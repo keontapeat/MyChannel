@@ -46,7 +46,7 @@ struct UploadView: View {
                     )
                     
                     // Privacy & Settings
-                    PrivacySettingsSection(
+                    UploadPrivacySettingsSection(
                         isPublic: $isPublic,
                         enableComments: $enableComments,
                         enableLikes: $enableLikes,
@@ -207,7 +207,7 @@ struct ContentDetailsSection: View {
                     .foregroundColor(AppTheme.Colors.textPrimary)
                 
                 TextField("Enter video title...", text: $title)
-                    .textFieldStyle(CustomTextFieldStyle())
+                    .textFieldStyle(UploadCustomTextFieldStyle())
                     .onChange(of: title) { oldValue, newValue in
                         if newValue.count > 100 {
                             title = String(newValue.prefix(100))
@@ -230,7 +230,7 @@ struct ContentDetailsSection: View {
                     .foregroundColor(AppTheme.Colors.textPrimary)
                 
                 TextField("Tell viewers about your video...", text: $description, axis: .vertical)
-                    .textFieldStyle(CustomTextFieldStyle())
+                    .textFieldStyle(UploadCustomTextFieldStyle())
                     .lineLimit(4...8)
                     .onChange(of: description) { oldValue, newValue in
                         if newValue.count > 1000 {
@@ -302,7 +302,7 @@ struct ContentDetailsSection: View {
     }
 }
 
-struct PrivacySettingsSection: View {
+struct UploadPrivacySettingsSection: View {
     @Binding var isPublic: Bool
     @Binding var enableComments: Bool
     @Binding var enableLikes: Bool
@@ -329,7 +329,7 @@ struct PrivacySettingsSection: View {
                 }
                 
                 VStack(spacing: 0) {
-                    SettingRow(
+                    UploadSettingRow(
                         icon: "globe",
                         title: "Public",
                         description: "Anyone can see your video",
@@ -340,7 +340,7 @@ struct PrivacySettingsSection: View {
                     Divider()
                         .padding(.leading, 44)
                     
-                    SettingRow(
+                    UploadSettingRow(
                         icon: "lock",
                         title: "Private",
                         description: "Only you can see your video",
@@ -364,7 +364,7 @@ struct PrivacySettingsSection: View {
                 }
                 
                 VStack(spacing: 0) {
-                    ToggleRow(
+                    UploadToggleRow(
                         icon: "bubble.right",
                         title: "Allow Comments",
                         isOn: $enableComments
@@ -373,7 +373,7 @@ struct PrivacySettingsSection: View {
                     Divider()
                         .padding(.leading, 44)
                     
-                    ToggleRow(
+                    UploadToggleRow(
                         icon: "heart",
                         title: "Allow Likes",
                         isOn: $enableLikes
@@ -395,7 +395,7 @@ struct PrivacySettingsSection: View {
                 }
                 
                 VStack(spacing: 0) {
-                    ToggleRow(
+                    UploadToggleRow(
                         icon: "calendar",
                         title: "Schedule for later",
                         isOn: $isScheduled
@@ -492,7 +492,7 @@ struct UploadButton: View {
 
 // MARK: - Supporting Views
 
-struct CustomTextFieldStyle: TextFieldStyle {
+struct UploadCustomTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
             .padding()
@@ -537,7 +537,7 @@ struct TagChip: View {
     }
 }
 
-struct SettingRow: View {
+struct UploadSettingRow: View {
     let icon: String
     let title: String
     let description: String
@@ -577,7 +577,7 @@ struct SettingRow: View {
     }
 }
 
-struct ToggleRow: View {
+struct UploadToggleRow: View {
     let icon: String
     let title: String
     @Binding var isOn: Bool
