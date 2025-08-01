@@ -49,6 +49,7 @@ struct ProfileView: View {
             }
             .background(AppTheme.Colors.background)
             .navigationBarHidden(true)
+            .clipped()
         }
         .sheet(isPresented: $showingEditProfile) {
             EditProfileView(user: $user)
