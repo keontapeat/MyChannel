@@ -9,9 +9,19 @@ import SwiftUI
 
 @main
 struct MyChannelApp: App {
+    @State private var showingSplash = true
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if showingSplash {
+                SplashView {
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        showingSplash = false
+                    }
+                }
+            } else {
+                MainTabView()
+            }
         }
     }
 }
