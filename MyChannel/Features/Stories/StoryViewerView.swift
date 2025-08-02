@@ -215,7 +215,9 @@ struct StoryViewerView: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingProfile) {
-            CreatorProfileView(creator: currentStory.creator)
+            if let creator = currentStory.creator {
+                CreatorProfileView(creator: creator)
+            }
         }
     }
     
@@ -399,10 +401,7 @@ struct EnhancedStoryContentView: View {
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .frame(
-                            width: geometry.size.width,
-                            height: geometry.size.height
-                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .clipped()
                         .scaleEffect(isPaused ? 1.05 : 1.0)
                         .animation(.easeInOut(duration: 0.3), value: isPaused)
@@ -412,41 +411,19 @@ struct EnhancedStoryContentView: View {
                         
                 case .failure(_):
                     Rectangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    AppTheme.Colors.primary.opacity(0.3),
-                                    AppTheme.Colors.secondary.opacity(0.3)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(AppTheme.Colors.surface)
                         .overlay(
-                            VStack(spacing: 16) {
-                                Image(systemName: "photo")
-                                    .font(.system(size: 40))
-                                    .foregroundColor(.white.opacity(0.6))
-                                
-                                Text("Image unavailable")
-                                    .font(.subheadline)
-                                    .foregroundColor(.white.opacity(0.8))
-                            }
+                            Image(systemName: "photo")
+                                .foregroundColor(AppTheme.Colors.textTertiary)
+                                .font(.title)
                         )
                         
                 case .empty:
                     Rectangle()
-                        .fill(AppTheme.Colors.surface.opacity(0.3))
+                        .fill(AppTheme.Colors.surface)
                         .overlay(
-                            VStack(spacing: 16) {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(1.5)
-                                
-                                Text("Loading...")
-                                    .font(.subheadline)
-                                    .foregroundColor(.white)
-                            }
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
                         )
                         
                 @unknown default:
@@ -455,86 +432,47 @@ struct EnhancedStoryContentView: View {
             }
             
         case .video:
-            // Enhanced video placeholder with better styling
-            ZStack {
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.black.opacity(0.8),
-                                AppTheme.Colors.primary.opacity(0.2)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                
-                VStack(spacing: 20) {
-                    ZStack {
-                        Circle()
-                            .fill(.white.opacity(0.2))
-                            .frame(width: 80, height: 80)
-                            .scaleEffect(loadingAnimation ? 1.1 : 1.0)
-                            .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: loadingAnimation)
-                        
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 32))
+            // Video player implementation
+            Rectangle()
+                .fill(AppTheme.Colors.surface)
+                .overlay(
+                    VStack {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 64))
+                            .foregroundColor(.white)
+                        Text("Video content")
                             .foregroundColor(.white)
                     }
-                    
-                    VStack(spacing: 8) {
-                        Text("Video Story")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                        
-                        Text("Tap to play")
-                            .font(.subheadline)
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                }
-            }
-            .onAppear {
-                loadingAnimation = true
-            }
+                )
             
         case .text:
             Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            AppTheme.Colors.primary,
-                            AppTheme.Colors.secondary
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(Color(hex: content.backgroundColor ?? "#FF6B6B"))
                 .overlay(
-                    // Subtle pattern overlay
-                    VStack(spacing: 40) {
-                        ForEach(0..<5) { row in
-                            HStack(spacing: 40) {
-                                ForEach(0..<3) { col in
-                                    Circle()
-                                        .fill(.white.opacity(0.05))
-                                        .frame(width: 20, height: 20)
-                                        .scaleEffect(loadingAnimation ? 1.2 : 0.8)
-                                        .animation(
-                                            .easeInOut(duration: 2.0)
-                                            .repeatForever(autoreverses: true)
-                                            .delay(Double(row + col) * 0.1),
-                                            value: loadingAnimation
-                                        )
-                                }
-                            }
+                    VStack {
+                        if let text = content.text {
+                            Text(text)
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .multilineTextAlignment(.center)
+                                .padding()
                         }
                     }
-                    .opacity(0.3)
                 )
-                .onAppear {
-                    loadingAnimation = true
-                }
+            
+        case .music:
+            Rectangle()
+                .fill(AppTheme.Colors.surface)
+                .overlay(
+                    VStack {
+                        Image(systemName: "music.note")
+                            .font(.system(size: 64))
+                            .foregroundColor(.white)
+                        Text("Music content")
+                            .foregroundColor(.white)
+                    }
+                )
         }
     }
 }
@@ -577,7 +515,7 @@ struct EnhancedStoryHeaderView: View {
             HStack(spacing: 12) {
                 Button(action: onProfileTap) {
                     ZStack(alignment: .bottomTrailing) {
-                        AsyncImage(url: URL(string: story.creator.profileImageURL ?? "")) { image in
+                        AsyncImage(url: URL(string: story.creator?.profileImageURL ?? "")) { image in
                             image
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
@@ -598,7 +536,7 @@ struct EnhancedStoryHeaderView: View {
                         .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
                         
                         // Online indicator
-                        if story.creator.isCreator {
+                        if story.creator?.isCreator == true {
                             Circle()
                                 .fill(AppTheme.Colors.success)
                                 .frame(width: 14, height: 14)
@@ -614,11 +552,11 @@ struct EnhancedStoryHeaderView: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Text(story.creator.displayName)
+                        Text(story.creator?.displayName ?? "Unknown")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.white)
                         
-                        if story.creator.isVerified {
+                        if story.creator?.isVerified == true {
                             Image(systemName: "checkmark.seal.fill")
                                 .font(.system(size: 14))
                                 .foregroundColor(AppTheme.Colors.primary)
@@ -787,7 +725,7 @@ struct StoryReplyView: View {
                 .padding(.top, 8)
             
             HStack(spacing: 12) {
-                AsyncImage(url: URL(string: story.creator.profileImageURL ?? "")) { image in
+                AsyncImage(url: URL(string: story.creator?.profileImageURL ?? "")) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -798,7 +736,7 @@ struct StoryReplyView: View {
                 .frame(width: 32, height: 32)
                 .clipShape(Circle())
                 
-                Text("Reply to \(story.creator.displayName)")
+                Text("Reply to \(story.creator?.displayName ?? "Unknown")")
                     .font(.headline)
                     .foregroundColor(AppTheme.Colors.textPrimary)
                 

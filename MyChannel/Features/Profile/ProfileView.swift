@@ -46,6 +46,11 @@ struct ProfileView: View {
                         user: currentUser,
                         videos: userVideos
                     )
+                    
+                    // Community Section Integration
+                    if selectedTab == .about {
+                        communitySection
+                    }
                 }
             }
             .coordinateSpace(name: "scroll")
@@ -66,6 +71,65 @@ struct ProfileView: View {
             // Update local user from auth manager
             user = currentUser
         }
+    }
+    
+    // MARK: - Community Section in Profile
+    private var communitySection: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            HStack {
+                Image(systemName: "person.3.fill")
+                    .foregroundColor(AppTheme.Colors.primary)
+                
+                Text("Community")
+                    .font(AppTheme.Typography.headline)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Spacer()
+                
+                Button("View All") {
+                    // Navigate to full community view
+                }
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.primary)
+            }
+            
+            // Recent Community Posts
+            VStack(spacing: AppTheme.Spacing.sm) {
+                ForEach(Array(CommunityPost.samplePosts.prefix(3))) { post in
+                    HStack(spacing: AppTheme.Spacing.sm) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(post.content)
+                                .font(AppTheme.Typography.body)
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                                .lineLimit(2)
+                            
+                            HStack {
+                                Text(post.createdAt, style: .relative)
+                                    .font(AppTheme.Typography.caption)
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                                
+                                Spacer()
+                                
+                                Label("\(post.likeCount)", systemImage: "heart")
+                                    .font(AppTheme.Typography.caption)
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                                
+                                Label("\(post.commentCount)", systemImage: "bubble.right")
+                                    .font(AppTheme.Typography.caption)
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(AppTheme.Spacing.sm)
+                    .background(AppTheme.Colors.surface)
+                    .cornerRadius(AppTheme.CornerRadius.sm)
+                }
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+        .padding(.vertical, AppTheme.Spacing.lg)
     }
 }
 
@@ -230,7 +294,7 @@ struct SettingsRow: View {
     }
 }
 
-// MARK: - Rest of ProfileView code remains the same...
+// MARK: - Rest of ProfileView components...
 
 struct ProfileHeaderView: View {
     let user: User
@@ -378,8 +442,6 @@ struct ProfileHeaderView: View {
         .opacity(headerOpacity)
     }
 }
-
-// MARK: - Keep all other existing ProfileView components unchanged...
 
 struct ProfileStatsView: View {
     let user: User
@@ -911,4 +973,5 @@ enum ProfileTab: String, CaseIterable {
 #Preview {
     ProfileView()
         .environmentObject(AuthenticationManager.shared)
+        .preferredColorScheme(.light)
 }

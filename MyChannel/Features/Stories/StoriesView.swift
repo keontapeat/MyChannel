@@ -19,8 +19,8 @@ struct StoriesView: View {
     private var filteredStories: [Story] {
         let filtered = stories.filter { story in
             if !searchText.isEmpty {
-                return story.creator.displayName.localizedCaseInsensitiveContains(searchText) ||
-                       story.content.contains { $0.text?.localizedCaseInsensitiveContains(searchText) == true }
+                return story.creator?.displayName.localizedCaseInsensitiveContains(searchText) == true ||
+                       story.caption?.localizedCaseInsensitiveContains(searchText) == true
             }
             return true
         }
@@ -30,9 +30,9 @@ struct StoriesView: View {
             return filtered
         case .following:
             // For now, simulate following by checking if creator has more than 100k subscribers
-            return filtered.filter { $0.creator.subscriberCount > 100000 }
+            return filtered.filter { $0.creator?.subscriberCount ?? 0 > 100000 }
         case .live:
-            return filtered.filter { $0.isLive }
+            return filtered.filter { $0.mediaType == .video } // Simulate live stories
         case .recent:
             return filtered.filter { 
                 Calendar.current.isDateInToday($0.createdAt) || 
@@ -78,7 +78,7 @@ struct StoriesView: View {
                             .foregroundColor(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
-                            .background(AppTheme.Colors.gradient)
+                            .background(AppTheme.Colors.primary)
                             .cornerRadius(20)
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -170,8 +170,8 @@ struct StoriesView: View {
     // MARK: - Private Methods
     
     private func loadStories() {
-        // Simulate loading fresh stories
-        stories = Story.generateFreshStories()
+        // Use existing sample stories
+        stories = Story.sampleStories
     }
     
     private func refreshStories() async {
@@ -180,7 +180,7 @@ struct StoriesView: View {
         // Simulate network delay
         try? await Task.sleep(nanoseconds: 1_000_000_000)
         
-        stories = Story.generateFreshStories()
+        stories = Story.sampleStories
         isRefreshing = false
     }
     
@@ -190,9 +190,9 @@ struct StoriesView: View {
             return stories.count
         case .following:
             // For now, simulate following by checking if creator has more than 100k subscribers
-            return stories.filter { $0.creator.subscriberCount > 100000 }.count
+            return stories.filter { $0.creator?.subscriberCount ?? 0 > 100000 }.count
         case .live:
-            return stories.filter { $0.isLive }.count
+            return stories.filter { $0.mediaType == .video }.count // Simulate live stories
         case .recent:
             return stories.filter { 
                 Calendar.current.isDateInToday($0.createdAt) || 
@@ -250,7 +250,7 @@ struct FilterChip: View {
                 Group {
                     if isSelected {
                         RoundedRectangle(cornerRadius: 20)
-                            .fill(AppTheme.Colors.gradient)
+                            .fill(AppTheme.Colors.primary)
                     } else {
                         RoundedRectangle(cornerRadius: 20)
                             .fill(Color.clear)
@@ -270,7 +270,7 @@ struct FilterChip: View {
     }
 }
 
-// MARK: - Story Card
+// MARK: - Story Card (Updated for our Story model)
 struct StoryCard: View {
     let story: Story
     let onTap: () -> Void
@@ -283,8 +283,8 @@ struct StoryCard: View {
                 // Story preview
                 ZStack(alignment: .topTrailing) {
                     // Background image/video preview
-                    if let firstContent = story.content.first {
-                        AsyncImage(url: URL(string: firstContent.url)) { phase in
+                    if !story.mediaURL.isEmpty {
+                        AsyncImage(url: URL(string: story.mediaURL)) { phase in
                             switch phase {
                             case .success(let image):
                                 image
@@ -293,7 +293,13 @@ struct StoryCard: View {
                                     .clipped()
                             case .failure(_):
                                 Rectangle()
-                                    .fill(AppTheme.Colors.gradient)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
                                     .aspectRatio(9/16, contentMode: .fill)
                                     .overlay(
                                         VStack {
@@ -315,9 +321,27 @@ struct StoryCard: View {
                             }
                         }
                     } else {
+                        // Text story background
                         Rectangle()
-                            .fill(AppTheme.Colors.gradient)
+                            .fill(
+                                LinearGradient(
+                                    colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
                             .aspectRatio(9/16, contentMode: .fill)
+                            .overlay(
+                                VStack {
+                                    if let caption = story.caption {
+                                        Text(caption)
+                                            .font(.title3.weight(.medium))
+                                            .foregroundColor(.white)
+                                            .multilineTextAlignment(.center)
+                                            .padding()
+                                    }
+                                }
+                            )
                     }
                     
                     // Overlay gradients for better text readability
@@ -339,46 +363,29 @@ struct StoryCard: View {
                         .frame(height: 80)
                     }
                     
-                    // Live indicator
-                    if story.isLive {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(.red)
-                                .frame(width: 6, height: 6)
-                                .scaleEffect(1.0)
-                                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: true)
-                            
-                            Text("LIVE")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.red)
-                        .cornerRadius(12)
-                        .padding(.top, 8)
-                        .padding(.trailing, 8)
-                    }
-                    
-                    // Story content count
+                    // Media type indicator
                     VStack {
-                        Spacer()
-                        
                         HStack {
                             Spacer()
                             
-                            // Progress indicators
-                            HStack(spacing: 2) {
-                                ForEach(0..<min(story.content.count, 5), id: \.self) { _ in
-                                    Rectangle()
-                                        .fill(.white.opacity(0.6))
-                                        .frame(width: 20, height: 2)
-                                        .cornerRadius(1)
-                                }
+                            if story.mediaType == .video {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.title2)
+                                    .foregroundColor(.white)
+                                    .background(Circle().fill(Color.black.opacity(0.3)))
+                                    .padding(.top, 8)
+                                    .padding(.trailing, 8)
+                            } else if story.mediaType == .music {
+                                Image(systemName: "music.note.circle.fill")
+                                    .font(.title2)
+                                    .foregroundColor(.white)
+                                    .background(Circle().fill(Color.black.opacity(0.3)))
+                                    .padding(.top, 8)
+                                    .padding(.trailing, 8)
                             }
-                            .padding(.bottom, 12)
-                            .padding(.trailing, 8)
                         }
+                        
+                        Spacer()
                     }
                 }
                 .cornerRadius(AppTheme.CornerRadius.md)
@@ -386,7 +393,7 @@ struct StoryCard: View {
                 // Story info
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
-                        AsyncImage(url: URL(string: story.creator.profileImageURL ?? "")) { image in
+                        AsyncImage(url: URL(string: story.creator?.profileImageURL ?? "")) { image in
                             image
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
@@ -398,7 +405,7 @@ struct StoryCard: View {
                         .clipShape(Circle())
                         
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(story.creator.displayName)
+                            Text(story.creator?.displayName ?? "Unknown")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(AppTheme.Colors.textPrimary)
                                 .lineLimit(1)
@@ -412,8 +419,8 @@ struct StoryCard: View {
                         Spacer()
                     }
                     
-                    if let firstTextContent = story.content.first(where: { $0.text != nil }) {
-                        Text(firstTextContent.text ?? "")
+                    if let caption = story.caption {
+                        Text(caption)
                             .font(.system(size: 12))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                             .lineLimit(2)
@@ -435,7 +442,7 @@ struct StoryCard: View {
     }
 }
 
-// MARK: - Create Story View
+// MARK: - Create Story View (keeping the same)
 struct CreateStoryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedOption: CreateOption?
@@ -553,15 +560,7 @@ struct CreateStoryView: View {
     }
 }
 
-// MARK: - Date Extension
-extension Date {
-    var timeAgoDisplay: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: self, relativeTo: Date())
-    }
-}
-
 #Preview {
     StoriesView()
+        .preferredColorScheme(.light)
 }

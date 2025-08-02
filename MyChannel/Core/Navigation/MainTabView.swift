@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct MainTabView: View {
-    @EnvironmentObject var authManager: AuthenticationManager
+    @StateObject private var authManager = AuthenticationManager.shared
     @State private var selectedTab: TabItem = .home
     @State private var tabBarOffset: CGFloat = 0
     @State private var isTabBarHidden: Bool = false
@@ -78,6 +78,7 @@ struct MainTabView: View {
         }
         .ignoresSafeArea(.keyboard)
         .environmentObject(appState)
+        .environmentObject(authManager)
         .onChange(of: selectedTab) { oldValue, newValue in
             // Clear notification badge for selected tab
             notificationBadges[newValue] = 0
@@ -261,7 +262,7 @@ struct UploadTabButton: View {
             ZStack {
                 // Gradient background
                 Circle()
-                    .fill(AppTheme.Colors.gradient)
+                    .fill(AppTheme.Colors.primary)
                     .frame(width: 50, height: 50)
                     .shadow(
                         color: AppTheme.Colors.primary.opacity(0.4),
@@ -445,7 +446,7 @@ struct LazyTabContent<Content: View>: View {
                         .font(.system(size: 40))
                         .foregroundColor(AppTheme.Colors.primary)
                         .scaleEffect(1.0)
-                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: true)
+                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: UUID())
                     
                     VStack(spacing: 8) {
                         ProgressView()
@@ -552,5 +553,5 @@ struct ScrollOffsetPreferenceKey: PreferenceKey {
 
 #Preview {
     MainTabView()
-        .environmentObject(AuthenticationManager.shared)
+        .preferredColorScheme(.light)
 }

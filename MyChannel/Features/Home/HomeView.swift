@@ -168,7 +168,7 @@ struct HomeView: View {
         impactFeedback.impactOccurred()
         
         // Refresh stories and videos
-        stories = Story.generateFreshStories()
+        stories = Story.sampleStories
         
         isRefreshing = false
     }
@@ -354,7 +354,7 @@ struct ProfessionalStoryItem: View {
                     }
                     
                     // Enhanced avatar with loading state
-                    AsyncImage(url: URL(string: story.creator.profileImageURL ?? "")) { phase in
+                    AsyncImage(url: URL(string: story.creator?.profileImageURL ?? "")) { phase in
                         switch phase {
                         case .success(let image):
                             image
@@ -411,7 +411,7 @@ struct ProfessionalStoryItem: View {
                     }
                 }
                 
-                Text(story.creator.displayName)
+                Text(story.creator?.displayName ?? "Unknown")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textSecondary)
                     .lineLimit(1)
@@ -427,7 +427,7 @@ struct ProfessionalStoryItem: View {
             onPress: { isPressed = true },
             onRelease: { isPressed = false }
         )
-        .accessibilityLabel("\(story.creator.displayName)'s story")
+        .accessibilityLabel("\(story.creator?.displayName ?? "Unknown")'s story")
         .accessibilityHint(story.isLive ? "Live story" : "Double tap to view story")
     }
 }
@@ -1329,101 +1329,6 @@ struct PaginationLoadingView: View {
         }
         .padding()
         .accessibilityLabel("Loading more content")
-    }
-}
-
-// MARK: - Enhanced Story Model
-struct Story: Identifiable {
-    let id: String
-    let creator: User
-    let isLive: Bool
-    let isViewed: Bool
-    let thumbnail: String
-    let content: [StoryContent]
-    let createdAt: Date
-    let expiresAt: Date
-    
-    init(
-        id: String = UUID().uuidString,
-        creator: User,
-        isLive: Bool = false,
-        isViewed: Bool = false,
-        thumbnail: String = "",
-        content: [StoryContent] = [],
-        createdAt: Date = Date(),
-        expiresAt: Date = Calendar.current.date(byAdding: .hour, value: 24, to: Date()) ?? Date()
-    ) {
-        self.id = id
-        self.creator = creator
-        self.isLive = isLive
-        self.isViewed = isViewed
-        self.thumbnail = thumbnail
-        self.content = content
-        self.createdAt = createdAt
-        self.expiresAt = expiresAt
-    }
-}
-
-struct StoryContent: Identifiable {
-    let id = UUID().uuidString
-    let type: StoryContentType
-    let url: String
-    let duration: TimeInterval
-    let text: String?
-    let backgroundColor: String?
-    
-    init(type: StoryContentType, url: String, duration: TimeInterval, text: String? = nil, backgroundColor: String? = nil) {
-        self.type = type
-        self.url = url
-        self.duration = duration
-        self.text = text
-        self.backgroundColor = backgroundColor
-    }
-    
-    enum StoryContentType {
-        case image, video, text
-    }
-}
-
-extension Story {
-    static let sampleStories: [Story] = [
-        Story(
-            creator: User.sampleUsers[0],
-            isLive: true,
-            content: [
-                StoryContent(type: .video, url: "https://example.com/story1.mp4", duration: 15)
-            ]
-        ),
-        Story(
-            creator: User.sampleUsers[1],
-            isViewed: true,
-            content: [
-                StoryContent(type: .image, url: "https://picsum.photos/400/600?random=1", duration: 3)
-            ]
-        ),
-        Story(
-            creator: User.sampleUsers[2],
-            content: [
-                StoryContent(type: .image, url: "https://picsum.photos/400/600?random=2", duration: 3)
-            ]
-        ),
-        Story(
-            creator: User.sampleUsers[3],
-            content: [
-                StoryContent(type: .text, url: "", duration: 5, text: "Check out my new video!", backgroundColor: "FF6B6B")
-            ]
-        )
-    ]
-    
-    static func generateFreshStories() -> [Story] {
-        return sampleStories.map { story in
-            Story(
-                creator: story.creator,
-                isLive: Bool.random(),
-                isViewed: Bool.random(),
-                content: story.content
-            )
-        }
     }
 }
 
