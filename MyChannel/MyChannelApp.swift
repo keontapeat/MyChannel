@@ -9,17 +9,45 @@ import SwiftUI
 
 @main
 struct MyChannelApp: App {
-    @StateObject private var authManager = AuthenticationManager.shared
-    @StateObject private var networkService = NetworkService.shared
-    @StateObject private var databaseService = DatabaseService.shared
-    @StateObject private var notificationManager = NotificationManager.shared
+    // Use lazy initialization to prevent circular dependencies
+    @StateObject private var authManager: AuthenticationManager = {
+        print("🔐 Initializing AuthenticationManager...")
+        return AuthenticationManager.shared
+    }()
+    
+    @StateObject private var networkService: NetworkService = {
+        print("🌐 Initializing NetworkService...")
+        return NetworkService.shared
+    }()
+    
+    @StateObject private var databaseService: DatabaseService = {
+        print("💾 Initializing DatabaseService...")
+        return DatabaseService.shared
+    }()
+    
+    @StateObject private var notificationManager: NotificationManager = {
+        print("🔔 Initializing NotificationManager...")
+        return NotificationManager.shared
+    }()
     
     init() {
+        print("🚀 MyChannelApp init started...")
+        
         // Print app configuration on startup
-        AppConfig.printConfiguration()
+        do {
+            AppConfig.printConfiguration()
+        } catch {
+            print("❌ Failed to print app configuration: \(error)")
+        }
         
         // Configure app appearance
-        setupAppearance()
+        do {
+            setupAppearance()
+        } catch {
+            print("❌ Failed to setup appearance: \(error)")
+        }
+        
+        print("✅ MyChannelApp init completed")
     }
     
     var body: some Scene {
@@ -39,21 +67,42 @@ struct MyChannelApp: App {
             }
             .preferredColorScheme(.light)
             .onAppear {
+                print("📱 App appeared, setting up services...")
                 setupServices()
+            }
+            .onOpenURL { url in
+                print("🔗 App opened with URL: \(url)")
             }
         }
     }
     
     private func setupServices() {
+        print("⚙️ Setting up services...")
+        
+        // Setup global error handling
+        NSSetUncaughtExceptionHandler { exception in
+            print("💥 UNCAUGHT EXCEPTION: \(exception)")
+            print("💥 Call stack: \(exception.callStackSymbols)")
+        }
+        
         // Setup notifications if needed
         if AppConfig.Features.enablePushNotifications {
+            print("🔔 Requesting notification permissions...")
             notificationManager.requestPermission()
         }
         
-        // Track app launch
+        // Safely track app launch with error handling
         Task {
-            await AnalyticsService.shared.trackAppLaunchTime(1.0) // Mock launch time
+            do {
+                print("📊 Tracking app launch...")
+                await AnalyticsService.shared.trackAppLaunchTime(1.0)
+                print("✅ App launch tracking completed")
+            } catch {
+                print("❌ Analytics tracking failed: \(error)")
+            }
         }
+        
+        print("✅ Services setup completed")
     }
     
     private func setupAppearance() {

@@ -358,7 +358,7 @@ struct ProfessionalStoryItem: View {
                     
                     // Enhanced avatar with loading state
                     AsyncImage(url: URL(string: story.creator?.profileImageURL ?? "")) { phase in
-                        switch phase {
+                        switch phase1 {
                         case .success(let image):
                             image
                                 .resizable()
@@ -799,12 +799,15 @@ struct ClickableLiveStreamsSection: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
-                    ForEach(0..<3) { index in
-                        ClickableLiveStreamCard(
-                            creator: User.sampleUsers[index % User.sampleUsers.count],
-                            viewerCount: Int.random(in: 100...5000)
-                        ) {
-                            onStreamTap(User.sampleUsers[index % User.sampleUsers.count])
+                    // Safe array access with guards
+                    ForEach(0..<min(3, User.sampleUsers.count), id: \.self) { index in
+                        if !User.sampleUsers.isEmpty {
+                            ClickableLiveStreamCard(
+                                creator: User.sampleUsers[index],
+                                viewerCount: Int.random(in: 100...5000)
+                            ) {
+                                onStreamTap(User.sampleUsers[index])
+                            }
                         }
                     }
                 }
@@ -1012,7 +1015,7 @@ struct ProfessionalVideoCard: View {
             }) {
                 ZStack(alignment: .bottomTrailing) {
                     AsyncImage(url: URL(string: video.thumbnailURL)) { phase in
-                        switch phase {
+                        switch phase1 {
                         case .success(let image):
                             image
                                 .resizable()
@@ -1134,8 +1137,14 @@ struct ProfessionalVideoCard: View {
                             )
                         }
                         
-                        ShareLink(item: URL(string: video.videoURL)!) {
-                            Label("Share", systemImage: "square.and.arrow.up")
+                        if let shareURL = URL(string: video.videoURL) {
+                            ShareLink(item: shareURL) {
+                                Label("Share", systemImage: "square.and.arrow.up")
+                            }
+                        } else {
+                            Button(action: {}) {
+                                Label("Share", systemImage: "square.and.arrow.up")
+                            }
                         }
                         
                         Button(action: {}) {
@@ -1188,18 +1197,15 @@ struct ProfessionalVideoCard: View {
                     .buttonStyle(PlainButtonStyle())
                     
                     // Share button
-                    ShareLink(item: URL(string: video.videoURL)!) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 16))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                            
-                            Text("Share")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
+                    if let shareURL = URL(string: video.videoURL) {
+                        ShareLink(item: shareURL) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                    } else {
+                        Button(action: {}) {
+                            Label("Share", systemImage: "square.and.arrow.up")
                         }
                     }
-                    .buttonStyle(PlainButtonStyle())
                     
                     Spacer()
                     

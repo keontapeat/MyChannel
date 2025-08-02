@@ -18,14 +18,18 @@ class AnalyticsService: ObservableObject {
     @Published var isEnabled: Bool = AppConfig.Analytics.enableUserAnalytics
     @Published var sessionId: String = UUID().uuidString
     
-    private let networkService = NetworkService.shared
-    private let databaseService = DatabaseService.shared
+    // Use lazy initialization to avoid circular dependencies
+    private lazy var networkService = NetworkService.shared
+    private lazy var databaseService = DatabaseService.shared
     private var cancellables = Set<AnyCancellable>()
     private var eventQueue: [AnalyticsEvent] = []
     private var sessionStartTime: Date = Date()
     
     private init() {
-        setupAnalytics()
+        // Delay setup to avoid initialization issues
+        DispatchQueue.main.async {
+            self.setupAnalytics()
+        }
     }
     
     // MARK: - Setup
