@@ -117,7 +117,7 @@ class VideoService: ObservableObject {
     // MARK: - Video Upload
     func uploadVideo(
         videoURL: URL,
-        metadata: VideoMetadata,
+        metadata: UploadVideoMetadata,
         thumbnailImage: UIImage? = nil
     ) async throws -> Video {
         
@@ -323,7 +323,7 @@ class VideoService: ObservableObject {
     
     // MARK: - Video Record Creation
     private func createVideoRecord(
-        metadata: VideoMetadata,
+        metadata: UploadVideoMetadata,
         videoURL: String,
         thumbnailURL: String
     ) async throws -> Video {
@@ -465,7 +465,7 @@ enum VideoServiceError: LocalizedError {
 }
 
 // MARK: - Supporting Models
-struct VideoMetadata {
+struct UploadVideoMetadata {
     let title: String
     let description: String
     let category: VideoCategory
