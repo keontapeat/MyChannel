@@ -90,7 +90,7 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
     @Published var isLoading = false
     
     private var userInteractions: [UserInteraction] = []
-    private var userProfiles: [String: UserProfile] = [:]
+    private var userProfiles: [String: RecommendationUserProfile] = [:]
     
     // MARK: - Public Methods
     func getHomeRecommendations(for userId: String, limit: Int) async throws -> [RecommendationResult] {
@@ -277,11 +277,11 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
     }
     
     // MARK: - Private Helper Methods
-    private func getUserProfile(userId: String) -> UserProfile {
-        return userProfiles[userId] ?? UserProfile(userId: userId)
+    private func getUserProfile(userId: String) -> RecommendationUserProfile {
+        return userProfiles[userId] ?? RecommendationUserProfile(userId: userId, preferences: UserPreferences())
     }
     
-    private func getVideosFromSubscriptions(profile: UserProfile, limit: Int) -> [Video] {
+    private func getVideosFromSubscriptions(profile: RecommendationUserProfile, limit: Int) -> [Video] {
         let subscriptionVideos = Video.sampleVideos.filter { video in
             profile.subscriptions.contains(video.creator.id)
         }
@@ -289,7 +289,7 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
         return Array(subscriptionVideos.sorted { $0.createdAt > $1.createdAt }.prefix(limit))
     }
     
-    private func getVideosBasedOnHistory(profile: UserProfile, limit: Int) -> [Video] {
+    private func getVideosBasedOnHistory(profile: RecommendationUserProfile, limit: Int) -> [Video] {
         var recommendedVideos: [Video] = []
         
         // Based on favorite categories
@@ -307,7 +307,7 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
         return Array(Set(recommendedVideos).prefix(limit))
     }
     
-    private func getPopularInCategories(profile: UserProfile, limit: Int) -> [Video] {
+    private func getPopularInCategories(profile: RecommendationUserProfile, limit: Int) -> [Video] {
         let categories = profile.favoriteCategories.isEmpty ? 
             [VideoCategory.entertainment, VideoCategory.technology, VideoCategory.education] :
             Array(profile.favoriteCategories.prefix(3))
@@ -351,11 +351,12 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
         return Array(timeBasedVideos.shuffled().prefix(limit))
     }
     
-    private func getCollaborativeRecommendations(profile: UserProfile, limit: Int) -> [Video] {
+    private func getCollaborativeRecommendations(profile: RecommendationUserProfile, limit: Int) -> [Video] {
         // Find users with similar preferences
-        let similarUsers = userProfiles.values.filter { otherProfile in
-            otherProfile.userId != profile.userId &&
-            !Set(otherProfile.favoriteCategories).isDisjoint(with: Set(profile.favoriteCategories))
+        let similarUsers = userProfiles.values.compactMap { otherProfile -> RecommendationUserProfile? in
+            guard otherProfile.userId != profile.userId else { return nil }
+            guard !Set(otherProfile.favoriteCategories).isDisjoint(with: Set(profile.favoriteCategories)) else { return nil }
+            return otherProfile
         }
         
         var collaborativeVideos: [Video] = []
@@ -441,8 +442,20 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
 }
 
 // MARK: - User Profile Model
+struct UserPreferences: Codable {
+    var favoriteCategories: [VideoCategory] = []
+    var videoQuality: String = "auto"
+    var autoPlay: Bool = true
+    var notificationsEnabled: Bool = true
+    
+    init() {
+        self.favoriteCategories = [.entertainment, .technology, .education]
+    }
+}
+
 struct RecommendationUserProfile {
     let userId: String
+    var preferences: UserPreferences
     var favoriteCategories: [VideoCategory] = []
     var likedCreators: [String] = []
     var subscriptions: [String] = []
@@ -457,8 +470,9 @@ struct RecommendationUserProfile {
         case short, medium, long
     }
     
-    init(userId: String) {
+    init(userId: String, preferences: UserPreferences) {
         self.userId = userId
+        self.preferences = preferences
         
         // Initialize with some default preferences
         self.favoriteCategories = [.entertainment, .technology, .education]
@@ -525,7 +539,7 @@ extension SmartRecommendationService {
     
     func initializeSampleData() {
         // Initialize some sample user profiles
-        var sampleProfile = UserProfile(userId: "user-1")
+        var sampleProfile = RecommendationUserProfile(userId: "user-1", preferences: UserPreferences())
         sampleProfile.favoriteCategories = [.technology, .gaming, .education]
         sampleProfile.likedCreators = Array(User.sampleUsers.prefix(2).map { $0.id })
         sampleProfile.subscriptions = Array(User.sampleUsers.map { $0.id })

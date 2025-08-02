@@ -124,12 +124,12 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $showingVideoPlayer) {
             if let video = selectedVideo {
-                VideoPlayerView(video: video)
+                VideoDetailView(video: video)
                     .onAppear {
-                        print("🎬 VideoPlayerView appeared for: \(video.title)")
+                        print("🎬 VideoDetailView appeared for: \(video.title)")
                     }
                     .onDisappear {
-                        print("🎬 VideoPlayerView disappeared")
+                        print("🎬 VideoDetailView disappeared")
                         selectedVideo = nil
                     }
             } else {
@@ -198,9 +198,12 @@ struct ParallaxHeaderView: View {
                 HStack {
                     // Enhanced MyChannel logo with professional styling
                     HStack(spacing: 12) {
-                        MyChannelLogo(size: 36, showText: false, animated: true)
-                            .scaleEffect(1 + min(scrollOffset / 500, 0.2))
-                            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: scrollOffset)
+                        ParallaxMyChannelLogo(
+                            size: 36, 
+                            scrollOffset: scrollOffset, 
+                            showText: false, 
+                            animated: true
+                        )
                         
                         VStack(alignment: .leading, spacing: 2) {
                             Text("MyChannel")
@@ -963,7 +966,7 @@ struct ClickableVideoFeedSection: View {
                         }
                     },
                     onWatchLater: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.1)) {
                             if watchLaterVideos.contains(video.id) {
                                 watchLaterVideos.remove(video.id)
                             } else {
