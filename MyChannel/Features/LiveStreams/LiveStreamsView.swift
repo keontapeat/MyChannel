@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct LiveStreamsView: View {
-    @State private var liveStreams: [LiveStream] = LiveStream.sampleStreams
+    @State private var liveStreams: [LiveStreamItem] = LiveStreamItem.sampleStreams
     
     var body: some View {
         NavigationStack {
@@ -29,7 +29,7 @@ struct LiveStreamsView: View {
 }
 
 struct LiveStreamDetailCard: View {
-    let stream: LiveStream
+    let stream: LiveStreamItem
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -119,27 +119,27 @@ struct LiveStreamDetailCard: View {
     }
 }
 
-struct LiveStream: Identifiable {
+struct LiveStreamItem: Identifiable {
     let id: String = UUID().uuidString
     let title: String
     let creator: User
     let viewerCount: Int
     let startedAt: Date
     
-    static let sampleStreams: [LiveStream] = [
-        LiveStream(
+    static let sampleStreams: [LiveStreamItem] = [
+        LiveStreamItem(
             title: "Live Coding Session - Building a SwiftUI App",
             creator: User.sampleUsers[0],
             viewerCount: 1245,
             startedAt: Calendar.current.date(byAdding: .hour, value: -2, to: Date()) ?? Date()
         ),
-        LiveStream(
+        LiveStreamItem(
             title: "Digital Art Speed Paint",
             creator: User.sampleUsers[1],
             viewerCount: 856,
             startedAt: Calendar.current.date(byAdding: .minute, value: -45, to: Date()) ?? Date()
         ),
-        LiveStream(
+        LiveStreamItem(
             title: "Gaming Tournament Finals",
             creator: User.sampleUsers[2],
             viewerCount: 3421,

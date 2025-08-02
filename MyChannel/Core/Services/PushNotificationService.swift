@@ -63,6 +63,7 @@ class NotificationAnalyticsTracker {
 /// Enterprise push notification service with intelligent scheduling and targeting
 /// Handles all notification types with personalization and analytics
 class PushNotificationService: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
+    static let shared = PushNotificationService()
     
     @Published var notificationPermissionStatus: UNAuthorizationStatus = .notDetermined
     @Published var registeredForNotifications = false
@@ -429,6 +430,29 @@ class PushNotificationService: NSObject, ObservableObject, UNUserNotificationCen
         default:
             break
         }
+    }
+    
+    // MARK: - Additional Methods for Creator Economy
+    
+    func sendNotification(to userId: String, notification: [String: String]) async {
+        let title = notification["title"] ?? "Notification"
+        let message = notification["message"] ?? ""
+        
+        await scheduleSmartNotification(
+            title: title,
+            body: message,
+            category: "CREATOR_NOTIFICATION",
+            userInfo: notification
+        )
+    }
+    
+    func sendLiveInvite(to guestId: String, streamId: String, streamTitle: String) async {
+        await scheduleSmartNotification(
+            title: "Live Stream Invitation",
+            body: "You've been invited to join '\(streamTitle)'",
+            category: "LIVE_STREAM",
+            userInfo: ["streamId": streamId, "type": "invite"]
+        )
     }
 }
 

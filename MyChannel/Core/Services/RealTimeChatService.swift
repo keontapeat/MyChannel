@@ -12,6 +12,8 @@ import Network
 /// Enterprise-grade real-time chat service with WebSocket implementation
 /// Supports millions of concurrent users with horizontal scaling
 class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
+    static let shared = RealTimeChatService()
+    
     @Published var messages: [ChatMessage] = []
     @Published var chatUsers: [ChatUser] = []
     @Published var statistics: ChatStatistics = ChatStatistics()
