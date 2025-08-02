@@ -294,10 +294,10 @@ struct ChatUserProfileView: View {
                             .fontWeight(.semibold)
                         
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 16) {
-                            StatItem(title: "Messages", value: "\(user.messageCount)")
-                            StatItem(title: "Joined", value: user.joinedAt.formatted(.relative(presentation: .named)))
-                            StatItem(title: "Status", value: user.isSubscriber ? "Subscriber" : "Viewer")
-                            StatItem(title: "Type", value: user.isModerator ? "Moderator" : user.isVIP ? "VIP" : "Regular")
+                            ChatStatItem(title: "Messages", value: "\(user.messageCount)")
+                            ChatStatItem(title: "Joined", value: user.joinedAt.formatted(.relative(presentation: .named)))
+                            ChatStatItem(title: "Status", value: user.isSubscriber ? "Subscriber" : "Viewer")
+                            ChatStatItem(title: "Type", value: user.isModerator ? "Moderator" : user.isVIP ? "VIP" : "Regular")
                         }
                     }
                     .padding()
@@ -335,7 +335,7 @@ struct ChatUserProfileView: View {
 }
 
 // MARK: - Supporting Views
-struct StatItem: View {
+struct ChatStatItem: View {
     let title: String
     let value: String
     

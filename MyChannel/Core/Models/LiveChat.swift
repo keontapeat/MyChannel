@@ -238,6 +238,7 @@ struct ChatStatistics: Codable, Equatable {
     let topChatters: [String] // User IDs
     let popularEmotes: [String] // Emote names
     let superChatTotal: Double
+    let superChatRevenue: Double
     let peakViewers: Int
     
     init(
@@ -247,6 +248,7 @@ struct ChatStatistics: Codable, Equatable {
         topChatters: [String] = [],
         popularEmotes: [String] = [],
         superChatTotal: Double = 0.0,
+        superChatRevenue: Double = 0.0,
         peakViewers: Int = 0
     ) {
         self.activeUsers = activeUsers
@@ -255,6 +257,7 @@ struct ChatStatistics: Codable, Equatable {
         self.topChatters = topChatters
         self.popularEmotes = popularEmotes
         self.superChatTotal = superChatTotal
+        self.superChatRevenue = superChatRevenue
         self.peakViewers = peakViewers
     }
     
@@ -267,16 +270,22 @@ struct ChatStatistics: Codable, Equatable {
 
 // MARK: - Chat Settings
 struct ChatSettings: Codable, Equatable {
-    let isSlowMode: Bool
-    let slowModeDelay: Int // seconds
-    let isSubscriberOnly: Bool
-    let isEmoteOnly: Bool
-    let isFollowerOnly: Bool
-    let followerOnlyDuration: Int // minutes
-    let maxMessageLength: Int
-    let isProfanityFilterEnabled: Bool
-    let bannedWords: [String]
-    let allowedEmotes: [String]
+    var isSlowMode: Bool
+    var slowModeDelay: Int // seconds
+    var isSubscriberOnly: Bool
+    var isEmoteOnly: Bool
+    var isFollowerOnly: Bool
+    var followerOnlyDuration: Int // minutes
+    var maxMessageLength: Int
+    var isProfanityFilterEnabled: Bool
+    var bannedWords: [String]
+    var allowedEmotes: [String]
+    var superChatEnabled: Bool
+    var superChatMinAmount: Double
+    var autoModerate: Bool
+    var filterSpam: Bool
+    var filterLinks: Bool
+    var requireVerification: Bool
     
     init(
         isSlowMode: Bool = false,
@@ -288,7 +297,13 @@ struct ChatSettings: Codable, Equatable {
         maxMessageLength: Int = 500,
         isProfanityFilterEnabled: Bool = true,
         bannedWords: [String] = [],
-        allowedEmotes: [String] = []
+        allowedEmotes: [String] = [],
+        superChatEnabled: Bool = true,
+        superChatMinAmount: Double = 1.0,
+        autoModerate: Bool = false,
+        filterSpam: Bool = true,
+        filterLinks: Bool = false,
+        requireVerification: Bool = false
     ) {
         self.isSlowMode = isSlowMode
         self.slowModeDelay = slowModeDelay
@@ -300,7 +315,15 @@ struct ChatSettings: Codable, Equatable {
         self.isProfanityFilterEnabled = isProfanityFilterEnabled
         self.bannedWords = bannedWords
         self.allowedEmotes = allowedEmotes
+        self.superChatEnabled = superChatEnabled
+        self.superChatMinAmount = superChatMinAmount
+        self.autoModerate = autoModerate
+        self.filterSpam = filterSpam
+        self.filterLinks = filterLinks
+        self.requireVerification = requireVerification
     }
+    
+    static let defaultSettings = ChatSettings()
     
     // MARK: - Equatable
     static func == (lhs: ChatSettings, rhs: ChatSettings) -> Bool {
@@ -392,6 +415,7 @@ class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
                 topChatters: Array(ChatUser.sampleUsers.prefix(5).map { $0.id }),
                 popularEmotes: ["😂", "❤️", "👏", "🔥", "😍"],
                 superChatTotal: 256.50,
+                superChatRevenue: 256.50,
                 peakViewers: 2456
             )
         }
@@ -573,6 +597,13 @@ class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
         }
     }
     
+    // MARK: - Additional helper methods for MockLiveChatService
+    func updateSettings(_ settings: ChatSettings) {
+        Task {
+            try? await updateChatSettings(streamId: currentStreamId ?? "", settings: settings)
+        }
+    }
+    
     // MARK: - Private Methods
     private func setupSampleData() {
         messages = ChatMessage.sampleMessages
@@ -619,34 +650,6 @@ class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
         )
         
         try? await sendMessage(newMessage)
-    }
-}
-
-// MARK: - Color Extension
-extension Color {
-    init?(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let a, r, g, b: UInt64
-        switch hex.count {
-        case 3: // RGB (12-bit)
-            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6: // RGB (24-bit)
-            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8: // ARGB (32-bit)
-            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default:
-            return nil
-        }
-        
-        self.init(
-            .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue:  Double(b) / 255,
-            opacity: Double(a) / 255
-        )
     }
 }
 

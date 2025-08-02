@@ -38,14 +38,37 @@ struct ChatSettingsView: View {
                     
                     Toggle("Subscriber Only", isOn: $tempSettings.isSubscriberOnly)
                     Toggle("Emote Only", isOn: $tempSettings.isEmoteOnly)
-                    Toggle("Auto-moderate", isOn: $tempSettings.autoModerate)
+                    Toggle("Follower Only", isOn: $tempSettings.isFollowerOnly)
+                    
+                    if tempSettings.isFollowerOnly {
+                        HStack {
+                            Text("Duration")
+                            Spacer()
+                            Stepper("\(tempSettings.followerOnlyDuration)min", 
+                                   value: $tempSettings.followerOnlyDuration, 
+                                   in: 1...60, 
+                                   step: 1)
+                        }
+                    }
                 }
                 
                 Section(header: Text("Content Filtering")) {
-                    Toggle("Filter Profanity", isOn: $tempSettings.filterProfanity)
-                    Toggle("Filter Spam", isOn: $tempSettings.filterSpam)
-                    Toggle("Filter Links", isOn: $tempSettings.filterLinks)
-                    Toggle("Require Verification", isOn: $tempSettings.requireVerification)
+                    Toggle("Filter Profanity", isOn: $tempSettings.isProfanityFilterEnabled)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Max Message Length")
+                            Spacer()
+                            Text("\(tempSettings.maxMessageLength)")
+                        }
+                        
+                        Slider(value: Binding(
+                            get: { Double(tempSettings.maxMessageLength) },
+                            set: { newValue in
+                                tempSettings.maxMessageLength = Int(newValue)
+                            }
+                        ), in: 50...1000, step: 50)
+                    }
                 }
                 
                 Section(header: Text("Super Chat")) {
@@ -84,14 +107,14 @@ struct ChatSettingsView: View {
                     HStack {
                         Text("Messages/Min")
                         Spacer()
-                        Text("\(chatService.statistics.messagesPerMinute)")
+                        Text(String(format: "%.1f", chatService.statistics.messagesPerMinute))
                             .foregroundColor(.secondary)
                     }
                     
                     HStack {
-                        Text("Super Chat Revenue")
+                        Text("Super Chat Total")
                         Spacer()
-                        Text("$\(chatService.statistics.superChatRevenue, specifier: "%.2f")")
+                        Text(String(format: "$%.2f", chatService.statistics.superChatTotal))
                             .foregroundColor(.green)
                     }
                 }
