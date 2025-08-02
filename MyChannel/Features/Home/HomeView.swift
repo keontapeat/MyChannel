@@ -192,18 +192,25 @@ struct ParallaxHeaderView: View {
     @Binding var searchText: String
     @Binding var showingFilters: Bool
     
+    @State private var logoScale: CGFloat = 1.0
+    
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 0) {
                 HStack {
-                    // Enhanced MyChannel logo with professional styling
+                    // MyChannel logo using your actual red MC logo asset
                     HStack(spacing: 12) {
-                        ParallaxMyChannelLogo(
-                            size: 36, 
-                            scrollOffset: scrollOffset, 
-                            showText: false, 
-                            animated: true
-                        )
+                        // Your actual MyChannel logo from Assets with subtle zoom animation
+                        Image("MyChannel")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 36, height: 36)
+                            .scaleEffect(logoScale * max(0.8, 1.0 - abs(scrollOffset) / 200.0))
+                            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollOffset)
+                            .animation(.easeInOut(duration: 2.0), value: logoScale)
+                            .onAppear {
+                                startSubtleZoom()
+                            }
                         
                         VStack(alignment: .leading, spacing: 2) {
                             Text("MyChannel")
@@ -269,6 +276,14 @@ struct ParallaxHeaderView: View {
             }
             .offset(y: scrollOffset > 0 ? -scrollOffset * 0.5 : 0)
             .opacity(headerOpacity)
+        }
+    }
+    
+    private func startSubtleZoom() {
+        Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+            withAnimation(.easeInOut(duration: 2.0)) {
+                logoScale = logoScale == 1.0 ? 1.08 : 1.0
+            }
         }
     }
 }
@@ -358,7 +373,7 @@ struct ProfessionalStoryItem: View {
                     
                     // Enhanced avatar with loading state
                     AsyncImage(url: URL(string: story.creator?.profileImageURL ?? "")) { phase in
-                        switch phase1 {
+                        switch phase {
                         case .success(let image):
                             image
                                 .resizable()
@@ -1015,7 +1030,7 @@ struct ProfessionalVideoCard: View {
             }) {
                 ZStack(alignment: .bottomTrailing) {
                     AsyncImage(url: URL(string: video.thumbnailURL)) { phase in
-                        switch phase1 {
+                        switch phase {
                         case .success(let image):
                             image
                                 .resizable()
