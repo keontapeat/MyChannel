@@ -8,7 +8,7 @@
 import SwiftUI
 
 // MARK: - User Model
-struct User: Identifiable, Codable, Equatable {
+struct User: Identifiable, Codable, Equatable, Hashable {
     let id: String
     let username: String
     let displayName: String
@@ -73,6 +73,11 @@ struct User: Identifiable, Codable, Equatable {
     // MARK: - Equatable
     static func == (lhs: User, rhs: User) -> Bool {
         lhs.id == rhs.id
+    }
+    
+    // MARK: - Hashable
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
 

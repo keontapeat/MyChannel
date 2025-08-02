@@ -8,17 +8,22 @@
 import SwiftUI
 
 struct MainTabView: View {
+    @EnvironmentObject var authManager: AuthenticationManager
     @State private var selectedTab: TabItem = .home
     @State private var tabBarOffset: CGFloat = 0
     @State private var isTabBarHidden: Bool = false
     @State private var lastScrollOffset: CGFloat = 0
     @State private var notificationBadges: [TabItem: Int] = [
         .home: 0,
-        .shorts: 0,
+        .stories: 2,
         .upload: 0,
         .search: 0,
         .profile: 3 // Sample notification count
     ]
+    
+    // App-wide state
+    @State private var showingUpload: Bool = false
+    @StateObject private var appState = AppState()
     
     var body: some View {
         GeometryReader { geometry in
@@ -33,13 +38,13 @@ struct MainTabView: View {
                     }
                     .tag(TabItem.home)
                     
-                    LazyTabContent(tab: .shorts) {
-                        ShortsView()
+                    LazyTabContent(tab: .stories) {
+                        StoriesView()
                     }
-                    .tag(TabItem.shorts)
+                    .tag(TabItem.stories)
                     
                     LazyTabContent(tab: .upload) {
-                        UploadView()
+                        UploadPlaceholderView()
                     }
                     .tag(TabItem.upload)
                     
@@ -61,7 +66,10 @@ struct MainTabView: View {
                 CustomTabBar(
                     selectedTab: $selectedTab,
                     notificationBadges: notificationBadges,
-                    isHidden: isTabBarHidden
+                    isHidden: isTabBarHidden,
+                    onUploadTap: {
+                        showingUpload = true
+                    }
                 )
                 .offset(y: tabBarOffset)
                 .animation(.easeInOut(duration: 0.3), value: tabBarOffset)
@@ -69,6 +77,7 @@ struct MainTabView: View {
             }
         }
         .ignoresSafeArea(.keyboard)
+        .environmentObject(appState)
         .onChange(of: selectedTab) { oldValue, newValue in
             // Clear notification badge for selected tab
             notificationBadges[newValue] = 0
@@ -76,6 +85,25 @@ struct MainTabView: View {
             // Add haptic feedback
             let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
             impactFeedback.impactOccurred()
+            
+            // Track screen view
+            Task {
+                await AnalyticsService.shared.trackScreenView(newValue.title)
+            }
+        }
+        .fullScreenCover(isPresented: $showingUpload) {
+            UploadView()
+        }
+        .onAppear {
+            // Set current user in app state
+            if let user = authManager.currentUser {
+                appState.currentUser = user
+            }
+        }
+        .onChange(of: authManager.currentUser) { oldValue, newValue in
+            if let user = newValue {
+                appState.currentUser = user
+            }
         }
     }
     
@@ -99,26 +127,92 @@ struct MainTabView: View {
     }
 }
 
+// MARK: - App State Management
+@MainActor
+class AppState: ObservableObject {
+    @Published var currentUser: User = User.sampleUsers[0]
+    @Published var isLoggedIn: Bool = true
+    @Published var watchLaterVideos: Set<String> = []
+    @Published var likedVideos: Set<String> = []
+    @Published var followedCreators: Set<String> = []
+    @Published var notifications: [AppNotification] = []
+    
+    func toggleLike(videoId: String) {
+        if likedVideos.contains(videoId) {
+            likedVideos.remove(videoId)
+        } else {
+            likedVideos.insert(videoId)
+        }
+    }
+    
+    func toggleWatchLater(videoId: String) {
+        if watchLaterVideos.contains(videoId) {
+            watchLaterVideos.remove(videoId)
+        } else {
+            watchLaterVideos.insert(videoId)
+        }
+    }
+    
+    func followCreator(_ creatorId: String) {
+        followedCreators.insert(creatorId)
+    }
+    
+    func unfollowCreator(_ creatorId: String) {
+        followedCreators.remove(creatorId)
+    }
+}
+
+// MARK: - App Notification Model
+struct AppNotification: Identifiable {
+    let id: String = UUID().uuidString
+    let title: String
+    let message: String
+    let type: NotificationType
+    let timestamp: Date
+    let isRead: Bool
+    
+    enum NotificationType {
+        case like, comment, follow, upload, system
+        
+        var iconName: String {
+            switch self {
+            case .like: return "heart.fill"
+            case .comment: return "bubble.right.fill"
+            case .follow: return "person.badge.plus"
+            case .upload: return "arrow.up.circle.fill"
+            case .system: return "bell.fill"
+            }
+        }
+    }
+}
+
 // MARK: - Custom Tab Bar
 struct CustomTabBar: View {
     @Binding var selectedTab: TabItem
     let notificationBadges: [TabItem: Int]
     let isHidden: Bool
+    let onUploadTap: () -> Void
     
     var body: some View {
         HStack(spacing: 0) {
             ForEach(TabItem.allCases, id: \.self) { tab in
-                CustomTabBarButton(
-                    tab: tab,
-                    isSelected: selectedTab == tab,
-                    badgeCount: notificationBadges[tab] ?? 0,
-                    action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            selectedTab = tab
+                if tab == .upload {
+                    // Special upload button
+                    UploadTabButton(action: onUploadTap)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    CustomTabBarButton(
+                        tab: tab,
+                        isSelected: selectedTab == tab,
+                        badgeCount: notificationBadges[tab] ?? 0,
+                        action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                selectedTab = tab
+                            }
                         }
-                    }
-                )
-                .frame(maxWidth: .infinity)
+                    )
+                    .frame(maxWidth: .infinity)
+                }
             }
         }
         .padding(.horizontal, AppTheme.Spacing.md)
@@ -154,6 +248,80 @@ struct CustomTabBar: View {
         )
         .opacity(isHidden ? 0 : 1)
         .scaleEffect(isHidden ? 0.9 : 1.0)
+    }
+}
+
+// MARK: - Upload Tab Button
+struct UploadTabButton: View {
+    let action: () -> Void
+    @State private var isPressed: Bool = false
+    
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                // Gradient background
+                Circle()
+                    .fill(AppTheme.Colors.gradient)
+                    .frame(width: 50, height: 50)
+                    .shadow(
+                        color: AppTheme.Colors.primary.opacity(0.4),
+                        radius: 8,
+                        x: 0,
+                        y: 4
+                    )
+                
+                // Plus icon
+                Image(systemName: "plus")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white)
+                    .scaleEffect(isPressed ? 0.9 : 1.0)
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .scaleEffect(isPressed ? 0.95 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+        .onPressGesture(
+            onPress: { isPressed = true },
+            onRelease: { isPressed = false }
+        )
+        .accessibilityLabel("Create content")
+        .accessibilityHint("Double tap to create new content")
+    }
+}
+
+// MARK: - Upload Placeholder View
+struct UploadPlaceholderView: View {
+    var body: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            
+            ZStack {
+                Circle()
+                    .fill(AppTheme.Colors.primary.opacity(0.1))
+                    .frame(width: 120, height: 120)
+                
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(AppTheme.Colors.primary)
+            }
+            
+            VStack(spacing: 16) {
+                Text("Create Amazing Content")
+                    .font(AppTheme.Typography.title1)
+                    .fontWeight(.bold)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Text("Tap the + button to start creating videos, shorts, or live streams")
+                    .font(AppTheme.Typography.body)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            
+            Spacer()
+        }
+        .padding()
+        .background(AppTheme.Colors.background)
     }
 }
 
@@ -268,12 +436,27 @@ struct LazyTabContent<Content: View>: View {
             if hasAppeared {
                 content()
             } else {
-                // Placeholder while loading
-                VStack {
+                // Enhanced loading placeholder
+                VStack(spacing: 20) {
                     Spacer()
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
-                        .scaleEffect(1.2)
+                    
+                    // Animated logo or icon
+                    Image(systemName: tab.iconName(isSelected: true))
+                        .font(.system(size: 40))
+                        .foregroundColor(AppTheme.Colors.primary)
+                        .scaleEffect(1.0)
+                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: true)
+                    
+                    VStack(spacing: 8) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
+                            .scaleEffect(1.2)
+                        
+                        Text("Loading \(tab.title)...")
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                    
                     Spacer()
                 }
                 .background(AppTheme.Colors.background)
@@ -282,7 +465,9 @@ struct LazyTabContent<Content: View>: View {
         .onAppear {
             // Delay loading to improve performance
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                hasAppeared = true
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    hasAppeared = true
+                }
             }
         }
     }
@@ -291,7 +476,7 @@ struct LazyTabContent<Content: View>: View {
 // MARK: - Enhanced Tab Item Enum
 enum TabItem: String, CaseIterable {
     case home = "home"
-    case shorts = "shorts"
+    case stories = "stories"
     case upload = "upload"
     case search = "search"
     case profile = "profile"
@@ -299,7 +484,7 @@ enum TabItem: String, CaseIterable {
     var title: String {
         switch self {
         case .home: return "Home"
-        case .shorts: return "Shorts"
+        case .stories: return "Stories"
         case .upload: return "Create"
         case .search: return "Search"
         case .profile: return "You"
@@ -310,8 +495,8 @@ enum TabItem: String, CaseIterable {
         switch self {
         case .home:
             return isSelected ? "house.fill" : "house"
-        case .shorts:
-            return isSelected ? "bolt.fill" : "bolt"
+        case .stories:
+            return isSelected ? "circle.fill" : "circle"
         case .upload:
             return isSelected ? "plus.circle.fill" : "plus.circle"
         case .search:
@@ -324,7 +509,7 @@ enum TabItem: String, CaseIterable {
     var accessibilityLabel: String {
         switch self {
         case .home: return "Home tab"
-        case .shorts: return "Shorts tab"
+        case .stories: return "Stories tab"
         case .upload: return "Create content tab"
         case .search: return "Search tab"
         case .profile: return "Profile tab"
@@ -367,4 +552,5 @@ struct ScrollOffsetPreferenceKey: PreferenceKey {
 
 #Preview {
     MainTabView()
+        .environmentObject(AuthenticationManager.shared)
 }

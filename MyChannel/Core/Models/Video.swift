@@ -8,7 +8,7 @@
 import SwiftUI
 
 // MARK: - Video Model
-struct Video: Identifiable, Codable, Equatable {
+struct Video: Identifiable, Codable, Equatable, Hashable {
     let id: String
     let title: String
     let description: String
@@ -77,6 +77,11 @@ struct Video: Identifiable, Codable, Equatable {
     // MARK: - Equatable
     static func == (lhs: Video, rhs: Video) -> Bool {
         lhs.id == rhs.id
+    }
+    
+    // MARK: - Hashable
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
 
