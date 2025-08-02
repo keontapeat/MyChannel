@@ -90,7 +90,7 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
     @Published var isLoading = false
     
     private var userInteractions: [UserInteraction] = []
-    private var userProfiles: [String: RecommendationUserProfile] = [:]
+    private var userProfiles: [String: UserProfile] = [:]
     
     // MARK: - Public Methods
     func getHomeRecommendations(for userId: String, limit: Int) async throws -> [RecommendationResult] {
@@ -100,7 +100,7 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
         // Simulate network delay
         try await Task.sleep(nanoseconds: 800_000_000) // 0.8 seconds
         
-        let profile = getRecommendationUserProfile(userId: userId)
+        let profile = getUserProfile(userId: userId)
         var recommendations: [RecommendationResult] = []
         
         // 1. Trending videos (20% of recommendations)
@@ -202,7 +202,7 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
         // Simulate network delay
         try await Task.sleep(nanoseconds: 400_000_000) // 0.4 seconds
         
-        let profile = getRecommendationUserProfile(userId: userId)
+        let profile = getUserProfile(userId: userId)
         
         // Mix of similar videos and personalized recommendations
         let similarCount = limit / 2
@@ -226,7 +226,7 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
         // Simulate network delay
         try await Task.sleep(nanoseconds: 1_000_000_000) // 1.0 second
         
-        let profile = getRecommendationUserProfile(userId: context.userId)
+        let profile = getUserProfile(userId: context.userId)
         var recommendations: [RecommendationResult] = []
         
         // Time-based recommendations
@@ -263,7 +263,7 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
         userInteractions.append(interaction)
         
         // Update user profile based on interaction
-        var profile = getRecommendationUserProfile(userId: interaction.userId)
+        var profile = getUserProfile(userId: interaction.userId)
         profile.updateWithInteraction(interaction)
         userProfiles[interaction.userId] = profile
         
@@ -277,11 +277,11 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
     }
     
     // MARK: - Private Helper Methods
-    private func getRecommendationUserProfile(userId: String) -> RecommendationUserProfile {
-        return userProfiles[userId] ?? RecommendationUserProfile(userId: userId)
+    private func getUserProfile(userId: String) -> UserProfile {
+        return userProfiles[userId] ?? UserProfile(userId: userId)
     }
     
-    private func getVideosFromSubscriptions(profile: RecommendationUserProfile, limit: Int) -> [Video] {
+    private func getVideosFromSubscriptions(profile: UserProfile, limit: Int) -> [Video] {
         let subscriptionVideos = Video.sampleVideos.filter { video in
             profile.subscriptions.contains(video.creator.id)
         }
@@ -289,7 +289,7 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
         return Array(subscriptionVideos.sorted { $0.createdAt > $1.createdAt }.prefix(limit))
     }
     
-    private func getVideosBasedOnHistory(profile: RecommendationUserProfile, limit: Int) -> [Video] {
+    private func getVideosBasedOnHistory(profile: UserProfile, limit: Int) -> [Video] {
         var recommendedVideos: [Video] = []
         
         // Based on favorite categories
@@ -307,7 +307,7 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
         return Array(Set(recommendedVideos).prefix(limit))
     }
     
-    private func getPopularInCategories(profile: RecommendationUserProfile, limit: Int) -> [Video] {
+    private func getPopularInCategories(profile: UserProfile, limit: Int) -> [Video] {
         let categories = profile.favoriteCategories.isEmpty ? 
             [VideoCategory.entertainment, VideoCategory.technology, VideoCategory.education] :
             Array(profile.favoriteCategories.prefix(3))
@@ -351,7 +351,7 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
         return Array(timeBasedVideos.shuffled().prefix(limit))
     }
     
-    private func getCollaborativeRecommendations(profile: RecommendationUserProfile, limit: Int) -> [Video] {
+    private func getCollaborativeRecommendations(profile: UserProfile, limit: Int) -> [Video] {
         // Find users with similar preferences
         let similarUsers = userProfiles.values.filter { otherProfile in
             otherProfile.userId != profile.userId &&
@@ -376,7 +376,7 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
         let trendingWeight = 0.3
         let collaborativeWeight = 0.3
         
-        let profile = getRecommendationUserProfile(userId: context.userId)
+        let profile = getUserProfile(userId: context.userId)
         
         let historyCount = Int(Double(limit) * historyWeight)
         let trendingCount = Int(Double(limit) * trendingWeight)
@@ -441,7 +441,7 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
 }
 
 // MARK: - User Profile Model
-struct RecommendationRecommendationUserProfile {
+struct RecommendationUserProfile {
     let userId: String
     var favoriteCategories: [VideoCategory] = []
     var likedCreators: [String] = []
@@ -525,7 +525,7 @@ extension SmartRecommendationService {
     
     func initializeSampleData() {
         // Initialize some sample user profiles
-        var sampleProfile = RecommendationUserProfile(userId: "user-1")
+        var sampleProfile = UserProfile(userId: "user-1")
         sampleProfile.favoriteCategories = [.technology, .gaming, .education]
         sampleProfile.likedCreators = Array(User.sampleUsers.prefix(2).map { $0.id })
         sampleProfile.subscriptions = Array(User.sampleUsers.map { $0.id })

@@ -42,7 +42,7 @@ class SuperiorRecommendationEngine: ObservableObject {
         defer { isLoading = false }
         
         // 1. Get user's viewing patterns and preferences
-        let userProfile = await buildSuperiorUserProfile(user)
+        let userProfile = await buildUserProfile(user)
         
         // 2. Get candidate videos
         let candidateVideos = try await getCandidateVideos(
@@ -79,11 +79,11 @@ class SuperiorRecommendationEngine: ObservableObject {
         // Setup real-time recommendation updates
     }
     
-    private func buildSuperiorUserProfile(_ user: User) async -> SuperiorUserProfile {
-        return SuperiorUserProfile(userId: user.id, preferences: [])
+    private func buildUserProfile(_ user: User) async -> UserProfile {
+        return UserProfile(userId: user.id, preferences: [])
     }
     
-    private func getCandidateVideos(for userProfile: SuperiorUserProfile, limit: Int) async throws -> [Video] {
+    private func getCandidateVideos(for userProfile: UserProfile, limit: Int) async throws -> [Video] {
         return Array(Video.sampleVideos.prefix(limit))
     }
     
@@ -98,13 +98,13 @@ class SuperiorRecommendationEngine: ObservableObject {
 
 // MARK: - Supporting Models
 
-struct SuperiorSuperiorUserProfile {
+struct UserProfile {
     let userId: String
     let preferences: [String]
 }
 
 class RecommendationMLModel {
-    func rankVideos(candidates: [Video], userProfile: SuperiorUserProfile) async -> [Video] {
+    func rankVideos(candidates: [Video], userProfile: UserProfile) async -> [Video] {
         return candidates.shuffled()
     }
 }
