@@ -780,7 +780,6 @@ struct AnimatedFilterChip: View {
         )
         .accessibilityLabel(title)
         .accessibilityHint(isSelected ? "Currently selected filter" : "Double tap to select filter")
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 

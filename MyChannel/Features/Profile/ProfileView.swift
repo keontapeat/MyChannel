@@ -54,9 +54,6 @@ struct ProfileView: View {
                 }
             }
             .coordinateSpace(name: "scroll")
-            .onScrollOffsetChange { offset in
-                scrollOffset = offset
-            }
             .background(AppTheme.Colors.background)
             .navigationBarHidden(true)
             .clipped()

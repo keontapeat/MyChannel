@@ -518,39 +518,6 @@ enum TabItem: String, CaseIterable {
     }
 }
 
-// MARK: - View Extensions
-extension View {
-    func onScrollOffsetChange(_ action: @escaping (CGFloat) -> Void) -> some View {
-        self.background(
-            GeometryReader { geometry in
-                Color.clear
-                    .preference(key: ScrollOffsetPreferenceKey.self, value: geometry.frame(in: .global).minY)
-            }
-        )
-        .onPreferenceChange(ScrollOffsetPreferenceKey.self, perform: action)
-    }
-    
-    func onPressGesture(
-        onPress: @escaping () -> Void,
-        onRelease: @escaping () -> Void
-    ) -> some View {
-        self.simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in onPress() }
-                .onEnded { _ in onRelease() }
-        )
-    }
-}
-
-// MARK: - Preference Key
-struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 #Preview {
     MainTabView()
         .preferredColorScheme(.light)

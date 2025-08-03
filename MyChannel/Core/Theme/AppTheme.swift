@@ -75,6 +75,23 @@ struct AppTheme {
         static let medium = Shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 2)
         static let large = Shadow(color: .black.opacity(0.15), radius: 16, x: 0, y: 4)
     }
+    
+    // MARK: - Modern Animations
+    struct AnimationPresets {
+        static let spring = Animation.spring(response: 0.4, dampingFraction: 0.8)
+        static let easeInOut = Animation.easeInOut(duration: 0.3)
+        static let bouncy = Animation.spring(response: 0.6, dampingFraction: 0.6)
+        static let gentle = Animation.easeInOut(duration: 0.5)
+        static let quick = Animation.easeInOut(duration: 0.2)
+    }
+    
+    // MARK: - Modern Effects
+    struct ModernEffects {
+        static let glassmorphism = Material.ultraThinMaterial
+        static let cardShadow = Shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
+        static let buttonShadow = Shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 2)
+        static let floatingShadow = Shadow(color: .black.opacity(0.12), radius: 20, x: 0, y: 8)
+    }
 }
 
 // MARK: - Shadow Helper
@@ -145,6 +162,44 @@ extension View {
             .foregroundColor(AppTheme.Colors.textPrimary)
             .cornerRadius(AppTheme.CornerRadius.md)
             .font(AppTheme.Typography.bodyMedium)
+    }
+    
+    func modernCardStyle() -> some View {
+        self
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg))
+            .shadow(
+                color: AppTheme.ModernEffects.cardShadow.color,
+                radius: AppTheme.ModernEffects.cardShadow.radius,
+                x: AppTheme.ModernEffects.cardShadow.x,
+                y: AppTheme.ModernEffects.cardShadow.y
+            )
+    }
+    
+    func modernButtonStyle() -> some View {
+        self
+            .padding(.horizontal, AppTheme.Spacing.lg)
+            .padding(.vertical, AppTheme.Spacing.md)
+            .background(AppTheme.Colors.gradient)
+            .foregroundColor(.white)
+            .cornerRadius(AppTheme.CornerRadius.lg)
+            .font(AppTheme.Typography.bodyMedium)
+            .shadow(
+                color: AppTheme.ModernEffects.buttonShadow.color,
+                radius: AppTheme.ModernEffects.buttonShadow.radius,
+                x: AppTheme.ModernEffects.buttonShadow.x,
+                y: AppTheme.ModernEffects.buttonShadow.y
+            )
+    }
+    
+    func floatingStyle() -> some View {
+        self
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xl))
+            .shadow(
+                color: AppTheme.ModernEffects.floatingShadow.color,
+                radius: AppTheme.ModernEffects.floatingShadow.radius,
+                x: AppTheme.ModernEffects.floatingShadow.x,
+                y: AppTheme.ModernEffects.floatingShadow.y
+            )
     }
 }
 
