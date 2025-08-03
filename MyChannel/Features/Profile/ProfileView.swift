@@ -22,42 +22,39 @@ struct ProfileView: View {
     }
     
     var body: some View {
-        GeometryReader { geometry in
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Profile Header with Parallax
-                    ProfileHeaderView(
-                        user: currentUser,
-                        scrollOffset: scrollOffset,
-                        isFollowing: $isFollowing,
-                        showingEditProfile: $showingEditProfile,
-                        showingSettings: $showingSettings
-                    )
-                    
-                    // Tab Navigation
-                    ProfileTabNavigation(
-                        selectedTab: $selectedTab,
-                        user: currentUser
-                    )
-                    
-                    // Content based on selected tab
-                    ProfileContentView(
-                        selectedTab: selectedTab,
-                        user: currentUser,
-                        videos: userVideos
-                    )
-                    
-                    // Community Section Integration
-                    if selectedTab == .about {
-                        communitySection
-                    }
+        ScrollView {
+            VStack(spacing: 0) {
+                // Profile Header with Parallax
+                ProfileHeaderView(
+                    user: currentUser,
+                    scrollOffset: scrollOffset,
+                    isFollowing: $isFollowing,
+                    showingEditProfile: $showingEditProfile,
+                    showingSettings: $showingSettings
+                )
+                
+                // Tab Navigation
+                ProfileTabNavigation(
+                    selectedTab: $selectedTab,
+                    user: currentUser
+                )
+                
+                // Content based on selected tab
+                ProfileContentView(
+                    selectedTab: selectedTab,
+                    user: currentUser,
+                    videos: userVideos
+                )
+                
+                // Community Section Integration
+                if selectedTab == .about {
+                    communitySection
                 }
             }
-            .coordinateSpace(name: "scroll")
-            .background(AppTheme.Colors.background)
-            .navigationBarHidden(true)
-            .clipped()
         }
+        .coordinateSpace(name: "scroll")
+        .background(AppTheme.Colors.background)
+        .ignoresSafeArea(.container, edges: .top)
         .sheet(isPresented: $showingEditProfile) {
             EditProfileView(user: .constant(currentUser))
         }
@@ -130,15 +127,30 @@ struct ProfileView: View {
     }
 }
 
-// MARK: - Profile Settings View (Updated with Sign Out)
+// MARK: - Profile Settings View (Enhanced with Better Organization)
 struct ProfileSettingsView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @Environment(\.dismiss) private var dismiss
     @State private var showingSignOutAlert: Bool = false
+    @State private var selectedTheme: Int = 0
+    @State private var pushNotificationsEnabled: Bool = true
+    @State private var emailNotificationsEnabled: Bool = true
+    @State private var darkModeEnabled: Bool = false
     
     var body: some View {
         NavigationView {
             List {
+                Section("Appearance") {
+                    Picker("Theme", selection: $selectedTheme) {
+                        Text("Light").tag(0)
+                        Text("Dark").tag(1)
+                        Text("System").tag(2)
+                    }
+                    .pickerStyle(.menu)
+                    
+                    Toggle("Dark Mode", isOn: $darkModeEnabled)
+                }
+                
                 Section("Account") {
                     SettingsRow(
                         icon: "person.circle",
@@ -149,18 +161,32 @@ struct ProfileSettingsView: View {
                     )
                     
                     SettingsRow(
-                        icon: "bell",
-                        title: "Notifications",
-                        action: {
-                            // Notification settings
-                        }
-                    )
-                    
-                    SettingsRow(
                         icon: "lock",
                         title: "Privacy & Security",
                         action: {
                             // Privacy settings
+                        }
+                    )
+                    
+                    SettingsRow(
+                        icon: "key",
+                        title: "Change Password",
+                        action: {
+                            // Change password
+                        }
+                    )
+                }
+                
+                Section("Notifications") {
+                    Toggle("Push Notifications", isOn: $pushNotificationsEnabled)
+                    
+                    Toggle("Email Notifications", isOn: $emailNotificationsEnabled)
+                    
+                    SettingsRow(
+                        icon: "bell.badge",
+                        title: "Notification Settings",
+                        action: {
+                            // Detailed notification settings
                         }
                     )
                 }
@@ -189,6 +215,32 @@ struct ProfileSettingsView: View {
                             // Watch history
                         }
                     )
+                    
+                    SettingsRow(
+                        icon: "arrow.down.circle",
+                        title: "Downloads",
+                        action: {
+                            // Downloads
+                        }
+                    )
+                }
+                
+                Section("Data & Storage") {
+                    SettingsRow(
+                        icon: "network",
+                        title: "Data Saver",
+                        action: {
+                            // Data saver settings
+                        }
+                    )
+                    
+                    SettingsRow(
+                        icon: "externaldrive",
+                        title: "Storage Management",
+                        action: {
+                            // Storage management
+                        }
+                    )
                 }
                 
                 Section("Support") {
@@ -200,6 +252,24 @@ struct ProfileSettingsView: View {
                         }
                     )
                     
+                    SettingsRow(
+                        icon: "exclamationmark.bubble",
+                        title: "Send Feedback",
+                        action: {
+                            // Send feedback
+                        }
+                    )
+                    
+                    SettingsRow(
+                        icon: "star",
+                        title: "Rate This App",
+                        action: {
+                            // Rate app
+                        }
+                    )
+                }
+                
+                Section("Legal") {
                     SettingsRow(
                         icon: "doc.text",
                         title: "Terms of Service",
@@ -217,7 +287,7 @@ struct ProfileSettingsView: View {
                     )
                 }
                 
-                Section("Account Actions") {
+                Section {
                     Button(action: {
                         showingSignOutAlert = true
                     }) {

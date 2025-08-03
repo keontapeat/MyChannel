@@ -15,7 +15,7 @@ struct MainTabView: View {
     @State private var lastScrollOffset: CGFloat = 0
     @State private var notificationBadges: [TabItem: Int] = [
         .home: 0,
-        .stories: 2,
+        .flicks: 2,
         .upload: 0,
         .search: 0,
         .profile: 3 // Sample notification count
@@ -26,55 +26,50 @@ struct MainTabView: View {
     @StateObject private var appState = AppState()
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .bottom) {
-                // Main content
-                TabView(selection: $selectedTab) {
+        ZStack(alignment: .bottom) {
+            // Main content
+            Group {
+                switch selectedTab {
+                case .home:
                     LazyTabContent(tab: .home) {
                         HomeView()
                             .onScrollOffsetChange { offset in
-                                handleScrollOffset(offset, geometry: geometry)
+                                handleScrollOffset(offset, geometry: UIScreen.main.bounds)
                             }
                     }
-                    .tag(TabItem.home)
-                    
-                    LazyTabContent(tab: .stories) {
-                        StoriesView()
+                case .flicks:
+                    LazyTabContent(tab: .flicks) {
+                        FlicksView()
                     }
-                    .tag(TabItem.stories)
-                    
+                case .upload:
                     LazyTabContent(tab: .upload) {
                         UploadPlaceholderView()
                     }
-                    .tag(TabItem.upload)
-                    
+                case .search:
                     LazyTabContent(tab: .search) {
                         SearchView()
                     }
-                    .tag(TabItem.search)
-                    
+                case .profile:
                     LazyTabContent(tab: .profile) {
                         ProfileView()
                     }
-                    .tag(TabItem.profile)
                 }
-                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-                .ignoresSafeArea(.keyboard)
-                .background(AppTheme.Colors.background)
-                
-                // Custom Tab Bar
-                CustomTabBar(
-                    selectedTab: $selectedTab,
-                    notificationBadges: notificationBadges,
-                    isHidden: isTabBarHidden,
-                    onUploadTap: {
-                        showingUpload = true
-                    }
-                )
-                .offset(y: tabBarOffset)
-                .animation(.easeInOut(duration: 0.3), value: tabBarOffset)
-                .animation(.easeInOut(duration: 0.3), value: isTabBarHidden)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(AppTheme.Colors.background)
+            
+            // Custom Tab Bar
+            CustomTabBar(
+                selectedTab: $selectedTab,
+                notificationBadges: notificationBadges,
+                isHidden: isTabBarHidden,
+                onUploadTap: {
+                    showingUpload = true
+                }
+            )
+            .offset(y: tabBarOffset)
+            .animation(.easeInOut(duration: 0.3), value: tabBarOffset)
+            .animation(.easeInOut(duration: 0.3), value: isTabBarHidden)
         }
         .ignoresSafeArea(.keyboard)
         .environmentObject(appState)
@@ -108,7 +103,7 @@ struct MainTabView: View {
         }
     }
     
-    private func handleScrollOffset(_ offset: CGFloat, geometry: GeometryProxy) {
+    private func handleScrollOffset(_ offset: CGFloat, geometry: CGRect) {
         let threshold: CGFloat = 20
         let diff = offset - lastScrollOffset
         
@@ -477,7 +472,7 @@ struct LazyTabContent<Content: View>: View {
 // MARK: - Enhanced Tab Item Enum
 enum TabItem: String, CaseIterable {
     case home = "home"
-    case stories = "stories"
+    case flicks = "flicks"
     case upload = "upload"
     case search = "search"
     case profile = "profile"
@@ -485,7 +480,7 @@ enum TabItem: String, CaseIterable {
     var title: String {
         switch self {
         case .home: return "Home"
-        case .stories: return "Stories"
+        case .flicks: return "Flicks"
         case .upload: return "Create"
         case .search: return "Search"
         case .profile: return "You"
@@ -496,8 +491,8 @@ enum TabItem: String, CaseIterable {
         switch self {
         case .home:
             return isSelected ? "house.fill" : "house"
-        case .stories:
-            return isSelected ? "circle.fill" : "circle"
+        case .flicks:
+            return isSelected ? "Kbon.fill" : "light.ribbon"
         case .upload:
             return isSelected ? "plus.circle.fill" : "plus.circle"
         case .search:
@@ -510,7 +505,7 @@ enum TabItem: String, CaseIterable {
     var accessibilityLabel: String {
         switch self {
         case .home: return "Home tab"
-        case .stories: return "Stories tab"
+        case .flicks: return "Flicks tab"
         case .upload: return "Create content tab"
         case .search: return "Search tab"
         case .profile: return "Profile tab"
