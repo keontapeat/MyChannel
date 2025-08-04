@@ -1,0 +1,2094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MyChannel.live - The Future of Video Streaming</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #FF4444;
+            --accent: #00FFE1;
+            --dark: #0A0A0A;
+            --darker: #050505;
+            --light: #FFFFFF;
+            --gray: #888888;
+            --gradient: linear-gradient(135deg, #FF4444 0%, #FF6B6B 100%);
+            --glow-primary: 0 0 30px rgba(255, 68, 68, 0.4);
+            --glow-accent: 0 0 30px rgba(0, 255, 225, 0.4);
+            --card-glow: 0 0 40px rgba(255, 68, 68, 0.8);
+            --mouse-x: 50%;
+            --mouse-y: 50%;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+            background: var(--darker);
+            color: var(--light);
+            overflow-x: hidden;
+            line-height: 1.6;
+            cursor: none;
+        }
+
+        /* Enhanced Custom Cursor */
+        .cursor {
+            position: fixed;
+            width: 20px;
+            height: 20px;
+            background: var(--primary);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            transition: all 0.15s ease;
+            box-shadow: 0 0 20px rgba(255, 68, 68, 0.8);
+            will-change: transform;
+            transform: translate(-50%, -50%);
+        }
+
+        .cursor-dot {
+            position: fixed;
+            width: 8px;
+            height: 8px;
+            background: var(--light);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10000;
+            transition: none;
+            transform: translate(-50%, -50%);
+            will-change: transform;
+        }
+
+        /* Loading Screen - Fixed Glow */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--darker);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10001;
+            transition: opacity 0.6s ease, visibility 0.6s ease;
+        }
+
+        .loading-screen.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .loading-logo {
+            width: 100px;
+            height: 100px;
+            background: var(--gradient);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            animation: loadingPulse 1.2s ease-in-out infinite;
+            box-shadow: 0 4px 20px rgba(255, 68, 68, 0.3);
+            overflow: hidden;
+        }
+
+        .loading-logo img {
+            width: 80%;
+            height: 80%;
+            object-fit: contain;
+            border-radius: 12px;
+        }
+
+        @keyframes loadingPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); box-shadow: 0 8px 30px rgba(255, 68, 68, 0.4); }
+        }
+
+        /* Enhanced Animated Background */
+        .bg-animation {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: -1;
+            background: linear-gradient(180deg, #0A0A0A 0%, #1A0A0A 100%);
+            overflow: hidden;
+        }
+
+        .bg-animation::before {
+            content: '';
+            position: absolute;
+            width: 150%;
+            height: 150%;
+            top: -25%;
+            left: -25%;
+            background: 
+                radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(255, 68, 68, 0.12) 0%, transparent 35%),
+                radial-gradient(circle at 30% 70%, rgba(0, 255, 225, 0.08) 0%, transparent 30%);
+            will-change: transform;
+            animation: rotate 35s linear infinite;
+        }
+
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Enhanced floating particles */
+        .bg-particles {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: rgba(255, 68, 68, 0.4);
+            border-radius: 50%;
+            animation: float-particle 15s infinite linear;
+            will-change: transform;
+        }
+
+        .particle:nth-child(even) {
+            background: rgba(0, 255, 225, 0.3);
+        }
+
+        @keyframes float-particle {
+            0% { transform: translateY(100vh) translateX(0) scale(0); opacity: 0; }
+            10% { opacity: 1; transform: scale(1); }
+            90% { opacity: 1; }
+            100% { transform: translateY(-100vh) translateX(50px) scale(0); opacity: 0; }
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            padding: 15px 40px;
+            background: rgba(10, 10, 10, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            transition: all 0.2s ease;
+            transform: translateZ(0);
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--light);
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .logo:hover {
+            transform: scale(1.05);
+            filter: drop-shadow(0 0 8px rgba(255, 68, 68, 0.4));
+        }
+
+        .logo-icon {
+            width: 45px;
+            height: 45px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            box-shadow: 0 4px 20px rgba(255, 68, 68, 0.3);
+            overflow: hidden;
+            background: #FF4444;
+            transition: all 0.2s ease;
+        }
+
+        .logo:hover .logo-icon {
+            box-shadow: var(--glow-primary);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            position: relative;
+            padding: 8px 16px;
+            border-radius: 8px;
+        }
+
+        .nav-links a:hover {
+            color: var(--light);
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-cta {
+            background: var(--gradient);
+            color: var(--light);
+            padding: 10px 24px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 20px rgba(255, 68, 68, 0.3);
+        }
+
+        .nav-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--glow-primary);
+        }
+
+        /* Live visitor counter - More Organic */
+        .live-counter {
+            position: fixed;
+            top: 90px;
+            right: 20px;
+            background: rgba(0, 255, 225, 0.1);
+            border: 1px solid rgba(0, 255, 225, 0.3);
+            border-radius: 20px;
+            padding: 8px 12px;
+            z-index: 999;
+            font-size: 11px;
+            animation: counterPulse 3s infinite;
+            transition: all 0.2s ease;
+        }
+
+        .live-counter:hover {
+            box-shadow: var(--glow-accent);
+            transform: scale(1.05);
+        }
+
+        .live-counter .pulse-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #00FF00;
+            border-radius: 50%;
+            margin-right: 6px;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes counterPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.1); }
+        }
+
+        /* Hero Section - Enhanced */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 100px 40px 60px;
+            position: relative;
+        }
+
+        .hero-content {
+            max-width: 1200px;
+            text-align: center;
+            z-index: 2;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            background: rgba(255, 68, 68, 0.1);
+            border: 1px solid rgba(255, 68, 68, 0.3);
+            color: var(--primary);
+            padding: 8px 20px;
+            border-radius: 50px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 30px;
+            animation: badgePulse 2.5s ease infinite;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s ease;
+        }
+
+        .hero-badge:hover {
+            box-shadow: var(--glow-primary);
+            transform: scale(1.05);
+        }
+
+        @keyframes badgePulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.9; transform: scale(1.03); }
+        }
+
+        h1 {
+            font-size: clamp(2.5rem, 7vw, 5rem);
+            font-weight: 900;
+            line-height: 1.1;
+            background: linear-gradient(135deg, #FFFFFF 0%, #FF4444 50%, #00FFE1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradient 3s ease infinite;
+            background-size: 200% 200%;
+            margin-bottom: 20px;
+        }
+
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .founder-credit {
+            margin: 10px 0 20px;
+            padding: 8px 20px;
+            background: rgba(0, 255, 225, 0.1);
+            border: 1px solid rgba(0, 255, 225, 0.3);
+            border-radius: 25px;
+            display: inline-block;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s ease;
+        }
+
+        .founder-credit:hover {
+            box-shadow: var(--glow-accent);
+            transform: scale(1.02);
+        }
+
+        .founder-name {
+            color: var(--accent);
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .hero-subtitle {
+            font-size: clamp(1.1rem, 2.5vw, 1.4rem);
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 40px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 1.6;
+            opacity: 0;
+            animation: fadeInUp 0.8s ease 0.3s forwards;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 50px;
+            opacity: 0;
+            animation: fadeInUp 0.8s ease 0.5s forwards;
+        }
+
+        .btn-primary {
+            background: var(--gradient);
+            color: var(--light);
+            padding: 16px 35px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 17px;
+            transition: all 0.2s ease;
+            box-shadow: 0 8px 30px rgba(255, 68, 68, 0.3);
+            border: none;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--glow-primary);
+        }
+
+        .btn-primary:active {
+            transform: translateY(-1px) scale(0.98);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--light);
+            padding: 16px 35px;
+            border-radius: 50px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 17px;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-3px);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Enhanced Stats - WITH RED GLOW */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 25px;
+            max-width: 600px;
+            margin: 0 auto;
+            opacity: 0;
+            animation: fadeInUp 0.8s ease 0.7s forwards;
+        }
+
+        .stat {
+            text-align: center;
+            padding: 20px;
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .stat:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--card-glow);
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 68, 68, 0.6);
+        }
+
+        .stat-number {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .stat:hover .stat-number {
+            transform: scale(1.1);
+            text-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+        }
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Features Section - WITH RED GLOW */
+        .features {
+            padding: 60px 40px;
+            background: linear-gradient(180deg, var(--darker) 0%, #0F0505 100%);
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .section-badge {
+            display: inline-block;
+            background: rgba(0, 255, 225, 0.1);
+            border: 1px solid rgba(0, 255, 225, 0.3);
+            color: var(--accent);
+            padding: 8px 20px;
+            border-radius: 50px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s ease;
+        }
+
+        .section-badge:hover {
+            box-shadow: var(--glow-accent);
+            transform: scale(1.05);
+        }
+
+        h2 {
+            font-size: clamp(1.8rem, 4vw, 3rem);
+            font-weight: 800;
+            margin-bottom: 20px;
+        }
+
+        .section-subtitle {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.1rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 25px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 35px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--gradient);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .feature-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(255, 68, 68, 0.1) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-12px);
+            border-color: rgba(255, 68, 68, 0.6);
+            box-shadow: 
+                0 25px 80px rgba(0, 0, 0, 0.4), 
+                var(--card-glow),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .feature-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .feature-card:hover::after {
+            opacity: 1;
+        }
+
+        .feature-icon {
+            width: 55px;
+            height: 55px;
+            background: var(--gradient);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 25px rgba(255, 68, 68, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover .feature-icon {
+            transform: scale(1.15) rotateY(10deg);
+            box-shadow: var(--glow-primary);
+        }
+
+        .feature-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            transition: all 0.2s ease;
+        }
+
+        .feature-card:hover .feature-title {
+            color: #FFFFFF;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+
+        .feature-description {
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.6;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+
+        .feature-card:hover .feature-description {
+            color: rgba(255, 255, 255, 0.85);
+        }
+
+        /* Enhanced Interactivity for Other Sections */
+        .flicks {
+            padding: 60px 40px;
+            background: radial-gradient(circle at center, rgba(255, 68, 68, 0.05) 0%, transparent 70%);
+        }
+
+        .flicks-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+        }
+
+        .flicks-text h2 {
+            font-size: clamp(2rem, 4vw, 3.5rem);
+            margin-bottom: 25px;
+        }
+
+        .flicks-text p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+        }
+
+        .flicks-features {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .flicks-feature {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: all 0.2s ease;
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        .flicks-feature:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateX(10px);
+            box-shadow: 0 0 15px rgba(255, 68, 68, 0.1);
+        }
+
+        .flicks-feature-icon {
+            width: 35px;
+            height: 35px;
+            background: rgba(255, 68, 68, 0.1);
+            border: 2px solid var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            font-size: 18px;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }
+
+        .flicks-feature:hover .flicks-feature-icon {
+            box-shadow: var(--glow-primary);
+            transform: scale(1.1);
+        }
+
+        .phone-mockup {
+            width: 280px;
+            height: 560px;
+            background: linear-gradient(135deg, #1A1A1A 0%, #2A2A2A 100%);
+            border-radius: 35px;
+            border: 3px solid #333;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+            margin: 0 auto;
+        }
+
+        .phone-mockup:hover {
+            transform: scale(1.05) rotateY(5deg);
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), var(--glow-primary);
+        }
+
+        .phone-screen {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            bottom: 15px;
+            background: #000;
+            border-radius: 25px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .phone-mockup:hover .phone-screen {
+            background: linear-gradient(135deg, rgba(255, 68, 68, 0.1) 0%, rgba(0, 255, 225, 0.05) 100%);
+        }
+
+        .flicks-icon-large {
+            font-size: 60px;
+            color: var(--primary);
+            animation: iconPulse 2.5s ease infinite;
+            transition: all 0.3s ease;
+        }
+
+        .phone-mockup:hover .flicks-icon-large {
+            transform: scale(1.2) rotate(10deg);
+            text-shadow: 0 0 20px rgba(255, 68, 68, 0.8);
+        }
+
+        @keyframes iconPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Creator Protection Section - WITH RED GLOW */
+        .creator-protection {
+            padding: 60px 40px;
+            background: linear-gradient(135deg, rgba(0, 255, 225, 0.05) 0%, rgba(255, 68, 68, 0.05) 100%);
+        }
+
+        .protection-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: flex-start;
+        }
+
+        .protection-visual {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .strike-system {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 35px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .strike-item {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 18px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 15px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .strike-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateX(10px);
+            box-shadow: var(--card-glow);
+            border: 1px solid rgba(255, 68, 68, 0.3);
+        }
+
+        .strike-item.final-review {
+            background: rgba(0, 255, 225, 0.1);
+            border: 1px solid rgba(0, 255, 225, 0.3);
+        }
+
+        .strike-item.final-review:hover {
+            box-shadow: var(--glow-accent);
+        }
+
+        .strike-number {
+            width: 45px;
+            height: 45px;
+            background: var(--gradient);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 18px;
+            color: white;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+
+        .strike-item:hover .strike-number {
+            transform: scale(1.1) rotateY(180deg);
+            box-shadow: var(--glow-primary);
+        }
+
+        .final-review .strike-number {
+            background: linear-gradient(135deg, #00FFE1 0%, #00C9B8 100%);
+            font-size: 20px;
+        }
+
+        .final-review:hover .strike-number {
+            box-shadow: var(--glow-accent);
+        }
+
+        .strike-info h4 {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 3px;
+            color: var(--light);
+        }
+
+        .strike-info p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 13px;
+        }
+
+        .protection-text {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .protection-text h3 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin-bottom: 20px;
+            color: var(--accent);
+        }
+
+        .protection-text p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1rem;
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+
+        .protection-features {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin: 30px 0;
+        }
+
+        .protection-feature {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            transition: all 0.2s ease;
+            padding: 12px;
+            border-radius: 10px;
+        }
+
+        .protection-feature:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateX(8px);
+            box-shadow: 0 0 20px rgba(0, 255, 225, 0.1);
+        }
+
+        .protection-icon {
+            width: 35px;
+            height: 35px;
+            background: rgba(0, 255, 225, 0.1);
+            border: 2px solid var(--accent);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+            color: var(--accent);
+            transition: all 0.2s ease;
+        }
+
+        .protection-feature:hover .protection-icon {
+            box-shadow: var(--glow-accent);
+            transform: scale(1.1);
+        }
+
+        .protection-guarantee {
+            background: rgba(0, 255, 225, 0.1);
+            border: 1px solid rgba(0, 255, 225, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            color: rgba(255, 255, 255, 0.9);
+            font-style: italic;
+            margin-top: 25px;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s ease;
+        }
+
+        .protection-guarantee:hover {
+            box-shadow: var(--glow-accent);
+            transform: scale(1.02);
+        }
+
+        /* Enhanced Creator Benefits - WITH RED GLOW */
+        .creators {
+            padding: 60px 40px;
+            background: linear-gradient(180deg, #0F0505 0%, var(--darker) 100%);
+        }
+
+        .creator-benefits {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 30px;
+            max-width: 1000px;
+            margin: 60px auto;
+        }
+
+        .benefit {
+            text-align: center;
+            transition: all 0.3s ease;
+            padding: 25px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+        }
+
+        .benefit:hover {
+            transform: translateY(-12px);
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: var(--card-glow);
+            border-color: rgba(255, 68, 68, 0.6);
+        }
+
+        .benefit-number {
+            font-size: 2.5rem;
+            font-weight: 900;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .benefit:hover .benefit-number {
+            transform: scale(1.15);
+            filter: drop-shadow(0 0 10px rgba(255, 68, 68, 0.5));
+        }
+
+        .benefit-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .benefit:hover .benefit-title {
+            color: #FFFFFF;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+        }
+
+        .benefit-description {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .benefit:hover .benefit-description {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Enhanced CTA Section */
+        .cta-section {
+            padding: 80px 40px;
+            background: radial-gradient(circle at center, rgba(255, 68, 68, 0.1) 0%, transparent 70%);
+            text-align: center;
+        }
+
+        .cta-container {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .cta-title {
+            font-size: clamp(2.2rem, 5vw, 3.5rem);
+            font-weight: 900;
+            margin-bottom: 25px;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .email-form {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 40px;
+        }
+
+        .email-input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            color: var(--light);
+            padding: 16px 28px;
+            border-radius: 50px;
+            font-size: 15px;
+            min-width: 280px;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .email-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: rgba(255, 255, 255, 0.08);
+            transform: scale(1.02);
+            box-shadow: var(--glow-primary);
+        }
+
+        .email-input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Enhanced Footer */
+        footer {
+            padding: 50px 40px 30px;
+            background: #050505;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 30px;
+        }
+
+        .footer-brand {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .footer-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--light);
+            transition: all 0.2s ease;
+        }
+
+        .footer-logo:hover {
+            filter: drop-shadow(0 0 8px rgba(255, 68, 68, 0.4));
+        }
+
+        .footer-description {
+            color: rgba(255, 255, 255, 0.5);
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+
+        .footer-column h4 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-bottom: 15px;
+        }
+
+        .footer-column a {
+            display: block;
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            margin-bottom: 10px;
+            transition: all 0.2s ease;
+            padding: 3px 0;
+            font-size: 0.9rem;
+        }
+
+        .footer-column a:hover {
+            color: var(--primary);
+            transform: translateX(5px);
+            text-shadow: 0 0 5px rgba(255, 68, 68, 0.3);
+        }
+
+        .footer-bottom {
+            padding-top: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.9rem;
+        }
+
+        .social-links {
+            display: flex;
+            gap: 15px;
+        }
+
+        .social-links a {
+            width: 35px;
+            height: 35px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255, 255, 255, 0.6);
+            text-decoration: none;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .social-links a:hover {
+            background: var(--gradient);
+            color: var(--light);
+            transform: translateY(-3px);
+            box-shadow: var(--glow-primary);
+        }
+
+        /* Enhanced Scroll animations */
+        .slide-in-left {
+            opacity: 0;
+            transform: translateX(-30px);
+            transition: all 0.6s ease;
+        }
+
+        .slide-in-right {
+            opacity: 0;
+            transform: translateX(30px);
+            transition: all 0.6s ease;
+        }
+
+        .slide-in-up {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.6s ease;
+        }
+
+        .fade-in {
+            opacity: 0;
+            transition: all 0.6s ease;
+        }
+
+        .animate-in {
+            opacity: 1;
+            transform: translate(0);
+        }
+
+        /* Enhanced Button effects */
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(0);
+            animation: ripple 0.5s ease-out;
+            pointer-events: none;
+        }
+
+        @keyframes ripple {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        /* FIXED Mobile Responsive */
+        @media (max-width: 768px) {
+            body { cursor: default; }
+            .cursor, .cursor-dot { display: none; }
+
+            .live-counter {
+                top: 70px;
+                right: 15px;
+                font-size: 10px;
+                padding: 6px 10px;
+            }
+
+            nav { padding: 12px 20px; }
+            .nav-links { display: none; }
+            .logo { font-size: 20px; }
+            .logo-icon { width: 35px; height: 35px; }
+
+            .hero { padding: 80px 20px 50px; }
+            h1 { font-size: 2.2rem; }
+            .hero-subtitle { font-size: 1rem; padding: 0 10px; }
+            
+            .hero-buttons {
+                flex-direction: column;
+                width: 100%;
+                padding: 0 20px;
+            }
+
+            .btn-primary, .btn-secondary {
+                width: 100%;
+                padding: 14px 30px;
+                font-size: 16px;
+            }
+
+            .stats {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 15px;
+                padding: 0 10px;
+            }
+
+            .stat { padding: 15px 10px; }
+            .stat-number { font-size: 1.6rem; }
+
+            .features, .flicks, .creators, .creator-protection, .cta-section {
+                padding: 50px 20px;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .feature-card { padding: 25px; }
+            .feature-card:hover { transform: translateY(-8px); }
+
+            .flicks-content {
+                grid-template-columns: 1fr;
+                text-align: center;
+                gap: 30px;
+            }
+
+            /* FIXED Mobile Creator Protection */
+            .protection-content {
+                grid-template-columns: 1fr;
+                gap: 40px;
+            }
+
+            .protection-text {
+                order: -1; /* Show text first on mobile */
+            }
+
+            .protection-text h3 {
+                font-size: 1.5rem;
+                text-align: center;
+                color: var(--accent);
+            }
+
+            .protection-text p {
+                text-align: center;
+                font-size: 0.95rem;
+            }
+
+            .protection-features {
+                gap: 20px;
+                margin: 25px 0;
+            }
+
+            .protection-feature {
+                padding: 15px;
+                background: rgba(255, 255, 255, 0.02);
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 0.05);
+            }
+
+            .protection-feature:hover {
+                transform: translateX(0) scale(1.02);
+            }
+
+            .protection-icon {
+                width: 40px;
+                height: 40px;
+                font-size: 18px;
+            }
+
+            .protection-guarantee {
+                padding: 15px;
+                font-size: 0.9rem;
+                text-align: center;
+            }
+
+            .strike-system {
+                padding: 25px;
+                gap: 15px;
+            }
+
+            .strike-item {
+                padding: 15px;
+            }
+
+            .strike-item:hover {
+                transform: translateX(0) scale(1.02);
+            }
+
+            .strike-number {
+                width: 40px;
+                height: 40px;
+                font-size: 16px;
+            }
+
+            .strike-info h4 {
+                font-size: 15px;
+            }
+
+            .strike-info p {
+                font-size: 12px;
+            }
+
+            .creator-benefits {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 20px;
+            }
+
+            .benefit:hover { transform: translateY(-8px); }
+
+            .email-form {
+                flex-direction: column;
+                padding: 0 20px;
+            }
+
+            .email-input {
+                width: 100%;
+                min-width: unset;
+                padding: 14px 24px;
+            }
+
+            footer { padding: 30px 20px 20px; }
+            .footer-content {
+                grid-template-columns: 1fr;
+                gap: 25px;
+            }
+
+            .footer-bottom {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 390px) {
+            h1 { font-size: 1.8rem; }
+            .hero-subtitle { font-size: 0.95rem; }
+            .stat-number { font-size: 1.4rem; }
+            .feature-card { padding: 20px; }
+            h2 { font-size: 1.6rem; }
+            
+            .protection-text h3 { font-size: 1.3rem; }
+            .protection-text p { font-size: 0.9rem; }
+            .strike-system { padding: 20px; }
+            .protection-guarantee { padding: 12px; font-size: 0.85rem; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+            .cursor, .cursor-dot { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-logo">
+            <img src="MyChannel.PNG" alt="MyChannel Logo">
+        </div>
+    </div>
+
+    <!-- Custom Cursor -->
+    <div class="cursor" id="cursor"></div>
+    <div class="cursor-dot" id="cursorDot"></div>
+
+    <!-- Live Visitor Counter -->
+    <div class="live-counter">
+        <span class="pulse-dot"></span>
+        <span id="visitorCount">2,847</span> live now
+    </div>
+
+    <!-- Background Animation -->
+    <div class="bg-animation"></div>
+    <div class="bg-particles"></div>
+
+    <!-- Navigation -->
+    <nav>
+        <div class="nav-container">
+            <a href="#" class="logo">
+                <div class="logo-icon">
+                    <img src="MyChannel.PNG" alt="MyChannel Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
+                </div>
+                <span>MyChannel</span>
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#flicks">Flicks</a>
+                <a href="#creators">Creators</a>
+                <a href="#pricing">Pricing</a>
+                <a href="#" class="nav-cta">Download App</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-badge">🚀 LAUNCHING THE REVOLUTION</div>
+            <h1>The Future of Video Has Arrived</h1>
+            <div class="founder-credit">
+                <span class="founder-name">Keonta Peat - Founder</span>
+            </div>
+            <p class="hero-subtitle">
+                YouTube's reign is over. Welcome to MyChannel — where creators earn 90% revenue share, 
+                content is truly free, and innovation drives everything we do.
+            </p>
+            <div class="hero-buttons">
+                <a href="#" class="btn-primary" id="downloadBtn">
+                    📱 Download on App Store
+                </a>
+                <a href="#" class="btn-secondary" id="demoBtn">
+                    ▶️ Watch Demo
+                </a>
+            </div>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-number" data-target="90" id="revenueCounter">0</div>
+                    <div class="stat-label">Creator Revenue</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number" data-target="100000" id="adoptersCounter">0</div>
+                    <div class="stat-label">Early Adopters</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number" data-target="0" id="feesCounter">0</div>
+                    <div class="stat-label">Hidden Fees</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features slide-in-up" id="features">
+        <div class="section-header">
+            <div class="section-badge">LEGENDARY FEATURES</div>
+            <h2>Everything YouTube Should Have Been</h2>
+            <p class="section-subtitle">
+                Built from the ground up with creators and viewers in mind. No compromises.
+            </p>
+        </div>
+        <div class="features-grid">
+            <div class="feature-card slide-in-left">
+                <div class="feature-icon">💰</div>
+                <h3 class="feature-title">90% Revenue Share</h3>
+                <p class="feature-description">
+                    We're not greedy. Creators keep 90% of all revenue. YouTube takes 45%. 
+                    The math is simple — you deserve more.
+                </p>
+            </div>
+            <div class="feature-card slide-in-right">
+                <div class="feature-icon">🎬</div>
+                <h3 class="feature-title">All Content Types</h3>
+                <p class="feature-description">
+                    Long-form videos, short Flicks, live streams — all in one app. 
+                    No switching between platforms ever again.
+                </p>
+            </div>
+            <div class="feature-card slide-in-left">
+                <div class="feature-icon">🤖</div>
+                <h3 class="feature-title">AI-Powered Discovery</h3>
+                <p class="feature-description">
+                    Our algorithm actually works. Find content you love, get discovered by 
+                    viewers who care. No more fighting the algorithm.
+                </p>
+            </div>
+            <div class="feature-card slide-in-right">
+                <div class="feature-icon">📊</div>
+                <h3 class="feature-title">Real Analytics</h3>
+                <p class="feature-description">
+                    Complete transparency. See exactly how much you're earning in real-time. 
+                    No hidden metrics, no delayed payments.
+                </p>
+            </div>
+            <div class="feature-card slide-in-left">
+                <div class="feature-icon">💬</div>
+                <h3 class="feature-title">True Community</h3>
+                <p class="feature-description">
+                    Built-in chat, community features, and direct creator-fan connections. 
+                    Your audience is your community, not just viewers.
+                </p>
+            </div>
+            <div class="feature-card slide-in-right">
+                <div class="feature-icon">📱</div>
+                <h3 class="feature-title">Watch Offline</h3>
+                <p class="feature-description">
+                    Download your favorite videos and watch them anywhere, anytime. No internet? 
+                    No problem. Your content is always available when you need it.
+                </p>
+            </div>
+            <div class="feature-card slide-in-left">
+                <div class="feature-icon">🎵</div>
+                <h3 class="feature-title">MyChannel Music</h3>
+                <p class="feature-description">
+                    Stream millions of songs ad-free. Music videos, audio-only tracks, playlists, 
+                    and exclusive content. YouTube Music wishes it was this good.
+                </p>
+            </div>
+            <div class="feature-card slide-in-right">
+                <div class="feature-icon">🎬</div>
+                <h3 class="feature-title">MyChannel Movies</h3>
+                <p class="feature-description">
+                    Watch blockbuster movies, indie films, documentaries, and exclusive originals. 
+                    4K quality, no ads, unlimited streaming. Netflix just got some real competition.
+                </p>
+            </div>
+            <div class="feature-card slide-in-left">
+                <div class="feature-icon">🛡️</div>
+                <h3 class="feature-title">Three-Strike Protection</h3>
+                <p class="feature-description">
+                    Your channel won't disappear overnight. Our fair review system gives creators 
+                    real protection with human oversight and appeal processes.
+                </p>
+            </div>
+            <div class="feature-card slide-in-right">
+                <div class="feature-icon">⚡</div>
+                <h3 class="feature-title">Lightning Fast</h3>
+                <p class="feature-description">
+                    4K streaming without buffering. Instant uploads. Zero lag live streams. 
+                    Built with cutting-edge technology that actually works.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Flicks Section -->
+    <section class="flicks slide-in-up" id="flicks">
+        <div class="flicks-content">
+            <div class="flicks-text slide-in-left">
+                <div class="section-badge">⚡ FLICKS</div>
+                <h2>Short-Form Content Reimagined</h2>
+                <p>
+                    TikTok meets YouTube Shorts, but better. Our Flicks feature isn't just another 
+                    copy — it's what short-form content should have been from the start.
+                </p>
+                <div class="flicks-features">
+                    <div class="flicks-feature">
+                        <div class="flicks-feature-icon">⚡</div>
+                        <div>
+                            <strong>Bolt Discovery</strong><br>
+                            Go viral instantly with our Bolt algorithm
+                        </div>
+                    </div>
+                    <div class="flicks-feature">
+                        <div class="flicks-feature-icon">🎵</div>
+                        <div>
+                            <strong>Music Library</strong><br>
+                            Millions of tracks with zero copyright strikes
+                        </div>
+                    </div>
+                    <div class="flicks-feature">
+                        <div class="flicks-feature-icon">💎</div>
+                        <div>
+                            <strong>Creator Tools</strong><br>
+                            Professional editing right in the app
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flicks-visual slide-in-right">
+                <div class="phone-mockup" id="phoneMockup">
+                    <div class="phone-screen">
+                        <div class="flicks-icon-large">⚡</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Creator Protection Section -->
+    <section class="creator-protection slide-in-up" id="protection">
+        <div class="section-header">
+            <div class="section-badge">🛡️ CREATOR PROTECTION</div>
+            <h2>Three-Strike Plus Final Review System</h2>
+            <p class="section-subtitle">
+                Your life's work deserves protection. We won't terminate your channel over one mistake like YouTube does.
+            </p>
+        </div>
+        <div class="protection-content">
+            <div class="protection-visual slide-in-left">
+                <div class="strike-system">
+                    <div class="strike-item">
+                        <div class="strike-number">1</div>
+                        <div class="strike-info">
+                            <h4>First Strike</h4>
+                            <p>Warning + Educational Resources</p>
+                        </div>
+                    </div>
+                    <div class="strike-item">
+                        <div class="strike-number">2</div>
+                        <div class="strike-info">
+                            <h4>Second Strike</h4>
+                            <p>Temporary Restrictions + Support</p>
+                        </div>
+                    </div>
+                    <div class="strike-item">
+                        <div class="strike-number">3</div>
+                        <div class="strike-info">
+                            <h4>Third Strike</h4>
+                            <p>Final Review Process Begins</p>
+                        </div>
+                    </div>
+                    <div class="strike-item final-review">
+                        <div class="strike-number">⚖️</div>
+                        <div class="strike-info">
+                            <h4>Final Review</h4>
+                            <p>Human reviewers + Appeal process</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="protection-text slide-in-right">
+                <h3>We Believe in Second Chances</h3>
+                <p>Unlike YouTube's harsh termination policies, our Three-Strike Plus Final Review system gives creators real protection:</p>
+                <div class="protection-features">
+                    <div class="protection-feature">
+                        <div class="protection-icon">🛡️</div>
+                        <div>
+                            <strong>No Instant Terminations</strong><br>
+                            Every strike comes with education and support, not punishment
+                        </div>
+                    </div>
+                    <div class="protection-feature">
+                        <div class="protection-icon">👥</div>
+                        <div>
+                            <strong>Human Final Review</strong><br>
+                            Real people review cases, not just algorithms
+                        </div>
+                    </div>
+                    <div class="protection-feature">
+                        <div class="protection-icon">💬</div>
+                        <div>
+                            <strong>Explain Your Case</strong><br>
+                            Get a chance to explain context and appeal decisions
+                        </div>
+                    </div>
+                    <div class="protection-feature">
+                        <div class="protection-icon">🔄</div>
+                        <div>
+                            <strong>Restoration Possible</strong><br>
+                            Wrongful strikes can be removed and channels restored
+                        </div>
+                    </div>
+                </div>
+                <p class="protection-guarantee">
+                    <strong>Our Promise:</strong> Your years of hard work won't disappear overnight because of one mistake. 
+                    We're here to help creators succeed, not to destroy their careers.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Creator Section -->
+    <section class="creators slide-in-up" id="creators">
+        <div class="section-header">
+            <div class="section-badge">FOR CREATORS</div>
+            <h2>Built By Creators, For Creators</h2>
+            <p class="section-subtitle">
+                We're not another corporate platform. We're creators who got tired of being exploited.
+            </p>
+        </div>
+        <div class="creator-benefits">
+            <div class="benefit fade-in">
+                <div class="benefit-number">90%</div>
+                <div class="benefit-title">Revenue Share</div>
+                <div class="benefit-description">Keep what you earn. Period.</div>
+            </div>
+            <div class="benefit fade-in">
+                <div class="benefit-number">24hr</div>
+                <div class="benefit-title">Fast Payouts</div>
+                <div class="benefit-description">Get paid daily, not monthly</div>
+            </div>
+            <div class="benefit fade-in">
+                <div class="benefit-number">Zero</div>
+                <div class="benefit-title">Censorship</div>
+                <div class="benefit-description">Create freely, express yourself</div>
+            </div>
+            <div class="benefit fade-in">
+                <div class="benefit-number">100%</div>
+                <div class="benefit-title">Ownership</div>
+                <div class="benefit-description">Your content, your rights</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section slide-in-up">
+        <div class="cta-container">
+            <h2 class="cta-title">Join The Revolution</h2>
+            <p class="hero-subtitle">
+                Be part of the platform that's ending YouTube's monopoly. Get early access and exclusive creator benefits.
+            </p>
+            <form class="email-form" id="emailForm" action="mailto:keontapeat@mychannel.live" method="post" enctype="text/plain">
+                <input type="email" name="email" class="email-input" placeholder="Enter your email for early access" required id="emailInput">
+                <button type="submit" class="btn-primary" id="submitBtn">Get Early Access</button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="slide-in-up">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <div class="footer-logo">
+                    <div class="logo-icon">
+                        <img src="MyChannel.PNG" alt="MyChannel Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
+                    </div>
+                    <span>MyChannel.live</span>
+                </div>
+                <p class="footer-description">
+                    The future of video streaming. Where creators thrive, communities grow, 
+                    and content is truly free. We're not just competing with YouTube — we're replacing it.
+                </p>
+            </div>
+            <div class="footer-column">
+                <h4>Platform</h4>
+                <a href="#">Features</a>
+                <a href="#">Flicks</a>
+                <a href="#">Live Streaming</a>
+                <a href="#">Creator Tools</a>
+                <a href="#">Analytics</a>
+            </div>
+            <div class="footer-column">
+                <h4>Creators</h4>
+                <a href="#">Get Started</a>
+                <a href="#">Revenue Share</a>
+                <a href="#">Success Stories</a>
+                <a href="#">Creator Fund</a>
+                <a href="#">Support</a>
+            </div>
+            <div class="footer-column">
+                <h4>Company</h4>
+                <a href="#">About Us</a>
+                <a href="#">Mission</a>
+                <a href="#">Press Kit</a>
+                <a href="#">Careers</a>
+                <a href="#">Contact</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <div>© 2025 MyChannel.live — The Revolution Starts Here</div>
+            <div class="social-links">
+                <a href="#" class="social-link">𝕏</a>
+                <a href="#" class="social-link">📧</a>
+                <a href="#" class="social-link">💬</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Enhanced cursor system
+        const cursor = document.querySelector('#cursor');
+        const cursorDot = document.querySelector('#cursorDot');
+        let mouseX = 0, mouseY = 0;
+        let cursorX = 0, cursorY = 0;
+
+        const isHoverDevice = window.matchMedia('(hover: hover)').matches;
+        
+        if (isHoverDevice) {
+            document.addEventListener('mousemove', (e) => {
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+                
+                // Throttled mouse tracking for background effects
+                requestAnimationFrame(() => {
+                    document.documentElement.style.setProperty('--mouse-x', `${(mouseX / window.innerWidth) * 100}%`);
+                    document.documentElement.style.setProperty('--mouse-y', `${(mouseY / window.innerHeight) * 100}%`);
+                });
+            });
+
+            function animateCursor() {
+                cursorX += (mouseX - cursorX) * 0.15;
+                cursorY += (mouseY - cursorY) * 0.15;
+                
+                cursor.style.left = cursorX + 'px';
+                cursor.style.top = cursorY + 'px';
+                cursorDot.style.left = mouseX + 'px';
+                cursorDot.style.top = mouseY + 'px';
+                
+                requestAnimationFrame(animateCursor);
+            }
+            animateCursor();
+
+            // Enhanced magnetic effect
+            document.querySelectorAll('.btn-primary, .btn-secondary, .feature-card, .logo, .stat, .benefit, .strike-item').forEach(el => {
+                el.addEventListener('mouseenter', () => {
+                    cursor.style.transform = 'scale(2.5) translate(-20%, -20%)';
+                    cursor.style.opacity = '0.3';
+                    cursor.style.background = 'linear-gradient(135deg, #FF4444, #00FFE1)';
+                });
+                
+                el.addEventListener('mouseleave', () => {
+                    cursor.style.transform = 'scale(1) translate(-50%, -50%)';
+                    cursor.style.opacity = '1';
+                    cursor.style.background = '#FF4444';
+                });
+            });
+        }
+
+        // Optimized particle system
+        function createParticles() {
+            const container = document.querySelector('.bg-particles');
+            const particleCount = window.innerWidth < 768 ? 6 : 12;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + 'vw';
+                particle.style.animationDelay = Math.random() * 15 + 's';
+                particle.style.animationDuration = (15 + Math.random() * 10) + 's';
+                container.appendChild(particle);
+            }
+        }
+
+        // Slower loading with staggered animations
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                document.getElementById('loadingScreen').classList.add('hidden');
+                startAnimations();
+            }, 800); // Slower loading
+        });
+
+        function startAnimations() {
+            createParticles();
+            startLiveCounter();
+            // Start counter animation immediately after loading for smoother experience
+            setTimeout(() => {
+                animateCounters();
+                initScrollAnimations();
+            }, 100);
+        }
+
+        // Enhanced live counter with more organic numbers
+        function startLiveCounter() {
+            const counter = document.getElementById('visitorCount');
+            const organicNumbers = [
+                2847, 2851, 2849, 2856, 2863, 2859, 2864, 2861, 2868, 2872,
+                2875, 2871, 2879, 2883, 2887, 2891, 2889, 2894, 2898, 2902,
+                2905, 2901, 2907, 2911, 2915, 2919, 2923, 2921, 2927, 2931
+            ];
+            let currentIndex = 0;
+            
+            setInterval(() => {
+                if (Math.random() > 0.3) { // 70% chance to update
+                    currentIndex = (currentIndex + 1) % organicNumbers.length;
+                    counter.textContent = organicNumbers[currentIndex].toLocaleString();
+                }
+            }, Math.random() * 8000 + 3000); // Random interval between 3-11 seconds
+        }
+
+        // Smoother counter animation
+        function animateCounters() {
+            const counters = [
+                { element: document.getElementById('revenueCounter'), target: 90, suffix: '%' },
+                { element: document.getElementById('adoptersCounter'), target: 100000, suffix: '+' },
+                { element: document.getElementById('feesCounter'), target: 0, suffix: '' }
+            ];
+
+            counters.forEach(({ element, target, suffix }, index) => {
+                let count = 0;
+                const increment = target / 50; // Smoother animation
+                const timer = setInterval(() => {
+                    count += increment;
+                    if (count >= target) {
+                        count = target;
+                        clearInterval(timer);
+                    }
+                    
+                    if (target === 100000) {
+                        element.textContent = (count / 1000).toFixed(0) + 'K' + suffix;
+                    } else if (target === 0) {
+                        element.textContent = 'Zero';
+                    } else {
+                        element.textContent = Math.ceil(count) + suffix;
+                    }
+                }, 30); // Faster updates
+            });
+        }
+
+        // Enhanced scroll animations with better performance
+        function initScrollAnimations() {
+            const observerOptions = {
+                threshold: 0.1,
+                rootMargin: '0px 0px -50px 0px'
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('animate-in');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, observerOptions);
+
+            // Stagger animations for better visual flow
+            const elements = document.querySelectorAll('.slide-in-left, .slide-in-right, .slide-in-up, .fade-in');
+            elements.forEach((el, index) => {
+                el.style.transitionDelay = `${index * 0.1}s`;
+                observer.observe(el);
+            });
+        }
+
+        // Enhanced button effects
+        function addButtonEffects() {
+            document.querySelectorAll('.btn-primary, .btn-secondary').forEach(button => {
+                button.addEventListener('click', function(e) {
+                    // Enhanced ripple effect
+                    const ripple = document.createElement('span');
+                    const rect = this.getBoundingClientRect();
+                    const size = Math.max(rect.width, rect.height);
+                    const x = e.clientX - rect.left - size / 2;
+                    const y = e.clientY - rect.top - size / 2;
+                    
+                    ripple.style.width = ripple.style.height = size + 'px';
+                    ripple.style.left = x + 'px';
+                    ripple.style.top = y + 'px';
+                    ripple.classList.add('ripple');
+                    
+                    this.appendChild(ripple);
+                    setTimeout(() => ripple.remove(), 500);
+
+                    // Enhanced haptic feedback
+                    if (navigator.vibrate) {
+                        navigator.vibrate([25, 10, 25]);
+                    }
+                });
+            });
+        }
+
+        // Enhanced email form
+        document.getElementById('emailForm').addEventListener('submit', (e) => {
+            const button = document.getElementById('submitBtn');
+            
+            // Enhanced success animation
+            button.innerHTML = '✨ Opening Email Client...';
+            button.style.transform = 'scale(1.05)';
+            
+            setTimeout(() => {
+                button.innerHTML = 'Get Early Access';
+                button.style.transform = '';
+            }, 3000);
+        });
+
+        // Smooth scroll with enhanced easing
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'start',
+                        inline: 'nearest'
+                    });
+                }
+            });
+        });
+
+        // Enhanced navbar scroll with better performance
+        let ticking = false;
+        function updateNavbar() {
+            const nav = document.querySelector('nav');
+            const scrolled = window.scrollY;
+            
+            nav.style.background = scrolled > 50 ? 
+                'rgba(10, 10, 10, 0.98)' : 'rgba(10, 10, 10, 0.8)';
+            nav.style.boxShadow = scrolled > 50 ? 
+                '0 5px 30px rgba(0, 0, 0, 0.8)' : 'none';
+            
+            ticking = false;
+        }
+
+        window.addEventListener('scroll', () => {
+            if (!ticking) {
+                requestAnimationFrame(updateNavbar);
+                ticking = true;
+            }
+        });
+
+        // Initialize everything
+        document.addEventListener('DOMContentLoaded', () => {
+            addButtonEffects();
+            document.getElementById('loadingScreen').style.display = 'flex';
+        });
+
+        // Performance optimization
+        if (navigator.hardwareConcurrency < 4) {
+            document.documentElement.style.setProperty('--animation-duration', '0.15s');
+        }
+
+        // Screen size optimization
+        function optimizeForScreen() {
+            const width = window.innerWidth;
+            const particleCount = width < 768 ? 6 : width < 1200 ? 10 : 12;
+            
+            // Clean up existing particles
+            const existingParticles = document.querySelectorAll('.particle');
+            existingParticles.forEach(p => p.remove());
+            
+            // Create optimized particle count
+            createParticles();
+        }
+
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(optimizeForScreen, 250);
+        });
+
+        // Add visual feedback for all interactive elements
+        document.querySelectorAll('.feature-card, .benefit, .strike-item, .stat').forEach(el => {
+            el.addEventListener('mouseenter', function() {
+                this.style.transform = this.style.transform.replace('scale(1)', 'scale(1.02)');
+            });
+            
+            el.addEventListener('mouseleave', function() {
+                this.style.transform = this.style.transform.replace('scale(1.02)', 'scale(1)');
+            });
+        });
+    </script>
+</body>
+</html>
