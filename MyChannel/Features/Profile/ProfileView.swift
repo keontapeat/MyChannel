@@ -12,7 +12,6 @@ struct ProfileView: View {
     @State private var selectedTab: ProfileTab = .videos
     @State private var showingSettings: Bool = false
     @State private var showingEditProfile: Bool = false
-    @State private var user: User = User.sampleUsers[0]
     @State private var isFollowing: Bool = false
     @State private var userVideos: [Video] = Video.sampleVideos
     @State private var scrollOffset: CGFloat = 0
@@ -51,19 +50,15 @@ struct ProfileView: View {
                     communitySection
                 }
             }
+            .frame(maxWidth: .infinity)
         }
         .coordinateSpace(name: "scroll")
         .background(AppTheme.Colors.background)
-        .ignoresSafeArea(.container, edges: .top)
         .sheet(isPresented: $showingEditProfile) {
             EditProfileView(user: .constant(currentUser))
         }
         .sheet(isPresented: $showingSettings) {
             ProfileSettingsView()
-        }
-        .onAppear {
-            // Update local user from auth manager
-            user = currentUser
         }
     }
     
@@ -1037,8 +1032,10 @@ enum ProfileTab: String, CaseIterable {
     }
 }
 
-#Preview {
-    ProfileView()
-        .environmentObject(AuthenticationManager.shared)
-        .preferredColorScheme(.light)
+struct ProfileView_Previews: PreviewProvider {
+    static var previews: some View {
+        ProfileView()
+            .environmentObject(AuthenticationManager.shared)
+            .preferredColorScheme(.light)
+    }
 }

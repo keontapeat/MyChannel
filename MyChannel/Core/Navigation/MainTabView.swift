@@ -25,103 +25,112 @@ struct MainTabView: View {
     @State private var showingUpload: Bool = false
     @StateObject private var appState = AppState()
     
+    init() {
+        // Hide the default TabBar
+        UITabBar.appearance().isHidden = true
+    }
+    
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // Main content
-            Group {
-                switch selectedTab {
-                case .home:
-                    LazyTabContent(tab: .home) {
-                        HomeView()
-                            .onScrollOffsetChange { offset in
-                                handleScrollOffset(offset, geometry: UIScreen.main.bounds)
-                            }
+        GeometryReader { geometry in
+            ZStack(alignment: .bottom) {
+                // Main content using TabView for stable view identity
+                TabView(selection: $selectedTab) {
+                    HomeView()
+                        .onScrollOffsetChange { offset in
+                            handleScrollOffset(offset)
+                        }
+                        .tag(TabItem.home)
+                    
+                    FlicksView()
+                        .tag(TabItem.flicks)
+                    
+                    // The upload tab is handled by the custom button, so its content is empty.
+                    Color.clear
+                        .tag(TabItem.upload)
+                    
+                    SearchView()
+                        .tag(TabItem.search)
+                    
+                    ProfileView()
+                        .tag(TabItem.profile)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(AppTheme.Colors.background)
+                
+                // Custom Tab Bar
+                CustomTabBar(
+                    selectedTab: $selectedTab,
+                    notificationBadges: notificationBadges,
+                    isHidden: isTabBarHidden,
+                    onUploadTap: {
+                        showingUpload = true
                     }
-                case .flicks:
-                    LazyTabContent(tab: .flicks) {
-                        FlicksView()
-                    }
-                case .upload:
-                    LazyTabContent(tab: .upload) {
-                        UploadPlaceholderView()
-                    }
-                case .search:
-                    LazyTabContent(tab: .search) {
-                        SearchView()
-                    }
-                case .profile:
-                    LazyTabContent(tab: .profile) {
-                        ProfileView()
-                    }
+                )
+                .offset(y: tabBarOffset)
+                .animation(.easeInOut(duration: 0.3), value: tabBarOffset)
+                .animation(.easeInOut(duration: 0.3), value: isTabBarHidden)
+            }
+            .ignoresSafeArea(.keyboard)
+            .environmentObject(appState)
+            .environmentObject(authManager)
+            .onChange(of: selectedTab) { oldValue, newValue in
+                // Prevent selecting the placeholder upload tab
+                if newValue == .upload {
+                    selectedTab = oldValue
+                    return
+                }
+                
+                // Clear notification badge for selected tab
+                notificationBadges[newValue] = 0
+                
+                // Add haptic feedback
+                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                impactFeedback.impactOccurred()
+                
+                // Track screen view
+                Task {
+                    await AnalyticsService.shared.trackScreenView(newValue.title)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.Colors.background)
-            
-            // Custom Tab Bar
-            CustomTabBar(
-                selectedTab: $selectedTab,
-                notificationBadges: notificationBadges,
-                isHidden: isTabBarHidden,
-                onUploadTap: {
-                    showingUpload = true
+            .fullScreenCover(isPresented: $showingUpload) {
+                UploadView()
+            }
+            .onAppear {
+                // Set current user in app state
+                if let user = authManager.currentUser {
+                    appState.currentUser = user
                 }
-            )
-            .offset(y: tabBarOffset)
-            .animation(.easeInOut(duration: 0.3), value: tabBarOffset)
-            .animation(.easeInOut(duration: 0.3), value: isTabBarHidden)
-        }
-        .ignoresSafeArea(.keyboard)
-        .environmentObject(appState)
-        .environmentObject(authManager)
-        .onChange(of: selectedTab) { oldValue, newValue in
-            // Clear notification badge for selected tab
-            notificationBadges[newValue] = 0
-            
-            // Add haptic feedback
-            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-            impactFeedback.impactOccurred()
-            
-            // Track screen view
-            Task {
-                await AnalyticsService.shared.trackScreenView(newValue.title)
             }
-        }
-        .fullScreenCover(isPresented: $showingUpload) {
-            UploadView()
-        }
-        .onAppear {
-            // Set current user in app state
-            if let user = authManager.currentUser {
-                appState.currentUser = user
-            }
-        }
-        .onChange(of: authManager.currentUser) { oldValue, newValue in
-            if let user = newValue {
-                appState.currentUser = user
+            .onChange(of: authManager.currentUser) { oldValue, newValue in
+                if let user = newValue {
+                    appState.currentUser = user
+                }
             }
         }
     }
     
-    private func handleScrollOffset(_ offset: CGFloat, geometry: CGRect) {
+    private func handleScrollOffset(_ offset: CGFloat) {
         let threshold: CGFloat = 20
         let diff = offset - lastScrollOffset
         
-        withAnimation(.easeInOut(duration: 0.3)) {
-            if diff > threshold && !isTabBarHidden {
-                // Scrolling down, hide tab bar
-                isTabBarHidden = true
-                tabBarOffset = 100
-            } else if diff < -threshold && isTabBarHidden {
-                // Scrolling up, show tab bar
-                isTabBarHidden = false
-                tabBarOffset = 0
+        // Ensure UI updates are on the main thread
+        DispatchQueue.main.async {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                if diff > threshold && offset > 0 && !isTabBarHidden {
+                    // Scrolling down, hide tab bar
+                    isTabBarHidden = true
+                    tabBarOffset = 100
+                } else if diff < -threshold && isTabBarHidden {
+                    // Scrolling up, show tab bar
+                    isTabBarHidden = false
+                    tabBarOffset = 0
+                }
             }
+            self.lastScrollOffset = offset
         }
-        
-        lastScrollOffset = offset
     }
 }
+
 
 // MARK: - App State Management
 @MainActor
@@ -191,23 +200,23 @@ struct CustomTabBar: View {
     
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(TabItem.allCases, id: \.self) { tab in
-                if tab == .upload {
-                    // Special upload button
+            ForEach(TabItem.allCases.filter { $0 != .upload }, id: \.self) { tab in
+                CustomTabBarButton(
+                    tab: tab,
+                    isSelected: selectedTab == tab,
+                    badgeCount: notificationBadges[tab] ?? 0,
+                    action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedTab = tab
+                        }
+                    }
+                )
+                .frame(maxWidth: .infinity)
+                
+                if tab == .flicks {
+                    // Special upload button sits in the middle
                     UploadTabButton(action: onUploadTap)
                         .frame(maxWidth: .infinity)
-                } else {
-                    CustomTabBarButton(
-                        tab: tab,
-                        isSelected: selectedTab == tab,
-                        badgeCount: notificationBadges[tab] ?? 0,
-                        action: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedTab = tab
-                            }
-                        }
-                    )
-                    .frame(maxWidth: .infinity)
                 }
             }
         }
@@ -285,42 +294,6 @@ struct UploadTabButton: View {
     }
 }
 
-// MARK: - Upload Placeholder View
-struct UploadPlaceholderView: View {
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            
-            ZStack {
-                Circle()
-                    .fill(AppTheme.Colors.primary.opacity(0.1))
-                    .frame(width: 120, height: 120)
-                
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(AppTheme.Colors.primary)
-            }
-            
-            VStack(spacing: 16) {
-                Text("Create Amazing Content")
-                    .font(AppTheme.Typography.title1)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Text("Tap the + button to start creating videos, shorts, or live streams")
-                    .font(AppTheme.Typography.body)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-            }
-            
-            Spacer()
-        }
-        .padding()
-        .background(AppTheme.Colors.background)
-    }
-}
-
 // MARK: - Custom Tab Bar Button
 struct CustomTabBarButton: View {
     let tab: TabItem
@@ -339,7 +312,7 @@ struct CustomTabBarButton: View {
                         Circle()
                             .fill(AppTheme.Colors.primary.opacity(0.2))
                             .frame(width: 40, height: 40)
-                            .scaleEffect(isPressed ? 0.9 : 1.0)
+                            .transition(.scale.combined(with: .opacity))
                     }
                     
                     // Icon with badge
@@ -402,7 +375,7 @@ struct NotificationBadge: View {
                 .foregroundColor(.white)
                 .minimumScaleFactor(0.5)
         }
-        .scaleEffect(count > 0 ? 1.0 : 0.0)
+        .transition(.scale.combined(with: .opacity))
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: count)
     }
 }
@@ -420,62 +393,13 @@ struct VisualEffectBlur: UIViewRepresentable {
     }
 }
 
-// MARK: - Lazy Tab Content
-struct LazyTabContent<Content: View>: View {
-    let tab: TabItem
-    let content: () -> Content
-    
-    @State private var hasAppeared: Bool = false
-    
-    var body: some View {
-        Group {
-            if hasAppeared {
-                content()
-            } else {
-                // Enhanced loading placeholder
-                VStack(spacing: 20) {
-                    Spacer()
-                    
-                    // Animated logo or icon
-                    Image(systemName: tab.iconName(isSelected: true))
-                        .font(.system(size: 40))
-                        .foregroundColor(AppTheme.Colors.primary)
-                        .scaleEffect(1.0)
-                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: UUID())
-                    
-                    VStack(spacing: 8) {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
-                            .scaleEffect(1.2)
-                        
-                        Text("Loading \(tab.title)...")
-                            .font(AppTheme.Typography.subheadline)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                    
-                    Spacer()
-                }
-                .background(AppTheme.Colors.background)
-            }
-        }
-        .onAppear {
-            // Delay loading to improve performance
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    hasAppeared = true
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Enhanced Tab Item Enum
-enum TabItem: String, CaseIterable {
-    case home = "home"
-    case flicks = "flicks"
-    case upload = "upload"
-    case search = "search"
-    case profile = "profile"
+enum TabItem: String, CaseIterable, Hashable {
+    case home
+    case flicks
+    case upload
+    case search
+    case profile
     
     var title: String {
         switch self {
@@ -492,9 +416,9 @@ enum TabItem: String, CaseIterable {
         case .home:
             return isSelected ? "house.fill" : "house"
         case .flicks:
-            return isSelected ? "Kbon.fill" : "light.ribbon"
+            return "light.ribbon" // Use the same icon for both states
         case .upload:
-            return isSelected ? "plus.circle.fill" : "plus.circle"
+            return "plus" // This is for the central button, not a tab item
         case .search:
             return isSelected ? "magnifyingglass.circle.fill" : "magnifyingglass"
         case .profile:
@@ -506,14 +430,16 @@ enum TabItem: String, CaseIterable {
         switch self {
         case .home: return "Home tab"
         case .flicks: return "Flicks tab"
-        case .upload: return "Create content tab"
+        case .upload: return "Create content"
         case .search: return "Search tab"
         case .profile: return "Profile tab"
         }
     }
 }
 
-#Preview {
-    MainTabView()
-        .preferredColorScheme(.light)
+struct MainTabView_Previews: PreviewProvider {
+    static var previews: some View {
+        MainTabView()
+            .preferredColorScheme(.light)
+    }
 }
