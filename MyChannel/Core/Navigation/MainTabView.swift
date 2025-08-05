@@ -7,52 +7,47 @@
 
 import SwiftUI
 
+// MARK: - Scroll-To-Top Notification
+extension Notification.Name {
+    static let scrollToTopProfile = Notification.Name("scrollToTopProfile")
+}
+
 struct MainTabView: View {
     @StateObject private var authManager = AuthenticationManager.shared
     @State private var selectedTab: TabItem = .home
+    @State private var previousTab: TabItem = .home
+
     @State private var notificationBadges: [TabItem: Int] = [
         .home: 0,
         .flicks: 2,
         .upload: 0,
         .search: 0,
-        .profile: 3 // Sample notification count
+        .profile: 3
     ]
-    
-    // App-wide state
+
     @State private var showingUpload: Bool = false
     @StateObject private var appState = AppState()
-    
-    init() {
-        // Hide the default TabBar
-        UITabBar.appearance().isHidden = true
-    }
-    
+
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Main content - NO TabView, just direct view switching
             Group {
                 switch selectedTab {
                 case .home:
                     HomeView()
-                        .transition(.identity) // No animation
                 case .flicks:
                     FlicksView()
-                        .transition(.identity) // No animation
                 case .search:
                     SearchView()
-                        .transition(.identity) // No animation
                 case .profile:
                     ProfileView()
-                        .transition(.identity) // No animation
                 case .upload:
-                    // This case should never be reached
                     EmptyView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(AppTheme.Colors.background)
-            
-            // Custom Tab Bar - ALWAYS VISIBLE
+            .transition(.identity)
+
             CustomTabBar(
                 selectedTab: $selectedTab,
                 notificationBadges: notificationBadges,
@@ -66,19 +61,21 @@ struct MainTabView: View {
         .environmentObject(appState)
         .environmentObject(authManager)
         .onChange(of: selectedTab) { oldValue, newValue in
-            // Prevent selecting the placeholder upload tab
             if newValue == .upload {
                 selectedTab = oldValue
                 return
             }
-            
-            // Clear notification badge for selected tab
+
+            // 👇 Scroll to top if Profile is tapped twice
+            if newValue == .profile && previousTab == .profile {
+                NotificationCenter.default.post(name: .scrollToTopProfile, object: nil)
+            }
+
+            // Update state
+            previousTab = newValue
             notificationBadges[newValue] = 0
-            
-            // Add haptic feedback for tab changes
             HapticManager.shared.impact(style: .light)
-            
-            // Track screen view
+
             Task {
                 await AnalyticsService.shared.trackScreenView(newValue.title)
             }
@@ -87,12 +84,11 @@ struct MainTabView: View {
             UploadView()
         }
         .onAppear {
-            // Set current user in app state
             if let user = authManager.currentUser {
                 appState.currentUser = user
             }
         }
-        .onChange(of: authManager.currentUser) { oldValue, newValue in
+        .onChange(of: authManager.currentUser) { _, newValue in
             if let user = newValue {
                 appState.currentUser = user
             }
@@ -100,7 +96,7 @@ struct MainTabView: View {
     }
 }
 
-// MARK: - App State Management
+// MARK: - App State
 @MainActor
 class AppState: ObservableObject {
     @Published var currentUser: User = User.sampleUsers[0]
@@ -109,7 +105,7 @@ class AppState: ObservableObject {
     @Published var likedVideos: Set<String> = []
     @Published var followedCreators: Set<String> = []
     @Published var notifications: [AppNotification] = []
-    
+
     func toggleLike(videoId: String) {
         if likedVideos.contains(videoId) {
             likedVideos.remove(videoId)
@@ -117,7 +113,7 @@ class AppState: ObservableObject {
             likedVideos.insert(videoId)
         }
     }
-    
+
     func toggleWatchLater(videoId: String) {
         if watchLaterVideos.contains(videoId) {
             watchLaterVideos.remove(videoId)
@@ -125,28 +121,28 @@ class AppState: ObservableObject {
             watchLaterVideos.insert(videoId)
         }
     }
-    
+
     func followCreator(_ creatorId: String) {
         followedCreators.insert(creatorId)
     }
-    
+
     func unfollowCreator(_ creatorId: String) {
         followedCreators.remove(creatorId)
     }
 }
 
-// MARK: - App Notification Model
+// MARK: - Notification Model
 struct AppNotification: Identifiable {
-    let id: String = UUID().uuidString
+    let id = UUID().uuidString
     let title: String
     let message: String
     let type: NotificationType
     let timestamp: Date
     let isRead: Bool
-    
+
     enum NotificationType {
         case like, comment, follow, upload, system
-        
+
         var iconName: String {
             switch self {
             case .like: return "heart.fill"
@@ -155,6 +151,41 @@ struct AppNotification: Identifiable {
             case .upload: return "arrow.up.circle.fill"
             case .system: return "bell.fill"
             }
+        }
+    }
+}
+
+// MARK: - Tab Bar
+enum TabItem: String, CaseIterable, Hashable {
+    case home, flicks, upload, search, profile
+
+    var title: String {
+        switch self {
+        case .home: return "Home"
+        case .flicks: return "Flicks"
+        case .upload: return "Create"
+        case .search: return "Search"
+        case .profile: return "You"
+        }
+    }
+
+    func iconName(isSelected: Bool) -> String {
+        switch self {
+        case .home: return isSelected ? "house.fill" : "house"
+        case .flicks: return isSelected ? "play.rectangle.on.rectangle.fill" : "play.rectangle.on.rectangle"
+        case .upload: return "plus"
+        case .search: return "magnifyingglass"
+        case .profile: return isSelected ? "person.fill" : "person"
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .home: return "Home tab"
+        case .flicks: return "Flicks tab"
+        case .upload: return "Create content"
+        case .search: return "Search tab"
+        case .profile: return "Profile tab"
         }
     }
 }
@@ -186,16 +217,16 @@ struct CustomTabBar: View {
                 }
             }
         }
-        .padding(.horizontal, AppTheme.Spacing.md)
-        .padding(.vertical, AppTheme.Spacing.sm)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
         .background(
             ZStack {
                 // Frosted glass effect
                 VisualEffectBlur(blurStyle: .systemMaterial)
-                    .cornerRadius(AppTheme.CornerRadius.xl)
+                    .cornerRadius(24)
                 
                 // Gradient border
-                RoundedRectangle(cornerRadius: AppTheme.CornerRadius.xl)
+                RoundedRectangle(cornerRadius: 24)
                     .stroke(
                         LinearGradient(
                             colors: [
@@ -209,8 +240,8 @@ struct CustomTabBar: View {
                     )
             }
         )
-        .padding(.horizontal, AppTheme.Spacing.md)
-        .padding(.bottom, AppTheme.Spacing.sm)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
         .shadow(
             color: AppTheme.Colors.textPrimary.opacity(0.1),
             radius: 20,
@@ -226,7 +257,10 @@ struct UploadTabButton: View {
     @State private var isPressed: Bool = false
     
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            action()
+            HapticManager.shared.impact(style: .medium)
+        }) {
             ZStack {
                 Circle()
                     .fill(AppTheme.Colors.primary)
@@ -247,12 +281,16 @@ struct UploadTabButton: View {
         .buttonStyle(PlainButtonStyle())
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
-        .onPressGesture(
-            onPress: {
-                isPressed = true
-                HapticManager.shared.impact(style: .medium)
-            },
-            onRelease: { isPressed = false }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !isPressed {
+                        isPressed = true
+                    }
+                }
+                .onEnded { _ in
+                    isPressed = false
+                }
         )
         .accessibilityLabel("Create content")
         .accessibilityHint("Double tap to create new content")
@@ -310,9 +348,16 @@ struct CustomTabBarButton: View {
         .buttonStyle(PlainButtonStyle())
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
-        .onPressGesture(
-            onPress: { isPressed = true },
-            onRelease: { isPressed = false }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !isPressed {
+                        isPressed = true
+                    }
+                }
+                .onEnded { _ in
+                    isPressed = false
+                }
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(tab.accessibilityLabel)
@@ -354,55 +399,9 @@ struct VisualEffectBlur: UIViewRepresentable {
     }
 }
 
-// MARK: - Enhanced Tab Item Enum
-enum TabItem: String, CaseIterable, Hashable {
-    case home
-    case flicks
-    case upload
-    case search
-    case profile
-    
-    var title: String {
-        switch self {
-        case .home: return "Home"
-        case .flicks: return "Flicks"
-        case .upload: return "Create"
-        case .search: return "Search"
-        case .profile: return "You"
-        }
-    }
-    
-    func iconName(isSelected: Bool) -> String {
-        switch self {
-        case .home:
-            return isSelected ? "house.fill" : "house"
-        case .flicks:
-            return isSelected ? "play.rectangle.on.rectangle.fill" : "play.rectangle.on.rectangle"
-        case .upload:
-            return "plus"
-        case .search:
-            return isSelected ? "magnifyingglass" : "magnifyingglass"
-        case .profile:
-            return isSelected ? "person.fill" : "person"
-        }
-    }
-    
-    var accessibilityLabel: String {
-        switch self {
-        case .home: return "Home tab"
-        case .flicks: return "Flicks tab"
-        case .upload: return "Create content"
-        case .search: return "Search tab"
-        case .profile: return "Profile tab"
-        }
-    }
-}
-
 // MARK: - Preview
-struct MainTabView_Previews: PreviewProvider {
-    static var previews: some View {
-        MainTabView()
-            .preferredColorScheme(.light)
-            .environmentObject(AuthenticationManager.shared)
-    }
+#Preview {
+    MainTabView()
+        .environmentObject(AuthenticationManager.shared)
+        .preferredColorScheme(.light)
 }

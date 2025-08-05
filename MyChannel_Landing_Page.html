@@ -4,6 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MyChannel.live - The Future of Video Streaming</title>
+    
+    <!-- Essential Facebook Open Graph Meta Tags -->
+    <meta property="og:title" content="MyChannel.live - The Future of Video Streaming">
+    <meta property="og:description" content="YouTube's reign is over. Welcome to MyChannel — where creators earn 90% revenue share, content is truly free, and innovation drives everything we do.">
+    <meta property="og:image" content="https://www.mychannel.live/MyChannel.PNG">
+    <meta property="og:url" content="https://www.mychannel.live">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MyChannel.live">
+    
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="MyChannel.live - The Future of Video Streaming">
+    <meta name="twitter:description" content="Where creators earn 90% revenue share. Join the revolution ending YouTube's monopoly.">
+    <meta name="twitter:image" content="https://www.mychannel.live/MyChannel.PNG">
+    
     <style>
         * {
             margin: 0;
@@ -95,6 +110,8 @@
             animation: loadingPulse 1.2s ease-in-out infinite;
             box-shadow: 0 4px 20px rgba(255, 68, 68, 0.3);
             overflow: hidden;
+            color: white;
+            font-weight: 900;
         }
 
         .loading-logo img {
@@ -222,6 +239,9 @@
             overflow: hidden;
             background: #FF4444;
             transition: all 0.2s ease;
+            font-size: 24px;
+            font-weight: 900;
+            color: white;
         }
 
         .logo:hover .logo-icon {
@@ -680,6 +700,35 @@
             color: rgba(255, 255, 255, 0.85);
         }
 
+        /* App Preview Section */
+        .app-preview {
+            padding: 80px 40px;
+            background: var(--darker);
+            text-align: center;
+        }
+
+        .preview-content {
+            max-width: 1000px;
+            margin: 40px auto 0;
+            perspective: 2000px;
+        }
+
+        .app-screenshot {
+            width: 100%;
+            max-width: 450px;
+            border-radius: 30px;
+            box-shadow: 0 30px 70px rgba(0,0,0,0.6),
+                        0 0 50px rgba(255, 68, 68, 0.2);
+            transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            transform: rotateX(10deg) rotateY(-10deg) scale(0.95);
+        }
+
+        .app-screenshot:hover {
+            transform: rotateX(0) rotateY(0) scale(1);
+            box-shadow: 0 40px 90px rgba(0,0,0,0.7),
+                        0 0 70px rgba(255, 68, 68, 0.4);
+        }
+
         /* Flicks Section with Dynamic Phone Mockup */
         .flicks {
             padding: 60px 40px;
@@ -737,7 +786,6 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--primary);
             font-size: 18px;
             flex-shrink: 0;
             transition: all 0.2s ease;
@@ -776,17 +824,10 @@
             overflow: hidden;
         }
 
-        .phone-screen-slider {
-            display: flex;
-            height: 100%;
-            transition: transform 0.8s cubic-bezier(0.76, 0, 0.24, 1);
-        }
-
-        .phone-screen-slider img {
+        .phone-screen img {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            flex-shrink: 0;
         }
 
         /* Creator Protection Section */
@@ -1223,6 +1264,28 @@
             }
         }
 
+        /* Form Success/Error Messages */
+        .form-message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 600;
+            text-align: center;
+            display: none;
+        }
+        
+        .form-message.success {
+            background: rgba(0, 255, 225, 0.1);
+            border: 1px solid rgba(0, 255, 225, 0.3);
+            color: var(--accent);
+        }
+        
+        .form-message.error {
+            background: rgba(255, 68, 68, 0.1);
+            border: 1px solid rgba(255, 68, 68, 0.3);
+            color: var(--primary);
+        }
+
         /* MOBILE RESPONSIVE */
         @media (max-width: 768px) {
             body { cursor: default; }
@@ -1265,7 +1328,7 @@
             .stat { padding: 15px 10px; }
             .stat-number { font-size: 1.6rem; }
 
-            .features, .flicks, .creators, .creator-protection, .cta-section {
+            .features, .flicks, .app-preview, .creators, .creator-protection, .cta-section {
                 padding: 50px 20px;
             }
 
@@ -1348,7 +1411,7 @@
     <!-- Loading Screen -->
     <div class="loading-screen" id="loadingScreen">
         <div class="loading-logo">
-            <img src="MyChannel.PNG" alt="MyChannel Logo">
+            MC
         </div>
     </div>
 
@@ -1370,9 +1433,7 @@
     <nav>
         <div class="nav-container">
             <a href="#" class="logo">
-                <div class="logo-icon">
-                    <img src="MyChannel.PNG" alt="MyChannel Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
-                </div>
+                <div class="logo-icon">MC</div>
                 <span>MyChannel</span>
             </a>
             <div class="nav-links">
@@ -1500,8 +1561,7 @@
                 <div class="feature-icon">🛡️</div>
                 <h3 class="feature-title">Three-Strike Protection</h3>
                 <p class="feature-description">
-                    Your channel won't disappear overnight. Our fair review system gives creators 
-                    real protection with human oversight and appeal processes.
+                    Your life's work deserves protection. We won't terminate your channel over one mistake like YouTube does.
                 </p>
             </div>
             <div class="feature-card slide-in-right">
@@ -1552,14 +1612,24 @@
             <div class="flicks-visual slide-in-right">
                 <div class="phone-mockup" id="phoneMockup">
                     <div class="phone-screen">
-                        <div class="phone-screen-slider" id="phoneScreenSlider">
-                            <img src="images/Home.png" alt="MyChannel Home Screen">
-                            <img src="images/Flicks.png" alt="MyChannel Flicks Screen">
-                            <img src="images/Search.png" alt="MyChannel Search Screen">
-                        </div>
+                        <img src="https://www.mychannel.live/MyChannel-App-Home.png" alt="MyChannel App Home Screen">
                     </div>
                 </div>
             </div>
+        </div>
+    </section>
+
+    <!-- App Preview Section -->
+    <section class="app-preview" id="app-preview">
+        <div class="section-header slide-in-up">
+            <div class="section-badge" style="color: var(--primary); border-color: var(--primary);">🔥 GAME CHANGER</div>
+            <h2>This Is How We Win.</h2>
+            <p class="section-subtitle">
+                Forget everything you know about video platforms. MyChannel isn't just an alternative; it's the replacement. We're putting power back where it belongs: in your hands. This is more than an app—it's a movement.
+            </p>
+        </div>
+        <div class="preview-content">
+            <img src="https://www.mychannel.live/MyChannel-App-Home.png" alt="MyChannel App Screenshot" class="app-screenshot slide-in-up">
         </div>
     </section>
 
@@ -1686,8 +1756,10 @@
             <p class="hero-subtitle">
                 Be part of the platform that's ending YouTube's monopoly. Get early access and exclusive creator benefits.
             </p>
-            <form class="email-form" id="emailForm" action="mailto:keontapeat@mychannel.live" method="post" enctype="text/plain">
+            <form class="email-form" id="emailForm" method="POST" action="https://formspree.io/f/mzzvjejj">
                 <input type="email" name="email" class="email-input" placeholder="Enter your email for early access" required id="emailInput">
+                <input type="hidden" name="_next" value="https://www.mychannel.live">
+                <input type="hidden" name="_subject" value="🚀 New MyChannel Early Access Signup">
                 <button type="submit" class="btn-primary" id="submitBtn">Get Early Access</button>
             </form>
         </div>
@@ -1698,9 +1770,7 @@
         <div class="footer-content">
             <div class="footer-brand">
                 <div class="footer-logo">
-                    <div class="logo-icon">
-                        <img src="MyChannel.PNG" alt="MyChannel Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
-                    </div>
+                    <div class="logo-icon">MC</div>
                     <span>MyChannel.live</span>
                 </div>
                 <p class="footer-description">
@@ -1731,11 +1801,11 @@
             </div>
         </div>
         <div class="footer-bottom">
-            <div>© 2025 MyChannel.live — The Revolution Starts Here</div>
+            <div> 2025 MyChannel.live — The Revolution Starts Here</div>
             <div class="social-links">
                 <a href="#" class="social-link">𝕏</a>
-                <a href="#" class="social-link">📧</a>
-                <a href="#" class="social-link">💬</a>
+                <a href="#" class="social-link">𝕏</a>
+                <a href="#" class="social-link">𝕏</a>
             </div>
         </div>
     </footer>
@@ -1804,7 +1874,6 @@
                 initDynamicCardGlow();
                 addCardPopEffect();
                 initButtonEffects();
-                initPhoneSlider();
             };
 
             // --- Particle System ---
@@ -1895,19 +1964,6 @@
                         }
                     });
                 });
-            };
-            
-            // --- PHONE MOCKUP SLIDER ---
-            const initPhoneSlider = () => {
-                const slider = document.getElementById('phoneScreenSlider');
-                if (!slider) return;
-                const images = slider.querySelectorAll('img');
-                let currentIndex = 0;
-
-                setInterval(() => {
-                    currentIndex = (currentIndex + 1) % images.length;
-                    slider.style.transform = `translateX(-${currentIndex * 100}%)`;
-                }, 3000);
             };
 
             // --- Button Ripple Effect ---

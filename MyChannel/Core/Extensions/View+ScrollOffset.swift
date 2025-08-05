@@ -8,30 +8,34 @@
 import SwiftUI
 
 extension View {
-    func onScrollOffsetChange(perform action: @escaping (CGFloat) -> Void) -> some View {
-        self.background(
-            GeometryReader { geometry in
-                Color.clear
-                    .preference(key: ScrollOffsetPreferenceKey.self, value: geometry.frame(in: .named("scroll")).minY)
-            }
-        )
-        .onPreferenceChange(ScrollOffsetPreferenceKey.self, perform: action)
+    func onScrollOffsetChange(_ action: @escaping (CGFloat) -> Void) -> some View {
+        self.modifier(ScrollOffsetModifier(onChange: action))
     }
+}
+
+struct ScrollOffsetModifier: ViewModifier {
+    let onChange: (CGFloat) -> Void
     
-    func onPressGesture(
-        onPress: @escaping () -> Void,
-        onRelease: @escaping () -> Void
-    ) -> some View {
-        self.simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in onPress() }
-                .onEnded { _ in onRelease() }
-        )
+    func body(content: Content) -> some View {
+        content
+            .background(
+                GeometryReader { geometry in
+                    Color.clear
+                        .preference(
+                            key: ScrollOffsetPreferenceKey.self,
+                            value: geometry.frame(in: .named("scroll")).minY
+                        )
+                }
+            )
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                onChange(value)
+            }
     }
 }
 
 struct ScrollOffsetPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
+    
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }

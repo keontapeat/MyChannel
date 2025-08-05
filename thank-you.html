@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thank You - MyChannel.live</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            background: linear-gradient(135deg, #FF4444, #00FFE1);
+            color: white;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        .container {
+            max-width: 500px;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+        h1 { font-size: 3rem; margin-bottom: 20px; }
+        p { font-size: 1.2rem; margin-bottom: 30px; opacity: 0.9; }
+        .btn {
+            background: white;
+            color: #FF4444;
+            padding: 15px 30px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 700;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        .btn:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎉 Welcome!</h1>
+        <p>You're now on the list for early access to MyChannel!</p>
+        <p>We'll notify you when we launch and give you exclusive creator benefits.</p>
+        <a href="https://www.mychannel.live/" class="btn">← Back to MyChannel</a>
+    </div>
+    
+    <script>
+        // Redirect after 5 seconds
+        setTimeout(() => {
+            window.location.href = 'https://www.mychannel.live/';
+        }, 5000);
+    </script>
+</body>
+</html>

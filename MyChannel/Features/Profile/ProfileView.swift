@@ -16,14 +16,14 @@ struct ProfileView: View {
     @State private var isFollowing: Bool = false
     @State private var userVideos: [Video] = Video.sampleVideos
     @State private var scrollOffset: CGFloat = 0
-    
+
     var currentUser: User {
         authManager.currentUser ?? User.sampleUsers[0]
     }
-    
+
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) { // Changed from VStack to LazyVStack
                 // Profile Header with Parallax
                 ProfileHeaderView(
                     user: currentUser,
@@ -32,25 +32,26 @@ struct ProfileView: View {
                     showingEditProfile: $showingEditProfile,
                     showingSettings: $showingSettings
                 )
-                
+
                 // Tab Navigation
                 ProfileTabNavigation(
                     selectedTab: $selectedTab,
                     user: currentUser
                 )
-                
+
                 // Content based on selected tab
                 ProfileContentView(
                     selectedTab: selectedTab,
                     user: currentUser,
                     videos: userVideos
                 )
-                
+
                 // Community Section Integration
                 if selectedTab == .about {
                     communitySection
                 }
             }
+            // Removed problematic frame modifiers
         }
         .coordinateSpace(name: "scroll")
         .background(AppTheme.Colors.background)
@@ -66,57 +67,60 @@ struct ProfileView: View {
             user = currentUser
         }
     }
-    
-    // MARK: - Community Section in Profile
+
+    // MARK: - Community Section in Profile (Fixed)
     private var communitySection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-            HStack {
-                Image(systemName: "person.3.fill")
+            // Fixed header section
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                HStack {
+                    Image(systemName: "person.3.fill")
+                        .foregroundColor(AppTheme.Colors.primary)
+
+                    Text("Community")
+                        .font(AppTheme.Typography.headline)
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+
+                    Spacer()
+
+                    Button("View All") {
+                        // Navigate to full community view
+                    }
+                    .font(AppTheme.Typography.caption)
                     .foregroundColor(AppTheme.Colors.primary)
-                
-                Text("Community")
-                    .font(AppTheme.Typography.headline)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Spacer()
-                
-                Button("View All") {
-                    // Navigate to full community view
                 }
-                .font(AppTheme.Typography.caption)
-                .foregroundColor(AppTheme.Colors.primary)
+                .frame(maxWidth: .infinity) // Ensure full width
             }
-            
-            // Recent Community Posts
+
+            // Recent Community Posts - Fixed layout
             VStack(spacing: AppTheme.Spacing.sm) {
                 ForEach(Array(CommunityPost.samplePosts.prefix(3))) { post in
-                    HStack(spacing: AppTheme.Spacing.sm) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(post.content)
-                                .font(AppTheme.Typography.body)
-                                .foregroundColor(AppTheme.Colors.textPrimary)
-                                .lineLimit(2)
-                            
-                            HStack {
-                                Text(post.createdAt, style: .relative)
-                                    .font(AppTheme.Typography.caption)
-                                    .foregroundColor(AppTheme.Colors.textTertiary)
-                                
-                                Spacer()
-                                
-                                Label("\(post.likeCount)", systemImage: "heart")
-                                    .font(AppTheme.Typography.caption)
-                                    .foregroundColor(AppTheme.Colors.textTertiary)
-                                
-                                Label("\(post.commentCount)", systemImage: "bubble.right")
-                                    .font(AppTheme.Typography.caption)
-                                    .foregroundColor(AppTheme.Colors.textTertiary)
-                            }
+                    VStack(alignment: .leading, spacing: 8) { // Changed from HStack to VStack
+                        Text(post.content)
+                            .font(AppTheme.Typography.body)
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        HStack {
+                            Text(post.createdAt, style: .relative)
+                                .font(AppTheme.Typography.caption)
+                                .foregroundColor(AppTheme.Colors.textTertiary)
+
+                            Spacer()
+
+                            Label("\(post.likeCount)", systemImage: "heart")
+                                .font(AppTheme.Typography.caption)
+                                .foregroundColor(AppTheme.Colors.textTertiary)
+
+                            Label("\(post.commentCount)", systemImage: "bubble.right")
+                                .font(AppTheme.Typography.caption)
+                                .foregroundColor(AppTheme.Colors.textTertiary)
                         }
-                        
-                        Spacer()
+                        .frame(maxWidth: .infinity)
                     }
                     .padding(AppTheme.Spacing.sm)
+                    .frame(maxWidth: .infinity, alignment: .leading) // Fixed alignment
                     .background(AppTheme.Colors.surface)
                     .cornerRadius(AppTheme.CornerRadius.sm)
                 }
@@ -124,7 +128,16 @@ struct ProfileView: View {
         }
         .padding(.horizontal, AppTheme.Spacing.md)
         .padding(.vertical, AppTheme.Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading) // Ensure full width alignment
     }
+}
+
+// MARK: - ProfileTab Enum
+enum ProfileTab: String, CaseIterable {
+    case videos = "videos"
+    case shorts = "shorts"
+    case playlists = "playlists"
+    case about = "about"
 }
 
 // MARK: - Profile Settings View (Enhanced with Better Organization)
@@ -136,7 +149,7 @@ struct ProfileSettingsView: View {
     @State private var pushNotificationsEnabled: Bool = true
     @State private var emailNotificationsEnabled: Bool = true
     @State private var darkModeEnabled: Bool = false
-    
+
     var body: some View {
         NavigationView {
             List {
@@ -147,10 +160,10 @@ struct ProfileSettingsView: View {
                         Text("System").tag(2)
                     }
                     .pickerStyle(.menu)
-                    
+
                     Toggle("Dark Mode", isOn: $darkModeEnabled)
                 }
-                
+
                 Section("Account") {
                     SettingsRow(
                         icon: "person.circle",
@@ -159,7 +172,7 @@ struct ProfileSettingsView: View {
                             // Edit profile
                         }
                     )
-                    
+
                     SettingsRow(
                         icon: "lock",
                         title: "Privacy & Security",
@@ -167,7 +180,7 @@ struct ProfileSettingsView: View {
                             // Privacy settings
                         }
                     )
-                    
+
                     SettingsRow(
                         icon: "key",
                         title: "Change Password",
@@ -176,12 +189,12 @@ struct ProfileSettingsView: View {
                         }
                     )
                 }
-                
+
                 Section("Notifications") {
                     Toggle("Push Notifications", isOn: $pushNotificationsEnabled)
-                    
+
                     Toggle("Email Notifications", isOn: $emailNotificationsEnabled)
-                    
+
                     SettingsRow(
                         icon: "bell.badge",
                         title: "Notification Settings",
@@ -190,7 +203,7 @@ struct ProfileSettingsView: View {
                         }
                     )
                 }
-                
+
                 Section("Content") {
                     SettingsRow(
                         icon: "video",
@@ -199,7 +212,7 @@ struct ProfileSettingsView: View {
                             // My videos
                         }
                     )
-                    
+
                     SettingsRow(
                         icon: "bookmark",
                         title: "Saved Videos",
@@ -207,7 +220,7 @@ struct ProfileSettingsView: View {
                             // Saved videos
                         }
                     )
-                    
+
                     SettingsRow(
                         icon: "clock",
                         title: "Watch History",
@@ -215,7 +228,7 @@ struct ProfileSettingsView: View {
                             // Watch history
                         }
                     )
-                    
+
                     SettingsRow(
                         icon: "arrow.down.circle",
                         title: "Downloads",
@@ -224,7 +237,7 @@ struct ProfileSettingsView: View {
                         }
                     )
                 }
-                
+
                 Section("Data & Storage") {
                     SettingsRow(
                         icon: "network",
@@ -233,7 +246,7 @@ struct ProfileSettingsView: View {
                             // Data saver settings
                         }
                     )
-                    
+
                     SettingsRow(
                         icon: "externaldrive",
                         title: "Storage Management",
@@ -242,7 +255,7 @@ struct ProfileSettingsView: View {
                         }
                     )
                 }
-                
+
                 Section("Support") {
                     SettingsRow(
                         icon: "questionmark.circle",
@@ -251,7 +264,7 @@ struct ProfileSettingsView: View {
                             // Help
                         }
                     )
-                    
+
                     SettingsRow(
                         icon: "exclamationmark.bubble",
                         title: "Send Feedback",
@@ -259,7 +272,7 @@ struct ProfileSettingsView: View {
                             // Send feedback
                         }
                     )
-                    
+
                     SettingsRow(
                         icon: "star",
                         title: "Rate This App",
@@ -268,7 +281,7 @@ struct ProfileSettingsView: View {
                         }
                     )
                 }
-                
+
                 Section("Legal") {
                     SettingsRow(
                         icon: "doc.text",
@@ -277,7 +290,7 @@ struct ProfileSettingsView: View {
                             // Terms
                         }
                     )
-                    
+
                     SettingsRow(
                         icon: "hand.raised",
                         title: "Privacy Policy",
@@ -286,7 +299,7 @@ struct ProfileSettingsView: View {
                         }
                     )
                 }
-                
+
                 Section {
                     Button(action: {
                         showingSignOutAlert = true
@@ -296,11 +309,11 @@ struct ProfileSettingsView: View {
                                 .font(.system(size: 16))
                                 .foregroundColor(AppTheme.Colors.error)
                                 .frame(width: 24)
-                            
+
                             Text("Sign Out")
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(AppTheme.Colors.error)
-                            
+
                             Spacer()
                         }
                         .padding(.vertical, 8)
@@ -336,7 +349,7 @@ struct SettingsRow: View {
     let icon: String
     let title: String
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
@@ -344,13 +357,13 @@ struct SettingsRow: View {
                     .font(.system(size: 16))
                     .foregroundColor(AppTheme.Colors.primary)
                     .frame(width: 24)
-                
+
                 Text(title)
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textPrimary)
-                
+
                 Spacer()
-                
+
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textTertiary)
@@ -369,13 +382,13 @@ struct ProfileHeaderView: View {
     @Binding var isFollowing: Bool
     @Binding var showingEditProfile: Bool
     @Binding var showingSettings: Bool
-    
+
     private var headerOpacity: Double {
         let threshold: CGFloat = 200
         let opacity = 1.0 - (abs(scrollOffset) / threshold)
         return max(0.0, opacity)
     }
-    
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             VStack(spacing: 0) {
@@ -392,19 +405,19 @@ struct ProfileHeaderView: View {
                             endPoint: .bottomTrailing
                         )
                     }
-                    .frame(height: 200)
+                    .frame(maxWidth: .infinity, maxHeight: 200)
                     .clipped()
                     .offset(y: scrollOffset > 0 ? -scrollOffset * 0.5 : 0)
-                    
+
                     // Gradient overlay
                     LinearGradient(
                         colors: [.clear, .black.opacity(0.6)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(height: 200)
+                    .frame(maxWidth: .infinity, maxHeight: 200)
                 }
-                
+
                 // Profile info
                 VStack(spacing: 20) {
                     // Avatar and basic info
@@ -431,7 +444,7 @@ struct ProfileHeaderView: View {
                             )
                             .shadow(radius: 10)
                             .offset(y: -50)
-                            
+
                             // Online status
                             if user.isCreator {
                                 Circle()
@@ -444,25 +457,25 @@ struct ProfileHeaderView: View {
                                     .offset(x: 8, y: -42)
                             }
                         }
-                        
+
                         VStack(spacing: 8) {
                             HStack(spacing: 8) {
                                 Text(user.displayName)
                                     .font(AppTheme.Typography.title2)
                                     .fontWeight(.bold)
                                     .foregroundColor(AppTheme.Colors.textPrimary)
-                                
+
                                 if user.isVerified {
                                     Image(systemName: "checkmark.seal.fill")
                                         .font(.title3)
                                         .foregroundColor(AppTheme.Colors.primary)
                                 }
                             }
-                            
+
                             Text("@\(user.username)")
                                 .font(AppTheme.Typography.subheadline)
                                 .foregroundColor(AppTheme.Colors.textSecondary)
-                            
+
                             if let bio = user.bio {
                                 Text(bio)
                                     .font(AppTheme.Typography.body)
@@ -471,29 +484,32 @@ struct ProfileHeaderView: View {
                                     .padding(.horizontal)
                             }
                         }
+                        .frame(maxWidth: .infinity)
                     }
                     .padding(.top, -30)
-                    
+
                     // Stats
                     ProfileStatsView(user: user)
-                    
+
                     // Action buttons (current user gets edit profile, others get follow)
                     ProfileActionButtons(
                         user: user,
                         isFollowing: $isFollowing,
                         showingEditProfile: $showingEditProfile
                     )
-                    
+
                     // Social links
                     if !user.socialLinks.isEmpty {
                         SocialLinksView(socialLinks: user.socialLinks)
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal)
                 .padding(.bottom, 24)
                 .background(AppTheme.Colors.background)
             }
-            
+            .frame(maxWidth: .infinity)
+
             // Settings button
             Button(action: { showingSettings = true }) {
                 Image(systemName: "gearshape.fill")
@@ -506,13 +522,14 @@ struct ProfileHeaderView: View {
             .padding()
             .opacity(headerOpacity)
         }
+        .frame(maxWidth: .infinity)
         .opacity(headerOpacity)
     }
 }
 
 struct ProfileStatsView: View {
     let user: User
-    
+
     var body: some View {
         HStack(spacing: 32) {
             StatItem(
@@ -520,13 +537,13 @@ struct ProfileStatsView: View {
                 value: user.subscriberCount.formatted(),
                 icon: "person.2.fill"
             )
-            
+
             StatItem(
                 title: "Videos",
                 value: "\(user.videoCount)",
                 icon: "play.rectangle.fill"
             )
-            
+
             if let totalViews = user.totalViews {
                 StatItem(
                     title: "Views",
@@ -535,6 +552,7 @@ struct ProfileStatsView: View {
                 )
             }
         }
+        .frame(maxWidth: .infinity)
         .padding()
         .background(AppTheme.Colors.surface)
         .cornerRadius(AppTheme.CornerRadius.lg)
@@ -545,18 +563,18 @@ struct StatItem: View {
     let title: String
     let value: String
     let icon: String
-    
+
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.title2)
                 .foregroundColor(AppTheme.Colors.primary)
-            
+
             Text(value)
                 .font(AppTheme.Typography.title3)
                 .fontWeight(.bold)
                 .foregroundColor(AppTheme.Colors.textPrimary)
-            
+
             Text(title)
                 .font(AppTheme.Typography.caption)
                 .foregroundColor(AppTheme.Colors.textSecondary)
@@ -569,7 +587,7 @@ struct ProfileActionButtons: View {
     let user: User
     @Binding var isFollowing: Bool
     @Binding var showingEditProfile: Bool
-    
+
     var body: some View {
         HStack(spacing: 12) {
             // Always show edit profile for current user
@@ -582,7 +600,7 @@ struct ProfileActionButtons: View {
                 .fontWeight(.semibold)
             }
             .secondaryButtonStyle()
-            
+
             Button(action: {}) {
                 HStack(spacing: 8) {
                     Image(systemName: "square.and.arrow.up")
@@ -598,14 +616,14 @@ struct ProfileActionButtons: View {
 
 struct SocialLinksView: View {
     let socialLinks: [SocialLink]
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Connect")
                 .font(AppTheme.Typography.subheadline)
                 .fontWeight(.semibold)
                 .foregroundColor(AppTheme.Colors.textPrimary)
-            
+
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
                 ForEach(socialLinks.prefix(4)) { link in
                     Button(action: {}) {
@@ -613,7 +631,7 @@ struct SocialLinksView: View {
                             Image(systemName: link.platform.iconName)
                                 .font(.title2)
                                 .foregroundColor(AppTheme.Colors.primary)
-                            
+
                             Text(link.platform.displayName)
                                 .font(.system(size: 10))
                                 .foregroundColor(AppTheme.Colors.textSecondary)
@@ -635,7 +653,7 @@ struct SocialLinksView: View {
 struct ProfileTabNavigation: View {
     @Binding var selectedTab: ProfileTab
     let user: User
-    
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 32) {
@@ -670,18 +688,18 @@ struct ProfileTabButton: View {
     let isSelected: Bool
     let count: Int?
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {
                 HStack(spacing: 6) {
                     Image(systemName: tab.iconName)
                         .font(.system(size: 16))
-                    
+
                     Text(tab.displayName)
                         .font(AppTheme.Typography.subheadline)
                         .fontWeight(.medium)
-                    
+
                     if let count = count, count > 0 {
                         Text("(\(count))")
                             .font(AppTheme.Typography.caption)
@@ -691,7 +709,7 @@ struct ProfileTabButton: View {
                 .foregroundColor(
                     isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary
                 )
-                
+
                 Rectangle()
                     .fill(AppTheme.Colors.primary)
                     .frame(height: 2)
@@ -707,7 +725,7 @@ struct ProfileContentView: View {
     let selectedTab: ProfileTab
     let user: User
     let videos: [Video]
-    
+
     var body: some View {
         switch selectedTab {
         case .videos:
@@ -724,7 +742,7 @@ struct ProfileContentView: View {
 
 struct ProfileVideosView: View {
     let videos: [Video]
-    
+
     var body: some View {
         LazyVStack(spacing: 16) {
             ForEach(videos) { video in
@@ -738,7 +756,7 @@ struct ProfileVideosView: View {
 
 struct ProfileVideoCard: View {
     let video: Video
-    
+
     var body: some View {
         HStack(spacing: 12) {
             AsyncImage(url: URL(string: video.thumbnailURL)) { image in
@@ -766,14 +784,14 @@ struct ProfileVideoCard: View {
                     .cornerRadius(4),
                 alignment: .bottomTrailing
             )
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(video.title)
                     .font(AppTheme.Typography.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(AppTheme.Colors.textPrimary)
                     .lineLimit(2)
-                
+
                 HStack(spacing: 4) {
                     Text("\(video.formattedViews) views")
                     Text("•")
@@ -781,7 +799,7 @@ struct ProfileVideoCard: View {
                 }
                 .font(AppTheme.Typography.caption)
                 .foregroundColor(AppTheme.Colors.textTertiary)
-                
+
                 HStack(spacing: 16) {
                     Label("\(video.likeCount)", systemImage: "heart")
                     Label("\(video.commentCount)", systemImage: "bubble.right")
@@ -789,9 +807,9 @@ struct ProfileVideoCard: View {
                 .font(AppTheme.Typography.caption)
                 .foregroundColor(AppTheme.Colors.textTertiary)
             }
-            
+
             Spacer()
-            
+
             Button(action: {}) {
                 Image(systemName: "ellipsis")
                     .font(.title3)
@@ -813,9 +831,9 @@ struct ProfileVideoCard: View {
 
 struct ProfileShortsView: View {
     let shorts: [Video]
-    
+
     let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
-    
+
     var body: some View {
         LazyVGrid(columns: columns, spacing: 8) {
             ForEach(shorts) { short in
@@ -828,7 +846,7 @@ struct ProfileShortsView: View {
 
 struct ProfileShortCard: View {
     let video: Video
-    
+
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             AsyncImage(url: URL(string: video.thumbnailURL)) { image in
@@ -842,25 +860,25 @@ struct ProfileShortCard: View {
             }
             .cornerRadius(AppTheme.CornerRadius.md)
             .clipped()
-            
+
             LinearGradient(
                 colors: [.clear, .black.opacity(0.8)],
                 startPoint: .center,
                 endPoint: .bottom
             )
             .cornerRadius(AppTheme.CornerRadius.md)
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Image(systemName: "play.fill")
                         .font(.system(size: 12))
                         .foregroundColor(.white)
-                    
+
                     Text(video.formattedViews)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white)
                 }
-                
+
                 Text(video.title)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white)
@@ -877,19 +895,19 @@ struct ProfilePlaylistsView: View {
             Image(systemName: "music.note.list")
                 .font(.system(size: 60))
                 .foregroundColor(AppTheme.Colors.textTertiary)
-            
+
             VStack(spacing: 8) {
                 Text("No playlists yet")
                     .font(AppTheme.Typography.title3)
                     .fontWeight(.semibold)
                     .foregroundColor(AppTheme.Colors.textPrimary)
-                
+
                 Text("Create your first playlist to organize your videos")
                     .font(AppTheme.Typography.body)
                     .foregroundColor(AppTheme.Colors.textSecondary)
                     .multilineTextAlignment(.center)
             }
-            
+
             Button("Create Playlist") {
                 // Create playlist
             }
@@ -902,7 +920,7 @@ struct ProfilePlaylistsView: View {
 
 struct ProfileAboutView: View {
     let user: User
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             if let bio = user.bio {
@@ -911,50 +929,50 @@ struct ProfileAboutView: View {
                         .font(AppTheme.Typography.title3)
                         .fontWeight(.bold)
                         .foregroundColor(AppTheme.Colors.textPrimary)
-                    
+
                     Text(bio)
                         .font(AppTheme.Typography.body)
                         .foregroundColor(AppTheme.Colors.textSecondary)
                 }
             }
-            
+
             if let website = user.website {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Website")
                         .font(AppTheme.Typography.title3)
                         .fontWeight(.bold)
                         .foregroundColor(AppTheme.Colors.textPrimary)
-                    
+
                     Link(website, destination: URL(string: website)!)
                         .font(AppTheme.Typography.body)
                         .foregroundColor(AppTheme.Colors.primary)
                 }
             }
-            
+
             if let location = user.location {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Location")
                         .font(AppTheme.Typography.title3)
                         .fontWeight(.bold)
                         .foregroundColor(AppTheme.Colors.textPrimary)
-                    
+
                     Text(location)
                         .font(AppTheme.Typography.body)
                         .foregroundColor(AppTheme.Colors.textSecondary)
                 }
             }
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text("Joined")
                     .font(AppTheme.Typography.title3)
                     .fontWeight(.bold)
                     .foregroundColor(AppTheme.Colors.textPrimary)
-                
+
                 Text(user.createdAt.formatted(date: .abbreviated, time: .omitted))
                     .font(AppTheme.Typography.body)
                     .foregroundColor(AppTheme.Colors.textSecondary)
             }
-            
+
             Spacer()
         }
         .padding()
@@ -966,18 +984,18 @@ struct ProfileAboutView: View {
 struct EditProfileView: View {
     @Binding var user: User
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 32) {
                 Text("Edit Profile")
                     .font(.largeTitle)
                     .fontWeight(.bold)
-                
+
                 Text("Profile editing coming soon!")
                     .font(.body)
                     .foregroundColor(AppTheme.Colors.textSecondary)
-                
+
                 Spacer()
             }
             .padding()
@@ -989,7 +1007,7 @@ struct EditProfileView: View {
                     }
                     .foregroundColor(AppTheme.Colors.textSecondary)
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         dismiss()
@@ -1003,12 +1021,7 @@ struct EditProfileView: View {
 }
 
 // MARK: - Supporting Types
-enum ProfileTab: String, CaseIterable {
-    case videos = "videos"
-    case shorts = "shorts"
-    case playlists = "playlists"
-    case about = "about"
-    
+extension ProfileTab {
     var displayName: String {
         switch self {
         case .videos: return "Videos"
@@ -1017,7 +1030,7 @@ enum ProfileTab: String, CaseIterable {
         case .about: return "About"
         }
     }
-    
+
     var iconName: String {
         switch self {
         case .videos: return "play.rectangle"
@@ -1026,7 +1039,7 @@ enum ProfileTab: String, CaseIterable {
         case .about: return "info.circle"
         }
     }
-    
+
     func count(for user: User) -> Int? {
         switch self {
         case .videos: return user.videoCount
