@@ -35,20 +35,39 @@ class VideoPlayerManager: ObservableObject {
     
     deinit {
         Task { @MainActor in
-            await cleanup()
+            cleanup()
         }
     }
     
-    private func cleanup() async {
+    private func cleanup() {
+        // Safely remove time observer
         if let timeObserver = timeObserver {
             player?.removeTimeObserver(timeObserver)
+            self.timeObserver = nil
         }
+        
+        // Pause and clear player
         player?.pause()
+        player?.replaceCurrentItem(with: nil)
+        player = nil
+        
+        // Clear cancellables
         cancellables.removeAll()
+        
+        // Reset state
+        isPlaying = false
+        isLoading = false
+        currentProgress = 0.0
+        currentTime = 0
+        duration = 0
+        currentVideo = nil
     }
     
-    // MARK: - Setup
+    // MARK: - Safe Setup
     func setupPlayer(with video: Video) {
+        // Clean up any existing player first
+        cleanup()
+        
         currentVideo = video
         isLoading = true
         hasError = false
@@ -142,19 +161,22 @@ class VideoPlayerManager: ObservableObject {
         }
     }
     
-    // MARK: - Playback Controls
+    // MARK: - Safe Playback Controls
     func play() {
-        player?.play()
+        guard let player = player else { return }
+        player.play()
         isPlaying = true
         isLoading = false
     }
     
     func pause() {
-        player?.pause()
+        guard let player = player else { return }
+        player.pause()
         isPlaying = false
     }
     
     func togglePlayPause() {
+        guard player != nil else { return }
         if isPlaying {
             pause()
         } else {
@@ -163,11 +185,18 @@ class VideoPlayerManager: ObservableObject {
     }
     
     func seek(to progress: Double) {
+        guard let player = player, duration > 0 else { return }
+        
         let targetTime = duration * progress
         let time = CMTime(seconds: targetTime, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-        player?.seek(to: time) { [weak self] _ in
-            self?.currentTime = targetTime
-            self?.currentProgress = progress
+        
+        player.seek(to: time) { [weak self] completed in
+            if completed {
+                DispatchQueue.main.async {
+                    self?.currentTime = targetTime
+                    self?.currentProgress = progress
+                }
+            }
         }
     }
     

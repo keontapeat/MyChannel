@@ -731,7 +731,7 @@ struct VideoDetailView: View {
                     Spacer()
                 }
                 
-                // Add Comment Row
+                // Add Comment row
                 HStack(spacing: 12) {
                     Circle()
                         .fill(AppTheme.Colors.primary)
@@ -1085,8 +1085,23 @@ struct VideoDetailView: View {
     }
     
     private func dismissWithAnimation() {
-        cleanupVideoOptimized()
-        dismiss()
+        // Enhanced cleanup before dismissal
+        playerControlsTimer?.invalidate()
+        engagementTimer?.invalidate()
+        
+        // Ensure video stops playing
+        playerManager.pause()
+        playerManager.player?.replaceCurrentItem(with: nil)
+        
+        // Reset all state
+        showPlayer = false
+        isPlayerReady = false
+        showPlayerControls = false
+        
+        // Dismiss with proper animation
+        withAnimation(.easeOut(duration: 0.3)) {
+            dismiss()
+        }
     }
     
     private func dismissMiniPlayerOptimized() {
@@ -1097,9 +1112,22 @@ struct VideoDetailView: View {
     }
     
     private func cleanupVideoOptimized() {
+        // More thorough cleanup
         playerControlsTimer?.invalidate()
+        playerControlsTimer = nil
+        
         engagementTimer?.invalidate()
+        engagementTimer = nil
+        
+        // Stop video and clear player
         playerManager.pause()
+        playerManager.player?.replaceCurrentItem(with: nil)
+        
+        // Reset states
+        showPlayer = false
+        isPlayerReady = false
+        showPlayerControls = false
+        isBuffering = false
     }
     
     private func formatTimeOptimized(_ seconds: Double) -> String {

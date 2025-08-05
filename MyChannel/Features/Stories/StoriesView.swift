@@ -7,20 +7,20 @@
 
 import SwiftUI
 
-struct FlicksView: View {
-    @State private var flicks: [Story] = Story.sampleStories
+struct StoriesView: View {
+    @State private var stories: [Story] = Story.sampleStories
     @State private var isRefreshing: Bool = false
-    @State private var selectedFlick: Story?
-    @State private var showingFlickViewer: Bool = false
+    @State private var selectedStory: Story?
+    @State private var showingStoryViewer: Bool = false
     @State private var searchText: String = ""
-    @State private var selectedFilter: FlickFilter = .all
-    @State private var showingCreateFlick: Bool = false
+    @State private var selectedFilter: StoryFilter = .all
+    @State private var showingCreateStory: Bool = false
     
-    private var filteredFlicks: [Story] {
-        let filtered = flicks.filter { flick in
+    private var filteredStories: [Story] {
+        let filtered = stories.filter { story in
             if !searchText.isEmpty {
-                return flick.creator?.displayName.localizedCaseInsensitiveContains(searchText) == true ||
-                       flick.caption?.localizedCaseInsensitiveContains(searchText) == true
+                return story.creator?.displayName.localizedCaseInsensitiveContains(searchText) == true ||
+                       story.caption?.localizedCaseInsensitiveContains(searchText) == true
             }
             return true
         }
@@ -32,7 +32,7 @@ struct FlicksView: View {
             // For now, simulate following by checking if creator has more than 100k subscribers
             return filtered.filter { $0.creator?.subscriberCount ?? 0 > 100000 }
         case .trending:
-            return filtered.filter { $0.mediaType == .video } // Simulate trending flicks
+            return filtered.filter { $0.mediaType == .video } // Simulate trending stories
         case .recent:
             return filtered.filter { 
                 Calendar.current.isDateInToday($0.createdAt) || 
@@ -53,12 +53,12 @@ struct FlicksView: View {
                 VStack(spacing: 16) {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("")
+                            Text("Stories")
                                 .font(AppTheme.Typography.largeTitle)
                                 .fontWeight(.bold)
                                 .foregroundColor(AppTheme.Colors.textPrimary)
                             
-                            Text("\(filteredFlicks.count) active flicks")
+                            Text("\(filteredStories.count) active stories")
                                 .font(AppTheme.Typography.subheadline)
                                 .foregroundColor(AppTheme.Colors.textSecondary)
                         }
@@ -66,7 +66,7 @@ struct FlicksView: View {
                         Spacer()
                         
                         Button(action: {
-                            showingCreateFlick = true
+                            showingCreateStory = true
                         }) {
                             HStack(spacing: 8) {
                                 Image(systemName: "plus.circle.fill")
@@ -89,7 +89,7 @@ struct FlicksView: View {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(AppTheme.Colors.textSecondary)
                         
-                        TextField("Search flicks...", text: $searchText)
+                        TextField("Search stories...", text: $searchText)
                             .textFieldStyle(PlainTextFieldStyle())
                         
                         if !searchText.isEmpty {
@@ -109,11 +109,11 @@ struct FlicksView: View {
                     // Filter tabs
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach(FlickFilter.allCases, id: \.self) { filter in
-                                FilterChip(
+                            ForEach(StoryFilter.allCases, id: \.self) { filter in
+                                StoryFilterChip(
                                     title: filter.title,
                                     isSelected: selectedFilter == filter,
-                                    count: flicksCount(for: filter)
+                                    count: storiesCount(for: filter)
                                 ) {
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                         selectedFilter = filter
@@ -128,13 +128,13 @@ struct FlicksView: View {
                 .padding(.top, AppTheme.Spacing.sm)
                 .background(AppTheme.Colors.background)
                 
-                // Flicks grid
+                // Stories grid
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 16) {
-                        ForEach(filteredFlicks) { flick in
-                            FlickCard(flick: flick) {
-                                selectedFlick = flick
-                                showingFlickViewer = true
+                        ForEach(filteredStories) { story in
+                            StoryCard(story: story) {
+                                selectedStory = story
+                                showingStoryViewer = true
                             }
                         }
                     }
@@ -142,59 +142,57 @@ struct FlicksView: View {
                     .padding(.top, AppTheme.Spacing.md)
                 }
                 .refreshable {
-                    await refreshFlicks()
+                    await refreshStories()
                 }
             }
             .background(AppTheme.Colors.background)
-            .fullScreenCover(isPresented: $showingFlickViewer) {
-                if let flick = selectedFlick {
+            .fullScreenCover(isPresented: $showingStoryViewer) {
+                if let story = selectedStory {
                     StoryViewerView(
-                        stories: flicks,
-                        initialStory: flick,
+                        stories: stories,
+                        initialStory: story,
                         onDismiss: {
-                            showingFlickViewer = false
-                            selectedFlick = nil
+                            showingStoryViewer = false
+                            selectedStory = nil
                         }
                     )
                 }
             }
-            .sheet(isPresented: $showingCreateFlick) {
-                CreateFlickView()
+            .sheet(isPresented: $showingCreateStory) {
+                CreateStoryView()
             }
         }
         .onAppear {
-            loadFlicks()
+            loadStories()
         }
     }
     
     // MARK: - Private Methods
     
-    private func loadFlicks() {
-        // Use existing sample stories as flicks
-        flicks = Story.sampleStories
+    private func loadStories() {
+        stories = Story.sampleStories
     }
     
-    private func refreshFlicks() async {
+    private func refreshStories() async {
         isRefreshing = true
         
         // Simulate network delay
         try? await Task.sleep(nanoseconds: 1_000_000_000)
         
-        flicks = Story.sampleStories
+        stories = Story.sampleStories
         isRefreshing = false
     }
     
-    private func flicksCount(for filter: FlickFilter) -> Int {
+    private func storiesCount(for filter: StoryFilter) -> Int {
         switch filter {
         case .all:
-            return flicks.count
+            return stories.count
         case .following:
-            // For now, simulate following by checking if creator has more than 100k subscribers
-            return flicks.filter { $0.creator?.subscriberCount ?? 0 > 100000 }.count
+            return stories.filter { $0.creator?.subscriberCount ?? 0 > 100000 }.count
         case .trending:
-            return flicks.filter { $0.mediaType == .video }.count // Simulate trending flicks
+            return stories.filter { $0.mediaType == .video }.count
         case .recent:
-            return flicks.filter { 
+            return stories.filter { 
                 Calendar.current.isDateInToday($0.createdAt) || 
                 Calendar.current.isDateInYesterday($0.createdAt) 
             }.count
@@ -202,8 +200,8 @@ struct FlicksView: View {
     }
 }
 
-// MARK: - Flick Filter
-enum FlickFilter: String, CaseIterable {
+// MARK: - Story Filter
+enum StoryFilter: String, CaseIterable {
     case all = "all"
     case following = "following"
     case trending = "trending"
@@ -219,8 +217,8 @@ enum FlickFilter: String, CaseIterable {
     }
 }
 
-// MARK: - Filter Chip
-struct FilterChip: View {
+// MARK: - Story Filter Chip
+struct StoryFilterChip: View {
     let title: String
     let isSelected: Bool
     let count: Int
@@ -270,9 +268,9 @@ struct FilterChip: View {
     }
 }
 
-// MARK: - Flick Card (Updated for Flicks)
-struct FlickCard: View {
-    let flick: Story
+// MARK: - Story Card
+struct StoryCard: View {
+    let story: Story
     let onTap: () -> Void
     
     @State private var imageLoaded: Bool = false
@@ -280,11 +278,11 @@ struct FlickCard: View {
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 0) {
-                // Flick preview
+                // Story preview
                 ZStack(alignment: .topTrailing) {
                     // Background image/video preview
-                    if !flick.mediaURL.isEmpty {
-                        AsyncImage(url: URL(string: flick.mediaURL)) { phase in
+                    if !story.mediaURL.isEmpty {
+                        AsyncImage(url: URL(string: story.mediaURL)) { phase in
                             switch phase {
                             case .success(let image):
                                 image
@@ -303,7 +301,7 @@ struct FlickCard: View {
                                     .aspectRatio(9/16, contentMode: .fill)
                                     .overlay(
                                         VStack {
-                                            Image(systemName: "bolt.fill")
+                                            Image(systemName: "photo.fill")
                                                 .font(.title)
                                                 .foregroundColor(.white.opacity(0.6))
                                         }
@@ -321,7 +319,7 @@ struct FlickCard: View {
                             }
                         }
                     } else {
-                        // Text flick background
+                        // Text story background
                         Rectangle()
                             .fill(
                                 LinearGradient(
@@ -333,7 +331,7 @@ struct FlickCard: View {
                             .aspectRatio(9/16, contentMode: .fill)
                             .overlay(
                                 VStack {
-                                    if let caption = flick.caption {
+                                    if let caption = story.caption {
                                         Text(caption)
                                             .font(.title3.weight(.medium))
                                             .foregroundColor(.white)
@@ -363,19 +361,19 @@ struct FlickCard: View {
                         .frame(height: 80)
                     }
                     
-                    // Media type indicator with flick branding
+                    // Media type indicator
                     VStack {
                         HStack {
                             Spacer()
                             
-                            if flick.mediaType == .video {
-                                Image(systemName: "bolt.circle.fill")
+                            if story.mediaType == .video {
+                                Image(systemName: "play.circle.fill")
                                     .font(.title2)
                                     .foregroundColor(.white)
                                     .background(Circle().fill(Color.black.opacity(0.3)))
                                     .padding(.top, 8)
                                     .padding(.trailing, 8)
-                            } else if flick.mediaType == .music {
+                            } else if story.mediaType == .music {
                                 Image(systemName: "music.note.circle.fill")
                                     .font(.title2)
                                     .foregroundColor(.white)
@@ -390,10 +388,10 @@ struct FlickCard: View {
                 }
                 .cornerRadius(AppTheme.CornerRadius.md)
                 
-                // Flick info
+                // Story info
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
-                        AsyncImage(url: URL(string: flick.creator?.profileImageURL ?? "")) { image in
+                        AsyncImage(url: URL(string: story.creator?.profileImageURL ?? "")) { image in
                             image
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
@@ -405,12 +403,12 @@ struct FlickCard: View {
                         .clipShape(Circle())
                         
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(flick.creator?.displayName ?? "Unknown")
+                            Text(story.creator?.displayName ?? "Unknown")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(AppTheme.Colors.textPrimary)
                                 .lineLimit(1)
                             
-                            Text(flick.createdAt.timeAgoDisplay)
+                            Text(story.createdAt.timeAgoDisplay)
                                 .font(.system(size: 11))
                                 .foregroundColor(AppTheme.Colors.textSecondary)
                                 .lineLimit(1)
@@ -419,7 +417,7 @@ struct FlickCard: View {
                         Spacer()
                     }
                     
-                    if let caption = flick.caption {
+                    if let caption = story.caption {
                         Text(caption)
                             .font(.system(size: 12))
                             .foregroundColor(AppTheme.Colors.textSecondary)
@@ -442,8 +440,8 @@ struct FlickCard: View {
     }
 }
 
-// MARK: - Create Flick View
-struct CreateFlickView: View {
+// MARK: - Create Story View
+struct CreateStoryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedOption: CreateOption?
     
@@ -482,17 +480,17 @@ struct CreateFlickView: View {
         NavigationStack {
             VStack(spacing: 32) {
                 VStack(spacing: 16) {
-                    Image(systemName: "bolt.circle.fill")
+                    Image(systemName: "camera.circle.fill")
                         .font(.system(size: 60))
                         .foregroundColor(AppTheme.Colors.primary)
                     
                     VStack(spacing: 8) {
-                        Text("Create Your Flick")
+                        Text("Create Your Story")
                             .font(AppTheme.Typography.title1)
                             .fontWeight(.bold)
                             .foregroundColor(AppTheme.Colors.textPrimary)
                         
-                        Text("Share a quick moment that sparks joy")
+                        Text("Share a moment with your followers")
                             .font(AppTheme.Typography.body)
                             .foregroundColor(AppTheme.Colors.textSecondary)
                             .multilineTextAlignment(.center)
@@ -523,7 +521,7 @@ struct CreateFlickView: View {
                                         .font(AppTheme.Typography.headline)
                                         .foregroundColor(AppTheme.Colors.textPrimary)
                                     
-                                    Text("Create a flick with \(option.title.lowercased())")
+                                    Text("Create a story with \(option.title.lowercased())")
                                         .font(AppTheme.Typography.subheadline)
                                         .foregroundColor(AppTheme.Colors.textSecondary)
                                 }
@@ -546,7 +544,7 @@ struct CreateFlickView: View {
                 
                 Spacer()
             }
-            .navigationTitle("Create Flick")
+            .navigationTitle("Create Story")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -561,6 +559,6 @@ struct CreateFlickView: View {
 }
 
 #Preview {
-    FlicksView()
+    StoriesView()
         .preferredColorScheme(.light)
 }
