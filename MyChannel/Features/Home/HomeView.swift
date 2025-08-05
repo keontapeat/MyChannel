@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct HomeView: View {
+    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
     @State private var selectedFilter: ContentFilter = .all
     @State private var searchText: String = ""
     @State private var showingFilters: Bool = false
@@ -65,9 +66,7 @@ struct HomeView: View {
                             videos: Video.sampleVideos.filter { $0.viewCount > 100000 },
                             onVideoTap: { video in
                                 print("🎬 Trending video tapped: \(video.title)")
-                                selectedVideo = video
-                                showingVideoPlayer = true
-                                print("🎬 State set - selectedVideo: \(selectedVideo?.title ?? "nil"), showingVideoPlayer: \(showingVideoPlayer)")
+                                playVideoWithGlobalPlayer(video)
                             }
                         )
 
@@ -95,9 +94,7 @@ struct HomeView: View {
                             isLoading: $isLoading,
                             onVideoTap: { video in
                                 print("🎬 Feed video tapped: \(video.title)")
-                                selectedVideo = video
-                                showingVideoPlayer = true
-                                print("🎬 State set - selectedVideo: \(selectedVideo?.title ?? "nil"), showingVideoPlayer: \(showingVideoPlayer)")
+                                playVideoWithGlobalPlayer(video)
                             }
                         )
                         
@@ -151,6 +148,13 @@ struct HomeView: View {
                 )
             }
         }
+    }
+    
+    // MARK: - Enhanced Video Playback
+    private func playVideoWithGlobalPlayer(_ video: Video) {
+        // Use global player for consistent mini player experience
+        selectedVideo = video
+        showingVideoPlayer = true
     }
     
     private func refreshContent() async {
@@ -419,6 +423,7 @@ struct ProfessionalStoryItem: View {
                                     .fill(AppTheme.Colors.primary)
                                     .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 2, x: 0, y: 1)
                             )
+                            .padding(8)
                         }
                         .frame(width: 68, height: 68)
                     }
@@ -664,7 +669,6 @@ struct ClickableTrendingVideoCard: View {
                 }
                 .frame(width: 180, height: 64, alignment: .top)
             }
-            .frame(width: 180)
         }
         .buttonStyle(PlainButtonStyle())
         .scaleEffect(isPressed ? 0.95 : 1.0)

@@ -14,6 +14,7 @@ extension Notification.Name {
 
 struct MainTabView: View {
     @StateObject private var authManager = AuthenticationManager.shared
+    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
     @State private var selectedTab: TabItem = .home
     @State private var previousTab: TabItem = .home
 
@@ -47,6 +48,10 @@ struct MainTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(AppTheme.Colors.background)
             .transition(.identity)
+            
+            // Floating Mini Player - Always on top
+            FloatingMiniPlayer()
+                .zIndex(999)
 
             CustomTabBar(
                 selectedTab: $selectedTab,
@@ -56,10 +61,12 @@ struct MainTabView: View {
                     showingUpload = true
                 }
             )
+            .zIndex(1000)
         }
         .ignoresSafeArea(.keyboard)
         .environmentObject(appState)
         .environmentObject(authManager)
+        .environmentObject(globalPlayer)
         .onChange(of: selectedTab) { oldValue, newValue in
             if newValue == .upload {
                 selectedTab = oldValue

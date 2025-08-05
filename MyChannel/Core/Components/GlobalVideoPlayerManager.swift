@@ -21,6 +21,9 @@ class GlobalVideoPlayerManager: ObservableObject {
     @Published var currentProgress: Double = 0.0
     @Published var currentTime: TimeInterval = 0
     @Published var duration: TimeInterval = 0
+    @Published var miniPlayerHeight: CGFloat = 80
+    @Published var shouldShowMiniPlayer = false
+    @Published var isTransitioning = false
     
     private let playerManager = VideoPlayerManager()
     private var cancellables = Set<AnyCancellable>()
@@ -63,9 +66,11 @@ class GlobalVideoPlayerManager: ObservableObject {
         if showFullscreen {
             showingFullscreen = true
             isMiniplayer = false
+            shouldShowMiniPlayer = false
         } else {
             isMiniplayer = true
             showingFullscreen = false
+            shouldShowMiniPlayer = true
         }
         
         // Start playing
@@ -79,16 +84,34 @@ class GlobalVideoPlayerManager: ObservableObject {
     }
     
     func minimizePlayer() {
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+        guard currentVideo != nil else { return }
+        
+        isTransitioning = true
+        
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
             showingFullscreen = false
             isMiniplayer = true
+            shouldShowMiniPlayer = true
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.isTransitioning = false
         }
     }
     
     func expandPlayer() {
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+        guard currentVideo != nil else { return }
+        
+        isTransitioning = true
+        
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
             showingFullscreen = true
             isMiniplayer = false
+            shouldShowMiniPlayer = false
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.isTransitioning = false
         }
     }
     
@@ -98,7 +121,18 @@ class GlobalVideoPlayerManager: ObservableObject {
             currentVideo = nil
             isMiniplayer = false
             showingFullscreen = false
+            shouldShowMiniPlayer = false
             miniplayerOffset = 0
+        }
+    }
+    
+    // MARK: - Navigation Handling for Mini Player
+    func handleNavigationChange(isVideoDetailVisible: Bool) {
+        guard let _ = currentVideo else { return }
+        
+        if !isVideoDetailVisible && !isMiniplayer {
+            // User navigated away from video detail, show mini player
+            minimizePlayer()
         }
     }
     
@@ -129,10 +163,13 @@ class GlobalVideoPlayerManager: ObservableObject {
     
     func handleMiniplayerDragEnd(_ translation: CGSize) {
         let dismissThreshold: CGFloat = 100
+        let expandThreshold: CGFloat = -50
         
         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
             if translation.height > dismissThreshold {
                 closePlayer()
+            } else if translation.height < expandThreshold {
+                expandPlayer()
             } else {
                 miniplayerOffset = 0
             }

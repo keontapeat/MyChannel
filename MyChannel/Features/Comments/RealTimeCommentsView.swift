@@ -14,9 +14,9 @@ struct RealTimeCommentsView: View {
     @State private var newCommentText = ""
     @State private var showingCommentComposer = false
     @State private var selectedComment: RealTimeComment?
-    @State private var sortOption: CommentSortOption = .newest
+    @State private var sortOption: RealTimeCommentSortOption = .newest
     
-    enum CommentSortOption: String, CaseIterable {
+    enum RealTimeCommentSortOption: String, CaseIterable {
         case newest = "Newest"
         case popular = "Popular"
         case oldest = "Oldest"
@@ -105,7 +105,7 @@ struct RealTimeCommentsView: View {
                 
                 // Sort menu
                 Menu {
-                    ForEach(CommentSortOption.allCases, id: \.self) { option in
+                    ForEach(RealTimeCommentSortOption.allCases, id: \.self) { option in
                         Button(action: { sortOption = option }) {
                             Label(option.rawValue, systemImage: option.systemImage)
                         }

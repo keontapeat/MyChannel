@@ -11,52 +11,49 @@ import AVKit
 struct FloatingMiniPlayer: View {
     @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
     @State private var dragOffset: CGFloat = 0
+    @State private var isDragging = false
     
     var body: some View {
-        if globalPlayer.isMiniplayer, let video = globalPlayer.currentVideo {
+        if globalPlayer.shouldShowMiniPlayer && !globalPlayer.showingFullscreen, 
+           let video = globalPlayer.currentVideo {
             VStack {
                 Spacer()
                 
                 miniPlayerView(video: video)
                     .offset(y: globalPlayer.miniplayerOffset + dragOffset)
-                    .opacity(max(0, 1.0 - (globalPlayer.miniplayerOffset / 100.0)))
-                    .scaleEffect(max(0.8, 1.0 - (globalPlayer.miniplayerOffset / 400.0)))
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                if value.translation.height > 0 {
-                                    dragOffset = value.translation.height
-                                } else {
-                                    // Expand on upward swipe
-                                    if abs(value.translation.height) > 50 {
-                                        globalPlayer.expandPlayer()
-                                    }
-                                }
-                            }
-                            .onEnded { value in
-                                dragOffset = 0
-                                
-                                if value.translation.height > 100 {
-                                    globalPlayer.closePlayer()
-                                } else if value.translation.height < -50 {
-                                    globalPlayer.expandPlayer()
-                                }
-                            }
-                    )
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: dragOffset)
+                    .opacity(opacity)
+                    .scaleEffect(scale)
+                    .gesture(miniPlayerDragGesture)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .move(edge: .bottom).combined(with: .opacity)
+                    ))
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: globalPlayer.shouldShowMiniPlayer)
             }
             .ignoresSafeArea(.container, edges: .bottom)
         }
     }
     
+    private var opacity: Double {
+        let totalOffset = globalPlayer.miniplayerOffset + dragOffset
+        return max(0.3, 1.0 - (totalOffset / 120.0))
+    }
+    
+    private var scale: CGFloat {
+        let totalOffset = globalPlayer.miniplayerOffset + dragOffset
+        return max(0.85, 1.0 - (totalOffset / 400.0))
+    }
+    
     private func miniPlayerView(video: Video) -> some View {
         HStack(spacing: 0) {
-            // Video thumbnail/player
+            // Video thumbnail/player section
             ZStack {
+                // Video player or thumbnail
                 if let player = globalPlayer.player {
                     VideoPlayer(player: player)
                         .aspectRatio(16/9, contentMode: .fill)
                         .disabled(true)
+                        .allowsHitTesting(false)
                 } else {
                     AsyncImage(url: URL(string: video.thumbnailURL)) { image in
                         image
@@ -65,28 +62,49 @@ struct FloatingMiniPlayer: View {
                     } placeholder: {
                         Rectangle()
                             .fill(AppTheme.Colors.surface)
+                            .overlay(
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
+                                    .scaleEffect(0.6)
+                            )
                     }
                 }
                 
-                // Progress bar overlay
+                // Progress bar overlay at the bottom
                 VStack {
                     Spacer()
                     
-                    Rectangle()
-                        .fill(AppTheme.Colors.primary)
-                        .frame(height: 2)
-                        .scaleEffect(x: globalPlayer.currentProgress, anchor: .leading)
-                        .animation(.linear(duration: 0.1), value: globalPlayer.currentProgress)
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            // Background track
+                            Rectangle()
+                                .fill(Color.black.opacity(0.3))
+                                .frame(height: 3)
+                            
+                            // Progress track
+                            Rectangle()
+                                .fill(AppTheme.Colors.primary)
+                                .frame(
+                                    width: geometry.size.width * CGFloat(globalPlayer.currentProgress),
+                                    height: 3
+                                )
+                                .animation(.linear(duration: 0.1), value: globalPlayer.currentProgress)
+                        }
+                    }
+                    .frame(height: 3)
                 }
             }
             .frame(width: 120, height: 68)
             .cornerRadius(8)
             .clipped()
             .onTapGesture {
-                globalPlayer.expandPlayer()
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    globalPlayer.expandPlayer()
+                }
+                HapticManager.shared.impact(style: .medium)
             }
             
-            // Video info and controls
+            // Video info and controls section
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(video.title)
@@ -103,27 +121,33 @@ struct FloatingMiniPlayer: View {
                 
                 Spacer()
                 
-                // Play/Pause button
-                Button(action: {
-                    globalPlayer.togglePlayPause()
-                }) {
-                    Image(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .frame(width: 32, height: 32)
+                // Control buttons
+                HStack(spacing: 16) {
+                    // Play/Pause button
+                    Button(action: {
+                        globalPlayer.togglePlayPause()
+                    }) {
+                        Image(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Close button
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            globalPlayer.closePlayer()
+                        }
+                        HapticManager.shared.impact(style: .light)
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(PlainButtonStyle())
-                
-                // Close button
-                Button(action: {
-                    globalPlayer.closePlayer()
-                }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(PlainButtonStyle())
             }
             .padding(.horizontal, 12)
         }
@@ -133,14 +157,50 @@ struct FloatingMiniPlayer: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(AppTheme.Colors.cardBackground)
                 .shadow(
-                    color: AppTheme.Colors.textPrimary.opacity(0.1),
-                    radius: 8,
+                    color: AppTheme.Colors.textPrimary.opacity(0.15),
+                    radius: 12,
                     x: 0,
-                    y: -2
+                    y: -4
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
                 )
         )
         .padding(.horizontal, 16)
-        .padding(.bottom, 100) // Account for tab bar
+        .padding(.bottom, safeAreaInsets.bottom + 90) // Account for tab bar and safe area
+    }
+    
+    private var miniPlayerDragGesture: some Gesture {
+        DragGesture()
+            .onChanged { value in
+                if !isDragging {
+                    isDragging = true
+                    HapticManager.shared.impact(style: .light)
+                }
+                
+                dragOffset = value.translation.height
+                
+                // Provide haptic feedback when crossing thresholds
+                if value.translation.height > 100 && dragOffset < 100 {
+                    HapticManager.shared.impact(style: .medium)
+                } else if value.translation.height < -50 && dragOffset > -50 {
+                    HapticManager.shared.impact(style: .medium)
+                }
+            }
+            .onEnded { value in
+                isDragging = false
+                dragOffset = 0
+                globalPlayer.handleMiniplayerDragEnd(value.translation)
+            }
+    }
+    
+    private var safeAreaInsets: UIEdgeInsets {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else {
+            return .zero
+        }
+        return window.safeAreaInsets
     }
 }
 
@@ -150,5 +210,9 @@ struct FloatingMiniPlayer: View {
             .ignoresSafeArea()
         
         FloatingMiniPlayer()
+            .onAppear {
+                // Mock data for preview
+                GlobalVideoPlayerManager.shared.playVideo(Video.sampleVideos[0], showFullscreen: false)
+            }
     }
 }

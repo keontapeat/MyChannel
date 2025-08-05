@@ -13,7 +13,7 @@ struct VideoDetailView: View {
     let video: Video
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var playerManager = VideoPlayerManager()
+    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
     
     // MARK: - Player States
     @State private var showPlayer = false
@@ -28,6 +28,7 @@ struct VideoDetailView: View {
     @State private var playerControlsTimer: Timer?
     @State private var isDraggingSeeker = false
     @State private var videoQuality: VideoQuality = .auto
+    @State private var isViewVisible = true
     
     // MARK: - Interaction States
     @State private var isLiked = false
@@ -52,47 +53,42 @@ struct VideoDetailView: View {
     // MARK: - UI States
     @State private var scrollOffset: CGFloat = 0
     @State private var headerOpacity: Double = 1.0
-    @State private var showMiniPlayer = false
     @State private var dragOffset: CGSize = .zero
     @State private var lastDragValue: CGSize = .zero
-    
-    // MARK: - Analytics & Performance
-    @State private var watchTime: TimeInterval = 0
-    @State private var engagementTimer: Timer?
-    @State private var viewCountIncremented = false
     
     // MARK: - Performance Optimizations
     @State private var isViewAppeared = false
     @State private var shouldPreloadRecommendations = false
-    private let imageCache = ImageCache.shared
     
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 Color.black.ignoresSafeArea()
                 
-                if showMiniPlayer {
-                    miniPlayerView
-                        .offset(dragOffset)
-                        .gesture(miniPlayerDragGesture)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                } else {
-                    fullScreenView(geometry: geometry)
-                        .transition(.opacity)
-                }
+                fullScreenView(geometry: geometry)
             }
         }
         .navigationBarHidden(true)
         .statusBarHidden(isFullscreen)
         .onAppear {
+            isViewVisible = true
             if !isViewAppeared {
                 setupVideoOptimized()
                 loadInitialDataOptimized()
                 isViewAppeared = true
             }
+            
+            // Set up global player to take over
+            globalPlayer.playVideo(video, showFullscreen: true)
         }
         .onDisappear {
+            isViewVisible = false
             cleanupVideoOptimized()
+            
+            // Handle navigation away - convert to mini player if video is still playing
+            if globalPlayer.isPlaying && globalPlayer.currentVideo?.id == video.id {
+                globalPlayer.minimizePlayer()
+            }
         }
         .onChange(of: scenePhase) { _, newPhase in
             handleScenePhaseChange(newPhase)
@@ -190,8 +186,8 @@ struct VideoDetailView: View {
                 .frame(height: playerHeight)
                 .overlay(
                     Group {
-                        if showPlayer && isPlayerReady {
-                            VideoPlayer(player: playerManager.player)
+                        if let player = globalPlayer.player, globalPlayer.showingFullscreen {
+                            VideoPlayer(player: player)
                                 .frame(height: playerHeight)
                                 .clipped()
                         } else {
@@ -202,7 +198,7 @@ struct VideoDetailView: View {
                 )
             
             // Enhanced Gesture and Control Logic
-            if showPlayer && isPlayerReady {
+            if globalPlayer.showingFullscreen && globalPlayer.player != nil {
                 // Single overlay for all gestures
                 HStack(spacing: 0) {
                     // Left side for rewind
@@ -210,7 +206,7 @@ struct VideoDetailView: View {
                         .fill(Color.clear)
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) {
-                            rewindVideoOptimized()
+                            globalPlayer.seekBackward()
                         }
                         .onTapGesture(count: 1) {
                             togglePlayerControlsOptimized()
@@ -221,7 +217,7 @@ struct VideoDetailView: View {
                         .fill(Color.clear)
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) {
-                            fastForwardVideoOptimized()
+                            globalPlayer.seekForward()
                         }
                         .onTapGesture(count: 1) {
                             togglePlayerControlsOptimized()
@@ -238,14 +234,20 @@ struct VideoDetailView: View {
             // Navigation Overlay - Always Visible
             VStack {
                 HStack {
-                    // Enhanced Back Button
-                    Button(action: { dismissWithAnimation() }) {
+                    // Enhanced Back Button with mini player conversion
+                    Button(action: { 
+                        if globalPlayer.isPlaying {
+                            // Convert to mini player instead of stopping
+                            globalPlayer.minimizePlayer()
+                        }
+                        dismissWithAnimation() 
+                    }) {
                         ZStack {
                             Circle()
                                 .fill(.ultraThinMaterial)
                                 .frame(width: 44, height: 44)
                             
-                            Image(systemName: "chevron.left")
+                            Image(systemName: "chevron.down")
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(.white)
                         }
@@ -256,7 +258,7 @@ struct VideoDetailView: View {
                     Spacer()
                     
                     // Quality and More Options
-                    if showPlayerControls || !showPlayer {
+                    if showPlayerControls || !globalPlayer.showingFullscreen {
                         HStack(spacing: 12) {
                             // Video Quality Button
                             Button(action: { showingQualitySelector = true }) {
@@ -365,14 +367,14 @@ struct VideoDetailView: View {
                     VStack(spacing: 8) {
                         // Time Labels and Progress Bar
                         HStack {
-                            Text(formatTimeOptimized(currentTime))
+                            Text(formatTimeOptimized(globalPlayer.currentTime))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(.white)
                                 .monospacedDigit()
                             
                             Spacer()
                             
-                            Text(formatTimeOptimized(videoDuration))
+                            Text(formatTimeOptimized(globalPlayer.duration))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(.white.opacity(0.8))
                                 .monospacedDigit()
@@ -394,13 +396,13 @@ struct VideoDetailView: View {
                                 // Playback Progress
                                 RoundedRectangle(cornerRadius: 2)
                                     .fill(AppTheme.Colors.primary)
-                                    .frame(width: geometry.size.width * CGFloat(playbackProgress), height: 4)
+                                    .frame(width: geometry.size.width * CGFloat(globalPlayer.currentProgress), height: 4)
                                 
                                 // Optimized Thumb with better performance
                                 Circle()
                                     .fill(AppTheme.Colors.primary)
                                     .frame(width: isDraggingSeeker ? 16 : 12, height: isDraggingSeeker ? 16 : 12)
-                                    .offset(x: geometry.size.width * CGFloat(playbackProgress) - (isDraggingSeeker ? 8 : 6))
+                                    .offset(x: geometry.size.width * CGFloat(globalPlayer.currentProgress) - (isDraggingSeeker ? 8 : 6))
                                     .animation(.easeOut(duration: 0.15), value: isDraggingSeeker)
                             }
                             .contentShape(Rectangle())
@@ -412,12 +414,10 @@ struct VideoDetailView: View {
                                             HapticManager.shared.impact(style: .light)
                                         }
                                         let newProgress = max(0, min(1, value.location.x / geometry.size.width))
-                                        playbackProgress = newProgress
-                                        currentTime = newProgress * videoDuration
+                                        globalPlayer.seek(to: newProgress)
                                     }
                                     .onEnded { _ in
                                         isDraggingSeeker = false
-                                        playerManager.seek(to: playbackProgress)
                                         HapticManager.shared.impact(style: .medium)
                                     }
                             )
@@ -428,7 +428,7 @@ struct VideoDetailView: View {
                     // Optimized Control Buttons
                     HStack(spacing: 32) {
                         // Rewind Button
-                        Button(action: { rewindVideoOptimized() }) {
+                        Button(action: { globalPlayer.seekBackward() }) {
                             Image(systemName: "gobackward.10")
                                 .font(.system(size: 24))
                                 .foregroundColor(.white)
@@ -437,14 +437,14 @@ struct VideoDetailView: View {
                         
                         // Play/Pause Button
                         Button(action: { togglePlayPauseOptimized() }) {
-                            Image(systemName: playerManager.isPlaying ? "pause.fill" : "play.fill")
+                            Image(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill")
                                 .font(.system(size: 32))
                                 .foregroundColor(.white)
                         }
                         .buttonStyle(VideoDetailOptimizedScaleButtonStyle())
                         
                         // Fast Forward Button
-                        Button(action: { fastForwardVideoOptimized() }) {
+                        Button(action: { globalPlayer.seekForward() }) {
                             Image(systemName: "goforward.10")
                                 .font(.system(size: 24))
                                 .foregroundColor(.white)
@@ -536,10 +536,11 @@ struct VideoDetailView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "tv")
                             .font(.system(size: 12))
+                            .foregroundColor(AppTheme.Colors.primary)
                         Text("HD")
                             .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.primary)
                     }
-                    .foregroundColor(AppTheme.Colors.primary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(AppTheme.Colors.primary.opacity(0.1))
@@ -786,9 +787,9 @@ struct VideoDetailView: View {
             .padding(.horizontal, 16)
             
             LazyVStack(spacing: 16) {
-                ForEach(Video.sampleVideos.prefix(5)) { recommendedVideo in
-                    NavigationLink(destination: VideoDetailView(video: recommendedVideo)) {
-                        VideoRecommendedVideoRow(video: recommendedVideo)
+                ForEach(Video.sampleVideos.prefix(5)) { video in
+                    NavigationLink(destination: VideoDetailView(video: video)) {
+                        VideoRecommendedVideoRow(video: video)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
@@ -798,83 +799,9 @@ struct VideoDetailView: View {
         .padding(.vertical, 20)
     }
     
-    // MARK: - Optimized Mini Player View
-    private var miniPlayerView: some View {
-        VStack(spacing: 0) {
-            Spacer()
-            
-            HStack(spacing: 12) {
-                // Mini video preview with optimized caching
-                CachedAsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Rectangle().fill(AppTheme.Colors.surface)
-                }
-                .frame(width: 80, height: 45)
-                .cornerRadius(8)
-                .clipped()
-                
-                // Video info
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(video.title)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .lineLimit(1)
-                    
-                    Text(video.creator.displayName)
-                        .font(.system(size: 12))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                }
-                
-                Spacer()
-                
-                // Controls
-                HStack(spacing: 16) {
-                    Button(action: { togglePlayPauseOptimized() }) {
-                        Image(systemName: playerManager.isPlaying ? "pause" : "play.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                    }
-                    
-                    Button(action: { dismissMiniPlayerOptimized() }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 18))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                }
-            }
-            .padding()
-            .background(AppTheme.Colors.surface)
-            .cornerRadius(12)
-            .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: -5)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 100)
-        }
-    }
-    
-    // MARK: - Optimized Gesture Handlers
-    private var miniPlayerDragGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                dragOffset = value.translation
-            }
-            .onEnded { value in
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    if value.translation.height > 100 {
-                        dismissMiniPlayerOptimized()
-                    } else {
-                        dragOffset = .zero
-                    }
-                }
-            }
-    }
-    
     // MARK: - Optimized Helper Methods
     
     private func setupVideoOptimized() {
-        playerManager.setupPlayer(with: video)
         loadUserPreferencesOptimized()
     }
     
@@ -908,7 +835,7 @@ struct VideoDetailView: View {
         }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            playerManager.play()
+            globalPlayer.playVideo(video, showFullscreen: true)
             isPlayerReady = true
             resetPlayerControlsTimerOptimized()
         }
@@ -917,11 +844,10 @@ struct VideoDetailView: View {
     }
     
     private func togglePlayPauseOptimized() {
-        playerManager.togglePlayPause()
-        HapticManager.shared.impact(style: .light)
+        globalPlayer.togglePlayPause()
         
         // Show controls when pausing, manage timer when playing
-        if playerManager.isPlaying {
+        if globalPlayer.isPlaying {
             resetPlayerControlsTimerOptimized()
         } else {
             playerControlsTimer?.invalidate()
@@ -936,47 +862,20 @@ struct VideoDetailView: View {
             showPlayerControls.toggle()
         }
 
-        if showPlayerControls && playerManager.isPlaying {
+        if showPlayerControls && globalPlayer.isPlaying {
             resetPlayerControlsTimerOptimized()
         }
     }
     
     private func resetPlayerControlsTimerOptimized() {
         playerControlsTimer?.invalidate()
-        if playerManager.isPlaying {
+        if globalPlayer.isPlaying {
             playerControlsTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: false) { _ in
                 withAnimation(.easeOut(duration: 0.25)) {
                     showPlayerControls = false
                 }
             }
         }
-    }
-    
-    private func rewindVideoOptimized() {
-        let currentSeconds = CMTimeGetSeconds(playerManager.player?.currentTime() ?? CMTime.zero)
-        let newTime = max(0, currentSeconds - 10)
-        let seekTime = CMTime(seconds: newTime, preferredTimescale: 600)
-        playerManager.player?.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
-        HapticManager.shared.impact(style: .light)
-        
-        withAnimation(.easeOut(duration: 0.25)) {
-            showPlayerControls = true
-        }
-        resetPlayerControlsTimerOptimized()
-    }
-    
-    private func fastForwardVideoOptimized() {
-        let currentSeconds = CMTimeGetSeconds(playerManager.player?.currentTime() ?? CMTime.zero)
-        let duration = CMTimeGetSeconds(playerManager.player?.currentItem?.duration ?? CMTime.zero)
-        let newTime = min(duration, currentSeconds + 10)
-        let seekTime = CMTime(seconds: newTime, preferredTimescale: 600)
-        playerManager.player?.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
-        HapticManager.shared.impact(style: .light)
-        
-        withAnimation(.easeOut(duration: 0.25)) {
-            showPlayerControls = true
-        }
-        resetPlayerControlsTimerOptimized()
     }
     
     private func changeVideoQuality(_ quality: VideoQuality) {
@@ -986,7 +885,7 @@ struct VideoDetailView: View {
     
     private func changePlaybackSpeed(_ speed: Float) {
         playbackRate = speed
-        playerManager.player?.rate = speed
+        globalPlayer.player?.rate = speed
         HapticManager.shared.impact(style: .light)
     }
     
@@ -1076,7 +975,7 @@ struct VideoDetailView: View {
     private func handleScenePhaseChange(_ phase: ScenePhase) {
         switch phase {
         case .background, .inactive:
-            playerManager.pause()
+            globalPlayer.togglePlayPause()
         case .active:
             break
         @unknown default:
@@ -1087,11 +986,6 @@ struct VideoDetailView: View {
     private func dismissWithAnimation() {
         // Enhanced cleanup before dismissal
         playerControlsTimer?.invalidate()
-        engagementTimer?.invalidate()
-        
-        // Ensure video stops playing
-        playerManager.pause()
-        playerManager.player?.replaceCurrentItem(with: nil)
         
         // Reset all state
         showPlayer = false
@@ -1104,26 +998,12 @@ struct VideoDetailView: View {
         }
     }
     
-    private func dismissMiniPlayerOptimized() {
-        withAnimation(.easeOut(duration: 0.25)) {
-            showMiniPlayer = false
-            playerManager.pause()
-        }
-    }
-    
     private func cleanupVideoOptimized() {
         // More thorough cleanup
         playerControlsTimer?.invalidate()
         playerControlsTimer = nil
         
-        engagementTimer?.invalidate()
-        engagementTimer = nil
-        
-        // Stop video and clear player
-        playerManager.pause()
-        playerManager.player?.replaceCurrentItem(with: nil)
-        
-        // Reset states
+        // Reset states (but don't stop global player)
         showPlayer = false
         isPlayerReady = false
         showPlayerControls = false
