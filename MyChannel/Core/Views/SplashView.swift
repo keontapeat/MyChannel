@@ -19,7 +19,7 @@ struct SplashView: View {
     var body: some View {
         ZStack {
             // Clean white background
-            Color.white
+            AppTheme.Colors.background
                 .ignoresSafeArea()
             
             VStack(spacing: 0) {
@@ -42,12 +42,12 @@ struct SplashView: View {
                         // Clean progress bar
                         ZStack(alignment: .leading) {
                             Rectangle()
-                                .fill(Color.gray.opacity(0.3))
+                                .fill(AppTheme.Colors.divider)
                                 .frame(width: 200, height: 3)
                                 .cornerRadius(1.5)
                             
                             Rectangle()
-                                .fill(Color.red)
+                                .fill(AppTheme.Colors.primary)
                                 .frame(width: 200 * progress, height: 3)
                                 .cornerRadius(1.5)
                                 .animation(.easeOut(duration: 0.3), value: progress)
@@ -144,7 +144,7 @@ struct MinimalSplashView: View {
     var body: some View {
         ZStack {
             // Pure white background
-            Color.white
+            AppTheme.Colors.background
                 .ignoresSafeArea()
             
             // Just the logo, clean AF
