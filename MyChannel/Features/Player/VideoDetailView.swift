@@ -201,7 +201,7 @@ struct VideoDetailView: View {
                     }
                 )
             
-            // --- REBUILT GESTURE AND CONTROL LOGIC ---
+            // Enhanced Gesture and Control Logic
             if showPlayer && isPlayerReady {
                 // Single overlay for all gestures
                 HStack(spacing: 0) {
@@ -228,17 +228,17 @@ struct VideoDetailView: View {
                         }
                 }
 
-                // Player controls are now on a higher layer, so they are always tappable when visible
+                // Player controls overlay
                 playerControlsOverlay
                 
+                // Buffering indicator
                 bufferingIndicator
             }
-            // --- END REBUILT GESTURE LOGIC ---
             
-            // ALWAYS VISIBLE Navigation Overlay - Optimized with reduced redraws
+            // Navigation Overlay - Always Visible
             VStack {
                 HStack {
-                    // Enhanced Back Button - ALWAYS VISIBLE
+                    // Enhanced Back Button
                     Button(action: { dismissWithAnimation() }) {
                         ZStack {
                             Circle()
@@ -255,7 +255,7 @@ struct VideoDetailView: View {
                     
                     Spacer()
                     
-                    // Quality and More Options - Optimized visibility logic
+                    // Quality and More Options
                     if showPlayerControls || !showPlayer {
                         HStack(spacing: 12) {
                             // Video Quality Button
@@ -333,9 +333,9 @@ struct VideoDetailView: View {
                 }
                 .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
             }
-            .buttonStyle(OptimizedScaleButtonStyle())
+            .buttonStyle(VideoDetailOptimizedScaleButtonStyle())
             
-            // Video Duration Badge - Optimized positioning
+            // Video Duration Badge
             VStack {
                 Spacer()
                 HStack {
@@ -433,7 +433,7 @@ struct VideoDetailView: View {
                                 .font(.system(size: 24))
                                 .foregroundColor(.white)
                         }
-                        .buttonStyle(OptimizedScaleButtonStyle())
+                        .buttonStyle(VideoDetailOptimizedScaleButtonStyle())
                         
                         // Play/Pause Button
                         Button(action: { togglePlayPauseOptimized() }) {
@@ -441,7 +441,7 @@ struct VideoDetailView: View {
                                 .font(.system(size: 32))
                                 .foregroundColor(.white)
                         }
-                        .buttonStyle(OptimizedScaleButtonStyle())
+                        .buttonStyle(VideoDetailOptimizedScaleButtonStyle())
                         
                         // Fast Forward Button
                         Button(action: { fastForwardVideoOptimized() }) {
@@ -449,7 +449,7 @@ struct VideoDetailView: View {
                                 .font(.system(size: 24))
                                 .foregroundColor(.white)
                         }
-                        .buttonStyle(OptimizedScaleButtonStyle())
+                        .buttonStyle(VideoDetailOptimizedScaleButtonStyle())
                         
                         Spacer()
                         
@@ -459,7 +459,7 @@ struct VideoDetailView: View {
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.white)
                         }
-                        .buttonStyle(OptimizedScaleButtonStyle())
+                        .buttonStyle(VideoDetailOptimizedScaleButtonStyle())
                         
                         // Fullscreen Button
                         Button(action: { toggleFullscreenOptimized() }) {
@@ -467,7 +467,7 @@ struct VideoDetailView: View {
                                 .font(.system(size: 20))
                                 .foregroundColor(.white)
                         }
-                        .buttonStyle(OptimizedScaleButtonStyle())
+                        .buttonStyle(VideoDetailOptimizedScaleButtonStyle())
                     }
                 }
                 .padding(.horizontal, 20)
@@ -612,7 +612,7 @@ struct VideoDetailView: View {
                             .fill(isSubscribed ? AppTheme.Colors.surface : AppTheme.Colors.primary)
                     )
                 }
-                .buttonStyle(OptimizedScaleButtonStyle())
+                .buttonStyle(VideoDetailOptimizedScaleButtonStyle())
                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSubscribed)
             }
             
@@ -656,7 +656,7 @@ struct VideoDetailView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
                     // Like Button
-                    EnhancedActionButton(
+                    EnhancedVideoActionButton(
                         icon: isLiked ? "hand.thumbsup.fill" : "hand.thumbsup",
                         text: video.likeCount.formatted(),
                         isSelected: isLiked,
@@ -666,7 +666,7 @@ struct VideoDetailView: View {
                     }
                     
                     // Dislike Button
-                    EnhancedActionButton(
+                    EnhancedVideoActionButton(
                         icon: isDisliked ? "hand.thumbsdown.fill" : "hand.thumbsdown",
                         text: "Dislike",
                         isSelected: isDisliked,
@@ -676,7 +676,7 @@ struct VideoDetailView: View {
                     }
                     
                     // Share Button
-                    EnhancedActionButton(
+                    EnhancedVideoActionButton(
                         icon: "square.and.arrow.up",
                         text: "Share",
                         color: AppTheme.Colors.accent
@@ -685,7 +685,7 @@ struct VideoDetailView: View {
                     }
                     
                     // Save Button
-                    EnhancedActionButton(
+                    EnhancedVideoActionButton(
                         icon: isWatchLater ? "bookmark.fill" : "bookmark",
                         text: "Save",
                         isSelected: isWatchLater,
@@ -695,7 +695,7 @@ struct VideoDetailView: View {
                     }
                     
                     // Download Button
-                    EnhancedActionButton(
+                    EnhancedVideoActionButton(
                         icon: "arrow.down.circle",
                         text: "Download",
                         color: AppTheme.Colors.accent
@@ -763,7 +763,7 @@ struct VideoDetailView: View {
             // Optimized Sample Comments with LazyVStack
             LazyVStack(alignment: .leading, spacing: 20) {
                 ForEach(getSampleCommentsOptimized()) { comment in
-                    CommentRowView(comment: comment)
+                    VideoCommentRowView(comment: comment)
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
             }
@@ -788,7 +788,7 @@ struct VideoDetailView: View {
             LazyVStack(spacing: 16) {
                 ForEach(Video.sampleVideos.prefix(5)) { recommendedVideo in
                     NavigationLink(destination: VideoDetailView(video: recommendedVideo)) {
-                        RecommendedVideoRow(video: recommendedVideo)
+                        VideoRecommendedVideoRow(video: recommendedVideo)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
@@ -904,7 +904,7 @@ struct VideoDetailView: View {
     private func playVideoWithAnimationOptimized() {
         withAnimation(.easeOut(duration: 0.4)) {
             showPlayer = true
-            showPlayerControls = true // Ensure controls are visible when starting
+            showPlayerControls = true
         }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -924,7 +924,6 @@ struct VideoDetailView: View {
         if playerManager.isPlaying {
             resetPlayerControlsTimerOptimized()
         } else {
-            // Show controls when paused and don't hide them
             playerControlsTimer?.invalidate()
             withAnimation(.easeOut(duration: 0.25)) {
                 showPlayerControls = true
@@ -933,13 +932,10 @@ struct VideoDetailView: View {
     }
     
     private func togglePlayerControlsOptimized() {
-        // This function now simply toggles the visibility.
-        // The timer logic is handled separately when play/pause is pressed.
         withAnimation(.easeOut(duration: 0.25)) {
             showPlayerControls.toggle()
         }
 
-        // If we are showing the controls and the video is playing, start the timer to hide them.
         if showPlayerControls && playerManager.isPlaying {
             resetPlayerControlsTimerOptimized()
         }
@@ -947,7 +943,6 @@ struct VideoDetailView: View {
     
     private func resetPlayerControlsTimerOptimized() {
         playerControlsTimer?.invalidate()
-        // Only hide controls automatically if video is playing
         if playerManager.isPlaying {
             playerControlsTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: false) { _ in
                 withAnimation(.easeOut(duration: 0.25)) {
@@ -964,7 +959,6 @@ struct VideoDetailView: View {
         playerManager.player?.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
         HapticManager.shared.impact(style: .light)
         
-        // Show controls and reset timer when seeking
         withAnimation(.easeOut(duration: 0.25)) {
             showPlayerControls = true
         }
@@ -979,7 +973,6 @@ struct VideoDetailView: View {
         playerManager.player?.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
         HapticManager.shared.impact(style: .light)
         
-        // Show controls and reset timer when seeking
         withAnimation(.easeOut(duration: 0.25)) {
             showPlayerControls = true
         }
@@ -1057,15 +1050,13 @@ struct VideoDetailView: View {
     
     @MainActor
     private func loadCommentsOptimized() async {
-        // Simulate async loading with better performance
-        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
+        try? await Task.sleep(nanoseconds: 100_000_000)
         comments = getSampleCommentsOptimized()
     }
     
     @MainActor
     private func loadRecommendationsOptimized() async {
-        // Simulate async loading
-        try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+        try? await Task.sleep(nanoseconds: 200_000_000)
         recommendedVideos = Array(Video.sampleVideos.prefix(5))
     }
     
@@ -1077,7 +1068,6 @@ struct VideoDetailView: View {
     }
     
     private func handleScrollOffsetOptimized(_ offset: CGFloat) {
-        // Throttle scroll offset updates for better performance
         if abs(offset - scrollOffset) > 5 {
             scrollOffset = offset
         }
@@ -1110,7 +1100,6 @@ struct VideoDetailView: View {
         playerControlsTimer?.invalidate()
         engagementTimer?.invalidate()
         playerManager.pause()
-        // Remove cleanup() call since it's private - the pause() handles the essential cleanup
     }
     
     private func formatTimeOptimized(_ seconds: Double) -> String {
@@ -1129,7 +1118,6 @@ struct VideoDetailView: View {
     }
     
     private func getSampleCommentsOptimized() -> [VideoComment] {
-        // Optimized with static data to avoid recreation
         return [
             VideoComment(
                 id: "1",
@@ -1151,8 +1139,8 @@ struct VideoDetailView: View {
     }
 }
 
-// MARK: - Optimized Enhanced Action Button
-struct EnhancedActionButton: View {
+// MARK: - Enhanced Action Button Component (VideoDetail specific)
+struct EnhancedVideoActionButton: View {
     let icon: String
     let text: String
     var isSelected: Bool = false
@@ -1182,12 +1170,12 @@ struct EnhancedActionButton: View {
                     .lineLimit(1)
             }
         }
-        .buttonStyle(OptimizedScaleButtonStyle())
+        .buttonStyle(VideoDetailOptimizedScaleButtonStyle())
     }
 }
 
-// MARK: - Optimized Comment Row View
-struct CommentRowView: View {
+// MARK: - Optimized Comment Row View (VideoDetail specific)
+struct VideoCommentRowView: View {
     let comment: VideoComment
     @State private var isLiked = false
     
@@ -1246,14 +1234,14 @@ struct CommentRowView: View {
                             }
                         }
                     }
-                    .buttonStyle(OptimizedScaleButtonStyle())
+                    .buttonStyle(VideoDetailOptimizedScaleButtonStyle())
                     
                     Button(action: { }) {
                         Text("Reply")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(AppTheme.Colors.textTertiary)
                     }
-                    .buttonStyle(OptimizedScaleButtonStyle())
+                    .buttonStyle(VideoDetailOptimizedScaleButtonStyle())
                     
                     Spacer()
                 }
@@ -1269,8 +1257,8 @@ struct CommentRowView: View {
     }
 }
 
-// MARK: - Optimized Recommended Video Row
-struct RecommendedVideoRow: View {
+// MARK: - Optimized Recommended Video Row (VideoDetail specific)
+struct VideoRecommendedVideoRow: View {
     let video: Video
     
     var body: some View {
@@ -1340,93 +1328,12 @@ struct RecommendedVideoRow: View {
     }
 }
 
-// MARK: - Optimized Supporting Components
-struct OptimizedScaleButtonStyle: ButtonStyle {
+// MARK: - Optimized Button Style (VideoDetail specific)
+struct VideoDetailOptimizedScaleButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
             .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
-    }
-}
-
-// MARK: - Cached AsyncImage for Performance
-struct CachedAsyncImage<Content: View, Placeholder: View>: View {
-    let url: URL?
-    let content: (Image) -> Content
-    let placeholder: () -> Placeholder
-    
-    @State private var image: UIImage?
-    @State private var isLoading = false
-    
-    init(
-        url: URL?,
-        @ViewBuilder content: @escaping (Image) -> Content,
-        @ViewBuilder placeholder: @escaping () -> Placeholder
-    ) {
-        self.url = url
-        self.content = content
-        self.placeholder = placeholder
-    }
-    
-    var body: some View {
-        Group {
-            if let image = image {
-                content(Image(uiImage: image))
-            } else {
-                placeholder()
-                    .onAppear {
-                        loadImage()
-                    }
-            }
-        }
-    }
-    
-    private func loadImage() {
-        guard let url = url, !isLoading else { return }
-        
-        // Check cache first
-        if let cachedImage = ImageCache.shared.image(for: url) {
-            self.image = cachedImage
-            return
-        }
-        
-        isLoading = true
-        
-        Task {
-            do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                if let uiImage = UIImage(data: data) {
-                    await MainActor.run {
-                        ImageCache.shared.setImage(uiImage, for: url)
-                        self.image = uiImage
-                        self.isLoading = false
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    self.isLoading = false
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Image Cache for Performance
-class ImageCache {
-    static let shared = ImageCache()
-    private let cache = NSCache<NSURL, UIImage>()
-    
-    private init() {
-        cache.countLimit = 100
-        cache.totalCostLimit = 50 * 1024 * 1024 // 50MB
-    }
-    
-    func image(for url: URL) -> UIImage? {
-        return cache.object(forKey: url as NSURL)
-    }
-    
-    func setImage(_ image: UIImage, for url: URL) {
-        cache.setObject(image, forKey: url as NSURL)
     }
 }
 
@@ -1439,11 +1346,9 @@ struct VideoScrollOffsetPreferenceKey: PreferenceKey {
 }
 
 // MARK: - Preview
-struct VideoDetailView_Previews: PreviewProvider {
-    static var previews: some View {
-        NavigationView {
-            VideoDetailView(video: Video.sampleVideos[0])
-        }
-        .preferredColorScheme(.dark)
+#Preview {
+    NavigationView {
+        VideoDetailView(video: Video.sampleVideos[0])
     }
+    .preferredColorScheme(.light)
 }
