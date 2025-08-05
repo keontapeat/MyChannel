@@ -26,12 +26,12 @@ struct MyChannelApp: App {
     
     var body: some Scene {
         WindowGroup {
-            // Temporarily bypass authentication to test the MainTabView
-            MainTabView()
+            // SPLASH SCREEN WITH MAINTABVIEW CONNECTION
+            SplashContainer()
                 .environmentObject(authManager)
                 .preferredColorScheme(.light)
                 .onAppear {
-                    print("📱 App appeared")
+                    print("📱 App appeared with MC logo splash!")
                 }
         }
     }
