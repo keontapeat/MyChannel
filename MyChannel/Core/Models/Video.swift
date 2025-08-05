@@ -218,198 +218,168 @@ extension Video {
 extension Video {
     static let sampleVideos: [Video] = [
         Video(
-            title: "Building the Future of SwiftUI",
-            description: "In this comprehensive tutorial, we'll explore the latest SwiftUI features and how to build modern, responsive apps that look great on all devices.",
-            thumbnailURL: "https://picsum.photos/400/225?random=1",
-            videoURL: "https://example.com/video1.mp4",
-            duration: 1245, // 20:45
-            viewCount: 45680,
-            likeCount: 3200,
-            dislikeCount: 45,
-            commentCount: 328,
+            title: "Big Buck Bunny - Official Short Film",
+            description: "Follow a day of the life of Big Buck Bunny when he meets three bullying rodents: Frank, Rinky, and Gamera. The rodents amuse themselves by harassing helpless creatures by throwing fruits, nuts and rocks at them.",
+            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg",
+            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+            duration: 596, // 9:56
+            viewCount: 2456780,
+            likeCount: 78900,
+            dislikeCount: 1245,
+            commentCount: 8934,
             createdAt: Calendar.current.date(byAdding: .day, value: -2, to: Date()) ?? Date(),
             creator: User.sampleUsers[0],
-            tags: ["SwiftUI", "iOS", "Development", "Tutorial"],
-            category: .technology,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 245.50, tipRevenue: 89.00)
+            tags: ["Animation", "Short Film", "Comedy", "Classic"],
+            category: .animation,
+            monetization: VideoMonetization(hasAds: true, adRevenue: 1245.50, tipRevenue: 389.00)
         ),
         Video(
-            title: "10 Minute Digital Art Challenge",
-            description: "Watch me create a stunning digital artwork in just 10 minutes using Procreate! Speed drawing with commentary and tips.",
-            thumbnailURL: "https://picsum.photos/400/225?random=2",
-            videoURL: "https://example.com/video2.mp4",
-            duration: 630, // 10:30
-            viewCount: 128340,
-            likeCount: 8900,
-            dislikeCount: 123,
-            commentCount: 567,
+            title: "Elephant's Dream - Blender Foundation",
+            description: "The story of two strange characters exploring a capricious and seemingly infinite machine. The elder, Proog, acts as a tour-guide and protector, happily showing off the sights and dangers of the machine to his initially curious but increasingly skeptical protege Emo.",
+            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ElephantsDream.jpg",
+            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+            duration: 654, // 10:54
+            viewCount: 1567890,
+            likeCount: 45600,
+            dislikeCount: 567,
+            commentCount: 3456,
             createdAt: Calendar.current.date(byAdding: .hour, value: -8, to: Date()) ?? Date(),
             creator: User.sampleUsers[1],
-            tags: ["Art", "Digital", "Procreate", "Tutorial", "Speed Drawing"],
+            tags: ["Animation", "3D", "Blender", "Art", "Experimental"],
             category: .art,
             isShort: false,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 687.20, tipRevenue: 234.00, membershipRevenue: 156.00)
+            monetization: VideoMonetization(hasAds: true, adRevenue: 987.20, tipRevenue: 234.00, membershipRevenue: 156.00)
         ),
         Video(
-            title: "Quick Cooking Hack",
-            description: "This will change how you cook forever! ",
-            thumbnailURL: "https://picsum.photos/400/225?random=3",
-            videoURL: "https://example.com/video3.mp4",
-            duration: 45, // 0:45
+            title: "For Bigger Blazes - Fire Safety",
+            description: "HBO GO now works with Chromecast -- the easiest way to enjoy online video on your TV. For when you want to settle into your Iron Throne to watch the latest episodes. For $35. Learn how to use Chromecast with HBO GO and more at google.com/chromecast.",
+            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerBlazes.jpg",
+            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+            duration: 15, // 0:15
             viewCount: 892340,
-            likeCount: 45600,
+            likeCount: 25600,
             dislikeCount: 890,
-            commentCount: 2340,
+            commentCount: 1234,
             createdAt: Calendar.current.date(byAdding: .minute, value: -45, to: Date()) ?? Date(),
             creator: User.sampleUsers[0],
-            tags: ["Cooking", "Food", "Hack", "Quick"],
-            category: .cooking,
-            isShort: true,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 1245.80, tipRevenue: 567.00)
-        ),
-        Video(
-            title: "iOS 18 Hidden Features Revealed",
-            description: "Discover the secret features Apple didn't announce at WWDC! These hidden gems will change how you use your iPhone.",
-            thumbnailURL: "https://picsum.photos/400/225?random=4",
-            videoURL: "https://example.com/video4.mp4",
-            duration: 890, // 14:50
-            viewCount: 567890,
-            likeCount: 34500,
-            dislikeCount: 234,
-            commentCount: 1456,
-            createdAt: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date(),
-            creator: User.sampleUsers[0],
-            tags: ["iOS", "Apple", "Features", "Tutorial"],
+            tags: ["Technology", "Streaming", "Commercial", "Short"],
             category: .technology,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 1234.50, tipRevenue: 456.00)
+            isShort: true,
+            monetization: VideoMonetization(hasAds: true, adRevenue: 456.80, tipRevenue: 123.00)
         ),
         Video(
-            title: "Midnight Art Session",
-            description: "Join me for a late-night digital painting session. Relaxing music and creative flow.",
-            thumbnailURL: "https://picsum.photos/400/225?random=5",
-            videoURL: "https://example.com/video5.mp4",
-            duration: 2340, // 39:00
-            viewCount: 234567,
-            likeCount: 15600,
-            dislikeCount: 89,
-            commentCount: 892,
+            title: "For Bigger Escapes - Travel Adventures",
+            description: "Introducing Chromecast. The easiest way to enjoy online video and music on your TV—for when Batman's escapes aren't quite big enough. For $35. Learn how to use Chromecast with Google Play Movies and more at google.com/chromecast.",
+            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerEscapes.jpg",
+            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+            duration: 15, // 0:15
+            viewCount: 567890,
+            likeCount: 18500,
+            dislikeCount: 234,
+            commentCount: 789,
+            createdAt: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date(),
+            creator: User.sampleUsers[2],
+            tags: ["Travel", "Adventure", "Technology", "Commercial"],
+            category: .travel,
+            isShort: true,
+            monetization: VideoMonetization(hasAds: true, adRevenue: 234.50, tipRevenue: 67.00)
+        ),
+        Video(
+            title: "Sintel - Blender Open Movie",
+            description: "A lonely young woman, Sintel, helps and befriends a dragon, whom she calls Scales. But when he is kidnapped by an adult dragon, Sintel decides to embark on a dangerous quest to find her lost friend Scales.",
+            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/Sintel.jpg",
+            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+            duration: 888, // 14:48
+            viewCount: 3456789,
+            likeCount: 125000,
+            dislikeCount: 2340,
+            commentCount: 15678,
             createdAt: Calendar.current.date(byAdding: .hour, value: -3, to: Date()) ?? Date(),
             creator: User.sampleUsers[1],
-            tags: ["Art", "Digital", "Relaxing", "Night"],
-            category: .art,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 456.20, tipRevenue: 123.00, membershipRevenue: 234.00)
+            tags: ["Animation", "Fantasy", "Dragon", "Adventure", "Blender"],
+            category: .animation,
+            monetization: VideoMonetization(hasAds: true, adRevenue: 2456.20, tipRevenue: 890.00, membershipRevenue: 456.00)
         ),
         Video(
-            title: "Gaming Setup Tour 2024",
-            description: "Check out my ultimate gaming setup! From RGB lighting to the latest hardware - everything you need to know.",
-            thumbnailURL: "https://picsum.photos/400/225?random=6",
-            videoURL: "https://example.com/video6.mp4",
-            duration: 1456, // 24:16
+            title: "Subaru Outback On Street And Dirt",
+            description: "Smoking Tire takes the all-new Subaru Outback to the highest point we can find in hopes our customer-appreciation barbecue for one would somehow make us more appreciated.",
+            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/SubaruOutbackOnStreetAndDirt.jpg",
+            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4",
+            duration: 596, // 9:56
             viewCount: 1234567,
-            likeCount: 89000,
+            likeCount: 45600,
             dislikeCount: 1200,
-            commentCount: 4567,
+            commentCount: 3456,
             createdAt: Calendar.current.date(byAdding: .day, value: -3, to: Date()) ?? Date(),
             creator: User.sampleUsers[2],
-            tags: ["Gaming", "Setup", "Hardware", "RGB"],
-            category: .gaming,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 2345.80, tipRevenue: 890.00)
+            tags: ["Cars", "Review", "Subaru", "Adventure", "Automotive"],
+            category: .entertainment,
+            monetization: VideoMonetization(hasAds: true, adRevenue: 1567.80, tipRevenue: 345.00)
         ),
         Video(
-            title: "Beat Making Tutorial",
-            description: "Learn how to make fire beats from scratch! Using Logic Pro X and some secret techniques.",
-            thumbnailURL: "https://picsum.photos/400/225?random=7",
-            videoURL: "https://example.com/video7.mp4",
-            duration: 1890, // 31:30
-            viewCount: 456789,
-            likeCount: 23400,
-            dislikeCount: 345,
-            commentCount: 1890,
+            title: "Tears of Steel - Sci-Fi Short",
+            description: "Tears of Steel was realized with crowd-funding by users of the open source 3D creation tool Blender. Target was to improve and test a complete open and free pipeline for visual effects in film.",
+            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/TearsOfSteel.jpg",
+            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+            duration: 734, // 12:14
+            viewCount: 2345678,
+            likeCount: 89000,
+            dislikeCount: 1567,
+            commentCount: 7890,
             createdAt: Calendar.current.date(byAdding: .hour, value: -12, to: Date()) ?? Date(),
             creator: User.sampleUsers[3],
-            tags: ["Music", "Beats", "Production", "Logic Pro"],
-            category: .music,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 890.50, tipRevenue: 234.00)
+            tags: ["Sci-Fi", "Short Film", "Blender", "Visual Effects", "Future"],
+            category: .entertainment,
+            monetization: VideoMonetization(hasAds: true, adRevenue: 1890.50, tipRevenue: 567.00)
         ),
         Video(
-            title: "React vs SwiftUI: Which is Better?",
-            description: "A comprehensive comparison between React and SwiftUI for mobile development in 2024.",
-            thumbnailURL: "https://picsum.photos/400/225?random=8",
-            videoURL: "https://example.com/video8.mp4",
-            duration: 1678, // 27:58
+            title: "Volkswagen GTI Review",
+            description: "The Smoking Tire heads out to Adams Motorsports Park in Riverside, CA to test the most requested car of 2010, the Volkswagen GTI. Will it beat the Mazdaspeed3's standard-setting lap time?",
+            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/VolkswagenGTIReview.jpg",
+            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4",
+            duration: 607, // 10:07
             viewCount: 789123,
-            likeCount: 45600,
-            dislikeCount: 890,
+            likeCount: 34500,
+            dislikeCount: 678,
             commentCount: 2345,
             createdAt: Calendar.current.date(byAdding: .day, value: -4, to: Date()) ?? Date(),
             creator: User.sampleUsers[0],
-            tags: ["Programming", "React", "SwiftUI", "Comparison"],
-            category: .technology,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 1567.20, tipRevenue: 678.00)
+            tags: ["Cars", "Review", "Volkswagen", "GTI", "Performance"],
+            category: .entertainment,
+            monetization: VideoMonetization(hasAds: true, adRevenue: 1234.20, tipRevenue: 456.00)
         ),
         Video(
-            title: "Epic Gaming Montage",
-            description: "My best gaming moments from this month! Incredible plays and funny fails.",
-            thumbnailURL: "https://picsum.photos/400/225?random=9",
-            videoURL: "https://example.com/video9.mp4",
-            duration: 567, // 9:27
-            viewCount: 2345678,
-            likeCount: 123456,
-            dislikeCount: 2345,
-            commentCount: 8901,
+            title: "We Are Going On Bullrun",
+            description: "The Smoking Tire is going on the 2010 Bullrun Live Rally in a 2011 Shelby GT500, and posting a video from the road every single day! The only place to watch them is by subscribing to The Smoking Tire or watching at BlackMagicShine.com",
+            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/WeAreGoingOnBullrun.jpg",
+            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
+            duration: 78, // 1:18
+            viewCount: 456789,
+            likeCount: 23400,
+            dislikeCount: 345,
+            commentCount: 1234,
             createdAt: Calendar.current.date(byAdding: .hour, value: -2, to: Date()) ?? Date(),
             creator: User.sampleUsers[2],
-            tags: ["Gaming", "Montage", "Highlights", "Epic"],
-            category: .gaming,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 4567.80, tipRevenue: 1234.00)
+            tags: ["Cars", "Rally", "Adventure", "Shelby", "Road Trip"],
+            category: .entertainment,
+            isShort: true,
+            monetization: VideoMonetization(hasAds: true, adRevenue: 345.80, tipRevenue: 123.00)
         ),
         Video(
-            title: "New Music Drop Tonight!",
-            description: "Get ready for my latest track! Here's a sneak peek of what's coming at midnight.",
-            thumbnailURL: "https://picsum.photos/400/225?random=10",
-            videoURL: "https://example.com/video10.mp4",
-            duration: 234, // 3:54
-            viewCount: 567890,
-            likeCount: 34567,
-            dislikeCount: 456,
-            commentCount: 3456,
+            title: "What Car Can You Get For A Grand?",
+            description: "The Smoking Tire meets up with Chris and Jorge from CarsForAGrand.com to see just how far $1,000 can go when looking for a car. The guys test a $1,000 car with the World Speed Record for a car under $1,000.",
+            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/WhatCarCanYouGetForAGrand.jpg",
+            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4",
+            duration: 596, // 9:56
+            viewCount: 1567890,
+            likeCount: 67800,
+            dislikeCount: 890,
+            commentCount: 4567,
             createdAt: Calendar.current.date(byAdding: .minute, value: -30, to: Date()) ?? Date(),
             creator: User.sampleUsers[3],
-            tags: ["Music", "New Release", "Preview", "Tonight"],
-            category: .music,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 890.50, tipRevenue: 456.00)
-        ),
-        Video(
-            title: "Morning Workout Routine",
-            description: "Start your day right with this energizing 20-minute workout! No equipment needed.",
-            thumbnailURL: "https://picsum.photos/400/225?random=11",
-            videoURL: "https://example.com/video11.mp4",
-            duration: 1245, // 20:45
-            viewCount: 345678,
-            likeCount: 23456,
-            dislikeCount: 234,
-            commentCount: 1567,
-            createdAt: Calendar.current.date(byAdding: .hour, value: -6, to: Date()) ?? Date(),
-            creator: User.sampleUsers[1],
-            tags: ["Fitness", "Workout", "Morning", "Health"],
-            category: .fitness,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 567.80, tipRevenue: 234.00)
-        ),
-        Video(
-            title: "Ultimate Food Challenge",
-            description: "Trying every item on the menu at my favorite restaurant! This was intense.",
-            thumbnailURL: "https://picsum.photos/400/225?random=12",
-            videoURL: "https://example.com/video12.mp4",
-            duration: 2156, // 35:56
-            viewCount: 1567890,
-            likeCount: 89012,
-            dislikeCount: 1345,
-            commentCount: 5678,
-            createdAt: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date(),
-            creator: User.sampleUsers[0],
-            tags: ["Food", "Challenge", "Restaurant", "Epic"],
+            tags: ["Cars", "Budget", "Review", "Challenge", "Automotive"],
             category: .entertainment,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 2890.50, tipRevenue: 1234.00)
+            monetization: VideoMonetization(hasAds: true, adRevenue: 890.50, tipRevenue: 234.00)
         )
     ]
 }

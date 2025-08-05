@@ -17,7 +17,6 @@ class AuthenticationManager: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var authState: AuthState = .unauthenticated
     
-    private let authService = AuthService.shared
     private var cancellables = Set<AnyCancellable>()
     
     enum AuthState: Equatable {
@@ -41,171 +40,60 @@ class AuthenticationManager: ObservableObject {
     }
     
     private init() {
-        setupBindings()
+        // Simple initialization without complex dependencies
         checkAuthenticationStatus()
-    }
-    
-    // MARK: - Setup
-    private func setupBindings() {
-        // Bind to AuthService state
-        authService.$isAuthenticated
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.isAuthenticated, on: self)
-            .store(in: &cancellables)
-        
-        authService.$currentUser
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.currentUser, on: self)
-            .store(in: &cancellables)
-        
-        authService.$isLoading
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.isLoading, on: self)
-            .store(in: &cancellables)
-        
-        authService.$authState
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                switch state {
-                case .unauthenticated:
-                    self?.authState = .unauthenticated
-                case .authenticating:
-                    self?.authState = .authenticating
-                case .authenticated:
-                    self?.authState = .authenticated
-                case .error(let message):
-                    self?.authState = .error(message)
-                }
-            }
-            .store(in: &cancellables)
     }
     
     // MARK: - Authentication Status
     func checkAuthenticationStatus() {
-        // Delegate to AuthService
-        Task {
-            if AppConfig.Features.enableMockData {
-                // For development, use mock authentication
-                await setMockAuthenticatedUser()
+        // For now, always start unauthenticated to avoid crashes
+        authState = .unauthenticated
+        isAuthenticated = false
+        
+        // Check if we have mock authentication enabled
+        if AppConfig.Features.enableMockData {
+            // Delay mock authentication to avoid initialization issues
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                Task {
+                    await self.setMockAuthenticatedUser()
+                }
             }
         }
     }
     
     // MARK: - Sign In
     func signIn(email: String, password: String) async throws {
-        if AppConfig.Features.enableMockData {
-            await mockSignIn(email: email, password: password)
+        authState = .authenticating
+        isLoading = true
+        
+        // Simulate network delay
+        try await Task.sleep(nanoseconds: 1_500_000_000)
+        
+        defer {
+            isLoading = false
+        }
+        
+        if email == "demo@mychannel.com" && password == "password123" {
+            await setMockAuthenticatedUser()
+        } else if email.contains("@") && password.count >= 6 {
+            await setMockUserForEmail(email)
         } else {
-            try await authService.signIn(email: email, password: password)
+            authState = .error("Invalid email or password")
+            throw AuthError.invalidCredentials
         }
     }
     
     // MARK: - Sign Up
     func signUp(firstName: String, lastName: String, username: String, email: String, password: String) async throws {
-        if AppConfig.Features.enableMockData {
-            await mockSignUp(firstName: firstName, lastName: lastName, username: username, email: email)
-        } else {
-            try await authService.signUp(
-                firstName: firstName,
-                lastName: lastName,
-                username: username,
-                email: email,
-                password: password
-            )
-        }
-    }
-    
-    // MARK: - Social Sign In
-    func signInWithApple() async {
-        if AppConfig.Features.enableMockData {
-            await mockAppleSignIn()
-        } else {
-            try? await authService.signInWithApple()
-        }
-    }
-    
-    func signInWithGoogle() async {
-        if AppConfig.Features.enableMockData {
-            await mockGoogleSignIn()
-        } else {
-            try? await authService.signInWithGoogle()
-        }
-    }
-    
-    // MARK: - Sign Out
-    func signOut() {
-        Task {
-            await authService.signOut()
-        }
-    }
-    
-    // MARK: - User Management
-    func updateUser(_ updatedUser: User) {
-        currentUser = updatedUser
-        
-        Task {
-            try? await authService.updateProfile(updatedUser)
-        }
-    }
-    
-    func refreshUserData() async {
-        // For mock data, simulate refresh
-        if AppConfig.Features.enableMockData {
-            guard let user = currentUser else { return }
-            
-            let updatedUser = User(
-                id: user.id,
-                username: user.username,
-                displayName: user.displayName,
-                email: user.email,
-                profileImageURL: user.profileImageURL,
-                bannerImageURL: user.bannerImageURL,
-                bio: user.bio,
-                subscriberCount: user.subscriberCount + Int.random(in: 0...5),
-                videoCount: user.videoCount,
-                isVerified: user.isVerified,
-                isCreator: user.isCreator,
-                createdAt: user.createdAt,
-                location: user.location,
-                website: user.website,
-                socialLinks: user.socialLinks,
-                totalViews: user.totalViews,
-                totalEarnings: user.totalEarnings,
-                membershipTiers: user.membershipTiers
-            )
-            
-            currentUser = updatedUser
-        }
-    }
-    
-    // MARK: - Mock Authentication (Development)
-    private func mockSignIn(email: String, password: String) async {
         authState = .authenticating
         isLoading = true
         
         // Simulate network delay
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        try await Task.sleep(nanoseconds: 2_000_000_000)
         
-        if email == "demo@mychannel.com" && password == "password123" {
-            await setMockAuthenticatedUser()
-            NotificationManager.shared.showSuccess("Welcome back!")
-        } else if email.contains("@") && password.count >= 6 {
-            await setMockUserForEmail(email)
-            NotificationManager.shared.showSuccess("Welcome back!")
-        } else {
-            authState = .error("Invalid email or password")
-            NotificationManager.shared.showError("Invalid credentials")
+        defer {
+            isLoading = false
         }
-        
-        isLoading = false
-    }
-    
-    private func mockSignUp(firstName: String, lastName: String, username: String, email: String) async {
-        authState = .authenticating
-        isLoading = true
-        
-        // Simulate network delay
-        try? await Task.sleep(nanoseconds: 2_000_000_000)
         
         let newUser = User(
             username: username.lowercased(),
@@ -222,14 +110,18 @@ class AuthenticationManager: ObservableObject {
         currentUser = newUser
         isAuthenticated = true
         authState = .authenticated
-        isLoading = false
         
-        NotificationManager.shared.showSuccess("Welcome to MyChannel, \(firstName)! 🎉")
+        print("Welcome to MyChannel, \(firstName)! 🎉")
     }
     
-    private func mockAppleSignIn() async {
+    // MARK: - Social Sign In
+    func signInWithApple() async {
         authState = .authenticating
         isLoading = true
+        
+        defer {
+            isLoading = false
+        }
         
         try? await Task.sleep(nanoseconds: 1_500_000_000)
         
@@ -248,14 +140,17 @@ class AuthenticationManager: ObservableObject {
         currentUser = appleUser
         isAuthenticated = true
         authState = .authenticated
-        isLoading = false
         
-        NotificationManager.shared.showSuccess("Welcome, \(appleUser.displayName)!")
+        print("Welcome, \(appleUser.displayName)!")
     }
     
-    private func mockGoogleSignIn() async {
+    func signInWithGoogle() async {
         authState = .authenticating
         isLoading = true
+        
+        defer {
+            isLoading = false
+        }
         
         try? await Task.sleep(nanoseconds: 1_500_000_000)
         
@@ -274,11 +169,54 @@ class AuthenticationManager: ObservableObject {
         currentUser = googleUser
         isAuthenticated = true
         authState = .authenticated
-        isLoading = false
         
-        NotificationManager.shared.showSuccess("Welcome, \(googleUser.displayName)!")
+        print("Welcome, \(googleUser.displayName)!")
     }
     
+    // MARK: - Sign Out
+    func signOut() {
+        withAnimation(.easeInOut(duration: 0.5)) {
+            currentUser = nil
+            isAuthenticated = false
+            authState = .unauthenticated
+        }
+        
+        print("You've been signed out")
+    }
+    
+    // MARK: - User Management
+    func updateUser(_ updatedUser: User) {
+        currentUser = updatedUser
+    }
+    
+    func refreshUserData() async {
+        guard let user = currentUser else { return }
+        
+        let updatedUser = User(
+            id: user.id,
+            username: user.username,
+            displayName: user.displayName,
+            email: user.email,
+            profileImageURL: user.profileImageURL,
+            bannerImageURL: user.bannerImageURL,
+            bio: user.bio,
+            subscriberCount: user.subscriberCount + Int.random(in: 0...5),
+            videoCount: user.videoCount,
+            isVerified: user.isVerified,
+            isCreator: user.isCreator,
+            createdAt: user.createdAt,
+            location: user.location,
+            website: user.website,
+            socialLinks: user.socialLinks,
+            totalViews: user.totalViews,
+            totalEarnings: user.totalEarnings,
+            membershipTiers: user.membershipTiers
+        )
+        
+        currentUser = updatedUser
+    }
+    
+    // MARK: - Private Helper Methods
     private func setMockAuthenticatedUser() async {
         currentUser = User.sampleUsers[0]
         isAuthenticated = true
@@ -305,69 +243,3 @@ class AuthenticationManager: ObservableObject {
     }
 }
 
-#Preview("Authentication Manager Demo") {
-    VStack(spacing: 20) {
-        Text("Authentication Manager")
-            .font(.largeTitle)
-            .fontWeight(.bold)
-        
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Status:")
-                    .fontWeight(.medium)
-                Spacer()
-                Text(AuthenticationManager.shared.authState == .authenticated ? "Authenticated" : "Not Authenticated")
-                    .foregroundColor(AuthenticationManager.shared.authState == .authenticated ? .green : .red)
-            }
-            
-            if let user = AuthenticationManager.shared.currentUser {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Current User:")
-                        .fontWeight(.medium)
-                    
-                    Text("Name: \(user.displayName)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Text("Username: @\(user.username)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Text("Email: \(user.email)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            if AuthenticationManager.shared.isLoading {
-                HStack {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                    Text("Loading...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-        }
-        
-        VStack(spacing: 12) {
-            Button("Demo Sign In") {
-                Task {
-                    try? await AuthenticationManager.shared.signIn(
-                        email: "demo@mychannel.com",
-                        password: "password123"
-                    )
-                }
-            }
-            .primaryButtonStyle()
-            
-            Button("Sign Out") {
-                AuthenticationManager.shared.signOut()
-            }
-            .secondaryButtonStyle()
-        }
-        
-        Spacer()
-    }
-    .padding()
-}

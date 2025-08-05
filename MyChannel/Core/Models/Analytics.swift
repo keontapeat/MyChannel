@@ -71,6 +71,49 @@ struct VideoAnalytics: Identifiable, Codable, Equatable {
     }
 }
 
+// MARK: - Analytics Period Enum
+enum AnalyticsPeriod: String, CaseIterable, Codable {
+    case last7Days = "last_7_days"
+    case last30Days = "last_30_days"
+    case lastMonth = "last_month"
+    case last90Days = "last_90_days"
+    case lastYear = "last_year"
+    case allTime = "all_time"
+    
+    var displayName: String {
+        switch self {
+        case .last7Days: return "Last 7 Days"
+        case .last30Days: return "Last 30 Days"
+        case .lastMonth: return "Last Month"
+        case .last90Days: return "Last 90 Days"
+        case .lastYear: return "Last Year"
+        case .allTime: return "All Time"
+        }
+    }
+    
+    var dateRange: (start: Date, end: Date) {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        switch self {
+        case .last7Days:
+            return (calendar.date(byAdding: .day, value: -7, to: now) ?? now, now)
+        case .last30Days:
+            return (calendar.date(byAdding: .day, value: -30, to: now) ?? now, now)
+        case .lastMonth:
+            let startOfMonth = calendar.dateInterval(of: .month, for: calendar.date(byAdding: .month, value: -1, to: now) ?? now)?.start ?? now
+            let endOfMonth = calendar.dateInterval(of: .month, for: calendar.date(byAdding: .month, value: -1, to: now) ?? now)?.end ?? now
+            return (startOfMonth, endOfMonth)
+        case .last90Days:
+            return (calendar.date(byAdding: .day, value: -90, to: now) ?? now, now)
+        case .lastYear:
+            return (calendar.date(byAdding: .year, value: -1, to: now) ?? now, now)
+        case .allTime:
+            return (calendar.date(from: DateComponents(year: 2020, month: 1, day: 1)) ?? now, now)
+        }
+    }
+}
+
 // MARK: - Channel Analytics Model
 struct ChannelAnalytics: Codable, Equatable {
     let totalViews: Int
@@ -134,49 +177,6 @@ struct ChannelAnalytics: Codable, Equatable {
         lhs.totalViews == rhs.totalViews &&
         lhs.totalSubscribers == rhs.totalSubscribers &&
         lhs.period == rhs.period
-    }
-}
-
-// MARK: - Analytics Period Enum
-enum AnalyticsPeriod: String, CaseIterable, Codable {
-    case last7Days = "last_7_days"
-    case last30Days = "last_30_days"
-    case lastMonth = "last_month"
-    case last90Days = "last_90_days"
-    case lastYear = "last_year"
-    case allTime = "all_time"
-    
-    var displayName: String {
-        switch self {
-        case .last7Days: return "Last 7 Days"
-        case .last30Days: return "Last 30 Days"
-        case .lastMonth: return "Last Month"
-        case .last90Days: return "Last 90 Days"
-        case .lastYear: return "Last Year"
-        case .allTime: return "All Time"
-        }
-    }
-    
-    var dateRange: (start: Date, end: Date) {
-        let calendar = Calendar.current
-        let now = Date()
-        
-        switch self {
-        case .last7Days:
-            return (calendar.date(byAdding: .day, value: -7, to: now) ?? now, now)
-        case .last30Days:
-            return (calendar.date(byAdding: .day, value: -30, to: now) ?? now, now)
-        case .lastMonth:
-            let startOfMonth = calendar.dateInterval(of: .month, for: calendar.date(byAdding: .month, value: -1, to: now) ?? now)?.start ?? now
-            let endOfMonth = calendar.dateInterval(of: .month, for: calendar.date(byAdding: .month, value: -1, to: now) ?? now)?.end ?? now
-            return (startOfMonth, endOfMonth)
-        case .last90Days:
-            return (calendar.date(byAdding: .day, value: -90, to: now) ?? now, now)
-        case .lastYear:
-            return (calendar.date(byAdding: .year, value: -1, to: now) ?? now, now)
-        case .allTime:
-            return (calendar.date(from: DateComponents(year: 2020, month: 1, day: 1)) ?? now, now)
-        }
     }
 }
 
@@ -386,130 +386,132 @@ extension VideoAnalytics {
     ]
 }
 
-#Preview {
-    ScrollView {
-        VStack(spacing: 20) {
-            Text("Analytics Dashboard")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-                .padding(.top)
-            
-            // Channel Overview
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Channel Overview")
-                    .font(.headline)
+struct Analytics_Previews: PreviewProvider {
+    static var previews: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                Text("Analytics Dashboard")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .padding(.top)
                 
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 16) {
-                    VStack {
-                        Text("1.2M")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                        Text("Total Views")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(12)
+                // Channel Overview
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Channel Overview")
+                        .font(.headline)
                     
-                    VStack {
-                        Text("45.6K")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.blue)
-                        Text("Subscribers")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(12)
-                    
-                    VStack {
-                        Text("$3,456")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.green)
-                        Text("Revenue")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(12)
-                    
-                    VStack {
-                        Text("156")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.orange)
-                        Text("Videos")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(12)
-                }
-            }
-            .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(16)
-            
-            // Top Performing Videos
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Top Performing Videos")
-                    .font(.headline)
-                
-                ForEach(VideoAnalytics.sampleAnalytics.prefix(2)) { analytics in
-                    HStack {
-                        Rectangle()
-                            .fill(Color(.systemGray5))
-                            .frame(width: 80, height: 45)
-                            .cornerRadius(6)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Video Title")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .lineLimit(1)
-                            
-                            HStack {
-                                Text("\(analytics.views.formatted()) views")
-                                Text("•")
-                                Text("\(analytics.likes.formatted()) likes")
-                            }
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        VStack(alignment: .trailing) {
-                            Text("$\(analytics.revenue, specifier: "%.2f")")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.green)
-                            
-                            Text("\(analytics.engagementRate, specifier: "%.1f")% engagement")
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 16) {
+                        VStack {
+                            Text("1.2M")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                            Text("Total Views")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .cornerRadius(12)
+                        
+                        VStack {
+                            Text("45.6K")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.blue)
+                            Text("Subscribers")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .cornerRadius(12)
+                        
+                        VStack {
+                            Text("$3,456")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.green)
+                            Text("Revenue")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .cornerRadius(12)
+                        
+                        VStack {
+                            Text("156")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.orange)
+                            Text("Videos")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .cornerRadius(12)
                     }
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(12)
                 }
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(16)
+                
+                // Top Performing Videos
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Top Performing Videos")
+                        .font(.headline)
+                    
+                    ForEach(VideoAnalytics.sampleAnalytics.prefix(2)) { analytics in
+                        HStack {
+                            Rectangle()
+                                .fill(Color(.systemGray5))
+                                .frame(width: 80, height: 45)
+                                .cornerRadius(6)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Video Title")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .lineLimit(1)
+                                
+                                HStack {
+                                    Text("\(analytics.views.formatted()) views")
+                                    Text("•")
+                                    Text("\(analytics.likes.formatted()) likes")
+                                }
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            VStack(alignment: .trailing) {
+                                Text("$\(analytics.revenue, specifier: "%.2f")")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.green)
+                                
+                                Text("\(analytics.engagementRate, specifier: "%.1f")% engagement")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .cornerRadius(12)
+                    }
+                }
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(16)
             }
             .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(16)
         }
-        .padding()
+        .background(Color(.systemGroupedBackground))
     }
-    .background(Color(.systemGroupedBackground))
 }

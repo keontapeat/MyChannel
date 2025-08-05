@@ -1,12 +1,6 @@
-//
-//  AdvancedSearchService.swift
-//  MyChannel
-//
-//  Created by AI Assistant on 7/9/25.
-//
-
 import SwiftUI
 import Combine
+import Foundation
 import NaturalLanguage
 
 /// Enterprise-grade search service with ML-powered ranking and recommendations
@@ -168,7 +162,7 @@ class AdvancedSearchService: ObservableObject {
         searchHistory.removeAll { $0.userId == userId }
     }
     
-    func getSearchAnalytics(period: AnalyticsPeriod) async -> SearchAnalytics {
+    func getSearchAnalytics(period: SearchAnalyticsPeriod) async -> SearchAnalytics {
         return searchAnalytics
     }
     
@@ -405,7 +399,7 @@ class AdvancedSearchService: ObservableObject {
                 totalScore += 1.0
             } else {
                 // Fuzzy match using Levenshtein distance
-                let words = text.components(separatedBy: .whitespacesAndNewlines)
+                let words = text.components(separatedBy: CharacterSet.whitespacesAndNewlines)
                 let bestMatch = words.map { levenshteinDistance($0, term) }.min() ?? Int.max
                 
                 if bestMatch <= 2 { // Allow up to 2 character differences
@@ -653,7 +647,7 @@ class QueryProcessor {
     
     func processQuery(_ query: String) async -> ProcessedQuery {
         let cleanedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let terms = cleanedQuery.lowercased().components(separatedBy: .whitespacesAndNewlines)
+        let terms = cleanedQuery.lowercased().components(separatedBy: CharacterSet.whitespacesAndNewlines)
         
         // Remove stop words
         let stopWords = Set(["the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by"])
@@ -833,7 +827,7 @@ class SearchIndexer {
         // Build inverted index for fast text search
         for video in videos {
             let text = (video.title + " " + video.description + " " + video.tags.joined(separator: " ")).lowercased()
-            let words = text.components(separatedBy: .whitespacesAndNewlines)
+            let words = text.components(separatedBy: CharacterSet.whitespacesAndNewlines)
             
             for word in words where !word.isEmpty {
                 videoIndex[word, default: []].append(video.id)
@@ -842,7 +836,7 @@ class SearchIndexer {
         
         for creator in creators {
             let text = (creator.displayName + " " + creator.username + " " + (creator.bio ?? "")).lowercased()
-            let words = text.components(separatedBy: .whitespacesAndNewlines)
+            let words = text.components(separatedBy: CharacterSet.whitespacesAndNewlines)
             
             for word in words where !word.isEmpty {
                 creatorIndex[word, default: []].append(creator.id)
@@ -855,6 +849,11 @@ class SearchIndexer {
         // For demo, return empty results
         return []
     }
+}
+
+// MARK: - Search Analytics Period
+enum SearchAnalyticsPeriod {
+    case day, week, month, year
 }
 
 // MARK: - Search Models
@@ -1068,38 +1067,40 @@ struct QueryCount {
     var count: Int
 }
 
-#Preview {
-    VStack {
-        Text("Advanced Search Engine")
-            .font(.largeTitle)
-            .fontWeight(.bold)
-        
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Enterprise Features")
-                .font(.headline)
+struct AdvancedSearchService_Previews: PreviewProvider {
+    static var previews: some View {
+        VStack {
+            Text("Advanced Search Engine")
+                .font(.largeTitle)
+                .fontWeight(.bold)
             
-            ForEach([
-                "🔍 Multi-dimensional search (videos, creators, playlists)",
-                "🤖 ML-powered relevance ranking",
-                "💬 Natural language query processing",
-                "🗣️ Voice search with transcription",
-                "⚡ Real-time search suggestions",
-                "📊 Advanced search analytics",
-                "🎯 Personalized search results",
-                "📱 Search within video content"
-            ], id: \.self) { feature in
-                HStack {
-                    Text(feature)
-                        .font(.body)
-                    Spacer()
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Enterprise Features")
+                    .font(.headline)
+                
+                ForEach([
+                    "🔍 Multi-dimensional search (videos, creators, playlists)",
+                    "🤖 ML-powered relevance ranking",
+                    "💬 Natural language query processing",
+                    "🗣️ Voice search with transcription",
+                    "⚡ Real-time search suggestions",
+                    "📊 Advanced search analytics",
+                    "🎯 Personalized search results",
+                    "📱 Search within video content"
+                ], id: \.self) { feature in
+                    HStack {
+                        Text(feature)
+                            .font(.body)
+                        Spacer()
+                    }
                 }
             }
+            .padding()
+            .background(Color(.systemGray6))
+            .cornerRadius(12)
+            
+            Spacer()
         }
         .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-        
-        Spacer()
     }
-    .padding()
 }

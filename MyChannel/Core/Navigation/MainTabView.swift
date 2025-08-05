@@ -10,9 +10,6 @@ import SwiftUI
 struct MainTabView: View {
     @StateObject private var authManager = AuthenticationManager.shared
     @State private var selectedTab: TabItem = .home
-    @State private var tabBarOffset: CGFloat = 0
-    @State private var isTabBarHidden: Bool = false
-    @State private var lastScrollOffset: CGFloat = 0
     @State private var notificationBadges: [TabItem: Int] = [
         .home: 0,
         .flicks: 2,
@@ -31,106 +28,77 @@ struct MainTabView: View {
     }
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .bottom) {
-                // Main content using TabView for stable view identity
-                TabView(selection: $selectedTab) {
+        ZStack(alignment: .bottom) {
+            // Main content - NO TabView, just direct view switching
+            Group {
+                switch selectedTab {
+                case .home:
                     HomeView()
-                        .onScrollOffsetChange { offset in
-                            handleScrollOffset(offset)
-                        }
-                        .tag(TabItem.home)
-                    
+                        .transition(.identity) // No animation
+                case .flicks:
                     FlicksView()
-                        .tag(TabItem.flicks)
-                    
-                    // The upload tab is handled by the custom button, so its content is empty.
-                    Color.clear
-                        .tag(TabItem.upload)
-                    
+                        .transition(.identity) // No animation
+                case .search:
                     SearchView()
-                        .tag(TabItem.search)
-                    
+                        .transition(.identity) // No animation
+                case .profile:
                     ProfileView()
-                        .tag(TabItem.profile)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(AppTheme.Colors.background)
-                
-                // Custom Tab Bar
-                CustomTabBar(
-                    selectedTab: $selectedTab,
-                    notificationBadges: notificationBadges,
-                    isHidden: isTabBarHidden,
-                    onUploadTap: {
-                        showingUpload = true
-                    }
-                )
-                .offset(y: tabBarOffset)
-                .animation(.easeInOut(duration: 0.3), value: tabBarOffset)
-                .animation(.easeInOut(duration: 0.3), value: isTabBarHidden)
-            }
-            .ignoresSafeArea(.keyboard)
-            .environmentObject(appState)
-            .environmentObject(authManager)
-            .onChange(of: selectedTab) { oldValue, newValue in
-                // Prevent selecting the placeholder upload tab
-                if newValue == .upload {
-                    selectedTab = oldValue
-                    return
-                }
-                
-                // Clear notification badge for selected tab
-                notificationBadges[newValue] = 0
-                
-                // Add haptic feedback
-                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                impactFeedback.impactOccurred()
-                
-                // Track screen view
-                Task {
-                    await AnalyticsService.shared.trackScreenView(newValue.title)
+                        .transition(.identity) // No animation
+                case .upload:
+                    // This case should never be reached
+                    EmptyView()
                 }
             }
-            .fullScreenCover(isPresented: $showingUpload) {
-                UploadView()
-            }
-            .onAppear {
-                // Set current user in app state
-                if let user = authManager.currentUser {
-                    appState.currentUser = user
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(AppTheme.Colors.background)
+            
+            // Custom Tab Bar - ALWAYS VISIBLE
+            CustomTabBar(
+                selectedTab: $selectedTab,
+                notificationBadges: notificationBadges,
+                isHidden: false,
+                onUploadTap: {
+                    showingUpload = true
                 }
+            )
+        }
+        .ignoresSafeArea(.keyboard)
+        .environmentObject(appState)
+        .environmentObject(authManager)
+        .onChange(of: selectedTab) { oldValue, newValue in
+            // Prevent selecting the placeholder upload tab
+            if newValue == .upload {
+                selectedTab = oldValue
+                return
             }
-            .onChange(of: authManager.currentUser) { oldValue, newValue in
-                if let user = newValue {
-                    appState.currentUser = user
-                }
+            
+            // Clear notification badge for selected tab
+            notificationBadges[newValue] = 0
+            
+            // Add haptic feedback for tab changes
+            HapticManager.shared.impact(style: .light)
+            
+            // Track screen view
+            Task {
+                await AnalyticsService.shared.trackScreenView(newValue.title)
             }
         }
-    }
-    
-    private func handleScrollOffset(_ offset: CGFloat) {
-        let threshold: CGFloat = 20
-        let diff = offset - lastScrollOffset
-        
-        // Ensure UI updates are on the main thread
-        DispatchQueue.main.async {
-            withAnimation(.easeInOut(duration: 0.3)) {
-                if diff > threshold && offset > 0 && !isTabBarHidden {
-                    // Scrolling down, hide tab bar
-                    isTabBarHidden = true
-                    tabBarOffset = 100
-                } else if diff < -threshold && isTabBarHidden {
-                    // Scrolling up, show tab bar
-                    isTabBarHidden = false
-                    tabBarOffset = 0
-                }
+        .fullScreenCover(isPresented: $showingUpload) {
+            UploadView()
+        }
+        .onAppear {
+            // Set current user in app state
+            if let user = authManager.currentUser {
+                appState.currentUser = user
             }
-            self.lastScrollOffset = offset
+        }
+        .onChange(of: authManager.currentUser) { oldValue, newValue in
+            if let user = newValue {
+                appState.currentUser = user
+            }
         }
     }
 }
-
 
 // MARK: - App State Management
 @MainActor
@@ -206,9 +174,7 @@ struct CustomTabBar: View {
                     isSelected: selectedTab == tab,
                     badgeCount: notificationBadges[tab] ?? 0,
                     action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            selectedTab = tab
-                        }
+                        selectedTab = tab
                     }
                 )
                 .frame(maxWidth: .infinity)
@@ -251,8 +217,6 @@ struct CustomTabBar: View {
             x: 0,
             y: -5
         )
-        .opacity(isHidden ? 0 : 1)
-        .scaleEffect(isHidden ? 0.9 : 1.0)
     }
 }
 
@@ -264,7 +228,6 @@ struct UploadTabButton: View {
     var body: some View {
         Button(action: action) {
             ZStack {
-                // Gradient background
                 Circle()
                     .fill(AppTheme.Colors.primary)
                     .frame(width: 50, height: 50)
@@ -275,7 +238,6 @@ struct UploadTabButton: View {
                         y: 4
                     )
                 
-                // Plus icon
                 Image(systemName: "plus")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(.white)
@@ -286,7 +248,10 @@ struct UploadTabButton: View {
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
         .onPressGesture(
-            onPress: { isPressed = true },
+            onPress: {
+                isPressed = true
+                HapticManager.shared.impact(style: .medium)
+            },
             onRelease: { isPressed = false }
         )
         .accessibilityLabel("Create content")
@@ -324,7 +289,6 @@ struct CustomTabBarButton: View {
                             )
                             .scaleEffect(isPressed ? 0.9 : 1.0)
                         
-                        // Notification badge
                         if badgeCount > 0 {
                             NotificationBadge(count: badgeCount)
                                 .offset(x: 8, y: -8)
@@ -341,14 +305,11 @@ struct CustomTabBarButton: View {
                     .opacity(isSelected ? 1.0 : 0.8)
             }
             .padding(.vertical, 4)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         }
         .buttonStyle(PlainButtonStyle())
         .scaleEffect(isPressed ? 0.95 : 1.0)
-        .onLongPressGesture(minimumDuration: 0.1) {
-            // Long press action (could show context menu)
-            let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
-            impactFeedback.impactOccurred()
-        }
+        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
         .onPressGesture(
             onPress: { isPressed = true },
             onRelease: { isPressed = false }
@@ -416,13 +377,13 @@ enum TabItem: String, CaseIterable, Hashable {
         case .home:
             return isSelected ? "house.fill" : "house"
         case .flicks:
-            return "light.ribbon" // Use the same icon for both states
+            return isSelected ? "play.rectangle.on.rectangle.fill" : "play.rectangle.on.rectangle"
         case .upload:
-            return "plus" // This is for the central button, not a tab item
+            return "plus"
         case .search:
-            return isSelected ? "magnifyingglass.circle.fill" : "magnifyingglass"
+            return isSelected ? "magnifyingglass" : "magnifyingglass"
         case .profile:
-            return isSelected ? "person.circle.fill" : "person.circle"
+            return isSelected ? "person.fill" : "person"
         }
     }
     
@@ -437,9 +398,11 @@ enum TabItem: String, CaseIterable, Hashable {
     }
 }
 
+// MARK: - Preview
 struct MainTabView_Previews: PreviewProvider {
     static var previews: some View {
         MainTabView()
             .preferredColorScheme(.light)
+            .environmentObject(AuthenticationManager.shared)
     }
 }

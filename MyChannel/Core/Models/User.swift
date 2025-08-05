@@ -280,45 +280,47 @@ extension User {
     ]
 }
 
-#Preview {
-    VStack(spacing: 20) {
-        Text("User Models")
-            .font(AppTheme.Typography.largeTitle)
-        
-        ForEach(User.sampleUsers.prefix(2)) { user in
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text(user.displayName)
-                        .font(AppTheme.Typography.headline)
-                    if user.isVerified {
-                        Image(systemName: "checkmark.seal.fill")
-                            .foregroundColor(AppTheme.Colors.primary)
+struct User_Previews: PreviewProvider {
+    static var previews: some View {
+        VStack(spacing: 20) {
+            Text("User Models")
+                .font(AppTheme.Typography.largeTitle)
+            
+            ForEach(User.sampleUsers.prefix(2)) { user in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text(user.displayName)
+                            .font(AppTheme.Typography.headline)
+                        if user.isVerified {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundColor(AppTheme.Colors.primary)
+                        }
+                        Spacer()
                     }
-                    Spacer()
-                }
-                
-                Text("@\(user.username)")
-                    .font(AppTheme.Typography.subheadline)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                
-                if let bio = user.bio {
-                    Text(bio)
-                        .font(AppTheme.Typography.body)
+                    
+                    Text("@\(user.username)")
+                        .font(AppTheme.Typography.subheadline)
                         .foregroundColor(AppTheme.Colors.textSecondary)
+                    
+                    if let bio = user.bio {
+                        Text(bio)
+                            .font(AppTheme.Typography.body)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                    
+                    HStack {
+                        Label("\(user.subscriberCount.formatted()) subscribers", systemImage: "person.2")
+                        Spacer()
+                        Label("\(user.videoCount) videos", systemImage: "play.rectangle")
+                    }
+                    .font(AppTheme.Typography.caption)
+                    .foregroundColor(AppTheme.Colors.textTertiary)
                 }
-                
-                HStack {
-                    Label("\(user.subscriberCount.formatted()) subscribers", systemImage: "person.2")
-                    Spacer()
-                    Label("\(user.videoCount) videos", systemImage: "play.rectangle")
-                }
-                .font(AppTheme.Typography.caption)
-                .foregroundColor(AppTheme.Colors.textTertiary)
+                .cardStyle()
+                .padding(.horizontal)
             }
-            .cardStyle()
-            .padding(.horizontal)
         }
+        .padding()
+        .background(AppTheme.Colors.background)
     }
-    .padding()
-    .background(AppTheme.Colors.background)
 }

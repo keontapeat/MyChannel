@@ -1,5 +1,5 @@
 //
-//  FlicksView.swift
+//  StoriesView.swift
 //  MyChannel
 //
 //  Created by Keonta on 7/9/25.

@@ -13,7 +13,7 @@ struct EnhancedVideoPlayerView: View {
     @StateObject private var playerManager = VideoPlayerManager()
     @State private var showControls = true
     @State private var isFullScreen = false
-    @State private var selectedQuality: VideoQuality = .auto
+    @State private var selectedQuality: MyChannel.VideoQuality = .auto
     @State private var playbackSpeed: PlaybackSpeed = .normal
     
     @Environment(\.dismiss) private var dismiss
@@ -200,19 +200,6 @@ struct EnhancedVideoPlayerView: View {
 }
 
 // MARK: - Player-specific enums (avoid conflicts with main enums)
-enum VideoQuality: CaseIterable {
-    case auto, low, medium, high, ultra
-    
-    var displayName: String {
-        switch self {
-        case .auto: return "Auto"
-        case .low: return "360p"
-        case .medium: return "720p"
-        case .high: return "1080p"
-        case .ultra: return "4K"
-        }
-    }
-}
 
 enum PlaybackSpeed: CaseIterable {
     case slow, normal, fast, faster

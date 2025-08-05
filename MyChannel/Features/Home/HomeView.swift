@@ -108,11 +108,6 @@ struct HomeView: View {
                     }
                 }
                 .coordinateSpace(name: "scroll")
-                .onScrollOffsetChange { offset in
-                    scrollOffset = offset
-                    let offsetValue = Double(abs(offset))
-                    headerOpacity = max(0, 1 - offsetValue / 100.0)
-                }
                 .refreshable {
                     await refreshContent()
                 }
@@ -951,7 +946,7 @@ struct ClickableVideoFeedSection: View {
     let videos: [Video]
     let selectedFilter: ContentFilter
     @Binding var watchLaterVideos: Set<String>
-    @Binding var likedVideos: Set<String>
+    @Binding var likedVideos: Set<String>;
     @Binding var isLoading: Bool
     let onVideoTap: (Video) -> Void
     

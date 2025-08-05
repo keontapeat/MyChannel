@@ -380,46 +380,48 @@ struct DatabaseStatistics {
     }
 }
 
-#Preview("Database Service Status") {
-    VStack(spacing: 20) {
-        Text("Database Service")
-            .font(.largeTitle)
-            .fontWeight(.bold)
-        
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Status:")
-                    .fontWeight(.medium)
-                Spacer()
-                Text(DatabaseService.shared.isReady ? "Ready" : "Loading")
-                    .foregroundColor(DatabaseService.shared.isReady ? .green : .orange)
+struct DatabaseService_Previews: PreviewProvider {
+    static var previews: some View {
+        VStack(spacing: 20) {
+            Text("Database Service")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+            
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Status:")
+                        .fontWeight(.medium)
+                    Spacer()
+                    Text(DatabaseService.shared.isReady ? "Ready" : "Loading")
+                        .foregroundColor(DatabaseService.shared.isReady ? .green : .orange)
+                }
+                
+                Divider()
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Configuration:")
+                        .fontWeight(.medium)
+                    
+                    Text("Storage: UserDefaults (Simplified)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Text("Auto Cleanup: Every hour")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Text("History Retention: 90 days")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Text("Analytics Retention: 30 days")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Configuration:")
-                    .fontWeight(.medium)
-                
-                Text("Storage: UserDefaults (Simplified)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                Text("Auto Cleanup: Every hour")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                Text("History Retention: 90 days")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                Text("Analytics Retention: 30 days")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            Spacer()
         }
-        
-        Spacer()
+        .padding()
     }
-    .padding()
 }
