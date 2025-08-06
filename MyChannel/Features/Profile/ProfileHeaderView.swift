@@ -30,55 +30,55 @@ struct ProfileHeaderView: View {
                                 .aspectRatio(contentMode: .fill)
                                 .frame(
                                     width: geometry.size.width,
-                                    height: geometry.size.height + geometry.safeAreaInsets.top + 56
+                                    height: geometry.size.height + geometry.safeAreaInsets.top + 60
                                 )
-                                .offset(y: -geometry.safeAreaInsets.top - 10)
+                                .offset(y: -geometry.safeAreaInsets.top - 15)
                                 .clipped()
                         } placeholder: {
                             Rectangle()
                                 .fill(
                                     LinearGradient(
-                                        colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary],
+                                        colors: [AppTheme.Colors.primary.opacity(0.8), AppTheme.Colors.secondary.opacity(0.8)],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
                                 )
                                 .frame(
                                     width: geometry.size.width,
-                                    height: geometry.size.height + geometry.safeAreaInsets.top + 56
+                                    height: geometry.size.height + geometry.safeAreaInsets.top + 60
                                 )
-                                .offset(y: -geometry.safeAreaInsets.top - 10)
+                                .offset(y: -geometry.safeAreaInsets.top - 15)
                         }
                     } else {
                         Rectangle()
                             .fill(
                                 LinearGradient(
-                                    colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary],
+                                    colors: [AppTheme.Colors.primary.opacity(0.8), AppTheme.Colors.secondary.opacity(0.8)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
                             )
                             .frame(
                                 width: geometry.size.width,
-                                height: geometry.size.height + geometry.safeAreaInsets.top + 56
+                                height: geometry.size.height + geometry.safeAreaInsets.top + 60
                             )
-                            .offset(y: -geometry.safeAreaInsets.top - 10)
+                            .offset(y: -geometry.safeAreaInsets.top - 15)
                     }
                     
-                    // Gradient Overlay - FILLS EVERYTHING
+                    // Adaptive gradient overlay that blends with any background
                     LinearGradient(
                         colors: [
-                            Color.black.opacity(0.4),
-                            Color.black.opacity(0.7)
+                            Color.black.opacity(0.2),
+                            Color.black.opacity(0.6)
                         ],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                     .frame(
                         width: geometry.size.width,
-                        height: geometry.size.height + geometry.safeAreaInsets.top + 56
+                        height: geometry.size.height + geometry.safeAreaInsets.top + 60
                     )
-                    .offset(y: -geometry.safeAreaInsets.top - 10)
+                    .offset(y: -geometry.safeAreaInsets.top - 15)
                 }
             }
             
@@ -99,13 +99,11 @@ struct ProfileHeaderView: View {
                             .font(.title2)
                             .foregroundColor(.white)
                             .padding(14)
-                            .background(
-                                .black.opacity(0.4),
-                                in: Circle()
-                            )
+                            .background(.black.opacity(0.4))
+                            .clipShape(Circle())
                             .overlay(
                                 Circle()
-                                    .stroke(.white.opacity(0.4), lineWidth: 1)
+                                    .stroke(.white.opacity(0.3), lineWidth: 1)
                             )
                     }
                 }
@@ -114,8 +112,8 @@ struct ProfileHeaderView: View {
                 Spacer()
                 
                 // Profile Content
-                VStack(spacing: 10) {
-                    // Profile Image
+                VStack(spacing: 12) {
+                    // Profile Image with better contrast
                     ZStack {
                         if let profileImageURL = user.profileImageURL {
                             CachedAsyncImage(url: URL(string: profileImageURL)) { image in
@@ -145,86 +143,97 @@ struct ProfileHeaderView: View {
                     .clipShape(Circle())
                     .overlay(
                         Circle()
-                            .stroke(.white, lineWidth: 3)
+                            .stroke(.white, lineWidth: 4)
                     )
-                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+                    .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 6)
                     
-                    // User Info
-                    VStack(spacing: 3) {
+                    // User Info with better readability
+                    VStack(spacing: 4) {
                         HStack(spacing: 6) {
                             Text(user.displayName)
-                                .font(.title3)
+                                .font(.title2)
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
+                                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
                             
                             if user.isVerified {
                                 Image(systemName: "checkmark.seal.fill")
-                                    .font(.body)
+                                    .font(.title3)
                                     .foregroundColor(.blue)
+                                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
                             }
                         }
                         
                         Text("@\(user.username)")
                             .font(.subheadline)
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(.white.opacity(0.9))
+                            .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
                         
                         if let bio = user.bio {
                             Text(bio)
                                 .font(.caption)
-                                .foregroundColor(.white.opacity(0.9))
+                                .foregroundColor(.white.opacity(0.95))
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
+                                .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+                                .padding(.horizontal, 8)
                         }
                     }
                     
-                    // Stats
-                    HStack(spacing: 20) {
+                    // Stats with better visibility
+                    HStack(spacing: 24) {
                         VStack(spacing: 2) {
                             Text("\(user.subscriberCount.formatted())")
                                 .font(.subheadline)
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
+                                .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
                             
                             Text("Subscribers")
                                 .font(.caption2)
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundColor(.white.opacity(0.9))
+                                .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
                         }
                         
                         Rectangle()
-                            .fill(.white.opacity(0.3))
-                            .frame(width: 1, height: 24)
+                            .fill(.white.opacity(0.4))
+                            .frame(width: 1, height: 28)
                         
                         VStack(spacing: 2) {
                             Text("\(user.videoCount)")
                                 .font(.subheadline)
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
+                                .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
                             
                             Text("Videos")
                                 .font(.caption2)
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundColor(.white.opacity(0.9))
+                                .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
                         }
                         
                         if let totalViews = user.totalViews {
                             Rectangle()
-                                .fill(.white.opacity(0.3))
-                                .frame(width: 1, height: 24)
+                                .fill(.white.opacity(0.4))
+                                .frame(width: 1, height: 28)
                             
                             VStack(spacing: 2) {
                                 Text(formatViews(totalViews))
                                     .font(.subheadline)
                                     .fontWeight(.bold)
                                     .foregroundColor(.white)
+                                    .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
                                 
                                 Text("Views")
                                     .font(.caption2)
-                                    .foregroundColor(.white.opacity(0.8))
+                                    .foregroundColor(.white.opacity(0.9))
+                                    .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
                             }
                         }
                     }
                     
-                    // Action Buttons
-                    HStack(spacing: 10) {
+                    // Action Buttons with better materials
+                    HStack(spacing: 12) {
                         Button {
                             showingEditProfile = true
                             HapticManager.shared.impact(style: .light)
@@ -234,11 +243,17 @@ struct ProfileHeaderView: View {
                                     .font(.caption)
                                 Text("Edit Profile")
                                     .font(.caption)
+                                    .fontWeight(.medium)
                             }
                             .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 10)
+                            .background(.black.opacity(0.4))
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .stroke(.white.opacity(0.3), lineWidth: 1)
+                            )
                         }
                         
                         Button {
@@ -252,15 +267,20 @@ struct ProfileHeaderView: View {
                                     .font(.caption)
                                 Text(isFollowing ? "Following" : "Follow")
                                     .font(.caption)
+                                    .fontWeight(.medium)
                             }
                             .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 10)
                             .background(
                                 isFollowing ? 
-                                    .white.opacity(0.2) : 
-                                    AppTheme.Colors.primary.opacity(0.8),
-                                in: RoundedRectangle(cornerRadius: 16)
+                                    .black.opacity(0.3) : 
+                                    AppTheme.Colors.primary.opacity(0.9)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .stroke(.white.opacity(0.3), lineWidth: 1)
                             )
                         }
                         .scaleEffect(isFollowing ? 0.95 : 1.0)
@@ -316,76 +336,6 @@ struct ProfileHeaderView: View {
             return String(format: "%.1fK", Double(views) / 1_000)
         } else {
             return "\(views)"
-        }
-    }
-}
-
-struct AProfileTabButton: View {
-    let tab: ProfileTab
-    let isSelected: Bool
-    let user: User
-    let action: () -> Void
-    
-    @State private var isPressed: Bool = false
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                HStack(spacing: 6) {
-                    Image(systemName: tab.iconName)
-                        .font(.system(size: 14, weight: .medium))
-                    
-                    Text(tab.title)
-                        .font(.system(size: 15, weight: .medium))
-                    
-                    if let count = getTabCount(for: tab) {
-                        Text("(\(count))")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                }
-                .foregroundColor(
-                    isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary
-                )
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                
-                // Selection Indicator
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(AppTheme.Colors.primary)
-                    .frame(height: 3)
-                    .scaleEffect(x: isSelected ? 1.0 : 0.0, y: 1.0, anchor: .center)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isSelected)
-            }
-        }
-        .buttonStyle(PlainButtonStyle())
-        .scaleEffect(isPressed ? 0.96 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isPressed)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    isPressed = false
-                }
-        )
-    }
-    
-    private func getTabCount(for tab: ProfileTab) -> Int? {
-        switch tab {
-        case .videos:
-            return user.videoCount > 0 ? user.videoCount : nil
-        case .shorts:
-            return user.videoCount > 5 ? user.videoCount / 3 : nil
-        case .playlists:
-            return user.videoCount > 10 ? user.videoCount / 8 : nil
-        case .community:
-            return user.subscriberCount > 1000 ? 12 : nil
-        case .about:
-            return nil
         }
     }
 }

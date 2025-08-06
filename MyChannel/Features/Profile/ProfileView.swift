@@ -23,43 +23,48 @@ struct ProfileView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            AppTheme.Colors.background
-                .ignoresSafeArea(.all)
-            
-            VStack(spacing: 0) {
-                // Combined Header + Tabs (NO GAP POSSIBLE!)
-                ProfileHeaderView(
-                    user: currentUser,
-                    scrollOffset: scrollOffset,
-                    isFollowing: $isFollowing,
-                    showingEditProfile: $showingEditProfile,
-                    showingSettings: $showingSettings,
-                    selectedTab: $selectedTab
-                )
-                .ignoresSafeArea(edges: .top)
+        GeometryReader { geometry in
+            ZStack(alignment: .top) {
+                // Dynamic background that adapts to any color
+                AppTheme.Colors.background
+                    .ignoresSafeArea(.all)
                 
-                // Scrollable Content Area
-                ScrollView {
-                    VStack(spacing: 0) {
-                        GeometryReader { proxy in
-                            Color.clear
-                                .preference(key: ProfileScrollOffsetPreferenceKey.self, 
-                                          value: proxy.frame(in: .named("scroll")).minY)
+                VStack(spacing: 0) {
+                    // Combined Header + Tabs (NO GAP POSSIBLE!)
+                    ProfileHeaderView(
+                        user: currentUser,
+                        scrollOffset: scrollOffset,
+                        isFollowing: $isFollowing,
+                        showingEditProfile: $showingEditProfile,
+                        showingSettings: $showingSettings,
+                        selectedTab: $selectedTab
+                    )
+                    .ignoresSafeArea(edges: .top)
+                    
+                    // Scrollable Content Area
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            GeometryReader { proxy in
+                                Color.clear
+                                    .preference(key: ProfileScrollOffsetPreferenceKey.self, 
+                                              value: proxy.frame(in: .named("scroll")).minY)
+                            }
+                            .frame(height: 0)
+                            
+                            ProfileContentView(
+                                selectedTab: selectedTab,
+                                user: currentUser,
+                                videos: userVideos
+                            )
+                            .padding(.top, 0)
                         }
-                        .frame(height: 0)
-                        
-                        ProfileContentView(
-                            selectedTab: selectedTab,
-                            user: currentUser,
-                            videos: userVideos
-                        )
-                        .padding(.top, 0)
                     }
-                }
-                .coordinateSpace(name: "scroll")
-                .onPreferenceChange(ProfileScrollOffsetPreferenceKey.self) { value in
-                    scrollOffset = value
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
+                    .coordinateSpace(name: "scroll")
+                    .onPreferenceChange(ProfileScrollOffsetPreferenceKey.self) { value in
+                        scrollOffset = value
+                    }
                 }
             }
         }
@@ -68,7 +73,15 @@ struct ProfileView: View {
             EditProfileView(user: Binding(
                 get: { currentUser },
                 set: { newUser in
+                    // Update the local user state
+                    user = newUser
+                    // Update the auth manager
                     authManager.updateUser(newUser)
+                    // Trigger a UI refresh
+                    Task { @MainActor in
+                        // Force refresh of user data
+                        userVideos = Video.sampleVideos
+                    }
                 }
             ))
         }
@@ -77,11 +90,18 @@ struct ProfileView: View {
         }
         .onAppear {
             user = currentUser
+            // Refresh user videos when appearing
+            userVideos = Video.sampleVideos
         }
         .onReceive(NotificationCenter.default.publisher(for: .scrollToTopProfile)) { _ in
             withAnimation(.easeInOut(duration: 0.8)) {
                 HapticManager.shared.impact(style: .light)
             }
+        }
+        .onChange(of: currentUser) { oldUser, newUser in
+            // Automatically update when user changes
+            user = newUser
+            userVideos = Video.sampleVideos
         }
     }
 }
