@@ -36,29 +36,24 @@ struct ProfileContentView: View {
 struct ProfileVideosView: View {
     let videos: [Video]
     
-    private let columns = [
-        GridItem(.flexible()),
-        GridItem(.flexible())
-    ]
-    
     var body: some View {
-        // Back to vertical grid layout (top to bottom scroll)
-        LazyVGrid(columns: columns, spacing: 16) {
+        LazyVStack(spacing: 0) {
             ForEach(videos) { video in
-                ProfileVideoCard(video: video)
+                ProfileVideoRow(video: video)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .padding(.top, 0)
     }
 }
 
-struct ProfileVideoCard: View {
+struct ProfileVideoRow: View {
     let video: Video
     @State private var isPressed: Bool = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 12) {
             // Thumbnail
             ZStack(alignment: .bottomTrailing) {
                 CachedAsyncImage(url: URL(string: video.thumbnailURL)) { image in
@@ -71,42 +66,169 @@ struct ProfileVideoCard: View {
                         .aspectRatio(16/9, contentMode: .fill)
                         .overlay(
                             Image(systemName: "play.rectangle")
-                                .font(.title2)
+                                .font(.title3)
                                 .foregroundColor(AppTheme.Colors.textSecondary)
                         )
                 }
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md))
+                .frame(width: 168, height: 94) // YouTube-style thumbnail size
+                .clipShape(RoundedRectangle(cornerRadius: 8))
                 
                 // Duration Badge
                 Text(video.formattedDuration)
-                    .font(AppTheme.Typography.caption)
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, 4)
                     .padding(.vertical, 2)
-                    .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 4))
-                    .padding(6)
+                    .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 3))
+                    .padding(4)
             }
             
             // Video Info
             VStack(alignment: .leading, spacing: 4) {
+                // Title
                 Text(video.title)
-                    .font(AppTheme.Typography.bodyMedium)
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textPrimary)
                     .lineLimit(2)
+                    .multilineTextAlignment(.leading)
                 
+                // Views and time
                 HStack(spacing: 4) {
                     Text("\(video.formattedViews) views")
-                        .font(AppTheme.Typography.caption)
+                        .font(.system(size: 12))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                     
                     Text("•")
-                        .font(AppTheme.Typography.caption)
+                        .font(.system(size: 12))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                     
                     Text(video.timeAgo)
-                        .font(AppTheme.Typography.caption)
+                        .font(.system(size: 12))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                 }
+                
+                Spacer()
+                
+                // Action buttons (share, like, playlist)
+                HStack(spacing: 20) {
+                    Button {
+                        HapticManager.shared.impact(style: .light)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrowshape.turn.up.right")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                    }
+                    
+                    Button {
+                        HapticManager.shared.impact(style: .light)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "hand.thumbsup")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            Text("0")
+                                .font(.system(size: 12))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                    }
+                    
+                    Button {
+                        HapticManager.shared.impact(style: .light)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "text.badge.plus")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            Text("0")
+                                .font(.system(size: 12))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    // More options
+                    Button {
+                        HapticManager.shared.impact(style: .light)
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 16))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                }
+            }
+        }
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
+        .onTapGesture {
+            // Handle video tap
+            HapticManager.shared.impact(style: .light)
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !isPressed {
+                        isPressed = true
+                    }
+                }
+                .onEnded { _ in
+                    isPressed = false
+                }
+        )
+    }
+}
+
+struct ProfileVideoCard: View {
+    let video: Video
+    @State private var isPressed: Bool = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Thumbnail
+            ZStack(alignment: .bottomTrailing) {
+                CachedAsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(16/9, contentMode: .fill)
+                } placeholder: {
+                    Rectangle()
+                        .fill(AppTheme.Colors.surface)
+                        .aspectRatio(16/9, contentMode: .fill)
+                        .overlay(
+                            Image(systemName: "play.rectangle")
+                                .font(.title3)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        )
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                
+                // Duration Badge
+                Text(video.formattedDuration)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 3))
+                    .padding(4)
+            }
+            
+            // Video Info - More Compact
+            VStack(alignment: .leading, spacing: 2) {
+                Text(video.title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                
+                Text("\(video.formattedViews) views")
+                    .font(.system(size: 11))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                
+                Text(video.timeAgo)
+                    .font(.system(size: 11))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
             }
         }
         .scaleEffect(isPressed ? 0.95 : 1.0)
@@ -134,19 +256,20 @@ struct ProfileFlicksView: View {
     let videos: [Video]
     
     private let columns = [
-        GridItem(.flexible()),
-        GridItem(.flexible()),
-        GridItem(.flexible())
+        GridItem(.flexible(), spacing: 6),
+        GridItem(.flexible(), spacing: 6),
+        GridItem(.flexible(), spacing: 6),
+        GridItem(.flexible(), spacing: 6)
     ]
     
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 12) {
+        LazyVGrid(columns: columns, spacing: 6) {
             ForEach(videos) { video in
                 ProfileFlickCard(video: video)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .padding(.horizontal, 12)
+        .padding(.top, 0)
     }
 }
 
@@ -166,23 +289,23 @@ struct ProfileFlickCard: View {
                     .aspectRatio(9/16, contentMode: .fill)
                     .overlay(
                         Image(systemName: "play.rectangle.on.rectangle")
-                            .font(.title2)
+                            .font(.title3)
                             .foregroundColor(AppTheme.Colors.textSecondary)
                     )
             }
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
             
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(video.title)
-                    .font(AppTheme.Typography.caption)
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white)
                     .lineLimit(2)
                 
                 Text("\(video.formattedViews) views")
-                    .font(AppTheme.Typography.caption2)
+                    .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.8))
             }
-            .padding(8)
+            .padding(6)
             .background(
                 LinearGradient(
                     colors: [.clear, .black.opacity(0.7)],
@@ -232,13 +355,13 @@ struct ProfilePlaylistsView: View {
     let user: User
     
     var body: some View {
-        LazyVStack(spacing: 16) {
+        LazyVStack(spacing: 12) {
             ForEach(samplePlaylists(for: user), id: \.id) { playlist in
                 ProfilePlaylistRow(playlist: playlist)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .padding(.horizontal, 12)
+        .padding(.top, 0)
     }
     
     private func samplePlaylists(for user: User) -> [MockPlaylist] {
@@ -277,7 +400,7 @@ struct ProfilePlaylistRow: View {
     @State private var isPressed: Bool = false
     
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             CachedAsyncImage(url: URL(string: playlist.thumbnailURL)) { image in
                 image
                     .resizable()
@@ -288,21 +411,21 @@ struct ProfilePlaylistRow: View {
                     .aspectRatio(16/9, contentMode: .fill)
                     .overlay(
                         Image(systemName: "list.bullet")
-                            .font(.title2)
+                            .font(.title3)
                             .foregroundColor(AppTheme.Colors.textSecondary)
                     )
             }
-            .frame(width: 120, height: 68)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.sm))
+            .frame(width: 100, height: 56)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(playlist.title)
-                    .font(AppTheme.Typography.bodyMedium)
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textPrimary)
                     .lineLimit(2)
                 
                 Text("\(playlist.videoCount) videos")
-                    .font(AppTheme.Typography.caption)
+                    .font(.system(size: 12))
                     .foregroundColor(AppTheme.Colors.textSecondary)
                 
                 Spacer()
@@ -311,12 +434,12 @@ struct ProfilePlaylistRow: View {
             Spacer()
             
             Image(systemName: "chevron.right")
-                .font(.caption)
+                .font(.caption2)
                 .foregroundColor(AppTheme.Colors.textTertiary)
         }
-        .padding()
+        .padding(12)
         .background(AppTheme.Colors.cardBackground)
-        .cornerRadius(AppTheme.CornerRadius.md)
+        .cornerRadius(8)
         .scaleEffect(isPressed ? 0.98 : 1.0)
         .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
         .onTapGesture {
@@ -341,13 +464,13 @@ struct ProfileCommunityView: View {
     let user: User
     
     var body: some View {
-        LazyVStack(spacing: 16) {
+        LazyVStack(spacing: 12) {
             ForEach(sampleCommunityPosts(for: user), id: \.id) { post in
                 ProfileCommunityPostCard(post: post, user: user)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .padding(.horizontal, 12)
+        .padding(.top, 0)
     }
     
     private func sampleCommunityPosts(for user: User) -> [MockCommunityPost] {
@@ -391,9 +514,9 @@ struct ProfileCommunityPostCard: View {
     @State private var isLiked: Bool = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             // User Info
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 if let profileImageURL = user.profileImageURL {
                     CachedAsyncImage(url: URL(string: profileImageURL)) { image in
                         image
@@ -403,23 +526,23 @@ struct ProfileCommunityPostCard: View {
                         Circle()
                             .fill(AppTheme.Colors.surface)
                     }
-                    .frame(width: 40, height: 40)
+                    .frame(width: 36, height: 36)
                     .clipShape(Circle())
                 } else {
                     Circle()
                         .fill(AppTheme.Colors.surface)
-                        .frame(width: 40, height: 40)
+                        .frame(width: 36, height: 36)
                 }
                 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 4) {
                         Text(user.displayName)
-                            .font(AppTheme.Typography.bodyMedium)
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(AppTheme.Colors.textPrimary)
                         
                         if user.isVerified {
                             Image(systemName: "checkmark.seal.fill")
-                                .font(.caption)
+                                .font(.caption2)
                                 .foregroundColor(.blue)
                         }
                     }
@@ -428,7 +551,7 @@ struct ProfileCommunityPostCard: View {
                          post.timestamp.formatted(.dateTime.month().day()) : 
                          RelativeDateTimeFormatter().localizedString(for: post.timestamp, relativeTo: Date())
                     )
-                    .font(AppTheme.Typography.caption)
+                    .font(.system(size: 11))
                     .foregroundColor(AppTheme.Colors.textSecondary)
                 }
                 
@@ -437,23 +560,23 @@ struct ProfileCommunityPostCard: View {
             
             // Post Content
             Text(post.content)
-                .font(AppTheme.Typography.body)
+                .font(.system(size: 14))
                 .foregroundColor(AppTheme.Colors.textPrimary)
             
             // Actions
-            HStack(spacing: 24) {
+            HStack(spacing: 20) {
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                         isLiked.toggle()
                     }
                     HapticManager.shared.impact(style: .light)
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 4) {
                         Image(systemName: isLiked ? "heart.fill" : "heart")
                             .foregroundColor(isLiked ? .red : AppTheme.Colors.textSecondary)
                         
                         Text("\(post.likeCount + (isLiked ? 1 : 0))")
-                            .font(AppTheme.Typography.caption)
+                            .font(.system(size: 11))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                     }
                 }
@@ -463,12 +586,12 @@ struct ProfileCommunityPostCard: View {
                 Button {
                     HapticManager.shared.impact(style: .light)
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 4) {
                         Image(systemName: "bubble.right")
                             .foregroundColor(AppTheme.Colors.textSecondary)
                         
                         Text("\(post.commentCount)")
-                            .font(AppTheme.Typography.caption)
+                            .font(.system(size: 11))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                     }
                 }
@@ -476,9 +599,9 @@ struct ProfileCommunityPostCard: View {
                 Spacer()
             }
         }
-        .padding()
+        .padding(12)
         .background(AppTheme.Colors.cardBackground)
-        .cornerRadius(AppTheme.CornerRadius.md)
+        .cornerRadius(8)
         .shadow(
             color: AppTheme.Shadows.small.color,
             radius: AppTheme.Shadows.small.radius,
@@ -493,19 +616,19 @@ struct ProfileAboutView: View {
     let user: User
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             // Basic Info
             if let bio = user.bio {
                 InfoSection(title: "About", icon: "info.circle") {
                     Text(bio)
-                        .font(AppTheme.Typography.body)
+                        .font(.system(size: 14))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                 }
             }
             
             // Stats
             InfoSection(title: "Channel Statistics", icon: "chart.bar") {
-                VStack(spacing: 12) {
+                VStack(spacing: 10) {
                     StatRow(label: "Joined", value: user.createdAt.formatted(.dateTime.month().day().year()))
                     StatRow(label: "Total Subscribers", value: user.subscriberCount.formatted())
                     StatRow(label: "Total Videos", value: "\(user.videoCount)")
@@ -519,33 +642,33 @@ struct ProfileAboutView: View {
             // Location & Links
             if user.location != nil || !user.socialLinks.isEmpty {
                 InfoSection(title: "Links & Location", icon: "link") {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 6) {
                         if let location = user.location {
-                            HStack(spacing: 8) {
+                            HStack(spacing: 6) {
                                 Image(systemName: "location")
                                     .foregroundColor(AppTheme.Colors.textSecondary)
                                 Text(location)
-                                    .font(AppTheme.Typography.body)
+                                    .font(.system(size: 14))
                                     .foregroundColor(AppTheme.Colors.textPrimary)
                             }
                         }
                         
                         if let website = user.website {
-                            HStack(spacing: 8) {
+                            HStack(spacing: 6) {
                                 Image(systemName: "globe")
                                     .foregroundColor(AppTheme.Colors.textSecondary)
                                 Link(website, destination: URL(string: website) ?? URL(string: "https://example.com")!)
-                                    .font(AppTheme.Typography.body)
+                                    .font(.system(size: 14))
                                     .foregroundColor(AppTheme.Colors.primary)
                             }
                         }
                         
                         ForEach(user.socialLinks) { socialLink in
-                            HStack(spacing: 8) {
+                            HStack(spacing: 6) {
                                 Image(systemName: socialLink.platform.iconName)
                                     .foregroundColor(AppTheme.Colors.textSecondary)
                                 Link(socialLink.displayName, destination: URL(string: socialLink.url) ?? URL(string: "https://example.com")!)
-                                    .font(AppTheme.Typography.body)
+                                    .font(.system(size: 14))
                                     .foregroundColor(AppTheme.Colors.primary)
                             }
                         }
@@ -553,10 +676,10 @@ struct ProfileAboutView: View {
                 }
             }
             
-            Spacer(minLength: 100)
+            Spacer(minLength: 60)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .padding(.horizontal, 12)
+        .padding(.top, 0)
     }
     
     private func formatLargeNumber(_ number: Int) -> String {
@@ -584,22 +707,22 @@ struct InfoSection<Content: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.title3)
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundColor(AppTheme.Colors.primary)
                 
                 Text(title)
-                    .font(AppTheme.Typography.headline)
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
             }
             
             content
         }
-        .padding()
+        .padding(12)
         .background(AppTheme.Colors.cardBackground)
-        .cornerRadius(AppTheme.CornerRadius.md)
+        .cornerRadius(8)
         .shadow(
             color: AppTheme.Shadows.small.color,
             radius: AppTheme.Shadows.small.radius,
@@ -616,13 +739,13 @@ struct StatRow: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(AppTheme.Typography.body)
+                .font(.system(size: 13))
                 .foregroundColor(AppTheme.Colors.textSecondary)
             
             Spacer()
             
             Text(value)
-                .font(AppTheme.Typography.bodyMedium)
+                .font(.system(size: 13, weight: .medium))
                 .foregroundColor(AppTheme.Colors.textPrimary)
         }
     }

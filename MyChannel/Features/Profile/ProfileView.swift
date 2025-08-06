@@ -54,7 +54,7 @@ struct ProfileView: View {
                             user: currentUser,
                             videos: userVideos
                         )
-                        .padding(.top, 16)
+                        .padding(.top, 0)
                     }
                 }
                 .coordinateSpace(name: "scroll")

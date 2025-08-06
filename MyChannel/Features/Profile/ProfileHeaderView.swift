@@ -294,10 +294,10 @@ struct ProfileHeaderView: View {
                     }
                     .frame(height: 56)
                 }
-                .background(.regularMaterial)
+                .background(Color.clear)
                 .overlay(
                     Rectangle()
-                        .fill(AppTheme.Colors.textSecondary.opacity(0.15))
+                        .fill(AppTheme.Colors.textSecondary.opacity(0.1))
                         .frame(height: 0.5),
                     alignment: .bottom
                 )
