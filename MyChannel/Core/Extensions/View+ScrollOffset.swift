@@ -22,18 +22,18 @@ struct ScrollOffsetModifier: ViewModifier {
                 GeometryReader { geometry in
                     Color.clear
                         .preference(
-                            key: ScrollOffsetPreferenceKey.self,
+                            key: AScrollOffsetPreferenceKey.self,
                             value: geometry.frame(in: .named("scroll")).minY
                         )
                 }
             )
-            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+            .onPreferenceChange(AScrollOffsetPreferenceKey.self) { value in
                 onChange(value)
             }
     }
 }
 
-struct ScrollOffsetPreferenceKey: PreferenceKey {
+struct AScrollOffsetPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {

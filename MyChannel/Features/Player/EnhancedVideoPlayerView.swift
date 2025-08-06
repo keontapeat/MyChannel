@@ -13,7 +13,7 @@ struct EnhancedVideoPlayerView: View {
     @StateObject private var playerManager = VideoPlayerManager()
     @State private var showControls = true
     @State private var isFullScreen = false
-    @State private var selectedQuality: MyChannel.VideoQuality = .auto
+    @State private var selectedQuality: VideoQuality = .auto
     @State private var playbackSpeed: PlaybackSpeed = .normal
     
     @Environment(\.dismiss) private var dismiss

@@ -278,6 +278,15 @@ extension User {
             totalEarnings: 19500.0
         )
     ]
+    
+    // Add a safe, default user to use as a fallback
+    static let defaultUser = User(
+        username: "user",
+        displayName: "User",
+        email: "user@example.com",
+        bio: "Loading...",
+        isCreator: false
+    )
 }
 
 struct User_Previews: PreviewProvider {

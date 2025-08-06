@@ -9,11 +9,9 @@ import SwiftUI
 
 @main
 struct MyChannelApp: App {
-    // Use lazy initialization to prevent circular dependencies
-    @StateObject private var authManager: AuthenticationManager = {
-        print("🔐 Initializing AuthenticationManager...")
-        return AuthenticationManager.shared
-    }()
+    // Centralized state management for the entire app
+    @StateObject private var authManager: AuthenticationManager = AuthenticationManager.shared
+    @StateObject private var appState: AppState = AppState()
     
     init() {
         print("🚀 MyChannelApp init started...")
@@ -26,9 +24,10 @@ struct MyChannelApp: App {
     
     var body: some Scene {
         WindowGroup {
-            // SPLASH SCREEN WITH MAINTABVIEW CONNECTION
+            // SplashContainer now receives all necessary environment objects from the top level
             SplashContainer()
                 .environmentObject(authManager)
+                .environmentObject(appState)
                 .preferredColorScheme(.light)
                 .onAppear {
                     print("📱 App appeared with MC logo splash!")

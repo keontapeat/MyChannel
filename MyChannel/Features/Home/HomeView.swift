@@ -8,7 +8,8 @@
 import SwiftUI
 
 struct HomeView: View {
-    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
+    @EnvironmentObject private var appState: AppState // Use the shared AppState
+    @ObservedObject private var globalPlayer = GlobalVideoPlayerManager.shared
     @State private var selectedFilter: ContentFilter = .all
     @State private var searchText: String = ""
     @State private var showingFilters: Bool = false
@@ -17,8 +18,6 @@ struct HomeView: View {
     @State private var showingStories: Bool = true
     @State private var headerOpacity: Double = 1.0
     @State private var isLoading: Bool = false
-    @State private var watchLaterVideos: Set<String> = []
-    @State private var likedVideos: Set<String> = []
     @State private var selectedVideo: Video? = nil
     @State private var showingVideoPlayer: Bool = false
     @State private var selectedStory: Story? = nil
@@ -89,8 +88,8 @@ struct HomeView: View {
                         ClickableVideoFeedSection(
                             videos: Video.sampleVideos,
                             selectedFilter: selectedFilter,
-                            watchLaterVideos: $watchLaterVideos,
-                            likedVideos: $likedVideos,
+                            watchLaterVideos: $appState.watchLaterVideos, // BIND TO THE SHARED STATE
+                            likedVideos: $appState.likedVideos, // BIND TO THE SHARED STATE
                             isLoading: $isLoading,
                             onVideoTap: { video in
                                 print("🎬 Feed video tapped: \(video.title)")
@@ -557,7 +556,7 @@ struct ClickableTrendingVideoCard: View {
                         case .success(let image):
                             image
                                 .resizable()
-                                .aspectRatio(contentMode: .fill)
+                                .aspectRatio(16/9, contentMode: .fill)
                         case .failure(_):
                             Rectangle()
                                 .fill(AppTheme.Colors.surface)
@@ -631,7 +630,7 @@ struct ClickableTrendingVideoCard: View {
                         AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
                             image
                                 .resizable()
-                                .aspectRatio(contentMode: .fill)
+                                .aspectRatio(16/9, contentMode: .fill)
                         } placeholder: {
                             Circle()
                                 .fill(AppTheme.Colors.surface)
@@ -898,7 +897,7 @@ struct ClickableLiveStreamCard: View {
                     AsyncImage(url: URL(string: creator.profileImageURL ?? "")) { image in
                         image
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
+                            .aspectRatio(16/9, contentMode: .fill)
                     } placeholder: {
                         Circle()
                             .fill(AppTheme.Colors.surface)
@@ -1087,7 +1086,7 @@ struct ProfessionalVideoCard: View {
                     AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
                         image
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
+                            .aspectRatio(16/9, contentMode: .fill)
                     } placeholder: {
                         Circle()
                             .fill(AppTheme.Colors.surface)
@@ -1385,4 +1384,6 @@ enum ContentFilter: String, CaseIterable {
 
 #Preview {
     HomeView()
+        .environmentObject(AppState())
+        .environmentObject(GlobalVideoPlayerManager.shared)
 }

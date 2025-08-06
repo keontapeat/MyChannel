@@ -13,11 +13,15 @@ extension Notification.Name {
 }
 
 struct MainTabView: View {
-    @StateObject private var authManager = AuthenticationManager.shared
-    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
+    // Receive all state objects from the environment for a single source of truth
+    @EnvironmentObject private var authManager: AuthenticationManager
+    @EnvironmentObject private var appState: AppState
+    @ObservedObject private var globalPlayer = GlobalVideoPlayerManager.shared
+    
     @State private var selectedTab: TabItem = .home
     @State private var previousTab: TabItem = .home
-
+    @State private var showingUpload: Bool = false
+    
     @State private var notificationBadges: [TabItem: Int] = [
         .home: 0,
         .flicks: 2,
@@ -25,9 +29,6 @@ struct MainTabView: View {
         .search: 0,
         .profile: 3
     ]
-
-    @State private var showingUpload: Bool = false
-    @StateObject private var appState = AppState()
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -64,8 +65,6 @@ struct MainTabView: View {
             .zIndex(1000)
         }
         .ignoresSafeArea(.keyboard)
-        .environmentObject(appState)
-        .environmentObject(authManager)
         .environmentObject(globalPlayer)
         .onChange(of: selectedTab) { oldValue, newValue in
             if newValue == .upload {
@@ -90,15 +89,13 @@ struct MainTabView: View {
         .fullScreenCover(isPresented: $showingUpload) {
             UploadView()
         }
-        .onAppear {
-            if let user = authManager.currentUser {
-                appState.currentUser = user
-            }
-        }
+        // This view now correctly syncs the user state when the auth state changes
         .onChange(of: authManager.currentUser) { _, newValue in
-            if let user = newValue {
-                appState.currentUser = user
-            }
+            appState.currentUser = newValue
+        }
+        .onAppear {
+             // Initial sync of user state
+            appState.currentUser = authManager.currentUser
         }
     }
 }
@@ -106,13 +103,18 @@ struct MainTabView: View {
 // MARK: - App State
 @MainActor
 class AppState: ObservableObject {
-    @Published var currentUser: User = User.sampleUsers[0]
+    @Published var currentUser: User? // Now optional to handle signed-out state
     @Published var isLoggedIn: Bool = true
     @Published var watchLaterVideos: Set<String> = []
     @Published var likedVideos: Set<String> = []
     @Published var followedCreators: Set<String> = []
     @Published var notifications: [AppNotification] = []
 
+    init() {
+        // Initialize with a default state if needed, or leave nil
+        self.currentUser = nil
+    }
+    
     func toggleLike(videoId: String) {
         if likedVideos.contains(videoId) {
             likedVideos.remove(videoId)
@@ -410,5 +412,7 @@ struct VisualEffectBlur: UIViewRepresentable {
 #Preview {
     MainTabView()
         .environmentObject(AuthenticationManager.shared)
+        .environmentObject(AppState()) // Provide a sample for the preview
+        .environmentObject(GlobalVideoPlayerManager.shared)
         .preferredColorScheme(.light)
 }
