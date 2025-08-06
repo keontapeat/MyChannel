@@ -42,7 +42,7 @@ struct StoryViewerView: View {
                 Color.black
                     .ignoresSafeArea()
                 
-                // Enhanced story content with better quality
+                // Main story content
                 if let content = currentContent {
                     EnhancedStoryContentView(
                         content: content,
@@ -54,6 +54,25 @@ struct StoryViewerView: View {
                         removal: .opacity.combined(with: .scale(scale: 0.9))
                     ))
                     .animation(.easeInOut(duration: 0.3), value: currentContentIndex)
+                } else {
+                    // Fallback when no content is available
+                    VStack(spacing: 20) {
+                        Image(systemName: "photo.fill")
+                            .font(.system(size: 64))
+                            .foregroundColor(.white.opacity(0.6))
+                        
+                        Text("Loading Story...")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                        
+                        Button("Close") {
+                            onDismiss()
+                        }
+                        .padding()
+                        .background(AppTheme.Colors.primary)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
                 }
                 
                 // Professional gradient overlays
@@ -195,12 +214,16 @@ struct StoryViewerView: View {
         .scaleEffect(dragOffset.height > 0 ? max(0.8, 1 - dragOffset.height / 1000) : 1.0)
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: dragOffset)
         .onAppear {
+            print("📖 StoryViewerView appeared with \(stories.count) stories")
+            print("📖 Initial story: \(initialStory.id)")
+            print("📖 Current story content count: \(currentStory.content.count)")
             setupInitialStory()
             startStoryTimer()
             simulateViewerCount()
         }
         .onDisappear {
             stopStoryTimer()
+            print("📖 StoryViewerView disappeared")
         }
         .statusBarHidden()
         .sheet(isPresented: $showingReply) {
@@ -216,7 +239,95 @@ struct StoryViewerView: View {
         }
         .sheet(isPresented: $showingProfile) {
             if let creator = currentStory.creator {
-                CreatorProfileView(creator: creator)
+                NavigationStack {
+                    VStack(spacing: 20) {
+                        AsyncImage(url: URL(string: creator.profileImageURL ?? "")) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Circle()
+                                .fill(AppTheme.Colors.surface)
+                                .overlay(
+                                    Image(systemName: "person.fill")
+                                        .font(.system(size: 40))
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                )
+                        }
+                        .frame(width: 100, height: 100)
+                        .clipShape(Circle())
+                        
+                        VStack(spacing: 8) {
+                            HStack(spacing: 8) {
+                                Text(creator.displayName)
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                
+                                if creator.isVerified {
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .foregroundColor(AppTheme.Colors.primary)
+                                }
+                            }
+                            
+                            Text("@\(creator.username)")
+                                .font(.subheadline)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            
+                            if let bio = creator.bio {
+                                Text(bio)
+                                    .font(.body)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal)
+                            }
+                        }
+                        
+                        HStack(spacing: 30) {
+                            VStack {
+                                Text("\(creator.subscriberCount)")
+                                    .font(.title3)
+                                    .fontWeight(.bold)
+                                Text("Subscribers")
+                                    .font(.caption)
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            }
+                            
+                            VStack {
+                                Text("\(creator.videoCount)")
+                                    .font(.title3)
+                                    .fontWeight(.bold)
+                                Text("Videos")
+                                    .font(.caption)
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            }
+                        }
+                        
+                        Button(action: {
+                            // Handle subscribe
+                        }) {
+                            Text("Subscribe")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(AppTheme.Colors.primary)
+                                .cornerRadius(12)
+                        }
+                        .padding(.horizontal)
+                        
+                        Spacer()
+                    }
+                    .padding()
+                    .navigationTitle("Profile")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .navigationBarBackButtonHidden(true)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("Done") {
+                                showingProfile = false
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -410,21 +521,47 @@ struct EnhancedStoryContentView: View {
                         }
                         
                 case .failure(_):
-                    Rectangle()
-                        .fill(AppTheme.Colors.surface)
-                        .overlay(
-                            Image(systemName: "photo")
-                                .foregroundColor(AppTheme.Colors.textTertiary)
-                                .font(.title)
+                    // Better fallback for failed image loads
+                    ZStack {
+                        LinearGradient(
+                            colors: [AppTheme.Colors.primary.opacity(0.8), AppTheme.Colors.secondary.opacity(0.8)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
                         
+                        VStack(spacing: 16) {
+                            Image(systemName: "photo.fill")
+                                .font(.system(size: 64))
+                                .foregroundColor(.white.opacity(0.9))
+                            
+                            Text("Story Image")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                            
+                            Text("Image temporarily unavailable")
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        
                 case .empty:
-                    Rectangle()
-                        .fill(AppTheme.Colors.surface)
-                        .overlay(
+                    // Better loading state
+                    ZStack {
+                        AppTheme.Colors.surface
+                        
+                        VStack(spacing: 16) {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
-                        )
+                                .scaleEffect(1.5)
+                            
+                            Text("Loading story...")
+                                .font(.subheadline)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                         
                 @unknown default:
                     EmptyView()
@@ -432,47 +569,80 @@ struct EnhancedStoryContentView: View {
             }
             
         case .video:
-            // Video player implementation
-            Rectangle()
-                .fill(AppTheme.Colors.surface)
-                .overlay(
-                    VStack {
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 64))
-                            .foregroundColor(.white)
-                        Text("Video content")
-                            .foregroundColor(.white)
-                    }
+            // Better video placeholder
+            ZStack {
+                LinearGradient(
+                    colors: [AppTheme.Colors.primary.opacity(0.6), AppTheme.Colors.secondary.opacity(0.6)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
+                
+                VStack(spacing: 20) {
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 80))
+                        .foregroundColor(.white)
+                        .shadow(radius: 4)
+                    
+                    Text("Video Story")
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    
+                    Text("Tap to play")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.8))
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             
         case .text:
-            Rectangle()
-                .fill(Color(hex: content.backgroundColor ?? "#FF6B6B"))
-                .overlay(
-                    VStack {
-                        if let text = content.text {
-                            Text(text)
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                                .multilineTextAlignment(.center)
-                                .padding()
-                        }
-                    }
-                )
+            ZStack {
+                // Use a safe color fallback
+                let bgColor = content.backgroundColor ?? "#FF6B6B"
+                Color(hex: bgColor)
+                
+                if let text = content.text {
+                    Text(text)
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                        .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             
         case .music:
-            Rectangle()
-                .fill(AppTheme.Colors.surface)
-                .overlay(
-                    VStack {
-                        Image(systemName: "music.note")
-                            .font(.system(size: 64))
-                            .foregroundColor(.white)
-                        Text("Music content")
-                            .foregroundColor(.white)
-                    }
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        Color.purple.opacity(0.8), 
+                        Color.pink.opacity(0.8), 
+                        Color.orange.opacity(0.6)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
+                
+                VStack(spacing: 24) {
+                    Image(systemName: "music.note.list")
+                        .font(.system(size: 64))
+                        .foregroundColor(.white)
+                        .shadow(radius: 4)
+                    
+                    VStack(spacing: 8) {
+                        Text("Music Story")
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        
+                        Text("Now Playing")
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
@@ -668,7 +838,7 @@ struct EnhancedStoryFooterView: View {
                         .font(.system(size: 16))
                         .foregroundColor(.white)
                     
-                    Text("Send message")
+                    Text("Comment")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.white)
                     
@@ -687,20 +857,43 @@ struct EnhancedStoryFooterView: View {
             }
             .buttonStyle(PlainButtonStyle())
             
-            HStack(spacing: 20) {
+            HStack(spacing: 16) {
                 Button(action: onLike) {
-                    Image(systemName: hasLiked ? "heart.fill" : "heart")
-                        .font(.system(size: 24))
-                        .foregroundColor(hasLiked ? .red : .white)
-                        .scaleEffect(hasLiked ? 1.2 : 1.0)
-                        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasLiked)
+                    ZStack {
+                        Circle()
+                            .fill(.black.opacity(0.4))
+                            .frame(width: 48, height: 48)
+                            .overlay(
+                                Circle()
+                                    .stroke(.white.opacity(0.3), lineWidth: 1)
+                            )
+                        
+                        Image(systemName: hasLiked ? "heart.fill" : "heart")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(hasLiked ? .red : .white)
+                            .scaleEffect(hasLiked ? 1.1 : 1.0)
+                            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasLiked)
+                    }
+                    .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
                 }
                 .buttonStyle(PlainButtonStyle())
                 
-                ShareLink(item: URL(string: "https://mychannel.app/story/\(story.id)")!) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 22))
-                        .foregroundColor(.white)
+                Button(action: onShare) {
+                    ZStack {
+                        Circle()
+                            .fill(.black.opacity(0.4))
+                            .frame(width: 48, height: 48)
+                            .overlay(
+                                Circle()
+                                    .stroke(.white.opacity(0.3), lineWidth: 1)
+                            )
+                        
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.white)
+                            .rotationEffect(.degrees(45))
+                    }
+                    .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
                 }
                 .buttonStyle(PlainButtonStyle())
             }

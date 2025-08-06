@@ -22,10 +22,8 @@ struct HomeView: View {
     @State private var showingVideoPlayer: Bool = false
     @State private var selectedStory: Story? = nil
     @State private var showingStoryViewer: Bool = false
-    
-    // Enhanced stories data
     @State private var stories: [Story] = Story.sampleStories
-    
+
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
@@ -45,8 +43,12 @@ struct HomeView: View {
                             ProfessionalStoriesSection(
                                 stories: stories,
                                 onStoryTap: { story in
+                                    print("📖 Story tapped: \(story.id) - \(story.creator?.displayName ?? "Unknown")")
+                                    print("📖 Setting selectedStory and showingStoryViewer")
                                     selectedStory = story
                                     showingStoryViewer = true
+                                    print("📖 selectedStory set to: \(selectedStory?.id ?? "nil")")
+                                    print("📖 showingStoryViewer set to: \(showingStoryViewer)")
                                 },
                                 onAddStory: {
                                     // Handle add story
@@ -136,15 +138,24 @@ struct HomeView: View {
             print("🎬 selectedVideo changed: \(oldValue?.title ?? "nil") -> \(newValue?.title ?? "nil")")
         }
         .fullScreenCover(isPresented: $showingStoryViewer) {
-            if let story = selectedStory {
-                StoryViewerView(
-                    stories: stories,
-                    initialStory: story,
-                    onDismiss: {
-                        showingStoryViewer = false
-                        selectedStory = nil
-                    }
-                )
+            // Create a safe story to show - never let it be nil
+            let safeStory = selectedStory ?? stories.first ?? Story.sampleStories.first!
+            let safeStories = stories.isEmpty ? Story.sampleStories : stories
+            
+            StoryViewerView(
+                stories: safeStories,
+                initialStory: safeStory,
+                onDismiss: {
+                    print("📖 Dismissing story viewer")
+                    showingStoryViewer = false
+                    selectedStory = nil
+                }
+            )
+            .onAppear {
+                print("📖 StoryViewerView appeared")
+                print("📖 Safe story: \(safeStory.id)")
+                print("📖 Stories count: \(safeStories.count)")
+                print("📖 selectedStory at presentation: \(selectedStory?.id ?? "nil")")
             }
         }
     }
@@ -340,7 +351,10 @@ struct ProfessionalStoryItem: View {
     @State private var isPressed: Bool = false
     
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            print("📖 ProfessionalStoryItem button tapped for: \(story.creator?.displayName ?? "Unknown")")
+            action()
+        }) {
             VStack(spacing: 8) {
                 ZStack {
                     // Professional gradient ring
@@ -441,8 +455,14 @@ struct ProfessionalStoryItem: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
         .animation(.easeInOut(duration: 0.2), value: story.isViewed)
         .onPressGesture(
-            onPress: { isPressed = true },
-            onRelease: { isPressed = false }
+            onPress: { 
+                isPressed = true
+                print("📖 Story item pressed")
+            },
+            onRelease: { 
+                isPressed = false 
+                print("📖 Story item released")
+            }
         )
         .accessibilityLabel("\(story.creator?.displayName ?? "Unknown")'s story")
         .accessibilityHint(story.isLive ? "Live story" : "Double tap to view story")
@@ -949,7 +969,7 @@ struct ClickableVideoFeedSection: View {
     let videos: [Video]
     let selectedFilter: ContentFilter
     @Binding var watchLaterVideos: Set<String>
-    @Binding var likedVideos: Set<String>;
+    @Binding var likedVideos: Set<String>
     @Binding var isLoading: Bool
     let onVideoTap: (Video) -> Void
     
