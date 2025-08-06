@@ -57,6 +57,7 @@ struct ProfileView: View {
                                 videos: userVideos
                             )
                             .padding(.top, 0)
+                            .background(AppTheme.Colors.background)
                         }
                     }
                     .scrollContentBackground(.hidden)
