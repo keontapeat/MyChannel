@@ -26,9 +26,9 @@ struct DownloadsView: View {
         case .all:
             filtered = premiumService.downloadedVideos
         case .videos:
-            filtered = premiumService.downloadedVideos.filter { !$0.video.isShort }
+            filtered = premiumService.downloadedVideos.filter { $0.video.category != .shorts }
         case .shorts:
-            filtered = premiumService.downloadedVideos.filter { $0.video.isShort }
+            filtered = premiumService.downloadedVideos.filter { $0.video.category == .shorts }
         }
         
         let searched = searchText.isEmpty ? filtered : filtered.filter {

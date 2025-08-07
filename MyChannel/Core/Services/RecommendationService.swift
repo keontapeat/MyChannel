@@ -334,7 +334,7 @@ class SmartRecommendationService: RecommendationServiceProtocol, ObservableObjec
             case 6...9: // Morning
                 return [.news, .education, .fitness]
             case 10...17: // Day
-                return [.technology, .education, .business]
+                return [.technology, .education, .other]
             case 18...22: // Evening
                 return [.entertainment, .gaming, .music]
             case 23...5: // Night

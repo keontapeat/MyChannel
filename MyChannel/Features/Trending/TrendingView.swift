@@ -106,7 +106,7 @@ struct TrendingVideoRow: View {
                 }
                 
                 HStack(spacing: 8) {
-                    Text("\(video.formattedViews) views")
+                    Text("\(video.formattedViewCount) views")
                     Text("•")
                     Text(video.timeAgo)
                 }

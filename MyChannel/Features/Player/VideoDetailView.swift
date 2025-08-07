@@ -516,7 +516,7 @@ struct VideoDetailView: View {
                 
                 // Optimized Stats Row
                 HStack(spacing: 8) {
-                    Label(video.formattedViews, systemImage: "eye")
+                    Label(video.formattedViewCount, systemImage: "eye")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                         .labelStyle(.titleAndIcon)
@@ -1214,7 +1214,7 @@ struct VideoRecommendedVideoRow: View {
                     .foregroundColor(AppTheme.Colors.textSecondary)
                 
                 HStack(spacing: 4) {
-                    Text(video.formattedViews)
+                    Text(video.formattedViewCount)
                         .font(.system(size: 12))
                         .foregroundColor(AppTheme.Colors.textTertiary)
                     

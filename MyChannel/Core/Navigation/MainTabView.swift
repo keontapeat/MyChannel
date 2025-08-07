@@ -59,27 +59,31 @@ struct MainTabView: View {
     
     @ViewBuilder
     private var mainContent: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             // Main Content
             SafeContentView(selectedTab: selectedTab)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(AppTheme.Colors.background)
-            
-            // Floating Mini Player - Simple version
-            SafeFloatingMiniPlayer()
-                .zIndex(999)
+                .zIndex(1)
 
-            // Custom Tab Bar
-            CustomTabBar(
-                selectedTab: $selectedTab,
-                notificationBadges: notificationBadges,
-                isHidden: false,
-                onUploadTap: {
-                    showingUpload = true
-                },
-                onTabSelected: handleTabSelection
-            )
-            .zIndex(1000)
+            // Floating Mini Player - Above content, below tab bar
+            SafeFloatingMiniPlayer()
+                .zIndex(998)
+
+            // Custom Tab Bar - Always on top
+            VStack {
+                Spacer()
+                CustomTabBar(
+                    selectedTab: $selectedTab,
+                    notificationBadges: notificationBadges,
+                    isHidden: false,
+                    onUploadTap: {
+                        showingUpload = true
+                    },
+                    onTabSelected: handleTabSelection
+                )
+            }
+            .zIndex(999)
         }
         .ignoresSafeArea(.keyboard)
         .fullScreenCover(isPresented: $showingUpload) {

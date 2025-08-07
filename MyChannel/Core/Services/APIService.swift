@@ -40,10 +40,9 @@ class APIService: ObservableObject {
             duration: 300,
             viewCount: 0,
             likeCount: 0,
-            commentCount: 0,
             creator: User.sampleUsers[0],
-            tags: metadata.tags,
             category: metadata.category,
+            tags: metadata.tags,
             isPublic: metadata.isPublic
         )
     }

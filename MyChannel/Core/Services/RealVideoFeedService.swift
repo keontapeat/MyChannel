@@ -30,7 +30,7 @@ class RealVideoFeedService: ObservableObject {
             thumbnailURL: "https://ia801504.us.archive.org/11/items/BigBuckBunny_124/BigBuckBunny_124.thumbs/BigBuckBunny_124_000005.jpg",
             videoURL: "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
             duration: 596,
-            category: .animation
+            category: .entertainment
         ),
         VideoSource(
             title: "Sintel - Blender Open Movie",
@@ -38,7 +38,7 @@ class RealVideoFeedService: ObservableObject {
             thumbnailURL: "https://ia601404.us.archive.org/2/items/Sintel/Sintel.thumbs/Sintel_000001.jpg",
             videoURL: "https://archive.org/download/Sintel/Sintel.mp4",
             duration: 888,
-            category: .animation
+            category: .entertainment
         ),
         VideoSource(
             title: "Tears of Steel",
@@ -54,7 +54,7 @@ class RealVideoFeedService: ObservableObject {
             thumbnailURL: "https://ia601508.us.archive.org/10/items/ElephantsDream/ElephantsDream.thumbs/ElephantsDream_000001.jpg",
             videoURL: "https://archive.org/download/ElephantsDream/ed_1024_512kb.mp4",
             duration: 654,
-            category: .art
+            category: .diy
         ),
         // Sample MP4 videos from various sources
         VideoSource(
@@ -63,7 +63,7 @@ class RealVideoFeedService: ObservableObject {
             thumbnailURL: "https://sample-videos.com/zip/10/mp4/480/big_buck_bunny_480p_1mb.jpg",
             videoURL: "https://sample-videos.com/zip/10/mp4/480/big_buck_bunny_480p_1mb.mp4",
             duration: 60,
-            category: .documentary
+            category: .documentaries
         ),
         VideoSource(
             title: "Tech Demo Reel",
@@ -148,21 +148,15 @@ class RealVideoFeedService: ObservableObject {
                 commentCount: Int.random(in: 50...10000),
                 createdAt: Calendar.current.date(byAdding: .hour, value: -Int.random(in: 1...168), to: Date()) ?? Date(),
                 creator: User.sampleUsers[adjustedIndex % User.sampleUsers.count],
-                tags: generateTagsForCategory(source.category),
                 category: source.category,
-                isShort: source.duration < 60,
-                monetization: VideoMonetization(
-                    hasAds: true,
-                    adRevenue: Double.random(in: 100...2000),
-                    tipRevenue: Double.random(in: 50...500)
-                )
+                tags: generateTagsForCategory(source.category)
             )
         }
     }
     
     private func generateTagsForCategory(_ category: VideoCategory) -> [String] {
         switch category {
-        case .animation:
+        case .entertainment:
             return ["Animation", "3D", "Blender", "Art", "Creative"]
         case .technology:
             return ["Tech", "Innovation", "Future", "Digital", "AI"]
@@ -170,12 +164,10 @@ class RealVideoFeedService: ObservableObject {
             return ["Tutorial", "Learning", "Programming", "Skills", "Knowledge"]
         case .music:
             return ["Music", "Beats", "Production", "Audio", "Sound"]
-        case .documentary:
+        case .documentaries:
             return ["Nature", "Wildlife", "Documentary", "Educational", "Planet"]
-        case .art:
+        case .diy:
             return ["Art", "Creative", "Design", "Visual", "Artistic"]
-        case .entertainment:
-            return ["Entertainment", "Fun", "Comedy", "Popular", "Trending"]
         default:
             return ["Video", "Content", "Popular", "Trending"]
         }
@@ -237,7 +229,6 @@ struct VideoSource {
                 await RealVideoFeedService.shared.refreshVideos()
             }
         }
-        .primaryButtonStyle()
         .padding()
         
         Spacer()

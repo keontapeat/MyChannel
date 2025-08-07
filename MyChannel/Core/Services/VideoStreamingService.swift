@@ -87,9 +87,11 @@ class VideoStreamingService: ObservableObject {
                 thumbnailURL: thumbnailURL,
                 videoURL: videoURL,
                 duration: videoInfo.duration,
+                viewCount: 0,
+                likeCount: 0,
                 creator: User.sampleUsers[0], // TODO: Use actual current user
-                tags: tags,
                 category: category,
+                tags: tags,
                 isPublic: isPublic
             )
             

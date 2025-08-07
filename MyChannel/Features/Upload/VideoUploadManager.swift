@@ -160,8 +160,8 @@ class VideoUploadManager: ObservableObject {
             likeCount: 0,
             commentCount: 0,
             creator: User.sampleUsers[0],
-            tags: metadata.tags,
             category: metadata.category,
+            tags: metadata.tags,
             isPublic: metadata.isPublic
         )
         

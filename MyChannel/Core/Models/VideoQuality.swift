@@ -8,7 +8,7 @@
 import SwiftUI
 
 // MARK: - Video Quality Enum
-enum VideoQuality: String, CaseIterable {
+enum VideoQuality: String, CaseIterable, Codable {
     case auto = "Auto"
     case quality144p = "144p"
     case quality240p = "240p"
@@ -18,6 +18,7 @@ enum VideoQuality: String, CaseIterable {
     case quality1080p = "1080p"
     case quality1440p = "1440p"
     case quality2160p = "4K"
+    case quality4K = "4K_Ultra"
     
     var displayName: String {
         switch self {
@@ -30,6 +31,7 @@ enum VideoQuality: String, CaseIterable {
         case .quality1080p: return "1080p"
         case .quality1440p: return "1440p"
         case .quality2160p: return "4K"
+        case .quality4K: return "4K Ultra"
         }
     }
     
@@ -44,6 +46,7 @@ enum VideoQuality: String, CaseIterable {
         case .quality1080p: return (1920, 1080)
         case .quality1440p: return (2560, 1440)
         case .quality2160p: return (3840, 2160)
+        case .quality4K: return (3840, 2160)
         }
     }
     
@@ -58,6 +61,39 @@ enum VideoQuality: String, CaseIterable {
         case .quality1080p: return 5000
         case .quality1440p: return 8000
         case .quality2160p: return 15000
+        case .quality4K: return 25000
         }
     }
+}
+
+#Preview {
+    VStack(spacing: 16) {
+        Text("Video Quality Options")
+            .font(.title)
+            .fontWeight(.bold)
+        
+        ForEach(VideoQuality.allCases, id: \.self) { quality in
+            HStack {
+                Text(quality.displayName)
+                    .font(.headline)
+                
+                Spacer()
+                
+                VStack(alignment: .trailing) {
+                    Text("\(quality.resolution.width) × \(quality.resolution.height)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Text("\(quality.bitrate) kbps")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color(.systemGray6))
+            .cornerRadius(8)
+        }
+    }
+    .padding()
 }

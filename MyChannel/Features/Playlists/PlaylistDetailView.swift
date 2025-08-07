@@ -413,7 +413,7 @@ struct PlaylistVideoRow: View {
                     .foregroundColor(.secondary)
                 
                 HStack {
-                    Text("\(video.formattedViews) views")
+                    Text("\(video.formattedViewCount) views")
                     Text("•")
                     Text(video.formattedDuration)
                 }

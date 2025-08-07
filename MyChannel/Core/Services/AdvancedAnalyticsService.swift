@@ -143,7 +143,7 @@ class AdvancedAnalyticsService: ObservableObject {
                 averageWatchTime: TimeInterval.random(in: 120...600),
                 clickThroughRate: Double.random(in: 2...15),
                 engagementRate: Double.random(in: 3...12),
-                revenue: video.monetization.totalRevenue
+                revenue: Double.random(in: 10...500)
             )
         }
         

@@ -112,7 +112,7 @@ class VideoPlayerManager: ObservableObject {
         cancellables.removeAll()
         
         // Set up time observer with weak self to prevent retain cycle
-        let interval = CMTime(seconds: 0.1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        let interval = CMTime(seconds: 0.5, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self = self, !self.isCleanedUp else { return }
             
@@ -195,6 +195,7 @@ class VideoPlayerManager: ObservableObject {
     // MARK: - Safe Playback Controls
     func play() {
         guard let player = player, !isCleanedUp else { return }
+        
         player.play()
         isPlaying = true
         isLoading = false

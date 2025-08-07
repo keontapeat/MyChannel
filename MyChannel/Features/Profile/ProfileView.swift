@@ -202,8 +202,8 @@ struct ProfileView: View {
                 likeCount: 89,
                 commentCount: 23,
                 creator: user,
-                tags: ["Welcome", "Getting Started"],
-                category: .entertainment
+                category: .entertainment,
+                tags: ["Welcome", "Getting Started"]
             ),
             Video(
                 title: "Behind the Scenes",
@@ -215,8 +215,8 @@ struct ProfileView: View {
                 likeCount: 45,
                 commentCount: 12,
                 creator: user,
-                tags: ["Behind the Scenes"],
-                category: .entertainment
+                category: .entertainment,
+                tags: ["Behind the Scenes"]
             )
         ]
     }

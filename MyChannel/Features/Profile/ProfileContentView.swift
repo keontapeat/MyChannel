@@ -13,22 +13,28 @@ struct ProfileContentView: View {
     let videos: [Video]
     
     var body: some View {
-        Group {
-            switch selectedTab {
-            case .videos:
-                ProfileVideosView(videos: videos)
-            case .shorts:
-                ProfileFlicksView(videos: videos.filter { $0.isShort })
-            case .playlists:
-                ProfilePlaylistsView(user: user)
-            case .community:
-                ProfileCommunityView(user: user)
-            case .about:
-                ProfileAboutView(user: user)
-            }
+        switch selectedTab {
+        case .videos:
+            ProfileVideosView(videos: videos)
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
+        case .shorts:
+            ProfileFlicksView(videos: videos.filter { $0.category == .shorts })
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
+        case .playlists:
+            ProfilePlaylistsView(user: user)
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
+        case .community:
+            ProfileCommunityView(user: user)
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
+        case .about:
+            ProfileAboutView(user: user)
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
         }
-        .transition(.opacity.combined(with: .move(edge: .trailing)))
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
     }
 }
 
@@ -94,8 +100,8 @@ struct ProfileVideoRow: View {
                 
                 // Views and time
                 HStack(spacing: 4) {
-                    Text("\(video.formattedViews) views")
-                        .font(.system(size: 12))
+                    Text("\(video.formattedViewCount) views")
+                        .font(.system(size: 11))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                     
                     Text("•")
@@ -222,7 +228,7 @@ struct ProfileVideoCard: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                 
-                Text("\(video.formattedViews) views")
+                Text("\(video.formattedViewCount) views")
                     .font(.system(size: 11))
                     .foregroundColor(AppTheme.Colors.textSecondary)
                 
@@ -301,7 +307,7 @@ struct ProfileFlickCard: View {
                     .foregroundColor(.white)
                     .lineLimit(2)
                 
-                Text("\(video.formattedViews) views")
+                Text("\(video.formattedViewCount) views")
                     .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.8))
             }

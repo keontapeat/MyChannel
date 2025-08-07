@@ -2,33 +2,126 @@
 //  Video.swift
 //  MyChannel
 //
-//  Created by Keonta on 7/9/25.
+//  Created by AI Assistant on 7/9/25.
 //
 
+import Foundation
 import SwiftUI
 
 // MARK: - Video Model
-struct Video: Identifiable, Codable, Equatable, Hashable {
+struct Video: Identifiable, Codable, Hashable {
     let id: String
-    let title: String
-    let description: String
-    let thumbnailURL: String
-    let videoURL: String
-    let duration: TimeInterval
-    let viewCount: Int
-    let likeCount: Int
-    let dislikeCount: Int
-    let commentCount: Int
-    let createdAt: Date
-    let updatedAt: Date
-    let creator: User
-    let tags: [String]
-    let category: VideoCategory
-    let isPublic: Bool
-    let isLive: Bool
-    let isShort: Bool
-    let isPremium: Bool
-    let monetization: VideoMonetization
+    var title: String
+    var description: String
+    var thumbnailURL: String
+    var videoURL: String
+    var duration: TimeInterval // in seconds
+    var viewCount: Int
+    var likeCount: Int
+    var dislikeCount: Int
+    var commentCount: Int
+    var createdAt: Date
+    var updatedAt: Date
+    let creatorId: String
+    var creator: User
+    var category: VideoCategory
+    var tags: [String]
+    var isPublic: Bool
+    var quality: [VideoQuality]
+    var aspectRatio: AspectRatio
+    var isLiveStream: Bool
+    var scheduledAt: Date?
+    
+    // Enhanced properties for different content types
+    var contentSource: ContentSource?
+    var externalID: String? // For API content
+    var contentRating: ContentRating?
+    var language: String?
+    var subtitles: [SubtitleTrack]?
+    var isVerified: Bool
+    var monetization: MonetizationSettings?
+    
+    // MARK: - Custom Coding Keys
+    private enum CodingKeys: String, CodingKey {
+        case id, title, description, thumbnailURL, videoURL, duration
+        case viewCount, likeCount, dislikeCount, commentCount
+        case createdAt, updatedAt, creatorId, creator, category
+        case tags, isPublic, quality, aspectRatio, isLiveStream
+        case scheduledAt, contentSource, externalID, contentRating
+        case language, subtitles, isVerified, monetization
+    }
+    
+    // MARK: - Custom Decoding
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        description = try container.decode(String.self, forKey: .description)
+        thumbnailURL = try container.decode(String.self, forKey: .thumbnailURL)
+        videoURL = try container.decode(String.self, forKey: .videoURL)
+        duration = try container.decode(TimeInterval.self, forKey: .duration)
+        viewCount = try container.decode(Int.self, forKey: .viewCount)
+        likeCount = try container.decode(Int.self, forKey: .likeCount)
+        dislikeCount = try container.decode(Int.self, forKey: .dislikeCount)
+        commentCount = try container.decode(Int.self, forKey: .commentCount)
+        
+        // Handle Date decoding safely
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+        scheduledAt = try container.decodeIfPresent(Date.self, forKey: .scheduledAt)
+        
+        creatorId = try container.decode(String.self, forKey: .creatorId)
+        creator = try container.decode(User.self, forKey: .creator)
+        category = try container.decode(VideoCategory.self, forKey: .category)
+        tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
+        isPublic = try container.decodeIfPresent(Bool.self, forKey: .isPublic) ?? true
+        quality = try container.decodeIfPresent([VideoQuality].self, forKey: .quality) ?? [.quality720p]
+        aspectRatio = try container.decodeIfPresent(AspectRatio.self, forKey: .aspectRatio) ?? .landscape
+        isLiveStream = try container.decodeIfPresent(Bool.self, forKey: .isLiveStream) ?? false
+        
+        contentSource = try container.decodeIfPresent(ContentSource.self, forKey: .contentSource)
+        externalID = try container.decodeIfPresent(String.self, forKey: .externalID)
+        contentRating = try container.decodeIfPresent(ContentRating.self, forKey: .contentRating)
+        language = try container.decodeIfPresent(String.self, forKey: .language)
+        subtitles = try container.decodeIfPresent([SubtitleTrack].self, forKey: .subtitles)
+        isVerified = try container.decodeIfPresent(Bool.self, forKey: .isVerified) ?? false
+        monetization = try container.decodeIfPresent(MonetizationSettings.self, forKey: .monetization)
+    }
+    
+    // MARK: - Custom Encoding
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        try container.encode(description, forKey: .description)
+        try container.encode(thumbnailURL, forKey: .thumbnailURL)
+        try container.encode(videoURL, forKey: .videoURL)
+        try container.encode(duration, forKey: .duration)
+        try container.encode(viewCount, forKey: .viewCount)
+        try container.encode(likeCount, forKey: .likeCount)
+        try container.encode(dislikeCount, forKey: .dislikeCount)
+        try container.encode(commentCount, forKey: .commentCount)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encodeIfPresent(scheduledAt, forKey: .scheduledAt)
+        try container.encode(creatorId, forKey: .creatorId)
+        try container.encode(creator, forKey: .creator)
+        try container.encode(category, forKey: .category)
+        try container.encode(tags, forKey: .tags)
+        try container.encode(isPublic, forKey: .isPublic)
+        try container.encode(quality, forKey: .quality)
+        try container.encode(aspectRatio, forKey: .aspectRatio)
+        try container.encode(isLiveStream, forKey: .isLiveStream)
+        try container.encodeIfPresent(contentSource, forKey: .contentSource)
+        try container.encodeIfPresent(externalID, forKey: .externalID)
+        try container.encodeIfPresent(contentRating, forKey: .contentRating)
+        try container.encodeIfPresent(language, forKey: .language)
+        try container.encodeIfPresent(subtitles, forKey: .subtitles)
+        try container.encode(isVerified, forKey: .isVerified)
+        try container.encodeIfPresent(monetization, forKey: .monetization)
+    }
     
     init(
         id: String = UUID().uuidString,
@@ -37,20 +130,27 @@ struct Video: Identifiable, Codable, Equatable, Hashable {
         thumbnailURL: String,
         videoURL: String,
         duration: TimeInterval,
-        viewCount: Int = 0,
-        likeCount: Int = 0,
+        viewCount: Int,
+        likeCount: Int,
         dislikeCount: Int = 0,
         commentCount: Int = 0,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         creator: User,
+        category: VideoCategory,
         tags: [String] = [],
-        category: VideoCategory = .entertainment,
         isPublic: Bool = true,
-        isLive: Bool = false,
-        isShort: Bool = false,
-        isPremium: Bool = false,
-        monetization: VideoMonetization = VideoMonetization()
+        quality: [VideoQuality] = [.quality720p],
+        aspectRatio: AspectRatio = .landscape,
+        isLiveStream: Bool = false,
+        scheduledAt: Date? = nil,
+        contentSource: ContentSource? = nil,
+        externalID: String? = nil,
+        contentRating: ContentRating? = nil,
+        language: String? = nil,
+        subtitles: [SubtitleTrack]? = nil,
+        isVerified: Bool = false,
+        monetization: MonetizationSettings? = nil
     ) {
         self.id = id
         self.title = title
@@ -64,140 +164,39 @@ struct Video: Identifiable, Codable, Equatable, Hashable {
         self.commentCount = commentCount
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.creatorId = creator.id
         self.creator = creator
-        self.tags = tags
         self.category = category
+        self.tags = tags
         self.isPublic = isPublic
-        self.isLive = isLive
-        self.isShort = isShort
-        self.isPremium = isPremium
+        self.quality = quality
+        self.aspectRatio = aspectRatio
+        self.isLiveStream = isLiveStream
+        self.scheduledAt = scheduledAt
+        self.contentSource = contentSource
+        self.externalID = externalID
+        self.contentRating = contentRating
+        self.language = language
+        self.subtitles = subtitles
+        self.isVerified = isVerified
         self.monetization = monetization
     }
     
-    // MARK: - Equatable
-    static func == (lhs: Video, rhs: Video) -> Bool {
-        lhs.id == rhs.id
-    }
-    
-    // MARK: - Hashable
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-}
-
-// MARK: - Video Category Enum
-enum VideoCategory: String, CaseIterable, Codable {
-    case entertainment = "entertainment"
-    case education = "education"
-    case gaming = "gaming"
-    case music = "music"
-    case news = "news"
-    case sports = "sports"
-    case technology = "technology"
-    case lifestyle = "lifestyle"
-    case cooking = "cooking"
-    case travel = "travel"
-    case fitness = "fitness"
-    case beauty = "beauty"
-    case fashion = "fashion"
-    case diy = "diy"
-    case business = "business"
-    case science = "science"
-    case comedy = "comedy"
-    case art = "art"
-    case animation = "animation"
-    case documentary = "documentary"
-    
-    var displayName: String {
-        switch self {
-        case .entertainment: return "Entertainment"
-        case .education: return "Education"
-        case .gaming: return "Gaming"
-        case .music: return "Music"
-        case .news: return "News"
-        case .sports: return "Sports"
-        case .technology: return "Technology"
-        case .lifestyle: return "Lifestyle"
-        case .cooking: return "Cooking"
-        case .travel: return "Travel"
-        case .fitness: return "Fitness"
-        case .beauty: return "Beauty"
-        case .fashion: return "Fashion"
-        case .diy: return "DIY & Crafts"
-        case .business: return "Business"
-        case .science: return "Science"
-        case .comedy: return "Comedy"
-        case .art: return "Art"
-        case .animation: return "Animation"
-        case .documentary: return "Documentary"
-        }
-    }
-    
-    var iconName: String {
-        switch self {
-        case .entertainment: return "tv"
-        case .education: return "graduationcap"
-        case .gaming: return "gamecontroller"
-        case .music: return "music.note"
-        case .news: return "newspaper"
-        case .sports: return "sportscourt"
-        case .technology: return "laptopcomputer"
-        case .lifestyle: return "house"
-        case .cooking: return "fork.knife"
-        case .travel: return "airplane"
-        case .fitness: return "figure.run"
-        case .beauty: return "sparkles"
-        case .fashion: return "tshirt"
-        case .diy: return "hammer"
-        case .business: return "briefcase"
-        case .science: return "flask"
-        case .comedy: return "theatermasks"
-        case .art: return "paintbrush"
-        case .animation: return "play.circle"
-        case .documentary: return "doc.text"
-        }
-    }
-}
-
-// MARK: - Video Monetization Model
-struct VideoMonetization: Codable, Equatable {
-    let hasAds: Bool
-    let adRevenue: Double
-    let tipRevenue: Double
-    let membershipRevenue: Double
-    let totalRevenue: Double
-    
-    init(
-        hasAds: Bool = false,
-        adRevenue: Double = 0.0,
-        tipRevenue: Double = 0.0,
-        membershipRevenue: Double = 0.0
-    ) {
-        self.hasAds = hasAds
-        self.adRevenue = adRevenue
-        self.tipRevenue = tipRevenue
-        self.membershipRevenue = membershipRevenue
-        self.totalRevenue = adRevenue + tipRevenue + membershipRevenue
-    }
-    
-    // MARK: - Equatable
-    static func == (lhs: VideoMonetization, rhs: VideoMonetization) -> Bool {
-        lhs.hasAds == rhs.hasAds &&
-        lhs.adRevenue == rhs.adRevenue &&
-        lhs.tipRevenue == rhs.tipRevenue &&
-        lhs.membershipRevenue == rhs.membershipRevenue
-    }
-}
-
-// MARK: - Video Extensions
-extension Video {
+    // MARK: - Computed Properties
     var formattedDuration: String {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        
+        if minutes >= 60 {
+            let hours = minutes / 60
+            let remainingMinutes = minutes % 60
+            return String(format: "%d:%02d:%02d", hours, remainingMinutes, seconds)
+        } else {
+            return String(format: "%d:%02d", minutes, seconds)
+        }
     }
     
-    var formattedViews: String {
+    var formattedViewCount: String {
         if viewCount >= 1_000_000 {
             return String(format: "%.1fM", Double(viewCount) / 1_000_000)
         } else if viewCount >= 1_000 {
@@ -207,242 +206,656 @@ extension Video {
         }
     }
     
+    var formattedLikeCount: String {
+        if likeCount >= 1_000_000 {
+            return String(format: "%.1fM", Double(likeCount) / 1_000_000)
+        } else if likeCount >= 1_000 {
+            return String(format: "%.1fK", Double(likeCount) / 1_000)
+        } else {
+            return "\(likeCount)"
+        }
+    }
+    
     var timeAgo: String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: createdAt, relativeTo: Date())
     }
+    
+    var isNew: Bool {
+        Date().timeIntervalSince(createdAt) < 24 * 60 * 60 // Less than 24 hours
+    }
+    
+    var isTrending: Bool {
+        viewCount > 100_000 && Date().timeIntervalSince(createdAt) < 7 * 24 * 60 * 60 // High views in last week
+    }
+    
+    var isShort: Bool {
+        duration <= 60 // Videos 60 seconds or less are considered shorts
+    }
+    
+    var isLive: Bool {
+        isLiveStream && scheduledAt != nil && Date() >= (scheduledAt ?? Date())
+    }
+    
+    var likeRatio: Double {
+        let total = likeCount + dislikeCount
+        return total > 0 ? Double(likeCount) / Double(total) : 0.0
+    }
+    
+    // MARK: - AspectRatio Enum
+    enum AspectRatio: String, Codable, CaseIterable {
+        case landscape = "16:9"
+        case portrait = "9:16"
+        case square = "1:1"
+        case ultrawide = "21:9"
+        
+        var ratio: CGFloat {
+            switch self {
+            case .landscape: return 16/9
+            case .portrait: return 9/16
+            case .square: return 1/1
+            case .ultrawide: return 21/9
+            }
+        }
+    }
+    
+    // MARK: - Content Source
+    enum ContentSource: String, Codable, CaseIterable {
+        case userUploaded = "user_uploaded"
+        case tmdb = "tmdb"
+        case omdb = "omdb"
+        case jikan = "jikan" // MyAnimeList
+        case anilist = "anilist"
+        case archive = "archive_org"
+        case youtube = "youtube"
+        case vimeo = "vimeo"
+        case twitch = "twitch"
+        case dailymotion = "dailymotion"
+        
+        var displayName: String {
+            switch self {
+            case .userUploaded: return "User Upload"
+            case .tmdb: return "The Movie Database"
+            case .omdb: return "Open Movie Database"
+            case .jikan: return "MyAnimeList"
+            case .anilist: return "AniList"
+            case .archive: return "Archive.org"
+            case .youtube: return "YouTube"
+            case .vimeo: return "Vimeo"
+            case .twitch: return "Twitch"
+            case .dailymotion: return "Dailymotion"
+            }
+        }
+        
+        var iconName: String {
+            switch self {
+            case .userUploaded: return "person.crop.circle"
+            case .tmdb: return "tv"
+            case .omdb: return "film"
+            case .jikan, .anilist: return "sparkles.tv"
+            case .archive: return "archivebox"
+            case .youtube: return "play.rectangle"
+            case .vimeo: return "v.circle"
+            case .twitch: return "gamecontroller"
+            case .dailymotion: return "play.circle"
+            }
+        }
+    }
+    
+    // MARK: - Content Rating
+    enum ContentRating: String, Codable, CaseIterable {
+        case G = "G"           // General Audiences
+        case PG = "PG"         // Parental Guidance
+        case PG13 = "PG-13"    // Parents Strongly Cautioned
+        case R = "R"           // Restricted
+        case NC17 = "NC-17"    // Adults Only
+        case TV_Y = "TV-Y"     // All Children
+        case TV_Y7 = "TV-Y7"   // Children 7+
+        case TV_G = "TV-G"     // General Audience
+        case TV_PG = "TV-PG"   // Parental Guidance
+        case TV_14 = "TV-14"   // Parents Strongly Cautioned
+        case TV_MA = "TV-MA"   // Mature Audience
+        
+        var description: String {
+            switch self {
+            case .G: return "General Audiences"
+            case .PG: return "Parental Guidance Suggested"
+            case .PG13: return "Parents Strongly Cautioned"
+            case .R: return "Restricted"
+            case .NC17: return "Adults Only"
+            case .TV_Y: return "All Children"
+            case .TV_Y7: return "Directed to Children 7+"
+            case .TV_G: return "General Audience"
+            case .TV_PG: return "Parental Guidance Suggested"
+            case .TV_14: return "Parents Strongly Cautioned"
+            case .TV_MA: return "Mature Audience Only"
+            }
+        }
+        
+        var color: Color {
+            switch self {
+            case .G, .TV_Y, .TV_G: return .green
+            case .PG, .TV_Y7, .TV_PG: return .blue
+            case .PG13, .TV_14: return .orange
+            case .R, .TV_MA: return .red
+            case .NC17: return .purple
+            }
+        }
+    }
+    
+    // MARK: - Subtitle Track
+    struct SubtitleTrack: Codable, Identifiable {
+        let id: String
+        let language: String
+        let languageCode: String
+        let url: String
+        let isDefault: Bool
+        
+        init(language: String, languageCode: String, url: String, isDefault: Bool) {
+            self.id = UUID().uuidString
+            self.language = language
+            self.languageCode = languageCode
+            self.url = url
+            self.isDefault = isDefault
+        }
+        
+        private enum CodingKeys: String, CodingKey {
+            case id, language, languageCode, url, isDefault
+        }
+    }
+    
+    // MARK: - Monetization Settings
+    struct MonetizationSettings: Codable {
+        let isMonetized: Bool
+        let adBreaks: [AdBreak]
+        let sponsorSegments: [SponsorSegment]
+        let merchandise: [MerchandiseItem]?
+        let donationEnabled: Bool
+        let subscriptionTier: SubscriptionTier?
+        let totalRevenue: Double // Add this property
+        
+        init(
+            isMonetized: Bool = false,
+            adBreaks: [AdBreak] = [],
+            sponsorSegments: [SponsorSegment] = [],
+            merchandise: [MerchandiseItem]? = nil,
+            donationEnabled: Bool = false,
+            subscriptionTier: SubscriptionTier? = nil,
+            totalRevenue: Double = 0.0
+        ) {
+            self.isMonetized = isMonetized
+            self.adBreaks = adBreaks
+            self.sponsorSegments = sponsorSegments
+            self.merchandise = merchandise
+            self.donationEnabled = donationEnabled
+            self.subscriptionTier = subscriptionTier
+            self.totalRevenue = totalRevenue
+        }
+        
+        struct AdBreak: Codable {
+            let timeStamp: TimeInterval
+            let duration: TimeInterval
+            let type: AdType
+            
+            enum AdType: String, Codable {
+                case preRoll = "pre_roll"
+                case midRoll = "mid_roll"
+                case postRoll = "post_roll"
+                case overlay = "overlay"
+            }
+        }
+        
+        struct SponsorSegment: Codable {
+            let startTime: TimeInterval
+            let endTime: TimeInterval
+            let sponsor: String
+            let category: SponsorCategory
+            
+            enum SponsorCategory: String, Codable {
+                case sponsor = "sponsor"
+                case selfPromo = "self_promo"
+                case interaction = "interaction"
+                case intro = "intro"
+                case outro = "outro"
+                case preview = "preview"
+            }
+        }
+        
+        struct MerchandiseItem: Codable {
+            let name: String
+            let description: String
+            let price: Double
+            let currency: String
+            let imageURL: String
+            let purchaseURL: String
+        }
+        
+        enum SubscriptionTier: String, Codable {
+            case free = "free"
+            case basic = "basic"
+            case premium = "premium"
+            case exclusive = "exclusive"
+        }
+    }
+    
+    // MARK: - Hashable
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
+    // MARK: - Equatable
+    static func == (lhs: Video, rhs: Video) -> Bool {
+        return lhs.id == rhs.id
+    }
+}
+
+// MARK: - Video Category
+enum VideoCategory: String, Codable, CaseIterable {
+    case movies = "movies"
+    case tvShows = "tv_shows"
+    case anime = "anime"
+    case mukbang = "mukbang"
+    case documentaries = "documentaries"
+    case shorts = "shorts"
+    case gaming = "gaming"
+    case music = "music"
+    case cooking = "cooking"
+    case lifestyle = "lifestyle"
+    case education = "education"
+    case technology = "technology"
+    case sports = "sports"
+    case news = "news"
+    case comedy = "comedy"
+    case beauty = "beauty"
+    case travel = "travel"
+    case fitness = "fitness"
+    case diy = "diy"
+    case pets = "pets"
+    case art = "art"
+    case entertainment = "entertainment"
+    case other = "other"
+    
+    var displayName: String {
+        switch self {
+        case .movies: return "Movies"
+        case .tvShows: return "TV Shows"
+        case .anime: return "Anime"
+        case .mukbang: return "Mukbang"
+        case .documentaries: return "Documentaries"
+        case .shorts: return "Shorts"
+        case .gaming: return "Gaming"
+        case .music: return "Music"
+        case .cooking: return "Cooking"
+        case .lifestyle: return "Lifestyle"
+        case .education: return "Education"
+        case .technology: return "Technology"
+        case .sports: return "Sports"
+        case .news: return "News"
+        case .comedy: return "Comedy"
+        case .beauty: return "Beauty & Fashion"
+        case .travel: return "Travel"
+        case .fitness: return "Fitness & Health"
+        case .diy: return "DIY & Crafts"
+        case .pets: return "Pets & Animals"
+        case .art: return "Art & Design"
+        case .entertainment: return "Entertainment"
+        case .other: return "Other"
+        }
+    }
+    
+    var iconName: String {
+        switch self {
+        case .movies: return "tv"
+        case .tvShows: return "tv.and.hifispeaker.fill"
+        case .anime: return "sparkles.tv"
+        case .mukbang: return "fork.knife"
+        case .documentaries: return "doc.on.doc"
+        case .shorts: return "rectangle.portrait"
+        case .gaming: return "gamecontroller"
+        case .music: return "music.note"
+        case .cooking: return "chef.hat"
+        case .lifestyle: return "heart.fill"
+        case .education: return "graduationcap"
+        case .technology: return "laptopcomputer"
+        case .sports: return "soccerball"
+        case .news: return "newspaper"
+        case .comedy: return "theatermasks"
+        case .beauty: return "paintbrush"
+        case .travel: return "airplane"
+        case .fitness: return "figure.run"
+        case .diy: return "hammer"
+        case .pets: return "pawprint"
+        case .art: return "paintbrush.pointed"
+        case .entertainment: return "sparkles"
+        case .other: return "ellipsis"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .movies, .tvShows: return .blue
+        case .anime: return .purple
+        case .mukbang, .cooking: return .orange
+        case .documentaries, .education: return .green
+        case .shorts: return .pink
+        case .gaming: return .red
+        case .music: return .indigo
+        case .lifestyle, .beauty: return .mint
+        case .technology: return .cyan
+        case .sports, .fitness: return .red
+        case .news: return .gray
+        case .comedy: return .yellow
+        case .travel: return .teal
+        case .diy: return .brown
+        case .pets: return .orange
+        case .art: return .purple
+        case .entertainment: return .purple
+        case .other: return .secondary
+        }
+    }
 }
 
 // MARK: - Sample Data
 extension Video {
-    static let sampleVideos: [Video] = [
-        Video(
-            title: "Big Buck Bunny - Official Short Film",
-            description: "Follow a day of the life of Big Buck Bunny when he meets three bullying rodents: Frank, Rinky, and Gamera. The rodents amuse themselves by harassing helpless creatures by throwing fruits, nuts and rocks at them.",
-            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg",
-            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-            duration: 596, // 9:56
-            viewCount: 2456780,
-            likeCount: 78900,
-            dislikeCount: 1245,
-            commentCount: 8934,
-            createdAt: Calendar.current.date(byAdding: .day, value: -2, to: Date()) ?? Date(),
-            creator: User.sampleUsers[0],
-            tags: ["Animation", "Short Film", "Comedy", "Classic"],
-            category: .animation,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 1245.50, tipRevenue: 389.00)
-        ),
-        Video(
-            title: "Elephant's Dream - Blender Foundation",
-            description: "The story of two strange characters exploring a capricious and seemingly infinite machine. The elder, Proog, acts as a tour-guide and protector, happily showing off the sights and dangers of the machine to his initially curious but increasingly skeptical protege Emo.",
-            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ElephantsDream.jpg",
-            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-            duration: 654, // 10:54
-            viewCount: 1567890,
-            likeCount: 45600,
-            dislikeCount: 567,
-            commentCount: 3456,
-            createdAt: Calendar.current.date(byAdding: .hour, value: -8, to: Date()) ?? Date(),
-            creator: User.sampleUsers[1],
-            tags: ["Animation", "3D", "Blender", "Art", "Experimental"],
-            category: .art,
-            isShort: false,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 987.20, tipRevenue: 234.00, membershipRevenue: 156.00)
-        ),
-        Video(
-            title: "For Bigger Blazes - Fire Safety",
-            description: "HBO GO now works with Chromecast -- the easiest way to enjoy online video on your TV. For when you want to settle into your Iron Throne to watch the latest episodes. For $35. Learn how to use Chromecast with HBO GO and more at google.com/chromecast.",
-            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerBlazes.jpg",
-            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-            duration: 15, // 0:15
-            viewCount: 892340,
-            likeCount: 25600,
-            dislikeCount: 890,
-            commentCount: 1234,
-            createdAt: Calendar.current.date(byAdding: .minute, value: -45, to: Date()) ?? Date(),
-            creator: User.sampleUsers[0],
-            tags: ["Technology", "Streaming", "Commercial", "Short"],
-            category: .technology,
-            isShort: true,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 456.80, tipRevenue: 123.00)
-        ),
-        Video(
-            title: "For Bigger Escapes - Travel Adventures",
-            description: "Introducing Chromecast. The easiest way to enjoy online video and music on your TV—for when Batman's escapes aren't quite big enough. For $35. Learn how to use Chromecast with Google Play Movies and more at google.com/chromecast.",
-            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerEscapes.jpg",
-            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-            duration: 15, // 0:15
-            viewCount: 567890,
-            likeCount: 18500,
-            dislikeCount: 234,
-            commentCount: 789,
-            createdAt: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date(),
-            creator: User.sampleUsers[2],
-            tags: ["Travel", "Adventure", "Technology", "Commercial"],
-            category: .travel,
-            isShort: true,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 234.50, tipRevenue: 67.00)
-        ),
-        Video(
-            title: "Sintel - Blender Open Movie",
-            description: "A lonely young woman, Sintel, helps and befriends a dragon, whom she calls Scales. But when he is kidnapped by an adult dragon, Sintel decides to embark on a dangerous quest to find her lost friend Scales.",
-            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/Sintel.jpg",
-            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-            duration: 888, // 14:48
-            viewCount: 3456789,
-            likeCount: 125000,
-            dislikeCount: 2340,
-            commentCount: 15678,
-            createdAt: Calendar.current.date(byAdding: .hour, value: -3, to: Date()) ?? Date(),
-            creator: User.sampleUsers[1],
-            tags: ["Animation", "Fantasy", "Dragon", "Adventure", "Blender"],
-            category: .animation,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 2456.20, tipRevenue: 890.00, membershipRevenue: 456.00)
-        ),
-        Video(
-            title: "Subaru Outback On Street And Dirt",
-            description: "Smoking Tire takes the all-new Subaru Outback to the highest point we can find in hopes our customer-appreciation barbecue for one would somehow make us more appreciated.",
-            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/SubaruOutbackOnStreetAndDirt.jpg",
-            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4",
-            duration: 596, // 9:56
-            viewCount: 1234567,
-            likeCount: 45600,
-            dislikeCount: 1200,
-            commentCount: 3456,
-            createdAt: Calendar.current.date(byAdding: .day, value: -3, to: Date()) ?? Date(),
-            creator: User.sampleUsers[2],
-            tags: ["Cars", "Review", "Subaru", "Adventure", "Automotive"],
-            category: .entertainment,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 1567.80, tipRevenue: 345.00)
-        ),
-        Video(
-            title: "Tears of Steel - Sci-Fi Short",
-            description: "Tears of Steel was realized with crowd-funding by users of the open source 3D creation tool Blender. Target was to improve and test a complete open and free pipeline for visual effects in film.",
-            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/TearsOfSteel.jpg",
-            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-            duration: 734, // 12:14
-            viewCount: 2345678,
-            likeCount: 89000,
-            dislikeCount: 1567,
-            commentCount: 7890,
-            createdAt: Calendar.current.date(byAdding: .hour, value: -12, to: Date()) ?? Date(),
-            creator: User.sampleUsers[3],
-            tags: ["Sci-Fi", "Short Film", "Blender", "Visual Effects", "Future"],
-            category: .entertainment,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 1890.50, tipRevenue: 567.00)
-        ),
-        Video(
-            title: "Volkswagen GTI Review",
-            description: "The Smoking Tire heads out to Adams Motorsports Park in Riverside, CA to test the most requested car of 2010, the Volkswagen GTI. Will it beat the Mazdaspeed3's standard-setting lap time?",
-            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/VolkswagenGTIReview.jpg",
-            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4",
-            duration: 607, // 10:07
-            viewCount: 789123,
-            likeCount: 34500,
-            dislikeCount: 678,
-            commentCount: 2345,
-            createdAt: Calendar.current.date(byAdding: .day, value: -4, to: Date()) ?? Date(),
-            creator: User.sampleUsers[0],
-            tags: ["Cars", "Review", "Volkswagen", "GTI", "Performance"],
-            category: .entertainment,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 1234.20, tipRevenue: 456.00)
-        ),
-        Video(
-            title: "We Are Going On Bullrun",
-            description: "The Smoking Tire is going on the 2010 Bullrun Live Rally in a 2011 Shelby GT500, and posting a video from the road every single day! The only place to watch them is by subscribing to The Smoking Tire or watching at BlackMagicShine.com",
-            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/WeAreGoingOnBullrun.jpg",
-            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
-            duration: 78, // 1:18
-            viewCount: 456789,
-            likeCount: 23400,
-            dislikeCount: 345,
-            commentCount: 1234,
-            createdAt: Calendar.current.date(byAdding: .hour, value: -2, to: Date()) ?? Date(),
-            creator: User.sampleUsers[2],
-            tags: ["Cars", "Rally", "Adventure", "Shelby", "Road Trip"],
-            category: .entertainment,
-            isShort: true,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 345.80, tipRevenue: 123.00)
-        ),
-        Video(
-            title: "What Car Can You Get For A Grand?",
-            description: "The Smoking Tire meets up with Chris and Jorge from CarsForAGrand.com to see just how far $1,000 can go when looking for a car. The guys test a $1,000 car with the World Speed Record for a car under $1,000.",
-            thumbnailURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/WhatCarCanYouGetForAGrand.jpg",
-            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4",
-            duration: 596, // 9:56
-            viewCount: 1567890,
-            likeCount: 67800,
-            dislikeCount: 890,
-            commentCount: 4567,
-            createdAt: Calendar.current.date(byAdding: .minute, value: -30, to: Date()) ?? Date(),
-            creator: User.sampleUsers[3],
-            tags: ["Cars", "Budget", "Review", "Challenge", "Automotive"],
-            category: .entertainment,
-            monetization: VideoMonetization(hasAds: true, adRevenue: 890.50, tipRevenue: 234.00)
-        )
-    ]
+    static var sampleVideos: [Video] {
+        let creators = User.sampleUsers
+        
+        var videos = [
+            // Movies
+            Video(
+                title: "Epic Adventure: The Lost Kingdom",
+                description: "Join our heroes on an epic quest to find the lost kingdom and restore peace to the realm. Featuring stunning visuals and an engaging storyline.",
+                thumbnailURL: "https://images.unsplash.com/photo-1489599511895-42ac8d2e6286?w=500",
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                duration: 596, // 9:56 minutes
+                viewCount: 1250000,
+                likeCount: 98500,
+                creator: creators[0],
+                category: .movies,
+                tags: ["adventure", "fantasy", "epic", "kingdom"],
+                contentSource: .archive,
+                contentRating: .PG13,
+                language: "English"
+            ),
+            
+            // Anime
+            Video(
+                title: "Sakura Academy Episode 12: Festival Night",
+                description: "The annual cherry blossom festival arrives at Sakura Academy! Watch as our characters navigate friendship, romance, and magical adventures under the moonlight.",
+                thumbnailURL: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500",
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+                duration: 653, // 10:53 minutes
+                viewCount: 856000,
+                likeCount: 125000,
+                creator: User(
+                    username: "SakuraStudio",
+                    displayName: "Sakura Animation Studio",
+                    email: "contact@sakurastudio.com",
+                    profileImageURL: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=150"
+                ),
+                category: .anime,
+                tags: ["anime", "school", "festival", "romance", "slice of life"],
+                contentSource: .jikan,
+                externalID: "sakura_academy_12",
+                contentRating: .TV_PG,
+                language: "Japanese",
+                subtitles: [
+                    SubtitleTrack(language: "English", languageCode: "en", url: "https://example.com/subtitles/en.vtt", isDefault: true),
+                    SubtitleTrack(language: "Spanish", languageCode: "es", url: "https://example.com/subtitles/es.vtt", isDefault: false)
+                ]
+            ),
+            
+            // Mukbang
+            Video(
+                title: "ASMR Mukbang: Korean BBQ Feast 🥩",
+                description: "Join me for a delicious Korean BBQ mukbang! Featuring marinated bulgogi, spicy kimchi, fresh lettuce wraps, and satisfying ASMR eating sounds.",
+                thumbnailURL: "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=500",
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+                duration: 15, // 15 seconds
+                viewCount: 2340000,
+                likeCount: 187000,
+                creator: User(
+                    username: "KoreanFoodieASMR",
+                    displayName: "Korean Foodie ASMR 🍽️",
+                    email: "hello@koreanfoodieasmr.com",
+                    profileImageURL: "https://images.unsplash.com/photo-1494790108755-2616b612b742?w=150"
+                ),
+                category: .mukbang,
+                tags: ["mukbang", "asmr", "korean food", "bbq", "eating sounds"],
+                contentSource: .userUploaded,
+                contentRating: .TV_G,
+                language: "Korean",
+                isVerified: true
+            ),
+            
+            Video(
+                title: "Spicy Fire Noodle Challenge Mukbang 🔥",
+                description: "Taking on the extreme spicy fire noodle challenge! Watch me struggle through the heat with milk, ice cream, and lots of tissues ready. Can I finish it all?",
+                thumbnailURL: "https://images.unsplash.com/photo-1555126634-323283e090fa?w=500",
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+                duration: 15, // 15 seconds
+                viewCount: 3450000,
+                likeCount: 456000,
+                creator: User(
+                    username: "SpicyEatsChallenge",
+                    displayName: "Spicy Eats Challenge 🌶️",
+                    email: "spicy@eatschallenge.com",
+                    profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150"
+                ),
+                category: .mukbang,
+                tags: ["mukbang", "spicy", "noodles", "challenge", "fire noodles"],
+                contentSource: .userUploaded,
+                contentRating: .TV_PG
+            ),
+            
+            // More content categories...
+            Video(
+                title: "Homemade Ramen: From Scratch Tutorial",
+                description: "Learn how to make authentic Japanese ramen from scratch! Including the perfect broth, handmade noodles, and traditional toppings.",
+                thumbnailURL: "https://images.unsplash.com/photo-1557872943-16a5ac26437e?w=500",
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+                duration: 15, // 15 seconds
+                viewCount: 567000,
+                likeCount: 67800,
+                creator: creators[2],
+                category: .cooking,
+                tags: ["cooking", "ramen", "japanese", "tutorial", "homemade"],
+                contentSource: .userUploaded,
+                contentRating: .TV_G
+            ),
+            
+            Video(
+                title: "Quick Morning Routine for Productivity",
+                description: "Transform your mornings with this efficient 30-minute routine that will boost your productivity and energy for the entire day!",
+                thumbnailURL: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500",
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
+                duration: 15, // 15 seconds
+                viewCount: 890000,
+                likeCount: 78900,
+                creator: creators[3],
+                category: .lifestyle,
+                tags: ["lifestyle", "morning routine", "productivity", "wellness"],
+                contentSource: .userUploaded,
+                contentRating: .TV_G
+            )
+        ]
+        
+        // Add art videos to the main sample data
+        videos.append(contentsOf: artVideos)
+        
+        return videos
+    }
+    
+    // Additional art videos for sample data
+    static var artVideos: [Video] {
+        let creators = User.sampleUsers
+        
+        return [
+            Video(
+                title: "Digital Portrait Tutorial: Realistic Eye Drawing",
+                description: "Learn how to draw realistic eyes in this step-by-step digital art tutorial. Perfect for beginners who want to improve their portrait skills.",
+                thumbnailURL: "https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=500",
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
+                duration: 15, // 15 seconds
+                viewCount: 425000,
+                likeCount: 34500,
+                creator: User(
+                    username: "DigitalArtMaster",
+                    displayName: "Digital Art Master 🎨",
+                    email: "hello@digitalartmaster.com",
+                    profileImageURL: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150"
+                ),
+                category: .art,
+                tags: ["art", "digital", "tutorial", "portrait", "drawing"],
+                contentSource: .userUploaded,
+                contentRating: .TV_G
+            ),
+            
+            Video(
+                title: "Watercolor Landscape: Mountain Sunrise",
+                description: "Paint a breathtaking mountain sunrise scene using watercolor techniques. Learn blending, color theory, and atmospheric perspective.",
+                thumbnailURL: "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=500",
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+                duration: 888, // 14:48 minutes
+                viewCount: 678000,
+                likeCount: 52300,
+                creator: User(
+                    username: "WatercolorWonders",
+                    displayName: "Watercolor Wonders 🌈",
+                    email: "paint@watercolorwonders.com",
+                    profileImageURL: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150"
+                ),
+                category: .art,
+                tags: ["art", "watercolor", "landscape", "painting", "tutorial"],
+                contentSource: .userUploaded,
+                contentRating: .TV_G,
+                isVerified: true
+            ),
+            
+            Video(
+                title: "3D Character Design Speedrun",
+                description: "Watch as I create a complete 3D character from concept to final render in just one hour! Using Blender 3D modeling techniques.",
+                thumbnailURL: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500",
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+                duration: 734, // 12:14 minutes
+                viewCount: 892000,
+                likeCount: 78900,
+                creator: User(
+                    username: "Blender3DPro",
+                    displayName: "Blender 3D Pro 🔥",
+                    email: "create@blender3dpro.com",
+                    profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150"
+                ),
+                category: .art,
+                tags: ["art", "3d", "blender", "character design", "speedrun"],
+                contentSource: .userUploaded,
+                contentRating: .TV_G
+            )
+        ]
+    }
 }
 
 #Preview {
     ScrollView {
-        VStack(spacing: 16) {
-            Text("Video Models")
-                .font(AppTheme.Typography.largeTitle)
-                .padding()
+        LazyVStack(spacing: 16) {
+            Text("Video System")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+                .padding(.top)
             
-            ForEach(Video.sampleVideos) { video in
+            ForEach(Video.sampleVideos.prefix(3)) { video in
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(16/9, contentMode: .fill)
-                        } placeholder: {
-                            Rectangle()
-                                .fill(AppTheme.Colors.surface)
-                                .aspectRatio(16/9, contentMode: .fill)
-                        }
-                        .frame(width: 120, height: 68)
-                        .cornerRadius(AppTheme.CornerRadius.sm)
+                    AsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(16/9, contentMode: .fill)
+                    } placeholder: {
+                        Rectangle()
+                            .fill(Color(.systemGray5))
+                            .aspectRatio(16/9, contentMode: .fill)
+                            .overlay(
+                                Image(systemName: video.category.iconName)
+                                    .font(.title)
+                                    .foregroundColor(.secondary)
+                            )
+                    }
+                    .frame(maxHeight: 200)
+                    .cornerRadius(12)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(video.title)
+                            .font(.headline)
+                            .lineLimit(2)
                         
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(video.title)
-                                .font(AppTheme.Typography.headline)
-                                .lineLimit(2)
+                        Text(video.description)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .lineLimit(3)
+                        
+                        HStack {
+                            AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                Circle()
+                                    .fill(Color(.systemGray4))
+                                    .overlay(
+                                        Image(systemName: "person.fill")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    )
+                            }
+                            .frame(width: 24, height: 24)
+                            .clipShape(Circle())
                             
                             Text(video.creator.displayName)
-                                .font(AppTheme.Typography.subheadline)
-                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                             
-                            HStack {
-                                Text("\(video.formattedViews) views")
-                                Text("•")
-                                Text(video.timeAgo)
+                            if video.isVerified {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.blue)
                             }
-                            .font(AppTheme.Typography.caption)
-                            .foregroundColor(AppTheme.Colors.textTertiary)
+                            
+                            Spacer()
+                            
+                            Text(video.category.displayName)
+                                .font(.caption)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(video.category.color.opacity(0.1))
+                                .foregroundColor(video.category.color)
+                                .cornerRadius(4)
                         }
                         
-                        Spacer()
-                    }
-                    
-                    HStack {
-                        Label(video.formattedDuration, systemImage: "clock")
-                        Spacer()
-                        Label("\(video.likeCount)", systemImage: "heart")
-                        Label("\(video.commentCount)", systemImage: "bubble.right")
-                        if video.isShort {
-                            Label("Short", systemImage: "bolt")
+                        HStack {
+                            Text("\(video.formattedViewCount) views")
+                            Text("•")
+                            Text(video.timeAgo)
+                            Text("•")
+                            Text(video.formattedDuration)
+                            
+                            Spacer()
+                            
+                            HStack(spacing: 2) {
+                                Image(systemName: "hand.thumbsup")
+                                Text(video.formattedLikeCount)
+                            }
                         }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                     }
-                    .font(AppTheme.Typography.caption)
-                    .foregroundColor(AppTheme.Colors.textTertiary)
                 }
-                .cardStyle()
-                .padding(.horizontal)
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
             }
         }
+        .padding()
     }
-    .background(AppTheme.Colors.background)
+    .background(Color(.systemGroupedBackground))
 }

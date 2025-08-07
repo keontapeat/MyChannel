@@ -286,7 +286,7 @@ class AdvancedSearchService: ObservableObject {
     ) async -> [LiveStreamSearchResult] {
         
         // Filter for live videos
-        let liveVideos = Video.sampleVideos.filter { $0.isLive }
+        let liveVideos = Video.sampleVideos.filter { $0.isLiveStream }
         
         let searchResults = liveVideos.compactMap { video -> LiveStreamSearchResult? in
             let relevanceScore = calculateRelevance(

@@ -124,11 +124,13 @@ private struct QualityRow: View {
     }
 }
 
-#Preview {
-    VideoQualitySelector(
-        selectedQuality: .constant(.auto),
-        onQualitySelected: { quality in
-            print("Selected quality: \(quality.displayName)")
-        }
-    )
+struct VideoQualitySelector_Previews: PreviewProvider {
+    static var previews: some View {
+        VideoQualitySelector(
+            selectedQuality: .constant(.auto),
+            onQualitySelected: { quality in
+                print("Selected quality: \(quality.displayName)")
+            }
+        )
+    }
 }
