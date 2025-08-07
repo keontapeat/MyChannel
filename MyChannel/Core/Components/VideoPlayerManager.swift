@@ -24,6 +24,7 @@ class VideoPlayerManager: ObservableObject {
     private var timeObserver: Any?
     private var cancellables = Set<AnyCancellable>()
     private var currentVideo: Video?
+    private var isCleanedUp = false
     
     var currentTimeString: String {
         formatTime(currentTime)
@@ -34,12 +35,27 @@ class VideoPlayerManager: ObservableObject {
     }
     
     deinit {
+        print("🗑️ VideoPlayerManager deinit called")
+        cleanupSync()
+    }
+    
+    private nonisolated func cleanupSync() {
+        print("🧹 Cleaning up VideoPlayerManager (sync)")
+        
+        // We can't access @MainActor properties from deinit safely
+        // So we'll schedule cleanup if needed, but since we're in deinit,
+        // the object is being deallocated anyway
         Task { @MainActor in
-            cleanup()
+            print("🧹 Final MainActor cleanup attempted (may not execute)")
         }
     }
     
     private func cleanup() {
+        guard !isCleanedUp else { return }
+        isCleanedUp = true
+        
+        print("🧹 Cleaning up VideoPlayerManager")
+        
         // Safely remove time observer
         if let timeObserver = timeObserver {
             player?.removeTimeObserver(timeObserver)
@@ -51,22 +67,26 @@ class VideoPlayerManager: ObservableObject {
         player?.replaceCurrentItem(with: nil)
         player = nil
         
-        // Clear cancellables
+        // Clear cancellables to break retain cycles
         cancellables.removeAll()
         
         // Reset state
         isPlaying = false
         isLoading = false
         currentProgress = 0.0
+        bufferedProgress = 0.0
         currentTime = 0
         duration = 0
         currentVideo = nil
+        hasError = false
+        errorMessage = nil
     }
     
     // MARK: - Safe Setup
     func setupPlayer(with video: Video) {
         // Clean up any existing player first
         cleanup()
+        isCleanedUp = false // Reset cleanup flag
         
         currentVideo = video
         isLoading = true
@@ -88,11 +108,13 @@ class VideoPlayerManager: ObservableObject {
     }
     
     private func setupObservers(for playerItem: AVPlayerItem) {
+        // Clear existing cancellables first
         cancellables.removeAll()
         
+        // Set up time observer with weak self to prevent retain cycle
         let interval = CMTime(seconds: 0.1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            guard let self = self else { return }
+            guard let self = self, !self.isCleanedUp else { return }
             
             self.currentTime = CMTimeGetSeconds(time)
             
@@ -101,17 +123,20 @@ class VideoPlayerManager: ObservableObject {
             }
         }
         
+        // Use weak self in all publishers to prevent retain cycles
         playerItem.publisher(for: \.status)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
+                guard let self = self, !self.isCleanedUp else { return }
+                
                 switch status {
                 case .readyToPlay:
-                    self?.isLoading = false
-                    self?.duration = CMTimeGetSeconds(playerItem.duration)
+                    self.isLoading = false
+                    self.duration = CMTimeGetSeconds(playerItem.duration)
                 case .failed:
-                    self?.handleError("Failed to load video")
+                    self.handleError("Failed to load video")
                 case .unknown:
-                    self?.isLoading = true
+                    self.isLoading = true
                 @unknown default:
                     break
                 }
@@ -121,7 +146,7 @@ class VideoPlayerManager: ObservableObject {
         playerItem.publisher(for: \.loadedTimeRanges)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] timeRanges in
-                guard let self = self,
+                guard let self = self, !self.isCleanedUp,
                       let timeRange = timeRanges.first?.timeRangeValue else { return }
                 
                 let bufferedTime = CMTimeGetSeconds(CMTimeAdd(timeRange.start, timeRange.duration))
@@ -134,28 +159,34 @@ class VideoPlayerManager: ObservableObject {
         NotificationCenter.default.publisher(for: .AVPlayerItemPlaybackStalled)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.isLoading = true
+                guard let self = self, !self.isCleanedUp else { return }
+                self.isLoading = true
             }
             .store(in: &cancellables)
         
         NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.isPlaying = false
-                self?.seek(to: 0)
+                guard let self = self, !self.isCleanedUp else { return }
+                self.isPlaying = false
+                self.seek(to: 0)
             }
             .store(in: &cancellables)
     }
     
     private func loadAssetProperties(for asset: AVAsset) async {
+        guard !isCleanedUp else { return }
+        
         do {
             let duration = try await asset.load(.duration)
-            await MainActor.run {
+            await MainActor.run { [weak self] in
+                guard let self = self, !self.isCleanedUp else { return }
                 self.duration = CMTimeGetSeconds(duration)
                 self.isLoading = false
             }
         } catch {
-            await MainActor.run {
+            await MainActor.run { [weak self] in
+                guard let self = self, !self.isCleanedUp else { return }
                 self.handleError("Failed to load video properties")
             }
         }
@@ -163,20 +194,20 @@ class VideoPlayerManager: ObservableObject {
     
     // MARK: - Safe Playback Controls
     func play() {
-        guard let player = player else { return }
+        guard let player = player, !isCleanedUp else { return }
         player.play()
         isPlaying = true
         isLoading = false
     }
     
     func pause() {
-        guard let player = player else { return }
+        guard let player = player, !isCleanedUp else { return }
         player.pause()
         isPlaying = false
     }
     
     func togglePlayPause() {
-        guard player != nil else { return }
+        guard player != nil, !isCleanedUp else { return }
         if isPlaying {
             pause()
         } else {
@@ -185,44 +216,51 @@ class VideoPlayerManager: ObservableObject {
     }
     
     func seek(to progress: Double) {
-        guard let player = player, duration > 0 else { return }
+        guard let player = player, duration > 0, !isCleanedUp else { return }
         
         let targetTime = duration * progress
         let time = CMTime(seconds: targetTime, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         
         player.seek(to: time) { [weak self] completed in
+            guard let self = self, !self.isCleanedUp else { return }
             if completed {
                 DispatchQueue.main.async {
-                    self?.currentTime = targetTime
-                    self?.currentProgress = progress
+                    self.currentTime = targetTime
+                    self.currentProgress = progress
                 }
             }
         }
     }
     
     func seekForward(_ seconds: TimeInterval) {
+        guard !isCleanedUp else { return }
         let newTime = min(currentTime + seconds, duration)
         let progress = duration > 0 ? newTime / duration : 0
         seek(to: progress)
     }
     
     func seekBackward(_ seconds: TimeInterval) {
+        guard !isCleanedUp else { return }
         let newTime = max(currentTime - seconds, 0)
         let progress = duration > 0 ? newTime / duration : 0
         seek(to: progress)
     }
     
     func setPlaybackRate(_ rate: Float) {
+        guard !isCleanedUp else { return }
         player?.rate = rate
     }
     
     func setLooping(_ shouldLoop: Bool) {
+        guard !isCleanedUp else { return }
+        
         if shouldLoop {
             NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] _ in
-                    self?.player?.seek(to: .zero)
-                    self?.player?.play()
+                    guard let self = self, !self.isCleanedUp else { return }
+                    self.player?.seek(to: .zero)
+                    self.player?.play()
                 }
                 .store(in: &cancellables)
         }
@@ -230,23 +268,32 @@ class VideoPlayerManager: ObservableObject {
     
     // MARK: - Volume and Audio
     func setVolume(_ volume: Float) {
+        guard !isCleanedUp else { return }
         player?.volume = volume
     }
     
     func mute() {
+        guard !isCleanedUp else { return }
         player?.isMuted = true
     }
     
     func unmute() {
+        guard !isCleanedUp else { return }
         player?.isMuted = false
     }
     
     // MARK: - Error Handling
     private func handleError(_ message: String) {
+        guard !isCleanedUp else { return }
         hasError = true
         errorMessage = message
         isLoading = false
         isPlaying = false
+    }
+    
+    // MARK: - Manual Cleanup
+    func performCleanup() {
+        cleanup()
     }
     
     // MARK: - Helper Methods

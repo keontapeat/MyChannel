@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyChannel - Google Cloud Infrastructure Section</title>
+    <style>
+        /* PERFORMANCE OPTIMIZATIONS FOR 60FPS BUTTER SMOOTH */
+        .cloud-infrastructure * {
+            will-change: transform;
+            backface-visibility: hidden;
+            perspective: 1000px;
+        }
+
+        /* SCOPED GOOGLE CLOUD INFRASTRUCTURE SECTION - ISOLATED */
+        .cloud-infrastructure {
+            position: relative;
+            padding: 140px 0 140px 0; /* Added bottom padding */
+            margin: 0; /* Reset margin */
+            background: linear-gradient(135deg, 
+                #0a0e13 0%, 
+                #1a202c 20%,
+                #2d3748 40%,
+                #1e2936 60%,
+                #1a202c 80%,
+                #0a0e13 100%);
+            overflow: hidden;
+            /* ISOLATION - Prevents bleeding */
+            isolation: isolate;
+            contain: layout style paint;
+        }
+
+        /* CLEAR FLOATING AND CONTAINMENT */
+        .cloud-infrastructure::after {
+            content: '';
+            display: block;
+            clear: both;
+            height: 0;
+            visibility: hidden;
+        }
+
+        /* ULTRA-SMOOTH PARTICLE SYSTEM */
+        .cloud-infrastructure::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: 
+                radial-gradient(circle at 20% 30%, rgba(66, 133, 244, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(52, 168, 83, 0.12) 0%, transparent 45%),
+                radial-gradient(circle at 50% 20%, rgba(251, 188, 5, 0.10) 0%, transparent 40%),
+                radial-gradient(circle at 30% 80%, rgba(234, 67, 53, 0.13) 0%, transparent 48%),
+                radial-gradient(circle at 70% 40%, rgba(66, 133, 244, 0.08) 0%, transparent 35%);
+            animation: gcp-smoothFloat 30s ease-in-out infinite;
+            z-index: 0;
+        }
+
+        @keyframes gcp-smoothFloat {
+            0%, 100% { 
+                transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+                filter: blur(0px) brightness(1);
+            }
+            33% { 
+                transform: translate3d(25px, -20px, 0) scale(1.02) rotate(1deg);
+                filter: blur(0.5px) brightness(1.1);
+            }
+            66% { 
+                transform: translate3d(-15px, 15px, 0) scale(0.98) rotate(-0.5deg);
+                filter: blur(0px) brightness(1.05);
+            }
+        }
+
+        /* ENTERPRISE BADGE - PREMIUM */
+        .cloud-infrastructure .gcp-enterprise-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 18px;
+            padding: 22px 45px;
+            background: linear-gradient(135deg, 
+                rgba(66, 133, 244, 0.2) 0%, 
+                rgba(52, 168, 83, 0.18) 30%,
+                rgba(251, 188, 5, 0.16) 60%,
+                rgba(234, 67, 53, 0.18) 100%);
+            border: 3px solid transparent;
+            border-radius: 50px;
+            backdrop-filter: blur(30px) saturate(200%);
+            position: relative;
+            overflow: hidden;
+            animation: gcp-enterprisePulse 5s ease-in-out infinite;
+            box-shadow: 
+                0 0 80px rgba(66, 133, 244, 0.4),
+                inset 0 2px 30px rgba(255, 255, 255, 0.12);
+        }
+
+        .cloud-infrastructure .gcp-enterprise-badge::before {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            background: linear-gradient(60deg, 
+                #4285F4 0%, #34A853 25%, #FBBC05 50%, #EA4335 75%, #4285F4 100%);
+            border-radius: 50px;
+            z-index: -1;
+            animation: gcp-borderFlow 6s linear infinite;
+        }
+
+        @keyframes gcp-enterprisePulse {
+            0%, 100% { 
+                transform: scale3d(1, 1, 1); 
+                box-shadow: 0 0 80px rgba(66, 133, 244, 0.4), inset 0 2px 30px rgba(255, 255, 255, 0.12);
+            }
+            50% { 
+                transform: scale3d(1.06, 1.06, 1); 
+                box-shadow: 0 0 120px rgba(66, 133, 244, 0.6), inset 0 2px 40px rgba(255, 255, 255, 0.18);
+            }
+        }
+
+        @keyframes gcp-borderFlow {
+            0% { transform: rotate(0deg) scale(1); }
+            100% { transform: rotate(360deg) scale(1.02); }
+        }
+
+        .cloud-infrastructure .badge-icon {
+            font-size: 30px;
+            animation: gcp-iconBounce 4s ease-in-out infinite;
+            filter: drop-shadow(0 0 15px rgba(66, 133, 244, 0.6));
+        }
+
+        @keyframes gcp-iconBounce {
+            0%, 100% { transform: translateY(0px) scale(1) rotateZ(0deg); }
+            25% { transform: translateY(-8px) scale(1.05) rotateZ(2deg); }
+            50% { transform: translateY(0px) scale(1) rotateZ(0deg); }
+            75% { transform: translateY(-4px) scale(1.02) rotateZ(-1deg); }
+        }
+
+        /* GOOGLE-WORTHY TYPOGRAPHY */
+        .cloud-infrastructure .gcp-title {
+            background: linear-gradient(145deg, #4285F4 0%, #34A853 30%, #FBBC05 60%, #EA4335 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 4rem;
+            font-weight: 900;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+            animation: gcp-textShimmer 4s ease-in-out infinite;
+            text-shadow: 0 0 40px rgba(66, 133, 244, 0.3);
+        }
+
+        @keyframes gcp-textShimmer {
+            0%, 100% { 
+                filter: brightness(1) contrast(1);
+                transform: scale(1);
+            }
+            50% { 
+                filter: brightness(1.3) contrast(1.1);
+                transform: scale(1.02);
+            }
+        }
+
+        /* SMOOTH SLIDE-IN ANIMATIONS */
+        .cloud-infrastructure .gcp-slide-up {
+            opacity: 0;
+            transform: translate3d(0, 80px, 0) scale(0.95);
+            animation: gcp-smoothSlideUp 1.2s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+        }
+
+        .cloud-infrastructure .gcp-slide-left {
+            opacity: 0;
+            transform: translate3d(-80px, 0, 0) rotateY(-15deg);
+            animation: gcp-smoothSlideLeft 1s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+        }
+
+        /* STAGGERED DELAYS */
+        .cloud-infrastructure .gcp-slide-left:nth-child(1) { animation-delay: 0.2s; }
+        .cloud-infrastructure .gcp-slide-left:nth-child(2) { animation-delay: 0.4s; }
+        .cloud-infrastructure .gcp-slide-left:nth-child(3) { animation-delay: 0.6s; }
+        .cloud-infrastructure .gcp-slide-left:nth-child(4) { animation-delay: 0.8s; }
+
+        @keyframes gcp-smoothSlideUp {
+            0% {
+                opacity: 0;
+                transform: translate3d(0, 80px, 0) scale(0.95);
+            }
+            60% {
+                opacity: 0.8;
+                transform: translate3d(0, -10px, 0) scale(1.02);
+            }
+            100% {
+                opacity: 1;
+                transform: translate3d(0, 0, 0) scale(1);
+            }
+        }
+
+        @keyframes gcp-smoothSlideLeft {
+            0% {
+                opacity: 0;
+                transform: translate3d(-80px, 0, 0) rotateY(-15deg);
+            }
+            60% {
+                opacity: 0.9;
+                transform: translate3d(5px, 0, 0) rotateY(2deg);
+            }
+            100% {
+                opacity: 1;
+                transform: translate3d(0, 0, 0) rotateY(0deg);
+            }
+        }
+
+        /* ENTERPRISE STATS - ULTRA SMOOTH */
+        .cloud-infrastructure .enterprise-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 40px;
+            max-width: 1400px;
+            margin: 100px auto 0;
+            padding: 0 32px;
+        }
+
+        .cloud-infrastructure .enterprise-stat-card {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 32px;
+            padding: 40px;
+            background: linear-gradient(135deg, 
+                rgba(255, 255, 255, 0.12) 0%,
+                rgba(255, 255, 255, 0.06) 100%);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-radius: 32px;
+            backdrop-filter: blur(25px) saturate(180%);
+            transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+            overflow: hidden;
+            box-shadow: 
+                0 20px 40px rgba(0, 0, 0, 0.15),
+                inset 0 1px 20px rgba(255, 255, 255, 0.1);
+        }
+
+        /* HOVER MAGIC */
+        .cloud-infrastructure .enterprise-stat-card:hover {
+            transform: translate3d(0, -15px, 0) rotateX(8deg) scale(1.03);
+            border-color: rgba(66, 133, 244, 0.5);
+            box-shadow: 
+                0 40px 80px rgba(0, 0, 0, 0.25),
+                0 0 120px rgba(66, 133, 244, 0.3),
+                inset 0 2px 30px rgba(255, 255, 255, 0.15);
+        }
+
+        /* SHIMMER EFFECT */
+        .cloud-infrastructure .enterprise-stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                rgba(255, 255, 255, 0.2) 50%, 
+                transparent 100%);
+            transition: left 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .cloud-infrastructure .enterprise-stat-card:hover::before {
+            left: 100%;
+        }
+
+        /* STAT ICONS WITH PREMIUM EFFECTS */
+        .cloud-infrastructure .stat-icon-wrapper {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            border-radius: 28px;
+            background: linear-gradient(135deg, 
+                rgba(66, 133, 244, 0.3) 0%, 
+                rgba(52, 168, 83, 0.25) 50%,
+                rgba(251, 188, 5, 0.2) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            box-shadow: 
+                0 10px 30px rgba(66, 133, 244, 0.3),
+                inset 0 2px 20px rgba(255, 255, 255, 0.1);
+        }
+
+        .cloud-infrastructure .stat-icon {
+            font-size: 42px;
+            z-index: 2;
+            animation: gcp-iconGlow 3s ease-in-out infinite;
+            filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.5));
+        }
+
+        /* ICON COLORS */
+        .cloud-infrastructure .uptime-icon { color: #34A853; }
+        .cloud-infrastructure .network-icon { color: #4285F4; }
+        .cloud-infrastructure .speed-icon { color: #FBBC05; }
+        .cloud-infrastructure .security-icon { color: #EA4335; }
+
+        @keyframes gcp-iconGlow {
+            0%, 100% { 
+                transform: scale(1) rotate(0deg);
+                filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.5));
+            }
+            50% { 
+                transform: scale(1.1) rotate(5deg);
+                filter: drop-shadow(0 0 30px rgba(255, 255, 255, 0.8));
+            }
+        }
+
+        /* ROTATING BORDER */
+        .cloud-infrastructure .stat-icon-wrapper::before {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            border-radius: 31px;
+            padding: 3px;
+            background: linear-gradient(60deg, #4285F4, #34A853, #FBBC05, #EA4335, #4285F4);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            animation: gcp-borderSpin 4s linear infinite;
+        }
+
+        @keyframes gcp-borderSpin {
+            0% { transform: rotate(0deg) scale(1); }
+            100% { transform: rotate(360deg) scale(1.05); }
+        }
+
+        /* ENTERPRISE NUMBERS */
+        .cloud-infrastructure .stat-number {
+            font-size: 3rem;
+            font-weight: 900;
+            color: #ffffff;
+            margin: 0 0 12px 0;
+            background: linear-gradient(135deg, #ffffff 0%, #e2e8f0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+            animation: gcp-numberPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes gcp-numberPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        /* ENTERPRISE CTA - FINAL SECTION */
+        .cloud-infrastructure .enterprise-cta {
+            max-width: 1000px;
+            margin: 120px auto 0;
+            padding: 80px 50px;
+            text-align: center;
+            background: linear-gradient(135deg, 
+                rgba(66, 133, 244, 0.12) 0%,
+                rgba(52, 168, 83, 0.10) 25%,
+                rgba(251, 188, 5, 0.08) 50%,
+                rgba(234, 67, 53, 0.10) 75%,
+                rgba(66, 133, 244, 0.12) 100%);
+            border: 3px solid transparent;
+            border-radius: 40px;
+            backdrop-filter: blur(30px) saturate(200%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cloud-infrastructure .enterprise-cta::before {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            border-radius: 43px;
+            padding: 3px;
+            background: linear-gradient(45deg, #4285F4, #34A853, #FBBC05, #EA4335, #4285F4);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            animation: gcp-ctaBorderFlow 5s linear infinite;
+        }
+
+        @keyframes gcp-ctaBorderFlow {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .cloud-infrastructure .enterprise-cta-title {
+            font-size: 3.2rem;
+            font-weight: 900;
+            color: #ffffff;
+            margin-bottom: 32px;
+            line-height: 1.2;
+        }
+
+        .cloud-infrastructure .highlight-text {
+            background: linear-gradient(135deg, #4285F4, #34A853, #FBBC05, #EA4335);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .cloud-infrastructure .cta-subtitle {
+            font-size: 1.2rem;
+            color: #a0aec0;
+            line-height: 1.6;
+            margin-bottom: 50px;
+        }
+
+        .cloud-infrastructure .cta-stats {
+            display: flex;
+            justify-content: center;
+            gap: 80px;
+            margin-top: 50px;
+        }
+
+        .cloud-infrastructure .cta-stat {
+            text-align: center;
+        }
+
+        .cloud-infrastructure .cta-stat strong {
+            display: block;
+            font-size: 2.4rem;
+            font-weight: 900;
+            color: #4285F4;
+            margin-bottom: 12px;
+        }
+
+        .cloud-infrastructure .cta-stat span {
+            color: #a0aec0;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        /* RESPONSIVE DESIGN */
+        @media (max-width: 768px) {
+            .cloud-infrastructure .gcp-title {
+                font-size: 2.8rem;
+            }
+            
+            .cloud-infrastructure .enterprise-stats-grid {
+                grid-template-columns: 1fr;
+                gap: 32px;
+            }
+            
+            .cloud-infrastructure .enterprise-stat-card {
+                flex-direction: column;
+                text-align: center;
+                padding: 32px;
+            }
+            
+            .cloud-infrastructure .cta-stats {
+                flex-direction: column;
+                gap: 30px;
+            }
+            
+            .cloud-infrastructure .enterprise-cta-title {
+                font-size: 2.2rem;
+            }
+        }
+
+        /* SECTION SPACING & ISOLATION */
+        .cloud-infrastructure > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .cloud-infrastructure .section-header {
+            text-align: center;
+            max-width: 1000px;
+            margin: 0 auto 80px;
+            padding: 0 32px;
+        }
+
+        .cloud-infrastructure .section-subtitle {
+            font-size: 1.4rem;
+            color: #a0aec0;
+            line-height: 1.7;
+            margin-top: 32px;
+        }
+
+        .cloud-infrastructure .stat-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #e2e8f0;
+            margin: 0 0 12px 0;
+        }
+
+        .cloud-infrastructure .stat-description {
+            font-size: 1rem;
+            color: #a0aec0;
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        /* KILLER 90% REVENUE SHARE SECTION */
+        .revenue-section {
+            padding: 80px 40px;
+            background: linear-gradient(180deg, #0F0505 0%, var(--darker) 100%);
+        }
+
+        .revenue-comparison-container {
+            max-width: 1000px;
+            margin: 60px auto 40px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: center;
+        }
+
+        .revenue-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 25px;
+            padding: 40px;
+            text-align: center;
+            backdrop-filter: blur(15px);
+            transition: all 0.4s ease;
+        }
+
+        .mychannel-card {
+            border-color: rgba(255, 68, 68, 0.5);
+            transform: scale(1.05);
+            box-shadow: 0 0 60px rgba(255, 68, 68, 0.25);
+            animation: cardPulse 3s infinite;
+        }
+
+        @keyframes cardPulse {
+            0%, 100% { box-shadow: 0 0 60px rgba(255, 68, 68, 0.25); }
+            50% { box-shadow: 0 0 80px rgba(255, 68, 68, 0.4); }
+        }
+
+        .mychannel-card:hover {
+            transform: scale(1.08);
+            box-shadow: 0 0 100px rgba(255, 68, 68, 0.6);
+        }
+
+        .youtube-card {
+            border-color: rgba(255, 0, 0, 0.5);
+            transform: scale(0.95);
+            box-shadow: 0 0 60px rgba(255, 0, 0, 0.25);
+            animation: youtubeCardPulse 3s infinite;
+            opacity: 0.9;
+        }
+
+        @keyframes youtubeCardPulse {
+            0%, 100% { box-shadow: 0 0 60px rgba(255, 0, 0, 0.25); }
+            50% { box-shadow: 0 0 80px rgba(255, 0, 0, 0.4); }
+        }
+        
+        .youtube-card:hover {
+            opacity: 1;
+            transform: scale(0.97);
+            box-shadow: 0 0 100px rgba(255, 0, 0, 0.6);
+        }
+
+        .platform-logo {
+            height: 60px;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        .platform-logo img {
+            height: 100%;
+            max-width: 150px;
+            object-fit: contain;
+        }
+        .mychannel-logo img {
+            height: 50px;
+        }
+        .mychannel-logo span {
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .youtube-logo img {
+             filter: grayscale(100%) contrast(0.8) brightness(1.2);
+        }
+
+        .revenue-share {
+            font-size: clamp(3rem, 8vw, 6rem);
+            font-weight: 900;
+            margin-bottom: 5px;
+            line-height: 1;
+        }
+        .mychannel-card .revenue-share {
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 0 15px rgba(255, 68, 68, 0.4));
+            animation: shareGlow 2s infinite;
+        }
+
+        .youtube-card .revenue-share {
+            color: #FF0000;
+            filter: drop-shadow(0 0 15px rgba(255, 0, 0, 0.4));
+            animation: youtubeShareGlow 2s infinite;
+        }
+
+        @keyframes shareGlow {
+            0%, 100% { filter: drop-shadow(0 0 15px rgba(255, 68, 68, 0.4)); }
+            50% { filter: drop-shadow(0 0 25px rgba(255, 68, 68, 0.8)); }
+        }
+
+        @keyframes youtubeShareGlow {
+            0%, 100% { filter: drop-shadow(0 0 15px rgba(255, 0, 0, 0.4)); }
+            50% { filter: drop-shadow(0 0 25px rgba(255, 0, 0, 0.8)); }
+        }
+
+        .share-description {
+            font-size: 1.1rem;
+            color: var(--gray);
+            margin-bottom: 25px;
+        }
+
+        .earnings-breakdown p {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+        .earnings-amount {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--light);
+            margin-top: 5px;
+        }
+        .mychannel-card .earnings-amount {
+            color: var(--accent);
+            text-shadow: 0 0 10px rgba(0, 255, 225, 0.4);
+        }
+
+        .youtube-card .earnings-amount {
+            color: #FF4444;
+            text-shadow: 0 0 10px rgba(255, 68, 68, 0.4);
+        }
+
+        .revenue-difference {
+            text-align: center;
+            margin-top: 50px;
+        }
+        .revenue-difference h3 {
+            font-size: clamp(1.5rem, 4vw, 2.5rem);
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        .highlight-difference {
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 900;
+            animation: differencePulse 2s infinite;
+        }
+
+        @keyframes differencePulse {
+            0%, 100% { filter: drop-shadow(0 0 10px rgba(255,68,68,0.3)); }
+            50% { filter: drop-shadow(0 0 20px rgba(255,68,68,0.6)); }
+        }
+
+        .calculate-btn {
+            margin-top: 30px;
+            background: var(--gradient);
+            color: var(--light);
+            padding: 18px 40px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 18px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;

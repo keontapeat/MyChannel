@@ -12,106 +12,345 @@ extension Notification.Name {
     static let scrollToTopProfile = Notification.Name("scrollToTopProfile")
 }
 
+// MARK: - Preview-Safe Main Tab View
 struct MainTabView: View {
-    // Receive all state objects from the environment for a single source of truth
+    // Simple environment object access without complex initialization
     @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var appState: AppState
-    @ObservedObject private var globalPlayer = GlobalVideoPlayerManager.shared
+    @EnvironmentObject private var globalPlayer: GlobalVideoPlayerManager
     
     @State private var selectedTab: TabItem = .home
     @State private var previousTab: TabItem = .home
     @State private var showingUpload: Bool = false
+    @State private var isInitialized: Bool = false
     
-    @State private var notificationBadges: [TabItem: Int] = [
-        .home: 0,
-        .flicks: 2,
-        .upload: 0,
-        .search: 0,
-        .profile: 3
-    ]
+    @State private var notificationBadges: [TabItem: Int] = [:]
+    
+    // Error handling state
+    @State private var hasError: Bool = false
+    @State private var errorMessage: String = ""
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Group {
-                switch selectedTab {
-                case .home:
-                    HomeView()
-                case .flicks:
-                    FlicksView()
-                case .search:
-                    SearchView()
-                case .profile:
-                    ProfileView()
-                case .upload:
-                    EmptyView()
-                }
+        ZStack {
+            if hasError {
+                errorView
+            } else {
+                mainContent
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.Colors.background)
-            .transition(.identity)
+        }
+        .onAppear {
+            setupInitialState()
+        }
+        .onChange(of: authManager.currentUser) { _, newValue in
+            safeUserStateSync(newValue)
+        }
+        .onDisappear {
+            cleanup()
+        }
+    }
+    
+    @ViewBuilder
+    private var errorView: some View {
+        ErrorView(message: errorMessage) {
+            hasError = false
+            errorMessage = ""
+        }
+    }
+    
+    @ViewBuilder
+    private var mainContent: some View {
+        ZStack(alignment: .bottom) {
+            // Main Content
+            SafeContentView(selectedTab: selectedTab)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(AppTheme.Colors.background)
             
-            // Floating Mini Player - Always on top
-            FloatingMiniPlayer()
+            // Floating Mini Player - Simple version
+            SafeFloatingMiniPlayer()
                 .zIndex(999)
 
+            // Custom Tab Bar
             CustomTabBar(
                 selectedTab: $selectedTab,
                 notificationBadges: notificationBadges,
                 isHidden: false,
                 onUploadTap: {
                     showingUpload = true
-                }
+                },
+                onTabSelected: handleTabSelection
             )
             .zIndex(1000)
         }
         .ignoresSafeArea(.keyboard)
-        .environmentObject(globalPlayer)
-        .onChange(of: selectedTab) { oldValue, newValue in
-            if newValue == .upload {
-                selectedTab = oldValue
-                return
-            }
-
-            // 👇 Scroll to top if Profile is tapped twice
-            if newValue == .profile && previousTab == .profile {
+        .fullScreenCover(isPresented: $showingUpload) {
+            SafeUploadView()
+        }
+    }
+    
+    // MARK: - Safe Methods
+    private func setupInitialState() {
+        guard !isInitialized else { return }
+        
+        do {
+            // Initialize notification badges safely
+            notificationBadges = [
+                .home: 0,
+                .flicks: 2,
+                .upload: 0,
+                .search: 0,
+                .profile: 3
+            ]
+            
+            // Sync user state safely
+            appState.currentUser = authManager.currentUser
+            isInitialized = true
+        } catch {
+            handleError("Failed to initialize app state: \(error.localizedDescription)")
+        }
+    }
+    
+    private func safeUserStateSync(_ newUser: User?) {
+        DispatchQueue.main.async {
+            appState.currentUser = newUser
+        }
+    }
+    
+    private func handleTabSelection(_ tab: TabItem) {
+        guard tab != .upload else { return }
+        
+        do {
+            // Handle double-tap to scroll for profile
+            if tab == .profile && previousTab == .profile {
                 NotificationCenter.default.post(name: .scrollToTopProfile, object: nil)
             }
-
-            // Update state
-            previousTab = newValue
-            notificationBadges[newValue] = 0
+            
+            // Update states safely
+            previousTab = selectedTab
+            selectedTab = tab
+            
+            // Clear badge for selected tab
+            notificationBadges[tab] = 0
+            
+            // Haptic feedback
             HapticManager.shared.impact(style: .light)
+            
+            // Analytics tracking (safe async)
+            Task { @MainActor in
+                do {
+                    await AnalyticsService.shared.trackScreenView(tab.title)
+                } catch {
+                    print("Analytics error: \(error)")
+                }
+            }
+        } catch {
+            handleError("Tab selection error: \(error.localizedDescription)")
+        }
+    }
+    
+    private func handleError(_ message: String) {
+        DispatchQueue.main.async {
+            errorMessage = message
+            hasError = true
+        }
+    }
+    
+    private func cleanup() {
+        print("🧹 MainTabView cleanup called")
+    }
+}
 
-            Task {
-                await AnalyticsService.shared.trackScreenView(newValue.title)
+// MARK: - Safe Content View
+struct SafeContentView: View {
+    let selectedTab: TabItem
+    
+    var body: some View {
+        Group {
+            switch selectedTab {
+            case .home:
+                SafeHomeView()
+            case .flicks:
+                SafeFlicksView()
+            case .search:
+                SafeSearchView()
+            case .profile:
+                SafeProfileView()
+            case .upload:
+                EmptyView()
             }
         }
-        .fullScreenCover(isPresented: $showingUpload) {
-            UploadView()
-        }
-        // This view now correctly syncs the user state when the auth state changes
-        .onChange(of: authManager.currentUser) { _, newValue in
-            appState.currentUser = newValue
-        }
-        .onAppear {
-             // Initial sync of user state
-            appState.currentUser = authManager.currentUser
+        .transition(.identity)
+    }
+}
+
+// MARK: - Safe View Wrappers
+struct SafeHomeView: View {
+    var body: some View {
+        ErrorBoundary {
+            HomeView()
+        } fallback: {
+            ContentUnavailableView(
+                "Home Unavailable",
+                systemImage: "house.slash",
+                description: Text("Please try again later")
+            )
         }
     }
 }
 
-// MARK: - App State
+struct SafeFlicksView: View {
+    var body: some View {
+        ErrorBoundary {
+            FlicksView()
+        } fallback: {
+            ContentUnavailableView(
+                "Flicks Unavailable",
+                systemImage: "play.slash",
+                description: Text("Please try again later")
+            )
+        }
+    }
+}
+
+struct SafeSearchView: View {
+    var body: some View {
+        ErrorBoundary {
+            SearchView()
+        } fallback: {
+            ContentUnavailableView(
+                "Search Unavailable",
+                systemImage: "magnifyingglass.circle.slash",
+                description: Text("Please try again later")
+            )
+        }
+    }
+}
+
+struct SafeProfileView: View {
+    var body: some View {
+        ErrorBoundary {
+            ProfileView()
+        } fallback: {
+            ContentUnavailableView(
+                "Profile Unavailable",
+                systemImage: "person.slash",
+                description: Text("Please try again later")
+            )
+        }
+    }
+}
+
+struct SafeUploadView: View {
+    var body: some View {
+        ErrorBoundary {
+            UploadView()
+        } fallback: {
+            ContentUnavailableView(
+                "Upload Unavailable",
+                systemImage: "plus.circle.slash",
+                description: Text("Please try again later")
+            )
+        }
+    }
+}
+
+struct SafeFloatingMiniPlayer: View {
+    var body: some View {
+        ErrorBoundary {
+            FloatingMiniPlayer()
+        } fallback: {
+            EmptyView()
+        }
+    }
+}
+
+// MARK: - Error Boundary
+struct ErrorBoundary<Content: View, Fallback: View>: View {
+    let content: () -> Content
+    let fallback: () -> Fallback
+    
+    @State private var hasError = false
+    
+    var body: some View {
+        Group {
+            if hasError {
+                fallback()
+            } else {
+                content()
+                    .onAppear {
+                        hasError = false
+                    }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ViewError"))) { _ in
+            hasError = true
+        }
+    }
+}
+
+// MARK: - Error View
+struct ErrorView: View {
+    let message: String
+    let onRetry: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 48))
+                .foregroundColor(AppTheme.Colors.primary)
+            
+            VStack(spacing: 8) {
+                Text("Something went wrong")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Text(message)
+                    .font(.body)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            
+            Button("Try Again") {
+                onRetry()
+            }
+            .buttonStyle(TabErrorButtonStyle())
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppTheme.Colors.background)
+    }
+}
+
+// MARK: - Tab Error Button Style
+struct TabErrorButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundColor(.white)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppTheme.Colors.primary)
+            )
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+// MARK: - App State (Thread-Safe)
 @MainActor
 class AppState: ObservableObject {
-    @Published var currentUser: User? // Now optional to handle signed-out state
+    @Published var currentUser: User?
     @Published var isLoggedIn: Bool = true
     @Published var watchLaterVideos: Set<String> = []
     @Published var likedVideos: Set<String> = []
     @Published var followedCreators: Set<String> = []
     @Published var notifications: [AppNotification] = []
 
+    private let queue = DispatchQueue(label: "appstate.queue", qos: .userInitiated)
+
     init() {
-        // Initialize with a default state if needed, or leave nil
         self.currentUser = nil
     }
     
@@ -205,6 +444,7 @@ struct CustomTabBar: View {
     let notificationBadges: [TabItem: Int]
     let isHidden: Bool
     let onUploadTap: () -> Void
+    let onTabSelected: (TabItem) -> Void
     
     var body: some View {
         HStack(spacing: 0) {
@@ -214,13 +454,12 @@ struct CustomTabBar: View {
                     isSelected: selectedTab == tab,
                     badgeCount: notificationBadges[tab] ?? 0,
                     action: {
-                        selectedTab = tab
+                        onTabSelected(tab)
                     }
                 )
                 .frame(maxWidth: .infinity)
                 
                 if tab == .flicks {
-                    // Special upload button sits in the middle
                     UploadTabButton(action: onUploadTap)
                         .frame(maxWidth: .infinity)
                 }
@@ -230,11 +469,9 @@ struct CustomTabBar: View {
         .padding(.vertical, 8)
         .background(
             ZStack {
-                // Frosted glass effect
                 VisualEffectBlur(blurStyle: .systemMaterial)
                     .cornerRadius(24)
                 
-                // Gradient border
                 RoundedRectangle(cornerRadius: 24)
                     .stroke(
                         LinearGradient(
@@ -319,7 +556,6 @@ struct CustomTabBarButton: View {
         Button(action: action) {
             VStack(spacing: 4) {
                 ZStack {
-                    // Background indicator
                     if isSelected {
                         Circle()
                             .fill(AppTheme.Colors.primary.opacity(0.2))
@@ -327,7 +563,6 @@ struct CustomTabBarButton: View {
                             .transition(.scale.combined(with: .opacity))
                     }
                     
-                    // Icon with badge
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: tab.iconName(isSelected: isSelected))
                             .font(.system(size: 20, weight: .medium))
@@ -343,7 +578,6 @@ struct CustomTabBarButton: View {
                     }
                 }
                 
-                // Tab title
                 Text(tab.title)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(
@@ -408,11 +642,35 @@ struct VisualEffectBlur: UIViewRepresentable {
     }
 }
 
+// MARK: - Preview-Safe Wrapper for App Injection
+struct PreviewSafeMainTabWrapper: View {
+    var body: some View {
+        MainTabView()
+            .environmentObject(createSafeAuthManager())
+            .environmentObject(createSafeAppState())
+            .environmentObject(createSafeVideoPlayerManager())
+    }
+    
+    private func createSafeAuthManager() -> AuthenticationManager {
+        let manager = AuthenticationManager.shared
+        manager.currentUser = User.sampleUsers.first ?? User.defaultUser
+        return manager
+    }
+    
+    private func createSafeAppState() -> AppState {
+        let state = AppState()
+        state.currentUser = User.sampleUsers.first ?? User.defaultUser
+        return state
+    }
+    
+    private func createSafeVideoPlayerManager() -> GlobalVideoPlayerManager {
+        // In preview context, use the preview-safe version
+        return PreviewSafeGlobalVideoPlayerManager() as! GlobalVideoPlayerManager
+    }
+}
+
 // MARK: - Preview
 #Preview {
-    MainTabView()
-        .environmentObject(AuthenticationManager.shared)
-        .environmentObject(AppState()) // Provide a sample for the preview
-        .environmentObject(GlobalVideoPlayerManager.shared)
+    PreviewSafeMainTabWrapper()
         .preferredColorScheme(.light)
 }

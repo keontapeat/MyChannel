@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyChannel - Google Cloud Infrastructure</title>
+    <style>
+        /* GOOGLE CLOUD INFRASTRUCTURE - WORLD CLASS DYNAMIC VERSION */
+        .cloud-infrastructure {
+            position: relative;
+            padding: 120px 0;
+            background: linear-gradient(135deg, 
+                #0f1419 0%, 
+                #1a202c 25%, 
+                #2d3748 50%, 
+                #1a202c 75%, 
+                #0f1419 100%);
+            overflow: hidden;
+        }
+
+        /* Dynamic Background Particles */
+        .cloud-infrastructure::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                radial-gradient(circle at 20% 20%, rgba(66, 133, 244, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(52, 168, 83, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 40% 60%, rgba(251, 188, 5, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 60% 40%, rgba(234, 67, 53, 0.1) 0%, transparent 50%);
+            animation: particleFloat 20s ease-in-out infinite;
+        }
+
+        @keyframes particleFloat {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(20px, -15px) rotate(1deg); }
+            66% { transform: translate(-10px, 10px) rotate(-1deg); }
+        }
+
+        /* Google Cloud Badge */
+        .gcp-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 32px;
+            background: linear-gradient(135deg, 
+                rgba(66, 133, 244, 0.15) 0%, 
+                rgba(52, 168, 83, 0.15) 25%,
+                rgba(251, 188, 5, 0.15) 50%,
+                rgba(234, 67, 53, 0.15) 75%,
+                rgba(66, 133, 244, 0.15) 100%);
+            border: 2px solid transparent;
+            border-radius: 50px;
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+            animation: gcpBadgePulse 3s ease-in-out infinite;
+        }
+
+        .gcp-badge::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, 
+                #4285F4, #34A853, #FBBC05, #EA4335, #4285F4);
+            border-radius: 50px;
+            z-index: -1;
+            animation: borderRotate 4s linear infinite;
+        }
+
+        @keyframes gcpBadgePulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 40px rgba(66, 133, 244, 0.3); }
+            50% { transform: scale(1.05); box-shadow: 0 0 60px rgba(66, 133, 244, 0.5); }
+        }
+
+        @keyframes borderRotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .badge-icon {
+            font-size: 24px;
+            animation: cloudFloat 2s ease-in-out infinite;
+        }
+
+        @keyframes cloudFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+        }
+
+        /* Google-worthy Typography */
+        .gcp-text {
+            background: linear-gradient(135deg, #4285F4, #34A853, #FBBC05, #EA4335);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 3.5rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            animation: textShimmer 3s ease-in-out infinite;
+        }
+
+        @keyframes textShimmer {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.2); }
+        }
+
+        /* Enterprise Stats Container */
+        .professional-stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 32px;
+            max-width: 1200px;
+            margin: 80px auto 0;
+            padding: 0 24px;
+        }
+
+        .professional-stat-card {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            padding: 32px;
+            background: linear-gradient(135deg, 
+                rgba(255, 255, 255, 0.08) 0%,
+                rgba(255, 255, 255, 0.04) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            backdrop-filter: blur(20px);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
+
+        .professional-stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, 
+                transparent, 
+                rgba(255, 255, 255, 0.1), 
+                transparent);
+            transition: left 0.6s ease-in-out;
+        }
+
+        .professional-stat-card:hover::before {
+            left: 100%;
+        }
+
+        .professional-stat-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            border-color: rgba(66, 133, 244, 0.4);
+            box-shadow: 
+                0 25px 50px rgba(0, 0, 0, 0.3),
+                0 0 100px rgba(66, 133, 244, 0.2);
+        }
+
+        /* Stat Icons with Dynamic Effects */
+        .stat-icon-container {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, 
+                rgba(66, 133, 244, 0.2), 
+                rgba(52, 168, 83, 0.2));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .stat-icon {
+            font-size: 32px;
+            z-index: 2;
+            animation: iconPulse 2s ease-in-out infinite;
+        }
+
+        .uptime-icon { color: #34A853; }
+        .network-icon { color: #4285F4; }
+        .speed-icon { color: #FBBC05; }
+        .security-icon { color: #EA4335; }
+
+        @keyframes iconPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .stat-icon-container::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: 22px;
+            padding: 2px;
+            background: linear-gradient(45deg, #4285F4, #34A853, #FBBC05, #EA4335);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            animation: borderSpin 3s linear infinite;
+        }
+
+        @keyframes borderSpin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Stat Numbers with Counter Animation */
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #ffffff;
+            margin: 0 0 8px 0;
+            background: linear-gradient(135deg, #ffffff, #e2e8f0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Professional Services Section */
+        .professional-services-section {
+            max-width: 1200px;
+            margin: 100px auto 0;
+            padding: 0 24px;
+        }
+
+        .services-header {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 60px;
+            position: relative;
+        }
+
+        .services-header::after {
+            content: '';
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 4px;
+            background: linear-gradient(90deg, #4285F4, #34A853, #FBBC05, #EA4335);
+            border-radius: 2px;
+            animation: underlineGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes underlineGlow {
+            0%, 100% { box-shadow: 0 0 20px rgba(66, 133, 244, 0.5); }
+            50% { box-shadow: 0 0 40px rgba(66, 133, 244, 0.8); }
+        }
+
+        .professional-services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 32px;
+        }
+
+        .professional-service-card {
+            position: relative;
+            padding: 40px;
+            background: linear-gradient(135deg, 
+                rgba(255, 255, 255, 0.06) 0%,
+                rgba(255, 255, 255, 0.03) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            backdrop-filter: blur(20px);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
+
+        .professional-service-card:hover {
+            transform: translateY(-12px) rotateX(5deg);
+            border-color: rgba(66, 133, 244, 0.3);
+            box-shadow: 
+                0 35px 70px rgba(0, 0, 0, 0.3),
+                0 0 80px rgba(66, 133, 244, 0.15);
+        }
+
+        .service-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .service-icon-pro {
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, 
+                rgba(66, 133, 244, 0.2), 
+                rgba(52, 168, 83, 0.2));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .service-icon-pro::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            transform: translateX(-100%);
+            transition: transform 0.6s ease-in-out;
+        }
+
+        .professional-service-card:hover .service-icon-pro::before {
+            transform: translateX(100%);
+        }
+
+        /* Feature Tags */
+        .service-features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .feature-tag {
+            padding: 8px 16px;
+            background: linear-gradient(135deg, 
+                rgba(66, 133, 244, 0.15), 
+                rgba(52, 168, 83, 0.15));
+            border: 1px solid rgba(66, 133, 244, 0.3);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #4285F4;
+            transition: all 0.3s ease;
+        }
+
+        .feature-tag:hover {
+            background: linear-gradient(135deg, 
+                rgba(66, 133, 244, 0.3), 
+                rgba(52, 168, 83, 0.3));
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px rgba(66, 133, 244, 0.3);
+        }
+
+        /* Professional CTA */
+        .professional-cta-container {
+            max-width: 800px;
+            margin: 100px auto 0;
+            padding: 60px 40px;
+            text-align: center;
+            background: linear-gradient(135deg, 
+                rgba(66, 133, 244, 0.1) 0%,
+                rgba(52, 168, 83, 0.1) 25%,
+                rgba(251, 188, 5, 0.1) 50%,
+                rgba(234, 67, 53, 0.1) 75%,
+                rgba(66, 133, 244, 0.1) 100%);
+            border: 2px solid transparent;
+            border-radius: 32px;
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .professional-cta-container::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: 34px;
+            padding: 2px;
+            background: linear-gradient(45deg, #4285F4, #34A853, #FBBC05, #EA4335, #4285F4);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            animation: ctaBorderFlow 4s linear infinite;
+        }
+
+        @keyframes ctaBorderFlow {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .professional-cta-title {
+            font-size: 2.8rem;
+            font-weight: 800;
+            color: #ffffff;
+            margin-bottom: 24px;
+            line-height: 1.2;
+        }
+
+        .highlight-text {
+            background: linear-gradient(135deg, #4285F4, #34A853, #FBBC05, #EA4335);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .cta-stats {
+            display: flex;
+            justify-content: center;
+            gap: 60px;
+            margin-top: 40px;
+        }
+
+        .cta-stat {
+            text-align: center;
+        }
+
+        .cta-stat strong {
+            display: block;
+            font-size: 2rem;
+            font-weight: 900;
+            color: #4285F4;
+            margin-bottom: 8px;
+        }
+
+        .cta-stat span {
+            color: #a0aec0;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        /* Enhanced Animations */
+        .slide-in-up {
+            animation: slideInUp 0.8s ease-out forwards;
+        }
+
+        .slide-in-left {
+            animation: slideInLeft 0.8s ease-out forwards;
+        }
+
+        @keyframes slideInUp {
+            from {
+                transform: translateY(60px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideInLeft {
+            from {
+                transform: translateX(-60px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .gcp-text {
+                font-size: 2.5rem;
+            }
+            
+            .professional-stats-container {
+                grid-template-columns: 1fr;
+                gap: 24px;
+            }
+            
+            .professional-stat-card {
+                flex-direction: column;
+                text-align: center;
+                padding: 24px;
+            }
+            
+            .professional-services-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .cta-stats {
+                flex-direction: column;
+                gap: 30px;
+            }
+            
+            .professional-cta-title {
+                font-size: 2rem;
+            }
+        }
+
+        /* Section spacing and layout */
+        .section-header {
+            text-align: center;
+            max-width: 900px;
+            margin: 0 auto 60px;
+            padding: 0 24px;
+        }
+
+        .section-subtitle {
+            font-size: 1.25rem;
+            color: #a0aec0;
+            line-height: 1.6;
+            margin-top: 24px;
+        }
+
+        .service-description {
+            color: #cbd5e0;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .professional-cta-subtitle {
+            font-size: 1.1rem;
+            color: #a0aec0;
+            line-height: 1.6;
+            margin-bottom: 0;
+        }
+
+        .stat-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #e2e8f0;
+            margin: 0 0 8px 0;
+        }
+
+        .stat-description {
+            font-size: 0.9rem;
+            color: #a0aec0;
+            margin: 0;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+
+<!-- GOOGLE CLOUD INFRASTRUCTURE SECTION - WORLD CLASS DYNAMIC VERSION -->
+<section class="cloud-infrastructure" id="infrastructure">
+  <div class="section-header slide-in-up">
+      <div class="section-badge gcp-badge">
+          <span class="badge-icon">☁️</span>
+          <span>ENTERPRISE CLOUD INFRASTRUCTURE</span>
+      </div>
+      <h2>
+          <span class="gcp-text">Engineered on Google Cloud Platform</span>
+      </h2>
+      <p class="section-subtitle">
+          MyChannel is built on the same hyper-resilient infrastructure that powers YouTube, Google Search, and Gmail.<br>
+          <strong>Designed for creators. Built for global scale. Secured by Google.</strong>
+      </p>
+  </div>
+
+  <!-- ENTERPRISE STATS GRID -->
+  <div class="professional-stats-container">
+      <div class="professional-stat-card slide-in-left">
+          <div class="stat-icon-container">
+              <div class="stat-icon uptime-icon">✓</div>
+          </div>
+          <div class="stat-content">
+              <h3 class="stat-number">99.99%</h3>
+              <p class="stat-title">Uptime SLA</p>
+              <p class="stat-description">Enterprise-grade availability backed by multi-region failover</p>
+          </div>
+      </div>
+      
+      <div class="professional-stat-card slide-in-left">
+          <div class="stat-icon-container">
+              <div class="stat-icon network-icon">🌐</div>
+          </div>
+          <div class="stat-content">
+              <h3 class="stat-number">200+</h3>
+              <p class="stat-title">Global Edge Locations</p>
+              <p class="stat-description">Near-instant video delivery through Google's global CDN</p>
+          </div>
+      </div>
+      
+      <div class="professional-stat-card slide-in-left">
+          <div class="stat-icon-container">
+              <div class="stat-icon speed-icon">⚡</div>
+          </div>
+          <div class="stat-content">
+              <h3 class="stat-number">40 Gbps</h3>
+              <p class="stat-title">Streaming Bandwidth</p>
+              <p class="stat-description">Ultra-low latency delivery optimized for 4K & live video</p>
+          </div>
+      </div>
+      
+      <div class="professional-stat-card slide-in-left">
+          <div class="stat-icon-container">
+              <div class="stat-icon security-icon">🔒</div>
+          </div>
+          <div class="stat-content">
+              <h3 class="stat-number">256-bit</h3>
+              <p class="stat-title">End-to-End Encryption</p>
+              <p class="stat-description">Military-grade encryption for data in transit and at rest</p>
+          </div>
+      </div>
+  </div>
+
+  <!-- ENTERPRISE SERVICES GRID -->
+  <div class="professional-services-section">
+      <h3 class="services-header">Scalable Cloud Services Powering MyChannel™</h3>
+      
+      <div class="professional-services-grid">
+          <div class="professional-service-card slide-in-left">
+              <div class="service-header">
+                  <div class="service-icon-pro">🎥</div>
+                  <h4>AI Video Intelligence</h4>
+              </div>
+              <p class="service-description">Leveraging Google Cloud Video AI to deliver advanced scene detection, auto-tagging, and recommendation engines—at scale.</p>
+              <div class="service-features">
+                  <span class="feature-tag">Machine Learning</span>
+                  <span class="feature-tag">Auto Metadata</span>
+                  <span class="feature-tag">Real-Time Insights</span>
+              </div>
+          </div>
+          
+          <div class="professional-service-card slide-in-left">
+              <div class="service-header">
+                  <div class="service-icon-pro">🌍</div>
+                  <h4>Global CDN Acceleration</h4>
+              </div>
+              <p class="service-description">Content automatically routed through Google's edge locations worldwide for zero-lag performance—anywhere, anytime.</p>
+              <div class="service-features">
+                  <span class="feature-tag">Edge Delivery</span>
+                  <span class="feature-tag">HTTP/3</span>
+                  <span class="feature-tag">4K Optimized</span>
+              </div>
+          </div>
+          
+          <div class="professional-service-card slide-in-left">
+              <div class="service-header">
+                  <div class="service-icon-pro">⚙️</div>
+                  <h4>Auto-Scaling Compute</h4>
+              </div>
+              <p class="service-description">Kubernetes-powered auto-scaling ensures MyChannel performs under any traffic conditions, from niche uploads to viral hits.</p>
+              <div class="service-features">
+                  <span class="feature-tag">GKE Clusters</span>
+                  <span class="feature-tag">Load Balancers</span>
+                  <span class="feature-tag">Instant Scaling</span>
+              </div>
+          </div>
+          
+          <div class="professional-service-card slide-in-left">
+              <div class="service-header">
+                  <div class="service-icon-pro">🛡️</div>
+                  <h4>Zero Trust Security</h4>
+              </div>
+              <p class="service-description">Hardened with Google Cloud Armor, IAM policies, and AI-powered threat detection. Proactive defense, 24/7.</p>
+              <div class="service-features">
+                  <span class="feature-tag">Zero Trust</span>
+                  <span class="feature-tag">DDoS Shield</span>
+                  <span class="feature-tag">Global SOC</span>
+              </div>
+          </div>
+      </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="professional-cta-container slide-in-up">
+      <div class="cta-content">
+          <h3 class="professional-cta-title">Cloud That Scales With You.<br><span class="highlight-text">Built for Creators. Powered by Google.</span></h3>
+          <p class="professional-cta-subtitle">
+              MyChannel delivers YouTube-grade performance with creator-first pricing—enabling you to scale without compromise.
+          </p>
+          <div class="cta-stats">
+              <div class="cta-stat">
+                  <strong>2B+ Hours</strong>
+                  <span>Content Delivered Monthly</span>
+              </div>
+              <div class="cta-stat">
+                  <strong>99.99%</strong>
+                  <span>Operational Uptime Guarantee</span>
+              </div>
+          </div>
+      </div>
+  </div>
+</section>
+
+<script>
+// Enhanced JavaScript for Dynamic Effects
+document.addEventListener('DOMContentLoaded', function() {
+    // Animated counter for statistics
+    const statNumbers = document.querySelectorAll('.stat-number');
+    
+    const animateCounter = (element, target, suffix = '') => {
+        let current = 0;
+        const increment = target / 100;
+        const timer = setInterval(() => {
+            current += increment;
+            if (current >= target) {
+                element.textContent = target + suffix;
+                clearInterval(timer);
+            } else {
+                element.textContent = Math.ceil(current) + suffix;
+            }
+        }, 20);
+    };
+    
+    // Intersection Observer for scroll animations
+    const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+    };
+    
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const target = entry.target;
+                
+                // Trigger counter animations
+                if (target.classList.contains('stat-number')) {
+                    const text = target.textContent;
+                    if (text.includes('%')) {
+                        animateCounter(target, parseFloat(text), '%');
+                    } else if (text.includes('+')) {
+                        animateCounter(target, parseInt(text), '+');
+                    } else if (text.includes('Gbps')) {
+                        animateCounter(target, parseInt(text), ' Gbps');
+                    } else if (text.includes('-bit')) {
+                        animateCounter(target, parseInt(text), '-bit');
+                    }
+                }
+                
+                // Add staggered animation delays
+                if (target.classList.contains('slide-in-left')) {
+                    const siblings = Array.from(target.parentElement.children);
+                    const index = siblings.indexOf(target);
+                    target.style.animationDelay = `${index * 0.1}s`;
+                }
+            }
+        });
+    }, observerOptions);
+    
+    // Observe all animated elements
+    document.querySelectorAll('.slide-in-up, .slide-in-left, .stat-number').forEach(el => {
+        observer.observe(el);
+    });
+    
+    // Enhanced hover effects for service cards
+    document.querySelectorAll('.professional-service-card').forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-12px) rotateX(5deg) scale(1.02)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0) rotateX(0) scale(1)';
+        });
+    });
+    
+    // Parallax effect for background particles
+    window.addEventListener('scroll', () => {
+        const scrolled = window.pageYOffset;
+        const parallax = document.querySelector('.cloud-infrastructure::before');
+        if (parallax) {
+            const speed = scrolled * 0.5;
+            parallax.style.transform = `translateY(${speed}px)`;
+        }
+    });
+});
+</script>
+
+</body>
+</html>
