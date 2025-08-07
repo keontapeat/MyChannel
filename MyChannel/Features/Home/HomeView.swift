@@ -22,7 +22,6 @@ struct HomeView: View {
     @State private var showingVideoPlayer: Bool = false
     @State private var selectedStory: Story? = nil
     @State private var showingStoryViewer: Bool = false
-    @State private var showingStoryCreation: Bool = false
     @State private var stories: [Story] = Story.sampleStories
 
     var body: some View {
@@ -52,8 +51,7 @@ struct HomeView: View {
                                     print("📖 showingStoryViewer set to: \(showingStoryViewer)")
                                 },
                                 onAddStory: {
-                                    // Launch story creation
-                                    showingStoryCreation = true
+                                    // Handle add story
                                     let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
                                     impactFeedback.impactOccurred()
                                 }
@@ -158,20 +156,6 @@ struct HomeView: View {
                 print("📖 Safe story: \(safeStory.id)")
                 print("📖 Stories count: \(safeStories.count)")
                 print("📖 selectedStory at presentation: \(selectedStory?.id ?? "nil")")
-            }
-        }
-        .fullScreenCover(isPresented: $showingStoryCreation) {
-            CreateStoryView { newStory in
-                // Add the new story to the beginning of the stories array
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                    stories.insert(newStory, at: 0)
-                }
-                
-                // Show success haptic feedback
-                let successFeedback = UINotificationFeedbackGenerator()
-                successFeedback.notificationOccurred(.success)
-                
-                print("📖 New story created: \(newStory.id)")
             }
         }
     }
@@ -679,7 +663,7 @@ struct ClickableTrendingVideoCard: View {
                             .foregroundColor(AppTheme.Colors.textSecondary)
                             .lineLimit(1)
                         
-                        if video.creator.isVerified {
+                        if video.isVerified {
                             Image(systemName: "checkmark.seal.fill")
                                 .font(.system(size: 10))
                                 .foregroundColor(AppTheme.Colors.primary)
