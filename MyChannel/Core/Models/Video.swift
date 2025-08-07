@@ -123,6 +123,11 @@ struct Video: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(monetization, forKey: .monetization)
     }
     
+    // Computed property for shareable link
+    var link: String {
+        return "https://mychannel.app/video/\(id)"
+    }
+
     init(
         id: String = UUID().uuidString,
         title: String,

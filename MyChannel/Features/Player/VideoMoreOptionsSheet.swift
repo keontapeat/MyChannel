@@ -1,55 +1,68 @@
 import SwiftUI
 
-import SwiftUI
-
 struct VideoMoreOptionsSheet: View {
     let video: Video
     @Binding var isSubscribed: Bool
     @Binding var isWatchLater: Bool
     
     @Environment(\.dismiss) private var dismiss
+    @State private var showReportAlert = false
+    @State private var showCopyToast = false
     
     var body: some View {
         NavigationView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("More Options")
-                    .font(.title)
-                    .bold()
-                
-                Text("Video: \(video.title)")
-                    .font(.subheadline)
-                
-                Button(action: {
-                    isWatchLater.toggle()
-                }) {
-                    HStack {
-                        Image(systemName: isWatchLater ? "bookmark.fill" : "bookmark")
-                        Text(isWatchLater ? "Remove from Watch Later" : "Save to Watch Later")
-                        Spacer()
+            List {
+                Section {
+                    Label("Video: \(video.title)", systemImage: "film")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section {
+                    Button(action: {
+                        isWatchLater.toggle()
+                        feedback()
+                    }) {
+                        HStack {
+                            Label(
+                                isWatchLater ? "Remove from Watch Later" : "Save to Watch Later",
+                                systemImage: isWatchLater ? "bookmark.fill" : "bookmark"
+                            )
+                            Spacer()
+                        }
+                    }
+                    
+                    Button(action: {
+                        isSubscribed.toggle()
+                        feedback()
+                    }) {
+                        HStack {
+                            Label(
+                                isSubscribed ? "Unsubscribe" : "Subscribe",
+                                systemImage: isSubscribed ? "bell.slash.fill" : "bell.fill"
+                            )
+                            Spacer()
+                        }
                     }
                 }
                 
-                Button(action: {
-                    isSubscribed.toggle()
-                }) {
-                    HStack {
-                        Image(systemName: isSubscribed ? "bell.slash" : "bell")
-                        Text(isSubscribed ? "Unsubscribe" : "Subscribe")
-                        Spacer()
+                Section {
+                    Button(role: .destructive) {
+                        showReportAlert = true
+                        feedback()
+                    } label: {
+                        Label("Report", systemImage: "flag.fill")
+                    }
+                    
+                    Button(action: {
+                        UIPasteboard.general.string = video.link // Assuming `video.link` exists
+                        showCopyToast = true
+                        feedback()
+                    }) {
+                        Label("Copy Video Link", systemImage: "link")
                     }
                 }
-                
-                Button("Report") {
-                    // Handle report
-                }
-                
-                Button("Copy Video Link") {
-                    // Handle copy link
-                }
-                
-                Spacer()
             }
-            .padding()
             .navigationTitle("More Options")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -59,7 +72,34 @@ struct VideoMoreOptionsSheet: View {
                     }
                 }
             }
+            .alert("Report this video?", isPresented: $showReportAlert) {
+                Button("Cancel", role: .cancel) {}
+                Button("Report", role: .destructive) {
+                    // Handle real report action
+                }
+            }
+            .overlay(
+                Group {
+                    if showCopyToast {
+                        ToastView(text: "Link copied!")
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                            .onAppear {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                    withAnimation {
+                                        showCopyToast = false
+                                    }
+                                }
+                            }
+                    }
+                },
+                alignment: .bottom
+            )
         }
+        .presentationDetents([.medium])
+    }
+    
+    func feedback() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 }
 
@@ -70,3 +110,4 @@ struct VideoMoreOptionsSheet: View {
         isWatchLater: .constant(false)
     )
 }
+
