@@ -657,24 +657,155 @@ struct PreviewSafeMainTabWrapper: View {
     
     private func createSafeAuthManager() -> AuthenticationManager {
         let manager = AuthenticationManager.shared
-        manager.currentUser = User.sampleUsers.first ?? User.defaultUser
+        // Set a default user to prevent crashes
+        manager.currentUser = User(
+            username: "preview_user",
+            displayName: "Preview User",
+            email: "preview@mychannel.com",
+            profileImageURL: "https://picsum.photos/200/200",
+            bio: "Preview user for testing"
+        )
         return manager
     }
     
     private func createSafeAppState() -> AppState {
         let state = AppState()
-        state.currentUser = User.sampleUsers.first ?? User.defaultUser
+        // Set a safe default user
+        state.currentUser = User(
+            username: "preview_user",
+            displayName: "Preview User",
+            email: "preview@mychannel.com",
+            profileImageURL: "https://picsum.photos/200/200",
+            bio: "Preview user for testing"
+        )
         return state
     }
     
     private func createSafeVideoPlayerManager() -> GlobalVideoPlayerManager {
-        // In preview context, use the preview-safe version
-        return PreviewSafeGlobalVideoPlayerManager() as! GlobalVideoPlayerManager
+        return GlobalVideoPlayerManager.shared
+    }
+}
+
+// MARK: - Simple Preview Alternative
+struct SimpleMainTabPreview: View {
+    @State private var selectedTab: TabItem = .home
+    
+    var body: some View {
+        VStack {
+            // Simple content area
+            ZStack {
+                switch selectedTab {
+                case .home:
+                    VStack {
+                        Image(systemName: "house.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(AppTheme.Colors.primary)
+                        Text("Home")
+                            .font(AppTheme.Typography.title2)
+                    }
+                case .flicks:
+                    VStack {
+                        Image(systemName: "play.rectangle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(AppTheme.Colors.primary)
+                        Text("Flicks")
+                            .font(AppTheme.Typography.title2)
+                    }
+                case .search:
+                    VStack {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 60))
+                            .foregroundColor(AppTheme.Colors.primary)
+                        Text("Search")
+                            .font(AppTheme.Typography.title2)
+                    }
+                case .profile:
+                    VStack {
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(AppTheme.Colors.primary)
+                        Text("Profile")
+                            .font(AppTheme.Typography.title2)
+                    }
+                case .upload:
+                    EmptyView()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(AppTheme.Colors.background)
+            
+            // Simple tab bar
+            HStack {
+                ForEach(TabItem.allCases.filter { $0 != .upload }, id: \.self) { tab in
+                    Button(action: {
+                        selectedTab = tab
+                    }) {
+                        VStack {
+                            Image(systemName: tab.iconName(isSelected: selectedTab == tab))
+                                .font(.title2)
+                            Text(tab.title)
+                                .font(.caption)
+                        }
+                        .foregroundColor(selectedTab == tab ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    
+                    if tab == .flicks {
+                        Button(action: {}) {
+                            Image(systemName: "plus")
+                                .font(.title2)
+                                .foregroundColor(.white)
+                                .frame(width: 44, height: 44)
+                                .background(Circle().fill(AppTheme.Colors.primary))
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            .padding()
+            .background(.ultraThinMaterial)
+        }
     }
 }
 
 // MARK: - Preview
-#Preview {
-    PreviewSafeMainTabWrapper()
+#Preview("Simple Tab Preview") {
+    SimpleMainTabPreview()
         .preferredColorScheme(.light)
+}
+
+#Preview("Safe MainTabView") {
+    ZStack {
+        AppTheme.Colors.background.ignoresSafeArea()
+        
+        VStack {
+            Text("MyChannel")
+                .font(AppTheme.Typography.largeTitle)
+                .foregroundColor(AppTheme.Colors.primary)
+            
+            Text("Professional Video Streaming Platform")
+                .font(AppTheme.Typography.subheadline)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+            
+            Spacer()
+            
+            // Simple tab bar representation
+            HStack {
+                ForEach(TabItem.allCases.filter { $0 != .upload }, id: \.self) { tab in
+                    VStack {
+                        Image(systemName: tab.iconName(isSelected: tab == .home))
+                            .font(.title2)
+                        Text(tab.title)
+                            .font(.caption)
+                    }
+                    .foregroundColor(tab == .home ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding()
+            .background(.ultraThinMaterial)
+            .cornerRadius(24)
+            .padding()
+        }
+    }
 }
