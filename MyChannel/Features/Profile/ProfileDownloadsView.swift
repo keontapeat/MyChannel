@@ -9,13 +9,11 @@ import SwiftUI
 
 struct ProfileDownloadsView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var authManager: AuthenticationManager
-    
-    @State private var downloads: [ProfileDownloadedVideo] = []
+    @State private var downloads: [DownloadedVideo] = []
     @State private var selectedQuality: DownloadQuality = .high
     @State private var isLoading: Bool = true
     @State private var showingDeleteAlert: Bool = false
-    @State private var videoToDelete: ProfileDownloadedVideo?
+    @State private var videoToDelete: DownloadedVideo?
     @State private var showingDeleteAllAlert: Bool = false
     @State private var totalStorageUsed: Int64 = 0
     
@@ -266,49 +264,14 @@ struct ProfileDownloadsView: View {
     // MARK: - Helper Methods
     private func loadDownloads() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            // Simulate loading downloads
-            downloads = [
-                ProfileDownloadedVideo(
-                    id: "1",
-                    title: "Swift UI Advanced Techniques",
-                    channelName: "Tech Channel",
-                    thumbnailURL: "https://example.com/thumb1.jpg",
-                    duration: 1200,
-                    quality: .high,
-                    fileSize: 250 * 1024 * 1024, // 250 MB
-                    downloadDate: Date(),
-                    isWatched: false
-                ),
-                ProfileDownloadedVideo(
-                    id: "2",
-                    title: "iOS Development Best Practices",
-                    channelName: "Developer Hub",
-                    thumbnailURL: "https://example.com/thumb2.jpg",
-                    duration: 900,
-                    quality: .medium,
-                    fileSize: 180 * 1024 * 1024, // 180 MB
-                    downloadDate: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date(),
-                    isWatched: true
-                ),
-                ProfileDownloadedVideo(
-                    id: "3",
-                    title: "Building Modern Apps",
-                    channelName: "Code Masters",
-                    thumbnailURL: "https://example.com/thumb3.jpg",
-                    duration: 1800,
-                    quality: .ultra,
-                    fileSize: 450 * 1024 * 1024, // 450 MB
-                    downloadDate: Calendar.current.date(byAdding: .day, value: -2, to: Date()) ?? Date(),
-                    isWatched: false
-                )
-            ]
-            
+            // Use sample downloads
+            downloads = DownloadedVideo.sampleDownloads
             totalStorageUsed = downloads.reduce(0) { $0 + $1.fileSize }
             isLoading = false
         }
     }
     
-    private func deleteDownload(_ video: ProfileDownloadedVideo) {
+    private func deleteDownload(_ video: DownloadedVideo) {
         HapticManager.shared.impact(style: .medium)
         
         withAnimation(.easeInOut(duration: 0.3)) {
@@ -329,7 +292,7 @@ struct ProfileDownloadsView: View {
 
 // MARK: - Downloaded Video Row
 struct ProfileDownloadedVideoRow: View {
-    let video: ProfileDownloadedVideo
+    let video: DownloadedVideo
     let onDelete: () -> Void
     let onPlay: () -> Void
     
@@ -360,7 +323,7 @@ struct ProfileDownloadedVideoRow: View {
                         Spacer()
                         HStack {
                             Spacer()
-                            Text(formatDuration(video.duration))
+                            Text(video.formattedDuration)
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 4)
@@ -396,7 +359,7 @@ struct ProfileDownloadedVideoRow: View {
                             .cornerRadius(4)
                         
                         // File size
-                        Text(ByteCountFormatter.string(fromByteCount: video.fileSize, countStyle: .binary))
+                        Text(video.formattedFileSize)
                             .font(.system(size: 12))
                             .foregroundColor(AppTheme.Colors.textTertiary)
                         
@@ -445,12 +408,6 @@ struct ProfileDownloadedVideoRow: View {
                 }
         )
     }
-    
-    private func formatDuration(_ duration: Int) -> String {
-        let minutes = duration / 60
-        let seconds = duration % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
 }
 
 // MARK: - Benefit Row
@@ -471,19 +428,6 @@ struct DownloadBenefitRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
-}
-
-// MARK: - Profile Downloaded Video Model
-struct ProfileDownloadedVideo: Identifiable {
-    let id: String
-    let title: String
-    let channelName: String
-    let thumbnailURL: String
-    let duration: Int // in seconds
-    let quality: DownloadQuality
-    let fileSize: Int64 // in bytes
-    let downloadDate: Date
-    let isWatched: Bool
 }
 
 #Preview {

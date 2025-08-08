@@ -7,11 +7,6 @@
 
 import SwiftUI
 
-// MARK: - Scroll-To-Top Notification
-extension Notification.Name {
-    static let scrollToTopProfile = Notification.Name("scrollToTopProfile")
-}
-
 // MARK: - Preview-Safe Main Tab View
 struct MainTabView: View {
     // Simple environment object access without complex initialization
@@ -48,6 +43,21 @@ struct MainTabView: View {
         .onDisappear {
             cleanup()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToHomeTab"))) { _ in
+            selectedTab = .home
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToSearchTab"))) { _ in
+            selectedTab = .search
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToProfileTab"))) { _ in
+            selectedTab = .profile
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowUpload"))) { _ in
+            showingUpload = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .scrollToTopProfile)) { _ in
+            // Handle scroll to top for profile
+        }
     }
     
     @ViewBuilder
@@ -67,25 +77,29 @@ struct MainTabView: View {
                 .background(AppTheme.Colors.background)
                 .zIndex(1)
 
-            // Floating Mini Player - Above content, below tab bar
-            SafeFloatingMiniPlayer()
-                .environmentObject(globalPlayer)
-                .zIndex(998)
-
-            // Custom Tab Bar - Always on top
-            VStack {
-                Spacer()
-                CustomTabBar(
-                    selectedTab: $selectedTab,
-                    notificationBadges: notificationBadges,
-                    isHidden: false,
-                    onUploadTap: {
-                        showingUpload = true
-                    },
-                    onTabSelected: handleTabSelection
-                )
+            // Floating Mini Player - Above content, below tab bar (only for non-Flicks tabs)
+            if selectedTab != .flicks {
+                SafeFloatingMiniPlayer()
+                    .environmentObject(globalPlayer)
+                    .zIndex(998)
             }
-            .zIndex(999)
+
+            // Custom Tab Bar - Hidden for Flicks, visible for others
+            if selectedTab != .flicks {
+                VStack {
+                    Spacer()
+                    CustomTabBar(
+                        selectedTab: $selectedTab,
+                        notificationBadges: notificationBadges,
+                        isHidden: false,
+                        onUploadTap: {
+                            showingUpload = true
+                        },
+                        onTabSelected: handleTabSelection
+                    )
+                }
+                .zIndex(999)
+            }
         }
         .ignoresSafeArea(.keyboard)
         .fullScreenCover(isPresented: $showingUpload) {
@@ -341,47 +355,6 @@ struct TabErrorButtonStyle: ButtonStyle {
             )
             .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-    }
-}
-
-// MARK: - App State (Thread-Safe)
-@MainActor
-class AppState: ObservableObject {
-    @Published var currentUser: User?
-    @Published var isLoggedIn: Bool = true
-    @Published var watchLaterVideos: Set<String> = []
-    @Published var likedVideos: Set<String> = []
-    @Published var followedCreators: Set<String> = []
-    @Published var notifications: [AppNotification] = []
-
-    private let queue = DispatchQueue(label: "appstate.queue", qos: .userInitiated)
-
-    init() {
-        self.currentUser = nil
-    }
-    
-    func toggleLike(videoId: String) {
-        if likedVideos.contains(videoId) {
-            likedVideos.remove(videoId)
-        } else {
-            likedVideos.insert(videoId)
-        }
-    }
-
-    func toggleWatchLater(videoId: String) {
-        if watchLaterVideos.contains(videoId) {
-            watchLaterVideos.remove(videoId)
-        } else {
-            watchLaterVideos.insert(videoId)
-        }
-    }
-
-    func followCreator(_ creatorId: String) {
-        followedCreators.insert(creatorId)
-    }
-
-    func unfollowCreator(_ creatorId: String) {
-        followedCreators.remove(creatorId)
     }
 }
 

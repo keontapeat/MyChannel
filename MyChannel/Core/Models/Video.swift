@@ -226,6 +226,10 @@ struct Video: Identifiable, Codable, Hashable {
         return formatter.localizedString(for: createdAt, relativeTo: Date())
     }
     
+    var uploadTimeAgo: String {
+        return timeAgo // Same as timeAgo for consistency
+    }
+    
     var isNew: Bool {
         Date().timeIntervalSince(createdAt) < 24 * 60 * 60 // Less than 24 hours
     }
@@ -342,9 +346,9 @@ struct Video: Identifiable, Codable, Hashable {
         case TV_Y = "TV-Y"     // All Children
         case TV_Y7 = "TV-Y7"   // Children 7+
         case TV_G = "TV-G"     // General Audience
-        case TV_PG = "TV-PG"   // Parental Guidance
+        case TV_PG = "TV-PG"   // Parental Guidance Suggested
         case TV_14 = "TV-14"   // Parents Strongly Cautioned
-        case TV_MA = "TV-MA"   // Mature Audience
+        case TV_MA = "TV-MA"   // Mature Audience Only
         
         var description: String {
             switch self {

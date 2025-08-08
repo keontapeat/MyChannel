@@ -289,15 +289,15 @@ struct AppConfigPreview: View {
         NavigationView {
             List {
                 Section("App Information") {
-                    InfoRow(title: "Name", value: AppConfig.appName)
-                    InfoRow(title: "Version", value: AppConfig.appVersion)
-                    InfoRow(title: "Build", value: AppConfig.buildNumber)
-                    InfoRow(title: "Environment", value: AppConfig.environment.displayName)
+                    ConfigInfoRow(icon: "app.fill", title: "Name", value: AppConfig.appName)
+                    ConfigInfoRow(icon: "number", title: "Version", value: AppConfig.appVersion)
+                    ConfigInfoRow(icon: "hammer.fill", title: "Build", value: AppConfig.buildNumber)
+                    ConfigInfoRow(icon: "globe", title: "Environment", value: AppConfig.environment.displayName)
                 }
                 
                 Section("API Configuration") {
-                    InfoRow(title: "Base URL", value: AppConfig.API.baseURL)
-                    InfoRow(title: "Timeout", value: "\(AppConfig.API.timeout)s")
+                    ConfigInfoRow(icon: "link", title: "Base URL", value: AppConfig.API.baseURL)
+                    ConfigInfoRow(icon: "clock", title: "Timeout", value: "\(AppConfig.API.timeout)s")
                 }
                 
                 Section("Features") {
@@ -309,9 +309,9 @@ struct AppConfigPreview: View {
                 }
                 
                 Section("Video Settings") {
-                    InfoRow(title: "Max Upload Size", value: "\(AppConfig.Video.maxUploadSizeMB)MB")
-                    InfoRow(title: "Max Duration", value: "\(Int(AppConfig.Video.maxDurationSeconds/60)) minutes")
-                    InfoRow(title: "Default Quality", value: AppConfig.Video.defaultQuality.rawValue)
+                    ConfigInfoRow(icon: "video", title: "Max Upload Size", value: "\(AppConfig.Video.maxUploadSizeMB)MB")
+                    ConfigInfoRow(icon: "clock.fill", title: "Max Duration", value: "\(Int(AppConfig.Video.maxDurationSeconds/60)) minutes")
+                    ConfigInfoRow(icon: "tv", title: "Default Quality", value: AppConfig.Video.defaultQuality.rawValue)
                 }
                 
                 if AppConfig.Debug.isEnabled {
@@ -327,15 +327,23 @@ struct AppConfigPreview: View {
     }
 }
 
-struct InfoRow: View {
+struct ConfigInfoRow: View {
+    let icon: String
     let title: String
     let value: String
     
     var body: some View {
         HStack {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundColor(AppTheme.Colors.primary)
+                .frame(width: 24)
+            
             Text(title)
                 .foregroundColor(AppTheme.Colors.textSecondary)
+            
             Spacer()
+            
             Text(value)
                 .foregroundColor(AppTheme.Colors.textPrimary)
                 .fontWeight(.medium)

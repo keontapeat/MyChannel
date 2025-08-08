@@ -19,8 +19,8 @@ struct DownloadsView: View {
     @State private var selectedVideo: Video? = nil
     @State private var showingVideoPlayer: Bool = false
     
-    var filteredDownloads: [DownloadedVideo] {
-        let filtered: [DownloadedVideo]
+    var filteredDownloads: [PremiumDownloadedVideo] {
+        let filtered: [PremiumDownloadedVideo]
         
         switch selectedSegment {
         case .all:
@@ -55,7 +55,7 @@ struct DownloadsView: View {
     }
     
     var totalDownloadSize: String {
-        let totalBytes = filteredDownloads.reduce(Int64(0)) { (total: Int64, download: DownloadedVideo) -> Int64 in
+        let totalBytes = filteredDownloads.reduce(Int64(0)) { (total: Int64, download: PremiumDownloadedVideo) -> Int64 in
             // Approximate sizes for each quality
             let bytes: Int64
             switch download.quality {
@@ -281,7 +281,7 @@ struct DownloadsView: View {
         ScrollView {
             LazyVStack(spacing: 16) {
                 ForEach(filteredDownloads, id: \.id) { download in
-                    DownloadItemView(
+                    PremiumDownloadItemView(
                         download: download,
                         isSelected: selectedDownloads.contains(download.id),
                         isSelectionMode: $isSelectionMode,
@@ -361,7 +361,7 @@ struct DownloadsView: View {
         }
     }
     
-    private func deleteDownload(_ download: DownloadedVideo) {
+    private func deleteDownload(_ download: PremiumDownloadedVideo) {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             premiumService.deleteDownload(download)
             
@@ -395,9 +395,9 @@ struct DownloadsView: View {
     }
 }
 
-// MARK: - Download Item View
-struct DownloadItemView: View {
-    let download: DownloadedVideo
+// MARK: - Premium Download Item View
+struct PremiumDownloadItemView: View {
+    let download: PremiumDownloadedVideo
     let isSelected: Bool
     @Binding var isSelectionMode: Bool
     let onToggleSelection: () -> Void

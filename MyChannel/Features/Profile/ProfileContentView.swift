@@ -2,357 +2,210 @@
 //  ProfileContentView.swift
 //  MyChannel
 //
-//  Created by Keonta on 7/9/25.
+//  Created by AI Assistant on 7/9/25.
 //
 
 import SwiftUI
 
+// MARK: - Safe Profile Content View
+struct SafeProfileContentView: View {
+    let selectedTab: ProfileTab
+    let user: User
+    let videos: [Video]
+    
+    var body: some View {
+        SafeViewWrapper {
+            ProfileContentView(
+                selectedTab: selectedTab,
+                user: user,
+                videos: videos
+            )
+        } fallback: {
+            ProfileContentFallback(selectedTab: selectedTab)
+        }
+    }
+}
+
+// MARK: - Profile Content View
 struct ProfileContentView: View {
     let selectedTab: ProfileTab
     let user: User
     let videos: [Video]
     
     var body: some View {
-        switch selectedTab {
-        case .videos:
-            ProfileVideosView(videos: videos)
-                .transition(.opacity.combined(with: .move(edge: .trailing)))
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
-        case .shorts:
-            ProfileFlicksView(videos: videos.filter { $0.category == .shorts })
-                .transition(.opacity.combined(with: .move(edge: .trailing)))
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
-        case .playlists:
-            ProfilePlaylistsView(user: user)
-                .transition(.opacity.combined(with: .move(edge: .trailing)))
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
-        case .community:
-            ProfileCommunityView(user: user)
-                .transition(.opacity.combined(with: .move(edge: .trailing)))
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
-        case .about:
-            ProfileAboutView(user: user)
-                .transition(.opacity.combined(with: .move(edge: .trailing)))
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
+        LazyVStack(spacing: 0) {
+            switch selectedTab {
+            case .videos:
+                ProfileVideosView(videos: videos, user: user)
+            case .shorts:
+                ProfileShortsView(videos: videos, user: user)
+            case .playlists:
+                ProfilePlaylistsView(user: user)
+            case .community:
+                ProfileCommunityView(user: user)
+            case .about:
+                ProfileAboutView(user: user)
+            }
         }
+        .animation(.easeInOut(duration: 0.3), value: selectedTab)
     }
 }
 
 // MARK: - Profile Videos View
 struct ProfileVideosView: View {
     let videos: [Video]
+    let user: User
     
     var body: some View {
-        LazyVStack(spacing: 0) {
+        LazyVGrid(columns: [
+            GridItem(.flexible(), spacing: 8),
+            GridItem(.flexible(), spacing: 8)
+        ], spacing: 12) {
             ForEach(videos) { video in
-                ProfileVideoRow(video: video)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                ProfileVideoCard(video: video)
+                    .onTapGesture {
+                        // Handle video tap
+                        HapticManager.shared.impact(style: .light)
+                    }
             }
         }
-        .padding(.top, 0)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 20)
     }
 }
 
-struct ProfileVideoRow: View {
+// MARK: - Profile Video Card
+struct ProfileVideoCard: View {
     let video: Video
-    @State private var isPressed: Bool = false
     
     var body: some View {
-        HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             // Thumbnail
-            ZStack(alignment: .bottomTrailing) {
-                CachedAsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(16/9, contentMode: .fill)
-                } placeholder: {
-                    Rectangle()
-                        .fill(AppTheme.Colors.surface)
-                        .aspectRatio(16/9, contentMode: .fill)
-                        .overlay(
-                            Image(systemName: "play.rectangle")
-                                .font(.title3)
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        )
-                }
-                .frame(width: 168, height: 94) // YouTube-style thumbnail size
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                
-                // Duration Badge
-                Text(video.formattedDuration)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 3))
-                    .padding(4)
+            AsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                image
+                    .resizable()
+                    .aspectRatio(16/9, contentMode: .fill)
+                    .clipped()
+            } placeholder: {
+                Rectangle()
+                    .fill(AppTheme.Colors.textTertiary.opacity(0.3))
+                    .aspectRatio(16/9, contentMode: .fit)
+                    .overlay(
+                        Image(systemName: "play.rectangle")
+                            .font(.title2)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                    )
             }
+            .cornerRadius(8)
+            .overlay(
+                // Duration badge
+                Text(video.formattedDuration)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.black.opacity(0.8))
+                    .cornerRadius(4)
+                    .padding(6),
+                alignment: .bottomTrailing
+            )
             
-            // Video Info
+            // Video info
             VStack(alignment: .leading, spacing: 4) {
-                // Title
                 Text(video.title)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                 
-                // Views and time
                 HStack(spacing: 4) {
-                    Text("\(video.formattedViewCount) views")
-                        .font(.system(size: 11))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    Text(video.formattedViewCount)
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
                     
                     Text("•")
                         .font(.system(size: 12))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .foregroundStyle(AppTheme.Colors.textTertiary)
                     
-                    Text(video.timeAgo)
+                    Text(video.uploadTimeAgo)
                         .font(.system(size: 12))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                }
-                
-                Spacer()
-                
-                // Action buttons (share, like, playlist)
-                HStack(spacing: 20) {
-                    Button {
-                        HapticManager.shared.impact(style: .light)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrowshape.turn.up.right")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                    }
-                    
-                    Button {
-                        HapticManager.shared.impact(style: .light)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "hand.thumbsup")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                            Text("0")
-                                .font(.system(size: 12))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                    }
-                    
-                    Button {
-                        HapticManager.shared.impact(style: .light)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "text.badge.plus")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                            Text("0")
-                                .font(.system(size: 12))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    // More options
-                    Button {
-                        HapticManager.shared.impact(style: .light)
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 16))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
                 }
             }
         }
-        .scaleEffect(isPressed ? 0.98 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
-        .onTapGesture {
-            // Handle video tap
-            HapticManager.shared.impact(style: .light)
-        }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    isPressed = false
-                }
-        )
-    }
-}
-
-struct ProfileVideoCard: View {
-    let video: Video
-    @State private var isPressed: Bool = false
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Thumbnail
-            ZStack(alignment: .bottomTrailing) {
-                CachedAsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(16/9, contentMode: .fill)
-                } placeholder: {
-                    Rectangle()
-                        .fill(AppTheme.Colors.surface)
-                        .aspectRatio(16/9, contentMode: .fill)
-                        .overlay(
-                            Image(systemName: "play.rectangle")
-                                .font(.title3)
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        )
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                
-                // Duration Badge
-                Text(video.formattedDuration)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 3))
-                    .padding(4)
-            }
-            
-            // Video Info - More Compact
-            VStack(alignment: .leading, spacing: 2) {
-                Text(video.title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                
-                Text("\(video.formattedViewCount) views")
-                    .font(.system(size: 11))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                
-                Text(video.timeAgo)
-                    .font(.system(size: 11))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-            }
-        }
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
-        .onTapGesture {
-            // Handle video tap
-            HapticManager.shared.impact(style: .light)
-        }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    isPressed = false
-                }
-        )
-    }
-}
-
-// MARK: - Profile Flicks View
-struct ProfileFlicksView: View {
-    let videos: [Video]
-    
-    private let columns = [
-        GridItem(.flexible(), spacing: 6),
-        GridItem(.flexible(), spacing: 6),
-        GridItem(.flexible(), spacing: 6),
-        GridItem(.flexible(), spacing: 6)
-    ]
-    
-    var body: some View {
-        LazyVGrid(columns: columns, spacing: 6) {
-            ForEach(videos) { video in
-                ProfileFlickCard(video: video)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 0)
-    }
-}
-
-struct ProfileFlickCard: View {
-    let video: Video
-    @State private var isPressed: Bool = false
-    
-    var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            CachedAsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                image
-                    .resizable()
-                    .aspectRatio(9/16, contentMode: .fill)
-            } placeholder: {
-                Rectangle()
-                    .fill(AppTheme.Colors.surface)
-                    .aspectRatio(9/16, contentMode: .fill)
-                    .overlay(
-                        Image(systemName: "play.rectangle.on.rectangle")
-                            .font(.title3)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    )
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(video.title)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                
-                Text("\(video.formattedViewCount) views")
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.8))
-            }
-            .padding(6)
-            .background(
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.7)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-        }
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
-        .onTapGesture {
-            HapticManager.shared.impact(style: .light)
-        }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    isPressed = false
-                }
-        )
+        .background(AppTheme.Colors.surface)
+        .cornerRadius(12)
+        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.08), radius: 4, x: 0, y: 2)
     }
 }
 
 // MARK: - Profile Shorts View
 struct ProfileShortsView: View {
     let videos: [Video]
+    let user: User
     
     var body: some View {
-        ProfileFlicksView(videos: videos)
+        LazyVGrid(columns: [
+            GridItem(.flexible(), spacing: 4),
+            GridItem(.flexible(), spacing: 4),
+            GridItem(.flexible(), spacing: 4)
+        ], spacing: 8) {
+            ForEach(videos.prefix(12)) { video in
+                ProfileShortCard(video: video)
+                    .onTapGesture {
+                        HapticManager.shared.impact(style: .light)
+                    }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 20)
     }
 }
 
+// MARK: - Profile Short Card
 struct ProfileShortCard: View {
     let video: Video
     
     var body: some View {
-        ProfileFlickCard(video: video)
+        ZStack(alignment: .bottomLeading) {
+            AsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                image
+                    .resizable()
+                    .aspectRatio(9/16, contentMode: .fill)
+                    .clipped()
+            } placeholder: {
+                Rectangle()
+                    .fill(AppTheme.Colors.textTertiary.opacity(0.3))
+                    .aspectRatio(9/16, contentMode: .fit)
+                    .overlay(
+                        Image(systemName: "play.rectangle.on.rectangle")
+                            .font(.title3)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                    )
+            }
+            .cornerRadius(8)
+            
+            // View count overlay
+            VStack(alignment: .leading, spacing: 2) {
+                Spacer()
+                
+                HStack(spacing: 4) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white)
+                    
+                    Text(video.formattedViewCount)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(.black.opacity(0.6))
+                .cornerRadius(4)
+                .padding(6)
+            }
+        }
+        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.1), radius: 3, x: 0, y: 1)
     }
 }
 
@@ -361,107 +214,64 @@ struct ProfilePlaylistsView: View {
     let user: User
     
     var body: some View {
-        LazyVStack(spacing: 12) {
-            ForEach(samplePlaylists(for: user), id: \.id) { playlist in
-                ProfilePlaylistRow(playlist: playlist)
+        VStack(spacing: 16) {
+            ForEach(0..<3) { index in
+                ProfilePlaylistCard(
+                    title: "My Playlist \(index + 1)",
+                    videoCount: Int.random(in: 5...25),
+                    thumbnailURL: "https://picsum.photos/400/300?random=\(index + 10)"
+                )
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 0)
-    }
-    
-    private func samplePlaylists(for user: User) -> [MockPlaylist] {
-        [
-            MockPlaylist(
-                id: UUID().uuidString,
-                title: "Best of \(user.displayName)",
-                videoCount: 12,
-                thumbnailURL: "https://picsum.photos/200/150?random=1"
-            ),
-            MockPlaylist(
-                id: UUID().uuidString,
-                title: "Recent Uploads",
-                videoCount: 8,
-                thumbnailURL: "https://picsum.photos/200/150?random=2"
-            ),
-            MockPlaylist(
-                id: UUID().uuidString,
-                title: "Popular Videos",
-                videoCount: 15,
-                thumbnailURL: "https://picsum.photos/200/150?random=3"
-            )
-        ]
+        .padding(.horizontal, 16)
+        .padding(.vertical, 20)
     }
 }
 
-struct MockPlaylist {
-    let id: String
+// MARK: - Profile Playlist Card
+struct ProfilePlaylistCard: View {
     let title: String
     let videoCount: Int
     let thumbnailURL: String
-}
-
-struct ProfilePlaylistRow: View {
-    let playlist: MockPlaylist
-    @State private var isPressed: Bool = false
     
     var body: some View {
-        HStack(spacing: 10) {
-            CachedAsyncImage(url: URL(string: playlist.thumbnailURL)) { image in
+        HStack(spacing: 12) {
+            AsyncImage(url: URL(string: thumbnailURL)) { image in
                 image
                     .resizable()
                     .aspectRatio(16/9, contentMode: .fill)
+                    .clipped()
             } placeholder: {
                 Rectangle()
-                    .fill(AppTheme.Colors.surface)
-                    .aspectRatio(16/9, contentMode: .fill)
+                    .fill(AppTheme.Colors.textTertiary.opacity(0.3))
                     .overlay(
                         Image(systemName: "list.bullet")
-                            .font(.title3)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .font(.title2)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
                     )
             }
-            .frame(width: 100, height: 56)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .frame(width: 120, height: 68)
+            .cornerRadius(8)
             
-            VStack(alignment: .leading, spacing: 3) {
-                Text(playlist.title)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
                     .lineLimit(2)
                 
-                Text("\(playlist.videoCount) videos")
-                    .font(.system(size: 12))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                Text("\(videoCount) videos")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
                 
                 Spacer()
             }
             
             Spacer()
-            
-            Image(systemName: "chevron.right")
-                .font(.caption2)
-                .foregroundColor(AppTheme.Colors.textTertiary)
         }
         .padding(12)
-        .background(AppTheme.Colors.cardBackground)
-        .cornerRadius(8)
-        .scaleEffect(isPressed ? 0.98 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
-        .onTapGesture {
-            HapticManager.shared.impact(style: .light)
-        }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    isPressed = false
-                }
-        )
+        .background(AppTheme.Colors.surface)
+        .cornerRadius(12)
+        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.08), radius: 4, x: 0, y: 2)
     }
 }
 
@@ -470,150 +280,138 @@ struct ProfileCommunityView: View {
     let user: User
     
     var body: some View {
-        LazyVStack(spacing: 12) {
-            ForEach(sampleCommunityPosts(for: user), id: \.id) { post in
-                ProfileCommunityPostCard(post: post, user: user)
+        LazyVStack(spacing: 16) {
+            ForEach(0..<5) { index in
+                ProfileCommunityPost(
+                    author: user,
+                    content: "This is a sample community post \(index + 1). Thanks for following my channel!",
+                    timestamp: Date().addingTimeInterval(-Double(index * 3600)),
+                    likeCount: Int.random(in: 10...500),
+                    commentCount: Int.random(in: 2...50)
+                )
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 0)
-    }
-    
-    private func sampleCommunityPosts(for user: User) -> [MockCommunityPost] {
-        [
-            MockCommunityPost(
-                id: UUID().uuidString,
-                content: "Working on some exciting new content! What would you like to see next? 🎬",
-                timestamp: Calendar.current.date(byAdding: .hour, value: -2, to: Date()) ?? Date(),
-                likeCount: 145,
-                commentCount: 23
-            ),
-            MockCommunityPost(
-                id: UUID().uuidString,
-                content: "Behind the scenes from yesterday's shoot. The creativity never stops! ✨",
-                timestamp: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date(),
-                likeCount: 287,
-                commentCount: 45
-            ),
-            MockCommunityPost(
-                id: UUID().uuidString,
-                content: "Thank you for 100K subscribers! This community is amazing 💫",
-                timestamp: Calendar.current.date(byAdding: .day, value: -3, to: Date()) ?? Date(),
-                likeCount: 892,
-                commentCount: 156
-            )
-        ]
+        .padding(.horizontal, 16)
+        .padding(.vertical, 20)
     }
 }
 
-struct MockCommunityPost {
-    let id: String
+// MARK: - Profile Community Post
+struct ProfileCommunityPost: View {
+    let author: User
     let content: String
     let timestamp: Date
     let likeCount: Int
     let commentCount: Int
-}
-
-struct ProfileCommunityPostCard: View {
-    let post: MockCommunityPost
-    let user: User
-    @State private var isLiked: Bool = false
+    
+    @State private var isLiked = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // User Info
-            HStack(spacing: 10) {
-                if let profileImageURL = user.profileImageURL {
-                    CachedAsyncImage(url: URL(string: profileImageURL)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Circle()
-                            .fill(AppTheme.Colors.surface)
-                    }
-                    .frame(width: 36, height: 36)
-                    .clipShape(Circle())
-                } else {
+        VStack(alignment: .leading, spacing: 12) {
+            // Author info
+            HStack(spacing: 12) {
+                AsyncImage(url: URL(string: author.profileImageURL ?? "")) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } placeholder: {
                     Circle()
-                        .fill(AppTheme.Colors.surface)
-                        .frame(width: 36, height: 36)
+                        .fill(AppTheme.Colors.primary.opacity(0.7))
+                        .overlay(
+                            Text(String(author.displayName.prefix(1)))
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(.white)
+                        )
                 }
+                .frame(width: 40, height: 40)
+                .clipShape(Circle())
                 
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 4) {
-                        Text(user.displayName)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(author.displayName)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppTheme.Colors.textPrimary)
                         
-                        if user.isVerified {
+                        if author.isVerified {
                             Image(systemName: "checkmark.seal.fill")
-                                .font(.caption2)
-                                .foregroundColor(.blue)
+                                .font(.system(size: 14))
+                                .foregroundStyle(AppTheme.Colors.primary)
                         }
                     }
                     
-                    Text(post.timestamp.timeIntervalSinceNow < -86400 ? 
-                         post.timestamp.formatted(.dateTime.month().day()) : 
-                         RelativeDateTimeFormatter().localizedString(for: post.timestamp, relativeTo: Date())
-                    )
-                    .font(.system(size: 11))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    Text(timeAgoString(from: timestamp))
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
                 }
                 
                 Spacer()
+                
+                Button(action: {}) {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 16))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
             }
             
-            // Post Content
-            Text(post.content)
-                .font(.system(size: 14))
-                .foregroundColor(AppTheme.Colors.textPrimary)
+            // Content
+            Text(content)
+                .font(.system(size: 15))
+                .foregroundStyle(AppTheme.Colors.textPrimary)
+                .multilineTextAlignment(.leading)
             
             // Actions
             HStack(spacing: 20) {
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                Button(action: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         isLiked.toggle()
                     }
                     HapticManager.shared.impact(style: .light)
-                } label: {
-                    HStack(spacing: 4) {
+                }) {
+                    HStack(spacing: 6) {
                         Image(systemName: isLiked ? "heart.fill" : "heart")
-                            .foregroundColor(isLiked ? .red : AppTheme.Colors.textSecondary)
+                            .font(.system(size: 16))
+                            .foregroundStyle(isLiked ? .red : AppTheme.Colors.textSecondary)
                         
-                        Text("\(post.likeCount + (isLiked ? 1 : 0))")
-                            .font(.system(size: 11))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        Text("\(likeCount)")
+                            .font(.system(size: 14))
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
                     }
                 }
-                .scaleEffect(isLiked ? 1.1 : 1.0)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isLiked)
+                .buttonStyle(.plain)
                 
-                Button {
-                    HapticManager.shared.impact(style: .light)
-                } label: {
-                    HStack(spacing: 4) {
+                Button(action: {}) {
+                    HStack(spacing: 6) {
                         Image(systemName: "bubble.right")
-                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .font(.system(size: 16))
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
                         
-                        Text("\(post.commentCount)")
-                            .font(.system(size: 11))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        Text("\(commentCount)")
+                            .font(.system(size: 14))
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
                     }
                 }
+                .buttonStyle(.plain)
                 
                 Spacer()
+                
+                Button(action: {}) {
+                    Image(systemName: "arrowshape.turn.up.right")
+                        .font(.system(size: 16))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+                .buttonStyle(.plain)
             }
         }
-        .padding(12)
-        .background(AppTheme.Colors.cardBackground)
-        .cornerRadius(8)
-        .shadow(
-            color: AppTheme.Shadows.small.color,
-            radius: AppTheme.Shadows.small.radius,
-            x: AppTheme.Shadows.small.x,
-            y: AppTheme.Shadows.small.y
-        )
+        .padding(16)
+        .background(AppTheme.Colors.surface)
+        .cornerRadius(12)
+        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.08), radius: 4, x: 0, y: 2)
+    }
+    
+    private func timeAgoString(from date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 
@@ -622,148 +420,277 @@ struct ProfileAboutView: View {
     let user: User
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Basic Info
+        VStack(spacing: 24) {
+            // Channel stats
+            ProfileStatsSection(user: user)
+            
+            // Description
             if let bio = user.bio {
-                InfoSection(title: "About", icon: "info.circle") {
-                    Text(bio)
-                        .font(.system(size: 14))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                }
+                ProfileDescriptionSection(bio: bio)
             }
             
-            // Stats
-            InfoSection(title: "Channel Statistics", icon: "chart.bar") {
-                VStack(spacing: 10) {
-                    StatRow(label: "Joined", value: user.createdAt.formatted(.dateTime.month().day().year()))
-                    StatRow(label: "Total Subscribers", value: user.subscriberCount.formatted())
-                    StatRow(label: "Total Videos", value: "\(user.videoCount)")
-                    
-                    if let totalViews = user.totalViews {
-                        StatRow(label: "Total Views", value: formatLargeNumber(totalViews))
-                    }
-                }
+            // Social links
+            if !user.socialLinks.isEmpty {
+                ProfileSocialLinksSection(socialLinks: user.socialLinks)
             }
             
-            // Location & Links
-            if user.location != nil || !user.socialLinks.isEmpty {
-                InfoSection(title: "Links & Location", icon: "link") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        if let location = user.location {
-                            HStack(spacing: 6) {
-                                Image(systemName: "location")
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                Text(location)
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                            }
-                        }
-                        
-                        if let website = user.website {
-                            HStack(spacing: 6) {
-                                Image(systemName: "globe")
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                Link(website, destination: URL(string: website) ?? URL(string: "https://example.com")!)
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.Colors.primary)
-                            }
-                        }
-                        
-                        ForEach(user.socialLinks) { socialLink in
-                            HStack(spacing: 6) {
-                                Image(systemName: socialLink.platform.iconName)
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                Link(socialLink.displayName, destination: URL(string: socialLink.url) ?? URL(string: "https://example.com")!)
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.Colors.primary)
-                            }
-                        }
-                    }
-                }
-            }
-            
-            Spacer(minLength: 60)
+            // Additional info
+            ProfileAdditionalInfoSection(user: user)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 0)
-    }
-    
-    private func formatLargeNumber(_ number: Int) -> String {
-        if number >= 1_000_000_000 {
-            return String(format: "%.1fB", Double(number) / 1_000_000_000)
-        } else if number >= 1_000_000 {
-            return String(format: "%.1fM", Double(number) / 1_000_000)
-        } else if number >= 1_000 {
-            return String(format: "%.1fK", Double(number) / 1_000)
-        } else {
-            return number.formatted()
-        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 20)
     }
 }
 
-struct InfoSection<Content: View>: View {
-    let title: String
-    let icon: String
-    let content: Content
-    
-    init(title: String, icon: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.icon = icon
-        self.content = content()
-    }
+// MARK: - Profile Stats Section
+struct ProfileStatsSection: View {
+    let user: User
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.primary)
-                
-                Text(title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-            }
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Channel Statistics")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AppTheme.Colors.textPrimary)
             
-            content
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 12) {
+                StatCard(
+                    title: "Subscribers",
+                    value: "\(user.subscriberCount.formatted())",
+                    icon: "person.2.fill",
+                    color: AppTheme.Colors.primary
+                )
+                
+                StatCard(
+                    title: "Videos",
+                    value: "\(user.videoCount)",
+                    icon: "play.rectangle.fill",
+                    color: AppTheme.Colors.secondary
+                )
+                
+                if let totalViews = user.totalViews {
+                    StatCard(
+                        title: "Total Views",
+                        value: "\(totalViews.formatted())",
+                        icon: "eye.fill",
+                        color: .green
+                    )
+                }
+                
+                StatCard(
+                    title: "Joined",
+                    value: user.createdAt.formatted(.dateTime.year().month(.abbreviated)),
+                    icon: "calendar.badge.plus",
+                    color: .orange
+                )
+            }
         }
-        .padding(12)
-        .background(AppTheme.Colors.cardBackground)
-        .cornerRadius(8)
-        .shadow(
-            color: AppTheme.Shadows.small.color,
-            radius: AppTheme.Shadows.small.radius,
-            x: AppTheme.Shadows.small.x,
-            y: AppTheme.Shadows.small.y
-        )
+        .padding(16)
+        .background(AppTheme.Colors.surface)
+        .cornerRadius(12)
+        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.08), radius: 4, x: 0, y: 2)
     }
 }
 
-struct StatRow: View {
-    let label: String
+// MARK: - Stat Card
+struct StatCard: View {
+    let title: String
+    let value: String
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(color)
+                    .frame(width: 24, height: 24)
+                
+                Spacer()
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(value)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .background(color.opacity(0.1))
+        .cornerRadius(8)
+    }
+}
+
+// MARK: - Profile Description Section
+struct ProfileDescriptionSection: View {
+    let bio: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("About")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AppTheme.Colors.textPrimary)
+            
+            Text(bio)
+                .font(.system(size: 15))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .multilineTextAlignment(.leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(AppTheme.Colors.surface)
+        .cornerRadius(12)
+        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.08), radius: 4, x: 0, y: 2)
+    }
+}
+
+// MARK: - Profile Social Links Section
+struct ProfileSocialLinksSection: View {
+    let socialLinks: [SocialLink]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Links")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AppTheme.Colors.textPrimary)
+            
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 8) {
+                ForEach(socialLinks) { link in
+                    ProfileSocialLinkCard(link: link)
+                }
+            }
+        }
+        .padding(16)
+        .background(AppTheme.Colors.surface)
+        .cornerRadius(12)
+        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.08), radius: 4, x: 0, y: 2)
+    }
+}
+
+// MARK: - Profile Additional Info Section
+struct ProfileAdditionalInfoSection: View {
+    let user: User
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Details")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AppTheme.Colors.textPrimary)
+            
+            VStack(spacing: 12) {
+                if let location = user.location {
+                    InfoRow(icon: "location.fill", title: "Location", value: location)
+                }
+                
+                if let website = user.website {
+                    InfoRow(icon: "globe", title: "Website", value: website)
+                }
+                
+                InfoRow(
+                    icon: "calendar.badge.plus",
+                    title: "Joined",
+                    value: user.createdAt.formatted(.dateTime.day().month().year())
+                )
+            }
+        }
+        .padding(16)
+        .background(AppTheme.Colors.surface)
+        .cornerRadius(12)
+        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.08), radius: 4, x: 0, y: 2)
+    }
+}
+
+// MARK: - Info Row
+struct InfoRow: View {
+    let icon: String
+    let title: String
     let value: String
     
     var body: some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 13))
-                .foregroundColor(AppTheme.Colors.textSecondary)
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .frame(width: 20, height: 20)
+            
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
             
             Spacer()
             
             Text(value)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(AppTheme.Colors.textPrimary)
+                .font(.system(size: 14))
+                .foregroundStyle(AppTheme.Colors.textPrimary)
         }
+        .padding(.vertical, 2)
     }
 }
 
-#Preview {
-    ScrollView {
-        ProfileContentView(
-            selectedTab: .about,
-            user: User.sampleUsers[0],
-            videos: Video.sampleVideos
-        )
+// MARK: - Profile Social Link Card (renamed to avoid conflict with EditProfileView)
+struct ProfileSocialLinkCard: View {
+    let link: SocialLink
+    
+    var body: some View {
+        Button(action: {
+            // Open link
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: link.platform.iconName)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.Colors.primary)
+                    .frame(width: 20, height: 20)
+                
+                Text(link.platform.displayName)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .lineLimit(1)
+                
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(AppTheme.Colors.primary.opacity(0.1))
+            .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
     }
-    .background(AppTheme.Colors.background)
+}
+
+// MARK: - Content Fallback
+struct ProfileContentFallback: View {
+    let selectedTab: ProfileTab
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: selectedTab.iconName)
+                .font(.system(size: 48))
+                .foregroundStyle(AppTheme.Colors.textTertiary)
+            
+            Text("Content Unavailable")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+            
+            Text("Unable to load \(selectedTab.title.lowercased())")
+                .font(.system(size: 14))
+                .foregroundStyle(AppTheme.Colors.textTertiary)
+        }
+        .padding(40)
+        .background(AppTheme.Colors.surface)
+        .cornerRadius(12)
+        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.05), radius: 4, x: 0, y: 2)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 20)
+    }
 }

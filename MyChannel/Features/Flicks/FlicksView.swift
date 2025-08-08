@@ -12,22 +12,21 @@ struct FlicksView: View {
     @State private var currentIndex: Int = 0
     @State private var videos: [Video] = []
     @State private var isLoading = true
-    @State private var dragOffset: CGFloat = 0
-    @State private var isDragging = false
     @State private var showingComments = false
     @State private var showingShare = false
-    @State private var showingSearch = false
     @State private var likedVideos: Set<String> = []
     @State private var followedCreators: Set<String> = []
+    @State private var showingProfile = false
+    @State private var selectedCreator: User?
+    @State private var subscriberCounts: [String: Int] = [:] // Track subscriber counts
     
     private let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-    private let swipeThreshold: CGFloat = 50
     
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
                 ZStack {
-                    Color.black.ignoresSafeArea(.all)
+                    Color.black.ignoresSafeArea()
                     
                     if isLoading {
                         loadingView
@@ -35,83 +34,154 @@ struct FlicksView: View {
                         verticalVideoFeed(geometry: geometry)
                     }
                     
-                    // Search button - top right only
-                    VStack {
-                        HStack {
-                            Spacer()
-                            
-                            Button(action: { 
-                                showingSearch = true
-                            }) {
-                                ZStack {
-                                    Circle()
-                                        .fill(.black.opacity(0.4))
-                                        .frame(width: 44, height: 44)
-                                    
-                                    Image(systemName: "magnifyingglass")
-                                        .font(.system(size: 18, weight: .medium))
-                                        .foregroundColor(.white)
-                                }
-                            }
-                            .padding(.trailing, 16)
-                            .padding(.top, 16)
-                        }
-                        
-                        Spacer()
-                    }
+                    // YouTube-style top overlay
+                    topOverlay
+                        .zIndex(1)
                 }
             }
             .navigationBarHidden(true)
             .statusBarHidden()
-            .ignoresSafeArea(.all)
             .onAppear {
                 loadFlicksContent()
             }
             .sheet(isPresented: $showingComments) {
                 if !videos.isEmpty && currentIndex < videos.count {
-                    FlicksCommentsSheet(video: videos[currentIndex])
-                        .presentationDetents([.medium, .large])
+                    YouTubeStyleCommentsSheet(video: videos[currentIndex])
+                        .presentationDetents([.height(200), .medium, .large])
                         .presentationDragIndicator(.visible)
+                        .presentationBackground(.ultraThinMaterial)
                 }
             }
             .sheet(isPresented: $showingShare) {
                 if !videos.isEmpty && currentIndex < videos.count {
-                    VideoShareSheet(items: [videos[currentIndex].videoURL, videos[currentIndex].title])
-                        .presentationDetents([.medium])
+                    YouTubeStyleShareSheet(video: videos[currentIndex])
+                        .presentationDetents([.height(400)])
+                        .presentationDragIndicator(.visible)
                 }
             }
-            .fullScreenCover(isPresented: $showingSearch) {
-                SearchView()
+            .fullScreenCover(isPresented: $showingProfile) {
+                if let creator = selectedCreator {
+                    FlicksCreatorProfileView(creator: creator)
+                }
             }
         }
     }
     
-    // MARK: - Loading View  
+    // MARK: - Loading View
     private var loadingView: some View {
         ZStack {
-            Color.black.ignoresSafeArea(.all)
+            Color.black
             
-            VStack(spacing: 20) {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
-                    .scaleEffect(1.5)
+            VStack(spacing: 24) {
+                // Animated loading circles
+                HStack(spacing: 8) {
+                    ForEach(0..<3) { index in
+                        Circle()
+                            .fill(.white.opacity(0.8))
+                            .frame(width: 12, height: 12)
+                            .scaleEffect(1.0)
+                            .animation(
+                                .easeInOut(duration: 0.6)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(index) * 0.2),
+                                value: UUID()
+                            )
+                    }
+                }
+                .onAppear {
+                    // Trigger animations
+                }
                 
-                Text("Loading Flicks...")
-                    .font(AppTheme.Typography.headline)
-                    .foregroundColor(.white)
+                Text("Flicks")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
             }
         }
+    }
+    
+    // MARK: - Top Overlay (YouTube Style)
+    private var topOverlay: some View {
+        VStack {
+            HStack {
+                // Back/Home button
+                Button(action: { }) {
+                    Image(systemName: "house.fill")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(.black.opacity(0.3))
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(.white.opacity(0.2), lineWidth: 1)
+                        )
+                }
+                
+                Spacer()
+                
+                // Center title with YouTube-style design
+                Text("Flicks")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                
+                Spacer()
+                
+                // Search and Camera buttons
+                HStack(spacing: 12) {
+                    Button(action: { }) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(.black.opacity(0.3))
+                            .clipShape(Circle())
+                            .overlay(
+                                Circle()
+                                    .stroke(.white.opacity(0.2), lineWidth: 1)
+                            )
+                    }
+                    
+                    Button(action: { }) {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(.black.opacity(0.3))
+                            .clipShape(Circle())
+                            .overlay(
+                                Circle()
+                                    .stroke(.white.opacity(0.2), lineWidth: 1)
+                            )
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            
+            Spacer()
+        }
+        .background(
+            LinearGradient(
+                colors: [.black.opacity(0.6), .clear],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 120)
+            .allowsHitTesting(false)
+        )
     }
     
     // MARK: - Vertical Video Feed
     private func verticalVideoFeed(geometry: GeometryProxy) -> some View {
         TabView(selection: $currentIndex) {
             ForEach(0..<videos.count, id: \.self) { index in
-                FlicksVideoPlayer(
+                YouTubeStyleVideoPlayer(
                     video: videos[index],
                     isCurrentVideo: index == currentIndex,
                     isLiked: likedVideos.contains(videos[index].id),
                     isFollowing: followedCreators.contains(videos[index].creator.id),
+                    subscriberCount: subscriberCounts[videos[index].creator.id] ?? videos[index].creator.subscriberCount,
                     onLike: {
                         toggleLike(for: videos[index])
                     },
@@ -123,22 +193,24 @@ struct FlicksView: View {
                     },
                     onShare: {
                         showingShare = true
+                    },
+                    onProfileTap: {
+                        selectedCreator = videos[index].creator
+                        showingProfile = true
                     }
                 )
                 .tag(index)
                 .frame(width: geometry.size.width, height: geometry.size.height)
-                .clipped()
             }
         }
         .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-        .ignoresSafeArea(.all)
-        .frame(width: geometry.size.width, height: geometry.size.height)
+        .ignoresSafeArea()
         .onChange(of: currentIndex) { _, newValue in
             impactFeedback.impactOccurred()
             preloadNextVideos(currentIndex: newValue)
         }
     }
-
+    
     // MARK: - Helper Methods
     private func loadFlicksContent() {
         Task {
@@ -146,13 +218,12 @@ struct FlicksView: View {
                 isLoading = true
             }
             
-            // Simulate loading
-            try? await Task.sleep(nanoseconds: 500_000_000) // Reduced to 0.5 seconds
+            // Simulate realistic loading time
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
             
             await MainActor.run {
                 videos = Video.sampleVideos.shuffled()
                 isLoading = false
-                print("🔥 Loaded \(videos.count) videos for Flicks")
             }
         }
     }
@@ -173,8 +244,12 @@ struct FlicksView: View {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
             if followedCreators.contains(creator.id) {
                 followedCreators.remove(creator.id)
+                // Decrease subscriber count
+                subscriberCounts[creator.id] = max(0, (subscriberCounts[creator.id] ?? creator.subscriberCount) - 1)
             } else {
                 followedCreators.insert(creator.id)
+                // Increase subscriber count
+                subscriberCounts[creator.id] = (subscriberCounts[creator.id] ?? creator.subscriberCount) + 1
             }
         }
         
@@ -182,9 +257,7 @@ struct FlicksView: View {
     }
     
     private func preloadNextVideos(currentIndex: Int) {
-        // Preload logic for smooth scrolling
         if currentIndex >= videos.count - 3 {
-            // Load more videos
             Task {
                 let moreVideos = Video.sampleVideos.shuffled().prefix(5)
                 await MainActor.run {
@@ -195,367 +268,146 @@ struct FlicksView: View {
     }
 }
 
-// MARK: - Flicks Video Player
-struct FlicksVideoPlayer: View {
+// MARK: - YouTube Style Video Player
+struct YouTubeStyleVideoPlayer: View {
     let video: Video
     let isCurrentVideo: Bool
     let isLiked: Bool
     let isFollowing: Bool
+    let subscriberCount: Int
     let onLike: () -> Void
     let onFollow: () -> Void
     let onComment: () -> Void
     let onShare: () -> Void
+    let onProfileTap: () -> Void
     
     @StateObject private var playerManager = VideoPlayerManager()
     @State private var showControls = false
-    @State private var hasSetupPlayer = false
+    @State private var controlsTimer: Timer?
+    @State private var isPlaying = true
+    @State private var showPlayIcon = false
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // SLEEK YOUTUBE-STYLE BACKGROUND
+        ZStack {
+            // Video Player Background
+            if isCurrentVideo {
+                VideoPlayer(player: playerManager.player)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .onTapGesture {
+                        togglePlayPause()
+                        showPlayPauseIcon()
+                    }
+                    .onAppear {
+                        setupPlayer()
+                    }
+                    .onDisappear {
+                        playerManager.pause()
+                    }
+            } else {
+                // High-quality thumbnail
                 AsyncImage(url: URL(string: video.thumbnailURL)) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .frame(width: geometry.size.width, height: geometry.size.height)
-                        .clipped()
-                        .overlay(
-                            // Dark overlay for better contrast
-                            Rectangle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.black.opacity(0.0),
-                                            Color.black.opacity(0.2),
-                                            Color.black.opacity(0.6)
-                                        ],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                        )
                 } placeholder: {
-                    // PREMIUM SLEEK PLACEHOLDER
                     ZStack {
-                        // Animated gradient background
                         Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 0.1, green: 0.1, blue: 0.3),
-                                        Color(red: 0.2, green: 0.0, blue: 0.4),
-                                        Color(red: 0.4, green: 0.0, blue: 0.6),
-                                        Color(red: 0.6, green: 0.0, blue: 0.4)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .fill(.black)
                         
-                        // Subtle pattern overlay
-                        Rectangle()
-                            .fill(
-                                RadialGradient(
-                                    colors: [
-                                        Color.white.opacity(0.05),
-                                        Color.clear,
-                                        Color.black.opacity(0.2)
-                                    ],
-                                    center: .center,
-                                    startRadius: 50,
-                                    endRadius: 400
-                                )
-                            )
-                        
-                        // SLEEK CONTENT OVERLAY
-                        VStack(spacing: 24) {
-                            // Category badge
-                            HStack {
-                                Image(systemName: video.category.iconName)
-                                    .font(.system(size: 12, weight: .semibold))
-                                Text(video.category.displayName.uppercased())
-                                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                                    .tracking(1.2)
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(.ultraThinMaterial)
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(video.category.color.opacity(0.5), lineWidth: 1)
-                                    )
-                            )
-                            
-                            // Main play button with glow effect
-                            ZStack {
-                                // Glow effect
-                                Circle()
-                                    .fill(
-                                        RadialGradient(
-                                            colors: [
-                                                Color.white.opacity(0.3),
-                                                Color.white.opacity(0.1),
-                                                Color.clear
-                                            ],
-                                            center: .center,
-                                            startRadius: 30,
-                                            endRadius: 80
-                                        )
-                                    )
-                                    .frame(width: 160, height: 160)
-                                
-                                // Play button
-                                ZStack {
-                                    Circle()
-                                        .fill(.ultraThinMaterial)
-                                        .frame(width: 80, height: 80)
-                                        .overlay(
-                                            Circle()
-                                                .stroke(.white.opacity(0.3), lineWidth: 2)
-                                        )
-                                    
-                                    Image(systemName: "play.fill")
-                                        .font(.system(size: 32, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .offset(x: 3) // Slight offset for visual balance
-                                }
-                                .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
-                            }
-                            
-                            // Title with glassmorphism background
-                            VStack(spacing: 8) {
-                                Text(video.title)
-                                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                                    .foregroundColor(.white)
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(2)
-                                    .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
-                                
-                                // Stats row
-                                HStack(spacing: 16) {
-                                    Label(video.formattedViewCount, systemImage: "eye.fill")
-                                    Label(video.formattedLikeCount, systemImage: "heart.fill")
-                                    Label(video.formattedDuration, systemImage: "clock.fill")
-                                }
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.white.opacity(0.9))
-                            }
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(.ultraThinMaterial)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 16)
-                                            .stroke(.white.opacity(0.2), lineWidth: 1)
-                                    )
-                            )
-                            .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
-                            
-                            // Tap to play hint
-                            Text("TAP TO PLAY")
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                .foregroundColor(.white.opacity(0.7))
-                                .tracking(2)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(
-                                    Capsule()
-                                        .fill(.black.opacity(0.3))
-                                        .overlay(
-                                            Capsule()
-                                                .stroke(.white.opacity(0.2), lineWidth: 1)
-                                        )
-                                )
-                        }
-                        .padding(.horizontal, 40)
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
                     }
                 }
-                
-                // Video Player (when current and ready) - PROPER ASPECT RATIO
-                if isCurrentVideo && playerManager.player != nil {
-                    VideoPlayer(player: playerManager.player)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: geometry.size.width, height: geometry.size.height)
-                        .background(.black)
-                        .allowsHitTesting(false) // Let our tap gesture handle interactions
-                }
-                
-                // SLEEK LOADING STATE
-                if isCurrentVideo && playerManager.isLoading {
-                    ZStack {
-                        Rectangle()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+            }
+            
+            // Play/Pause Icon Overlay
+            if showPlayIcon {
+                Image(systemName: isPlaying ? "play.fill" : "pause.fill")
+                    .font(.system(size: 60, weight: .medium))
+                    .foregroundStyle(.white)
+                    .background(
+                        Circle()
                             .fill(.black.opacity(0.4))
-                            .background(.ultraThinMaterial)
-                        
-                        VStack(spacing: 20) {
-                            // Animated loading ring
-                            ZStack {
-                                Circle()
-                                    .stroke(.white.opacity(0.2), lineWidth: 4)
-                                    .frame(width: 60, height: 60)
-                                
-                                Circle()
-                                    .trim(from: 0, to: 0.7)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [.white, .white.opacity(0.3)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
-                                    )
-                                    .frame(width: 60, height: 60)
-                                    .rotationEffect(.degrees(-90))
-                            }
-                            
-                            VStack(spacing: 8) {
-                                Text("Loading Video")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.white)
-                                
-                                Text("Preparing your experience...")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.white.opacity(0.7))
-                            }
-                        }
+                            .frame(width: 100, height: 100)
+                    )
+                    .transition(.scale.combined(with: .opacity))
+            }
+            
+            // YouTube-style overlays
+            GeometryReader { geometry in
+                ZStack {
+                    // Bottom gradient for text readability
+                    VStack {
+                        Spacer()
+                        LinearGradient(
+                            colors: [.clear, .black.opacity(0.8)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 300)
+                        .allowsHitTesting(false)
                     }
-                }
-                
-                // PREMIUM ERROR STATE
-                if isCurrentVideo && playerManager.hasError {
-                    ZStack {
-                        Rectangle()
-                            .fill(.black.opacity(0.6))
-                            .background(.ultraThinMaterial)
-                        
-                        VStack(spacing: 24) {
-                            // Error icon with glow
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        RadialGradient(
-                                            colors: [
-                                                Color.red.opacity(0.2),
-                                                Color.clear
-                                            ],
-                                            center: .center,
-                                            startRadius: 30,
-                                            endRadius: 80
-                                        )
-                                    )
-                                    .frame(width: 120, height: 120)
-                                
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.system(size: 40))
-                                    .foregroundColor(.red.opacity(0.9))
-                                    .shadow(color: .red.opacity(0.3), radius: 5, x: 0, y: 2)
-                            }
-                            
-                            VStack(spacing: 12) {
-                                Text("Video Unavailable")
-                                    .font(.system(size: 20, weight: .bold))
-                                    .foregroundColor(.white)
-                                
-                                Text(playerManager.errorMessage ?? "Unable to load this video right now")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.white.opacity(0.8))
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(2)
-                            }
-                            
-                            // Retry button
-                            Button(action: { setupPlayer() }) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "arrow.clockwise")
-                                        .font(.system(size: 14, weight: .semibold))
-                                    Text("Try Again")
-                                        .font(.system(size: 16, weight: .semibold))
-                                }
-                                .foregroundColor(.black)
-                                .padding(.horizontal, 24)
-                                .padding(.vertical, 12)
-                                .background(
-                                    Capsule()
-                                        .fill(.white)
-                                        .shadow(color: .white.opacity(0.3), radius: 8, x: 0, y: 4)
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal, 40)
-                    }
-                }
-                
-                // Bottom gradient overlay for text readability
-                LinearGradient(
-                    colors: [.clear, .clear, .black.opacity(0.4), .black.opacity(0.8)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .allowsHitTesting(false)
-                
-                // Content overlays - PROPER POSITIONING
-                VStack(spacing: 0) {
-                    Spacer()
                     
-                    HStack(alignment: .bottom, spacing: 16) {
+                    // Content overlays
+                    HStack(alignment: .bottom) {
                         // Left side - Video info
-                        VStack(alignment: .leading, spacing: 12) {
-                            // Creator section
+                        VStack(alignment: .leading, spacing: 0) {
+                            Spacer()
+                            
+                            // Creator info section
                             HStack(spacing: 12) {
-                                // Profile image
-                                AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Circle()
-                                        .fill(AppTheme.Colors.primary)
-                                        .overlay(
-                                            Text(String(video.creator.displayName.prefix(1)))
-                                                .font(.system(size: 16, weight: .bold))
-                                                .foregroundColor(.white)
-                                        )
+                                Button(action: onProfileTap) {
+                                    AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                    } placeholder: {
+                                        Circle()
+                                            .fill(AppTheme.Colors.primary)
+                                            .overlay(
+                                                Text(String(video.creator.displayName.prefix(1)))
+                                                    .font(.system(size: 16, weight: .bold))
+                                                    .foregroundStyle(.white)
+                                            )
+                                    }
+                                    .frame(width: 48, height: 48)
+                                    .clipShape(Circle())
+                                    .overlay(
+                                        Circle()
+                                            .stroke(.white.opacity(0.3), lineWidth: 2)
+                                    )
                                 }
-                                .frame(width: 48, height: 48)
-                                .clipShape(Circle())
-                                .overlay(
-                                    Circle()
-                                        .stroke(.white.opacity(0.3), lineWidth: 1.5)
-                                )
+                                .buttonStyle(.plain)
                                 
-                                // Creator info
-                                VStack(alignment: .leading, spacing: 3) {
+                                VStack(alignment: .leading, spacing: 4) {
                                     HStack(spacing: 6) {
                                         Text("@\(video.creator.username)")
                                             .font(.system(size: 15, weight: .semibold))
-                                            .foregroundColor(.white)
+                                            .foregroundStyle(.white)
                                         
                                         if video.creator.isVerified {
                                             Image(systemName: "checkmark.seal.fill")
-                                                .font(.system(size: 13))
-                                                .foregroundColor(AppTheme.Colors.primary)
+                                                .font(.system(size: 14))
+                                                .foregroundStyle(AppTheme.Colors.primary)
                                         }
                                     }
                                     
-                                    Text("\(formatSubscribers(video.creator.subscriberCount)) subscribers")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.white.opacity(0.8))
+                                    Text("\(subscriberCount.formatted()) subscribers")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.8))
                                 }
                                 
                                 Spacer()
                                 
-                                // Subscribe button
+                                // YouTube-style follow button
                                 if !isFollowing {
                                     Button(action: onFollow) {
                                         Text("Subscribe")
                                             .font(.system(size: 14, weight: .bold))
-                                            .foregroundColor(.black)
+                                            .foregroundStyle(.black)
                                             .padding(.horizontal, 16)
                                             .padding(.vertical, 8)
                                             .background(.white)
@@ -564,30 +416,37 @@ struct FlicksVideoPlayer: View {
                                     .buttonStyle(.plain)
                                 }
                             }
+                            .padding(.bottom, 12)
                             
-                            // Video title and description
-                            VStack(alignment: .leading, spacing: 6) {
+                            // Video description
+                            VStack(alignment: .leading, spacing: 8) {
                                 Text(video.title)
                                     .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(.white)
+                                    .foregroundStyle(.white)
                                     .lineLimit(2)
                                     .multilineTextAlignment(.leading)
                                 
                                 if !video.description.isEmpty {
                                     Text(video.description)
                                         .font(.system(size: 14))
-                                        .foregroundColor(.white.opacity(0.85))
+                                        .foregroundStyle(.white.opacity(0.8))
                                         .lineLimit(2)
                                         .multilineTextAlignment(.leading)
                                 }
                             }
+                            .frame(maxWidth: geometry.size.width * 0.65, alignment: .leading)
+                            .padding(.bottom, 100)
                         }
-                        .frame(maxWidth: geometry.size.width * 0.65) // Fixed width calculation
+                        .padding(.leading, 16)
                         
-                        // Right side - Action buttons
-                        VStack(spacing: 18) {
+                        Spacer()
+                        
+                        // Right side - Action buttons (YouTube style)
+                        VStack(spacing: 24) {
+                            Spacer()
+                            
                             // Like button
-                            ActionButton(
+                            YouTubeActionButton(
                                 icon: isLiked ? "heart.fill" : "heart",
                                 text: formatCount(video.likeCount),
                                 isActive: isLiked,
@@ -596,86 +455,75 @@ struct FlicksVideoPlayer: View {
                             )
                             
                             // Comment button
-                            ActionButton(
+                            YouTubeActionButton(
                                 icon: "bubble.right.fill",
                                 text: formatCount(video.commentCount),
                                 action: onComment
                             )
                             
                             // Share button
-                            ActionButton(
+                            YouTubeActionButton(
                                 icon: "arrowshape.turn.up.right.fill",
                                 text: "Share",
                                 action: onShare
                             )
                             
-                            // More button
-                            ActionButton(
+                            // More options
+                            YouTubeActionButton(
                                 icon: "ellipsis",
                                 text: "",
                                 action: { }
                             )
-                        }
-                        .frame(width: 60) // Fixed width for action buttons
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, geometry.safeAreaInsets.bottom + 40) // Dynamic bottom padding
-                }
-                
-                // Tap gesture for play/pause - FULL SCREEN
-                Rectangle()
-                    .fill(Color.clear)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if isCurrentVideo {
-                            if playerManager.player != nil {
-                                togglePlayPause()
-                            } else {
-                                setupPlayer()
+                            
+                            // Creator profile (mini)
+                            Button(action: onProfileTap) {
+                                AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Circle()
+                                        .fill(AppTheme.Colors.primary.opacity(0.7))
+                                }
+                                .frame(width: 32, height: 32)
+                                .clipShape(Circle())
+                                .overlay(
+                                    Circle()
+                                        .stroke(.white, lineWidth: 2)
+                                )
                             }
+                            .buttonStyle(.plain)
                         }
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 100)
                     }
+                }
             }
-        }
-        .ignoresSafeArea(.all)
-        .onAppear {
-            if isCurrentVideo && !hasSetupPlayer {
-                setupPlayer()
-            }
-        }
-        .onChange(of: isCurrentVideo) { _, newValue in
-            if newValue && !hasSetupPlayer {
-                setupPlayer()
-            } else if !newValue {
-                playerManager.pause()
-                hasSetupPlayer = false
-            }
-        }
-        .onDisappear {
-            playerManager.pause()
-            hasSetupPlayer = false
         }
     }
     
     private func setupPlayer() {
-        print("🎬 Setting up player for: \(video.title)")
-        hasSetupPlayer = true
         playerManager.setupPlayer(with: video)
-        playerManager.setLooping(true)
-        
-        // Auto-play immediately when ready
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            if isCurrentVideo && !playerManager.hasError {
-                print("▶️ Starting auto-play for: \(self.video.title)")
-                playerManager.play()
-            }
-        }
+        playerManager.play()
+        isPlaying = true
     }
     
     private func togglePlayPause() {
-        print("🎯 Toggle play/pause - isPlaying: \(playerManager.isPlaying)")
         playerManager.togglePlayPause()
+        isPlaying.toggle()
         HapticManager.shared.impact(style: .light)
+    }
+    
+    private func showPlayPauseIcon() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+            showPlayIcon = true
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                showPlayIcon = false
+            }
+        }
     }
     
     private func formatCount(_ count: Int) -> String {
@@ -687,20 +535,10 @@ struct FlicksVideoPlayer: View {
             return "\(count)"
         }
     }
-    
-    private func formatSubscribers(_ count: Int) -> String {
-        if count >= 1_000_000 {
-            return String(format: "%.1fM", Double(count) / 1_000_000)
-        } else if count >= 1_000 {
-            return String(format: "%.0fK", Double(count) / 1_000)
-        } else {
-            return "\(count)"
-        }
-    }
 }
 
-// MARK: - Simple Action Button
-struct ActionButton: View {
+// MARK: - YouTube Action Button
+struct YouTubeActionButton: View {
     let icon: String
     let text: String
     var isActive: Bool = false
@@ -716,16 +554,21 @@ struct ActionButton: View {
         }) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundColor(isActive ? activeColor : .white)
-                    .frame(width: 44, height: 44)
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundStyle(isActive ? activeColor : .white)
+                    .frame(width: 48, height: 48)
+                    .background(
+                        Circle()
+                            .fill(isActive ? .white.opacity(0.2) : .clear)
+                    )
                     .scaleEffect(isPressed ? 0.9 : 1.0)
                 
                 if !text.isEmpty {
                     Text(text)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                         .lineLimit(1)
+                        .shadow(color: .black.opacity(0.5), radius: 1, x: 0, y: 1)
                 }
             }
         }
@@ -733,7 +576,7 @@ struct ActionButton: View {
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isPressed)
         .onLongPressGesture(minimumDuration: 0.01) {
-            // Handle if needed
+            // Handle long press if needed
         } onPressingChanged: { pressing in
             withAnimation(.easeInOut(duration: 0.1)) {
                 isPressed = pressing
@@ -742,8 +585,8 @@ struct ActionButton: View {
     }
 }
 
-// MARK: - Flicks Comments Sheet
-struct FlicksCommentsSheet: View {
+// MARK: - YouTube Style Comments Sheet
+struct YouTubeStyleCommentsSheet: View {
     let video: Video
     @Environment(\.dismiss) private var dismiss
     @State private var newComment = ""
@@ -789,7 +632,7 @@ struct FlicksCommentsSheet: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(comments) { comment in
-                            FlicksCommentRow(comment: comment)
+                            YouTubeCommentRow(comment: comment)
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 12)
                         }
@@ -868,8 +711,8 @@ struct FlicksCommentsSheet: View {
     }
 }
 
-// MARK: - Flicks Comment Row
-struct FlicksCommentRow: View {
+// MARK: - YouTube Comment Row
+struct YouTubeCommentRow: View {
     let comment: VideoComment
     @State private var isLiked = false
     @State private var showReplies = false
@@ -883,11 +726,11 @@ struct FlicksCommentRow: View {
                         .aspectRatio(contentMode: .fill)
                 } placeholder: {
                     Circle()
-                        .fill(AppTheme.Colors.primary.opacity(0.7));
+                        .fill(AppTheme.Colors.primary.opacity(0.7))
                         .overlay(
                             Text(String(comment.author.displayName.prefix(1)))
                                 .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundStyle(.white)
                         )
                 }
                 .frame(width: 36, height: 36)
@@ -897,24 +740,24 @@ struct FlicksCommentRow: View {
                     HStack(spacing: 8) {
                         Text("@\(comment.author.username)")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .foregroundStyle(AppTheme.Colors.textPrimary)
                         
                         Text(comment.timeAgo)
                             .font(.system(size: 12))
-                            .foregroundColor(AppTheme.Colors.textTertiary)
+                            .foregroundStyle(AppTheme.Colors.textTertiary)
                         
                         Spacer()
                         
                         Button(action: { }) {
                             Image(systemName: "ellipsis")
                                 .font(.system(size: 14))
-                                .foregroundColor(AppTheme.Colors.textTertiary)
+                                .foregroundStyle(AppTheme.Colors.textTertiary)
                         }
                     }
                     
                     Text(comment.text)
                         .font(.system(size: 14))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
                         .multilineTextAlignment(.leading)
                     
                     HStack(spacing: 20) {
@@ -922,12 +765,12 @@ struct FlicksCommentRow: View {
                             HStack(spacing: 6) {
                                 Image(systemName: isLiked ? "heart.fill" : "heart")
                                     .font(.system(size: 14))
-                                    .foregroundColor(isLiked ? .red : AppTheme.Colors.textTertiary)
+                                    .foregroundStyle(isLiked ? .red : AppTheme.Colors.textTertiary)
                                 
                                 if comment.likeCount > 0 {
                                     Text("\(comment.likeCount)")
                                         .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(AppTheme.Colors.textTertiary)
+                                        .foregroundStyle(AppTheme.Colors.textTertiary)
                                 }
                             }
                         }
@@ -936,7 +779,7 @@ struct FlicksCommentRow: View {
                         Button(action: { }) {
                             Text("Reply")
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(AppTheme.Colors.textTertiary)
+                                .foregroundStyle(AppTheme.Colors.textTertiary)
                         }
                         .buttonStyle(.plain)
                         
@@ -956,11 +799,11 @@ struct FlicksCommentRow: View {
                         
                         Text("\(comment.replyCount) replies")
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.primary)
+                            .foregroundStyle(AppTheme.Colors.primary)
                         
                         Image(systemName: showReplies ? "chevron.up" : "chevron.down")
                             .font(.system(size: 12))
-                            .foregroundColor(AppTheme.Colors.primary)
+                            .foregroundStyle(AppTheme.Colors.primary)
                         
                         Spacer()
                     }
@@ -985,72 +828,78 @@ struct YouTubeStyleShareSheet: View {
     let video: Video
     @Environment(\.dismiss) private var dismiss
     
-    private let shareOptions = [
-        ("message.fill", "Messages"),
-        ("square.and.arrow.up.fill", "Copy Link"),
-        ("square.on.square", "Copy"),
-        ("bookmark.fill", "Save"),
-        ("exclamationmark.triangle.fill", "Report")
-    ]
-    
     var body: some View {
-        VStack(spacing: 0) {
-            // Handle
-            RoundedRectangle(cornerRadius: 3)
-                .fill(.gray.opacity(0.4))
-                .frame(width: 40, height: 6)
-                .padding(.top, 8)
-            
-            // Header
-            HStack {
-                Text("Share")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
+        NavigationView {
+            VStack(spacing: 0) {
+                // Handle bar
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(.gray.opacity(0.4))
+                    .frame(width: 40, height: 6)
+                    .padding(.top, 8)
                 
-                Spacer()
-                
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-                        .frame(width: 32, height: 32)
-                        .background(.gray.opacity(0.2))
-                        .clipShape(Circle())
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            
-            // Share options
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 20) {
-                ForEach(shareOptions, id: \.0) { icon, title in
-                    Button(action: { }) {
-                        VStack(spacing: 8) {
-                            Image(systemName: icon)
-                                .font(.system(size: 24))
-                                .foregroundStyle(AppTheme.Colors.textPrimary)
-                                .frame(width: 56, height: 56)
-                                .background(.gray.opacity(0.1))
-                                .clipShape(Circle())
-                            
-                            Text(title)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(AppTheme.Colors.textSecondary)
-                                .lineLimit(1)
-                        }
+                // Header
+                HStack {
+                    Text("Share")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                    
+                    Spacer()
+                    
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                            .frame(width: 32, height: 32)
+                            .background(.gray.opacity(0.2))
+                            .clipShape(Circle())
                     }
-                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                
+                // Share options
+                ScrollView {
+                    LazyVGrid(columns: [
+                        GridItem(.flexible()),
+                        GridItem(.flexible()),
+                        GridItem(.flexible()),
+                        GridItem(.flexible())
+                    ], spacing: 20) {
+                        ShareOption(icon: "message.fill", title: "Messages", color: .green)
+                        ShareOption(icon: "envelope.fill", title: "Mail", color: .blue)
+                        ShareOption(icon: "square.and.arrow.up", title: "More", color: .gray)
+                        ShareOption(icon: "link", title: "Copy Link", color: .orange)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 40)
-            
-            Spacer()
         }
     }
 }
 
-// MARK: - Flicks Creator Profile View  
+struct ShareOption: View {
+    let icon: String
+    let title: String
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 24))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .background(color)
+                .clipShape(Circle())
+            
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+        }
+    }
+}
+
+// MARK: - Flicks Creator Profile View
 struct FlicksCreatorProfileView: View {
     let creator: User
     @Environment(\.dismiss) private var dismiss
@@ -1058,21 +907,95 @@ struct FlicksCreatorProfileView: View {
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(spacing: 20) {
-                    Text("@\(creator.username)")
-                        .font(.title)
-                        .fontWeight(.bold)
-                }
-                .padding()
-            }
-            .navigationTitle("Profile")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
+                VStack(spacing: 24) {
+                    // Header
+                    VStack(spacing: 16) {
+                        AsyncImage(url: URL(string: creator.profileImageURL ?? "")) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Circle()
+                                .fill(AppTheme.Colors.primary)
+                                .overlay(
+                                    Text(String(creator.displayName.prefix(1)))
+                                        .font(.system(size: 48, weight: .bold))
+                                        .foregroundStyle(.white)
+                                )
+                        }
+                        .frame(width: 120, height: 120)
+                        .clipShape(Circle())
+                        
+                        VStack(spacing: 8) {
+                            HStack(spacing: 8) {
+                                Text(creator.displayName)
+                                    .font(.system(size: 24, weight: .bold))
+                                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                                
+                                if creator.isVerified {
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .font(.system(size: 20))
+                                        .foregroundStyle(AppTheme.Colors.primary)
+                                }
+                            }
+                            
+                            Text("@\(creator.username)")
+                                .font(.system(size: 16))
+                                .foregroundStyle(AppTheme.Colors.textSecondary)
+                            
+                            Text("\(creator.subscriberCount.formatted()) subscribers")
+                                .font(.system(size: 14))
+                                .foregroundStyle(AppTheme.Colors.textTertiary)
+                        }
                     }
+                    
+                    // Bio
+                    if let bio = creator.bio {
+                        Text(bio)
+                            .font(.system(size: 15))
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
+                    }
+                    
+                    // Action buttons
+                    HStack(spacing: 16) {
+                        Button(action: {}) {
+                            Text("Subscribe")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(AppTheme.Colors.primary)
+                                .clipShape(Capsule())
+                        }
+                        
+                        Button(action: {}) {
+                            Image(systemName: "bell")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppTheme.Colors.textPrimary)
+                                .frame(width: 44, height: 44)
+                                .background(AppTheme.Colors.surface)
+                                .clipShape(Circle())
+                        }
+                    }
+                    .padding(.horizontal, 20)
                 }
+                .padding(.vertical, 20)
+            }
+            .background(AppTheme.Colors.background)
+            .navigationBarHidden(true)
+            .overlay(alignment: .topTrailing) {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                        .frame(width: 44, height: 44)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                }
+                .padding(.top, 50)
+                .padding(.trailing, 20)
             }
         }
     }

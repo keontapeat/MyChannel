@@ -15,7 +15,7 @@ class PremiumService: ObservableObject {
     @Published var isPremium = false
     @Published var premiumTier: PremiumTier = .none
     @Published var subscriptionStatus: SubscriptionStatus = .inactive
-    @Published var downloadedVideos: [DownloadedVideo] = []
+    @Published var downloadedVideos: [PremiumDownloadedVideo] = []
     @Published var premiumFeatures: Set<PremiumFeature> = []
     @Published var downloadProgress: [String: Double] = [:] // videoID: progress
     
@@ -107,7 +107,7 @@ class PremiumService: ObservableObject {
         }
         
         // Create downloaded video
-        let downloadedVideo = DownloadedVideo(
+        let downloadedVideo = PremiumDownloadedVideo(
             video: video,
             quality: quality,
             downloadDate: Date(),
@@ -123,7 +123,7 @@ class PremiumService: ObservableObject {
         saveDownloadedVideos()
     }
     
-    func deleteDownload(_ downloadedVideo: DownloadedVideo) {
+    func deleteDownload(_ downloadedVideo: PremiumDownloadedVideo) {
         downloadedVideos.removeAll { $0.id == downloadedVideo.id }
         downloadProgress[downloadedVideo.video.id] = nil
         
@@ -159,12 +159,12 @@ class PremiumService: ObservableObject {
     private func loadDownloadedVideos() {
         // Load downloaded videos from persistent storage
         if let data = UserDefaults.standard.data(forKey: "downloadedVideos"),
-           let videos = try? JSONDecoder().decode([DownloadedVideo].self, from: data) {
+           let videos = try? JSONDecoder().decode([PremiumDownloadedVideo].self, from: data) {
             downloadedVideos = videos
         }
     }
     
-    func getDownloadedVideos() -> [DownloadedVideo] {
+    func getDownloadedVideos() -> [PremiumDownloadedVideo] {
         return downloadedVideos
     }
     
@@ -384,8 +384,8 @@ enum PremiumError: LocalizedError {
     }
 }
 
-// MARK: - Downloaded Video Model
-struct DownloadedVideo: Identifiable, Codable {
+// MARK: - Premium Downloaded Video Model (Different from regular downloads)
+struct PremiumDownloadedVideo: Identifiable, Codable {
     let id: String
     let video: Video
     let quality: PremiumVideoQuality
