@@ -632,8 +632,8 @@ extension Video {
                 title: "EPIC Warrior Battle: Power Unleashed! ⚡🔥",
                 description: "Watch this incredible anime-style battle animation! Two warriors clash with earth-shaking power in this action-packed episode. Amazing fight choreography and stunning visuals!",
                 thumbnailURL: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500&h=281&fit=crop",
-                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", // Working sample video
-                duration: 596, // 9:56 minutes
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                duration: 596,
                 viewCount: 15600000,
                 likeCount: 2340000,
                 commentCount: 456000,
@@ -650,8 +650,8 @@ extension Video {
                 title: "Mystical Academy: Magic School Adventures! ✨🏫",
                 description: "Join students at the most magical academy in the world! Watch as they learn powerful spells and face incredible challenges. Perfect anime-style storytelling!",
                 thumbnailURL: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=500&h=281&fit=crop",
-                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4", // Working sample video
-                duration: 653, // 10:53 minutes
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+                duration: 653,
                 viewCount: 12800000,
                 likeCount: 1890000,
                 commentCount: 234000,
@@ -667,9 +667,9 @@ extension Video {
                 title: "Ninja Chronicles: Shadow Warrior Training! 🥷",
                 description: "Follow young ninjas as they master ancient techniques and face ultimate challenges! Action-packed ninja adventure with incredible fight scenes!",
                 thumbnailURL: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=500&h=281&fit=crop&crop=center",
-                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", // Working sample video
-                duration: 1380, // 23 minutes
-                viewCount: 18900000, // MASSIVE VIEWS
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+                duration: 1380,
+                viewCount: 18900000,
                 likeCount: 2890000,
                 commentCount: 567000,
                 creator: animeStudioCreator,
@@ -697,8 +697,8 @@ extension Video {
                 title: "Learn Colors with Fun Animals! 🌈🦁",
                 description: "Educational and fun! Kids will learn all the colors of the rainbow with cute animals. Perfect for toddlers and preschoolers. Safe, verified content!",
                 thumbnailURL: "https://images.unsplash.com/photo-1551963831-b3b1ca40c98e?w=500&h=281&fit=crop",
-                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-                duration: 180, // 3 minutes - perfect for kids
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+                duration: 180,
                 viewCount: 2300000,
                 likeCount: 345000,
                 commentCount: 12000,
@@ -715,8 +715,8 @@ extension Video {
                 title: "Numbers 1-10 Fun Learning Song! 🔢🎵",
                 description: "Count along with our fun number song! Kids will learn numbers 1 through 10 with catchy music and colorful animations. Educational entertainment!",
                 thumbnailURL: "https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=500&h=281&fit=crop",
-                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-                duration: 240, // 4 minutes
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+                duration: 240,
                 viewCount: 1800000,
                 likeCount: 290000,
                 commentCount: 8500,
@@ -745,8 +745,8 @@ extension Video {
                 title: "ASMR Food Challenge: Satisfying Eating Sounds! 🔥",
                 description: "The most satisfying food eating video! Watch and listen to amazing ASMR eating sounds that will relax and satisfy you. Pure eating bliss!",
                 thumbnailURL: "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=500&h=281&fit=crop",
-                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
-                duration: 1800, // 30 minutes
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
+                duration: 1800,
                 viewCount: 8900000,
                 likeCount: 1200000,
                 commentCount: 234000,
@@ -775,8 +775,8 @@ extension Video {
                 title: "24 Hour Challenge: Living in a Tiny House! 🏠",
                 description: "I spent 24 hours in the world's tiniest house! Watch me try to cook, sleep, and live in this incredible space. You won't believe what happens!",
                 thumbnailURL: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=281&fit=crop",
-                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
-                duration: 1800, // 30 minutes
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
+                duration: 1800,
                 viewCount: 12400000,
                 likeCount: 1890000,
                 commentCount: 345000,
@@ -805,8 +805,8 @@ extension Video {
                 title: "EPIC Gaming Moments Compilation! 🏆",
                 description: "The most epic gaming moments ever! Watch these incredible plays that will leave you speechless. Pro-level gameplay and amazing skills!",
                 thumbnailURL: "https://images.unsplash.com/photo-1552820728-8b83bb6b773f?w=500&h=281&fit=crop",
-                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-                duration: 900, // 15 minutes
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4",
+                duration: 900,
                 viewCount: 6700000,
                 likeCount: 890000,
                 commentCount: 156000,
@@ -835,8 +835,8 @@ extension Video {
                 title: "Chill Beats for Study & Relax 🌊🎵",
                 description: "The perfect background music for studying, working, or just chilling out. Smooth beats that will help you focus and feel good!",
                 thumbnailURL: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&h=281&fit=crop",
-                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-                duration: 3600, // 1 hour
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4",
+                duration: 3600,
                 viewCount: 5200000,
                 likeCount: 720000,
                 commentCount: 89000,
@@ -865,8 +865,8 @@ extension Video {
                 title: "Hilarious Life Situations Everyone Can Relate To! 😂",
                 description: "These funny situations happen to everyone! Watch these hilarious skits that perfectly capture everyday life. You'll be laughing non-stop!",
                 thumbnailURL: "https://images.unsplash.com/photo-1517315003714-a071486bd9ea?w=500&h=281&fit=crop",
-                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4",
-                duration: 480, // 8 minutes
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
+                duration: 480,
                 viewCount: 4100000,
                 likeCount: 580000,
                 commentCount: 78000,
@@ -895,8 +895,8 @@ extension Video {
                 title: "How Technology Actually Works - Mind Blowing! 🤯",
                 description: "Ever wondered how your phone really works? This amazing explanation will blow your mind! Learn about technology in a fun and easy way!",
                 thumbnailURL: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=500&h=281&fit=crop",
-                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
-                duration: 960, // 16 minutes
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4",
+                duration: 960,
                 viewCount: 2800000,
                 likeCount: 390000,
                 commentCount: 45000,
@@ -925,8 +925,8 @@ extension Video {
                 title: "Transform Your Life: Morning Routine That Works! ☀️",
                 description: "This morning routine will completely change your life! Simple steps to boost your energy, productivity, and happiness. Start transforming today!",
                 thumbnailURL: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=281&fit=crop",
-                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-                duration: 720, // 12 minutes
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                duration: 720,
                 viewCount: 1900000,
                 likeCount: 280000,
                 commentCount: 34000,
@@ -954,10 +954,10 @@ extension Video {
             Video(
                 title: "This Will Make You Smile! 😊❤️",
                 description: "Pure wholesome content that will instantly make your day better! Watch this heartwarming moment that's going viral! #shorts",
-                thumbnailURL: "https://images.unsplash.com/photo-1552053831-71594a27632d?w=500&h=889&fit=crop", // Vertical for shorts
-                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-                duration: 30, // 30 seconds
-                viewCount: 15600000, // Shorts get MASSIVE views!
+                thumbnailURL: "https://images.unsplash.com/photo-1552053831-71594a27632d?w=500&h=889&fit=crop",
+                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+                duration: 30,
+                viewCount: 15600000,
                 likeCount: 2340000,
                 commentCount: 456000,
                 creator: shortsCreator,

@@ -127,10 +127,12 @@ struct FlicksView: View {
                 )
                 .tag(index)
                 .frame(width: geometry.size.width, height: geometry.size.height)
+                .clipped()
             }
         }
         .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
         .ignoresSafeArea(.all)
+        .frame(width: geometry.size.width, height: geometry.size.height)
         .onChange(of: currentIndex) { _, newValue in
             impactFeedback.impactOccurred()
             preloadNextVideos(currentIndex: newValue)
@@ -145,11 +147,12 @@ struct FlicksView: View {
             }
             
             // Simulate loading
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            try? await Task.sleep(nanoseconds: 500_000_000) // Reduced to 0.5 seconds
             
             await MainActor.run {
                 videos = Video.sampleVideos.shuffled()
                 isLoading = false
+                print("🔥 Loaded \(videos.count) videos for Flicks")
             }
         }
     }
@@ -205,54 +208,287 @@ struct FlicksVideoPlayer: View {
     
     @StateObject private var playerManager = VideoPlayerManager()
     @State private var showControls = false
+    @State private var hasSetupPlayer = false
     
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Background - Always show the thumbnail/image as fallback
+                // SLEEK YOUTUBE-STYLE BACKGROUND
                 AsyncImage(url: URL(string: video.thumbnailURL)) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: geometry.size.width, height: geometry.size.height)
                         .clipped()
-                } placeholder: {
-                    // Colored background as placeholder
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: Double.random(in: 0.3...0.7), 
-                                          green: Double.random(in: 0.3...0.7), 
-                                          blue: Double.random(in: 0.3...0.7)),
-                                    Color(red: Double.random(in: 0.1...0.5), 
-                                          green: Double.random(in: 0.1...0.5), 
-                                          blue: Double.random(in: 0.1...0.5))
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
                         .overlay(
-                            VStack {
-                                Image(systemName: "play.circle.fill")
-                                    .font(.system(size: 60))
-                                    .foregroundColor(.white.opacity(0.8))
-                                
-                                Text("Tap to Play")
-                                    .font(.headline)
-                                    .foregroundColor(.white.opacity(0.8))
-                            }
+                            // Dark overlay for better contrast
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.black.opacity(0.0),
+                                            Color.black.opacity(0.2),
+                                            Color.black.opacity(0.6)
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
                         )
+                } placeholder: {
+                    // PREMIUM SLEEK PLACEHOLDER
+                    ZStack {
+                        // Animated gradient background
+                        Rectangle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.1, green: 0.1, blue: 0.3),
+                                        Color(red: 0.2, green: 0.0, blue: 0.4),
+                                        Color(red: 0.4, green: 0.0, blue: 0.6),
+                                        Color(red: 0.6, green: 0.0, blue: 0.4)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        
+                        // Subtle pattern overlay
+                        Rectangle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        Color.white.opacity(0.05),
+                                        Color.clear,
+                                        Color.black.opacity(0.2)
+                                    ],
+                                    center: .center,
+                                    startRadius: 50,
+                                    endRadius: 400
+                                )
+                            )
+                        
+                        // SLEEK CONTENT OVERLAY
+                        VStack(spacing: 24) {
+                            // Category badge
+                            HStack {
+                                Image(systemName: video.category.iconName)
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text(video.category.displayName.uppercased())
+                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                    .tracking(1.2)
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(.ultraThinMaterial)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(video.category.color.opacity(0.5), lineWidth: 1)
+                                    )
+                            )
+                            
+                            // Main play button with glow effect
+                            ZStack {
+                                // Glow effect
+                                Circle()
+                                    .fill(
+                                        RadialGradient(
+                                            colors: [
+                                                Color.white.opacity(0.3),
+                                                Color.white.opacity(0.1),
+                                                Color.clear
+                                            ],
+                                            center: .center,
+                                            startRadius: 30,
+                                            endRadius: 80
+                                        )
+                                    )
+                                    .frame(width: 160, height: 160)
+                                
+                                // Play button
+                                ZStack {
+                                    Circle()
+                                        .fill(.ultraThinMaterial)
+                                        .frame(width: 80, height: 80)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(.white.opacity(0.3), lineWidth: 2)
+                                        )
+                                    
+                                    Image(systemName: "play.fill")
+                                        .font(.system(size: 32, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .offset(x: 3) // Slight offset for visual balance
+                                }
+                                .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
+                            }
+                            
+                            // Title with glassmorphism background
+                            VStack(spacing: 8) {
+                                Text(video.title)
+                                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                                    .foregroundColor(.white)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                    .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                                
+                                // Stats row
+                                HStack(spacing: 16) {
+                                    Label(video.formattedViewCount, systemImage: "eye.fill")
+                                    Label(video.formattedLikeCount, systemImage: "heart.fill")
+                                    Label(video.formattedDuration, systemImage: "clock.fill")
+                                }
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.white.opacity(0.9))
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(.ultraThinMaterial)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .stroke(.white.opacity(0.2), lineWidth: 1)
+                                    )
+                            )
+                            .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                            
+                            // Tap to play hint
+                            Text("TAP TO PLAY")
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.7))
+                                .tracking(2)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(
+                                    Capsule()
+                                        .fill(.black.opacity(0.3))
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(.white.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                        }
+                        .padding(.horizontal, 40)
+                    }
                 }
                 
-                // Video Player (when current and ready)
+                // Video Player (when current and ready) - PROPER ASPECT RATIO
                 if isCurrentVideo && playerManager.player != nil {
                     VideoPlayer(player: playerManager.player)
-                        .aspectRatio(contentMode: .fill)
+                        .aspectRatio(contentMode: .fit)
                         .frame(width: geometry.size.width, height: geometry.size.height)
-                        .clipped()
-                        .opacity(playerManager.isLoading ? 0 : 1)
+                        .background(.black)
+                        .allowsHitTesting(false) // Let our tap gesture handle interactions
+                }
+                
+                // SLEEK LOADING STATE
+                if isCurrentVideo && playerManager.isLoading {
+                    ZStack {
+                        Rectangle()
+                            .fill(.black.opacity(0.4))
+                            .background(.ultraThinMaterial)
+                        
+                        VStack(spacing: 20) {
+                            // Animated loading ring
+                            ZStack {
+                                Circle()
+                                    .stroke(.white.opacity(0.2), lineWidth: 4)
+                                    .frame(width: 60, height: 60)
+                                
+                                Circle()
+                                    .trim(from: 0, to: 0.7)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [.white, .white.opacity(0.3)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                                    )
+                                    .frame(width: 60, height: 60)
+                                    .rotationEffect(.degrees(-90))
+                            }
+                            
+                            VStack(spacing: 8) {
+                                Text("Loading Video")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.white)
+                                
+                                Text("Preparing your experience...")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                        }
+                    }
+                }
+                
+                // PREMIUM ERROR STATE
+                if isCurrentVideo && playerManager.hasError {
+                    ZStack {
+                        Rectangle()
+                            .fill(.black.opacity(0.6))
+                            .background(.ultraThinMaterial)
+                        
+                        VStack(spacing: 24) {
+                            // Error icon with glow
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        RadialGradient(
+                                            colors: [
+                                                Color.red.opacity(0.2),
+                                                Color.clear
+                                            ],
+                                            center: .center,
+                                            startRadius: 30,
+                                            endRadius: 80
+                                        )
+                                    )
+                                    .frame(width: 120, height: 120)
+                                
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.red.opacity(0.9))
+                                    .shadow(color: .red.opacity(0.3), radius: 5, x: 0, y: 2)
+                            }
+                            
+                            VStack(spacing: 12) {
+                                Text("Video Unavailable")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(.white)
+                                
+                                Text(playerManager.errorMessage ?? "Unable to load this video right now")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.white.opacity(0.8))
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                            }
+                            
+                            // Retry button
+                            Button(action: { setupPlayer() }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.system(size: 14, weight: .semibold))
+                                    Text("Try Again")
+                                        .font(.system(size: 16, weight: .semibold))
+                                }
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 12)
+                                .background(
+                                    Capsule()
+                                        .fill(.white)
+                                        .shadow(color: .white.opacity(0.3), radius: 8, x: 0, y: 4)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 40)
+                    }
                 }
                 
                 // Bottom gradient overlay for text readability
@@ -263,7 +499,7 @@ struct FlicksVideoPlayer: View {
                 )
                 .allowsHitTesting(false)
                 
-                // Content overlays
+                // Content overlays - PROPER POSITIONING
                 VStack(spacing: 0) {
                     Spacer()
                     
@@ -346,10 +582,10 @@ struct FlicksVideoPlayer: View {
                                 }
                             }
                         }
-                        .frame(maxWidth: geometry.size.width * 0.7)
+                        .frame(maxWidth: geometry.size.width * 0.65) // Fixed width calculation
                         
                         // Right side - Action buttons
-                        VStack(spacing: 20) {
+                        VStack(spacing: 18) {
                             // Like button
                             ActionButton(
                                 icon: isLiked ? "heart.fill" : "heart",
@@ -380,49 +616,64 @@ struct FlicksVideoPlayer: View {
                                 action: { }
                             )
                         }
+                        .frame(width: 60) // Fixed width for action buttons
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 100)
+                    .padding(.bottom, geometry.safeAreaInsets.bottom + 40) // Dynamic bottom padding
                 }
                 
-                // Tap gesture for play/pause
-                Color.clear
+                // Tap gesture for play/pause - FULL SCREEN
+                Rectangle()
+                    .fill(Color.clear)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        togglePlayPause()
+                        if isCurrentVideo {
+                            if playerManager.player != nil {
+                                togglePlayPause()
+                            } else {
+                                setupPlayer()
+                            }
+                        }
                     }
             }
         }
+        .ignoresSafeArea(.all)
         .onAppear {
-            if isCurrentVideo {
+            if isCurrentVideo && !hasSetupPlayer {
                 setupPlayer()
             }
         }
         .onChange(of: isCurrentVideo) { _, newValue in
-            if newValue {
+            if newValue && !hasSetupPlayer {
                 setupPlayer()
-            } else {
+            } else if !newValue {
                 playerManager.pause()
+                hasSetupPlayer = false
             }
         }
         .onDisappear {
             playerManager.pause()
+            hasSetupPlayer = false
         }
     }
     
     private func setupPlayer() {
+        print("🎬 Setting up player for: \(video.title)")
+        hasSetupPlayer = true
         playerManager.setupPlayer(with: video)
         playerManager.setLooping(true)
         
-        // Auto-play after setup
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            if isCurrentVideo {
+        // Auto-play immediately when ready
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            if isCurrentVideo && !playerManager.hasError {
+                print("▶️ Starting auto-play for: \(self.video.title)")
                 playerManager.play()
             }
         }
     }
     
     private func togglePlayPause() {
+        print("🎯 Toggle play/pause - isPlaying: \(playerManager.isPlaying)")
         playerManager.togglePlayPause()
         HapticManager.shared.impact(style: .light)
     }
@@ -632,7 +883,7 @@ struct FlicksCommentRow: View {
                         .aspectRatio(contentMode: .fill)
                 } placeholder: {
                     Circle()
-                        .fill(AppTheme.Colors.primary.opacity(0.7))
+                        .fill(AppTheme.Colors.primary.opacity(0.7));
                         .overlay(
                             Text(String(comment.author.displayName.prefix(1)))
                                 .font(.system(size: 14, weight: .bold))
