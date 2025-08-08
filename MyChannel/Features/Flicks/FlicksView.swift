@@ -359,13 +359,6 @@ struct FlicksVideoPlayer: View {
                                 action: onLike
                             )
                             
-                            // Dislike button
-                            ActionButton(
-                                icon: "heart.slash",
-                                text: "",
-                                action: { }
-                            )
-                            
                             // Comment button
                             ActionButton(
                                 icon: "bubble.right.fill",
@@ -405,6 +398,13 @@ struct FlicksVideoPlayer: View {
                 setupPlayer()
             }
         }
+        .onChange(of: isCurrentVideo) { _, newValue in
+            if newValue {
+                setupPlayer()
+            } else {
+                playerManager.pause()
+            }
+        }
         .onDisappear {
             playerManager.pause()
         }
@@ -415,8 +415,10 @@ struct FlicksVideoPlayer: View {
         playerManager.setLooping(true)
         
         // Auto-play after setup
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            playerManager.play()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if isCurrentVideo {
+                playerManager.play()
+            }
         }
     }
     
