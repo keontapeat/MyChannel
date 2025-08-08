@@ -78,6 +78,36 @@ struct HomeView: View {
                             }
                         )
                         
+                        // Live TV Channels Section - NEW!
+                        if selectedFilter == .liveTV || selectedFilter == .all {
+                            PremiumLiveTVSection(
+                                onChannelTap: { channel in
+                                    print(" Live TV Channel tapped: \(channel.name)")
+                                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                                    impactFeedback.impactOccurred()
+                                }
+                            )
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .leading).combined(with: .opacity),
+                                removal: .move(edge: .trailing).combined(with: .opacity)
+                            ))
+                        }
+                        
+                        // Free Movies Hub Section - NEW!
+                        if selectedFilter == .movies || selectedFilter == .all {
+                            PremiumMoviesHubSection(
+                                onMovieTap: { movie in
+                                    print(" Movie tapped: \(movie.title)")
+                                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                    impactFeedback.impactOccurred()
+                                }
+                            )
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .bottom).combined(with: .opacity),
+                                removal: .move(edge: .top).combined(with: .opacity)
+                            ))
+                        }
+
                         // Main Video Feed with navigation
                         ClickableVideoFeedSection(
                             videos: Video.sampleVideos,
@@ -803,7 +833,11 @@ struct AnimatedFilterChip: View {
             .background(
                 ZStack {
                     if isSelected {
-                        AppTheme.Colors.gradient
+                        LinearGradient(
+                            colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     } else {
                         AppTheme.Colors.surface
                     }
@@ -897,6 +931,7 @@ struct ClickableLiveStreamCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
+                // Professional stream preview
                 ZStack(alignment: .topLeading) {
                     // Professional stream preview
                     RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md)
@@ -962,6 +997,7 @@ struct ClickableLiveStreamCard: View {
                     .clipShape(Circle())
                     
                     VStack(alignment: .leading, spacing: 2) {
+                        // Creator name and metadata
                         HStack(spacing: 4) {
                             Text(creator.displayName)
                                 .font(.system(size: 12, weight: .medium))
@@ -1413,6 +1449,8 @@ struct PaginationLoadingView: View {
 enum ContentFilter: String, CaseIterable {
     case all = "all"
     case trending = "trending"
+    case liveTV = "live_tv"
+    case movies = "movies"
     case gaming = "gaming"
     case music = "music"
     case education = "education"
@@ -1421,20 +1459,85 @@ enum ContentFilter: String, CaseIterable {
     case sports = "sports"
     case news = "news"
     case live = "live"
+    case lifestyle = "lifestyle"
+    case food = "food"
+    case travel = "travel"
+    case comedy = "comedy"
+    case fitness = "fitness"
+    case business = "business"
+    case science = "science"
+    case fashion = "fashion"
     
     var displayName: String {
         switch self {
         case .all: return "All"
-        case .trending: return "Trending"
-        case .gaming: return "Gaming"
-        case .music: return "Music"
-        case .education: return "Education"
-        case .technology: return "Technology"
-        case .entertainment: return "Entertainment"
-        case .sports: return "Sports"
-        case .news: return "News"
-        case .live: return "Live"
+        case .trending: return "🔥 Trending"
+        case .liveTV: return "📺 Live TV"
+        case .movies: return "🎬 Movies"
+        case .gaming: return "🎮 Gaming"
+        case .music: return "🎵 Music"
+        case .education: return "📚 Education"
+        case .technology: return "💻 Tech"
+        case .entertainment: return "🎭 Entertainment"
+        case .sports: return "⚽ Sports"
+        case .news: return "📰 News"
+        case .live: return "🔴 Live"
+        case .lifestyle: return "✨ Lifestyle"
+        case .food: return "🍕 Food"
+        case .travel: return "✈️ Travel"
+        case .comedy: return "😂 Comedy"
+        case .fitness: return "💪 Fitness"
+        case .business: return "💼 Business"
+        case .science: return "🔬 Science"
+        case .fashion: return "👗 Fashion"
         }
+    }
+    
+    var gradient: LinearGradient {
+        let colors: [Color]
+        switch self {
+        case .all:
+            colors = [AppTheme.Colors.primary, AppTheme.Colors.secondary]
+        case .trending:
+            colors = [.orange, .red]
+        case .liveTV:
+            colors = [.blue, .purple]
+        case .movies:
+            colors = [.red, .pink]
+        case .gaming:
+            colors = [.green, .blue]
+        case .music:
+            colors = [.purple, .pink]
+        case .education:
+            colors = [.blue, .indigo]
+        case .technology:
+            colors = [.gray, .blue]
+        case .entertainment:
+            colors = [.yellow, .orange]
+        case .sports:
+            colors = [.green, .yellow]
+        case .news:
+            colors = [.red, .orange]
+        case .live:
+            colors = [.red, .pink]
+        case .lifestyle:
+            colors = [.pink, .purple]
+        case .food:
+            colors = [.orange, .yellow]
+        case .travel:
+            colors = [.blue, .cyan]
+        case .comedy:
+            colors = [.yellow, .orange]
+        case .fitness:
+            colors = [.green, .mint]
+        case .business:
+            colors = [.gray, .blue]
+        case .science:
+            colors = [.blue, .purple]
+        case .fashion:
+            colors = [.pink, .purple]
+        }
+        return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 }
 
