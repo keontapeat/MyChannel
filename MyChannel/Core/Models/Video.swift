@@ -484,7 +484,7 @@ struct Video: Identifiable, Codable, Hashable {
 }
 
 // MARK: - Video Category
-enum VideoCategory: String, Codable, CaseIterable {
+enum VideoCategory: String, Codable, CaseIterable, CustomStringConvertible {
     case movies = "movies"
     case tvShows = "tv_shows"
     case anime = "anime"
@@ -511,6 +511,10 @@ enum VideoCategory: String, Codable, CaseIterable {
     case cartoons = "cartoons"
     case adultAnimation = "adult_animation" // For Robot Chicken type content
     case other = "other"
+    
+    var description: String {
+        return displayName
+    }
     
     var displayName: String {
         switch self {
