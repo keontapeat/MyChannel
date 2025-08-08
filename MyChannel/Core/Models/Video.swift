@@ -1,4 +1,3 @@
-//
 //  Video.swift
 //  MyChannel
 //
@@ -598,407 +597,162 @@ enum VideoCategory: String, Codable, CaseIterable {
     }
 }
 
-// MARK: - Sample Data Extension with FIRE CONTENT 🔥
+// MARK: - Sample Data Extension with REAL WORKING CONTENT 🔥
 extension Video {
     static var sampleVideos: [Video] {
         var allVideos: [Video] = []
         
-        // Add all categories
-        allVideos.append(contentsOf: dragonBallZVideos)
-        allVideos.append(contentsOf: inuyashaVideos)
-        allVideos.append(contentsOf: narutoVideos)
-        allVideos.append(contentsOf: robotChickenVideos)
-        allVideos.append(contentsOf: kidsVideos) // 🎯 NEW KIDS CONTENT!
-        allVideos.append(contentsOf: mukbangVideos)
-        allVideos.append(contentsOf: trendingVideos)
-        allVideos.append(contentsOf: movieVideos)
-        allVideos.append(contentsOf: gamingVideos)
-        allVideos.append(contentsOf: musicVideos)
-        allVideos.append(contentsOf: comedyVideos)
-        allVideos.append(contentsOf: educationalVideos)
-        allVideos.append(contentsOf: lifestyleVideos)
-        allVideos.append(contentsOf: shortsVideos)
+        // Add all categories with REAL working videos
+        allVideos.append(contentsOf: animeInspiredVideos) // Legal anime-inspired content
+        allVideos.append(contentsOf: kidsVideos) // Safe kids content
+        allVideos.append(contentsOf: mukbangVideos) // Food content
+        allVideos.append(contentsOf: trendingVideos) // Viral content
+        allVideos.append(contentsOf: gamingVideos) // Gaming content
+        allVideos.append(contentsOf: musicVideos) // Music content
+        allVideos.append(contentsOf: comedyVideos) // Comedy content
+        allVideos.append(contentsOf: educationalVideos) // Educational content
+        allVideos.append(contentsOf: lifestyleVideos) // Lifestyle content
+        allVideos.append(contentsOf: shortsVideos) // Viral shorts
         
         return allVideos
     }
     
-    // 🔥 DRAGON BALL Z - THE GOAT ANIME
-    static var dragonBallZVideos: [Video] {
-        let gokuCreator = User(
-            username: "ToeiAnimation",
-            displayName: "Toei Animation Official 🐉",
-            email: "official@toei-animation.com",
-            profileImageURL: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=150",
+    // 🔥 ANIME-INSPIRED CONTENT (Legal & Working!)
+    static var animeInspiredVideos: [Video] {
+        let animeStudioCreator = User(
+            username: "EpicAnimeStudio",
+            displayName: "Epic Anime Studio 🎌",
+            email: "official@epicanimestudio.com",
+            profileImageURL: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=150&h=150&fit=crop&crop=face",
             isVerified: true
         )
         
         return [
             Video(
-                title: "Dragon Ball Z: Goku vs Vegeta - EPIC FINAL BATTLE! 🐉⚡",
-                description: "The most legendary battle in anime history! Watch Goku and Vegeta clash in an earth-shattering fight that will leave you on the edge of your seat. Pure Saiyan power unleashed!",
-                thumbnailURL: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-                duration: 1440, // 24 minutes
-                viewCount: 15600000, // 15.6M views 🔥
+                title: "EPIC Warrior Battle: Power Unleashed! ⚡🔥",
+                description: "Watch this incredible anime-style battle animation! Two warriors clash with earth-shaking power in this action-packed episode. Amazing fight choreography and stunning visuals!",
+                thumbnailURL: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500&h=281&fit=crop",
+                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", // Working sample video
+                duration: 596, // 9:56 minutes
+                viewCount: 15600000,
                 likeCount: 2340000,
                 commentCount: 456000,
-                creator: gokuCreator,
+                creator: animeStudioCreator,
                 category: .anime,
-                tags: ["dragon ball z", "goku", "vegeta", "saiyan", "battle", "anime", "epic"],
-                contentSource: .crunchyroll,
+                tags: ["anime", "battle", "warrior", "action", "epic", "animation"],
+                contentSource: .userUploaded,
                 contentRating: .TV_PG,
-                language: "Japanese",
-                subtitles: [
-                    SubtitleTrack(language: "English", languageCode: "en", url: "https://example.com/dbz1_en.vtt", isDefault: true),
-                    SubtitleTrack(language: "Spanish", languageCode: "es", url: "https://example.com/dbz1_es.vtt", isDefault: false)
-                ],
+                language: "English",
                 isVerified: true
             ),
             
             Video(
-                title: "Gohan Goes SUPER SAIYAN 2 vs Cell - Most Emotional Moment! 😭🔥",
-                description: "The moment that made everyone cry! Watch teenage Gohan unlock his true power and transform into Super Saiyan 2 to save the world. Cell saga at its peak!",
-                thumbnailURL: "https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-                duration: 1320, // 22 minutes
+                title: "Mystical Academy: Magic School Adventures! ✨🏫",
+                description: "Join students at the most magical academy in the world! Watch as they learn powerful spells and face incredible challenges. Perfect anime-style storytelling!",
+                thumbnailURL: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=500&h=281&fit=crop",
+                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4", // Working sample video
+                duration: 653, // 10:53 minutes
                 viewCount: 12800000,
                 likeCount: 1890000,
                 commentCount: 234000,
-                creator: gokuCreator,
+                creator: animeStudioCreator,
                 category: .anime,
-                tags: ["dragon ball z", "gohan", "super saiyan 2", "cell", "transformation", "emotional"],
-                contentSource: .funimation,
+                tags: ["anime", "magic", "school", "academy", "fantasy", "adventure"],
+                contentSource: .userUploaded,
                 contentRating: .TV_PG,
-                language: "English",
                 isVerified: true
             ),
             
             Video(
-                title: "Frieza's Final Form DESTROYS Planet Namek! 💥",
-                description: "The tyrant of the universe reveals his true power! Watch Frieza's terrifying final transformation as Planet Namek crumbles. Classic DBZ at its finest!",
-                thumbnailURL: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+                title: "Ninja Chronicles: Shadow Warrior Training! 🥷",
+                description: "Follow young ninjas as they master ancient techniques and face ultimate challenges! Action-packed ninja adventure with incredible fight scenes!",
+                thumbnailURL: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=500&h=281&fit=crop&crop=center",
+                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", // Working sample video
                 duration: 1380, // 23 minutes
-                viewCount: 9500000,
-                likeCount: 1200000,
-                commentCount: 167000,
-                creator: gokuCreator,
-                category: .anime,
-                tags: ["dragon ball z", "frieza", "namek", "destruction", "villain", "transformation"],
-                contentSource: .crunchyroll,
-                contentRating: .TV_PG,
-                isVerified: true
-            )
-        ]
-    }
-    
-    // ⚔️ INUYASHA - FEUDAL FAIRY TALE VIBES
-    static var inuyashaVideos: [Video] {
-        let inuyashaCreator = User(
-            username: "SunriseAnimation",
-            displayName: "Sunrise Animation Studio ⚔️",
-            email: "official@sunrise-inc.co.jp",
-            profileImageURL: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=150",
-            isVerified: true
-        )
-        
-        return [
-            Video(
-                title: "Inuyasha & Kagome's First Meeting - Love Story Begins! 💕⚔️",
-                description: "The moment that started it all! Watch Kagome fall through the well and meet the half-demon Inuyasha. A timeless love story across centuries begins!",
-                thumbnailURL: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-                duration: 1440, // 24 minutes
-                viewCount: 8900000,
-                likeCount: 1340000,
-                commentCount: 234000,
-                creator: inuyashaCreator,
-                category: .anime,
-                tags: ["inuyasha", "kagome", "romance", "feudal japan", "demons", "time travel"],
-                contentSource: .crunchyroll,
-                contentRating: .TV_PG,
-                language: "Japanese",
-                subtitles: [
-                    SubtitleTrack(language: "English", languageCode: "en", url: "https://example.com/inu1_en.vtt", isDefault: true)
-                ],
-                isVerified: true
-            ),
-            
-            Video(
-                title: "Sesshomaru's Transformation - FULL DEMON POWER! 🌙",
-                description: "The most elegant and powerful demon in the series! Watch Sesshomaru unleash his true demonic form. Pure badass energy and stunning animation!",
-                thumbnailURL: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-                duration: 1320, // 22 minutes
-                viewCount: 6700000,
-                likeCount: 980000,
-                commentCount: 156000,
-                creator: inuyashaCreator,
-                category: .anime,
-                tags: ["inuyasha", "sesshomaru", "demon", "transformation", "power", "badass"],
-                contentSource: .funimation,
-                contentRating: .TV_PG,
-                isVerified: true
-            ),
-            
-            Video(
-                title: "The Final Act: Naraku's ULTIMATE DEFEAT! ⚡💀",
-                description: "The climactic battle everyone waited for! Watch Inuyasha and friends finally defeat the evil Naraku in this epic conclusion. Tears and triumph guaranteed!",
-                thumbnailURL: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
-                duration: 1500, // 25 minutes
-                viewCount: 11200000,
-                likeCount: 1670000,
-                commentCount: 289000,
-                creator: inuyashaCreator,
-                category: .anime,
-                tags: ["inuyasha", "naraku", "final battle", "victory", "conclusion", "epic"],
-                contentSource: .crunchyroll,
-                contentRating: .TV_PG,
-                isVerified: true
-            )
-        ]
-    }
-    
-    // 🍃 NARUTO - BELIEVE IT!
-    static var narutoVideos: [Video] {
-        let narutoCreator = User(
-            username: "StudioPierrot",
-            displayName: "Studio Pierrot Official 🍃",
-            email: "official@pierrot.jp",
-            profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
-            isVerified: true
-        )
-        
-        return [
-            Video(
-                title: "Naruto vs Sasuke - Valley of the End FINAL BATTLE! 🍃⚡",
-                description: "The battle that broke our hearts! Watch Naruto and Sasuke's ultimate clash at the Valley of the End. Brotherhood, rivalry, and ninja way collide!",
-                thumbnailURL: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
-                duration: 1680, // 28 minutes
-                viewCount: 18900000, // MASSIVE VIEWS 🔥
+                viewCount: 18900000, // MASSIVE VIEWS
                 likeCount: 2890000,
                 commentCount: 567000,
-                creator: narutoCreator,
+                creator: animeStudioCreator,
                 category: .anime,
-                tags: ["naruto", "sasuke", "valley of the end", "final battle", "ninja", "friendship"],
-                contentSource: .crunchyroll,
+                tags: ["ninja", "training", "warrior", "action", "adventure", "martial arts"],
+                contentSource: .userUploaded,
                 contentRating: .TV_PG,
-                language: "Japanese",
-                subtitles: [
-                    SubtitleTrack(language: "English", languageCode: "en", url: "https://example.com/naruto1_en.vtt", isDefault: true)
-                ],
-                isVerified: true
-            ),
-            
-            Video(
-                title: "Rock Lee Drops His Weights - SPEED OF LIGHT! 💚⚡",
-                description: "The moment that gave everyone goosebumps! Watch Rock Lee remove his training weights and show what hard work can achieve. Pure inspiration!",
-                thumbnailURL: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-                duration: 960, // 16 minutes
-                viewCount: 14500000,
-                likeCount: 2100000,
-                commentCount: 345000,
-                creator: narutoCreator,
-                category: .anime,
-                tags: ["naruto", "rock lee", "weights", "speed", "hard work", "inspiration"],
-                contentSource: .funimation,
-                contentRating: .TV_PG,
-                isVerified: true
-            ),
-            
-            Video(
-                title: "Pain Destroys Hidden Leaf Village - ALMIGHTY PUSH! 💥",
-                description: "The most devastating attack in Naruto! Watch Pain obliterate the entire Hidden Leaf Village with one move. Absolute power displayed!",
-                thumbnailURL: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-                duration: 1200, // 20 minutes
-                viewCount: 16700000,
-                likeCount: 2450000,
-                commentCount: 423000,
-                creator: narutoCreator,
-                category: .anime,
-                tags: ["naruto", "pain", "destruction", "almighty push", "village", "power"],
-                contentSource: .crunchyroll,
-                contentRating: .TV_14,
                 isVerified: true
             )
         ]
     }
     
-    // 🤖 ROBOT CHICKEN - ADULT SWIM CHAOS
-    static var robotChickenVideos: [Video] {
-        let robotCreator = User(
-            username: "AdultSwimOfficial",
-            displayName: "Adult Swim [AS] 🤖",
-            email: "chaos@adultswim.com",
-            profileImageURL: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150",
-            isVerified: true
-        )
-        
-        return [
-            Video(
-                title: "Robot Chicken: Star Wars Parody - Darth Vader's Day Off! 🤖⭐",
-                description: "Watch Darth Vader like you've never seen him before! Robot Chicken's hilarious take on Star Wars will have you rolling on the floor laughing!",
-                thumbnailURL: "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4",
-                duration: 660, // 11 minutes
-                viewCount: 5600000,
-                likeCount: 780000,
-                commentCount: 123000,
-                creator: robotCreator,
-                category: .adultAnimation,
-                tags: ["robot chicken", "star wars", "parody", "comedy", "adult swim", "stop motion"],
-                contentSource: .adultswim,
-                contentRating: .TV_MA,
-                language: "English",
-                isVerified: true
-            ),
-            
-            Video(
-                title: "Robot Chicken: Childhood Toys GONE WRONG! 🧸💀",
-                description: "Your favorite childhood toys get the Robot Chicken treatment! Dark, twisted, and absolutely hilarious. Not for the faint of heart!",
-                thumbnailURL: "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
-                duration: 720, // 12 minutes
-                viewCount: 4200000,
-                likeCount: 590000,
-                commentCount: 89000,
-                creator: robotCreator,
-                category: .adultAnimation,
-                tags: ["robot chicken", "toys", "childhood", "dark comedy", "twisted", "adult swim"],
-                contentSource: .adultswim,
-                contentRating: .TV_MA,
-                isVerified: true
-            )
-        ]
-    }
-    
-    // 🎯 KIDS CONTENT - SAFE AND EDUCATIONAL! 
+    // 🎯 KIDS CONTENT - REAL & SAFE!
     static var kidsVideos: [Video] {
         let kidsCreator = User(
-            username: "SafeKidsChannel",
+            username: "SafeKidsLearning",
             displayName: "Safe Kids Learning 🌈",
             email: "safe@kidschannel.com",
-            profileImageURL: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150",
-            isVerified: true
-        )
-        
-        let pbsCreator = User(
-            username: "PBSKidsOfficial",
-            displayName: "PBS Kids 📚",
-            email: "kids@pbs.org",
-            profileImageURL: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150",
+            profileImageURL: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face",
             isVerified: true
         )
         
         return [
             Video(
-                title: "ABC Song with Dancing Animals! 🎵🦁 Learn Your ABCs!",
-                description: "Join our friendly animal friends as they sing and dance to the ABC song! Perfect for toddlers learning their letters. Educational and fun!",
-                thumbnailURL: "https://images.unsplash.com/photo-1551963831-b3b1ca40c98e?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                title: "Learn Colors with Fun Animals! 🌈🦁",
+                description: "Educational and fun! Kids will learn all the colors of the rainbow with cute animals. Perfect for toddlers and preschoolers. Safe, verified content!",
+                thumbnailURL: "https://images.unsplash.com/photo-1551963831-b3b1ca40c98e?w=500&h=281&fit=crop",
+                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
                 duration: 180, // 3 minutes - perfect for kids
                 viewCount: 2300000,
                 likeCount: 345000,
-                commentCount: 12000, // Limited comments for safety
+                commentCount: 12000,
                 creator: kidsCreator,
                 category: .kids,
-                tags: ["kids", "abc", "learning", "animals", "educational", "toddlers", "safe"],
-                contentSource: .pbsKids,
+                tags: ["kids", "colors", "learning", "animals", "educational", "toddlers"],
+                contentSource: .userUploaded,
                 contentRating: .TV_Y,
                 language: "English",
                 isVerified: true
             ),
             
             Video(
-                title: "Daniel Tiger's Neighborhood: Sharing is Caring! 🐅❤️",
-                description: "Learn about sharing with Daniel Tiger! A gentle lesson about friendship and kindness. Perfect for preschoolers developing social skills.",
-                thumbnailURL: "https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-                duration: 1440, // 24 minutes
+                title: "Numbers 1-10 Fun Learning Song! 🔢🎵",
+                description: "Count along with our fun number song! Kids will learn numbers 1 through 10 with catchy music and colorful animations. Educational entertainment!",
+                thumbnailURL: "https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=500&h=281&fit=crop",
+                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+                duration: 240, // 4 minutes
                 viewCount: 1800000,
                 likeCount: 290000,
                 commentCount: 8500,
-                creator: pbsCreator,
+                creator: kidsCreator,
                 category: .kids,
-                tags: ["daniel tiger", "sharing", "friendship", "preschool", "pbs kids", "social skills"],
-                contentSource: .pbsKids,
-                contentRating: .TV_Y,
-                isVerified: true
-            ),
-            
-            Video(
-                title: "Fun Science Experiments for Kids! 🧪🌟 Safe & Easy!",
-                description: "Amazing science experiments you can do at home! Adult supervision recommended. Learn about colors, bubbles, and simple chemistry safely!",
-                thumbnailURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-                duration: 900, // 15 minutes
-                viewCount: 3200000,
-                likeCount: 450000,
-                commentCount: 15600,
-                creator: User(
-                    username: "ScienceForKids",
-                    displayName: "Science for Kids 🔬",
-                    email: "learn@scienceforkids.com",
-                    profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
-                    isVerified: true
-                ),
-                category: .kids,
-                tags: ["kids", "science", "experiments", "educational", "safe", "learning", "STEM"],
+                tags: ["numbers", "counting", "kids", "educational", "song", "learning"],
                 contentSource: .userUploaded,
-                contentRating: .TV_Y7,
-                isVerified: true
-            ),
-            
-            Video(
-                title: "Sesame Street: Cookie Monster's Healthy Snacks! 🍪🥕",
-                description: "Cookie Monster learns about healthy eating! Fun lessons about nutrition with everyone's favorite blue monster. Me love healthy cookies!",
-                thumbnailURL: "https://images.unsplash.com/photo-1551963831-b3b1ca40c98e?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-                duration: 720, // 12 minutes
-                viewCount: 2700000,
-                likeCount: 380000,
-                commentCount: 11200,
-                creator: User(
-                    username: "SesameStreetOfficial",
-                    displayName: "Sesame Street 🏠",
-                    email: "friends@sesamestreet.org",
-                    profileImageURL: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150",
-                    isVerified: true
-                ),
-                category: .kids,
-                tags: ["sesame street", "cookie monster", "healthy eating", "nutrition", "kids"],
-                contentSource: .pbsKids,
                 contentRating: .TV_Y,
                 isVerified: true
             )
         ]
     }
     
-    // 🍽️ MUKBANG - EATING SHOW VIBES
+    // 🍽️ MUKBANG & FOOD CONTENT
     static var mukbangVideos: [Video] {
+        let foodCreator = User(
+            username: "FoodieASMR",
+            displayName: "Foodie ASMR 🍽️",
+            email: "eat@foodieasmr.com",
+            profileImageURL: "https://images.unsplash.com/photo-1494790108755-2616b612b742?w=150&h=150&fit=crop&crop=face",
+            isVerified: true
+        )
+        
         return [
             Video(
-                title: "ULTIMATE Korean BBQ Mukbang FEAST! 🥩🔥 ASMR Eating",
-                description: "The most satisfying Korean BBQ mukbang ever! Watch me devour pounds of marinated beef, spicy kimchi, and fresh lettuce wraps. Pure eating bliss!",
-                thumbnailURL: "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-                duration: 3600, // 1 hour - marathon eating!
+                title: "ASMR Food Challenge: Satisfying Eating Sounds! 🔥",
+                description: "The most satisfying food eating video! Watch and listen to amazing ASMR eating sounds that will relax and satisfy you. Pure eating bliss!",
+                thumbnailURL: "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=500&h=281&fit=crop",
+                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
+                duration: 1800, // 30 minutes
                 viewCount: 8900000,
                 likeCount: 1200000,
                 commentCount: 234000,
-                creator: User(
-                    username: "MukbangKingASMR",
-                    displayName: "Mukbang King ASMR 👑🍽️",
-                    email: "eat@mukbangking.com",
-                    profileImageURL: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150",
-                    isVerified: true
-                ),
+                creator: foodCreator,
                 category: .mukbang,
-                tags: ["mukbang", "korean bbq", "asmr", "eating", "food", "satisfying"],
+                tags: ["mukbang", "asmr", "eating", "food", "satisfying", "relaxing"],
                 contentSource: .userUploaded,
                 contentRating: .TV_G,
                 isVerified: true
@@ -1008,25 +762,27 @@ extension Video {
     
     // 🔥 TRENDING CONTENT
     static var trendingVideos: [Video] {
+        let trendingCreator = User(
+            username: "ViralChallenges",
+            displayName: "Viral Challenges 🔥",
+            email: "viral@challenges.com",
+            profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
+            isVerified: true
+        )
+        
         return [
             Video(
-                title: "24 HOURS in a Japanese Convenience Store! 🏪",
-                description: "I spent 24 hours living in a Japanese 7-Eleven! Trying every snack, sleeping in the store, and discovering Japan's amazing convenience culture!",
-                thumbnailURL: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
+                title: "24 Hour Challenge: Living in a Tiny House! 🏠",
+                description: "I spent 24 hours in the world's tiniest house! Watch me try to cook, sleep, and live in this incredible space. You won't believe what happens!",
+                thumbnailURL: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=281&fit=crop",
+                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
                 duration: 1800, // 30 minutes
                 viewCount: 12400000,
                 likeCount: 1890000,
                 commentCount: 345000,
-                creator: User(
-                    username: "JapanChallenges",
-                    displayName: "Japan Challenges 🇯🇵",
-                    email: "adventure@japanchallenges.com",
-                    profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
-                    isVerified: true
-                ),
+                creator: trendingCreator,
                 category: .lifestyle,
-                tags: ["challenge", "japan", "convenience store", "24 hours", "culture", "adventure"],
+                tags: ["24 hour challenge", "tiny house", "lifestyle", "adventure", "viral"],
                 contentSource: .userUploaded,
                 contentRating: .TV_PG,
                 isVerified: true
@@ -1034,83 +790,59 @@ extension Video {
         ]
     }
     
-    // 🎬 MOVIES
-    static var movieVideos: [Video] {
-        return [
-            Video(
-                title: "The Lost Kingdom: Epic Fantasy Adventure (Full Movie)",
-                description: "A legendary quest begins! Follow brave warriors as they search for the lost kingdom and battle mythical creatures. Award-winning fantasy epic!",
-                thumbnailURL: "https://images.unsplash.com/photo-1489599511895-42ac8d2e6286?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
-                duration: 7200, // 2 hours
-                viewCount: 3400000,
-                likeCount: 450000,
-                commentCount: 67000,
-                creator: User(
-                    username: "EpicFilmsStudio",
-                    displayName: "Epic Films Studio 🎬",
-                    email: "info@epicfilms.com",
-                    profileImageURL: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150",
-                    isVerified: true
-                ),
-                category: .movies,
-                tags: ["fantasy", "adventure", "epic", "full movie", "kingdom", "warriors"],
-                contentSource: .archive,
-                contentRating: .PG13,
-                isVerified: true
-            )
-        ]
-    }
-    
-    // 🎮 GAMING
+    // 🎮 GAMING CONTENT
     static var gamingVideos: [Video] {
+        let gamingCreator = User(
+            username: "ProGamerElite",
+            displayName: "Pro Gamer Elite 🎮",
+            email: "pro@gaming.com",
+            profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
+            isVerified: true
+        )
+        
         return [
             Video(
-                title: "Fortnite Victory Royale Compilation - INSANE CLUTCHES! 🏆",
-                description: "The most epic Fortnite victory royales ever! Watch these insane clutch moments that will leave you speechless. Pro gameplay at its finest!",
-                thumbnailURL: "https://images.unsplash.com/photo-1552820728-8b83bb6b773f?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+                title: "EPIC Gaming Moments Compilation! 🏆",
+                description: "The most epic gaming moments ever! Watch these incredible plays that will leave you speechless. Pro-level gameplay and amazing skills!",
+                thumbnailURL: "https://images.unsplash.com/photo-1552820728-8b83bb6b773f?w=500&h=281&fit=crop",
+                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
                 duration: 900, // 15 minutes
                 viewCount: 6700000,
                 likeCount: 890000,
                 commentCount: 156000,
-                creator: User(
-                    username: "ProGamerElite",
-                    displayName: "Pro Gamer Elite 🎮",
-                    email: "clutch@progamer.com",
-                    profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
-                    isVerified: true
-                ),
+                creator: gamingCreator,
                 category: .gaming,
-                tags: ["fortnite", "victory royale", "gaming", "clutch", "pro player", "compilation"],
-                contentSource: .twitch,
+                tags: ["gaming", "epic moments", "compilation", "pro player", "skills"],
+                contentSource: .userUploaded,
                 contentRating: .TV_PG,
                 isVerified: true
             )
         ]
     }
     
-    // 🎵 MUSIC
+    // 🎵 MUSIC CONTENT
     static var musicVideos: [Video] {
+        let musicCreator = User(
+            username: "ChillVibesMusic",
+            displayName: "Chill Vibes Music 🎧",
+            email: "music@chillvibes.com",
+            profileImageURL: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=150&h=150&fit=crop&crop=face",
+            isVerified: true
+        )
+        
         return [
             Video(
-                title: "Summer Vibes 2024 - Chill Hip Hop Mix 🌊🎵",
-                description: "The perfect summer playlist! Smooth hip hop beats to vibe to. Perfect for studying, chilling, or just feeling good. Non-stop good vibes!",
-                thumbnailURL: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-                duration: 3600, // 1 hour mix
+                title: "Chill Beats for Study & Relax 🌊🎵",
+                description: "The perfect background music for studying, working, or just chilling out. Smooth beats that will help you focus and feel good!",
+                thumbnailURL: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&h=281&fit=crop",
+                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+                duration: 3600, // 1 hour
                 viewCount: 5200000,
                 likeCount: 720000,
                 commentCount: 89000,
-                creator: User(
-                    username: "ChillBeatsCollective",
-                    displayName: "Chill Beats Collective 🎧",
-                    email: "vibes@chillbeats.com",
-                    profileImageURL: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=150",
-                    isVerified: true
-                ),
+                creator: musicCreator,
                 category: .music,
-                tags: ["hip hop", "chill", "summer", "vibes", "mix", "playlist", "study music"],
+                tags: ["chill", "study music", "beats", "relax", "background music"],
                 contentSource: .userUploaded,
                 contentRating: .TV_G,
                 isVerified: true
@@ -1118,27 +850,29 @@ extension Video {
         ]
     }
     
-    // 😂 COMEDY
+    // 😂 COMEDY CONTENT  
     static var comedyVideos: [Video] {
+        let comedyCreator = User(
+            username: "FunnySkits",
+            displayName: "Funny Skits Comedy 😂",
+            email: "laughs@funnyskits.com",
+            profileImageURL: "https://images.unsplash.com/photo-1517315003714-a071486bd9ea?w=150&h=150&fit=crop&crop=face",
+            isVerified: true
+        )
+        
         return [
             Video(
-                title: "When You're the Only One Who Shows Up to Work 😂",
-                description: "We've all been there! This hilarious sketch perfectly captures what happens when you're the only responsible one. Relatable comedy gold!",
-                thumbnailURL: "https://images.unsplash.com/photo-1517315003714-a071486bd9ea?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4",
-                duration: 240, // 4 minutes
+                title: "Hilarious Life Situations Everyone Can Relate To! 😂",
+                description: "These funny situations happen to everyone! Watch these hilarious skits that perfectly capture everyday life. You'll be laughing non-stop!",
+                thumbnailURL: "https://images.unsplash.com/photo-1517315003714-a071486bd9ea?w=500&h=281&fit=crop",
+                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4",
+                duration: 480, // 8 minutes
                 viewCount: 4100000,
                 likeCount: 580000,
                 commentCount: 78000,
-                creator: User(
-                    username: "ComedyCentral",
-                    displayName: "Comedy Central 😂",
-                    email: "laughs@comedy.com",
-                    profileImageURL: "https://images.unsplash.com/photo-1517315003714-a071486bd9ea?w=150",
-                    isVerified: true
-                ),
+                creator: comedyCreator,
                 category: .comedy,
-                tags: ["comedy", "sketch", "work", "relatable", "funny", "viral"],
+                tags: ["comedy", "funny", "relatable", "skits", "humor"],
                 contentSource: .userUploaded,
                 contentRating: .TV_PG,
                 isVerified: true
@@ -1146,27 +880,29 @@ extension Video {
         ]
     }
     
-    // 📚 EDUCATIONAL
+    // 📚 EDUCATIONAL CONTENT
     static var educationalVideos: [Video] {
+        let eduCreator = User(
+            username: "LearnWithUs",
+            displayName: "Learn With Us 📚",
+            email: "learn@educational.com",
+            profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
+            isVerified: true
+        )
+        
         return [
             Video(
-                title: "How the Internet Actually Works - Explained Simply! 🌐",
-                description: "Ever wondered how the internet really works? This easy-to-understand explanation will blow your mind! From cables to satellites to your phone!",
-                thumbnailURL: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
+                title: "How Technology Actually Works - Mind Blowing! 🤯",
+                description: "Ever wondered how your phone really works? This amazing explanation will blow your mind! Learn about technology in a fun and easy way!",
+                thumbnailURL: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=500&h=281&fit=crop",
+                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
                 duration: 960, // 16 minutes
                 viewCount: 2800000,
                 likeCount: 390000,
                 commentCount: 45000,
-                creator: User(
-                    username: "ScienceExplained",
-                    displayName: "Science Explained 🔬",
-                    email: "learn@scienceexplained.com",
-                    profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
-                    isVerified: true
-                ),
+                creator: eduCreator,
                 category: .education,
-                tags: ["internet", "technology", "education", "science", "explained", "learning"],
+                tags: ["technology", "education", "learning", "science", "how it works"],
                 contentSource: .userUploaded,
                 contentRating: .TV_G,
                 isVerified: true
@@ -1174,27 +910,29 @@ extension Video {
         ]
     }
     
-    // 💅 LIFESTYLE
+    // 💅 LIFESTYLE CONTENT
     static var lifestyleVideos: [Video] {
+        let lifestyleCreator = User(
+            username: "LifestyleGuru",
+            displayName: "Lifestyle Guru ✨",
+            email: "lifestyle@guru.com",
+            profileImageURL: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face",
+            isVerified: true
+        )
+        
         return [
             Video(
-                title: "My 5AM Morning Routine That Changed My Life! ☀️✨",
-                description: "Transform your mornings and your life! My productive 5AM routine that boosted my energy, focus, and happiness. Game-changing tips inside!",
-                thumbnailURL: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                title: "Transform Your Life: Morning Routine That Works! ☀️",
+                description: "This morning routine will completely change your life! Simple steps to boost your energy, productivity, and happiness. Start transforming today!",
+                thumbnailURL: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=281&fit=crop",
+                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
                 duration: 720, // 12 minutes
                 viewCount: 1900000,
                 likeCount: 280000,
                 commentCount: 34000,
-                creator: User(
-                    username: "WellnessGuru",
-                    displayName: "Wellness Guru ✨",
-                    email: "glow@wellnessguru.com",
-                    profileImageURL: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150",
-                    isVerified: true
-                ),
+                creator: lifestyleCreator,
                 category: .lifestyle,
-                tags: ["morning routine", "productivity", "wellness", "lifestyle", "self care", "motivation"],
+                tags: ["morning routine", "lifestyle", "productivity", "wellness", "self improvement"],
                 contentSource: .userUploaded,
                 contentRating: .TV_G,
                 isVerified: true
@@ -1202,27 +940,29 @@ extension Video {
         ]
     }
     
-    // 🩳 SHORTS
+    // 🩳 VIRAL SHORTS
     static var shortsVideos: [Video] {
+        let shortsCreator = User(
+            username: "ViralShorts",
+            displayName: "Viral Shorts 🔥",
+            email: "shorts@viral.com",
+            profileImageURL: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face",
+            isVerified: true
+        )
+        
         return [
             Video(
-                title: "Dog Sees Owner After 6 Months - Pure Joy! 🐕❤️",
-                description: "This reunion will melt your heart! Watch this dog's incredible reaction to seeing their owner after 6 months apart. Pure love! #shorts",
-                thumbnailURL: "https://images.unsplash.com/photo-1552053831-71594a27632d?w=500",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+                title: "This Will Make You Smile! 😊❤️",
+                description: "Pure wholesome content that will instantly make your day better! Watch this heartwarming moment that's going viral! #shorts",
+                thumbnailURL: "https://images.unsplash.com/photo-1552053831-71594a27632d?w=500&h=889&fit=crop", // Vertical for shorts
+                videoURL: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
                 duration: 30, // 30 seconds
-                viewCount: 15600000, // Shorts get massive views!
+                viewCount: 15600000, // Shorts get MASSIVE views!
                 likeCount: 2340000,
                 commentCount: 456000,
-                creator: User(
-                    username: "WholesomeVibes",
-                    displayName: "Wholesome Vibes 💕",
-                    email: "heart@wholesomevibes.com",
-                    profileImageURL: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150",
-                    isVerified: true
-                ),
+                creator: shortsCreator,
                 category: .shorts,
-                tags: ["dog", "reunion", "wholesome", "pets", "love", "viral", "shorts"],
+                tags: ["wholesome", "viral", "shorts", "heartwarming", "smile"],
                 aspectRatio: .portrait,
                 contentSource: .userUploaded,
                 contentRating: .TV_G,
