@@ -474,9 +474,12 @@ struct ProfessionalAddStoryButton: View {
     let action: () -> Void
     
     @State private var isPressed: Bool = false
+    @State private var showingStoryCreation: Bool = false
     
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            showingStoryCreation = true
+        }) {
             VStack(spacing: 8) {
                 ZStack {
                     Circle()
@@ -489,13 +492,37 @@ struct ProfessionalAddStoryButton: View {
                         .overlay(
                             ZStack {
                                 Circle()
-                                    .fill(AppTheme.Colors.primary)
-                                    .frame(width: 24, height: 24)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 28, height: 28)
+                                    .shadow(
+                                        color: AppTheme.Colors.primary.opacity(0.3),
+                                        radius: 4,
+                                        x: 0,
+                                        y: 2
+                                    )
                                 
                                 Image(systemName: "plus")
-                                    .font(.system(size: 14, weight: .bold))
+                                    .font(.system(size: 16, weight: .bold))
                                     .foregroundColor(.white)
                             }
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [AppTheme.Colors.primary.opacity(0.3), .clear],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                                .frame(width: 68, height: 68)
                         )
                 }
                 
@@ -509,11 +536,28 @@ struct ProfessionalAddStoryButton: View {
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
         .onPressGesture(
-            onPress: { isPressed = true },
-            onRelease: { isPressed = false }
+            onPress: { 
+                isPressed = true
+                // Add professional haptic feedback
+                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                impactFeedback.impactOccurred()
+            },
+            onRelease: { 
+                isPressed = false 
+            }
         )
         .accessibilityLabel("Add your story")
         .accessibilityHint("Double tap to create a new story")
+        .fullScreenCover(isPresented: $showingStoryCreation) {
+            StoryCreationView()
+                .onAppear {
+                    print("📖 StoryCreationView presented")
+                }
+                .onDisappear {
+                    print("📖 StoryCreationView dismissed")
+                    action() // Call the original action if needed
+                }
+        }
     }
 }
 
