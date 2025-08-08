@@ -112,7 +112,9 @@ struct ProfileView: View {
         }
         .navigationBarHidden(true)
         .sheet(isPresented: $showingEditProfile) {
-            SafeEditProfileView(user: $user)
+            NavigationStack {
+                EditProfileView(user: $user)
+            }
         }
         .sheet(isPresented: $showingSettings) {
             SafeProfileSettingsView()

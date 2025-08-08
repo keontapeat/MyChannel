@@ -8,24 +8,10 @@
 import SwiftUI
 import PhotosUI
 
-// MARK: - Safe Edit Profile View
-struct SafeEditProfileView: View {
-    @Binding var user: User
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        SafeViewWrapper {
-            EditProfileView(user: $user, dismiss: dismiss)
-        } fallback: {
-            EditProfileFallback(dismiss: dismiss)
-        }
-    }
-}
-
-// MARK: - Edit Profile View
+// MARK: - Edit Profile View (Enhanced)
 struct EditProfileView: View {
     @Binding var user: User
-    let dismiss: DismissAction
+    @Environment(\.dismiss) private var dismiss
     
     @State private var displayName: String = ""
     @State private var username: String = ""
@@ -37,212 +23,446 @@ struct EditProfileView: View {
     @State private var isSaving = false
     @State private var showingImagePicker = false
     @State private var imagePickerType: ImagePickerType = .profile
+    @State private var showingSaveConfirmation = false
+    @State private var hasUnsavedChanges = false
+    @State private var showingDiscardAlert = false
     
     private enum ImagePickerType {
         case profile, banner
     }
     
     var body: some View {
-        NavigationView {
+        ZStack {
+            // Background
+            AppTheme.Colors.background
+                .ignoresSafeArea()
+            
             ScrollView {
-                VStack(spacing: 24) {
-                    // Profile Header Section
-                    profileHeaderSection
+                LazyVStack(spacing: 0) {
+                    // Header section
+                    headerSection
                     
-                    // Form Fields
-                    formFieldsSection
-                    
-                    // Social Links Section
-                    socialLinksSection
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-            }
-            .background(AppTheme.Colors.background)
-            .navigationTitle("Edit Profile")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
+                    // Content sections
+                    VStack(spacing: 28) {
+                        profileImagesSection
+                        formFieldsSection
+                        privacySection
                     }
-                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 28)
                 }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        saveProfile()
+            }
+            .scrollDismissesKeyboard(.immediately)
+            
+            // Save confirmation toast
+            if showingSaveConfirmation {
+                VStack {
+                    HStack(spacing: 16) {
+                        ZStack {
+                            Circle()
+                                .fill(.green.opacity(0.2))
+                                .frame(width: 40, height: 40)
+                            
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundColor(.green)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Profile Updated!")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                            
+                            Text("Your changes have been saved successfully")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(20)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+                    .padding(.horizontal, 20)
+                    
+                    Spacer()
+                }
+                .padding(.top, 70)
+                .transition(.move(edge: .top).combined(with: .scale(scale: 0.8)).combined(with: .opacity))
+                .zIndex(1000)
+            }
+        }
+        .navigationTitle("Edit Profile")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: handleBackTap) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Back")
+                            .font(.system(size: 16, weight: .medium))
                     }
                     .foregroundStyle(AppTheme.Colors.primary)
-                    .fontWeight(.semibold)
-                    .disabled(isSaving)
                 }
+            }
+            
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: saveProfile) {
+                    Group {
+                        if isSaving {
+                            HStack(spacing: 10) {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.8)
+                                Text("Saving...")
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(AppTheme.Colors.primary.opacity(0.8), in: Capsule())
+                        } else {
+                            Text("Save")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(hasUnsavedChanges ? .white : AppTheme.Colors.primary)
+                                .padding(.horizontal, hasUnsavedChanges ? 16 : 0)
+                                .padding(.vertical, hasUnsavedChanges ? 8 : 0)
+                                .background(hasUnsavedChanges ? AppTheme.Colors.primary : .clear, in: Capsule())
+                                .scaleEffect(hasUnsavedChanges ? 1.05 : 1.0)
+                        }
+                    }
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: hasUnsavedChanges)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSaving)
+                }
+                .disabled(isSaving || !hasUnsavedChanges)
             }
         }
         .onAppear {
             initializeFields()
         }
+        .onChange(of: displayName) { _, _ in checkForChanges() }
+        .onChange(of: username) { _, _ in checkForChanges() }
+        .onChange(of: bio) { _, _ in checkForChanges() }
+        .onChange(of: location) { _, _ in checkForChanges() }
+        .onChange(of: website) { _, _ in checkForChanges() }
         .photosPicker(
             isPresented: $showingImagePicker,
             selection: imagePickerType == .profile ? $selectedProfileImage : $selectedBannerImage,
             matching: .images,
             photoLibrary: .shared()
         )
+        .alert("Discard Changes?", isPresented: $showingDiscardAlert) {
+            Button("Discard", role: .destructive) {
+                dismiss()
+            }
+            Button("Keep Editing", role: .cancel) { }
+        } message: {
+            Text("You have unsaved changes. Are you sure you want to discard them?")
+        }
     }
     
-    // MARK: - Profile Header Section
-    private var profileHeaderSection: some View {
-        VStack(spacing: 16) {
-            // Banner Image
+    // MARK: - Header Section
+    private var headerSection: some View {
+        VStack(spacing: 0) {
             ZStack {
-                if let bannerURL = user.bannerImageURL {
-                    CachedAsyncImage(url: URL(string: bannerURL)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Rectangle()
-                            .fill(AppTheme.Colors.surface)
+                // Dynamic gradient background
+                LinearGradient(
+                    colors: [
+                        AppTheme.Colors.primary.opacity(0.15),
+                        AppTheme.Colors.secondary.opacity(0.1),
+                        AppTheme.Colors.background
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .frame(height: 120)
+                
+                // Floating elements for depth
+                VStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .frame(width: 60, height: 60)
+                            .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 15, x: 0, y: 5)
+                        
+                        Image(systemName: "person.crop.circle.badge.plus")
+                            .font(.system(size: 28, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.primary)
                     }
-                    .frame(height: 120)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                } else {
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [AppTheme.Colors.primary.opacity(0.3), AppTheme.Colors.secondary.opacity(0.3)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(height: 120)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                    
+                    VStack(spacing: 4) {
+                        Text("Customize Your Profile")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                        
+                        Text("Make your profile shine ✨")
+                            .font(.system(size: 15))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
                 }
+                .padding(.top, 25)
+            }
+        }
+    }
+    
+    // MARK: - Profile Images Section
+    private var profileImagesSection: some View {
+        VStack(spacing: 20) {
+            // Banner Image
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Cover Photo")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
                 
                 Button(action: {
                     imagePickerType = .banner
                     showingImagePicker = true
+                    HapticManager.shared.impact(style: .light)
                 }) {
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .background(.black.opacity(0.6))
-                        .clipShape(Circle())
+                    ZStack {
+                        if let bannerURL = user.bannerImageURL {
+                            CachedAsyncImage(url: URL(string: bannerURL)) { image in
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                Rectangle()
+                                    .fill(AppTheme.Colors.surface)
+                                    .overlay(
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
+                                    )
+                            }
+                        } else {
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [AppTheme.Colors.primary.opacity(0.3), AppTheme.Colors.secondary.opacity(0.3)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        }
+                        
+                        VStack(spacing: 8) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 24))
+                                .foregroundColor(.white)
+                            
+                            Text("Change Cover")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                        .padding(16)
+                        .background(.black.opacity(0.5))
+                        .cornerRadius(12)
+                    }
+                    .frame(height: 140)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
+                    )
                 }
+                .buttonStyle(PlainButtonStyle())
             }
             
             // Profile Image
-            ZStack {
-                if let profileURL = user.profileImageURL {
-                    CachedAsyncImage(url: URL(string: profileURL)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Circle()
-                            .fill(AppTheme.Colors.surface)
-                            .overlay(
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 32))
-                                    .foregroundStyle(AppTheme.Colors.textTertiary)
-                            )
-                    }
-                    .frame(width: 80, height: 80)
-                    .clipShape(Circle())
-                } else {
-                    Circle()
-                        .fill(AppTheme.Colors.primary)
-                        .frame(width: 80, height: 80)
-                        .overlay(
-                            Text(String(user.displayName.prefix(1)))
-                                .font(.system(size: 32, weight: .bold))
-                                .foregroundStyle(.white)
-                        )
-                }
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Profile Photo")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
                 
-                Button(action: {
-                    imagePickerType = .profile
-                    showingImagePicker = true
-                }) {
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white)
-                        .frame(width: 24, height: 24)
-                        .background(.black.opacity(0.8))
+                HStack(spacing: 16) {
+                    Button(action: {
+                        imagePickerType = .profile
+                        showingImagePicker = true
+                        HapticManager.shared.impact(style: .light)
+                    }) {
+                        ZStack {
+                            if let profileURL = user.profileImageURL {
+                                CachedAsyncImage(url: URL(string: profileURL)) { image in
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Circle()
+                                        .fill(AppTheme.Colors.surface)
+                                        .overlay(
+                                            ProgressView()
+                                                .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
+                                        )
+                                }
+                            } else {
+                                Circle()
+                                    .fill(AppTheme.Colors.primary)
+                                    .overlay(
+                                        Text(String(user.displayName.prefix(1)))
+                                            .font(.system(size: 36, weight: .bold))
+                                            .foregroundColor(.white)
+                                    )
+                            }
+                            
+                            Circle()
+                                .fill(.black.opacity(0.5))
+                                .overlay(
+                                    Image(systemName: "camera.fill")
+                                        .font(.system(size: 20))
+                                        .foregroundColor(.white)
+                                )
+                        }
+                        .frame(width: 100, height: 100)
                         .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(AppTheme.Colors.background, lineWidth: 4)
+                        )
+                        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.1), radius: 8, x: 0, y: 4)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Choose a profile photo")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                        
+                        Text("Upload a photo that represents you well. Square images work best.")
+                            .font(.system(size: 14))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    
+                    Spacer()
                 }
-                .offset(x: 25, y: 25)
             }
-            .offset(y: -40)
         }
     }
     
     // MARK: - Form Fields Section
     private var formFieldsSection: some View {
-        VStack(spacing: 20) {
-            ModernTextField(
-                title: "Display Name",
-                text: $displayName,
-                icon: "person.fill"
-            )
-            
-            ModernTextField(
-                title: "Username",
-                text: $username,
-                icon: "at",
-                prefix: "@"
-            )
-            
-            ModernTextEditor(
-                title: "Bio",
-                text: $bio,
-                icon: "text.quote",
-                placeholder: "Tell people about yourself..."
-            )
-            
-            ModernTextField(
-                title: "Location",
-                text: $location,
-                icon: "location.fill"
-            )
-            
-            ModernTextField(
-                title: "Website",
-                text: $website,
-                icon: "globe",
-                keyboardType: .URL
-            )
-        }
-    }
-    
-    // MARK: - Social Links Section
-    private var socialLinksSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Social Links")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(AppTheme.Colors.textPrimary)
-            
-            Text("Connect your social media accounts")
-                .font(.system(size: 14))
-                .foregroundStyle(AppTheme.Colors.textSecondary)
-            
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 12) {
-                ForEach(SocialPlatform.allCases, id: \.rawValue) { platform in
-                    SocialLinkCard(
-                        platform: platform,
-                        existingLink: user.socialLinks.first { $0.platform == platform }
-                    )
+        VStack(spacing: 24) {
+            HStack {
+                Text("Basic Information")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Spacer()
+                
+                // Progress indicator
+                HStack(spacing: 4) {
+                    ForEach(0..<5) { index in
+                        Circle()
+                            .fill(getFieldProgress() > index ? AppTheme.Colors.primary : AppTheme.Colors.divider)
+                            .frame(width: 6, height: 6)
+                    }
                 }
             }
+            
+            VStack(spacing: 20) {
+                ModernTextField(
+                    title: "Display Name",
+                    text: $displayName,
+                    icon: "person.fill",
+                    placeholder: "Your display name"
+                )
+                
+                ModernTextField(
+                    title: "Username",
+                    text: $username,
+                    icon: "at",
+                    prefix: "@",
+                    placeholder: "username"
+                )
+                
+                ModernTextEditor(
+                    title: "Bio",
+                    text: $bio,
+                    icon: "text.quote",
+                    placeholder: "Tell people about yourself...",
+                    maxLength: 150
+                )
+                
+                ModernTextField(
+                    title: "Location",
+                    text: $location,
+                    icon: "location.fill",
+                    placeholder: "Where are you located?"
+                )
+                
+                ModernTextField(
+                    title: "Website",
+                    text: $website,
+                    icon: "globe",
+                    placeholder: "https://yourwebsite.com",
+                    keyboardType: .URL
+                )
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
     
-    // MARK: - Actions
+    // MARK: - Privacy Section
+    private var privacySection: some View {
+        VStack(spacing: 16) {
+            Text("Privacy & Visibility")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            VStack(spacing: 12) {
+                PrivacyToggleRow(
+                    title: "Public Profile",
+                    description: "Allow others to find and view your profile",
+                    icon: "eye",
+                    isOn: .constant(true)
+                )
+                
+                PrivacyToggleRow(
+                    title: "Show Online Status",
+                    description: "Let others see when you're active",
+                    icon: "circle.fill",
+                    isOn: .constant(false)
+                )
+                
+                PrivacyToggleRow(
+                    title: "Allow Messages",
+                    description: "Let other users send you direct messages",
+                    icon: "message",
+                    isOn: .constant(true)
+                )
+            }
+        }
+    }
+    
+    // MARK: - Helper Functions
+    private func handleBackTap() {
+        HapticManager.shared.impact(style: .light)
+        if hasUnsavedChanges {
+            showingDiscardAlert = true
+        } else {
+            dismiss()
+        }
+    }
+    
+    private func checkForChanges() {
+        hasUnsavedChanges = displayName != user.displayName ||
+                           username != user.username ||
+                           bio != (user.bio ?? "") ||
+                           location != (user.location ?? "") ||
+                           website != (user.website ?? "")
+    }
+    
+    private func getFieldProgress() -> Int {
+        var progress = 0
+        if !displayName.isEmpty { progress += 1 }
+        if !username.isEmpty { progress += 1 }
+        if !bio.isEmpty { progress += 1 }
+        if !location.isEmpty { progress += 1 }
+        if !website.isEmpty { progress += 1 }
+        return progress
+    }
+    
     private func initializeFields() {
         displayName = user.displayName
         username = user.username
@@ -253,9 +473,10 @@ struct EditProfileView: View {
     
     private func saveProfile() {
         isSaving = true
+        HapticManager.shared.impact(style: .medium)
         
-        // Simulate save operation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+        // Simulate save operation with realistic delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             // Update user with new values
             var updatedUser = user
             updatedUser = User(
@@ -281,12 +502,30 @@ struct EditProfileView: View {
             
             user = updatedUser
             isSaving = false
+            hasUnsavedChanges = false
+            
+            // Show success confirmation
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                showingSaveConfirmation = true
+            }
+            
+            // Hide confirmation after 2 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    showingSaveConfirmation = false
+                }
+            }
             
             // Notify that profile was updated
             NotificationCenter.default.post(name: .userProfileUpdated, object: updatedUser)
             
+            // Success haptic
             HapticManager.shared.impact(style: .light)
-            dismiss()
+            
+            // Auto-dismiss after showing confirmation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                dismiss()
+            }
         }
     }
 }
@@ -297,47 +536,53 @@ struct ModernTextField: View {
     @Binding var text: String
     let icon: String
     let prefix: String?
+    let placeholder: String
     let keyboardType: UIKeyboardType
     
-    init(title: String, text: Binding<String>, icon: String, prefix: String? = nil, keyboardType: UIKeyboardType = .default) {
+    @FocusState private var isFocused: Bool
+    
+    init(title: String, text: Binding<String>, icon: String, prefix: String? = nil, placeholder: String = "", keyboardType: UIKeyboardType = .default) {
         self.title = title
         self._text = text
         self.icon = icon
         self.prefix = prefix
+        self.placeholder = placeholder
         self.keyboardType = keyboardType
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(AppTheme.Colors.textSecondary)
             
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 Image(systemName: icon)
-                    .font(.system(size: 16))
-                    .foregroundStyle(AppTheme.Colors.textTertiary)
-                    .frame(width: 20)
+                    .font(.system(size: 17))
+                    .foregroundColor(isFocused ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
+                    .frame(width: 22)
                 
                 if let prefix = prefix {
                     Text(prefix)
-                        .font(.system(size: 16))
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
                 }
                 
-                TextField("", text: $text)
-                    .font(.system(size: 16))
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                TextField(placeholder, text: $text)
+                    .font(.system(size: 17))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
                     .keyboardType(keyboardType)
                     .textInputAutocapitalization(keyboardType == .URL ? .never : .words)
+                    .focused($isFocused)
             }
-            .padding(16)
+            .padding(18)
             .background(AppTheme.Colors.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(AppTheme.Colors.textTertiary.opacity(0.2), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(isFocused ? AppTheme.Colors.primary : AppTheme.Colors.divider.opacity(0.3), lineWidth: isFocused ? 2 : 1)
             )
+            .animation(.easeInOut(duration: 0.2), value: isFocused)
         }
     }
 }
@@ -348,134 +593,118 @@ struct ModernTextEditor: View {
     @Binding var text: String
     let icon: String
     let placeholder: String
+    let maxLength: Int
+    
+    @FocusState private var isFocused: Bool
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(AppTheme.Colors.textSecondary)
+            HStack {
+                Text(title)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                
+                Spacer()
+                
+                Text("\(text.count)/\(maxLength)")
+                    .font(.system(size: 12))
+                    .foregroundColor(text.count > maxLength ? .red : AppTheme.Colors.textTertiary)
+            }
             
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 12) {
                     Image(systemName: icon)
                         .font(.system(size: 16))
-                        .foregroundStyle(AppTheme.Colors.textTertiary)
+                        .foregroundColor(isFocused ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
                         .frame(width: 20)
                     
-                    Text("Bio")
+                    Text("About You")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
                     
                     Spacer()
-                    
-                    Text("\(text.count)/150")
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppTheme.Colors.textTertiary)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
                 
-                TextEditor(text: $text)
-                    .font(.system(size: 16))
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
-                    .frame(height: 80)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 12)
-                    .overlay(alignment: .topLeading) {
-                        if text.isEmpty {
-                            Text(placeholder)
-                                .font(.system(size: 16))
-                                .foregroundStyle(AppTheme.Colors.textTertiary)
-                                .padding(.horizontal, 16)
-                                .padding(.top, 8)
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $text)
+                        .font(.system(size: 16))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .focused($isFocused)
+                        .scrollContentBackground(.hidden)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .onChange(of: text) { _, newValue in
+                            if newValue.count > maxLength {
+                                text = String(newValue.prefix(maxLength))
+                            }
                         }
+                    
+                    if text.isEmpty {
+                        Text(placeholder)
+                            .font(.system(size: 16))
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .allowsHitTesting(false)
                     }
+                }
+                .frame(height: 100)
             }
             .background(AppTheme.Colors.surface)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(AppTheme.Colors.textTertiary.opacity(0.2), lineWidth: 1)
+                    .stroke(isFocused ? AppTheme.Colors.primary : AppTheme.Colors.divider.opacity(0.3), lineWidth: isFocused ? 2 : 1)
             )
+            .animation(.easeInOut(duration: 0.2), value: isFocused)
         }
     }
 }
 
-// MARK: - Social Link Card
-struct SocialLinkCard: View {
-    let platform: SocialPlatform
-    let existingLink: SocialLink?
+// MARK: - Privacy Toggle Row
+struct PrivacyToggleRow: View {
+    let title: String
+    let description: String
+    let icon: String
+    @Binding var isOn: Bool
     
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: platform.iconName)
-                .font(.system(size: 18))
-                .foregroundStyle(AppTheme.Colors.primary)
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundColor(AppTheme.Colors.primary)
                 .frame(width: 24)
             
-            Text(platform.displayName)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(AppTheme.Colors.textPrimary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Text(description)
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             
             Spacer()
             
-            if existingLink != nil {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(AppTheme.Colors.primary)
-            } else {
-                Image(systemName: "plus.circle")
-                    .font(.system(size: 16))
-                    .foregroundStyle(AppTheme.Colors.textTertiary)
-            }
+            Toggle("", isOn: $isOn)
+                .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.primary))
         }
-        .padding(12)
+        .padding(16)
         .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(existingLink != nil ? AppTheme.Colors.primary.opacity(0.3) : AppTheme.Colors.textTertiary.opacity(0.2), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
         )
     }
 }
 
-// MARK: - Edit Profile Fallback
-struct EditProfileFallback: View {
-    let dismiss: DismissAction
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 24) {
-                Image(systemName: "person.crop.circle.badge.exclamationmark")
-                    .font(.system(size: 64))
-                    .foregroundStyle(AppTheme.Colors.textTertiary)
-                
-                VStack(spacing: 8) {
-                    Text("Profile Editor Unavailable")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
-                    
-                    Text("Unable to load profile editor at this time.")
-                        .font(.body)
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
-                }
-                
-                Button("Close") {
-                    dismiss()
-                }
-                .buttonStyle(ProfileRetryButtonStyle())
-            }
-            .padding(.horizontal, 40)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.Colors.background)
-            .navigationTitle("Edit Profile")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-}
-
 #Preview {
-    SafeEditProfileView(user: .constant(User.sampleUsers[0]))
+    NavigationStack {
+        EditProfileView(user: .constant(User.sampleUsers[0]))
+    }
 }
