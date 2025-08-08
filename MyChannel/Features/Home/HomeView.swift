@@ -239,14 +239,14 @@ struct ParallaxHeaderView: View {
                     // Enhanced action buttons
                     HStack(spacing: 16) {
                         NavigationLink(destination: SearchView()) {
-                            ProfessionalActionButton(
+                            HomeActionButton(
                                 icon: "magnifyingglass",
                                 isActive: false
                             )
                         }
                         .buttonStyle(PlainButtonStyle())
                         
-                        ProfessionalActionButton(
+                        HomeActionButton(
                             icon: "slider.horizontal.3",
                             isActive: showingFilters,
                             action: {
@@ -1268,7 +1268,7 @@ struct ProfessionalVideoCard: View {
 
 // MARK: - Supporting Views and Extensions
 
-struct ProfessionalActionButton: View {
+struct HomeActionButton: View {
     let icon: String
     let isActive: Bool
     let action: (() -> Void)?
