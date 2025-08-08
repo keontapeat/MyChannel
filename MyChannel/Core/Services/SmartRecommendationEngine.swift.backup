@@ -1,0 +1,216 @@
+import SwiftUI
+import Foundation
+
+// MARK: - AI Recommendation Engine
+class SmartRecommendationEngine: ObservableObject {
+    static let shared = SmartRecommendationEngine()
+    
+    @Published var personalizedRecommendations: [Video] = []
+    @Published var trendingNow: [Video] = []
+    @Published var dailySpotlight: Video?
+    @Published var continueWatching: [WatchProgress] = []
+    @Published var isAnalyzing: Bool = false
+    
+    private let userDefaults = UserDefaults.standard
+    private let apiKey = "your_ai_api_key" // Replace with actual API key
+    
+    private var userProfile: SmartUserProfile = SmartUserProfile()
+    
+    private init() {
+        loadWatchHistory()
+        startTrendingAnalysis()
+        loadDailySpotlight()
+    }
+    
+    // MARK: - AI-Powered Recommendations
+    func generatePersonalizedRecommendations() async {
+        isAnalyzing = true
+        
+        let watchHistory = getWatchHistory()
+        let preferences = analyzeUserPreferences(from: watchHistory)
+        
+        // Simulate AI recommendation API call
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        
+        await MainActor.run {
+            personalizedRecommendations = Video.sampleVideos.shuffled().prefix(10).map { video in
+                var recommendedVideo = video
+                recommendedVideo.recommendationScore = Double.random(in: 0.8...1.0)
+                recommendedVideo.recommendationReason = generateRecommendationReason(for: video, preferences: preferences)
+                return recommendedVideo
+            }
+            isAnalyzing = false
+        }
+    }
+    
+    // MARK: - Live Trending Analysis
+    private func startTrendingAnalysis() {
+        Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
+            self.updateTrendingNow()
+        }
+    }
+    
+    private func updateTrendingNow() {
+        // Simulate live trending data
+        let trending = Video.sampleVideos.shuffled().prefix(8).map { video in
+            var trendingVideo = video
+            trendingVideo.trendingScore = Double.random(in: 0.7...1.0)
+            trendingVideo.hourlyViews = Int.random(in: 1000...50000)
+            return trendingVideo
+        }.sorted { $0.trendingScore > $1.trendingScore }
+        
+        DispatchQueue.main.async {
+            self.trendingNow = trending
+        }
+    }
+    
+    // MARK: - Daily Spotlight
+    private func loadDailySpotlight() {
+        let today = Calendar.current.startOfDay(for: Date())
+        let spotlightKey = "daily_spotlight_\(today.timeIntervalSince1970)"
+        
+        if userDefaults.object(forKey: spotlightKey) == nil {
+            // New day, pick new spotlight
+            dailySpotlight = Video.sampleVideos.randomElement()
+            userDefaults.set(true, forKey: spotlightKey)
+        }
+    }
+    
+    // MARK: - Continue Watching
+    func updateWatchProgress(for videoId: String, progress: TimeInterval, duration: TimeInterval) {
+        let progressPercentage = progress / duration
+        
+        if let index = continueWatching.firstIndex(where: { $0.videoId == videoId }) {
+            continueWatching[index].progress = progress
+            continueWatching[index].percentage = progressPercentage
+            continueWatching[index].lastWatched = Date()
+        } else {
+            let watchProgress = WatchProgress(
+                videoId: videoId,
+                progress: progress,
+                duration: duration,
+                percentage: progressPercentage,
+                lastWatched: Date()
+            )
+            continueWatching.append(watchProgress)
+        }
+        
+        // Sync across devices (simulate cloud sync)
+        syncWatchProgressToCloud()
+        saveWatchProgress()
+    }
+    
+    // MARK: - Cross-Device Sync
+    private func syncWatchProgressToCloud() {
+        // Simulate cloud sync to Firebase/iCloud
+        let encoder = JSONEncoder()
+        if let data = try? encoder.encode(continueWatching) {
+            userDefaults.set(data, forKey: "continue_watching_cloud")
+        }
+    }
+    
+    private func loadWatchHistory() {
+        if let data = userDefaults.data(forKey: "continue_watching_cloud"),
+           let watchProgress = try? JSONDecoder().decode([WatchProgress].self, from: data) {
+            continueWatching = watchProgress
+        }
+    }
+    
+    // MARK: - AI Analysis Helpers
+    private func getWatchHistory() -> [String] {
+        return userDefaults.stringArray(forKey: "watch_history") ?? []
+    }
+    
+    private func analyzeUserPreferences(from history: [String]) -> AIUserPreferences {
+        // Simulate AI analysis
+        return AIUserPreferences(
+            favoriteGenres: [.anime, .gaming, .comedy],
+            preferredDuration: .medium,
+            watchTime: .evening,
+            deviceType: .mobile
+        )
+    }
+    
+    private func generateRecommendationReason(for video: Video, preferences: AIUserPreferences) -> String {
+        let reasons = [
+            "Because you loved similar action movies",
+            "Trending in your area right now",
+            "Perfect for your evening watch time",
+            "Other viewers like you also enjoyed this",
+            "Matches your favorite genres",
+            "Hot on MyChannel today"
+        ]
+        return reasons.randomElement() ?? "Recommended for you"
+    }
+    
+    private func saveWatchProgress() {
+        let encoder = JSONEncoder()
+        if let data = try? encoder.encode(continueWatching) {
+            userDefaults.set(data, forKey: "watch_progress")
+        }
+    }
+}
+
+// MARK: - Supporting Models
+struct WatchProgress: Identifiable, Codable {
+    let id = UUID()
+    let videoId: String
+    var progress: TimeInterval
+    let duration: TimeInterval
+    var percentage: Double
+    var lastWatched: Date
+}
+
+struct AIUserPreferences {
+    let favoriteGenres: [VideoCategory]
+    let preferredDuration: DurationPreference
+    let watchTime: WatchTimePreference
+    let deviceType: DeviceType
+    
+    enum DurationPreference {
+        case short, medium, long
+    }
+    
+    enum WatchTimePreference {
+        case morning, afternoon, evening, night
+    }
+}
+
+// MARK: - Video Extensions for AI
+extension Video {
+    var recommendationScore: Double {
+        get { return 0.0 }
+        set { /* Store in UserDefaults or Core Data */ }
+    }
+    
+    var recommendationReason: String {
+        get { return "" }
+        set { /* Store recommendation reason */ }
+    }
+    
+    var trendingScore: Double {
+        get { return 0.0 }
+        set { /* Store trending score */ }
+    }
+    
+    var hourlyViews: Int {
+        get { return 0 }
+        set { /* Store hourly view count */ }
+    }
+}
+
+struct SmartUserProfile {
+    var favoriteGenres: [String] = []
+    var viewingTimes: [Int] = []
+    var deviceTypes: [DeviceType] = []
+    var subscriptionTier: String = "Free"
+}
+
+#Preview {
+    VStack {
+        Text("Smart Recommendation Engine")
+            .font(.title)
+        Text("AI-powered content discovery")
+            .font(.caption)
+    }
+}

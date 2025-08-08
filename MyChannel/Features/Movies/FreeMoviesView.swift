@@ -216,29 +216,6 @@ struct FreeMoviesView: View {
                                     )
                             )
                         }
-                        
-                        // Source Filter
-                        ForEach(FreeMovie.StreamingSource.allCases, id: \.self) { source in
-                            Button(action: {
-                                selectedSource = selectedSource == source ? nil : source
-                            }) {
-                                HStack(spacing: 6) {
-                                    Circle()
-                                        .fill(source.color)
-                                        .frame(width: 8, height: 8)
-                                    
-                                    Text(source.displayName)
-                                        .font(.system(size: 14, weight: .medium))
-                                }
-                                .foregroundColor(selectedSource == source ? .white : AppTheme.Colors.textPrimary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .fill(selectedSource == source ? source.color : AppTheme.Colors.surface)
-                                )
-                            }
-                        }
                     }
                     .padding(.horizontal, 20)
                 }
@@ -277,7 +254,7 @@ struct CompactMovieCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
-                // Movie Poster
+                // Movie Poster (no FREE badge)
                 ZStack(alignment: .topTrailing) {
                     AsyncImage(url: URL(string: movie.posterURL)) { phase in
                         switch phase {
@@ -310,20 +287,20 @@ struct CompactMovieCard: View {
                     .cornerRadius(12)
                     .clipped()
                     
-                    // Free Badge
-                    Text("FREE")
+                    // MyChannel badge instead of FREE
+                    Text("MC")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(
                             Capsule()
-                                .fill(.green)
+                                .fill(AppTheme.Colors.primary)
                         )
                         .padding(6)
                 }
                 
-                // Movie Info
+                // Movie Info (no streaming source)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(movie.title)
                         .font(.system(size: 12, weight: .semibold))
@@ -347,16 +324,11 @@ struct CompactMovieCard: View {
                             .foregroundColor(AppTheme.Colors.textTertiary)
                     }
                     
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(movie.streamingSource.color)
-                            .frame(width: 6, height: 6)
-                        
-                        Text(movie.streamingSource.displayName)
-                            .font(.system(size: 10))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .lineLimit(1)
-                    }
+                    // Just show HD quality, no streaming source
+                    Text("HD Quality")
+                        .font(.system(size: 10))
+                        .foregroundColor(AppTheme.Colors.primary)
+                        .lineLimit(1)
                 }
             }
         }

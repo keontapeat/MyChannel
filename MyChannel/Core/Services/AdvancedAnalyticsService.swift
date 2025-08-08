@@ -335,8 +335,8 @@ class AdvancedAnalyticsService: ObservableObject {
         }
     }
     
-    private func generateAIInsights(for video: VideoAnalytics) -> AIInsights {
-        return AIInsights(
+    private func generateAIInsights(for video: VideoAnalytics) -> VideoAIInsights {
+        return VideoAIInsights(
             performanceScore: calculatePerformanceScore(video),
             optimizationSuggestions: generateOptimizationSuggestions(video),
             viralPotential: calculateViralPotential(video),
@@ -499,7 +499,7 @@ struct MarketPosition: Codable { let rank: Int; let percentile: Double; let cate
 struct ContentGap: Codable { let topic: String; let opportunity: String; let difficulty: String }
 struct GrowthPrediction: Codable { let currentValue: Double; let predictedValue: Double; let growthRate: Double }
 
-struct AIInsights: Codable {
+struct VideoAIInsights: Codable {
     let performanceScore: Double
     let optimizationSuggestions: [String]
     let viralPotential: Double

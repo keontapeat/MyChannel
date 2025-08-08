@@ -29,11 +29,11 @@ struct PremiumMoviesHubSection: View {
                         .foregroundColor(AppTheme.Colors.primary)
                     
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("🎬 Free Movies")
+                        Text("🎬 MyChannel Movies")
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(AppTheme.Colors.textPrimary)
                         
-                        Text("Netflix-Quality • 100% Free")
+                        Text("Exclusive Library • Premium Quality")
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                     }
@@ -164,13 +164,13 @@ struct FeaturedMovieBanner: View {
                     
                     HStack {
                         VStack(alignment: .leading, spacing: 8) {
-                            // Source Badge
+                            // MyChannel Original Badge
                             HStack(spacing: 6) {
-                                Image(systemName: "play.circle.fill")
+                                Image(systemName: "crown.fill")
                                     .font(.system(size: 12))
                                     .foregroundColor(.white)
                                 
-                                Text(movie.streamingSource.displayName)
+                                Text("MyChannel Original")
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(.white)
                             }
@@ -178,7 +178,7 @@ struct FeaturedMovieBanner: View {
                             .padding(.vertical, 4)
                             .background(
                                 Capsule()
-                                    .fill(movie.streamingSource.color.opacity(0.9))
+                                    .fill(AppTheme.Colors.primary.opacity(0.9))
                             )
                             
                             // Movie Title
@@ -254,14 +254,14 @@ struct FeaturedMovieBanner: View {
                             .scaleEffect(isPressed ? 0.9 : 1.0)
                             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
                             
-                            Text("FREE")
+                            Text("WATCH")
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.green)
+                                .foregroundColor(.white)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(
                                     Capsule()
-                                        .fill(.white)
+                                        .fill(AppTheme.Colors.primary)
                                 )
                         }
                     }
@@ -290,32 +290,36 @@ struct StreamingSourcesRow: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("🎯 Free Streaming Sources")
+            Text("🎯 MyChannel Originals")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(AppTheme.Colors.textPrimary)
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(sources, id: \.self) { source in
-                        StreamingSourceChip(source: source)
-                    }
+                    // Replace streaming sources with MyChannel categories
+                    MyChannelCategoryChip(title: "🔥 Trending", color: .red)
+                    MyChannelCategoryChip(title: "⭐ Top Rated", color: .yellow)
+                    MyChannelCategoryChip(title: "🆕 New Releases", color: .blue)
+                    MyChannelCategoryChip(title: "🎬 Blockbusters", color: .purple)
+                    MyChannelCategoryChip(title: "🏆 Award Winners", color: .green)
                 }
             }
         }
     }
 }
 
-// MARK: - Streaming Source Chip
-struct StreamingSourceChip: View {
-    let source: FreeMovie.StreamingSource
+// MARK: - MyChannel Category Chip
+struct MyChannelCategoryChip: View {
+    let title: String
+    let color: Color
     
     var body: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(source.color)
+                .fill(color)
                 .frame(width: 8, height: 8)
             
-            Text(source.displayName)
+            Text(title)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(AppTheme.Colors.textPrimary)
         }
@@ -326,7 +330,7 @@ struct StreamingSourceChip: View {
                 .fill(AppTheme.Colors.surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(source.color.opacity(0.3), lineWidth: 1)
+                        .stroke(color.opacity(0.3), lineWidth: 1)
                 )
         )
     }
@@ -477,20 +481,20 @@ struct PremiumMovieCard: View {
                     )
                     .cornerRadius(12)
                     
-                    // Free Badge
+                    // MyChannel Original Badge (top right)
                     VStack {
                         HStack {
                             Spacer()
                             
-                            Text("FREE")
+                            Text("MC")
                                 .font(.system(size: 8, weight: .bold))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(
                                     Capsule()
-                                        .fill(.green)
-                                        .shadow(color: .green.opacity(0.4), radius: 2, x: 0, y: 1)
+                                        .fill(AppTheme.Colors.primary)
+                                        .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 2, x: 0, y: 1)
                                 )
                         }
                         
@@ -529,7 +533,7 @@ struct PremiumMovieCard: View {
                     .padding(8)
                 }
                 
-                // Movie Info
+                // Movie Info (no streaming source)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(movie.title)
                         .font(.system(size: 14, weight: .semibold))
@@ -538,19 +542,18 @@ struct PremiumMovieCard: View {
                         .frame(height: 36, alignment: .top)
                     
                     HStack(spacing: 4) {
-                        Circle()
-                            .fill(movie.streamingSource.color)
-                            .frame(width: 8, height: 8)
-                        
-                        Text(movie.streamingSource.displayName)
+                        // Just show year and quality
+                        Text("\(movie.year)")
                             .font(.system(size: 12))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                         
-                        Spacer()
-                        
-                        Text("\(movie.year)")
+                        Text("•")
                             .font(.system(size: 12))
                             .foregroundColor(AppTheme.Colors.textTertiary)
+                        
+                        Text("HD")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.primary)
                     }
                     
                     HStack(spacing: 4) {
