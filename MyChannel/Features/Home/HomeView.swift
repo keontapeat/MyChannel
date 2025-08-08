@@ -1,10 +1,3 @@
-// 
-//  HomeView.swift
-//  MyChannel
-//
-//  Created by Keonta on 7/9/25.
-//
-
 import SwiftUI
 
 struct HomeView: View {
@@ -23,6 +16,7 @@ struct HomeView: View {
     @State private var selectedStory: Story? = nil
     @State private var showingStoryViewer: Bool = false
     @State private var stories: [Story] = Story.sampleStories
+    @State private var showingSearchView: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -35,7 +29,8 @@ struct HomeView: View {
                             headerOpacity: headerOpacity,
                             selectedFilter: $selectedFilter,
                             searchText: $searchText,
-                            showingFilters: $showingFilters
+                            showingFilters: $showingFilters,
+                            showingSearchView: $showingSearchView
                         )
                         
                         // Professional Stories Section
@@ -43,12 +38,12 @@ struct HomeView: View {
                             ProfessionalStoriesSection(
                                 stories: stories,
                                 onStoryTap: { story in
-                                    print("📖 Story tapped: \(story.id) - \(story.creator?.displayName ?? "Unknown")")
-                                    print("📖 Setting selectedStory and showingStoryViewer")
+                                    print(" Story tapped: \(story.id) - \(story.creator?.displayName ?? "Unknown")")
+                                    print(" Setting selectedStory and showingStoryViewer")
                                     selectedStory = story
                                     showingStoryViewer = true
-                                    print("📖 selectedStory set to: \(selectedStory?.id ?? "nil")")
-                                    print("📖 showingStoryViewer set to: \(showingStoryViewer)")
+                                    print(" selectedStory set to: \(selectedStory?.id ?? "nil")")
+                                    print(" showingStoryViewer set to: \(showingStoryViewer)")
                                 },
                                 onAddStory: {
                                     // Handle add story
@@ -65,10 +60,7 @@ struct HomeView: View {
                         // Trending Carousel with clickable videos
                         ClickableTrendingCarousel(
                             videos: Video.sampleVideos.filter { $0.viewCount > 100000 },
-                            onVideoTap: { video in
-                                print("🎬 Trending video tapped: \(video.title)")
-                                playVideoWithGlobalPlayer(video)
-                            }
+                            onVideoTap: playVideoWithGlobalPlayer
                         )
 
                         // Filter Chips with Enhanced Animation
@@ -93,10 +85,7 @@ struct HomeView: View {
                             watchLaterVideos: $appState.watchLaterVideos, // BIND TO THE SHARED STATE
                             likedVideos: $appState.likedVideos, // BIND TO THE SHARED STATE
                             isLoading: $isLoading,
-                            onVideoTap: { video in
-                                print("🎬 Feed video tapped: \(video.title)")
-                                playVideoWithGlobalPlayer(video)
-                            }
+                            onVideoTap: playVideoWithGlobalPlayer
                         )
                         
                         // Loading indicator for pagination
@@ -119,10 +108,10 @@ struct HomeView: View {
             if let video = selectedVideo {
                 VideoDetailView(video: video)
                     .onAppear {
-                        print("🎬 VideoDetailView appeared for: \(video.title)")
+                        print(" VideoDetailView appeared for: \(video.title)")
                     }
                     .onDisappear {
-                        print("🎬 VideoDetailView disappeared")
+                        print(" VideoDetailView disappeared")
                         selectedVideo = nil
                     }
             } else {
@@ -132,13 +121,12 @@ struct HomeView: View {
             }
         }
         .onChange(of: showingVideoPlayer) { oldValue, newValue in
-            print("🎬 showingVideoPlayer changed: \(oldValue) -> \(newValue)")
+            print(" showingVideoPlayer changed: \(oldValue) -> \(newValue)")
         }
         .onChange(of: selectedVideo) { oldValue, newValue in
-            print("🎬 selectedVideo changed: \(oldValue?.title ?? "nil") -> \(newValue?.title ?? "nil")")
+            print(" selectedVideo changed: \(oldValue?.title ?? "nil") -> \(newValue?.title ?? "nil")")
         }
         .fullScreenCover(isPresented: $showingStoryViewer) {
-            // Create a safe story to show - never let it be nil
             let safeStory = selectedStory ?? stories.first ?? Story.sampleStories.first!
             let safeStories = stories.isEmpty ? Story.sampleStories : stories
             
@@ -146,17 +134,27 @@ struct HomeView: View {
                 stories: safeStories,
                 initialStory: safeStory,
                 onDismiss: {
-                    print("📖 Dismissing story viewer")
+                    print(" Dismissing story viewer")
                     showingStoryViewer = false
                     selectedStory = nil
                 }
             )
             .onAppear {
-                print("📖 StoryViewerView appeared")
-                print("📖 Safe story: \(safeStory.id)")
-                print("📖 Stories count: \(safeStories.count)")
-                print("📖 selectedStory at presentation: \(selectedStory?.id ?? "nil")")
+                print(" StoryViewerView appeared")
+                print(" Safe story: \(safeStory.id)")
+                print(" Stories count: \(safeStories.count)")
+                print(" selectedStory at presentation: \(selectedStory?.id ?? "nil")")
             }
+        }
+        .fullScreenCover(isPresented: $showingSearchView) {
+            SearchView()
+                .onAppear {
+                    print(" SearchView appeared")
+                }
+                .onDisappear {
+                    print(" SearchView disappeared")
+                    showingSearchView = false
+                }
         }
     }
     
@@ -200,6 +198,7 @@ struct ParallaxHeaderView: View {
     @Binding var selectedFilter: ContentFilter
     @Binding var searchText: String
     @Binding var showingFilters: Bool
+    @Binding var showingSearchView: Bool
     
     @State private var logoScale: CGFloat = 1.0
     
@@ -236,9 +235,10 @@ struct ParallaxHeaderView: View {
                     
                     Spacer()
                     
-                    // Enhanced action buttons
                     HStack(spacing: 16) {
-                        NavigationLink(destination: SearchView()) {
+                        Button(action: {
+                            showingSearchView = true
+                        }) {
                             HomeActionButton(
                                 icon: "magnifyingglass",
                                 isActive: false
@@ -253,6 +253,7 @@ struct ParallaxHeaderView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
+                    .frame(height: 44) 
                 }
                 .padding(.horizontal, AppTheme.Spacing.md)
                 .padding(.vertical, AppTheme.Spacing.sm)
@@ -344,7 +345,7 @@ struct ProfessionalStoryItem: View {
     
     var body: some View {
         Button(action: {
-            print("📖 ProfessionalStoryItem button tapped for: \(story.creator?.displayName ?? "Unknown")")
+            print(" Story item tapped: \(story.creator?.displayName ?? "Unknown")")
             action()
         }) {
             VStack(spacing: 8) {
@@ -443,17 +444,16 @@ struct ProfessionalStoryItem: View {
         }
         .buttonStyle(PlainButtonStyle())
         .scaleEffect(isPressed ? 0.95 : (story.isViewed ? 0.97 : 1.0))
-        .opacity(story.isViewed ? 0.7 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
         .animation(.easeInOut(duration: 0.2), value: story.isViewed)
         .onPressGesture(
             onPress: { 
                 isPressed = true
-                print("📖 Story item pressed")
+                print(" Story item pressed")
             },
             onRelease: { 
                 isPressed = false 
-                print("📖 Story item released")
+                print(" Story item released")
             }
         )
         .accessibilityLabel("\(story.creator?.displayName ?? "Unknown")'s story")
@@ -543,10 +543,10 @@ struct ProfessionalAddStoryButton: View {
         .fullScreenCover(isPresented: $showingStoryCreation) {
             StoryCreationView()
                 .onAppear {
-                    print("📖 StoryCreationView presented")
+                    print(" StoryCreationView presented")
                 }
                 .onDisappear {
-                    print("📖 StoryCreationView dismissed")
+                    print(" StoryCreationView dismissed")
                     action() // Call the original action if needed
                 }
         }
@@ -1078,7 +1078,7 @@ struct ProfessionalVideoCard: View {
         VStack(alignment: .leading, spacing: 0) {
             // Professional clickable thumbnail
             Button(action: {
-                print("🎬 Video tapped: \(video.title)")
+                print(" Video tapped: \(video.title)")
                 onVideoTap()
             }) {
                 ZStack(alignment: .bottomTrailing) {
@@ -1250,7 +1250,7 @@ struct ProfessionalVideoCard: View {
                     
                     // Comments button
                     Button(action: {
-                        print("💬 Comments tapped for: \(video.title)")
+                        print(" Comments tapped for: \(video.title)")
                     }) {
                         HStack(spacing: 6) {
                             Image(systemName: "bubble.right")
