@@ -246,15 +246,7 @@ struct ParallaxHeaderView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                         
-                        HomeActionButton(
-                            icon: "slider.horizontal.3",
-                            isActive: showingFilters,
-                            action: {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                    showingFilters.toggle()
-                                }
-                            }
-                        )
+                        QuickActionsMenu()
                         
                         NavigationLink(destination: NotificationsView()) {
                             NotificationButton()

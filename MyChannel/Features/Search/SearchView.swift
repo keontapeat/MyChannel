@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct SearchView: View {
-    @Environment(\.dismiss) private var dismiss // Add dismiss environment
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var searchService = AdvancedSearchService()
     @State private var searchText: String = ""
     @State private var selectedScope: SearchScope = .all
@@ -16,6 +16,7 @@ struct SearchView: View {
     @State private var recentSearches: [String] = ["SwiftUI", "iOS Development", "Gaming"]
     @State private var searchFilters = SearchFilters()
     @State private var showingFilters = false
+    @FocusState private var isSearchFieldFocused: Bool  // Add focus state
     
     var body: some View {
         NavigationStack {
@@ -44,6 +45,7 @@ struct SearchView: View {
                             .font(AppTheme.Typography.body)
                             .foregroundColor(AppTheme.Colors.textPrimary)
                             .textFieldStyle(PlainTextFieldStyle())
+                            .focused($isSearchFieldFocused)  // Bind focus state
                             .onSubmit {
                                 performSearch()
                             }
@@ -116,6 +118,24 @@ struct SearchView: View {
             }
             .background(AppTheme.Colors.background)
             .navigationBarHidden(true) // Hide default navigation
+        }
+        .onAppear {
+            // Auto-focus search bar when view appears
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                isSearchFieldFocused = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("FocusSearchBar"))) { _ in
+            // Focus search bar when notification is received
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isSearchFieldFocused = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchClearAndReset"))) { _ in
+            // Clear search and reset when tab is reselected
+            searchText = ""
+            selectedScope = .all
+            isSearchFieldFocused = true
         }
         .sheet(isPresented: $showingFilters) {
             SearchFiltersView(filters: $searchFilters) {

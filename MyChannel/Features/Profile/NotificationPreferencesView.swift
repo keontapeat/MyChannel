@@ -413,7 +413,7 @@ struct NotificationPreferencesView: View {
             SectionHeader(title: "Quick Actions")
             
             VStack(spacing: 12) {
-                QuickActionButton(
+                ProfileQuickActionButton(
                     icon: "checkmark.circle",
                     title: "Enable All",
                     subtitle: "Turn on all notification types",
@@ -422,7 +422,7 @@ struct NotificationPreferencesView: View {
                     enableAllNotifications()
                 }
                 
-                QuickActionButton(
+                ProfileQuickActionButton(
                     icon: "xmark.circle",
                     title: "Disable All",
                     subtitle: "Turn off all notification types",
@@ -431,7 +431,7 @@ struct NotificationPreferencesView: View {
                     disableAllNotifications()
                 }
                 
-                QuickActionButton(
+                ProfileQuickActionButton(
                     icon: "arrow.clockwise",
                     title: "Reset to Defaults",
                     subtitle: "Restore recommended settings",
@@ -724,7 +724,7 @@ struct NotificationPickerRow<T: CaseIterable & Hashable & CustomStringConvertibl
 }
 
 // MARK: - Quick Action Button
-struct QuickActionButton: View {
+struct ProfileQuickActionButton: View {
     let icon: String
     let title: String
     let subtitle: String
