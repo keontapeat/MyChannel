@@ -774,38 +774,90 @@ struct SimpleMainTabPreview: View {
         .preferredColorScheme(.light)
 }
 
-#Preview("Safe MainTabView") {
-    ZStack {
-        AppTheme.Colors.background.ignoresSafeArea()
-        
-        VStack {
-            Text("MyChannel")
-                .font(AppTheme.Typography.largeTitle)
-                .foregroundColor(AppTheme.Colors.primary)
+#Preview("MainTabView - Preview Safe") {
+    // Create a minimal version that definitely won't crash
+    VStack {
+        // Header
+        HStack {
+            Image("MyChannel")
+                .resizable()
+                .frame(width: 36, height: 36)
+                .cornerRadius(18)
             
-            Text("Professional Video Streaming Platform")
-                .font(AppTheme.Typography.subheadline)
-                .foregroundColor(AppTheme.Colors.textSecondary)
+            VStack(alignment: .leading) {
+                Text("MyChannel")
+                    .font(AppTheme.Typography.title2)
+                    .fontWeight(.bold)
+                
+                Text("Video Streaming Platform")
+                    .font(AppTheme.Typography.caption)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
             
             Spacer()
+        }
+        .padding()
+        
+        Spacer()
+        
+        // Center content
+        VStack(spacing: 20) {
+            Image(systemName: "play.circle.fill")
+                .font(.system(size: 80))
+                .foregroundColor(AppTheme.Colors.primary)
             
-            // Simple tab bar representation
-            HStack {
-                ForEach(TabItem.allCases.filter { $0 != .upload }, id: \.self) { tab in
-                    VStack {
-                        Image(systemName: tab.iconName(isSelected: tab == .home))
-                            .font(.title2)
-                        Text(tab.title)
-                            .font(.caption)
-                    }
-                    .foregroundColor(tab == .home ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
-                    .frame(maxWidth: .infinity)
+            Text("MyChannel Tab View")
+                .font(AppTheme.Typography.title1)
+                .fontWeight(.bold)
+            
+            Text("Professional video streaming interface")
+                .font(AppTheme.Typography.body)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        
+        Spacer()
+        
+        // Bottom tab bar preview
+        HStack {
+            ForEach(TabItem.allCases.filter { $0 != .upload }, id: \.self) { tab in
+                VStack(spacing: 4) {
+                    Image(systemName: tab.iconName(isSelected: tab == .home))
+                        .font(.title2)
+                    Text(tab.title)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(tab == .home ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                .frame(maxWidth: .infinity)
+                
+                if tab == .flicks {
+                    Circle()
+                        .fill(AppTheme.Colors.primary)
+                        .frame(width: 44, height: 44)
+                        .overlay(
+                            Image(systemName: "plus")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.white)
+                        )
+                        .frame(maxWidth: .infinity)
                 }
             }
-            .padding()
-            .background(.ultraThinMaterial)
-            .cornerRadius(24)
-            .padding()
         }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(.ultraThinMaterial)
+        .cornerRadius(24)
+        .padding()
     }
+    .background(AppTheme.Colors.background)
+}
+
+#Preview("Full MainTabView - Advanced") {
+    // Only show this if you want to test the full complexity
+    PreviewSafeMainTabWrapper()
+        .preferredColorScheme(.light)
+        .onAppear {
+            print("🎬 Advanced MainTabView preview loaded")
+        }
 }

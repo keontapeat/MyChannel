@@ -25,32 +25,14 @@ struct SplashView: View {
             VStack(spacing: 0) {
                 Spacer()
                 
-                // YouTube-style animated logo with safe fallback
-                Group {
-                    if let _ = UIImage(named: "MyChannel") {
-                        Image("MyChannel")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                    } else {
-                        // Fallback logo when asset is missing
-                        ZStack {
-                            Circle()
-                                .fill(AppTheme.Colors.primary)
-                                .overlay(
-                                    Circle()
-                                        .stroke(.white.opacity(0.2), lineWidth: 2)
-                                )
-                            
-                            Text("MC")
-                                .font(.system(size: 48, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-                    }
-                }
-                .frame(width: 120, height: 120)
-                .scaleEffect(logoScale * pulseScale)
-                .opacity(logoOpacity)
-                .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: pulseScale)
+                // YouTube-style animated logo
+                Image("MyChannel")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 120, height: 120)
+                    .scaleEffect(logoScale * pulseScale)
+                    .opacity(logoOpacity)
+                    .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: pulseScale)
                 
                 Spacer()
                 
@@ -167,31 +149,13 @@ struct MinimalSplashView: View {
             AppTheme.Colors.background
                 .ignoresSafeArea()
             
-            // Just the logo with safe fallback
-            Group {
-                if let _ = UIImage(named: "MyChannel") {
-                    Image("MyChannel")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                } else {
-                    // Fallback logo when asset is missing
-                    ZStack {
-                        Circle()
-                            .fill(AppTheme.Colors.primary)
-                            .overlay(
-                                Circle()
-                                    .stroke(.white.opacity(0.2), lineWidth: 1)
-                            )
-                        
-                        Text("MC")
-                            .font(.system(size: 36, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                }
-            }
-            .frame(width: 100, height: 100)
-            .scaleEffect(logoScale)
-            .opacity(logoOpacity)
+            // Just the logo, clean AF
+            Image("MyChannel")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 100, height: 100)
+                .scaleEffect(logoScale)
+                .opacity(logoOpacity)
         }
         .onAppear {
             // Simple fade in

@@ -207,94 +207,84 @@ struct ParallaxHeaderView: View {
         VStack(spacing: 0) {
             VStack(spacing: 0) {
                 HStack {
-                    // MyChannel logo with safe fallback for missing asset
-                    Group {
-                        if let _ = UIImage(named: "MyChannel") {
-                            Image("MyChannel")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                        } else {
-                            // Fallback when asset is missing
-                            ZStack {
-                                Circle()
-                                    .fill(AppTheme.Colors.primary)
-                                    .frame(width: 36, height: 36)
-                                
-                                Text("MC")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(.white)
+                    // MyChannel logo and title section
+                    HStack(spacing: 12) {
+                        // Your actual MyChannel logo from Assets  
+                        Image("MyChannel")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 36, height: 36)
+                            .scaleEffect(logoScale * max(0.8, 1.0 - abs(scrollOffset) / 200.0))
+                            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollOffset)
+                            .animation(.easeInOut(duration: 2.0), value: logoScale)
+                            .onAppear {
+                                startSubtleZoom()
                             }
-                        }
-                    }
-                    .frame(width: 36, height: 36)
-                    .scaleEffect(logoScale * max(0.8, 1.0 - abs(scrollOffset) / 200.0))
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollOffset)
-                    .animation(.easeInOut(duration: 2.0), value: logoScale)
-                    .onAppear {
-                        startSubtleZoom()
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("MyChannel")
-                            .font(AppTheme.Typography.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppTheme.Colors.textPrimary)
                         
-                        Text("Welcome back!")
-                            .font(AppTheme.Typography.caption)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .opacity(headerOpacity)
-                    }
-                }
-                
-                Spacer()
-                
-                // Enhanced action buttons
-                HStack(spacing: 16) {
-                    NavigationLink(destination: SearchView()) {
-                        ProfessionalActionButton(
-                            icon: "magnifyingglass",
-                            isActive: false
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    ProfessionalActionButton(
-                        icon: "slider.horizontal.3",
-                        isActive: showingFilters,
-                        action: {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                showingFilters.toggle()
-                            }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("MyChannel")
+                                .font(AppTheme.Typography.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                            
+                            Text("Welcome back!")
+                                .font(AppTheme.Typography.caption)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                .opacity(headerOpacity)
                         }
-                    )
-                    
-                    NavigationLink(destination: NotificationsView()) {
-                        NotificationButton()
                     }
-                    .buttonStyle(PlainButtonStyle())
+                    
+                    Spacer()
+                    
+                    // Enhanced action buttons
+                    HStack(spacing: 16) {
+                        NavigationLink(destination: SearchView()) {
+                            ProfessionalActionButton(
+                                icon: "magnifyingglass",
+                                isActive: false
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        ProfessionalActionButton(
+                            icon: "slider.horizontal.3",
+                            isActive: showingFilters,
+                            action: {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                    showingFilters.toggle()
+                                }
+                            }
+                        )
+                        
+                        NavigationLink(destination: NotificationsView()) {
+                            NotificationButton()
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
                 }
-            }
-            .padding(.horizontal, AppTheme.Spacing.md)
-            .padding(.vertical, AppTheme.Spacing.sm)
-            .background(
-                LinearGradient(
-                    colors: [
-                        AppTheme.Colors.background,
-                        AppTheme.Colors.background.opacity(0.95)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.vertical, AppTheme.Spacing.sm)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            AppTheme.Colors.background,
+                            AppTheme.Colors.background.opacity(0.95)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .opacity(headerOpacity)
                 )
-                .opacity(headerOpacity)
-            )
-            .overlay(
-                Rectangle()
-                    .fill(AppTheme.Colors.divider.opacity(0.2))
-                    .frame(height: 1)
-                    .opacity(1 - headerOpacity),
-                alignment: .bottom
-            )
+                .overlay(
+                    Rectangle()
+                        .fill(AppTheme.Colors.divider.opacity(0.2))
+                        .frame(height: 1)
+                        .opacity(1 - headerOpacity),
+                    alignment: .bottom
+                )
+            }
+            .offset(y: scrollOffset > 0 ? -scrollOffset * 0.5 : 0)
+            .opacity(headerOpacity)
         }
     }
     
