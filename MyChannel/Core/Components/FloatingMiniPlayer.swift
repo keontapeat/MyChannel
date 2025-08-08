@@ -160,45 +160,59 @@ struct FloatingMiniPlayer: View {
                     globalPlayer.togglePlayPause()
                     HapticManager.shared.impact(style: .light)
                 }) {
-                    Image(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .frame(width: 28, height: 28)
+                    ZStack {
+                        Circle()
+                            .fill(AppTheme.Colors.primary.opacity(0.1))
+                            .frame(width: 32, height: 32)
+                        
+                        Image(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.primary)
+                    }
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(ScaleButtonStyle())
                 
-                // Close button
+                // Close button with improved styling
                 Button(action: closePlayer) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .frame(width: 28, height: 28)
+                    ZStack {
+                        Circle()
+                            .fill(AppTheme.Colors.textSecondary.opacity(0.1))
+                            .frame(width: 28, height: 28)
+                        
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(ScaleButtonStyle())
             }
         }
         .padding(.horizontal, 12)
     }
     
     private var miniPlayerBackground: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(AppTheme.Colors.cardBackground)
+        RoundedRectangle(cornerRadius: 16)
+            .fill(.ultraThinMaterial)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(AppTheme.Colors.cardBackground.opacity(0.95))
+            )
             .shadow(
-                color: AppTheme.Colors.textPrimary.opacity(0.08),
-                radius: 16,
+                color: AppTheme.Colors.textPrimary.opacity(0.12),
+                radius: 20,
                 x: 0,
                 y: -8
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 0.5)
             )
     }
     
     private func calculateBottomPadding(geometry: GeometryProxy) -> CGFloat {
         let safeAreaBottom = geometry.safeAreaInsets.bottom
         let tabBarHeight: CGFloat = 80
-        return safeAreaBottom + tabBarHeight + 8
+        return safeAreaBottom + tabBarHeight + 12
     }
     
     // MARK: - Gesture Handling
@@ -244,16 +258,17 @@ struct FloatingMiniPlayer: View {
                     if finalOffset > 120 || velocity > 1000 {
                         // Dismiss
                         globalPlayer.closePlayer()
+                        HapticManager.shared.impact(style: .heavy)
                     } else if finalOffset < -60 || velocity < -800 {
                         // Expand
                         globalPlayer.expandPlayer()
+                        HapticManager.shared.impact(style: .medium)
                     } else {
                         // Reset position
                         globalPlayer.miniplayerOffset = 0
+                        HapticManager.shared.impact(style: .light)
                     }
                 }
-                
-                HapticManager.shared.impact(style: .medium)
             }
     }
     
@@ -282,22 +297,33 @@ struct FloatingMiniPlayer: View {
         ScrollView {
             LazyVStack(spacing: 16) {
                 ForEach(0..<10, id: \.self) { i in
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AppTheme.Colors.cardBackground)
                         .frame(height: 200)
-                        .cornerRadius(12)
+                        .overlay(
+                            VStack {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                                
+                                Text("Video Content \(i + 1)")
+                                    .font(.headline)
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                            }
+                        )
                 }
             }
             .padding()
         }
         
         FloatingMiniPlayer()
-            .onAppear {
-                // Mock data for preview
-                let mockPlayer = GlobalVideoPlayerManager.shared
-                mockPlayer.currentVideo = Video.sampleVideos[0]
-                mockPlayer.shouldShowMiniPlayer = true
-                mockPlayer.isMiniplayer = true
-            }
+    }
+    .environmentObject(PreviewSafeGlobalVideoPlayerManager())
+    .onAppear {
+        // Mock setup for preview
+        let mockManager = PreviewSafeGlobalVideoPlayerManager()
+        mockManager.currentVideo = Video.sampleVideos[0]
+        mockManager.shouldShowMiniPlayer = true
+        mockManager.isMiniplayer = true
     }
 }

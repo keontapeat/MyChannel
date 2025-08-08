@@ -17,7 +17,7 @@ struct MainTabView: View {
     // Simple environment object access without complex initialization
     @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var appState: AppState
-    @EnvironmentObject private var globalPlayer: GlobalVideoPlayerManager
+    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
     
     @State private var selectedTab: TabItem = .home
     @State private var previousTab: TabItem = .home
@@ -36,6 +36,7 @@ struct MainTabView: View {
                 errorView
             } else {
                 mainContent
+                    .environmentObject(globalPlayer)
             }
         }
         .onAppear {
@@ -68,6 +69,7 @@ struct MainTabView: View {
 
             // Floating Mini Player - Above content, below tab bar
             SafeFloatingMiniPlayer()
+                .environmentObject(globalPlayer)
                 .zIndex(998)
 
             // Custom Tab Bar - Always on top
