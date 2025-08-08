@@ -139,14 +139,14 @@ struct MainTabView: View {
         guard tab != .upload else { return }
         
         do {
-            // Handle double-tap to scroll for profile
-            if tab == .profile && previousTab == .profile {
-                NotificationCenter.default.post(name: .scrollToTopProfile, object: nil)
+            // Handle tab reselection - if same tab is tapped, pop to root or scroll to top
+            if tab == selectedTab {
+                handleTabReselection(tab)
+            } else {
+                // Normal tab change
+                previousTab = selectedTab
+                selectedTab = tab
             }
-            
-            // Update states safely
-            previousTab = selectedTab
-            selectedTab = tab
             
             // Clear badge for selected tab
             notificationBadges[tab] = 0
@@ -165,6 +165,29 @@ struct MainTabView: View {
         } catch {
             handleError("Tab selection error: \(error.localizedDescription)")
         }
+    }
+    
+    private func handleTabReselection(_ tab: TabItem) {
+        // Handle reselection of the same tab
+        switch tab {
+        case .home:
+            // Send notification to HomeView to scroll to top
+            NotificationCenter.default.post(name: NSNotification.Name("HomeScrollToTop"), object: nil)
+        case .flicks:
+            // Send notification to FlicksView to reset to first video
+            NotificationCenter.default.post(name: NSNotification.Name("FlicksResetToFirst"), object: nil)
+        case .search:
+            // Send notification to SearchView to clear search and scroll to top
+            NotificationCenter.default.post(name: NSNotification.Name("SearchClearAndReset"), object: nil)
+        case .profile:
+            // Send notification to ProfileView to scroll to top
+            NotificationCenter.default.post(name: .scrollToTopProfile, object: nil)
+        case .upload:
+            break
+        }
+        
+        // Stronger haptic feedback for reselection
+        HapticManager.shared.impact(style: .medium)
     }
     
     private func handleError(_ message: String) {

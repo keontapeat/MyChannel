@@ -44,6 +44,10 @@ struct FlicksView: View {
             .onAppear {
                 loadFlicksContent()
             }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("FlicksResetToFirst"))) { _ in
+                // Handle tab reselection - reset to first video
+                resetToFirstVideo()
+            }
             .sheet(isPresented: $showingComments) {
                 if !videos.isEmpty && currentIndex < videos.count {
                     YouTubeStyleCommentsSheet(video: videos[currentIndex])
@@ -103,8 +107,12 @@ struct FlicksView: View {
     private var topOverlay: some View {
         VStack {
             HStack {
-                // Back/Home button
-                Button(action: { }) {
+                // Back/Home button - now functional!
+                Button(action: {
+                    // Send notification to switch to home tab
+                    NotificationCenter.default.post(name: NSNotification.Name("SwitchToHomeTab"), object: nil)
+                    HapticManager.shared.impact(style: .medium)
+                }) {
                     Image(systemName: "house.fill")
                         .font(.system(size: 20, weight: .medium))
                         .foregroundStyle(.white)
@@ -116,6 +124,7 @@ struct FlicksView: View {
                                 .stroke(.white.opacity(0.2), lineWidth: 1)
                         )
                 }
+                .buttonStyle(PlainButtonStyle())
                 
                 Spacer()
                 
@@ -129,7 +138,11 @@ struct FlicksView: View {
                 
                 // Search and Camera buttons
                 HStack(spacing: 12) {
-                    Button(action: { }) {
+                    Button(action: {
+                        // Send notification to switch to search tab
+                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToSearchTab"), object: nil)
+                        HapticManager.shared.impact(style: .light)
+                    }) {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 18, weight: .medium))
                             .foregroundStyle(.white)
@@ -141,8 +154,13 @@ struct FlicksView: View {
                                     .stroke(.white.opacity(0.2), lineWidth: 1)
                             )
                     }
+                    .buttonStyle(PlainButtonStyle())
                     
-                    Button(action: { }) {
+                    Button(action: {
+                        // Show upload view
+                        NotificationCenter.default.post(name: NSNotification.Name("ShowUpload"), object: nil)
+                        HapticManager.shared.impact(style: .light)
+                    }) {
                         Image(systemName: "camera.fill")
                             .font(.system(size: 18, weight: .medium))
                             .foregroundStyle(.white)
@@ -154,6 +172,7 @@ struct FlicksView: View {
                                     .stroke(.white.opacity(0.2), lineWidth: 1)
                             )
                     }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
             .padding(.horizontal, 16)
@@ -205,6 +224,7 @@ struct FlicksView: View {
         }
         .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
         .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.3), value: currentIndex) // Add smooth animation
         .onChange(of: currentIndex) { _, newValue in
             impactFeedback.impactOccurred()
             preloadNextVideos(currentIndex: newValue)
@@ -226,6 +246,18 @@ struct FlicksView: View {
                 isLoading = false
             }
         }
+    }
+    
+    private func resetToFirstVideo() {
+        // Reset to first video when Flicks tab is tapped again
+        guard !videos.isEmpty && currentIndex != 0 else { return }
+        
+        withAnimation(.easeInOut(duration: 0.5)) {
+            currentIndex = 0
+        }
+        
+        // Haptic feedback
+        HapticManager.shared.impact(style: .medium)
     }
     
     private func toggleLike(for video: Video) {
