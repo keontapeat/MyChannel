@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct SearchView: View {
+    @Environment(\.dismiss) private var dismiss // Add dismiss environment
     @StateObject private var searchService = AdvancedSearchService()
     @State private var searchText: String = ""
     @State private var selectedScope: SearchScope = .all
@@ -19,8 +20,22 @@ struct SearchView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Professional search bar
-                VStack(spacing: 16) {
+                // Custom header with back button
+                HStack(spacing: 16) {
+                    // Back/Close button
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Image(systemName: "arrow.left")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .frame(width: 40, height: 40)
+                            .background(AppTheme.Colors.surface)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    
+                    // Professional search bar
                     HStack(spacing: 12) {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(AppTheme.Colors.textSecondary)
@@ -40,41 +55,50 @@ struct SearchView: View {
                             .font(AppTheme.Typography.caption)
                             .foregroundColor(AppTheme.Colors.primary)
                         }
-                        
-                        Button(action: { showingFilters.toggle() }) {
-                            Image(systemName: "slider.horizontal.3")
-                                .foregroundColor(AppTheme.Colors.primary)
-                        }
                     }
                     .padding()
                     .background(AppTheme.Colors.surface)
                     .cornerRadius(AppTheme.CornerRadius.md)
                     
-                    // Search scopes
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            ForEach(SearchScope.allCases, id: \.self) { scope in
-                                Button(scope.displayName) {
-                                    selectedScope = scope
-                                    if !searchText.isEmpty {
-                                        performSearch()
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(
-                                    selectedScope == scope ? AppTheme.Colors.primary : AppTheme.Colors.surface
-                                )
-                                .foregroundColor(
-                                    selectedScope == scope ? .white : AppTheme.Colors.textPrimary
-                                )
-                                .cornerRadius(AppTheme.CornerRadius.md)
-                            }
-                        }
-                        .padding(.horizontal)
+                    // Filters button
+                    Button(action: { showingFilters.toggle() }) {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.primary)
+                            .frame(width: 40, height: 40)
+                            .background(AppTheme.Colors.surface)
+                            .clipShape(Circle())
                     }
+                    .buttonStyle(.plain)
                 }
-                .padding()
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(AppTheme.Colors.background)
+                
+                // Search scopes
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(SearchScope.allCases, id: \.self) { scope in
+                            Button(scope.displayName) {
+                                selectedScope = scope
+                                if !searchText.isEmpty {
+                                    performSearch()
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(
+                                selectedScope == scope ? AppTheme.Colors.primary : AppTheme.Colors.surface
+                            )
+                            .foregroundColor(
+                                selectedScope == scope ? .white : AppTheme.Colors.textPrimary
+                            )
+                            .cornerRadius(AppTheme.CornerRadius.md)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .padding(.vertical, 8)
                 
                 // Search content
                 if searchText.isEmpty {
@@ -91,8 +115,7 @@ struct SearchView: View {
                 Spacer()
             }
             .background(AppTheme.Colors.background)
-            .navigationTitle("Search")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarHidden(true) // Hide default navigation
         }
         .sheet(isPresented: $showingFilters) {
             SearchFiltersView(filters: $searchFilters) {

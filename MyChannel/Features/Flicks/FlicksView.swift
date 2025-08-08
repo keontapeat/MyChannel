@@ -12,20 +12,22 @@ struct FlicksView: View {
     @State private var currentIndex: Int = 0
     @State private var videos: [Video] = []
     @State private var isLoading = true
+    @State private var dragOffset: CGFloat = 0
+    @State private var isDragging = false
     @State private var showingComments = false
     @State private var showingShare = false
+    @State private var showingSearch = false
     @State private var likedVideos: Set<String> = []
     @State private var followedCreators: Set<String> = []
-    @State private var showingProfile = false
-    @State private var selectedCreator: User?
     
     private let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+    private let swipeThreshold: CGFloat = 50
     
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
                 ZStack {
-                    Color.black.ignoresSafeArea()
+                    Color.black.ignoresSafeArea(.all)
                     
                     if isLoading {
                         loadingView
@@ -33,149 +35,79 @@ struct FlicksView: View {
                         verticalVideoFeed(geometry: geometry)
                     }
                     
-                    // YouTube-style top overlay
-                    topOverlay
-                        .zIndex(1)
+                    // Search button - top right only
+                    VStack {
+                        HStack {
+                            Spacer()
+                            
+                            Button(action: { 
+                                showingSearch = true
+                            }) {
+                                ZStack {
+                                    Circle()
+                                        .fill(.black.opacity(0.4))
+                                        .frame(width: 44, height: 44)
+                                    
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 18, weight: .medium))
+                                        .foregroundColor(.white)
+                                }
+                            }
+                            .padding(.trailing, 16)
+                            .padding(.top, 16)
+                        }
+                        
+                        Spacer()
+                    }
                 }
             }
             .navigationBarHidden(true)
             .statusBarHidden()
+            .ignoresSafeArea(.all)
             .onAppear {
                 loadFlicksContent()
             }
             .sheet(isPresented: $showingComments) {
                 if !videos.isEmpty && currentIndex < videos.count {
-                    YouTubeStyleCommentsSheet(video: videos[currentIndex])
-                        .presentationDetents([.height(200), .medium, .large])
+                    FlicksCommentsSheet(video: videos[currentIndex])
+                        .presentationDetents([.medium, .large])
                         .presentationDragIndicator(.visible)
-                        .presentationBackground(.ultraThinMaterial)
                 }
             }
             .sheet(isPresented: $showingShare) {
                 if !videos.isEmpty && currentIndex < videos.count {
-                    YouTubeStyleShareSheet(video: videos[currentIndex])
-                        .presentationDetents([.height(400)])
-                        .presentationDragIndicator(.visible)
+                    VideoShareSheet(items: [videos[currentIndex].videoURL, videos[currentIndex].title])
+                        .presentationDetents([.medium])
                 }
             }
-            .fullScreenCover(isPresented: $showingProfile) {
-                if let creator = selectedCreator {
-                    FlicksCreatorProfileView(creator: creator)
-                }
+            .fullScreenCover(isPresented: $showingSearch) {
+                SearchView()
             }
         }
     }
     
-    // MARK: - Loading View
+    // MARK: - Loading View  
     private var loadingView: some View {
         ZStack {
-            Color.black
+            Color.black.ignoresSafeArea(.all)
             
-            VStack(spacing: 24) {
-                // Animated loading circles
-                HStack(spacing: 8) {
-                    ForEach(0..<3) { index in
-                        Circle()
-                            .fill(.white.opacity(0.8))
-                            .frame(width: 12, height: 12)
-                            .scaleEffect(1.0)
-                            .animation(
-                                .easeInOut(duration: 0.6)
-                                .repeatForever(autoreverses: true)
-                                .delay(Double(index) * 0.2),
-                                value: UUID()
-                            )
-                    }
-                }
-                .onAppear {
-                    // Trigger animations
-                }
+            VStack(spacing: 20) {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
+                    .scaleEffect(1.5)
                 
-                Text("Flicks")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                Text("Loading Flicks...")
+                    .font(AppTheme.Typography.headline)
+                    .foregroundColor(.white)
             }
         }
-    }
-    
-    // MARK: - Top Overlay (YouTube Style)
-    private var topOverlay: some View {
-        VStack {
-            HStack {
-                // Back/Home button
-                Button(action: { }) {
-                    Image(systemName: "house.fill")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .background(.black.opacity(0.3))
-                        .clipShape(Circle())
-                        .overlay(
-                            Circle()
-                                .stroke(.white.opacity(0.2), lineWidth: 1)
-                        )
-                }
-                
-                Spacer()
-                
-                // Center title with YouTube-style design
-                Text("Flicks")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
-                
-                Spacer()
-                
-                // Search and Camera buttons
-                HStack(spacing: 12) {
-                    Button(action: { }) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(.white)
-                            .frame(width: 44, height: 44)
-                            .background(.black.opacity(0.3))
-                            .clipShape(Circle())
-                            .overlay(
-                                Circle()
-                                    .stroke(.white.opacity(0.2), lineWidth: 1)
-                            )
-                    }
-                    
-                    Button(action: { }) {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(.white)
-                            .frame(width: 44, height: 44)
-                            .background(.black.opacity(0.3))
-                            .clipShape(Circle())
-                            .overlay(
-                                Circle()
-                                    .stroke(.white.opacity(0.2), lineWidth: 1)
-                            )
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            
-            Spacer()
-        }
-        .background(
-            LinearGradient(
-                colors: [.black.opacity(0.6), .clear],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 120)
-            .allowsHitTesting(false)
-        )
     }
     
     // MARK: - Vertical Video Feed
     private func verticalVideoFeed(geometry: GeometryProxy) -> some View {
         TabView(selection: $currentIndex) {
             ForEach(0..<videos.count, id: \.self) { index in
-                YouTubeStyleVideoPlayer(
+                FlicksVideoPlayer(
                     video: videos[index],
                     isCurrentVideo: index == currentIndex,
                     isLiked: likedVideos.contains(videos[index].id),
@@ -191,10 +123,6 @@ struct FlicksView: View {
                     },
                     onShare: {
                         showingShare = true
-                    },
-                    onProfileTap: {
-                        selectedCreator = videos[index].creator
-                        showingProfile = true
                     }
                 )
                 .tag(index)
@@ -202,13 +130,13 @@ struct FlicksView: View {
             }
         }
         .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-        .ignoresSafeArea()
+        .ignoresSafeArea(.all)
         .onChange(of: currentIndex) { _, newValue in
             impactFeedback.impactOccurred()
             preloadNextVideos(currentIndex: newValue)
         }
     }
-    
+
     // MARK: - Helper Methods
     private func loadFlicksContent() {
         Task {
@@ -216,8 +144,8 @@ struct FlicksView: View {
                 isLoading = true
             }
             
-            // Simulate realistic loading time
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            // Simulate loading
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
             
             await MainActor.run {
                 videos = Video.sampleVideos.shuffled()
@@ -251,7 +179,9 @@ struct FlicksView: View {
     }
     
     private func preloadNextVideos(currentIndex: Int) {
+        // Preload logic for smooth scrolling
         if currentIndex >= videos.count - 3 {
+            // Load more videos
             Task {
                 let moreVideos = Video.sampleVideos.shuffled().prefix(5)
                 await MainActor.run {
@@ -262,8 +192,8 @@ struct FlicksView: View {
     }
 }
 
-// MARK: - YouTube Style Video Player
-struct YouTubeStyleVideoPlayer: View {
+// MARK: - Flicks Video Player
+struct FlicksVideoPlayer: View {
     let video: Video
     let isCurrentVideo: Bool
     let isLiked: Bool
@@ -272,135 +202,124 @@ struct YouTubeStyleVideoPlayer: View {
     let onFollow: () -> Void
     let onComment: () -> Void
     let onShare: () -> Void
-    let onProfileTap: () -> Void
     
     @StateObject private var playerManager = VideoPlayerManager()
     @State private var showControls = false
-    @State private var controlsTimer: Timer?
-    @State private var isPlaying = true
-    @State private var showPlayIcon = false
     
     var body: some View {
-        ZStack {
-            // Video Player Background
-            if isCurrentVideo {
-                VideoPlayer(player: playerManager.player)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-                    .onTapGesture {
-                        togglePlayPause()
-                        showPlayPauseIcon()
-                    }
-                    .onAppear {
-                        setupPlayer()
-                    }
-                    .onDisappear {
-                        playerManager.pause()
-                    }
-            } else {
-                // High-quality thumbnail
+        GeometryReader { geometry in
+            ZStack {
+                // Background - Always show the thumbnail/image as fallback
                 AsyncImage(url: URL(string: video.thumbnailURL)) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
                 } placeholder: {
-                    ZStack {
-                        Rectangle()
-                            .fill(.black)
-                        
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
-            }
-            
-            // Play/Pause Icon Overlay
-            if showPlayIcon {
-                Image(systemName: isPlaying ? "play.fill" : "pause.fill")
-                    .font(.system(size: 60, weight: .medium))
-                    .foregroundStyle(.white)
-                    .background(
-                        Circle()
-                            .fill(.black.opacity(0.4))
-                            .frame(width: 100, height: 100)
-                    )
-                    .transition(.scale.combined(with: .opacity))
-            }
-            
-            // YouTube-style overlays
-            GeometryReader { geometry in
-                ZStack {
-                    // Bottom gradient for text readability
-                    VStack {
-                        Spacer()
-                        LinearGradient(
-                            colors: [.clear, .black.opacity(0.8)],
-                            startPoint: .top,
-                            endPoint: .bottom
+                    // Colored background as placeholder
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: Double.random(in: 0.3...0.7), 
+                                          green: Double.random(in: 0.3...0.7), 
+                                          blue: Double.random(in: 0.3...0.7)),
+                                    Color(red: Double.random(in: 0.1...0.5), 
+                                          green: Double.random(in: 0.1...0.5), 
+                                          blue: Double.random(in: 0.1...0.5))
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                        .frame(height: 300)
-                        .allowsHitTesting(false)
-                    }
-                    
-                    // Content overlays
-                    HStack(alignment: .bottom) {
-                        // Left side - Video info
-                        VStack(alignment: .leading, spacing: 0) {
-                            Spacer()
-                            
-                            // Creator info section
-                            HStack(spacing: 12) {
-                                Button(action: onProfileTap) {
-                                    AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                    } placeholder: {
-                                        Circle()
-                                            .fill(AppTheme.Colors.primary)
-                                            .overlay(
-                                                Text(String(video.creator.displayName.prefix(1)))
-                                                    .font(.system(size: 16, weight: .bold))
-                                                    .foregroundStyle(.white)
-                                            )
-                                    }
-                                    .frame(width: 48, height: 48)
-                                    .clipShape(Circle())
-                                    .overlay(
-                                        Circle()
-                                            .stroke(.white.opacity(0.3), lineWidth: 2)
-                                    )
-                                }
-                                .buttonStyle(.plain)
+                        .overlay(
+                            VStack {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 60))
+                                    .foregroundColor(.white.opacity(0.8))
                                 
-                                VStack(alignment: .leading, spacing: 4) {
+                                Text("Tap to Play")
+                                    .font(.headline)
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                        )
+                }
+                
+                // Video Player (when current and ready)
+                if isCurrentVideo && playerManager.player != nil {
+                    VideoPlayer(player: playerManager.player)
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                        .opacity(playerManager.isLoading ? 0 : 1)
+                }
+                
+                // Bottom gradient overlay for text readability
+                LinearGradient(
+                    colors: [.clear, .clear, .black.opacity(0.4), .black.opacity(0.8)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .allowsHitTesting(false)
+                
+                // Content overlays
+                VStack(spacing: 0) {
+                    Spacer()
+                    
+                    HStack(alignment: .bottom, spacing: 16) {
+                        // Left side - Video info
+                        VStack(alignment: .leading, spacing: 12) {
+                            // Creator section
+                            HStack(spacing: 12) {
+                                // Profile image
+                                AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Circle()
+                                        .fill(AppTheme.Colors.primary)
+                                        .overlay(
+                                            Text(String(video.creator.displayName.prefix(1)))
+                                                .font(.system(size: 16, weight: .bold))
+                                                .foregroundColor(.white)
+                                        )
+                                }
+                                .frame(width: 48, height: 48)
+                                .clipShape(Circle())
+                                .overlay(
+                                    Circle()
+                                        .stroke(.white.opacity(0.3), lineWidth: 1.5)
+                                )
+                                
+                                // Creator info
+                                VStack(alignment: .leading, spacing: 3) {
                                     HStack(spacing: 6) {
                                         Text("@\(video.creator.username)")
                                             .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(.white)
+                                            .foregroundColor(.white)
                                         
                                         if video.creator.isVerified {
                                             Image(systemName: "checkmark.seal.fill")
-                                                .font(.system(size: 14))
-                                                .foregroundStyle(AppTheme.Colors.primary)
+                                                .font(.system(size: 13))
+                                                .foregroundColor(AppTheme.Colors.primary)
                                         }
                                     }
                                     
-                                    Text("\(video.creator.subscriberCount.formatted()) subscribers")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundStyle(.white.opacity(0.8))
+                                    Text("\(formatSubscribers(video.creator.subscriberCount)) subscribers")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.white.opacity(0.8))
                                 }
                                 
                                 Spacer()
                                 
-                                // YouTube-style follow button
+                                // Subscribe button
                                 if !isFollowing {
                                     Button(action: onFollow) {
                                         Text("Subscribe")
                                             .font(.system(size: 14, weight: .bold))
-                                            .foregroundStyle(.black)
+                                            .foregroundColor(.black)
                                             .padding(.horizontal, 16)
                                             .padding(.vertical, 8)
                                             .background(.white)
@@ -409,52 +328,30 @@ struct YouTubeStyleVideoPlayer: View {
                                     .buttonStyle(.plain)
                                 }
                             }
-                            .padding(.bottom, 12)
                             
-                            // Video description
-                            VStack(alignment: .leading, spacing: 8) {
+                            // Video title and description
+                            VStack(alignment: .leading, spacing: 6) {
                                 Text(video.title)
                                     .font(.system(size: 15, weight: .medium))
-                                    .foregroundStyle(.white)
+                                    .foregroundColor(.white)
                                     .lineLimit(2)
                                     .multilineTextAlignment(.leading)
                                 
                                 if !video.description.isEmpty {
                                     Text(video.description)
                                         .font(.system(size: 14))
-                                        .foregroundStyle(.white.opacity(0.8))
+                                        .foregroundColor(.white.opacity(0.85))
                                         .lineLimit(2)
                                         .multilineTextAlignment(.leading)
                                 }
-                                
-                                // Music info (if applicable) - Remove this section since Video doesn't have musicTitle
-                                // if !video.musicTitle.isEmpty {
-                                //     HStack(spacing: 8) {
-                                //         Image(systemName: "music.note")
-                                //             .font(.system(size: 12))
-                                //             .foregroundStyle(.white.opacity(0.8))
-                                //         
-                                //         Text(video.musicTitle)
-                                //             .font(.system(size: 12, weight: .medium))
-                                //             .foregroundStyle(.white.opacity(0.8))
-                                //             .lineLimit(1)
-                                //     }
-                                //     .padding(.top, 4)
-                                // }
                             }
-                            .frame(maxWidth: geometry.size.width * 0.65, alignment: .leading)
-                            .padding(.bottom, 100)
                         }
-                        .padding(.leading, 16)
+                        .frame(maxWidth: geometry.size.width * 0.7)
                         
-                        Spacer()
-                        
-                        // Right side - Action buttons (YouTube style)
-                        VStack(spacing: 24) {
-                            Spacer()
-                            
+                        // Right side - Action buttons
+                        VStack(spacing: 20) {
                             // Like button
-                            YouTubeActionButton(
+                            ActionButton(
                                 icon: isLiked ? "heart.fill" : "heart",
                                 text: formatCount(video.likeCount),
                                 isActive: isLiked,
@@ -463,82 +360,69 @@ struct YouTubeStyleVideoPlayer: View {
                             )
                             
                             // Dislike button
-                            YouTubeActionButton(
+                            ActionButton(
                                 icon: "heart.slash",
-                                text: "Dislike",
+                                text: "",
                                 action: { }
                             )
                             
                             // Comment button
-                            YouTubeActionButton(
+                            ActionButton(
                                 icon: "bubble.right.fill",
                                 text: formatCount(video.commentCount),
                                 action: onComment
                             )
                             
                             // Share button
-                            YouTubeActionButton(
+                            ActionButton(
                                 icon: "arrowshape.turn.up.right.fill",
                                 text: "Share",
                                 action: onShare
                             )
                             
-                            // More options
-                            YouTubeActionButton(
+                            // More button
+                            ActionButton(
                                 icon: "ellipsis",
                                 text: "",
                                 action: { }
                             )
-                            
-                            // Creator profile (mini)
-                            Button(action: onProfileTap) {
-                                AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Circle()
-                                        .fill(AppTheme.Colors.primary.opacity(0.7))
-                                }
-                                .frame(width: 32, height: 32)
-                                .clipShape(Circle())
-                                .overlay(
-                                    Circle()
-                                        .stroke(.white, lineWidth: 2)
-                                )
-                            }
-                            .buttonStyle(.plain)
                         }
-                        .padding(.trailing, 16)
-                        .padding(.bottom, 100)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 100)
                 }
+                
+                // Tap gesture for play/pause
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        togglePlayPause()
+                    }
             }
+        }
+        .onAppear {
+            if isCurrentVideo {
+                setupPlayer()
+            }
+        }
+        .onDisappear {
+            playerManager.pause()
         }
     }
     
     private func setupPlayer() {
         playerManager.setupPlayer(with: video)
-        playerManager.play()
-        isPlaying = true
+        playerManager.setLooping(true)
+        
+        // Auto-play after setup
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            playerManager.play()
+        }
     }
     
     private func togglePlayPause() {
         playerManager.togglePlayPause()
-        isPlaying.toggle()
         HapticManager.shared.impact(style: .light)
-    }
-    
-    private func showPlayPauseIcon() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-            showPlayIcon = true
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                showPlayIcon = false
-            }
-        }
     }
     
     private func formatCount(_ count: Int) -> String {
@@ -550,10 +434,20 @@ struct YouTubeStyleVideoPlayer: View {
             return "\(count)"
         }
     }
+    
+    private func formatSubscribers(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.1fM", Double(count) / 1_000_000)
+        } else if count >= 1_000 {
+            return String(format: "%.0fK", Double(count) / 1_000)
+        } else {
+            return "\(count)"
+        }
+    }
 }
 
-// MARK: - YouTube Action Button
-struct YouTubeActionButton: View {
+// MARK: - Simple Action Button
+struct ActionButton: View {
     let icon: String
     let text: String
     var isActive: Bool = false
@@ -569,21 +463,16 @@ struct YouTubeActionButton: View {
         }) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(isActive ? activeColor : .white)
-                    .frame(width: 48, height: 48)
-                    .background(
-                        Circle()
-                            .fill(isActive ? .white.opacity(0.2) : .clear)
-                    )
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundColor(isActive ? activeColor : .white)
+                    .frame(width: 44, height: 44)
                     .scaleEffect(isPressed ? 0.9 : 1.0)
                 
                 if !text.isEmpty {
                     Text(text)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white)
+                        .foregroundColor(.white)
                         .lineLimit(1)
-                        .shadow(color: .black.opacity(0.5), radius: 1, x: 0, y: 1)
                 }
             }
         }
@@ -591,7 +480,7 @@ struct YouTubeActionButton: View {
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isPressed)
         .onLongPressGesture(minimumDuration: 0.01) {
-            // Handle long press if needed
+            // Handle if needed
         } onPressingChanged: { pressing in
             withAnimation(.easeInOut(duration: 0.1)) {
                 isPressed = pressing
@@ -600,8 +489,8 @@ struct YouTubeActionButton: View {
     }
 }
 
-// MARK: - YouTube Style Comments Sheet
-struct YouTubeStyleCommentsSheet: View {
+// MARK: - Flicks Comments Sheet
+struct FlicksCommentsSheet: View {
     let video: Video
     @Environment(\.dismiss) private var dismiss
     @State private var newComment = ""
@@ -647,7 +536,7 @@ struct YouTubeStyleCommentsSheet: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(comments) { comment in
-                            YouTubeCommentRow(comment: comment)
+                            FlicksCommentRow(comment: comment)
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 12)
                         }
@@ -726,8 +615,8 @@ struct YouTubeStyleCommentsSheet: View {
     }
 }
 
-// MARK: - YouTube Comment Row
-struct YouTubeCommentRow: View {
+// MARK: - Flicks Comment Row
+struct FlicksCommentRow: View {
     let comment: VideoComment
     @State private var isLiked = false
     @State private var showReplies = false
@@ -745,7 +634,7 @@ struct YouTubeCommentRow: View {
                         .overlay(
                             Text(String(comment.author.displayName.prefix(1)))
                                 .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
+                                .foregroundColor(.white)
                         )
                 }
                 .frame(width: 36, height: 36)
@@ -755,24 +644,24 @@ struct YouTubeCommentRow: View {
                     HStack(spacing: 8) {
                         Text("@\(comment.author.username)")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(AppTheme.Colors.textPrimary)
+                            .foregroundColor(AppTheme.Colors.textPrimary)
                         
                         Text(comment.timeAgo)
                             .font(.system(size: 12))
-                            .foregroundStyle(AppTheme.Colors.textTertiary)
+                            .foregroundColor(AppTheme.Colors.textTertiary)
                         
                         Spacer()
                         
                         Button(action: { }) {
                             Image(systemName: "ellipsis")
                                 .font(.system(size: 14))
-                                .foregroundStyle(AppTheme.Colors.textTertiary)
+                                .foregroundColor(AppTheme.Colors.textTertiary)
                         }
                     }
                     
                     Text(comment.text)
                         .font(.system(size: 14))
-                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                        .foregroundColor(AppTheme.Colors.textPrimary)
                         .multilineTextAlignment(.leading)
                     
                     HStack(spacing: 20) {
@@ -780,12 +669,12 @@ struct YouTubeCommentRow: View {
                             HStack(spacing: 6) {
                                 Image(systemName: isLiked ? "heart.fill" : "heart")
                                     .font(.system(size: 14))
-                                    .foregroundStyle(isLiked ? .red : AppTheme.Colors.textTertiary)
+                                    .foregroundColor(isLiked ? .red : AppTheme.Colors.textTertiary)
                                 
                                 if comment.likeCount > 0 {
                                     Text("\(comment.likeCount)")
                                         .font(.system(size: 12, weight: .medium))
-                                        .foregroundStyle(AppTheme.Colors.textTertiary)
+                                        .foregroundColor(AppTheme.Colors.textTertiary)
                                 }
                             }
                         }
@@ -794,7 +683,7 @@ struct YouTubeCommentRow: View {
                         Button(action: { }) {
                             Text("Reply")
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(AppTheme.Colors.textTertiary)
+                                .foregroundColor(AppTheme.Colors.textTertiary)
                         }
                         .buttonStyle(.plain)
                         
@@ -814,11 +703,11 @@ struct YouTubeCommentRow: View {
                         
                         Text("\(comment.replyCount) replies")
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(AppTheme.Colors.primary)
+                            .foregroundColor(AppTheme.Colors.primary)
                         
                         Image(systemName: showReplies ? "chevron.up" : "chevron.down")
                             .font(.system(size: 12))
-                            .foregroundStyle(AppTheme.Colors.primary)
+                            .foregroundColor(AppTheme.Colors.primary)
                         
                         Spacer()
                     }
