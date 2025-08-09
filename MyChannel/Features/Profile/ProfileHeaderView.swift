@@ -70,9 +70,7 @@ struct ProfileHeaderView: View {
                     .frame(height: 40)
             }
         }
-        .frame(height: headerHeight)
-        .offset(y: scrollOffset > 0 ? -scrollOffset * 0.25 : 0)
-        .opacity(1 - min(1, max(0, -scrollOffset) / 220))
+        // Keep original placement (no parallax offset) so header does not shift unexpectedly.
     }
     
     // MARK: - Profile Info Section

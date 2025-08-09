@@ -2305,6 +2305,104 @@
                     }
                 });
                 el.addEventListener('mouseleave', () => {
-                     if
-```
-It seems like the user's command was to replace the existing video modal styles with new styles for a video modal. I have applied the new styles in the original code. Please note that there might be some issues with other parts of the code that are not shown here.
+                    if (cursor) {
+                        cursor.style.transform = `translate(${cursorX - 10}px, ${cursorY - 10}px) scale(1)`;
+                        cursor.style.opacity = '1';
+                        cursor.style.background = 'var(--primary)';
+                    }
+                });
+            });
+        }
+
+        // --- Minimal fallbacks for animations to avoid ReferenceErrors ---
+        const initParticles = () => {
+            const container = document.querySelector('.bg-particles');
+            if (!container) return;
+            const particleCount = 50;
+            for (let i = 0; i < particleCount; i += 1) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = `${Math.random() * 100}%`;
+                particle.style.animationDelay = `${Math.random() * 5}s`;
+                particle.style.animationDuration = `${12 + Math.random() * 10}s`;
+                container.appendChild(particle);
+            }
+        };
+
+        const initLiveCounter = () => {
+            const el = document.getElementById('visitorCount');
+            if (!el) return;
+            let count = Number(el.textContent.replace(/[^0-9]/g, '')) || 2847;
+            setInterval(() => {
+                const delta = Math.floor(Math.random() * 7) - 3; // -3..+3
+                count = Math.max(1, count + delta);
+                el.textContent = count.toLocaleString();
+            }, 2000);
+        };
+
+        const initStatCounters = () => {
+            const animateCounter = (el, target, duration = 1200) => {
+                const start = 0;
+                const startTime = performance.now();
+                const step = (now) => {
+                    const progress = Math.min(1, (now - startTime) / duration);
+                    const value = Math.round(start + (target - start) * progress);
+                    el.textContent = value.toLocaleString();
+                    if (progress < 1) requestAnimationFrame(step);
+                };
+                requestAnimationFrame(step);
+            };
+            const revenue = document.getElementById('revenueCounter');
+            const adopters = document.getElementById('adoptersCounter');
+            const fees = document.getElementById('feesCounter');
+            if (revenue) animateCounter(revenue, Number(revenue.dataset.target || 90));
+            if (adopters) animateCounter(adopters, Number(adopters.dataset.target || 100000));
+            if (fees) animateCounter(fees, Number(fees.dataset.target || 0));
+        };
+
+        const initScrollTriggers = () => {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) entry.target.classList.add('animate-in');
+                });
+            }, { threshold: 0.2 });
+            document.querySelectorAll('.slide-in-left, .slide-in-right, .slide-in-up, .fade-in')
+                .forEach(el => observer.observe(el));
+        };
+
+        const initButtonEffects = () => {
+            document.querySelectorAll('.btn-primary, .calculate-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const ripple = document.createElement('span');
+                    ripple.className = 'ripple';
+                    const rect = btn.getBoundingClientRect();
+                    const size = Math.max(rect.width, rect.height);
+                    ripple.style.width = ripple.style.height = `${size}px`;
+                    ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
+                    ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
+                    btn.appendChild(ripple);
+                    setTimeout(() => ripple.remove(), 500);
+                });
+            });
+        };
+
+        const initDynamicScreen = () => {
+            // Placeholder for any dynamic phone screen/visual interactions
+        };
+
+        const initDynamicCardGlow = () => {
+            document.querySelectorAll('.feature-card').forEach(card => {
+                card.addEventListener('mousemove', (e) => {
+                    const rect = card.getBoundingClientRect();
+                    const x = ((e.clientX - rect.left) / rect.width) * 100;
+                    const y = ((e.clientY - rect.top) / rect.height) * 100;
+                    card.style.setProperty('--mouse-x', `${x}%`);
+                    card.style.setProperty('--mouse-y', `${y}%`);
+                });
+            });
+        };
+
+    });
+    </script>
+    </body>
+    </html>

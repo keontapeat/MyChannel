@@ -75,8 +75,10 @@ struct ProfileView: View {
 
                     ProfileTabNavigation(
                         selectedTab: $selectedTab,
-                        user: user
+                        user: user,
+                        scrollOffset: scrollOffset
                     )
+                    .padding(.top, -10)
 
                     ScrollViewReader { proxy in
                         ScrollView {

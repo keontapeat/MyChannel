@@ -10,6 +10,11 @@ import SwiftUI
 struct ProfileTabNavigation: View {
     @Binding var selectedTab: ProfileTab
     let user: User
+    let scrollOffset: CGFloat
+    
+    private var isPinned: Bool {
+        scrollOffset < -10
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -30,14 +35,20 @@ struct ProfileTabNavigation: View {
                     }
                 }
                 .padding(.horizontal, 16)
+                .background(Color.clear)
             }
             .frame(height: 56)
         }
-        .background(Color.clear)
+        .background(isPinned ? AppTheme.Colors.background : Color.clear)
         .overlay(
-            Rectangle()
-                .fill(AppTheme.Colors.textSecondary.opacity(0.1))
-                .frame(height: 0.5),
+            Group {
+                if isPinned {
+                    Rectangle()
+                        .fill(AppTheme.Colors.textSecondary.opacity(0.1))
+                        .frame(height: 0.5)
+                        .transition(.opacity)
+                }
+            },
             alignment: .bottom
         )
     }
@@ -136,7 +147,8 @@ struct ProfileTabButton: View {
         
         ProfileTabNavigation(
             selectedTab: .constant(.videos),
-            user: User.sampleUsers[0]
+            user: User.sampleUsers[0],
+            scrollOffset: 0
         )
         
         ScrollView {
