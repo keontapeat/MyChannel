@@ -118,13 +118,36 @@ class AuthenticationManager: ObservableObject {
     func signInWithApple() async {
         authState = .authenticating
         isLoading = true
-        
-        defer {
-            isLoading = false
+
+        defer { isLoading = false }
+
+        if FirebaseAppleAuthService.shared.isAvailable {
+            do {
+                let payload = try await FirebaseAppleAuthService.shared.signIn()
+                let user = User(
+                    id: payload.uid,
+                    username: payload.email?.components(separatedBy: "@").first ?? "apple_user",
+                    displayName: payload.displayName,
+                    email: payload.email ?? "unknown@apple.com",
+                    profileImageURL: nil,
+                    bio: "Signed in with Apple 🍎",
+                    subscriberCount: 0,
+                    videoCount: 0,
+                    isVerified: true,
+                    isCreator: true
+                )
+                currentUser = user
+                isAuthenticated = true
+                authState = .authenticated
+                return
+            } catch {
+                authState = .error(error.localizedDescription)
+                return
+            }
         }
-        
+
+        // ... existing fallback mock sign-in with Apple ...
         try? await Task.sleep(nanoseconds: 1_500_000_000)
-        
         let appleUser = User(
             username: "apple_user",
             displayName: "Apple User",
@@ -136,12 +159,9 @@ class AuthenticationManager: ObservableObject {
             isVerified: true,
             isCreator: true
         )
-        
         currentUser = appleUser
         isAuthenticated = true
         authState = .authenticated
-        
-        print("Welcome, \(appleUser.displayName)!")
     }
     
     func signInWithGoogle() async {
@@ -242,4 +262,3 @@ class AuthenticationManager: ObservableObject {
         authState = .authenticated
     }
 }
-

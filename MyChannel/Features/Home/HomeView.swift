@@ -61,6 +61,8 @@ struct HomeView: View {
     @State private var heroAsset: AssetStory? = nil
     @State private var showHeroOverlay: Bool = false
 
+    @State private var selectedMovie: FreeMovie? = nil
+
     var body: some View {
         NavigationStack {
             GeometryReader { _ in
@@ -102,7 +104,7 @@ struct HomeView: View {
                         if selectedFilter == .movies || selectedFilter == .all {
                             PremiumMoviesHubSection(
                                 onMovieTap: { movie in
-                                    print(" Movie tapped: \(movie.title)")
+                                    selectedMovie = movie
                                     let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                                     impactFeedback.impactOccurred()
                                 }
@@ -206,6 +208,12 @@ struct HomeView: View {
                 .onDisappear {
                     print(" SearchView disappeared")
                     showingSearchView = false
+                }
+        }
+        .fullScreenCover(item: $selectedMovie) { movie in
+            MovieDetailView(movie: movie)
+                .onDisappear {
+                    selectedMovie = nil
                 }
         }
         .overlay {

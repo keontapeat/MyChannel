@@ -866,6 +866,32 @@
             transform: scale(0.97);
         }
         
+        /* Highlight YouTube card on scroll with light blue glow */
+        .youtube-card.is-highlighted {
+            opacity: 1;
+            transform: scale(1.05);
+            background: rgba(0, 255, 225, 0.06);
+            border-color: rgba(0, 255, 225, 0.6);
+            box-shadow: 0 0 100px rgba(0, 255, 225, 0.4), 0 20px 50px rgba(0, 0, 0, 0.4);
+            animation: bluePulse 2.8s ease-in-out infinite;
+        }
+
+        .youtube-card.is-highlighted .revenue-share {
+            background: linear-gradient(135deg, #00FFE1 0%, #00C9B8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .youtube-card.is-highlighted .youtube-logo img {
+            filter: none;
+        }
+
+        @keyframes bluePulse {
+            0%, 100% { box-shadow: 0 0 80px rgba(0, 255, 225, 0.35), 0 20px 50px rgba(0, 0, 0, 0.35); }
+            50% { box-shadow: 0 0 110px rgba(0, 255, 225, 0.55), 0 30px 70px rgba(0, 0, 0, 0.5); }
+        }
+        
         .platform-logo {
             height: 60px;
             margin-bottom: 25px;
@@ -2228,6 +2254,7 @@
             initButtonEffects();
             initDynamicScreen();
             initDynamicCardGlow();
+            initRevenueHighlights();
         };
         
         // Video Modal Functionality
@@ -2400,6 +2427,21 @@
                     card.style.setProperty('--mouse-y', `${y}%`);
                 });
             });
+        };
+
+        const initRevenueHighlights = () => {
+            const youtubeCard = document.querySelector('.revenue-card.youtube-card');
+            if (!youtubeCard) return;
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        youtubeCard.classList.add('is-highlighted');
+                    } else {
+                        youtubeCard.classList.remove('is-highlighted');
+                    }
+                });
+            }, { threshold: 0.45 });
+            observer.observe(youtubeCard);
         };
 
     });

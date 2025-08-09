@@ -8,6 +8,12 @@ struct FreeMoviesView: View {
     @State private var sortBy: SortOption = .popular
     @State private var showAllGenres: Bool = true
     
+    @State private var selectedMovie: FreeMovie? = nil
+
+    @State private var remoteMovies: [FreeMovie] = []
+    @State private var isFetching: Bool = false
+    @State private var page: Int = 1
+
     enum SortOption: String, CaseIterable {
         case popular = "popular"
         case newest = "newest"
@@ -23,53 +29,9 @@ struct FreeMoviesView: View {
             }
         }
     }
-    
+
     private var allMovies: [FreeMovie] {
-        FreeMovie.sampleMovies + [
-            // Additional sample movies for variety
-            FreeMovie(
-                id: "tubi-die-hard",
-                title: "Die Hard",
-                posterURL: "https://image.tmdb.org/t/p/w500/yFihWxQcmqcaBR31QM6Y8gT6aYV.jpg",
-                backdropURL: "https://image.tmdb.org/t/p/w1280/17zArExB7ztm6fjUXZwQWgGMC9f.jpg",
-                overview: "NYPD cop John McClane's plan to reconcile with his estranged wife is thrown for a serious loop.",
-                releaseDate: "1988-07-15",
-                runtime: 132,
-                genre: [.action, .thriller],
-                rating: "R",
-                imdbRating: 8.2,
-                streamingSource: .tubi,
-                streamURL: "https://tubitv.com/movies/die-hard",
-                trailerURL: "https://www.youtube.com/watch?v=QIOX44m8ktc",
-                cast: ["Bruce Willis", "Alan Rickman", "Bonnie Bedelia"],
-                director: "John McTiernan",
-                year: 1988,
-                language: "English",
-                country: "US",
-                isAvailable: true
-            ),
-            FreeMovie(
-                id: "crackle-spider-man",
-                title: "Spider-Man",
-                posterURL: "https://image.tmdb.org/t/p/w500/gh4cZbhZxyTbgxQPxD0dOudNPTn.jpg",
-                backdropURL: "https://image.tmdb.org/t/p/w1280/TjQfbBMu4SPBJLOmgbg13sjQ3i.jpg",
-                overview: "After being bitten by a genetically altered spider, Peter Parker gains spider-like abilities.",
-                releaseDate: "2002-05-03",
-                runtime: 121,
-                genre: [.action, .adventure, .scifi],
-                rating: "PG-13",
-                imdbRating: 7.4,
-                streamingSource: .crackle,
-                streamURL: "https://www.crackle.com/watch/spider-man",
-                trailerURL: "https://www.youtube.com/watch?v=t06RUxPbp_c",
-                cast: ["Tobey Maguire", "Willem Dafoe", "Kirsten Dunst"],
-                director: "Sam Raimi",
-                year: 2002,
-                language: "English",
-                country: "US",
-                isAvailable: true
-            )
-        ]
+        FreeMovie.sampleMovies + remoteMovies
     }
     
     private var filteredMovies: [FreeMovie] {
@@ -230,17 +192,61 @@ struct FreeMoviesView: View {
                     ], spacing: 20) {
                         ForEach(filteredMovies) { movie in
                             CompactMovieCard(movie: movie) {
-                                // Handle movie tap
-                                print("Movie selected: \(movie.title)")
+                                selectedMovie = movie
+                                let impact = UIImpactFeedbackGenerator(style: .medium)
+                                impact.impactOccurred()
+                            }
+                            .onAppear {
+                                if movie.id == filteredMovies.last?.id {
+                                    fetchNextPageIfNeeded()
+                                }
                             }
                         }
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 20)
+
+                    if isFetching {
+                        ProgressView("Loading more...")
+                            .padding()
+                    }
                 }
             }
         }
         .background(AppTheme.Colors.background)
+        .fullScreenCover(item: $selectedMovie) { mv in
+            MovieDetailView(movie: mv)
+                .onDisappear {
+                    selectedMovie = nil
+                }
+        }
+        .task {
+            if remoteMovies.isEmpty {
+                await initialFetch()
+            }
+        }
+    }
+
+    private func initialFetch() async {
+        isFetching = true
+        defer { isFetching = false }
+        if let page1 = try? await ArchiveOrgService.shared.fetchPopular(page: 1, rows: 60) {
+            remoteMovies = page1
+            page = 1
+        }
+    }
+
+    private func fetchNextPageIfNeeded() {
+        guard !isFetching else { return }
+        isFetching = true
+        Task {
+            defer { isFetching = false }
+            let next = page + 1
+            if let results = try? await ArchiveOrgService.shared.fetchPopular(page: next, rows: 60) {
+                page = next
+                remoteMovies.append(contentsOf: results)
+            }
+        }
     }
 }
 

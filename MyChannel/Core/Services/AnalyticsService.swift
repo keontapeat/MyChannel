@@ -13,17 +13,14 @@ class AnalyticsService {
     private init() {}
     
     func trackScreenView(_ screenName: String) async {
-        print("📊 Analytics: Screen view - \(screenName)")
-        // In a real app, this would send analytics to your service
+        FirebaseManager.shared.logEvent("screen_view", parameters: ["screen_name": screenName])
     }
     
     func trackAppLaunchTime(_ time: TimeInterval) async {
-        print("📊 Analytics: App launch time - \(time)s")
-        // In a real app, this would send analytics to your service
+        FirebaseManager.shared.logEvent("app_launch_time", parameters: ["seconds": time])
     }
     
     func trackEvent(_ eventName: String, parameters: [String: Any] = [:]) async {
-        print("📊 Analytics: Event - \(eventName) with parameters: \(parameters)")
-        // In a real app, this would send analytics to your service
+        FirebaseManager.shared.logEvent(eventName, parameters: parameters)
     }
 }

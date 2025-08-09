@@ -439,55 +439,45 @@ struct PremiumMovieCard: View {
             action()
         }) {
             VStack(alignment: .leading, spacing: 12) {
-                // Movie Poster with Premium Effects
                 ZStack(alignment: .center) {
-                    // ALWAYS WORKING MOVIE POSTER
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.blue.opacity(0.4),
-                                    Color.purple.opacity(0.2)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .aspectRatio(2/3, contentMode: .fill)
-                        .overlay(
-                            VStack(spacing: 12) {
-                                Image(systemName: "film.fill")
-                                    .font(.system(size: 40))
-                                    .foregroundColor(.white)
-                                
-                                Text(movie.title)
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(3)
-                                    .padding(.horizontal, 8)
-                                
-                                // Genre badges
-                                HStack(spacing: 4) {
-                                    ForEach(Array(movie.genre.prefix(2)), id: \.self) { genre in
-                                        Text(genre.rawValue.capitalized)
-                                            .font(.system(size: 8, weight: .medium))
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 4)
-                                            .padding(.vertical, 2)
-                                            .background(
-                                                Capsule()
-                                                    .fill(.white.opacity(0.3))
-                                            )
-                                    }
-                                }
-                            }
-                        )
-                        .frame(width: 140, height: 210)
-                        .cornerRadius(12)
-                        .clipped()
+                    AsyncImage(url: URL(string: movie.posterURL)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(2/3, contentMode: .fill)
+                        case .failure(_):
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.blue.opacity(0.35), Color.purple.opacity(0.2)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .overlay(
+                                    Image(systemName: "film.fill")
+                                        .font(.system(size: 28, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.9))
+                                )
+                        case .empty:
+                            SkeletonView()
+                                .aspectRatio(2/3, contentMode: .fill)
+                                .cornerRadius(12)
+                        @unknown default:
+                            Color.clear
+                        }
+                    }
+                    .frame(width: 140, height: 210)
+                    .cornerRadius(12)
+                    .clipped()
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppTheme.Colors.divider.opacity(0.12), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 6)
                     
-                    // CLICKABLE PLAY BUTTON OVERLAY
+                    // Play overlay
                     Circle()
                         .fill(.white.opacity(0.95))
                         .frame(width: 60, height: 60)
@@ -500,59 +490,51 @@ struct PremiumMovieCard: View {
                         .scaleEffect(isPressed ? 0.9 : 1.0)
                         .opacity(isPressed ? 1.0 : 0.9)
                     
-                    // MyChannel Original Badge (top right)
+                    // Badges and meta
                     VStack {
                         HStack {
                             Spacer()
-                            
                             Text("MC")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(.system(size: 9, weight: .bold))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
+                                .padding(.vertical, 3)
                                 .background(
                                     Capsule()
                                         .fill(AppTheme.Colors.primary)
-                                        .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 2, x: 0, y: 1)
+                                        .shadow(color: AppTheme.Colors.primary.opacity(0.35), radius: 3, x: 0, y: 1)
                                 )
                         }
+                        .padding(6)
                         
                         Spacer()
                         
-                        // Rating & Runtime
-                        VStack(alignment: .trailing, spacing: 4) {
+                        HStack(spacing: 6) {
                             HStack(spacing: 4) {
                                 Image(systemName: "star.fill")
                                     .font(.system(size: 10))
                                     .foregroundColor(.yellow)
-                                
                                 Text("\(movie.imdbRating, specifier: "%.1f")")
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(.white)
                             }
                             .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule()
-                                    .fill(.black.opacity(0.7))
-                            )
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(.black.opacity(0.7)))
                             
                             Text(movie.formattedRuntime)
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                            .background(
-                                Capsule()
-                                    .fill(.black.opacity(0.7))
-                            )
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(.black.opacity(0.7)))
                         }
+                        .padding(8)
                     }
                     .frame(width: 140, height: 210)
-                    .padding(8)
                 }
                 
-                // Movie Info (no streaming source)
+                // Info
                 VStack(alignment: .leading, spacing: 6) {
                     Text(movie.title)
                         .font(.system(size: 14, weight: .semibold))
@@ -561,7 +543,6 @@ struct PremiumMovieCard: View {
                         .frame(height: 36, alignment: .top)
                     
                     HStack(spacing: 4) {
-                        // Just show year and quality
                         Text("\(movie.year)")
                             .font(.system(size: 12))
                             .foregroundColor(AppTheme.Colors.textSecondary)
@@ -580,14 +561,13 @@ struct PremiumMovieCard: View {
                             Text(genre.rawValue.capitalized)
                                 .font(.system(size: 10))
                                 .foregroundColor(AppTheme.Colors.textTertiary)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 2)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
                                 .background(
                                     Capsule()
                                         .fill(AppTheme.Colors.surface)
                                 )
                         }
-                        
                         Spacer()
                     }
                 }
@@ -599,9 +579,7 @@ struct PremiumMovieCard: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isHovered)
         .onPressGesture(
-            onPress: { 
-                isPressed = true
-            },
+            onPress: { isPressed = true },
             onRelease: { isPressed = false }
         )
         .onHover { hovering in

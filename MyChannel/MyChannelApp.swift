@@ -9,6 +9,8 @@ import SwiftUI
 
 @main
 struct MyChannelApp: App {
+    @UIApplicationDelegateAdaptor(FirebaseAppDelegate.self) var firebaseDelegate
+
     // Centralized state management for the entire app
     @StateObject private var authManager: AuthenticationManager = AuthenticationManager.shared
     @StateObject private var appState: AppState = AppState()
@@ -18,6 +20,7 @@ struct MyChannelApp: App {
         
         // Configure app appearance
         setupAppearance()
+
         
         print("✅ MyChannelApp init completed")
     }

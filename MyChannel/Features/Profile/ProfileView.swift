@@ -58,69 +58,15 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var profileContent: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .top) {
-                AppTheme.Colors.background
-                    .ignoresSafeArea(.all)
-
-                VStack(spacing: 0) {
-                    SafeProfileHeaderView(
-                        user: user,
-                        scrollOffset: scrollOffset,
-                        isFollowing: $isFollowing,
-                        showingEditProfile: $showingEditProfile,
-                        showingSettings: $showingSettings
-                    )
-                    .ignoresSafeArea(edges: .top)
-
-                    ProfileTabNavigation(
-                        selectedTab: $selectedTab,
-                        user: user,
-                        scrollOffset: scrollOffset
-                    )
-                    .padding(.top, -10)
-
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            VStack(spacing: 0) {
-                                Color.clear
-                                    .frame(height: 0)
-                                    .id("profileTop")
-
-                                GeometryReader { proxy in
-                                    Color.clear
-                                        .preference(key: ProfileScrollOffsetPreferenceKey.self,
-                                                    value: proxy.frame(in: .named("scroll")).minY)
-                                }
-                                .frame(height: 0)
-
-                                SafeProfileContentView(
-                                    selectedTab: selectedTab,
-                                    user: user,
-                                    videos: userVideos
-                                )
-                                .padding(.top, 0)
-                                .background(AppTheme.Colors.background)
-                            }
-                        }
-                        .scrollContentBackground(.hidden)
-                        .background(Color.clear)
-                        .coordinateSpace(name: "scroll")
-                        .onPreferenceChange(ProfileScrollOffsetPreferenceKey.self) { value in
-                            withAnimation(.easeOut(duration: 0.12)) {
-                                scrollOffset = value
-                            }
-                        }
-                        .onReceive(NotificationCenter.default.publisher(for: .scrollToTopProfile)) { _ in
-                            withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                                proxy.scrollTo("profileTop", anchor: .top)
-                            }
-                            HapticManager.shared.impact(style: .light)
-                        }
-                    }
-                }
-            }
-        }
+        ProfileMainSection(
+            user: user,
+            selectedTab: $selectedTab,
+            isFollowing: $isFollowing,
+            showingEditProfile: $showingEditProfile,
+            showingSettings: $showingSettings,
+            userVideos: $userVideos,
+            scrollOffset: $scrollOffset
+        )
         .navigationBarHidden(true)
         .sheet(isPresented: $showingEditProfile) {
             NavigationStack {
@@ -295,19 +241,171 @@ struct SafeProfileHeaderView: View {
 }
 
 
-#Preview {
-    NavigationView {
-        ProfileView()
-            .environmentObject({
-                let authManager = AuthenticationManager.shared
-                authManager.currentUser = User.sampleUsers.isEmpty ? User.defaultUser : User.sampleUsers[0]
-                return authManager
-            }())
-            .environmentObject({
-                let appState = AppState()
-                appState.currentUser = User.sampleUsers.isEmpty ? User.defaultUser : User.sampleUsers[0]
-                return appState
-            }())
-            .environmentObject(GlobalVideoPlayerManager.shared)
+// MARK: - Inline section components for quick navigation in Xcode like HomeView.
+
+// MARK: - Profile Main Section
+private struct ProfileMainSection: View {
+    let user: User
+    @Binding var selectedTab: ProfileTab
+    @Binding var isFollowing: Bool
+    @Binding var showingEditProfile: Bool
+    @Binding var showingSettings: Bool
+    @Binding var userVideos: [Video]
+    @Binding var scrollOffset: CGFloat
+
+    var body: some View {
+        GeometryReader { _ in
+            ZStack(alignment: .top) {
+                AppTheme.Colors.background
+                    .ignoresSafeArea(.all)
+
+                VStack(spacing: 0) {
+                    ProfileHeaderSection(
+                        user: user,
+                        scrollOffset: scrollOffset,
+                        isFollowing: $isFollowing,
+                        showingEditProfile: $showingEditProfile,
+                        showingSettings: $showingSettings
+                    )
+                    .ignoresSafeArea(edges: .top)
+
+                    ProfileTabsSection(
+                        selectedTab: $selectedTab,
+                        user: user,
+                        scrollOffset: scrollOffset
+                    )
+                    .padding(.top, -10)
+
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(spacing: 0) {
+                                Color.clear
+                                    .frame(height: 0)
+                                    .id("profileTop")
+
+                                GeometryReader { innerProxy in
+                                    Color.clear
+                                        .preference(
+                                            key: ProfileScrollOffsetPreferenceKey.self,
+                                            value: innerProxy.frame(in: .named("scroll")).minY
+                                        )
+                                }
+                                .frame(height: 0)
+
+                                ProfileContentSection(
+                                    selectedTab: selectedTab,
+                                    user: user,
+                                    videos: userVideos
+                                )
+                                .padding(.top, 0)
+                                .background(AppTheme.Colors.background)
+                            }
+                        }
+                        .scrollContentBackground(.hidden)
+                        .background(Color.clear)
+                        .coordinateSpace(name: "scroll")
+                        .onPreferenceChange(ProfileScrollOffsetPreferenceKey.self) { value in
+                            withAnimation(.easeOut(duration: 0.12)) {
+                                scrollOffset = value
+                            }
+                        }
+                        .onReceive(NotificationCenter.default.publisher(for: .scrollToTopProfile)) { _ in
+                            withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                                proxy.scrollTo("profileTop", anchor: .top)
+                            }
+                            HapticManager.shared.impact(style: .light)
+                        }
+                    }
+                }
+            }
+        }
     }
+}
+
+private struct ProfileHeaderSection: View {
+    let user: User
+    let scrollOffset: CGFloat
+    @Binding var isFollowing: Bool
+    @Binding var showingEditProfile: Bool
+    @Binding var showingSettings: Bool
+
+    var body: some View {
+        SafeProfileHeaderView(
+            user: user,
+            scrollOffset: scrollOffset,
+            isFollowing: $isFollowing,
+            showingEditProfile: $showingEditProfile,
+            showingSettings: $showingSettings
+        )
+    }
+}
+
+private struct ProfileTabsSection: View {
+    @Binding var selectedTab: ProfileTab
+    let user: User
+    let scrollOffset: CGFloat
+
+    var body: some View {
+        ProfileTabNavigation(
+            selectedTab: $selectedTab,
+            user: user,
+            scrollOffset: scrollOffset
+        )
+    }
+}
+
+private struct ProfileContentSection: View {
+    let selectedTab: ProfileTab
+    let user: User
+    let videos: [Video]
+
+    var body: some View {
+        SafeProfileContentView(
+            selectedTab: selectedTab,
+            user: user,
+            videos: videos
+        )
+    }
+}
+
+#Preview("Profile Header Section") {
+    ProfileHeaderSection(
+        user: User.sampleUsers.first ?? .defaultUser,
+        scrollOffset: 0,
+        isFollowing: .constant(false),
+        showingEditProfile: .constant(false),
+        showingSettings: .constant(false)
+    )
+    .environmentObject(AppState())
+}
+
+#Preview("Profile Tabs Section") {
+    ProfileTabsSection(
+        selectedTab: .constant(.videos),
+        user: User.sampleUsers.first ?? .defaultUser,
+        scrollOffset: 0
+    )
+    .environmentObject(AppState())
+}
+
+#Preview("Profile Content Section") {
+    ProfileContentSection(
+        selectedTab: .videos,
+        user: User.sampleUsers.first ?? .defaultUser,
+        videos: Array(Video.sampleVideos.prefix(6))
+    )
+    .environmentObject(AppState())
+}
+
+#Preview("Profile Main Section") {
+    ProfileMainSection(
+        user: User.sampleUsers.first ?? .defaultUser,
+        selectedTab: .constant(.videos),
+        isFollowing: .constant(false),
+        showingEditProfile: .constant(false),
+        showingSettings: .constant(false),
+        userVideos: .constant(Array(Video.sampleVideos.prefix(8))),
+        scrollOffset: .constant(0)
+    )
+    .environmentObject(AppState())
 }
