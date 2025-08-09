@@ -432,54 +432,73 @@ struct PremiumMovieCard: View {
     @State private var isHovered: Bool = false
     
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            print("🎬 MOVIE CLICKED: \(movie.title)")
+            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+            impactFeedback.impactOccurred()
+            action()
+        }) {
             VStack(alignment: .leading, spacing: 12) {
                 // Movie Poster with Premium Effects
-                ZStack(alignment: .topTrailing) {
-                    AsyncImage(url: URL(string: movie.posterURL)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(2/3, contentMode: .fill)
-                        case .failure(_):
-                            Rectangle()
-                                .fill(AppTheme.Colors.surface)
-                                .aspectRatio(2/3, contentMode: .fill)
-                                .overlay(
-                                    VStack(spacing: 8) {
-                                        Image(systemName: "film")
-                                            .font(.system(size: 32))
-                                            .foregroundColor(AppTheme.Colors.textTertiary)
-                                        
-                                        Text("Movie")
-                                            .font(.caption)
-                                            .foregroundColor(AppTheme.Colors.textTertiary)
+                ZStack(alignment: .center) {
+                    // ALWAYS WORKING MOVIE POSTER
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.blue.opacity(0.4),
+                                    Color.purple.opacity(0.2)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .aspectRatio(2/3, contentMode: .fill)
+                        .overlay(
+                            VStack(spacing: 12) {
+                                Image(systemName: "film.fill")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.white)
+                                
+                                Text(movie.title)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(3)
+                                    .padding(.horizontal, 8)
+                                
+                                // Genre badges
+                                HStack(spacing: 4) {
+                                    ForEach(Array(movie.genre.prefix(2)), id: \.self) { genre in
+                                        Text(genre.rawValue.capitalized)
+                                            .font(.system(size: 8, weight: .medium))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 2)
+                                            .background(
+                                                Capsule()
+                                                    .fill(.white.opacity(0.3))
+                                            )
                                     }
-                                )
-                        case .empty:
-                            Rectangle()
-                                .fill(AppTheme.Colors.surface)
-                                .aspectRatio(2/3, contentMode: .fill)
-                                .overlay(
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
-                                )
-                        @unknown default:
-                            EmptyView()
-                        }
-                    }
-                    .frame(width: 140, height: 210)
-                    .cornerRadius(12)
-                    .clipped()
+                                }
+                            }
+                        )
+                        .frame(width: 140, height: 210)
+                        .cornerRadius(12)
+                        .clipped()
                     
-                    // Premium gradient overlay
-                    LinearGradient(
-                        colors: [.clear, .black.opacity(0.7)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .cornerRadius(12)
+                    // CLICKABLE PLAY BUTTON OVERLAY
+                    Circle()
+                        .fill(.white.opacity(0.95))
+                        .frame(width: 60, height: 60)
+                        .overlay(
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 24))
+                                .foregroundColor(.black)
+                        )
+                        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+                        .scaleEffect(isPressed ? 0.9 : 1.0)
+                        .opacity(isPressed ? 1.0 : 0.9)
                     
                     // MyChannel Original Badge (top right)
                     VStack {
@@ -523,10 +542,10 @@ struct PremiumMovieCard: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(.black.opacity(0.7))
-                                )
+                            .background(
+                                Capsule()
+                                    .fill(.black.opacity(0.7))
+                            )
                         }
                     }
                     .frame(width: 140, height: 210)
@@ -576,14 +595,12 @@ struct PremiumMovieCard: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
-        .scaleEffect(isPressed ? 0.95 : (isHovered ? 1.05 : 1.0))
+        .scaleEffect(isPressed ? 0.95 : (isHovered ? 1.02 : 1.0))
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isHovered)
         .onPressGesture(
             onPress: { 
                 isPressed = true
-                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                impactFeedback.impactOccurred()
             },
             onRelease: { isPressed = false }
         )

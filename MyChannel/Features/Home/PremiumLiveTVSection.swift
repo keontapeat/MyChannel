@@ -186,7 +186,12 @@ struct PremiumChannelCard: View {
     @State private var isHovered: Bool = false
     
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            print("📺 LIVE TV CLICKED: \(channel.name)")
+            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+            impactFeedback.impactOccurred()
+            action()
+        }) {
             VStack(spacing: 12) {
                 // Channel Logo with Live Indicator
                 ZStack {
@@ -218,31 +223,40 @@ struct PremiumChannelCard: View {
                                 )
                         )
                     
-                    // Channel Logo
-                    AsyncImage(url: URL(string: channel.logoURL)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 60, height: 40)
-                        case .failure(_):
-                            VStack(spacing: 4) {
-                                Image(systemName: "tv")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(channel.category.color)
-                                
-                                Text(channel.name.prefix(2).uppercased())
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(channel.category.color)
-                            }
-                        case .empty:
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: channel.category.color))
-                        @unknown default:
-                            EmptyView()
-                        }
+                    // Channel Logo - ALWAYS SHOW WORKING CONTENT
+                    VStack(spacing: 8) {
+                        // TV Icon for all channels
+                        Image(systemName: "tv.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(channel.category.color)
+                        
+                        // Channel name abbreviation  
+                        Text(String(channel.name.prefix(3)).uppercased())
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(channel.category.color)
                     }
+                    
+                    // CLICKABLE PLAY OVERLAY
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            
+                            Circle()
+                                .fill(.white.opacity(0.9))
+                                .frame(width: 40, height: 40)
+                                .overlay(
+                                    Image(systemName: "play.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.black)
+                                )
+                                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                            
+                            Spacer()
+                        }
+                        Spacer()
+                    }
+                    .opacity(isPressed ? 1.0 : 0.8)
                     
                     // Live Badge
                     VStack {
@@ -312,8 +326,6 @@ struct PremiumChannelCard: View {
         .onPressGesture(
             onPress: { 
                 isPressed = true
-                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                impactFeedback.impactOccurred()
             },
             onRelease: { isPressed = false }
         )
