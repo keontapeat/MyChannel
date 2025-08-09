@@ -1,0 +1,48 @@
+name: iOS Build (MyChannel)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: |
+          XCODE="/Applications/Xcode_16.0.app"
+          if [ -d "$XCODE" ]; then
+            sudo xcode-select -s "$XCODE"
+          else
+            xcodebuild -version
+          fi
+
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            ~/Library/Developer/Xcode/DerivedData
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-
+
+      - name: Resolve dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies -project MyChannel.xcodeproj
+
+      - name: Build (Debug, iPhone 15)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project MyChannel.xcodeproj \
+            -scheme MyChannel \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            build | xcpretty
+        env:
+          NSUnbufferedIO: YES
