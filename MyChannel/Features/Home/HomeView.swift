@@ -1,3 +1,5 @@
+// ... existing code ...
+
 import SwiftUI
 import Combine
 
@@ -53,8 +55,7 @@ struct HomeView: View {
     @State private var stories: [Story] = Story.sampleStories
     @State private var showingSearchView: Bool = false
     @State private var assetStories: [AssetStory] = AssetStory.sampleStories
-    @State private var selectedAssetStory: AssetStory? = nil
-    @State private var showingAssetStoryViewer: Bool = false
+    @State private var viewerStories: [Story] = Story.sampleStories
 
     var body: some View {
         NavigationStack {
@@ -73,9 +74,8 @@ struct HomeView: View {
                         if showingStories {
                             AssetBouncyStoriesRow(
                                 stories: assetStories,
-                                onStoryTap: { story in
-                                    selectedAssetStory = story
-                                    showingAssetStoryViewer = true
+                                onStoryTap: { asset in
+                                    openViewerForAssetStory(asset)
                                 },
                                 onAddStory: {
                                     let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
@@ -180,8 +180,8 @@ struct HomeView: View {
             print(" selectedVideo changed: \(oldValue?.title ?? "nil") -> \(newValue?.title ?? "nil")")
         }
         .fullScreenCover(isPresented: $showingStoryViewer) {
-            let safeStory = selectedStory ?? stories.first ?? Story.sampleStories.first!
-            let safeStories = stories.isEmpty ? Story.sampleStories : stories
+            let safeStory = selectedStory ?? viewerStories.first ?? Story.sampleStories.first!
+            let safeStories = viewerStories.isEmpty ? Story.sampleStories : viewerStories
             
             StoryViewerView(
                 stories: safeStories,
@@ -191,16 +191,6 @@ struct HomeView: View {
                     selectedStory = nil
                 }
             )
-        }
-        .fullScreenCover(isPresented: $showingAssetStoryViewer) {
-            if let s = selectedAssetStory {
-                NavigationStack {
-                    AssetStoryViewerView(story: s) {
-                        showingAssetStoryViewer = false
-                        selectedAssetStory = nil
-                    }
-                }
-            }
         }
         .fullScreenCover(isPresented: $showingSearchView) {
             SearchView()
@@ -235,6 +225,69 @@ struct HomeView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             isLoading = false
         }
+    }
+    
+    private func openViewerForAssetStory(_ asset: AssetStory) {
+        let converted: [Story] = assetStories.enumerated().map { (idx, s) in
+            let creatorId = matchUserId(for: s.username) ?? User.sampleUsers.first?.id ?? UUID().uuidString
+            let imageName: String = {
+                switch s.media {
+                case .image(let name): return name
+                case .video(let name): return name
+                }
+            }()
+            return Story(
+                creatorId: creatorId,
+                mediaURL: imageName,
+                mediaType: .image,
+                duration: 12.0,
+                caption: nil,
+                text: nil,
+                createdAt: Date(),
+                expiresAt: Calendar.current.date(byAdding: .hour, value: 24, to: Date()) ?? Date(),
+                viewCount: Int.random(in: 100...5_000),
+                isViewed: false,
+                thumbnail: nil,
+                isLive: false,
+                content: [
+                    StoryContent(
+                        url: imageName,            // Asset name used as URL; viewer resolves to Image(name)
+                        type: .image,
+                        duration: 12.0
+                    )
+                ],
+                backgroundColor: nil,
+                textColor: nil,
+                music: nil,
+                stickers: [],
+                polls: [],
+                links: []
+            )
+        }
+
+        viewerStories = converted
+
+        // Pick the initial story that matches the tapped asset's username (fallback first)
+        if let initial = converted.first(where: { story in
+            let display = story.creator?.displayName.lowercased()
+            let handle = story.creator?.username.lowercased()
+            return display == asset.username.lowercased() || handle == asset.username.lowercased()
+        }) ?? converted.first {
+            selectedStory = initial
+        } else {
+            selectedStory = Story.sampleStories.first!
+        }
+
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.9)) {
+            showingStoryViewer = true
+        }
+    }
+
+    private func matchUserId(for username: String) -> String? {
+        let u = username.lowercased()
+        return User.sampleUsers.first(where: {
+            $0.username.lowercased() == u || $0.displayName.lowercased() == u
+        })?.id
     }
 }
 
@@ -906,90 +959,54 @@ struct ProfessionalVideoCard: View {
                 onVideoTap()
             }) {
                 ZStack(alignment: .center) {
-                    AsyncImage(url: URL(string: video.thumbnailURL)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(16/9, contentMode: .fill)
-                        case .failure(_):
-                            Rectangle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            video.category.color.opacity(0.4),
-                                            video.category.color.opacity(0.1)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
+                    AsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(16/9, contentMode: .fill)
+                    } placeholder: {
+                        Rectangle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        video.category.color.opacity(0.4),
+                                        video.category.color.opacity(0.1)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
                                 )
-                                .overlay(
-                                    VStack(spacing: 12) {
-                                        Image(systemName: video.category.iconName)
-                                            .font(.system(size: 40))
-                                            .foregroundColor(video.category.color)
-                                        
-                                        Text(video.title)
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundColor(video.category.color)
-                                            .multilineTextAlignment(.center)
-                                            .lineLimit(2)
-                                            .padding(.horizontal, 20)
-                                        
-                                        Text(video.category.displayName)
-                                            .font(.system(size: 12))
-                                            .foregroundColor(video.category.color.opacity(0.8))
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 6)
-                                            .background(
-                                                Capsule()
-                                                    .fill(video.category.color.opacity(0.2))
-                                            )
-                                    }
-                                )
-                        case .empty:
-                            Rectangle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            video.category.color.opacity(0.4),
-                                            video.category.color.opacity(0.1)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .overlay(
-                                    VStack(spacing: 12) {
-                                        Image(systemName: video.category.iconName)
-                                            .font(.system(size: 40))
-                                            .foregroundColor(video.category.color)
-                                        
-                                        Text(video.title)
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundColor(video.category.color)
-                                            .multilineTextAlignment(.center)
-                                            .lineLimit(2)
-                                            .padding(.horizontal, 20)
-                                        
-                                        Text(video.category.displayName)
-                                            .font(.system(size: 12))
-                                            .foregroundColor(video.category.color.opacity(0.8))
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 6)
-                                            .background(
-                                                Capsule()
-                                                    .fill(video.category.color.opacity(0.2))
-                                            )
-                                    }
-                                )
-                        @unknown default:
-                            EmptyView()
-                        }
+                            )
+                            .overlay(
+                                VStack(spacing: 12) {
+                                    Image(systemName: video.category.iconName)
+                                        .font(.system(size: 40))
+                                        .foregroundColor(video.category.color)
+                                    
+                                    Text(video.title)
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(video.category.color)
+                                        .multilineTextAlignment(.center)
+                                        .lineLimit(2)
+                                        .padding(.horizontal, 20)
+                                    
+                                    Text(video.category.displayName)
+                                        .font(.system(size: 12))
+                                        .foregroundColor(video.category.color.opacity(0.8))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            Capsule()
+                                                .fill(video.category.color.opacity(0.2))
+                                        )
+                                }
+                            )
                     }
-                    .cornerRadius(AppTheme.CornerRadius.lg)
+                    .frame(width: 180, height: 101)
                     .clipped()
+                    .cornerRadius(AppTheme.CornerRadius.lg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg)
+                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+                    )
                     
                     Circle()
                         .fill(.white.opacity(0.95))

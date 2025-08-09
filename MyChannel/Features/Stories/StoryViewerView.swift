@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AVKit
+import UIKit
 
 struct StoryViewerView: View {
     let stories: [Story]
@@ -506,70 +507,41 @@ struct EnhancedStoryContentView: View {
     var body: some View {
         switch content.type {
         case .image:
-            AsyncImage(url: URL(string: content.url)) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
-                        .scaleEffect(isPaused ? 1.05 : 1.0)
-                        .animation(.easeInOut(duration: 0.3), value: isPaused)
-                        .onAppear {
-                            imageLoaded = true
-                        }
-                        
-                case .failure(_):
-                    // Better fallback for failed image loads
-                    ZStack {
-                        LinearGradient(
-                            colors: [AppTheme.Colors.primary.opacity(0.8), AppTheme.Colors.secondary.opacity(0.8)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                        
-                        VStack(spacing: 16) {
-                            Image(systemName: "photo.fill")
-                                .font(.system(size: 64))
-                                .foregroundColor(.white.opacity(0.9))
-                            
-                            Text("Story Image")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                            
-                            Text("Image temporarily unavailable")
-                                .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.8))
-                        }
+            let urlString = content.url
+            if let url = URL(string: urlString), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .clipped()
+                            .scaleEffect(isPaused ? 1.05 : 1.0)
+                            .animation(.easeInOut(duration: 0.3), value: isPaused)
+                            .onAppear { imageLoaded = true }
+                    case .failure(_):
+                        failurePlaceholder
+                    case .empty:
+                        loadingPlaceholder
+                    @unknown default:
+                        EmptyView()
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        
-                case .empty:
-                    // Better loading state
-                    ZStack {
-                        AppTheme.Colors.surface
-                        
-                        VStack(spacing: 16) {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
-                                .scaleEffect(1.5)
-                            
-                            Text("Loading story...")
-                                .font(.subheadline)
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        
-                @unknown default:
-                    EmptyView()
                 }
+            } else if UIImage(named: urlString) != nil {
+                Image(urlString)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .scaleEffect(isPaused ? 1.05 : 1.0)
+                    .animation(.easeInOut(duration: 0.3), value: isPaused)
+            } else {
+                failurePlaceholder
             }
             
         case .video:
-            // Better video placeholder
+            // Better video placeholder (kept as-is)
             ZStack {
                 LinearGradient(
                     colors: [AppTheme.Colors.primary.opacity(0.6), AppTheme.Colors.secondary.opacity(0.6)],
@@ -597,7 +569,6 @@ struct EnhancedStoryContentView: View {
             
         case .text:
             ZStack {
-                // Use a safe color fallback
                 let bgColor = content.backgroundColor ?? "#FF6B6B"
                 Color(hex: bgColor)
                 
@@ -615,11 +586,7 @@ struct EnhancedStoryContentView: View {
         case .music:
             ZStack {
                 LinearGradient(
-                    colors: [
-                        Color.purple.opacity(0.8), 
-                        Color.pink.opacity(0.8), 
-                        Color.orange.opacity(0.6)
-                    ],
+                    colors: [Color.purple.opacity(0.8), Color.pink.opacity(0.8), Color.orange.opacity(0.6)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -644,6 +611,44 @@ struct EnhancedStoryContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+    
+    private var failurePlaceholder: some View {
+        ZStack {
+            LinearGradient(
+                colors: [AppTheme.Colors.primary.opacity(0.8), AppTheme.Colors.secondary.opacity(0.8)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            VStack(spacing: 16) {
+                Image(systemName: "photo.fill")
+                    .font(.system(size: 64))
+                    .foregroundColor(.white.opacity(0.9))
+                Text("Story Image")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                Text("Image temporarily unavailable")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.8))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private var loadingPlaceholder: some View {
+        ZStack {
+            AppTheme.Colors.surface
+            VStack(spacing: 16) {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
+                    .scaleEffect(1.5)
+                Text("Loading story...")
+                    .font(.subheadline)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
