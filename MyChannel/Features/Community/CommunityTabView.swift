@@ -63,7 +63,7 @@ struct CommunityTabView: View {
                 await loadPosts()
             }
             .sheet(isPresented: $showingCreatePost) {
-                CreateCommunityPostView(creator: creator, communityService: communityService)
+                CommunityCreatePostWrapper(creator: creator, communityService: communityService)
             }
         }
         .task {
@@ -648,6 +648,19 @@ struct CommunityPostPlaceholder: View {
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
     }
+}
+
+// MOVE: Move wrapper to bottom so CommunityTabView stays first in jump bar
+struct CommunityCreatePostWrapper: View {
+    let creator: User
+    @ObservedObject var communityService: MockCommunityService
+    var body: some View {
+        CreateCommunityPostView(creator: creator, communityService: communityService)
+    }
+}
+
+#Preview("Community Create Post Wrapper") {
+    CommunityCreatePostWrapper(creator: User.sampleUsers[0], communityService: MockCommunityService())
 }
 
 #Preview {

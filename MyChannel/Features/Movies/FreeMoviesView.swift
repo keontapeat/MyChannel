@@ -7,13 +7,11 @@ struct FreeMoviesView: View {
     @State private var searchText: String = ""
     @State private var sortBy: SortOption = .popular
     @State private var showAllGenres: Bool = true
-    
     @State private var selectedMovie: FreeMovie? = nil
-
     @State private var remoteMovies: [FreeMovie] = []
     @State private var isFetching: Bool = false
     @State private var page: Int = 1
-
+    
     enum SortOption: String, CaseIterable {
         case popular = "popular"
         case newest = "newest"
@@ -29,7 +27,7 @@ struct FreeMoviesView: View {
             }
         }
     }
-
+    
     private var allMovies: [FreeMovie] {
         FreeMovie.sampleMovies + remoteMovies
     }
@@ -37,19 +35,16 @@ struct FreeMoviesView: View {
     private var filteredMovies: [FreeMovie] {
         var movies = allMovies
         
-        // Filter by genre
         if !showAllGenres {
             movies = movies.filter { $0.genre.contains(selectedGenre) }
         }
         
-        // Filter by source
         if let source = selectedSource {
             movies = movies.filter { $0.streamingSource == source }
         }
         
-        // Filter by search text
         if !searchText.isEmpty {
-            movies = movies.filter { 
+            movies = movies.filter {
                 $0.title.localizedCaseInsensitiveContains(searchText) ||
                 $0.overview.localizedCaseInsensitiveContains(searchText) ||
                 $0.director.localizedCaseInsensitiveContains(searchText) ||
@@ -57,7 +52,6 @@ struct FreeMoviesView: View {
             }
         }
         
-        // Sort movies
         switch sortBy {
         case .popular:
             return movies.sorted { $0.imdbRating > $1.imdbRating }
@@ -73,152 +67,17 @@ struct FreeMoviesView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .background(
-                                Circle()
-                                    .fill(AppTheme.Colors.surface)
-                                    .frame(width: 32, height: 32)
-                            )
-                    }
-                    
-                    Spacer()
-                    
-                    VStack(spacing: 2) {
-                        Text("🎬 Free Movies")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                        
-                        Text("\(filteredMovies.count) movies available")
-                            .font(.system(size: 14))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                    
-                    Spacer()
-                    
-                    Menu {
-                        ForEach(SortOption.allCases, id: \.self) { option in
-                            Button(action: { sortBy = option }) {
-                                Label(option.displayName, systemImage: sortBy == option ? "checkmark" : "")
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                            .font(.system(size: 24))
-                            .foregroundColor(AppTheme.Colors.primary)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 10)
-                
-                // Search Bar
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                    
-                    TextField("Search movies...", text: $searchText)
-                        .textFieldStyle(PlainTextFieldStyle())
-                        .font(.system(size: 16))
-                    
-                    if !searchText.isEmpty {
-                        Button(action: { searchText = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(AppTheme.Colors.surface)
-                )
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-                
-                // Filter Chips
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        // Genre Filter
-                        Menu {
-                            Button(action: { 
-                                showAllGenres = true 
-                            }) {
-                                Label("🎬 All Genres", systemImage: showAllGenres ? "checkmark" : "")
-                            }
-                            
-                            ForEach(FreeMovie.MovieGenre.allCases, id: \.self) { genre in
-                                Button(action: { 
-                                    selectedGenre = genre
-                                    showAllGenres = false
-                                }) {
-                                    Label(genre.displayName, systemImage: (!showAllGenres && selectedGenre == genre) ? "checkmark" : "")
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text(showAllGenres ? "🎬 All Genres" : selectedGenre.displayName)
-                                    .font(.system(size: 14, weight: .semibold))
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 12))
-                            }
-                            .foregroundColor(AppTheme.Colors.primary)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .fill(AppTheme.Colors.primary.opacity(0.1))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 20)
-                                            .stroke(AppTheme.Colors.primary.opacity(0.3), lineWidth: 1)
-                                    )
-                            )
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-                .padding(.top, 16)
-                
-                // Movies Grid
-                ScrollView {
-                    LazyVGrid(columns: [
-                        GridItem(.flexible(), spacing: 16),
-                        GridItem(.flexible(), spacing: 16),
-                        GridItem(.flexible(), spacing: 16)
-                    ], spacing: 20) {
-                        ForEach(filteredMovies) { movie in
-                            CompactMovieCard(movie: movie) {
-                                selectedMovie = movie
-                                let impact = UIImpactFeedbackGenerator(style: .medium)
-                                impact.impactOccurred()
-                            }
-                            .onAppear {
-                                if movie.id == filteredMovies.last?.id {
-                                    fetchNextPageIfNeeded()
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-
-                    if isFetching {
-                        ProgressView("Loading more...")
-                            .padding()
-                    }
-                }
+                header
+                searchBar
+                filters
+                grid
             }
+            .background(AppTheme.Colors.background.ignoresSafeArea())
+            .navigationBarHidden(true)
         }
-        .background(AppTheme.Colors.background)
         .fullScreenCover(item: $selectedMovie) { mv in
-            MovieDetailView(movie: mv)
-                .onDisappear {
-                    selectedMovie = nil
-                }
+            FreeMovieDetailWrapper(movie: mv)
+                .onDisappear { selectedMovie = nil }
         }
         .task {
             if remoteMovies.isEmpty {
@@ -226,16 +85,247 @@ struct FreeMoviesView: View {
             }
         }
     }
-
+    
+    private var header: some View {
+        HStack {
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .frame(width: 32, height: 32)
+                    .background(AppTheme.Colors.surface, in: Circle())
+            }
+            .buttonStyle(PressableScaleStyle())
+            
+            Spacer()
+            
+            VStack(spacing: 2) {
+                HStack(spacing: 8) {
+                    Image(systemName: "film.stack.fill")
+                        .foregroundColor(AppTheme.Colors.primary)
+                    Text("Free Movies")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                }
+                Text("\(filteredMovies.count) movies available")
+                    .font(.system(size: 13))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+            
+            Spacer()
+            
+            Menu {
+                ForEach(SortOption.allCases, id: \.self) { option in
+                    Button {
+                        withAnimation(AppTheme.AnimationPresets.easeInOut) { sortBy = option }
+                    } label: {
+                        Label(option.displayName, systemImage: sortBy == option ? "checkmark" : "")
+                    }
+                }
+            } label: {
+                Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(AppTheme.Colors.primary)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(PressableScaleStyle())
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+    }
+    
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(AppTheme.Colors.textSecondary)
+            TextField("Search movies, directors, cast...", text: $searchText)
+                .textInputAutocapitalization(.words)
+                .disableAutocorrection(true)
+                .font(.system(size: 16))
+            if !searchText.isEmpty {
+                Button {
+                    withAnimation(AppTheme.AnimationPresets.quick) { searchText = "" }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                .buttonStyle(PressableScaleStyle())
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(AppTheme.Colors.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(AppTheme.Colors.divider, lineWidth: 1)
+        )
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+    }
+    
+    private var filters: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                Menu {
+                    Button {
+                        withAnimation(AppTheme.AnimationPresets.easeInOut) { showAllGenres = true }
+                    } label: {
+                        Label("🎬 All Genres", systemImage: showAllGenres ? "checkmark" : "")
+                    }
+                    ForEach(FreeMovie.MovieGenre.allCases, id: \.self) { genre in
+                        Button {
+                            withAnimation(AppTheme.AnimationPresets.easeInOut) {
+                                selectedGenre = genre
+                                showAllGenres = false
+                            }
+                        } label: {
+                            Label(genre.displayName, systemImage: (!showAllGenres && selectedGenre == genre) ? "checkmark" : "")
+                        }
+                    }
+                } label: {
+                    chipLabel(text: showAllGenres ? "🎬 All Genres" : selectedGenre.displayName)
+                }
+                .buttonStyle(PressableScaleStyle())
+                
+                Menu {
+                    Button {
+                        withAnimation(AppTheme.AnimationPresets.easeInOut) { selectedSource = nil }
+                    } label: {
+                        Label("All Sources", systemImage: selectedSource == nil ? "checkmark" : "")
+                    }
+                    ForEach(FreeMovie.StreamingSource.allCases, id: \.self) { src in
+                        Button {
+                            withAnimation(AppTheme.AnimationPresets.easeInOut) { selectedSource = src }
+                        } label: {
+                            Label(src.displayName, systemImage: selectedSource == src ? "checkmark" : "")
+                        }
+                    }
+                } label: {
+                    chipLabel(text: selectedSource?.displayName ?? "All Sources")
+                }
+                .buttonStyle(PressableScaleStyle())
+            }
+            .padding(.horizontal, 20)
+        }
+        .padding(.top, 12)
+    }
+    
+    private func chipLabel(text: String) -> some View {
+        HStack(spacing: 6) {
+            Text(text)
+                .font(.system(size: 14, weight: .semibold))
+            Image(systemName: "chevron.down")
+                .font(.system(size: 12, weight: .semibold))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .foregroundColor(AppTheme.Colors.primary)
+        .background(AppTheme.Colors.primary.opacity(0.1), in: Capsule())
+        .overlay(Capsule().stroke(AppTheme.Colors.primary.opacity(0.25), lineWidth: 1))
+    }
+    
+    private var grid: some View {
+        GeometryReader { proxy in
+            let containerWidth = proxy.size.width - 40
+            let spacing: CGFloat = 16
+            let config = columnsFor(width: containerWidth, spacing: spacing)
+            let itemWidth = config.itemWidth
+            let posterHeight = itemWidth * 1.5
+            
+            ScrollView {
+                LazyVStack(spacing: 18) {
+                    ForEach(chunked(filteredMovies, size: config.count), id: \.first?.id) { rowMovies in
+                        HStack(alignment: .top, spacing: spacing) {
+                            ForEach(rowMovies) { movie in
+                                Button {
+                                    selectedMovie = movie
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                } label: {
+                                    MovieThumbnailView(movie: movie, itemWidth: itemWidth, posterHeight: posterHeight)
+                                }
+                                .buttonStyle(PressableScaleStyle(scale: 0.97))
+                                .contextMenu {
+                                    Button("Open Details", systemImage: "info.circle") { selectedMovie = movie }
+                                    ShareLink(item: URL(string: movie.streamURL) ?? URL(fileURLWithPath: "/"), subject: Text(movie.title)) {
+                                        Label("Share", systemImage: "square.and.arrow.up")
+                                    }
+                                }
+                                .onAppear {
+                                    if movie.id == filteredMovies.last?.id {
+                                        fetchNextPageIfNeeded()
+                                    }
+                                }
+                            }
+                            
+                            // Fill remaining space if last row has fewer items
+                            if rowMovies.count < config.count {
+                                ForEach(0..<(config.count - rowMovies.count), id: \.self) { _ in
+                                    Spacer()
+                                        .frame(width: itemWidth)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                
+                if isFetching {
+                    ProgressView("Loading more…")
+                        .padding(.vertical, 20)
+                }
+            }
+            .refreshable { await refresh() }
+        }
+    }
+    
+    private func columnsFor(width: CGFloat, spacing: CGFloat) -> (count: Int, itemWidth: CGFloat) {
+        let count: Int
+        switch width {
+        case 0..<360: count = 2
+        case 360..<520: count = 3
+        case 520..<740: count = 4
+        case 740..<980: count = 5
+        default: count = 6
+        }
+        let totalSpacing = CGFloat(max(0, count - 1)) * spacing
+        let itemWidth = (width - totalSpacing) / CGFloat(count)
+        return (count, floor(itemWidth))
+    }
+    
+    private func chunked<T>(_ array: [T], size: Int) -> [[T]] {
+        return stride(from: 0, to: array.count, by: size).map {
+            Array(array[$0..<min($0 + size, array.count)])
+        }
+    }
+    
     private func initialFetch() async {
         isFetching = true
         defer { isFetching = false }
         if let page1 = try? await ArchiveOrgService.shared.fetchPopular(page: 1, rows: 60) {
-            remoteMovies = page1
-            page = 1
+            withAnimation(AppTheme.AnimationPresets.easeInOut) {
+                remoteMovies = page1
+                page = 1
+            }
         }
     }
-
+    
+    private func refresh() async {
+        isFetching = true
+        defer { isFetching = false }
+        if let page1 = try? await ArchiveOrgService.shared.fetchPopular(page: 1, rows: 60) {
+            await MainActor.run {
+                withAnimation(AppTheme.AnimationPresets.easeInOut) {
+                    remoteMovies = page1
+                    page = 1
+                }
+            }
+        }
+    }
+    
     private func fetchNextPageIfNeeded() {
         guard !isFetching else { return }
         isFetching = true
@@ -243,112 +333,29 @@ struct FreeMoviesView: View {
             defer { isFetching = false }
             let next = page + 1
             if let results = try? await ArchiveOrgService.shared.fetchPopular(page: next, rows: 60) {
-                page = next
-                remoteMovies.append(contentsOf: results)
+                await MainActor.run {
+                    withAnimation(AppTheme.AnimationPresets.gentle) {
+                        page = next
+                        remoteMovies.append(contentsOf: results)
+                    }
+                }
             }
         }
     }
 }
 
-// MARK: - Compact Movie Card
-struct CompactMovieCard: View {
+struct FreeMovieDetailWrapper: View {
     let movie: FreeMovie
-    let action: () -> Void
-    
-    @State private var isPressed: Bool = false
-    
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                // Movie Poster (no FREE badge)
-                ZStack(alignment: .topTrailing) {
-                    AsyncImage(url: URL(string: movie.posterURL)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(2/3, contentMode: .fill)
-                        case .failure(_):
-                            Rectangle()
-                                .fill(AppTheme.Colors.surface)
-                                .aspectRatio(2/3, contentMode: .fill)
-                                .overlay(
-                                    Image(systemName: "film")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(AppTheme.Colors.textTertiary)
-                                )
-                        case .empty:
-                            Rectangle()
-                                .fill(AppTheme.Colors.surface)
-                                .aspectRatio(2/3, contentMode: .fill)
-                                .overlay(
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
-                                        .scaleEffect(0.8)
-                                )
-                        @unknown default:
-                            EmptyView()
-                        }
-                    }
-                    .cornerRadius(12)
-                    .clipped()
-                    
-                    // MyChannel badge instead of FREE
-                    Text("MC")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(AppTheme.Colors.primary)
-                        )
-                        .padding(6)
-                }
-                
-                // Movie Info (no streaming source)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(movie.title)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                    
-                    HStack(spacing: 4) {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 8))
-                            .foregroundColor(.yellow)
-                        
-                        Text("\(movie.imdbRating, specifier: "%.1f")")
-                            .font(.system(size: 10))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        
-                        Spacer()
-                        
-                        Text("\(movie.year)")
-                            .font(.system(size: 10))
-                            .foregroundColor(AppTheme.Colors.textTertiary)
-                    }
-                    
-                    // Just show HD quality, no streaming source
-                    Text("HD Quality")
-                        .font(.system(size: 10))
-                        .foregroundColor(AppTheme.Colors.primary)
-                        .lineLimit(1)
-                }
-            }
-        }
-        .buttonStyle(PlainButtonStyle())
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
-        .onPressGesture(
-            onPress: { isPressed = true },
-            onRelease: { isPressed = false }
-        )
+        MovieDetailView(movie: movie)
     }
 }
 
-#Preview {
+#Preview("FreeMovie Detail Wrapper") {
+    FreeMovieDetailWrapper(movie: FreeMovie.sampleMovies.first!)
+}
+
+#Preview("Free Movies Grid") {
     FreeMoviesView()
         .environmentObject(AppState())
 }

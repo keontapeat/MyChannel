@@ -531,25 +531,21 @@
         .founder-name {
             position: relative;
             display: inline-block;
-            font-weight: 800;
+            font-weight: 700;
             font-size: 18px;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.4px;
             background: linear-gradient(90deg, #00FFE1 0%, #FF4444 50%, #00FFE1 100%);
             background-size: 200% 200%;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            filter: drop-shadow(0 0 6px rgba(0, 255, 225, 0.35));
-            animation: founderGradient 3s linear infinite,
-                       founderGlow 1.6s ease-in-out infinite alternate,
-                       founderPunch 8s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
-            will-change: transform, filter, background-position, text-shadow;
+            animation: founderGradient 5s ease-in-out infinite,
+                       founderBreathe 4.8s ease-in-out infinite;
+            will-change: transform, background-position;
         }
 
         .founder-credit:hover .founder-name {
-            animation-duration: 2.2s, 1s, 6s;
-            filter: drop-shadow(0 0 12px rgba(0, 255, 225, 0.65));
-            transform: translateZ(0);
+            animation-duration: 3.2s, 3.2s;
         }
 
         @keyframes founderGradient {
@@ -558,17 +554,14 @@
             100% { background-position: 0% 50%; }
         }
 
-        @keyframes founderGlow {
-            0% {
-                text-shadow:
-                    0 0 6px rgba(0, 255, 225, 0.40),
-                    0 0 12px rgba(0, 255, 225, 0.20);
+        @keyframes founderBreathe {
+            0%, 100% {
+                transform: translateY(0) scale(1);
+                letter-spacing: 0.4px;
             }
-            100% {
-                text-shadow:
-                    0 0 10px rgba(255, 68, 68, 0.70),
-                    0 0 22px rgba(255, 68, 68, 0.35),
-                    0 0 36px rgba(0, 255, 225, 0.35);
+            50% {
+                transform: translateY(-1px) scale(1.01);
+                letter-spacing: 0.5px;
             }
         }
 
@@ -680,12 +673,16 @@
             border: 1px solid rgba(255, 255, 255, 0.05);
             transition: all 0.3s ease;
             cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 8px 22px rgba(0,0,0,0.25);
         }
 
         .stat:hover {
-            transform: translateY(-8px);
-            background: rgba(255, 255, 255, 0.05);
-            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-10px) scale(1.04);
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.22);
+            box-shadow: 0 18px 46px rgba(0,0,0,0.4), 0 0 46px rgba(255, 68, 68, 0.18);
         }
 
         .stat-number {
@@ -706,6 +703,61 @@
             font-size: 13px;
             text-transform: uppercase;
             letter-spacing: 1px;
+        }
+
+        /* Light TV static overlay for top stats to match lower cards vibe */
+        .tv-static-lite {
+            position: absolute; inset: 0;
+            background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+            background-size: 100% 2px, 2px 100%;
+            opacity: 0.22;
+            pointer-events: none;
+            animation: staticLite 0.08s infinite alternate;
+        }
+        @keyframes staticLite { 0% { opacity: 0.28; } 100% { opacity: 0.18; } }
+
+        /* Gold-tinted static + stronger glow to match bottom 90% card */
+        .premium-stat .tv-static-lite {
+            background-image: linear-gradient(rgba(255,215,64,0.09) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(255,215,64,0.08) 1px, transparent 1px);
+            opacity: 0.3;
+            animation: goldStatic 0.07s infinite alternate;
+        }
+        @keyframes goldStatic { 0% { opacity: 0.35; filter: hue-rotate(0deg); } 100% { opacity: 0.28; filter: hue-rotate(6deg); } }
+
+        /* Premium styling for the first 90% stat */
+        .premium-stat {
+            border-color: rgba(255, 68, 68, 0.5);
+            box-shadow: 0 0 60px rgba(255, 68, 68, 0.25);
+            animation: cardPulse 3s infinite;
+        }
+        .premium-stat .stat-number {
+            background: linear-gradient(135deg, #FFD54F 0%, #FBC02D 50%, #FFE082 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 0 12px rgba(255, 215, 64, 0.45));
+        }
+
+        /* Accent pops for the other two stats */
+        .stats .stat:nth-child(2) .stat-number {
+            background: linear-gradient(135deg, #00FFE1 0%, #00C9B8 100%);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 10px rgba(0, 255, 225, 0.35));
+        }
+        .stats .stat:nth-child(2):hover {
+            box-shadow: 0 18px 46px rgba(0,0,0,0.4), 0 0 46px rgba(0, 255, 225, 0.25);
+            border-color: rgba(0,255,225,0.35);
+        }
+        .stats .stat:nth-child(3) .stat-number {
+            background: linear-gradient(135deg, #A5D6A7 0%, #66BB6A 100%);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 10px rgba(102, 187, 106, 0.35));
+        }
+        .stats .stat:nth-child(3):hover {
+            box-shadow: 0 18px 46px rgba(0,0,0,0.4), 0 0 46px rgba(102, 187, 106, 0.25);
+            border-color: rgba(102,187,106,0.35);
         }
 
         @keyframes fadeInUp {
@@ -750,78 +802,205 @@
             transform: scale(1.05);
         }
 
-        /* ROADMAP badge custom animation */
+        /* Trusted Signals custom badge */
+        .trusted-badge { position: relative; padding: 10px 26px; overflow: visible; }
+        .trusted-badge .trust-pulse { position: absolute; inset: -6px; border-radius: 28px; box-shadow: 0 0 36px rgba(0,255,225,0.35), inset 0 0 28px rgba(0,255,225,0.22); animation: pulseRing 2.4s ease-in-out infinite; pointer-events: none; }
+        .trusted-badge .trust-sweep { position: absolute; inset: 0; overflow: hidden; border-radius: 28px; pointer-events: none; }
+        .trusted-badge .trust-sweep::after { content: ""; position: absolute; left: -40%; top: 0; height: 100%; width: 40%; background: linear-gradient(110deg, transparent, rgba(255,255,255,0.35), transparent); transform: skewX(-20deg); animation: sweepAcross 3s linear infinite; }
+
+        /* Partners custom badge */
+        .partners-badge { position: relative; padding: 10px 26px; overflow: visible; }
+        .partners-badge::after { content: ""; position: absolute; inset: -6px; border-radius: 28px; box-shadow: 0 0 32px rgba(255,255,255,0.22), inset 0 0 22px rgba(255,255,255,0.12); pointer-events: none; }
+        .partners-badge:hover::after { box-shadow: 0 0 44px rgba(255,255,255,0.3), inset 0 0 28px rgba(255,255,255,0.16); }
+
+        /* Entry bounce on scroll-in */
+        .trusted-badge, .partners-badge { opacity: 1; transform: translateY(0) scale(1); }
+        .section-header:not(.animate-in) .trusted-badge, .section-header:not(.animate-in) .partners-badge { opacity: 0; transform: translateY(8px) scale(0.98); }
+        .section-header.animate-in .trusted-badge, .section-header.animate-in .partners-badge { animation: badgeBounceIn 650ms cubic-bezier(0.22, 1.1, 0.24, 1) forwards; }
+        @keyframes badgeBounceIn {
+            0% { opacity: 0; transform: translateY(12px) scale(0.96); }
+            60% { opacity: 1; transform: translateY(-4px) scale(1.03); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* Flicks custom badge */
+        .flicks-badge { position: relative; padding: 10px 26px; overflow: visible; }
+        .flicks-badge .badge-loop {
+            position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%);
+            width: 150px; height: 32px; border-radius: 999px; pointer-events: none;
+            border: 2px dashed rgba(255,255,255,0.25);
+            animation: dashMove 2.2s linear infinite;
+        }
+        @keyframes dashMove { to { transform: translateX(-50%) rotate(360deg); } }
+        .flicks-badge .badge-spark { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #FF4444; box-shadow: 0 0 12px rgba(255,68,68,0.8); animation: sparkPop 1.4s infinite; }
+        .flicks-badge .badge-spark.s1 { right: -8px; top: -6px; animation-delay: 0.2s; }
+        .flicks-badge .badge-spark.s2 { left: -10px; bottom: -8px; animation-delay: 0.6s; }
+        @keyframes sparkPop { 0%,100% { transform: scale(0.6); opacity: 0.6; } 50% { transform: scale(1.2); opacity: 1; } }
+
+        /* THE 90% DIFFERENCE custom badge */
+        .ninety-badge {
+            position: relative;
+            padding: 10px 26px;
+            border-radius: 28px;
+            border-color: rgba(255, 68, 68, 0.55);
+            color: #fff;
+            background: radial-gradient(circle at 20% 50%, rgba(255,68,68,0.18), transparent 60%),
+                        radial-gradient(circle at 80% 50%, rgba(0,255,225,0.18), transparent 60%),
+                        rgba(255,255,255,0.06);
+            overflow: visible;
+        }
+        .ninety-badge .ninety-orb {
+            position: absolute;
+            left: -18px; top: 50%; transform: translateY(-50%);
+            width: 24px; height: 24px; border-radius: 50%;
+            background: radial-gradient(circle, #FF6B6B 0%, rgba(255,68,68,0.6) 60%, rgba(255,68,68,0.0) 70%);
+            box-shadow: 0 0 18px rgba(255,68,68,0.8), 0 0 32px rgba(255,68,68,0.5);
+            animation: orbPulse 2.8s ease-in-out infinite;
+        }
+        @keyframes orbPulse { 0%,100% { transform: translateY(-50%) scale(1); } 50% { transform: translateY(-50%) scale(1.12); } }
+        .ninety-badge .ninety-shine {
+            position: absolute; inset: 0; border-radius: 28px; overflow: hidden; pointer-events: none;
+        }
+        .ninety-badge .ninety-shine::after {
+            content: ""; position: absolute; top: 0; left: -40%; height: 100%; width: 40%;
+            background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.35) 50%, transparent 100%);
+            transform: skewX(-18deg); animation: ninetySweep 2.4s linear infinite;
+        }
+        @keyframes ninetySweep { 0% { left: -40%; } 100% { left: 120%; } }
+
+        /* Game Changer custom badge */
+        .game-badge { position: relative; padding: 10px 26px; overflow: visible; border-color: rgba(255, 68, 68, 0.6); }
+        .game-badge .badge-flag {
+            position: absolute; left: -16px; top: 50%; transform: translateY(-50%) skewX(-8deg);
+            width: 18px; height: 28px; background: linear-gradient(180deg, #FF4444, #FF8A65);
+            box-shadow: 0 0 18px rgba(255,68,68,0.7);
+        }
+        .game-badge .badge-glow { position: absolute; inset: -6px; border-radius: 28px; box-shadow: 0 0 28px rgba(255,68,68,0.35) inset; pointer-events: none; }
+
+        /* LEGENDARY FEATURES badge custom bling */
+        .features#features .section-badge {
+            position: relative;
+            overflow: visible;
+        }
+
+        /* Crown hovering above */
+        .features#features .section-badge .badge-crown {
+            position: absolute;
+            left: 50%;
+            top: -26px;
+            transform: translateX(-50%);
+            width: 36px;
+            height: 24px;
+            filter: drop-shadow(0 4px 10px rgba(255, 215, 0, 0.35));
+            animation: crownFloat 2.4s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes crownFloat {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(-4px); }
+        }
+
+        /* Shimmer sweep across text */
+        .features#features .section-badge .badge-shimmer {
+            position: absolute;
+            inset: 0;
+            border-radius: 50px;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .features#features .section-badge .badge-shimmer::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -40%;
+            height: 100%;
+            width: 40%;
+            background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.1) 40%, rgba(255,255,255,0.45) 50%, rgba(255,255,255,0.1) 60%, transparent 100%);
+            transform: skewX(-20deg);
+            animation: shimmerSweep 3.2s ease-in-out infinite;
+        }
+
+        .features#features .section-badge:hover .badge-shimmer::after {
+            animation-duration: 1.8s;
+        }
+
+        @keyframes shimmerSweep {
+            0% { left: -50%; }
+            100% { left: 120%; }
+        }
+
+        /* Twinkling sparkles */
+        .features#features .section-badge .sparkle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: radial-gradient(circle, #FFFFFF 0%, rgba(255,255,255,0.2) 60%, transparent 70%);
+            border-radius: 50%;
+            animation: twinkle 1.8s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        .features#features .section-badge .sparkle.s1 { left: 8%; top: -6px; animation-delay: 0.0s; }
+        .features#features .section-badge .sparkle.s2 { right: 10%; top: -10px; animation-delay: 0.3s; }
+        .features#features .section-badge .sparkle.s3 { left: 18%; bottom: -8px; animation-delay: 0.6s; }
+        .features#features .section-badge .sparkle.s4 { right: 20%; bottom: -10px; animation-delay: 0.9s; }
+
+        @keyframes twinkle {
+            0%, 100% { transform: scale(0.6); opacity: 0.5; }
+            50% { transform: scale(1.2); opacity: 1; }
+        }
+        /* ROADMAP badge custom animation: map loop + car */
         .features#roadmap .section-badge {
             position: relative;
             overflow: visible;
         }
 
-        /* Dashed arc path under the badge */
-        .features#roadmap .section-badge::after {
-            content: "";
+        .features#roadmap .section-badge .badge-route {
             position: absolute;
             left: 50%;
-            top: calc(100% + 8px);
-            width: 160px;
-            height: 80px;
+            top: calc(100% + 6px);
             transform: translateX(-50%);
-            border-bottom: 2px dashed rgba(255, 255, 255, 0.28);
-            border-left: 2px dashed rgba(255, 255, 255, 0.18);
-            border-right: 2px dashed rgba(255, 255, 255, 0.18);
-            border-top: 0;
-            border-radius: 0 0 160px 160px / 0 0 80px 80px;
+            width: 220px;
+            height: 120px;
             pointer-events: none;
         }
 
-        /* Rocket following the arc */
-        .features#roadmap .section-badge .badge-rocket {
+        /* Moving dashed route effect */
+        .features#roadmap .section-badge .badge-route .route-path {
+            stroke: rgba(255, 255, 255, 0.35);
+            stroke-width: 3;
+            fill: none;
+            stroke-linecap: round;
+            stroke-dasharray: 8 8;
+            animation: routeDash 2s linear infinite;
+        }
+
+        @keyframes routeDash {
+            to { stroke-dashoffset: -32; }
+        }
+
+        /* CSS motion-path fallback car (in case SMIL is unsupported) */
+        .features#roadmap .section-badge .badge-route .car-css {
             position: absolute;
-            left: calc(50% - 80px);
-            top: calc(100% + 0px);
-            width: 26px;
-            height: 26px;
-            transform-origin: center;
-            animation: rocketPath 4s ease-in-out infinite;
-            filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
-            pointer-events: none;
+            width: 24px;
+            height: 14px;
+            top: 0;
+            left: 0;
+            offset-path: path('M10,60 C40,10 180,10 210,60 C180,110 40,110 10,60 Z');
+            offset-rotate: auto;
+            animation: carDistance 6s linear infinite;
+            transform: translate(-12px, -7px); /* center on path point */
         }
 
-        .features#roadmap .section-badge:hover .badge-rocket {
-            animation-duration: 2.6s;
+        .features#roadmap .section-badge:hover .badge-route .car-css {
+            animation-duration: 3.6s;
         }
 
-        .features#roadmap .section-badge .badge-rocket::after {
-            content: "";
-            position: absolute;
-            right: 50%;
-            top: 60%;
-            width: 14px;
-            height: 6px;
-            transform: translate(0, -50%) rotate(10deg);
-            background: radial-gradient(closest-side, rgba(255, 68, 68, 0.8), rgba(255, 68, 68, 0) 70%);
-            filter: blur(2px);
-            opacity: 0.7;
-            animation: rocketFlare 0.5s ease-in-out infinite alternate;
-        }
-
-        .features#roadmap .section-badge .rocket-icon {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
-
-        @keyframes rocketFlare {
-            0% { opacity: 0.35; transform: translate(0, -50%) rotate(5deg) scaleX(0.8); }
-            100% { opacity: 0.9; transform: translate(2px, -50%) rotate(15deg) scaleX(1.2); }
-        }
-
-        @keyframes rocketPath {
-            0% { transform: translate(0px, 72px) rotate(-20deg); }
-            20% { transform: translate(32px, 48px) rotate(-5deg); }
-            40% { transform: translate(64px, 26px) rotate(5deg); }
-            60% { transform: translate(96px, 18px) rotate(12deg); }
-            80% { transform: translate(128px, 40px) rotate(5deg); }
-            100% { transform: translate(160px, 72px) rotate(20deg); }
+        @keyframes carDistance {
+            from { offset-distance: 0%; }
+            to { offset-distance: 100%; }
         }
         /* Hanging lock for the Security & Trust badge */
         .section-badge .badge-lock {
@@ -876,6 +1055,17 @@
                 filter: drop-shadow(0 0 10px rgba(255, 0, 0, 0.85));
             }
         }
+
+        /* Creator Protection custom badge */
+        .protect-badge { position: relative; padding: 10px 26px; overflow: visible; }
+        .protect-badge .shield-aura { position: absolute; inset: -8px; border-radius: 28px; box-shadow: 0 0 22px rgba(0,255,225,0.35), inset 0 0 22px rgba(0,255,225,0.15); pointer-events: none; }
+        .protect-badge .lock-hang { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); width: 22px; height: 28px; animation: lockSwing 2.4s ease-in-out infinite; }
+
+        /* For Creators custom badge */
+        .creators-badge { position: relative; padding: 10px 26px; overflow: visible; }
+        .creators-badge .spark-left, .creators-badge .spark-right { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #00FFE1; box-shadow: 0 0 12px rgba(0,255,225,0.9); animation: sparkPop 1.6s infinite; }
+        .creators-badge .spark-left { left: -10px; top: 50%; transform: translateY(-50%); }
+        .creators-badge .spark-right { right: -10px; top: 50%; transform: translateY(-50%); animation-delay: 0.5s; }
 
         h2 {
             font-size: clamp(1.8rem, 4vw, 3rem);
@@ -972,17 +1162,103 @@
         }
 
         .feature-icon {
-            width: 55px;
-            height: 55px;
-            background: var(--gradient);
-            border-radius: 15px;
+            width: 72px;
+            height: 72px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 18px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 26px;
             margin-bottom: 20px;
-            box-shadow: 0 8px 25px rgba(255, 68, 68, 0.3);
-            transition: all 0.3s ease;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+            transition: transform 0.35s ease, box-shadow 0.35s ease, background 0.35s ease;
+            perspective: 700px;
+            position: relative;
+            overflow: visible;
+        }
+
+        .feature-icon::after {
+            content: "";
+            position: absolute;
+            inset: -6px;
+            border-radius: 22px;
+            background: radial-gradient(closest-side, rgba(255,68,68,0.18), transparent 70%);
+            opacity: 0.0;
+            transition: opacity 0.35s ease;
+            z-index: -1;
+        }
+
+        .feature-card:hover .feature-icon {
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 18px 38px rgba(0, 0, 0, 0.45), 0 0 22px rgba(255, 68, 68, 0.25);
+        }
+
+        .feature-card:hover .feature-icon::after {
+            opacity: 1;
+        }
+
+        .feature-icon .icon-3d {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform-style: preserve-3d;
+            transition: transform 0.35s ease, filter 0.35s ease;
+            filter: drop-shadow(0 6px 12px rgba(0,0,0,0.35));
+        }
+
+        .feature-card:hover .feature-icon .icon-3d {
+            transform: translateZ(16px) scale(1.06) rotateX(6deg) rotateY(-6deg);
+            filter: drop-shadow(0 14px 24px rgba(0,0,0,0.5)) drop-shadow(0 0 12px rgba(255,68,68,0.35));
+        }
+
+        .icon-svg { width: 56px; height: 56px; display: block; }
+
+        /* Animated 90% text for the 90% Revenue Share icon */
+        .feature-icon .icon-90-text {
+            display: inline-block;
+            font-weight: 900;
+            font-size: 24px;
+            padding: 0 6px;
+            letter-spacing: 0.4px;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+            background: linear-gradient(90deg, #00FFE1, #FF4444, #FFD700, #00FFE1);
+            background-size: 300% 300%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: icon90Sweep 3.2s linear infinite, icon90Hue 10s linear infinite;
+            will-change: filter, background-position;
+        }
+
+        @keyframes icon90Sweep {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 100% 50%; }
+        }
+
+        @keyframes icon90Hue {
+            0% { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(360deg); }
+        }
+
+        /* Micro shimmer for gold bars */
+        .feature-icon .gold-shimmer {
+            opacity: 0;
+            transform-box: fill-box;
+            transform-origin: center;
+        }
+        .feature-card:hover .feature-icon .gold-shimmer {
+            animation: goldShine 1.6s linear infinite;
+        }
+        @keyframes goldShine {
+            0% { transform: translateX(-90px); opacity: 0; }
+            10% { opacity: 0.6; }
+            90% { opacity: 0.6; }
+            100% { transform: translateX(90px); opacity: 0; }
         }
 
         .feature-title {
@@ -1012,13 +1288,59 @@
         .payout-container { max-width: 1200px; margin: 0 auto; }
         .payout-header { text-align: center; margin-bottom: 50px; }
         .payout-badge {
-            display: inline-block;
-            padding: 8px 18px;
-            border-radius: 24px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 22px;
+            border-radius: 28px;
             color: var(--accent);
             border: 1px solid rgba(0,255,225,0.5);
             background: rgba(0,255,225,0.08);
             backdrop-filter: blur(10px);
+            position: relative;
+            overflow: visible;
+        }
+
+        .payout-badge .badge-ring {
+            position: absolute;
+            inset: -6px;
+            border-radius: 32px;
+            border: 2px solid rgba(0,255,225,0.25);
+            box-shadow: 0 0 30px rgba(0,255,225,0.25), inset 0 0 20px rgba(0,255,225,0.15);
+            pointer-events: none;
+            animation: pulseRing 2.2s ease-in-out infinite;
+        }
+
+        @keyframes pulseRing {
+            0%, 100% { opacity: 0.7; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.03); }
+        }
+
+        .payout-badge .bolt {
+            width: 22px; height: 22px;
+            display: inline-block;
+            filter: drop-shadow(0 0 10px rgba(0,255,225,0.6));
+            animation: boltFlicker 1.4s ease-in-out infinite;
+        }
+
+        @keyframes boltFlicker {
+            0%, 100% { opacity: 0.9; }
+            50% { opacity: 1; filter: drop-shadow(0 0 16px rgba(0,255,225,0.9)); }
+        }
+
+        .payout-badge .sweep {
+            position: absolute;
+            left: -40%; top: 0; bottom: 0;
+            width: 38%; border-radius: 28px;
+            background: linear-gradient(115deg, transparent, rgba(255,255,255,0.35), transparent);
+            transform: skewX(-20deg);
+            animation: sweepAcross 2.6s linear infinite;
+            pointer-events: none;
+        }
+
+        @keyframes sweepAcross {
+            0% { left: -40%; }
+            100% { left: 120%; }
         }
         .payout-title { margin-top: 16px; font-size: clamp(1.9rem, 4.6vw, 3.2rem); font-weight: 900; }
         .payout-subtitle { color: rgba(255,255,255,0.7); max-width: 760px; margin: 12px auto 0; }
@@ -1311,20 +1633,41 @@
         }
 
         .calculate-btn {
+            --btn-grad: linear-gradient(135deg, #FF5F6D 0%, #FFC371 100%);
             margin-top: 30px;
-            background: var(--gradient);
-            color: var(--light);
-            padding: 18px 40px;
-            border-radius: 50px;
+            background: var(--btn-grad);
+            color: #0A0A0A;
+            padding: 18px 44px;
+            border-radius: 16px;
             text-decoration: none;
-            font-weight: 700;
+            font-weight: 900;
             font-size: 18px;
-            border: none;
+            border: 0;
             cursor: pointer;
-            transition: all 0.3s ease;
-            animation: btnPulse 3s infinite;
-            box-shadow: 0 8px 30px rgba(255, 68, 68, 0.3);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+            box-shadow: 0 14px 38px rgba(255, 95, 109, 0.35), inset 0 0 0 1px rgba(255,255,255,0.2);
+            display: inline-flex; align-items: center; gap: 12px;
+            position: relative; overflow: hidden;
         }
+
+        .calculate-btn::before {
+            content: '';
+            position: absolute; inset: 0; border-radius: 16px;
+            background: radial-gradient(80% 80% at 20% 20%, rgba(255,255,255,0.3), transparent 60%);
+            opacity: 0.0; transition: opacity 0.2s ease;
+        }
+
+        .calculate-btn:hover { transform: translateY(-2px); box-shadow: 0 18px 46px rgba(255, 95, 109, 0.45); }
+        .calculate-btn:hover::before { opacity: 1; }
+
+        .calculate-btn .badge-pro {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 4px 8px; border-radius: 999px;
+            font-size: 12px; font-weight: 800; letter-spacing: 0.4px;
+            color: #0A0A0A; background: #FFE082; box-shadow: 0 0 20px rgba(255,224,130,0.5);
+        }
+
+        .calculate-btn .arrow { font-weight: 900; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.3)); }
 
         @keyframes btnPulse {
             0%, 100% { transform: scale(1); box-shadow: 0 8px 30px rgba(255, 68, 68, 0.3); }
@@ -1655,7 +1998,7 @@
         }
 
         .strike-item:hover .strike-number {
-            transform: scale(1.1) rotateY(180deg);
+            transform: scale(1.08);
             box-shadow: var(--glow-primary);
         }
 
@@ -3039,17 +3382,20 @@
                 </a>
             </div>
             <div class="stats">
-                <div class="stat">
+                <div class="stat premium-stat">
                     <div class="stat-number" data-target="90" id="revenueCounter">0</div>
                     <div class="stat-label">Creator Revenue</div>
+                    <div class="tv-static-lite" aria-hidden="true"></div>
                 </div>
                 <div class="stat">
                     <div class="stat-number" data-target="100000" id="adoptersCounter">0</div>
                     <div class="stat-label">Early Adopters</div>
+                    <div class="tv-static-lite" aria-hidden="true"></div>
                 </div>
                 <div class="stat">
                     <div class="stat-number" data-target="0" id="feesCounter">0</div>
                     <div class="stat-label">Hidden Fees</div>
+                    <div class="tv-static-lite" aria-hidden="true"></div>
                 </div>
             </div>
         </div>
@@ -3133,7 +3479,10 @@
     <!-- Trusted by / Social Proof Strip -->
     <section class="features" style="padding: 30px 20px; background: radial-gradient(circle at center, rgba(255, 68, 68, 0.06) 0%, transparent 70%);">
         <div class="section-header fade-in" style="margin-bottom: 20px;">
-            <div class="section-badge">TRUSTED SIGNALS</div>
+            <div class="section-badge trusted-badge">TRUSTED SIGNALS
+                <span class="trust-pulse" aria-hidden="true"></span>
+                <span class="trust-sweep" aria-hidden="true"></span>
+            </div>
             <p class="section-subtitle">Backed by a growing creator community and industry advisors.</p>
         </div>
         <div class="features-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; max-width: 1000px;">
@@ -3159,7 +3508,7 @@
     <!-- Partners / For Google Reviewers Section -->
     <section class="features" id="partners" style="background: linear-gradient(180deg, #0F0505 0%, var(--darker) 100%);">
         <div class="section-header slide-in-up">
-            <div class="section-badge">🤝 PARTNERS</div>
+            <div class="section-badge partners-badge">PARTNERS</div>
             <h2>Built For Scale On Google Cloud</h2>
             <p class="section-subtitle">
                 Architecture, security, and a responsible credits plan designed to scale globally on GCP.
@@ -3210,13 +3559,24 @@
     <section class="features" id="roadmap" style="background: linear-gradient(180deg, var(--darker) 0%, #0F0505 100%);">
         <div class="section-header slide-in-up">
             <div class="section-badge">ROADMAP
-                <span class="badge-rocket" aria-hidden="true">
-                    <svg class="rocket-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2c2.5 0 5 2.5 5 5 0 2.2-1.2 5.2-3.6 8.8-.3.5-.8.8-1.4.8s-1.1-.3-1.4-.8C8.2 12.2 7 9.2 7 7c0-2.5 2.5-5 5-5z" fill="#ffffff"/>
-                        <circle cx="12" cy="7" r="1.5" fill="#00FFE1"/>
-                        <path d="M9 16l-3 2 2-3 1-.5c.4-.2.9 0 1.1.4.2.4 0 .9-.4 1.1L9 16z" fill="#B0BEC5"/>
-                        <path d="M15 16l3 2-2-3-1-.5c-.4-.2-.9 0-1.1.4-.2.4 0 .9.4 1.1L15 16z" fill="#B0BEC5"/>
+                <span class="badge-route" aria-hidden="true">
+                    <svg viewBox="0 0 220 120" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Map-like loop route -->
+                        <path class="route-path" d="M10,60 C40,10 180,10 210,60 C180,110 40,110 10,60 Z" />
                     </svg>
+                    <!-- CSS motion-path car fallback (overlays the SVG path) -->
+                    <span class="car-css">
+                        <svg viewBox="0 0 48 28" xmlns="http://www.w3.org/2000/svg">
+                            <!-- body -->
+                            <rect x="8" y="10" width="28" height="12" rx="3" fill="#FFFFFF" opacity="0.95"/>
+                            <rect x="16" y="6" width="12" height="8" rx="2" fill="#00FFE1"/>
+                            <!-- wheels -->
+                            <circle cx="16" cy="24" r="4" fill="#0A0A0A"/>
+                            <circle cx="30" cy="24" r="4" fill="#0A0A0A"/>
+                            <!-- headlight glow -->
+                            <circle cx="36" cy="16" r="2" fill="#FFEE58"/>
+                        </svg>
+                    </span>
                 </span>
             </div>
             <h2>Milestones Aligned With Google Cloud</h2>
@@ -3249,7 +3609,22 @@
     <!-- Features Section -->
     <section class="features" id="features">
         <div class="section-header slide-in-up">
-            <div class="section-badge">LEGENDARY FEATURES</div>
+            <div class="section-badge">LEGENDARY FEATURES
+                <span class="badge-crown" aria-hidden="true">
+                    <svg viewBox="0 0 36 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M2 18 L10 8 L18 16 L26 6 L34 18 Z" fill="#FFD700"/>
+                        <rect x="2" y="18" width="32" height="4" rx="2" fill="#FFC107"/>
+                        <circle cx="10" cy="8" r="2" fill="#FFF59D"/>
+                        <circle cx="18" cy="16" r="2" fill="#FFF59D"/>
+                        <circle cx="26" cy="6" r="2" fill="#FFF59D"/>
+                    </svg>
+                </span>
+                <span class="badge-shimmer" aria-hidden="true"></span>
+                <span class="sparkle s1"></span>
+                <span class="sparkle s2"></span>
+                <span class="sparkle s3"></span>
+                <span class="sparkle s4"></span>
+            </div>
             <h2>Everything YouTube Should Have Been</h2>
             <p class="section-subtitle">
                 Built from the ground up with creators and viewers in mind. No compromises.
@@ -3257,7 +3632,11 @@
         </div>
         <div class="features-grid">
             <div class="feature-card slide-in-left">
-                <div class="feature-icon">💰</div>
+                <div class="feature-icon">
+                    <div class="icon-3d" aria-hidden="true">
+                        <span class="icon-90-text" id="icon-90-text">0%</span>
+                    </div>
+                </div>
                 <h3 class="feature-title">90% Revenue Share</h3>
                 <p class="feature-description">
                     We're not greedy. Creators keep 90% of all revenue. YouTube takes 45%. 
@@ -3265,7 +3644,20 @@
                 </p>
             </div>
             <div class="feature-card slide-in-left">
-                <div class="feature-icon">🎬</div>
+                <div class="feature-icon">
+                    <div class="icon-3d">
+                        <svg class="icon-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <!-- clapper base -->
+                            <rect x="10" y="24" width="44" height="26" rx="4" fill="#263238"/>
+                            <rect x="10" y="14" width="44" height="14" rx="4" fill="#37474F"/>
+                            <!-- stripes -->
+                            <path d="M12 16 L22 16 L18 24 L8 24 Z" fill="#ECEFF1"/>
+                            <path d="M24 16 L34 16 L30 24 L20 24 Z" fill="#ECEFF1"/>
+                            <path d="M36 16 L46 16 L42 24 L32 24 Z" fill="#ECEFF1"/>
+                            <path d="M48 16 L56 16 L54 22 L44 22 Z" fill="#ECEFF1"/>
+                        </svg>
+                    </div>
+                </div>
                 <h3 class="feature-title">All Content Types</h3>
                 <p class="feature-description">
                     Long-form videos, short Flicks, live streams — all in one app. 
@@ -3273,7 +3665,22 @@
                 </p>
             </div>
             <div class="feature-card slide-in-left">
-                <div class="feature-icon">🤖</div>
+                <div class="feature-icon">
+                    <div class="icon-3d">
+                        <svg class="icon-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <!-- robot head -->
+                            <rect x="14" y="18" width="36" height="26" rx="6" fill="#90A4AE"/>
+                            <rect x="18" y="22" width="28" height="14" rx="4" fill="#263238"/>
+                            <circle cx="24" cy="29" r="3" fill="#00FFE1"/>
+                            <circle cx="40" cy="29" r="3" fill="#00FFE1"/>
+                            <!-- antenna -->
+                            <rect x="30" y="12" width="4" height="8" rx="2" fill="#B0BEC5"/>
+                            <circle cx="32" cy="10" r="3" fill="#FF4444"/>
+                            <!-- jaw -->
+                            <rect x="22" y="38" width="20" height="6" rx="3" fill="#B0BEC5"/>
+                        </svg>
+                    </div>
+                </div>
                 <h3 class="feature-title">AI-Powered Discovery</h3>
                 <p class="feature-description">
                     Our algorithm actually works. Find content you love, get discovered by 
@@ -3281,7 +3688,18 @@
                 </p>
             </div>
             <div class="feature-card slide-in-left">
-                <div class="feature-icon">📊</div>
+                <div class="feature-icon">
+                    <div class="icon-3d">
+                        <svg class="icon-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <!-- chart bars -->
+                            <rect x="12" y="34" width="8" height="16" rx="2" fill="#42A5F5"/>
+                            <rect x="26" y="28" width="8" height="22" rx="2" fill="#66BB6A"/>
+                            <rect x="40" y="20" width="8" height="30" rx="2" fill="#FF7043"/>
+                            <!-- baseline -->
+                            <rect x="10" y="52" width="44" height="2" fill="#ECEFF1" opacity="0.8"/>
+                        </svg>
+                    </div>
+                </div>
                 <h3 class="feature-title">Real Analytics</h3>
                 <p class="feature-description">
                     Complete transparency. See exactly how much you're earning in real-time. 
@@ -3289,7 +3707,17 @@
                 </p>
             </div>
             <div class="feature-card slide-in-left">
-                <div class="feature-icon">💬</div>
+                <div class="feature-icon">
+                    <div class="icon-3d">
+                        <svg class="icon-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <!-- chat bubbles -->
+                            <rect x="10" y="18" width="30" height="20" rx="6" fill="#29B6F6"/>
+                            <path d="M16 38 L18 32 L22 34 Z" fill="#29B6F6"/>
+                            <rect x="24" y="28" width="30" height="18" rx="6" fill="#AB47BC"/>
+                            <path d="M44 46 L46 40 L50 42 Z" fill="#AB47BC"/>
+                        </svg>
+                    </div>
+                </div>
                 <h3 class="feature-title">True Community</h3>
                 <p class="feature-description">
                     Built-in chat, community features, and direct creator-fan connections. 
@@ -3297,7 +3725,16 @@
                 </p>
             </div>
             <div class="feature-card slide-in-left">
-                <div class="feature-icon">📱</div>
+                <div class="feature-icon">
+                    <div class="icon-3d">
+                        <svg class="icon-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <!-- phone -->
+                            <rect x="18" y="8" width="28" height="48" rx="6" fill="#263238"/>
+                            <rect x="20" y="12" width="24" height="36" rx="4" fill="#00ACC1"/>
+                            <circle cx="32" cy="50" r="2" fill="#B0BEC5"/>
+                        </svg>
+                    </div>
+                </div>
                 <h3 class="feature-title">Watch Offline</h3>
                 <p class="feature-description">
                     Download your favorite videos and watch them anywhere, anytime. No internet? 
@@ -3305,7 +3742,20 @@
                 </p>
             </div>
             <div class="feature-card slide-in-left">
-                <div class="feature-icon">🎵</div>
+                <div class="feature-icon">
+                    <div class="icon-3d">
+                        <svg class="icon-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <!-- glossy disc with play -->
+                            <circle cx="32" cy="32" r="20" fill="#212121"/>
+                            <circle cx="30" cy="30" r="20" fill="#2E2E2E"/>
+                            <circle cx="30" cy="30" r="14" fill="#424242"/>
+                            <circle cx="30" cy="30" r="3" fill="#9E9E9E"/>
+                            <path d="M22 30 L28 26 L28 34 Z" fill="#00FFE1"/>
+                            <!-- light arc -->
+                            <path d="M16 24 A16 16 0 0 1 44 24" stroke="#00FFE1" stroke-opacity="0.4" stroke-width="2" fill="none"/>
+                        </svg>
+                    </div>
+                </div>
                 <h3 class="feature-title">MyChannel Music</h3>
                 <p class="feature-description">
                     Stream millions of songs ad-free. Music videos, audio-only tracks, playlists, 
@@ -3313,7 +3763,32 @@
                 </p>
             </div>
             <div class="feature-card slide-in-left">
-                <div class="feature-icon">🎬</div>
+                <div class="feature-icon">
+                    <div class="icon-3d">
+                        <svg class="icon-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <!-- clapper + film strip combo -->
+                            <rect x="10" y="26" width="44" height="24" rx="4" fill="#1F2933"/>
+                            <rect x="10" y="16" width="44" height="12" rx="4" fill="#2C3A44"/>
+                            <path d="M12 18 L22 18 L18 26 L8 26 Z" fill="#ECEFF1"/>
+                            <path d="M24 18 L34 18 L30 26 L20 26 Z" fill="#ECEFF1"/>
+                            <path d="M36 18 L46 18 L42 26 L32 26 Z" fill="#ECEFF1"/>
+                            <path d="M48 18 L56 18 L54 24 L44 24 Z" fill="#ECEFF1"/>
+                            <!-- perforated film edge -->
+                            <rect x="10" y="26" width="4" height="24" fill="#263238"/>
+                            <rect x="50" y="26" width="4" height="24" fill="#263238"/>
+                            <g fill="#37474F">
+                                <rect x="12" y="28" width="2" height="3"/>
+                                <rect x="12" y="33" width="2" height="3"/>
+                                <rect x="12" y="38" width="2" height="3"/>
+                                <rect x="12" y="43" width="2" height="3"/>
+                                <rect x="50" y="28" width="2" height="3"/>
+                                <rect x="50" y="33" width="2" height="3"/>
+                                <rect x="50" y="38" width="2" height="3"/>
+                                <rect x="50" y="43" width="2" height="3"/>
+                            </g>
+                        </svg>
+                    </div>
+                </div>
                 <h3 class="feature-title">MyChannel Movies</h3>
                 <p class="feature-description">
                     Watch blockbuster movies, indie films, documentaries, and exclusive originals. 
@@ -3321,7 +3796,15 @@
                 </p>
             </div>
             <div class="feature-card slide-in-left">
-                <div class="feature-icon">🛡️</div>
+                <div class="feature-icon">
+                    <div class="icon-3d">
+                        <svg class="icon-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <!-- shield -->
+                            <path d="M32 8 L50 14 L50 28 C50 40 42 50 32 56 C22 50 14 40 14 28 L14 14 Z" fill="#1E88E5"/>
+                            <path d="M32 12 L46 16 L46 28 C46 38 39 46 32 50 C25 46 18 38 18 28 L18 16 Z" fill="#42A5F5"/>
+                        </svg>
+                    </div>
+                </div>
                 <h3 class="feature-title">Three-Strike Protection</h3>
                 <p class="feature-description">
                     Your channel won't disappear overnight. Our fair review system gives creators 
@@ -3329,7 +3812,21 @@
                 </p>
             </div>
             <div class="feature-card slide-in-left">
-                <div class="feature-icon">⚡</div>
+                <div class="feature-icon">
+                    <div class="icon-3d">
+                        <svg class="icon-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <!-- lightning bolt -->
+                            <path d="M36 6 L18 34 H30 L24 58 L46 28 H34 Z" fill="#FFEE58" stroke="#FDD835" stroke-width="2"/>
+                            <filter id="glowL">
+                                <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </svg>
+                    </div>
+                </div>
                 <h3 class="feature-title">Lightning Fast</h3>
                 <p class="feature-description">
                     4K streaming without buffering. Instant uploads. Zero lag live streams. 
@@ -3343,7 +3840,7 @@
     <section class="payout-section" id="payouts">
         <div class="payout-container">
             <div class="payout-header slide-in-up">
-                <div class="payout-badge">💸 24-HOUR PAYOUTS</div>
+            <div class="payout-badge"><span class="bolt" aria-hidden="true">⚡</span>24-HOUR PAYOUTS<div class="badge-ring"></div><div class="sweep"></div></div>
                 <h2 class="payout-title">Get Paid Tomorrow For What You Made Today</h2>
                 <p class="payout-subtitle">No 30-day waits. No “net-60.” We settle creator earnings in under 24 hours with automated risk controls and instant transfer rails.</p>
             </div>
@@ -3370,7 +3867,7 @@
                 </div>
             </div>
             <div class="payout-dial slide-in-up"></div>
-            <div class="payout-meta fade-in">Average payout time last month: <strong>18h 42m</strong></div>
+            <div class="payout-meta fade-in">Average payout time: <strong>Coming soon — we haven’t even launched yet</strong></div>
             <div class="payout-steps slide-in-up">
                 <div class="payout-step">
                     <div>🎬</div>
@@ -3399,7 +3896,10 @@
     <!-- KILLER 90% REVENUE SHARE SECTION -->
     <section class="revenue-section" id="revenue">
         <div class="section-header slide-in-up">
-            <div class="section-badge" style="color: var(--primary); border-color: var(--primary);">💰 THE 90% DIFFERENCE</div>
+            <div class="section-badge ninety-badge">THE 90% DIFFERENCE
+                <span class="ninety-orb" aria-hidden="true"></span>
+                <span class="ninety-shine" aria-hidden="true"></span>
+            </div>
             <h2>Stop Getting ROBBED. Start Getting PAID.</h2>
             <p class="section-subtitle">
                 See what YouTube's pathetic 55% cut actually costs you. The math will make you FURIOUS.
@@ -3436,7 +3936,7 @@
                 YouTube is literally stealing <strong>$35,000</strong> from you for every $100K you make. 
                 That's a new car, a house down payment, or a year of rent. WAKE UP.
             </p>
-            <button class="calculate-btn">💸 Calculate Your Lost Earnings</button>
+            <button class="calculate-btn"><span class="badge-pro">PRO</span> Calculate Your Lost Earnings <span class="arrow">→</span></button>
         </div>
     </section>
 
@@ -3444,7 +3944,11 @@
     <section class="flicks" id="flicks">
         <div class="flicks-content">
             <div class="flicks-text slide-in-left">
-                <div class="section-badge">⚡ FLICKS</div>
+                <div class="section-badge flicks-badge">FLICKS
+                    <span class="badge-loop" aria-hidden="true"></span>
+                    <span class="badge-spark s1"></span>
+                    <span class="badge-spark s2"></span>
+                </div>
                 <h2>Short-Form Content Reimagined</h2>
                 <p>
                     TikTok meets YouTube Shorts, but better. Our Flicks feature isn't just another 
@@ -3488,7 +3992,10 @@
     <!-- App Preview Section -->
     <section class="app-preview" id="app-preview">
         <div class="section-header slide-in-up">
-            <div class="section-badge" style="color: var(--primary); border-color: var(--primary);">🔥 GAME CHANGER</div>
+            <div class="section-badge game-badge">GAME CHANGER
+                <span class="badge-flag" aria-hidden="true"></span>
+                <span class="badge-glow" aria-hidden="true"></span>
+            </div>
             <h2>This Is How We Win.</h2>
             <p class="section-subtitle">
                 Forget everything you know about video platforms. MyChannel isn't just an alternative; it's the replacement. We're putting power back where it belongs: in your hands. This is more than an app—it's a movement.
@@ -3502,7 +4009,10 @@
     <!-- Creator Protection Section -->
     <section class="creator-protection" id="protection">
         <div class="section-header slide-in-up">
-            <div class="section-badge">🛡️ CREATOR PROTECTION</div>
+            <div class="section-badge protect-badge">CREATOR PROTECTION
+                <span class="lock-hang" aria-hidden="true"></span>
+                <span class="shield-aura" aria-hidden="true"></span>
+            </div>
             <h2>Three-Strike Plus Final Review System</h2>
             <p class="section-subtitle">
                 Your life's work deserves protection. We won't terminate your channel over one mistake like YouTube does.
@@ -3675,7 +4185,10 @@
     <!-- Creator Section -->
     <section class="creators" id="creators">
         <div class="section-header slide-in-up">
-            <div class="section-badge">FOR CREATORS</div>
+            <div class="section-badge creators-badge">FOR CREATORS
+                <span class="spark-left"></span>
+                <span class="spark-right"></span>
+            </div>
             <h2>Built By Creators, For Creators</h2>
             <p class="section-subtitle">
                 We're not another corporate platform. We're creators who got tired of being exploited.
@@ -4066,6 +4579,23 @@
                 document.getElementById('feesCounter').textContent = 'Zero';
             };
 
+            // --- Animate the 90% icon from 0% to 90% ---
+            const initIconNinety = () => {
+                const el = document.getElementById('icon-90-text');
+                if (!el) return;
+                let start = null;
+                const duration = 1200;
+                const target = 90;
+                const step = (ts) => {
+                    if (!start) start = ts;
+                    const p = Math.min(1, (ts - start) / duration);
+                    const val = Math.floor(target * p);
+                    el.textContent = `${val}%`;
+                    if (p < 1) requestAnimationFrame(step);
+                };
+                requestAnimationFrame(step);
+            };
+
             // --- ULTRA SMOOTH SCROLL ANIMATIONS ---
             const initScrollTriggers = () => {
                 const observer = new IntersectionObserver((entries) => {
@@ -4104,6 +4634,10 @@
                         if (entry.isIntersecting) {
                             cards.forEach(c => c.classList.remove('is-active'));
                             entry.target.classList.add('is-active');
+                            // Trigger 90% icon count-up when the first features card enters
+                            if (entry.target.querySelector('#icon-90-text')) {
+                                initIconNinety();
+                            }
                         }
                     });
                 }, { rootMargin: '-40% 0px -40% 0px', threshold: 0.2 });
@@ -4274,10 +4808,8 @@
                 fetch('payout-stats.json', { cache: 'no-store' })
                     .then(r => r.ok ? r.json() : Promise.reject())
                     .then(d => {
+                        // If we have stats later, we can render; for now keep "coming soon"
                         if (!d || typeof d.averageHours !== 'number') return;
-                        const hours = Math.floor(d.averageHours);
-                        const mins = Math.round((d.averageHours - hours) * 60);
-                        meta.innerHTML = `Average payout time last month: <strong>${hours}h ${mins}m</strong>`;
                     })
                     .catch(() => {});
             };

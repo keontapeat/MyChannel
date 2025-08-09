@@ -69,12 +69,10 @@ struct ProfileView: View {
         )
         .navigationBarHidden(true)
         .sheet(isPresented: $showingEditProfile) {
-            NavigationStack {
-                EditProfileView(user: $user)
-            }
+            ProfileEditWrapper(user: $user)
         }
         .sheet(isPresented: $showingSettings) {
-            SafeProfileSettingsView()
+            ProfileSettingsWrapper()
         }
     }
 
@@ -239,7 +237,6 @@ struct SafeProfileHeaderView: View {
         }
     }
 }
-
 
 // MARK: - Inline section components for quick navigation in Xcode like HomeView.
 
@@ -408,4 +405,26 @@ private struct ProfileContentSection: View {
         scrollOffset: .constant(0)
     )
     .environmentObject(AppState())
+}
+
+// MARK: - Wrappers for previews
+struct ProfileEditWrapper: View {
+    @Binding var user: User
+    var body: some View {
+        EditProfileView(user: $user)
+    }
+}
+
+struct ProfileSettingsWrapper: View {
+    var body: some View {
+        SafeProfileSettingsView()
+    }
+}
+
+#Preview("Profile Edit Wrapper") {
+    ProfileEditWrapper(user: .constant(User.defaultUser))
+}
+
+#Preview("Profile Settings Wrapper") {
+    ProfileSettingsWrapper()
 }
