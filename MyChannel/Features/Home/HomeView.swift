@@ -56,6 +56,10 @@ struct HomeView: View {
     @State private var showingSearchView: Bool = false
     @State private var assetStories: [AssetStory] = AssetStory.sampleStories
     @State private var viewerStories: [Story] = Story.sampleStories
+    @State private var selectedAssetStory: AssetStory? = nil
+    @Namespace private var storyHeroNS
+    @State private var heroAsset: AssetStory? = nil
+    @State private var showHeroOverlay: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -75,12 +79,14 @@ struct HomeView: View {
                             AssetBouncyStoriesRow(
                                 stories: assetStories,
                                 onStoryTap: { asset in
-                                    openViewerForAssetStory(asset)
+                                    startHeroTransition(for: asset)
                                 },
                                 onAddStory: {
                                     let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
                                     impactFeedback.impactOccurred()
-                                }
+                                },
+                                ns: storyHeroNS,
+                                activeHeroId: heroAsset?.id
                             )
                             .transition(.asymmetric(
                                 insertion: .move(edge: .top).combined(with: .opacity),
@@ -202,6 +208,11 @@ struct HomeView: View {
                     showingSearchView = false
                 }
         }
+        .overlay {
+            if showHeroOverlay, let asset = heroAsset {
+                heroOverlay(for: asset)
+            }
+        }
     }
     
     // MARK: - Enhanced Video Playback
@@ -227,8 +238,8 @@ struct HomeView: View {
         }
     }
     
-    private func openViewerForAssetStory(_ asset: AssetStory) {
-        let converted: [Story] = assetStories.enumerated().map { (idx, s) in
+    private func prepareViewerForAsset(_ asset: AssetStory) {
+        let converted: [Story] = assetStories.map { s in
             let creatorId = matchUserId(for: s.username) ?? User.sampleUsers.first?.id ?? UUID().uuidString
             let imageName: String = {
                 switch s.media {
@@ -251,23 +262,14 @@ struct HomeView: View {
                 isLive: false,
                 content: [
                     StoryContent(
-                        url: imageName,            // Asset name used as URL; viewer resolves to Image(name)
+                        url: imageName,
                         type: .image,
                         duration: 12.0
                     )
-                ],
-                backgroundColor: nil,
-                textColor: nil,
-                music: nil,
-                stickers: [],
-                polls: [],
-                links: []
+                ]
             )
         }
-
         viewerStories = converted
-
-        // Pick the initial story that matches the tapped asset's username (fallback first)
         if let initial = converted.first(where: { story in
             let display = story.creator?.displayName.lowercased()
             let handle = story.creator?.username.lowercased()
@@ -277,9 +279,28 @@ struct HomeView: View {
         } else {
             selectedStory = Story.sampleStories.first!
         }
+    }
 
+    private func presentViewer() {
         withAnimation(.spring(response: 0.45, dampingFraction: 0.9)) {
             showingStoryViewer = true
+        }
+    }
+
+    private func startHeroTransition(for asset: AssetStory) {
+        prepareViewerForAsset(asset)
+        heroAsset = asset
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+            showHeroOverlay = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+            presentViewer()
+            withAnimation(.easeInOut(duration: 0.22)) {
+                showHeroOverlay = false
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
+                heroAsset = nil
+            }
         }
     }
 
@@ -288,6 +309,27 @@ struct HomeView: View {
         return User.sampleUsers.first(where: {
             $0.username.lowercased() == u || $0.displayName.lowercased() == u
         })?.id
+    }
+
+    private func heroOverlay(for asset: AssetStory) -> some View {
+        let imageName: String = {
+            switch asset.media {
+            case .image(let n): return n
+            case .video(let n): return n
+            }
+        }()
+        return ZStack {
+            Color.black.opacity(0.45)
+                .ignoresSafeArea()
+                .transition(.opacity)
+            Image(imageName)
+                .resizable()
+                .scaledToFill()
+                .matchedGeometryEffect(id: "storyHero-\(asset.id.uuidString)", in: storyHeroNS)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .ignoresSafeArea()
+        }
     }
 }
 
@@ -1217,7 +1259,7 @@ struct ProfessionalVideoCard: View {
     }
 }
 
-// MARK: - Supporting Views and Extensions
+// MARK: - HomeActionButton
 struct HomeActionButton: View {
     let icon: String
     let isActive: Bool

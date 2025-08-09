@@ -35,22 +35,47 @@ extension AssetStory {
     }
 }
 
+// Matches with HomeView.heroOverlay: id "storyHero-<uuid>"
+struct HeroMatch: ViewModifier {
+    let ns: Namespace.ID?
+    let id: UUID
+
+    func body(content: Content) -> some View {
+        if let ns {
+            content.matchedGeometryEffect(id: "storyHero-\(id.uuidString)", in: ns)
+        } else {
+            content
+        }
+    }
+}
+
 struct AssetBouncyStoryBubble: View {
     let story: AssetStory
     let onTap: (AssetStory) -> Void
+    let ns: Namespace.ID?
+    let activeHeroId: UUID?
 
     @State private var showProfilePic = true
     @State private var bounceScale: CGFloat = 1.0
     @State private var player: AVPlayer?
+
+    init(story: AssetStory, onTap: @escaping (AssetStory) -> Void, ns: Namespace.ID? = nil, activeHeroId: UUID? = nil) {
+        self.story = story
+        self.onTap = onTap
+        self.ns = ns
+        self.activeHeroId = activeHeroId
+    }
 
     var body: some View {
         VStack(spacing: 6) {
             ZStack {
                 Circle()
                     .stroke(
-                        LinearGradient(colors: [.purple, .blue, .pink],
-                                       startPoint: .topLeading,
-                                       endPoint: .bottomTrailing),
+                        LinearGradient(
+                            colors: [.purple, .blue, .pink],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
                         lineWidth: 3
                     )
                     .frame(width: 80, height: 80)
@@ -71,7 +96,8 @@ struct AssetBouncyStoryBubble: View {
                             .transition(.opacity)
                     }
                 }
-                .animation(.easeInOut(duration: 0.5), value: showProfilePic)
+                .opacity(activeHeroId == story.id ? 0 : 1)
+                .modifier(HeroMatch(ns: ns, id: story.id))
                 .scaleEffect(bounceScale)
             }
             .contentShape(Circle())
@@ -140,6 +166,22 @@ struct AssetBouncyStoriesRow: View {
     let stories: [AssetStory]
     let onStoryTap: (AssetStory) -> Void
     let onAddStory: () -> Void
+    let ns: Namespace.ID?
+    let activeHeroId: UUID?
+
+    init(
+        stories: [AssetStory],
+        onStoryTap: @escaping (AssetStory) -> Void,
+        onAddStory: @escaping () -> Void,
+        ns: Namespace.ID? = nil,
+        activeHeroId: UUID? = nil
+    ) {
+        self.stories = stories
+        self.onStoryTap = onStoryTap
+        self.onAddStory = onAddStory
+        self.ns = ns
+        self.activeHeroId = activeHeroId
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -157,7 +199,12 @@ struct AssetBouncyStoriesRow: View {
                 LazyHStack(spacing: 10) {
                     addStoryButton
                     ForEach(stories) { story in
-                        AssetBouncyStoryBubble(story: story, onTap: onStoryTap)
+                        AssetBouncyStoryBubble(
+                            story: story,
+                            onTap: onStoryTap,
+                            ns: ns,
+                            activeHeroId: activeHeroId
+                        )
                     }
                 }
                 .padding(.horizontal, 16)
@@ -211,14 +258,22 @@ struct AssetStoryViewerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             content
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    onDismiss()
-                } label: {
-                    Image(systemName: "xmark").foregroundStyle(.white)
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        onDismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(10)
+                            .background(.black.opacity(0.4))
+                            .clipShape(Circle())
+                    }
                 }
+                .padding()
+                Spacer()
             }
         }
     }
@@ -243,30 +298,44 @@ struct AssetStoryViewerView: View {
     }
 }
 
-#Preview("Asset Stories Row") {
-    AssetBouncyStoriesRow(
-        stories: AssetStory.sampleStories,
-        onStoryTap: { _ in },
-        onAddStory: {}
-    )
-    .padding(.vertical)
-    .background(Color(.systemBackground))
-}
-
-#Preview("Asset Story Bubble") {
-    AssetBouncyStoryBubble(
-        story: AssetStory.sampleStories.first!,
-        onTap: { _ in }
-    )
-    .padding()
-    .background(Color(.systemBackground))
-}
-
-#Preview("Asset Story Viewer") {
-    NavigationStack {
-        AssetStoryViewerView(
+// MARK: - Previews
+#Preview("AssetBouncyStoryBubble") {
+    VStack {
+        AssetBouncyStoryBubble(
             story: AssetStory.sampleStories.first!,
-            onDismiss: {}
+            onTap: { _ in },
+            ns: nil,
+            activeHeroId: nil
         )
     }
+    .padding()
+    .background(Color(.systemGroupedBackground))
+}
+
+#Preview("AssetBouncyStoriesRow") {
+    VStack {
+        AssetBouncyStoriesRow(
+            stories: AssetStory.sampleStories,
+            onStoryTap: { _ in },
+            onAddStory: {},
+            ns: nil,
+            activeHeroId: nil
+        )
+    }
+    .padding(.vertical)
+    .background(Color(.systemGroupedBackground))
+}
+
+#Preview("AssetStoryViewerView - Image") {
+    AssetStoryViewerView(
+        story: AssetStory.sampleStories.first!,
+        onDismiss: {}
+    )
+}
+
+#Preview("AssetStoryViewerView - Video Fallback") {
+    AssetStoryViewerView(
+        story: AssetStory(media: .video("nonexistent.mp4"), username: "preview", authorImageName: "friend_profile2"),
+        onDismiss: {}
+    )
 }
