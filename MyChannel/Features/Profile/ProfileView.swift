@@ -52,9 +52,6 @@ struct ProfileView: View {
         .onChange(of: appState.currentUser) { _, newUser in
             handleUserChange(newUser)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .scrollToTopProfile)) { _ in
-            handleScrollToTop()
-        }
     }
 
     // MARK: - Main Profile Content
@@ -81,30 +78,42 @@ struct ProfileView: View {
                         user: user
                     )
 
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            GeometryReader { proxy in
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(spacing: 0) {
                                 Color.clear
-                                    .preference(key: ProfileScrollOffsetPreferenceKey.self,
-                                                value: proxy.frame(in: .named("scroll")).minY)
-                            }
-                            .frame(height: 0)
+                                    .frame(height: 0)
+                                    .id("profileTop")
 
-                            SafeProfileContentView(
-                                selectedTab: selectedTab,
-                                user: user,
-                                videos: userVideos
-                            )
-                            .padding(.top, 0)
-                            .background(AppTheme.Colors.background)
+                                GeometryReader { proxy in
+                                    Color.clear
+                                        .preference(key: ProfileScrollOffsetPreferenceKey.self,
+                                                    value: proxy.frame(in: .named("scroll")).minY)
+                                }
+                                .frame(height: 0)
+
+                                SafeProfileContentView(
+                                    selectedTab: selectedTab,
+                                    user: user,
+                                    videos: userVideos
+                                )
+                                .padding(.top, 0)
+                                .background(AppTheme.Colors.background)
+                            }
                         }
-                    }
-                    .scrollContentBackground(.hidden)
-                    .background(Color.clear)
-                    .coordinateSpace(name: "scroll")
-                    .onPreferenceChange(ProfileScrollOffsetPreferenceKey.self) { value in
-                        withAnimation(.easeOut(duration: 0.1)) {
-                            scrollOffset = value
+                        .scrollContentBackground(.hidden)
+                        .background(Color.clear)
+                        .coordinateSpace(name: "scroll")
+                        .onPreferenceChange(ProfileScrollOffsetPreferenceKey.self) { value in
+                            withAnimation(.easeOut(duration: 0.12)) {
+                                scrollOffset = value
+                            }
+                        }
+                        .onReceive(NotificationCenter.default.publisher(for: .scrollToTopProfile)) { _ in
+                            withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                                proxy.scrollTo("profileTop", anchor: .top)
+                            }
+                            HapticManager.shared.impact(style: .light)
                         }
                     }
                 }
@@ -125,18 +134,10 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var profileLoadingView: some View {
-        VStack(spacing: 24) {
-            ProgressView()
-                .scaleEffect(1.2)
-                .tint(AppTheme.Colors.primary)
-
-            Text("Loading Profile...")
-                .font(.body)
-                .foregroundColor(AppTheme.Colors.textSecondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AppTheme.Colors.background)
-        .navigationBarHidden(true)
+        ProfileLoadingSkeleton()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(AppTheme.Colors.background)
+            .navigationBarHidden(true)
     }
 
     // MARK: - Error View
@@ -238,15 +239,6 @@ struct ProfileView: View {
             } else {
                 user = User.defaultUser
                 userVideos = createFallbackVideos()
-            }
-        }
-    }
-
-    private func handleScrollToTop() {
-        DispatchQueue.main.async {
-            withAnimation(.easeInOut(duration: 0.8)) {
-                HapticManager.shared.impact(style: .light)
-                // implement scroll to top logic if needed
             }
         }
     }

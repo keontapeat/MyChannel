@@ -7,20 +7,17 @@ struct ProfileHeaderView: View {
     @Binding var showingEditProfile: Bool
     @Binding var showingSettings: Bool
     
-    // Add environment object to get current user
     @EnvironmentObject private var appState: AppState
 
     private let headerHeight: CGFloat = 365
     private let profileImageSize: CGFloat = 80
     
-    // Check if this is the current user's profile
     private var isCurrentUserProfile: Bool {
         return appState.currentUser?.id == user.id
     }
 
     var body: some View {
         ZStack {
-            // Background Banner - Cover everything including safe area
             GeometryReader { geometry in
                 ZStack {
                     if let bannerURL = user.bannerImageURL {
@@ -42,9 +39,8 @@ struct ProfileHeaderView: View {
                     )
                 }
             }
-            .ignoresSafeArea(.all) // This makes it flush to the very top
+            .ignoresSafeArea(.all)
 
-            // Settings Button - Fixed at top right
             VStack {
                 HStack {
                     Spacer()
@@ -67,7 +63,6 @@ struct ProfileHeaderView: View {
                 Spacer()
             }
             
-            // Profile Info - Centered with some bottom padding
             VStack {
                 Spacer()
                 profileInfoSection
@@ -75,6 +70,9 @@ struct ProfileHeaderView: View {
                     .frame(height: 40)
             }
         }
+        .frame(height: headerHeight)
+        .offset(y: scrollOffset > 0 ? -scrollOffset * 0.25 : 0)
+        .opacity(1 - min(1, max(0, -scrollOffset) / 220))
     }
     
     // MARK: - Profile Info Section

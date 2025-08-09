@@ -80,7 +80,6 @@ struct ProfileVideoCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Thumbnail
             AsyncImage(url: URL(string: video.thumbnailURL)) { image in
                 image
                     .resizable()
@@ -98,7 +97,6 @@ struct ProfileVideoCard: View {
             }
             .cornerRadius(8)
             .overlay(
-                // Duration badge
                 Text(video.formattedDuration)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.white)
@@ -110,7 +108,6 @@ struct ProfileVideoCard: View {
                 alignment: .bottomTrailing
             )
             
-            // Video info
             VStack(alignment: .leading, spacing: 4) {
                 Text(video.title)
                     .font(.system(size: 14, weight: .medium))
@@ -136,6 +133,25 @@ struct ProfileVideoCard: View {
         .background(AppTheme.Colors.surface)
         .cornerRadius(12)
         .shadow(color: AppTheme.Colors.textPrimary.opacity(0.08), radius: 4, x: 0, y: 2)
+        .contextMenu {
+            Button {
+                HapticManager.shared.impact(style: .light)
+            } label: {
+                Label("Save to Watch Later", systemImage: "bookmark")
+            }
+            Button {
+                HapticManager.shared.impact(style: .light)
+            } label: {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+            Button(role: .destructive) {
+                HapticManager.shared.impact(style: .light)
+            } label: {
+                Label("Not interested", systemImage: "hand.thumbsdown")
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(video.title)
     }
 }
 
@@ -185,7 +201,6 @@ struct ProfileShortCard: View {
             }
             .cornerRadius(8)
             
-            // View count overlay
             VStack(alignment: .leading, spacing: 2) {
                 Spacer()
                 
@@ -206,6 +221,19 @@ struct ProfileShortCard: View {
             }
         }
         .shadow(color: AppTheme.Colors.textPrimary.opacity(0.1), radius: 3, x: 0, y: 1)
+        .contextMenu {
+            Button {
+                HapticManager.shared.impact(style: .light)
+            } label: {
+                Label("Save to Watch Later", systemImage: "bookmark")
+            }
+            Button {
+                HapticManager.shared.impact(style: .light)
+            } label: {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+        }
+        .accessibilityLabel("\(video.title) short")
     }
 }
 
