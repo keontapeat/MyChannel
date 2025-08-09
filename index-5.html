@@ -529,9 +529,68 @@
         }
 
         .founder-name {
-            color: var(--accent);
-            font-weight: 600;
-            font-size: 16px;
+            position: relative;
+            display: inline-block;
+            font-weight: 800;
+            font-size: 18px;
+            letter-spacing: 0.5px;
+            background: linear-gradient(90deg, #00FFE1 0%, #FF4444 50%, #00FFE1 100%);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 0 6px rgba(0, 255, 225, 0.35));
+            animation: founderGradient 3s linear infinite,
+                       founderGlow 1.6s ease-in-out infinite alternate,
+                       founderPunch 8s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+            will-change: transform, filter, background-position, text-shadow;
+        }
+
+        .founder-credit:hover .founder-name {
+            animation-duration: 2.2s, 1s, 6s;
+            filter: drop-shadow(0 0 12px rgba(0, 255, 225, 0.65));
+            transform: translateZ(0);
+        }
+
+        @keyframes founderGradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes founderGlow {
+            0% {
+                text-shadow:
+                    0 0 6px rgba(0, 255, 225, 0.40),
+                    0 0 12px rgba(0, 255, 225, 0.20);
+            }
+            100% {
+                text-shadow:
+                    0 0 10px rgba(255, 68, 68, 0.70),
+                    0 0 22px rgba(255, 68, 68, 0.35),
+                    0 0 36px rgba(0, 255, 225, 0.35);
+            }
+        }
+
+        @keyframes founderPunch {
+            0%, 100% {
+                transform: perspective(600px) rotateX(0deg) rotateY(0deg) scale(1);
+                letter-spacing: 0.5px;
+            }
+            20% {
+                transform: perspective(600px) rotateX(6deg) rotateY(-6deg) scale(1.08);
+                letter-spacing: 1px;
+            }
+            40% {
+                transform: perspective(600px) rotateX(-5deg) rotateY(5deg) scale(0.98);
+                letter-spacing: 0.8px;
+            }
+            60% {
+                transform: perspective(600px) rotateX(3deg) rotateY(-3deg) scale(1.04);
+            }
+            80% {
+                transform: perspective(600px) rotateX(-2deg) rotateY(2deg) scale(0.99);
+            }
         }
 
         .hero-subtitle {
@@ -683,11 +742,139 @@
             margin-bottom: 20px;
             backdrop-filter: blur(10px);
             transition: all 0.2s ease;
+            position: relative;
         }
 
         .section-badge:hover {
             box-shadow: var(--glow-accent);
             transform: scale(1.05);
+        }
+
+        /* ROADMAP badge custom animation */
+        .features#roadmap .section-badge {
+            position: relative;
+            overflow: visible;
+        }
+
+        /* Dashed arc path under the badge */
+        .features#roadmap .section-badge::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: calc(100% + 8px);
+            width: 160px;
+            height: 80px;
+            transform: translateX(-50%);
+            border-bottom: 2px dashed rgba(255, 255, 255, 0.28);
+            border-left: 2px dashed rgba(255, 255, 255, 0.18);
+            border-right: 2px dashed rgba(255, 255, 255, 0.18);
+            border-top: 0;
+            border-radius: 0 0 160px 160px / 0 0 80px 80px;
+            pointer-events: none;
+        }
+
+        /* Rocket following the arc */
+        .features#roadmap .section-badge .badge-rocket {
+            position: absolute;
+            left: calc(50% - 80px);
+            top: calc(100% + 0px);
+            width: 26px;
+            height: 26px;
+            transform-origin: center;
+            animation: rocketPath 4s ease-in-out infinite;
+            filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+            pointer-events: none;
+        }
+
+        .features#roadmap .section-badge:hover .badge-rocket {
+            animation-duration: 2.6s;
+        }
+
+        .features#roadmap .section-badge .badge-rocket::after {
+            content: "";
+            position: absolute;
+            right: 50%;
+            top: 60%;
+            width: 14px;
+            height: 6px;
+            transform: translate(0, -50%) rotate(10deg);
+            background: radial-gradient(closest-side, rgba(255, 68, 68, 0.8), rgba(255, 68, 68, 0) 70%);
+            filter: blur(2px);
+            opacity: 0.7;
+            animation: rocketFlare 0.5s ease-in-out infinite alternate;
+        }
+
+        .features#roadmap .section-badge .rocket-icon {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        @keyframes rocketFlare {
+            0% { opacity: 0.35; transform: translate(0, -50%) rotate(5deg) scaleX(0.8); }
+            100% { opacity: 0.9; transform: translate(2px, -50%) rotate(15deg) scaleX(1.2); }
+        }
+
+        @keyframes rocketPath {
+            0% { transform: translate(0px, 72px) rotate(-20deg); }
+            20% { transform: translate(32px, 48px) rotate(-5deg); }
+            40% { transform: translate(64px, 26px) rotate(5deg); }
+            60% { transform: translate(96px, 18px) rotate(12deg); }
+            80% { transform: translate(128px, 40px) rotate(5deg); }
+            100% { transform: translate(160px, 72px) rotate(20deg); }
+        }
+        /* Hanging lock for the Security & Trust badge */
+        .section-badge .badge-lock {
+            position: absolute;
+            left: 50%;
+            top: 100%;
+            transform: translateX(-50%);
+            width: 24px;
+            height: 30px;
+            transform-origin: top center;
+            animation: lockSwing 2.4s ease-in-out infinite;
+            pointer-events: none;
+            filter: drop-shadow(0 2px 6px rgba(255, 0, 0, 0.35));
+        }
+
+        .section-badge .badge-lock::before {
+            content: "";
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.35);
+            border-radius: 2px;
+        }
+
+        .section-badge .badge-lock .lock-icon {
+            width: 100%;
+            height: 100%;
+            display: block;
+            fill: #FF4444;
+            stroke: rgba(255, 255, 255, 0.9);
+            stroke-width: 0.5;
+            animation: lockBlink 1.6s steps(2, end) infinite;
+        }
+
+        @keyframes lockSwing {
+            0%, 100% { transform: translateX(-50%) rotate(0deg); }
+            25% { transform: translateX(-50%) rotate(6deg); }
+            50% { transform: translateX(-50%) rotate(0deg); }
+            75% { transform: translateX(-50%) rotate(-6deg); }
+        }
+
+        @keyframes lockBlink {
+            0%, 60%, 100% {
+                fill: #FF4444;
+                filter: drop-shadow(0 0 0 rgba(255, 0, 0, 0));
+            }
+            30% {
+                fill: #FF0000;
+                filter: drop-shadow(0 0 10px rgba(255, 0, 0, 0.85));
+            }
         }
 
         h2 {
@@ -817,6 +1004,74 @@
             color: rgba(255, 255, 255, 0.85);
         }
 
+        /* 24-HOUR PAYOUTS SECTION */
+        .payout-section {
+            padding: 80px 40px;
+            background: radial-gradient(circle at center, rgba(0,255,225,0.06) 0%, transparent 70%);
+        }
+        .payout-container { max-width: 1200px; margin: 0 auto; }
+        .payout-header { text-align: center; margin-bottom: 50px; }
+        .payout-badge {
+            display: inline-block;
+            padding: 8px 18px;
+            border-radius: 24px;
+            color: var(--accent);
+            border: 1px solid rgba(0,255,225,0.5);
+            background: rgba(0,255,225,0.08);
+            backdrop-filter: blur(10px);
+        }
+        .payout-title { margin-top: 16px; font-size: clamp(1.9rem, 4.6vw, 3.2rem); font-weight: 900; }
+        .payout-subtitle { color: rgba(255,255,255,0.7); max-width: 760px; margin: 12px auto 0; }
+
+        .payout-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 22px;
+            margin-top: 36px;
+        }
+        .payout-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 18px;
+            padding: 26px;
+            backdrop-filter: blur(18px);
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+        }
+        .payout-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 18px 40px rgba(0,0,0,0.35), 0 0 40px rgba(0,255,225,0.25);
+        }
+        .payout-card .icon {
+            width: 46px; height: 46px; border-radius: 12px;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: rgba(0,255,225,0.12);
+            border: 2px solid rgba(0,255,225,0.6);
+            color: var(--accent); font-size: 22px; margin-bottom: 12px;
+            box-shadow: 0 0 20px rgba(0,255,225,0.25);
+        }
+        .payout-card h4 { font-weight: 800; margin-bottom: 8px; }
+        .payout-card p { color: rgba(255,255,255,0.7); font-size: 0.98rem; }
+
+        /* 24h dial */
+        .payout-dial {
+            width: 160px; height: 160px; margin: 30px auto 10px; position: relative;
+            border-radius: 50%;
+            background: conic-gradient(from 270deg, rgba(0,255,225,0.9) 0 75%, rgba(255,255,255,0.08) 75%);
+            box-shadow: 0 0 60px rgba(0,255,225,0.4);
+        }
+        .payout-dial::after { content: '24h'; position: absolute; inset: 0; display: grid; place-items: center; font-weight: 900; font-size: 32px; color: var(--light); text-shadow: 0 0 14px rgba(0,255,225,0.6); }
+        .payout-meta { text-align: center; color: rgba(255,255,255,0.7); }
+
+        /* Step row */
+        .payout-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 28px; }
+        .payout-step { text-align: center; padding: 16px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+        .payout-step .step-title { font-weight: 700; margin-top: 6px; }
+        .payout-step .step-note { color: rgba(255,255,255,0.6); font-size: 0.9rem; }
+
+        @media (max-width: 768px) {
+            .payout-steps { grid-template-columns: repeat(2, 1fr); }
+        }
+
         /* KILLER 90% REVENUE SHARE SECTION */
         .revenue-section {
             padding: 80px 40px;
@@ -893,6 +1148,47 @@
         @keyframes bluePulse {
             0%, 100% { box-shadow: 0 0 80px rgba(0, 255, 225, 0.35), 0 20px 50px rgba(0, 0, 0, 0.35); }
             50% { box-shadow: 0 0 110px rgba(0, 255, 225, 0.55), 0 30px 70px rgba(0, 0, 0, 0.5); }
+        }
+
+        /* Glass crack overlay (SVG mask) */
+        .revenue-card.youtube-card { position: relative; overflow: hidden; }
+        .revenue-card.youtube-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 40% 40%, rgba(255,255,255,0.25), rgba(255,255,255,0) 60%);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+            /* crack lines via mask */
+            -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'><g stroke='white' stroke-width='2' fill='none' stroke-linecap='round'><path d='M200 120 L120 40'/><path d='M200 120 L280 30'/><path d='M200 120 L340 110'/><path d='M200 120 L60 130'/><path d='M200 120 L220 210'/><path d='M200 120 L130 210'/><path d='M200 120 L300 180'/><path d='M200 120 L90 80'/></g><circle cx='200' cy='120' r='10' fill='white'/></svg>");
+            mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'><g stroke='white' stroke-width='2' fill='none' stroke-linecap='round'><path d='M200 120 L120 40'/><path d='M200 120 L280 30'/><path d='M200 120 L340 110'/><path d='M200 120 L60 130'/><path d='M200 120 L220 210'/><path d='M200 120 L130 210'/><path d='M200 120 L300 180'/><path d='M200 120 L90 80'/></g><circle cx='200' cy='120' r='10' fill='white'/></svg>");
+            -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+            -webkit-mask-size: cover; mask-size: cover;
+        }
+        .revenue-card.youtube-card.shatter::before { opacity: 1; }
+        .revenue-card.youtube-card.shatter { animation: cardShake 300ms ease-in-out 1; }
+        @keyframes cardShake {
+            0% { transform: translateX(0) rotate(0deg) scale(1.05); }
+            20% { transform: translateX(-3px) rotate(-0.5deg) scale(1.05); }
+            40% { transform: translateX(3px) rotate(0.6deg) scale(1.05); }
+            60% { transform: translateX(-2px) rotate(-0.3deg) scale(1.05); }
+            80% { transform: translateX(2px) rotate(0.2deg) scale(1.05); }
+            100% { transform: translateX(0) rotate(0deg) scale(1.05); }
+        }
+        .glass-piece {
+            position: absolute;
+            width: 6px; height: 10px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.1));
+            border-radius: 1px;
+            filter: drop-shadow(0 0 6px rgba(255,255,255,0.5));
+            opacity: 0.95;
+            pointer-events: none;
+            animation: fallPiece 900ms ease forwards;
+        }
+        @keyframes fallPiece {
+            0% { transform: translate(0, -4px) rotate(0deg); opacity: 1; }
+            100% { transform: translate(0, 40px) rotate(90deg); opacity: 0; }
         }
 
         /* Pre-launch toast + attention highlight */
@@ -1181,26 +1477,82 @@
             100% { opacity: 0.8; }
         }
 
-        .lightning-bolt {
-            position: relative; /* Position relative to allow centering */
-            font-size: 80px;
-            color: var(--primary);
-            opacity: 0; /* Initially hidden */
-            transition: opacity 0.3s ease;
-            text-shadow: 0 0 20px rgba(255, 68, 68, 0.8);
-            z-index: 1; /* Ensure it's above static */
+        /* Play rectangle on rectangle (SF-style) overlay with neon glow */
+        .play-overlay {
+            position: relative;
+            width: 120px;
+            height: 80px;
+            cursor: pointer;
+            filter: drop-shadow(0 0 20px rgba(0,255,225,0.35));
+            transition: transform 0.2s ease, filter 0.2s ease, opacity 0.25s ease;
+            opacity: 0; /* hidden until animated in */
+            z-index: 2;
+        }
+        .play-overlay::before, .play-overlay::after {
+            content: '';
+            position: absolute;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(0,255,225,0.8);
+            box-shadow: 0 0 30px rgba(0,255,225,0.35);
+        }
+        /* back rectangle */
+        .play-overlay::before {
+            width: 100px;
+            height: 64px;
+            top: 8px;
+            left: 10px;
+            transform: rotate(-2deg);
+        }
+        /* front rectangle */
+        .play-overlay::after {
+            width: 110px;
+            height: 70px;
+            top: 4px;
+            left: 6px;
+        }
+        /* triangle play icon */
+        .play-overlay .triangle {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-45%, -50%);
+            width: 0; height: 0;
+            border-left: 20px solid rgba(0,255,225,0.95);
+            border-top: 14px solid transparent;
+            border-bottom: 14px solid transparent;
+            filter: drop-shadow(0 0 16px rgba(0,255,225,0.65));
+        }
+        .play-overlay.active { opacity: 1; animation: playPulse 1.4s ease-in-out infinite; }
+        .play-overlay:active { transform: scale(0.98); }
+        @keyframes playPulse {
+            0%,100% { filter: drop-shadow(0 0 18px rgba(0,255,225,0.45)); }
+            50% { filter: drop-shadow(0 0 28px rgba(0,255,225,0.85)); }
         }
 
-        .lightning-bolt.active {
-            opacity: 1;
-            animation: lightning-pulse 1s ease-in-out infinite alternate;
+        /* Demo nudge arrow */
+        .demo-nudge {
+            position: fixed;
+            right: 18px;
+            top: 46vh; /* mid-page */
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            background: rgba(0,0,0,0.55);
+            border: 1px solid rgba(0,255,225,0.5);
+            border-radius: 14px;
+            color: #fff;
+            z-index: 15000;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4), 0 0 30px rgba(0,255,225,0.25);
+            cursor: pointer;
+            user-select: none;
         }
-
-        @keyframes lightning-pulse {
-            0% { transform: scale(1); opacity: 1; text-shadow: 0 0 20px rgba(255, 68, 68, 0.8); }
-            50% { transform: scale(1.2); opacity: 0.7; text-shadow: 0 0 30px rgba(255, 68, 68, 1); }
-            100% { transform: scale(1); opacity: 1; text-shadow: 0 0 20px rgba(255, 68, 68, 0.8); }
-        }
+        .demo-nudge .arrow { font-size: 22px; animation: arrowBounce 1s ease-in-out infinite; }
+        .demo-nudge .label { font-weight: 700; letter-spacing: 0.3px; }
+        @keyframes arrowBounce { 0%,100% { transform: translateX(0); } 50% { transform: translateX(-6px); } }
 
         /* App Preview Section */
         .app-preview {
@@ -1271,14 +1623,12 @@
             border-radius: 15px;
             transition: all 0.3s ease;
             cursor: pointer;
+            -webkit-tap-highlight-color: rgba(0,0,0,0);
+            touch-action: manipulation;
         }
 
-        .strike-item:hover {
-            background: rgba(255, 255, 255, 0.08);
-            transform: translateX(10px);
-            box-shadow: 0 0 20px rgba(255, 68, 68, 0.2);
-            border: 1px solid rgba(255, 68, 68, 0.3);
-        }
+        .strike-item:hover { background: rgba(255, 255, 255, 0.08); transform: translateX(10px); box-shadow: 0 0 20px rgba(255, 68, 68, 0.2); border: 1px solid rgba(255, 68, 68, 0.3); }
+        .strike-item.is-pressed { transform: scale(0.98) translateX(6px); box-shadow: 0 12px 30px rgba(255,68,68,0.25); }
 
         .strike-item.final-review {
             background: rgba(0, 255, 225, 0.1);
@@ -1863,14 +2213,12 @@
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.05);
             cursor: pointer;
+            -webkit-tap-highlight-color: rgba(0,0,0,0);
+            touch-action: manipulation;
         }
 
-        .benefit:hover {
-            transform: translateY(-12px);
-            background: rgba(255, 255, 255, 0.08);
-            box-shadow: var(--card-glow-hover);
-            border-color: rgba(255, 68, 68, 0.6);
-        }
+        .benefit:hover { transform: translateY(-12px); background: rgba(255, 255, 255, 0.08); box-shadow: var(--card-glow-hover); border-color: rgba(255, 68, 68, 0.6); }
+        .benefit.is-pressed { transform: scale(0.98) translateY(-2px); box-shadow: 0 16px 40px rgba(255,68,68,0.35); }
 
         .benefit-number {
             font-size: 2.5rem;
@@ -1909,6 +2257,32 @@
         .benefit:hover .benefit-description {
             color: rgba(255, 255, 255, 0.8);
         }
+
+        /* Fire + Blue Pop Effects */
+        .benefit.on-fire { position: relative; overflow: hidden; }
+        .benefit .real-fire { position: absolute; inset: -10% -10% -20% -10%; pointer-events: none; z-index: 1; mix-blend-mode: screen; filter: saturate(140%); }
+        .benefit .real-fire svg { width: 120%; height: 120%; transform: translate(-10%, -5%); filter: drop-shadow(0 0 25px rgba(255,120,0,0.5)); }
+        .benefit .real-fire canvas { position: absolute; inset: 0; width: 100%; height: 100%; mix-blend-mode: screen; }
+        .benefit.on-fire::after {
+            content: '';
+            position: absolute; inset: -10% -10% -20% -10%;
+            pointer-events: none;
+            background:
+                radial-gradient(ellipse at 50% 80%, rgba(255,140,0,0.45) 0%, rgba(255,140,0,0.15) 35%, transparent 60%),
+                radial-gradient(circle at 60% 20%, rgba(255,255,255,0.18) 0%, transparent 35%),
+                conic-gradient(from 0deg, rgba(255,200,0,0.25), rgba(255,80,0,0.25), rgba(255,200,0,0.25));
+            mix-blend-mode: screen;
+            filter: blur(12px) saturate(140%);
+            transform: translateY(6px) scale(1.05);
+            opacity: 0.75;
+            animation: flameFlicker 1.4s ease-in-out infinite, heatWave 3s ease-in-out infinite;
+        }
+        @keyframes flameFlicker { 0%,100%{filter:blur(12px) brightness(1)} 50%{filter:blur(16px) brightness(1.2)} }
+        @keyframes heatWave { 0%{transform:translateY(6px) scale(1.05)} 50%{transform:translateY(0) scale(1.08)} 100%{transform:translateY(6px) scale(1.05)} }
+
+        .pop-blue { box-shadow: 0 18px 48px rgba(0,170,255,0.35) !important; border-color: rgba(0,170,255,0.6) !important; transform: translateY(-8px) scale(1.03) !important; }
+        .stat.pop-blue .stat-number { text-shadow: 0 0 18px rgba(0,170,255,0.8); }
+        .cloud-infrastructure .enterprise-stat-card.pop-blue { border-color: rgba(66,133,244,0.6); box-shadow: 0 30px 80px rgba(66,133,244,0.35), 0 0 120px rgba(66,133,244,0.25); transform: translate3d(0,-10px,0) scale(1.02); }
 
         /* Enhanced CTA Section */
         .cta-section {
@@ -2684,7 +3058,17 @@
     <!-- Security & Trust Center -->
     <section class="creator-protection" id="trust">
         <div class="section-header slide-in-up">
-            <div class="section-badge">SECURITY & TRUST</div>
+            <div class="section-badge">SECURITY & TRUST
+                <span class="badge-lock" aria-hidden="true">
+                    <svg class="lock-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Open lock: shackle offset to imply unlocked -->
+                        <path d="M16 9V7a4 4 0 10-8 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <rect x="5" y="9" width="14" height="12" rx="3" ry="3"></rect>
+                        <!-- small keyhole -->
+                        <circle cx="12" cy="15" r="1.5"></circle>
+                    </svg>
+                </span>
+            </div>
             <h2>Security, Privacy, and Reliability by Design</h2>
             <p class="section-subtitle">Built on Google Cloud with least-privilege IAM, encryption everywhere, and production-ready guardrails.</p>
         </div>
@@ -2825,7 +3209,16 @@
     <!-- Roadmap & Milestones -->
     <section class="features" id="roadmap" style="background: linear-gradient(180deg, var(--darker) 0%, #0F0505 100%);">
         <div class="section-header slide-in-up">
-            <div class="section-badge">ROADMAP</div>
+            <div class="section-badge">ROADMAP
+                <span class="badge-rocket" aria-hidden="true">
+                    <svg class="rocket-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2c2.5 0 5 2.5 5 5 0 2.2-1.2 5.2-3.6 8.8-.3.5-.8.8-1.4.8s-1.1-.3-1.4-.8C8.2 12.2 7 9.2 7 7c0-2.5 2.5-5 5-5z" fill="#ffffff"/>
+                        <circle cx="12" cy="7" r="1.5" fill="#00FFE1"/>
+                        <path d="M9 16l-3 2 2-3 1-.5c.4-.2.9 0 1.1.4.2.4 0 .9-.4 1.1L9 16z" fill="#B0BEC5"/>
+                        <path d="M15 16l3 2-2-3-1-.5c-.4-.2-.9 0-1.1.4-.2.4 0 .9.4 1.1L15 16z" fill="#B0BEC5"/>
+                    </svg>
+                </span>
+            </div>
             <h2>Milestones Aligned With Google Cloud</h2>
             <p class="section-subtitle">Clear phases to responsibly utilize credits while scaling globally.</p>
         </div>
@@ -2946,6 +3339,63 @@
         </div>
     </section>
 
+    <!-- 24-Hour Payouts Section -->
+    <section class="payout-section" id="payouts">
+        <div class="payout-container">
+            <div class="payout-header slide-in-up">
+                <div class="payout-badge">💸 24-HOUR PAYOUTS</div>
+                <h2 class="payout-title">Get Paid Tomorrow For What You Made Today</h2>
+                <p class="payout-subtitle">No 30-day waits. No “net-60.” We settle creator earnings in under 24 hours with automated risk controls and instant transfer rails.</p>
+            </div>
+            <div class="payout-grid slide-in-up">
+                <div class="payout-card">
+                    <div class="icon">⚡</div>
+                    <h4>Instant Settlement Engine</h4>
+                    <p>Your earnings flow through our automated ledger the moment views and purchases clear fraud checks.</p>
+                </div>
+                <div class="payout-card">
+                    <div class="icon">🔐</div>
+                    <h4>Protected & Compliant</h4>
+                    <p>KYC/AML and chargeback protection baked in. Secure by design with audit-ready trails.</p>
+                </div>
+                <div class="payout-card">
+                    <div class="icon">🌍</div>
+                    <h4>Global Rails</h4>
+                    <p>US and international payouts with multi-currency support and transparent FX.</p>
+                </div>
+                <div class="payout-card">
+                    <div class="icon">📈</div>
+                    <h4>Creator Cash Flow</h4>
+                    <p>Reinvest faster. Scale production weekly instead of monthly. No more waiting on platforms.</p>
+                </div>
+            </div>
+            <div class="payout-dial slide-in-up"></div>
+            <div class="payout-meta fade-in">Average payout time last month: <strong>18h 42m</strong></div>
+            <div class="payout-steps slide-in-up">
+                <div class="payout-step">
+                    <div>🎬</div>
+                    <div class="step-title">Publish</div>
+                    <div class="step-note">Your video goes live</div>
+                </div>
+                <div class="payout-step">
+                    <div>🧠</div>
+                    <div class="step-title">Verify</div>
+                    <div class="step-note">AI fraud checks clear</div>
+                </div>
+                <div class="payout-step">
+                    <div>💰</div>
+                    <div class="step-title">Settle</div>
+                    <div class="step-note">Earnings calculated</div>
+                </div>
+                <div class="payout-step">
+                    <div>🚀</div>
+                    <div class="step-title">Payout</div>
+                    <div class="step-note">Funds hit your account</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- KILLER 90% REVENUE SHARE SECTION -->
     <section class="revenue-section" id="revenue">
         <div class="section-header slide-in-up">
@@ -3028,7 +3478,7 @@
                 <div class="phone-mockup" id="phoneMockup">
                     <div class="phone-screen">
                         <div class="tv-static" id="tvStatic"></div>
-                        <div class="lightning-bolt" id="lightningBolt">⚡️</div>
+                        <div class="play-overlay" id="playOverlay"><div class="triangle"></div></div>
                     </div>
                 </div>
             </div>
@@ -3356,6 +3806,20 @@
         window.MYCHANNEL_CLOUD = window.MYCHANNEL_CLOUD || {
             // apiBase: 'https://mychannel-api-xxxxxxxx-uc.a.run.app'
         };
+        // Demo nudge element (non-visual unless shown)
+        (function(){
+            const n = document.createElement('div');
+            n.className = 'demo-nudge';
+            n.innerHTML = '<span class="arrow">⬅</span><span class="label">Watch the demo</span>';
+            document.body.appendChild(n);
+            // Preload glass sfx for YouTube card shatter
+            const sfx = document.createElement('audio');
+            sfx.id = 'glassSfx';
+            sfx.preload = 'auto';
+            sfx.src = 'https://cdn.jsdelivr.net/gh/naptha/tinyfiles@master/sounds/glass1.mp3';
+            sfx.crossOrigin = 'anonymous';
+            document.body.appendChild(sfx);
+        })();
         document.addEventListener('DOMContentLoaded', () => {
             const isHoverDevice = window.matchMedia('(hover: hover)').matches;
 
@@ -3462,6 +3926,25 @@
                 });
             }
 
+            // Mid-page nudge: if user scrolls near the phone mockup and hasn't clicked demo
+            (function initDemoNudge(){
+                const nudge = document.querySelector('.demo-nudge');
+                const demoBtnEl = document.getElementById('demoBtn');
+                const phone = document.getElementById('phoneMockup');
+                if (!nudge || !phone) return;
+                const obs = new IntersectionObserver((entries)=>{
+                    entries.forEach(entry=>{
+                        if (entry.isIntersecting) {
+                            nudge.style.display = 'flex';
+                        } else {
+                            nudge.style.display = 'none';
+                        }
+                    })
+                }, { rootMargin: '0px', threshold: 0.3 });
+                obs.observe(phone);
+                nudge.addEventListener('click', ()=> demoBtnEl && demoBtnEl.click());
+            })();
+
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape' && videoModal && videoModal.classList.contains('active')) {
                     closeModal();
@@ -3493,6 +3976,7 @@
                 initButtonEffects();
                 initDynamicScreen();
                 initRevenueHighlights();
+                initPayoutStats();
             };
 
             // --- PDF download (desktop + mobile): generate client-side PDF; fallback to print route ---
@@ -3564,19 +4048,18 @@
             // --- Stat Counters ---
             const initCounters = () => {
                 const animateCounter = (el, target) => {
-                    let count = 0;
-                    const duration = 1500;
-                    const increment = target / (duration / 16);
-                    const timer = setInterval(() => {
-                        count += increment;
-                        if (count >= target) {
-                            count = target;
-                            clearInterval(timer);
-                        }
-                        if (target === 100000) el.textContent = `${(count / 1000).toFixed(0)}K+`;
+                    let start = null;
+                    const duration = 1200;
+                    const step = (ts) => {
+                        if (!start) start = ts;
+                        const p = Math.min(1, (ts - start) / duration);
+                        const val = Math.floor(target * p);
+                        if (target === 100000) el.textContent = `${(val / 1000).toFixed(0)}K+`;
                         else if (target === 0) el.textContent = 'Zero';
-                        else el.textContent = `${Math.ceil(count)}%`;
-                    }, 16);
+                        else el.textContent = `${val}%`;
+                        if (p < 1) requestAnimationFrame(step);
+                    };
+                    requestAnimationFrame(step);
                 };
                 animateCounter(document.getElementById('revenueCounter'), 90);
                 animateCounter(document.getElementById('adoptersCounter'), 100000);
@@ -3591,6 +4074,13 @@
                             setTimeout(() => {
                                 entry.target.classList.add('animate-in');
                             }, 40);
+                            // Fire/Blue pop effects for specific cards when they come into view
+                            if (entry.target.classList.contains('benefit')) {
+                                const label = entry.target.querySelector('.benefit-number')?.textContent?.trim().toLowerCase();
+                                if (label === '90%') entry.target.classList.add('on-fire');
+                                if (label === '100%') entry.target.classList.add('pop-blue');
+                                if (label && label.includes('zero')) entry.target.classList.add('pop-blue');
+                            }
                             observer.unobserve(entry.target);
                         }
                     });
@@ -3599,7 +4089,7 @@
                     rootMargin: '50px 0px -50px 0px'
                 });
 
-                document.querySelectorAll('.slide-in-up, .slide-in-left, .slide-in-right, .fade-in').forEach((el, index) => {
+                document.querySelectorAll('.slide-in-up, .slide-in-left, .slide-in-right, .fade-in, .benefit').forEach((el, index) => {
                     el.style.transitionDelay = `${(index % 8) * 0.09}s`;
                     observer.observe(el);
                 });
@@ -3622,13 +4112,105 @@
             
             // --- DYNAMIC PHONE SCREEN EFFECT ---
             const initDynamicScreen = () => {
-                const lightningBolt = document.getElementById('lightningBolt');
-                if (!lightningBolt) return;
+                const playOverlay = document.getElementById('playOverlay');
+                const tvStatic = document.getElementById('tvStatic');
+                if (!playOverlay || !tvStatic) return;
 
-                setInterval(() => {
-                    lightningBolt.classList.toggle('active');
-                }, 3000);
+                // Animate in when section is visible
+                const sectionObserver = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            playOverlay.classList.add('active');
+                        } else {
+                            playOverlay.classList.remove('active');
+                        }
+                    });
+                }, { rootMargin: '-20% 0px -20% 0px', threshold: 0.25 });
+                sectionObserver.observe(playOverlay);
+
+                // Tap to toggle like a TV on/off and open demo
+                let tvOn = false;
+                const toggleTV = () => {
+                    tvOn = !tvOn;
+                    tvStatic.style.opacity = tvOn ? '0.2' : '1';
+                    playOverlay.style.opacity = tvOn ? '0.3' : '1';
+                    if (tvOn) {
+                        // open demo modal
+                        const demoBtn = document.getElementById('demoBtn');
+                        if (demoBtn) demoBtn.click();
+                    }
+                };
+                playOverlay.addEventListener('click', toggleTV);
             };
+
+            // Inject a high-quality procedural fire SVG and attach to 90% card when visible
+            (function mountRealFire(){
+                const attachFire = (card) => {
+                    if (card.querySelector('.real-fire')) return;
+                    const host = document.createElement('div');
+                    host.className = 'real-fire';
+                    const canvas = document.createElement('canvas');
+                    host.appendChild(canvas);
+                    card.appendChild(host);
+
+                    // Realistic per-pixel fire using canvas + noise and additive color
+                    const ctx = canvas.getContext('2d');
+                    const DPR = Math.min(2, window.devicePixelRatio || 1);
+                    const resize = () => { canvas.width = card.clientWidth * DPR; canvas.height = card.clientHeight * DPR; };
+                    resize();
+                    let t = 0;
+                    const rnd = (x,y,s)=> (Math.sin(x*12.9898 + y*78.233 + s*43758.5453) * 43758.5453) % 1;
+                    const draw = () => {
+                        t += 0.008;
+                        const w = canvas.width, h = canvas.height;
+                        const img = ctx.createImageData(w, h);
+                        for (let y=0; y<h; y++) {
+                            const v = y/h;
+                            for (let x=0; x<w; x++) {
+                                const i = (y*w + x)*4;
+                                // layered noise advected upward for flame motion
+                                const nx = x/w, ny = y/h;
+                                let n = 0;
+                                n += rnd(nx*6, ny*12 - t*4, 1);
+                                n += rnd(nx*12, ny*24 - t*6, 2)*0.6;
+                                n += rnd(nx*24, ny*48 - t*9, 3)*0.35;
+                                n = Math.pow(Math.max(0, n - (ny*0.8)), 1.6);
+                                // color ramp (true RGB fire)
+                                const heat = Math.min(1, n*2);
+                                let r = 0, g = 0, b = 0;
+                                if (heat > 0.7) { // white-hot core
+                                    r = 255; g = 240; b = 200;
+                                } else if (heat > 0.45) { // yellow/orange
+                                    const p = (heat-0.45)/0.25; r = 255; g = 200 + 40*p; b = 80*(1-p);
+                                } else if (heat > 0.2) { // deep orange/red
+                                    const p = (heat-0.2)/0.25; r = 200 + 55*p; g = 80 + 120*p; b = 20*(1-p);
+                                } else { // ember red
+                                    const p = heat/0.2; r = 120 + 80*p; g = 20 + 60*p; b = 10*p;
+                                }
+                                // fade top
+                                const fade = Math.max(0, 1 - ny*1.3);
+                                img.data[i] = r*fade;
+                                img.data[i+1] = g*fade;
+                                img.data[i+2] = b*fade;
+                                img.data[i+3] = 255 * Math.min(1, heat*1.2);
+                            }
+                        }
+                        ctx.putImageData(img, 0, 0);
+                        requestAnimationFrame(draw);
+                    };
+                    draw();
+                };
+                const benefits = document.querySelectorAll('.benefit');
+                const io = new IntersectionObserver((entries)=>{
+                    entries.forEach(e=>{
+                        if (e.isIntersecting) {
+                            const label = e.target.querySelector('.benefit-number')?.textContent?.trim();
+                            if (label === '90%') attachFire(e.target);
+                        }
+                    });
+                }, { threshold: 0.4 });
+                benefits.forEach(b=> io.observe(b));
+            })();
 
             // --- Highlight YouTube card when revenue section is in view ---
             const initRevenueHighlights = () => {
@@ -3638,12 +4220,66 @@
                     entries.forEach(entry => {
                         if (entry.isIntersecting) {
                             youtubeCard.classList.add('is-highlighted');
+                            // Auto-shatter once when card enters viewport
+                            if (!youtubeCard.dataset.autoShattered) {
+                                shatter();
+                                youtubeCard.dataset.autoShattered = '1';
+                            }
                         } else {
                             youtubeCard.classList.remove('is-highlighted');
                         }
                     });
-                }, { threshold: 0.45 });
+                }, { threshold: 0.35, rootMargin: '-10% 0px -10% 0px' });
                 observer.observe(youtubeCard);
+
+                // Add one-time shatter on hover or tap
+                const playGlassSound = () => {
+                    const el = document.getElementById('glassSfx');
+                    if (el) {
+                        el.currentTime = 0;
+                        el.volume = 0.35;
+                        el.play().catch(()=>{});
+                    }
+                };
+                let shattered = false;
+                const spawnGlassPieces = (x, y, count = 16) => {
+                    const rect = youtubeCard.getBoundingClientRect();
+                    for (let i = 0; i < count; i++) {
+                        const piece = document.createElement('div');
+                        piece.className = 'glass-piece';
+                        const px = (x ?? (rect.left + rect.width/2)) + (Math.random()*30 - 15);
+                        const py = (y ?? (rect.top + rect.height/2)) + (Math.random()*20 - 10);
+                        piece.style.left = `${px - rect.left}px`;
+                        piece.style.top = `${py - rect.top}px`;
+                        piece.style.transform = `translate(${Math.random()*20-10}px, ${-Math.random()*10}px)`;
+                        piece.style.opacity = `${0.6 + Math.random()*0.4}`;
+                        youtubeCard.appendChild(piece);
+                        setTimeout(()=> piece.remove(), 950);
+                    }
+                };
+                const shatter = (clientX, clientY) => {
+                    youtubeCard.classList.add('shatter');
+                    playGlassSound();
+                    spawnGlassPieces(clientX, clientY, 20);
+                    setTimeout(()=> youtubeCard.classList.remove('shatter'), 350);
+                };
+                youtubeCard.addEventListener('mouseenter', (e)=>{ if (!shattered) { shatter(); shattered = true; } });
+                youtubeCard.addEventListener('click', (e)=>{ shatter(e.clientX, e.clientY); });
+            };
+
+            // --- 24h Payout stats (dynamic number, no UI change) ---
+            const initPayoutStats = () => {
+                const meta = document.querySelector('.payout-meta');
+                if (!meta) return;
+                fetch('payout-stats.json', { cache: 'no-store' })
+                    .then(r => r.ok ? r.json() : Promise.reject())
+                    .then(d => {
+                        if (!d || typeof d.averageHours !== 'number') return;
+                        const hours = Math.floor(d.averageHours);
+                        const mins = Math.round((d.averageHours - hours) * 60);
+                        meta.innerHTML = `Average payout time last month: <strong>${hours}h ${mins}m</strong>`;
+                    })
+                    .catch(() => {});
             };
 
             // --- Button Ripple Effect ---
@@ -3663,6 +4299,21 @@
                             trackEvent('calculator_open');
                         }
                     });
+                });
+
+                // Press feedback for benefit and strike cards (mobile-friendly)
+                const pressables = [
+                    ...document.querySelectorAll('.benefit'),
+                    ...document.querySelectorAll('.strike-item')
+                ];
+                pressables.forEach(el => {
+                    const add = () => el.classList.add('is-pressed');
+                    const remove = () => el.classList.remove('is-pressed');
+                    el.addEventListener('pointerdown', add);
+                    el.addEventListener('pointerup', remove);
+                    el.addEventListener('pointerleave', remove);
+                    el.addEventListener('touchstart', add, { passive: true });
+                    el.addEventListener('touchend', remove, { passive: true });
                 });
             };
 
