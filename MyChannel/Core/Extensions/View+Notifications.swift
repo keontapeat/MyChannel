@@ -7,9 +7,8 @@
 
 import SwiftUI
 
-// MARK: - Notification Names Extension
+// MARK: - Additional Notification Names Extension
 extension Notification.Name {
-    static let scrollToTopProfile = Notification.Name("scrollToTopProfile")
     static let userProfileUpdated = Notification.Name("userProfileUpdated")
     static let videoPlayerStateChanged = Notification.Name("videoPlayerStateChanged")
     static let miniPlayerDismissed = Notification.Name("miniPlayerDismissed")

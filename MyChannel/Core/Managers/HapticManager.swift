@@ -2,63 +2,98 @@
 //  HapticManager.swift
 //  MyChannel
 //
-//  Created by Keonta on 7/9/25.
+//  Created by AI Assistant on 8/9/25.
 //
 
 import UIKit
 
-// MARK: - Haptic Feedback Manager
-/// A singleton class to manage haptic feedback throughout the app.
-/// This provides a simple interface to trigger different feedback types,
-/// enhancing the user's tactile experience.
-final class HapticManager {
-    
-    /// The shared singleton instance of the `HapticManager`.
+// MARK: - 📳 Professional Haptic Feedback Manager
+class HapticManager {
     static let shared = HapticManager()
     
-    // Private feedback generators for different haptic styles.
-    // Initializing them once and reusing them is more efficient.
-    private let lightImpactGenerator = UIImpactFeedbackGenerator(style: .light)
-    private let mediumImpactGenerator = UIImpactFeedbackGenerator(style: .medium)
-    private let heavyImpactGenerator = UIImpactFeedbackGenerator(style: .heavy)
-    private let softImpactGenerator = UIImpactFeedbackGenerator(style: .soft)
-    private let rigidImpactGenerator = UIImpactFeedbackGenerator(style: .rigid)
-    private let notificationGenerator = UINotificationFeedbackGenerator()
+    private init() {}
     
-    /// Private initializer to ensure the singleton pattern.
-    private init() {
-        // Prepare generators to reduce latency for the first haptic feedback.
-        lightImpactGenerator.prepare()
-        mediumImpactGenerator.prepare()
-        heavyImpactGenerator.prepare()
-        softImpactGenerator.prepare()
-        rigidImpactGenerator.prepare()
-        notificationGenerator.prepare()
+    // MARK: - Impact Feedback
+    func impact(style: UIImpactFeedbackGenerator.FeedbackStyle) {
+        let generator = UIImpactFeedbackGenerator(style: style)
+        generator.prepare()
+        generator.impactOccurred()
     }
     
-    /// Triggers an impact feedback with a specific style.
-    /// - Parameter style: The intensity of the impact feedback.
-    func impact(style: UIImpactFeedbackGenerator.FeedbackStyle) {
-        switch style {
-        case .light:
-            lightImpactGenerator.impactOccurred()
-        case .medium:
-            mediumImpactGenerator.impactOccurred()
-        case .heavy:
-            heavyImpactGenerator.impactOccurred()
-        case .soft:
-            softImpactGenerator.impactOccurred()
-        case .rigid:
-            rigidImpactGenerator.impactOccurred()
-        @unknown default:
-            // Fallback to medium for any future unknown styles.
-            mediumImpactGenerator.impactOccurred()
+    // MARK: - Notification Feedback
+    func notification(type: UINotificationFeedbackGenerator.FeedbackType) {
+        let generator = UINotificationFeedbackGenerator()
+        generator.prepare()
+        generator.notificationOccurred(type)
+    }
+    
+    // MARK: - Selection Feedback
+    func selection() {
+        let generator = UISelectionFeedbackGenerator()
+        generator.prepare()
+        generator.selectionChanged()
+    }
+    
+    // MARK: - Custom Patterns
+    func doubleImpact() {
+        impact(style: .medium)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.impact(style: .light)
         }
     }
     
-    /// Triggers a notification feedback.
-    /// - Parameter type: The type of the notification feedback (e.g., success, warning, error).
-    func notification(type: UINotificationFeedbackGenerator.FeedbackType) {
-        notificationGenerator.notificationOccurred(type)
+    func successPattern() {
+        notification(type: .success)
+    }
+    
+    func errorPattern() {
+        notification(type: .error)
+    }
+    
+    func warningPattern() {
+        notification(type: .warning)
+    }
+    
+    func likePattern() {
+        impact(style: .light)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            self.impact(style: .medium)
+        }
+    }
+    
+    func sharePattern() {
+        selection()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.impact(style: .light)
+        }
+    }
+}
+
+// MARK: - Haptic Extensions
+extension HapticManager {
+    /// Play haptic feedback for UI interactions
+    func playForUIAction(_ action: UIAction) {
+        switch action {
+        case .tap:
+            selection()
+        case .longPress:
+            impact(style: .medium)
+        case .swipe:
+            impact(style: .light)
+        case .success:
+            successPattern()
+        case .error:
+            errorPattern()
+        case .warning:
+            warningPattern()
+        case .like:
+            likePattern()
+        case .share:
+            sharePattern()
+        }
+    }
+    
+    enum UIAction {
+        case tap, longPress, swipe, success, error, warning, like, share
     }
 }

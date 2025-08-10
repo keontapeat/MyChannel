@@ -108,34 +108,6 @@ struct SplashView: View {
     }
 }
 
-// MARK: - Splash Container (UPDATED WITH PROPER ENVIRONMENT OBJECTS)
-struct SplashContainer: View {
-    @EnvironmentObject private var authManager: AuthenticationManager
-    @EnvironmentObject private var appState: AppState
-    @State private var showingSplash = true
-    
-    var body: some View {
-        ZStack {
-            if showingSplash {
-                SplashView {
-                    withAnimation(.easeInOut(duration: 0.8)) {
-                        showingSplash = false
-                    }
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                .zIndex(2)
-            } else {
-                MainTabView()
-                    .environmentObject(authManager)
-                    .environmentObject(appState)
-                    .environmentObject(GlobalVideoPlayerManager.shared)
-                    .transition(.opacity.combined(with: .scale(scale: 1.05)))
-                    .zIndex(1)
-            }
-        }
-    }
-}
-
 // MARK: - Super Simple Version (Even Cleaner)
 struct MinimalSplashView: View {
     @State private var logoOpacity: Double = 0.0

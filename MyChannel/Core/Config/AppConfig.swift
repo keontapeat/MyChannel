@@ -2,19 +2,19 @@
 //  AppConfig.swift
 //  MyChannel
 //
-//  Created by AI Assistant on 7/9/25.
+//  Created by AI Assistant on 8/9/25.
 //
 
 import Foundation
-import SwiftUI
 
+// MARK: - 🔧 App Configuration
 struct AppConfig {
     
     // MARK: - Environment
-    enum Environment: String, CaseIterable {
-        case development = "development"
-        case staging = "staging"
-        case production = "production"
+    enum Environment {
+        case development
+        case staging
+        case production
         
         var displayName: String {
             switch self {
@@ -23,10 +23,17 @@ struct AppConfig {
             case .production: return "Production"
             }
         }
+        
+        var apiBaseURL: String {
+            switch self {
+            case .development: return "https://dev-api.mychannel.app"
+            case .staging: return "https://staging-api.mychannel.app"
+            case .production: return "https://api.mychannel.app"
+            }
+        }
     }
     
-    // MARK: - Current Environment
-    static var environment: Environment {
+    static let environment: Environment = {
         #if DEBUG
         return .development
         #elseif STAGING
@@ -34,350 +41,189 @@ struct AppConfig {
         #else
         return .production
         #endif
-    }
-    
-    // MARK: - App Information
-    static let appName = "MyChannel"
-    static let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-    static let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-    static let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.yourcompany.mychannel"
-    
-    // MARK: - API Configuration
-    struct API {
-        static var baseURL: String {
-            switch environment {
-            case .development:
-                return "https://your-dev-api.supabase.co"
-            case .staging:
-                return "https://your-staging-api.supabase.co"
-            case .production:
-                return "https://your-prod-api.supabase.co"
-            }
-        }
-
-        static var cloudRunBaseURL: String {
-            switch environment {
-            case .development:
-                return "https://mychannel-gw-b9ljiz6f.uc.gateway.dev"
-            case .staging:
-                return "https://mychannel-gw-b9ljiz6f.uc.gateway.dev"
-            case .production:
-                return "https://mychannel-gw-b9ljiz6f.uc.gateway.dev"
-            }
-        }
-        
-        static var supabaseURL: String {
-            return baseURL
-        }
-        
-        static var supabaseAnonKey: String {
-            switch environment {
-            case .development:
-                return "your-dev-supabase-anon-key"
-            case .staging:
-                return "your-staging-supabase-anon-key"
-            case .production:
-                return "your-prod-supabase-anon-key"
-            }
-        }
-        
-        static let timeout: TimeInterval = 30.0
-        static let maxRetryAttempts = 3
-    }
+    }()
     
     // MARK: - Video Configuration
     struct Video {
-        static let maxUploadSizeMB: Int = 500
-        static let maxDurationSeconds: TimeInterval = 3600 // 1 hour
-        static let supportedFormats = ["mp4", "mov", "avi", "mkv"]
-        static let thumbnailSize = CGSize(width: 1280, height: 720)
-        
-        // Video quality settings
         enum Quality: String, CaseIterable {
-            case low = "360p"
-            case medium = "720p"
-            case high = "1080p"
-            case ultra = "4K"
+            case quality240p = "240p"
+            case quality360p = "360p"
+            case quality480p = "480p"
+            case quality720p = "720p"
+            case quality1080p = "1080p"
+            case quality1440p = "1440p"
+            case quality4K = "4K"
             
+            var displayName: String { return rawValue }
             var bitrate: Int {
                 switch self {
-                case .low: return 1000
-                case .medium: return 5000
-                case .high: return 8000
-                case .ultra: return 20000
+                case .quality240p: return 300_000
+                case .quality360p: return 700_000
+                case .quality480p: return 1_500_000
+                case .quality720p: return 5_000_000
+                case .quality1080p: return 8_000_000
+                case .quality1440p: return 16_000_000
+                case .quality4K: return 35_000_000
                 }
             }
         }
         
-        static let defaultQuality: Quality = .high
+        static let defaultQuality = Quality.quality720p
+        static let supportedFormats = ["mp4", "mov", "m4v"]
+        static let maxDuration: TimeInterval = 10 * 60 * 60 // 10 hours
+        static let maxDurationSeconds: TimeInterval = 10 * 60 * 60 // 10 hours
+        static let minDuration: TimeInterval = 1 // 1 second
+        static let maxUploadSizeMB: Int = 2048 // 2GB
+        static let thumbnailSize = CGSize(width: 320, height: 180) // 16:9 aspect ratio
     }
     
-    // MARK: - Storage Configuration
-    struct Storage {
-        static var bucketName: String {
-            switch environment {
-            case .development: return "mychannel-dev"
-            case .staging: return "mychannel-staging"
-            case .production: return "mychannel-prod"
-            }
-        }
+    // MARK: - API Configuration
+    struct API {
+        static let baseURL = environment.apiBaseURL
+        static let cloudRunBaseURL = "https://mychannel-api-abcd123-uc.a.run.app"
+        static let version = "v1"
+        static let timeout: TimeInterval = 30.0
+        static let supabaseAnonKey = "your-supabase-anon-key-here" // Replace with actual key
         
-        static let videoPath = "videos"
-        static let thumbnailPath = "thumbnails"
-        static let profileImagePath = "profiles"
-        static let bannerImagePath = "banners"
+        // API Endpoints
+        struct Endpoints {
+            static let videos = "/videos"
+            static let users = "/users"
+            static let analytics = "/analytics"
+            static let ai = "/ai"
+            static let upload = "/upload"
+            static let flicks = "/flicks"
+            static let recommendations = "/recommendations"
+        }
     }
+    
+    // MARK: - App Information
+    struct App {
+        static let name = "MyChannel"
+        static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        static let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        static let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.mychannel.app"
+    }
+    
+    // Convenience accessor for app version
+    static let appVersion = App.version
     
     // MARK: - Feature Flags
     struct Features {
+        static let enableFlicks = true
         static let enableLiveStreaming = true
-        static let enableShorts = true
-        static let enableStories = true
-        static let enableMonetization = environment == .production
+        static let enableAIRecommendations = true
+        static let enablePremiumFeatures = true
         static let enableAnalytics = true
         static let enablePushNotifications = true
-        static let enableOfflineViewing = false // Future feature
-        static let enableiCloudSync = false // Future feature
-        
-        // Development features
-        static let showDebugMenu = environment == .development
-        static let enableMockData = environment == .development
-        static let enableNetworkLogging = environment != .production
+        static let enableDeepLinks = true
+        static let enableOfflineDownload = true
+        static let enableMockData = isDebug // Enable mock data in debug mode
+        static let enableNetworkLogging = isDebug // Enable network logging in debug mode
+    }
+    
+    // MARK: - Performance Settings
+    struct Performance {
+        static let maxVideoPreload = 3
+        static let videoQualityOptions = ["360p", "480p", "720p", "1080p"]
+        static let defaultVideoQuality = "720p"
+        static let maxCacheSize: Int64 = 500 * 1024 * 1024 // 500MB
+        static let backgroundTaskTimeout: TimeInterval = 30.0
     }
     
     // MARK: - UI Configuration
     struct UI {
         static let animationDuration: TimeInterval = 0.3
-        static let longAnimationDuration: TimeInterval = 0.5
-        static let shortAnimationDuration: TimeInterval = 0.15
-        
-        static let cornerRadius: CGFloat = 12.0
-        static let shadowRadius: CGFloat = 8.0
-        static let blurRadius: CGFloat = 20.0
-        
-        // Pagination
-        static let defaultPageSize = 20
-        static let maxPageSize = 50
+        static let tabBarHeight: CGFloat = 83
+        static let miniPlayerHeight: CGFloat = 60
+        static let maxVideoAspectRatio: CGFloat = 16/9
+        static let minVideoAspectRatio: CGFloat = 9/16
     }
     
-    // MARK: - Notification Configuration
-    struct Notifications {
-        static let enableInApp = true
-        static let enablePush = true
-        static let autoHideDelay: TimeInterval = 3.0
-        
-        // Categories
-        static let likeCategory = "LIKE_CATEGORY"
-        static let commentCategory = "COMMENT_CATEGORY"
-        static let followCategory = "FOLLOW_CATEGORY"
-        static let uploadCategory = "UPLOAD_CATEGORY"
-    }
-    
-    // MARK: - Analytics Configuration
+    // MARK: - Analytics
     struct Analytics {
-        static let enableCrashReporting = environment == .production
-        static let enablePerformanceMonitoring = true
-        static let enableUserAnalytics = environment == .production
-        
-        // Events
+        static let enableCrashReporting = true
+        static let enablePerformanceTracking = true
+        static let enableUserBehaviorTracking = true
+        static let sessionTimeout: TimeInterval = 30 * 60 // 30 minutes
         static let videoWatchEvent = "video_watch"
         static let videoLikeEvent = "video_like"
         static let videoShareEvent = "video_share"
-        static let profileViewEvent = "profile_view"
-        static let searchEvent = "search"
+        static let videoCommentEvent = "video_comment"
     }
     
-    // MARK: - Security Configuration
+    // MARK: - Security
     struct Security {
-        static let enableSSLPinning = environment == .production
-        static let enableRequestSigning = environment == .production
-        static let sessionTimeoutMinutes: TimeInterval = 60 * 24 // 24 hours
+        static let enableBiometricAuth = true
+        static let sessionDuration: TimeInterval = 24 * 60 * 60 // 24 hours
         static let maxLoginAttempts = 5
-        static let lockoutDurationMinutes: TimeInterval = 15
+        static let enableSSLPinning = true
     }
     
-    // MARK: - Cache Configuration
-    struct Cache {
-        static let maxVideoCache = 1024 * 1024 * 500 // 500MB
-        static let maxImageCache = 1024 * 1024 * 100 // 100MB
-        static let cacheExpirationHours: TimeInterval = 24
+    // MARK: - Storage Configuration
+    struct Storage {
+        static let thumbnailPath = "thumbnails"
+        static let videoPath = "videos"
+        static let profileImagePath = "profile-images"
+        static let tempPath = "temp"
+        static let maxFileSize: Int64 = 2 * 1024 * 1024 * 1024 // 2GB
     }
     
-    // MARK: - Social Configuration
+    // MARK: - Environment Detection
+    static var isDebug: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+    
+    static var isPreview: Bool {
+        return ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+    }
+    
+    static var isTestFlight: Bool {
+        return Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+    }
+    
+    static var isAppStore: Bool {
+        return !isDebug && !isTestFlight
+    }
+    
+    // MARK: - URL Schemes
+    struct URLSchemes {
+        static let main = "mychannel"
+        static let video = "mychannel://video"
+        static let profile = "mychannel://profile"
+        static let flicks = "mychannel://flicks"
+    }
+    
+    // MARK: - Social Media
     struct Social {
+        static let twitterHandle = "@MyChannelApp"
+        static let instagramHandle = "@MyChannelApp"
+        static let websiteURL = "https://www.mychannel.app"
+        static let supportEmail = "support@mychannel.app"
         static let enableAppleLogin = true
         static let enableGoogleLogin = true
         static let enableFacebookLogin = false
         static let enableTwitterLogin = false
-        
-        // Sharing
-        static let shareBaseURL = "https://mychannel.app/video/"
-        static let appStoreURL = "https://apps.apple.com/app/mychannel/id123456789"
-    }
-    
-    // MARK: - Development Tools
-    struct Debug {
-        static var isEnabled: Bool {
-            return environment == .development && Features.showDebugMenu
-        }
-        
-        static let enableNetworkInspector = environment == .development
-        static let enableViewBorders = false
-        static let enablePerformanceOverlay = false
-        static let enableMemoryMonitoring = environment == .development
-    }
-    
-    // MARK: - Helper Methods
-    static func printConfiguration() {
-        print("🚀 MyChannel Configuration")
-        print("📱 App: \(appName) v\(appVersion) (\(buildNumber))")
-        print("🌍 Environment: \(environment.displayName)")
-        print("🔗 API Base URL: \(API.baseURL)")
-        print("🎬 Max Upload Size: \(Video.maxUploadSizeMB)MB")
-        print("✨ Features: Live=\(Features.enableLiveStreaming), Shorts=\(Features.enableShorts), Analytics=\(Features.enableAnalytics)")
-        
-        if Debug.isEnabled {
-            print("🐛 Debug Mode: Enabled")
-            print("📊 Mock Data: \(Features.enableMockData)")
-            print("🌐 Network Logging: \(Features.enableNetworkLogging)")
-        }
     }
 }
 
-// MARK: - Bundle Extensions
-extension Bundle {
-    var displayName: String {
-        return object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ??
-               object(forInfoDictionaryKey: "CFBundleName") as? String ??
-               "MyChannel"
-    }
-    
-    var appVersion: String {
-        return object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
-    }
-    
-    var buildNumber: String {
-        return object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
-    }
-}
-
-// MARK: - Configuration Validation
+// MARK: - Environment-specific Configuration
 extension AppConfig {
-    static func validateConfiguration() -> [String] {
-        var errors: [String] = []
-        
-        // Validate API configuration
-        if API.baseURL.isEmpty {
-            errors.append("API base URL is not configured")
-        }
-        
-        if API.supabaseAnonKey.isEmpty || API.supabaseAnonKey.contains("your-") {
-            errors.append("Supabase anonymous key is not configured")
-        }
-        
-        // Validate video configuration
-        if Video.maxUploadSizeMB <= 0 {
-            errors.append("Invalid max upload size")
-        }
-        
-        // Validate storage configuration
-        if Storage.bucketName.isEmpty {
-            errors.append("Storage bucket name is not configured")
-        }
-        
-        return errors
-    }
-    
-    static func isProductionReady() -> Bool {
-        return validateConfiguration().isEmpty && environment == .production
-    }
-}
-
-#if DEBUG
-// MARK: - Debug Configuration Preview
-struct AppConfigPreview: View {
-    var body: some View {
-        NavigationView {
-            List {
-                Section("App Information") {
-                    ConfigInfoRow(icon: "app.fill", title: "Name", value: AppConfig.appName)
-                    ConfigInfoRow(icon: "number", title: "Version", value: AppConfig.appVersion)
-                    ConfigInfoRow(icon: "hammer.fill", title: "Build", value: AppConfig.buildNumber)
-                    ConfigInfoRow(icon: "globe", title: "Environment", value: AppConfig.environment.displayName)
-                }
-                
-                Section("API Configuration") {
-                    ConfigInfoRow(icon: "link", title: "Base URL", value: AppConfig.API.baseURL)
-                    ConfigInfoRow(icon: "clock", title: "Timeout", value: "\(AppConfig.API.timeout)s")
-                }
-                
-                Section("Features") {
-                    FeatureRow(title: "Live Streaming", enabled: AppConfig.Features.enableLiveStreaming)
-                    FeatureRow(title: "Shorts", enabled: AppConfig.Features.enableShorts)
-                    FeatureRow(title: "Stories", enabled: AppConfig.Features.enableStories)
-                    FeatureRow(title: "Monetization", enabled: AppConfig.Features.enableMonetization)
-                    FeatureRow(title: "Analytics", enabled: AppConfig.Features.enableAnalytics)
-                }
-                
-                Section("Video Settings") {
-                    ConfigInfoRow(icon: "video", title: "Max Upload Size", value: "\(AppConfig.Video.maxUploadSizeMB)MB")
-                    ConfigInfoRow(icon: "clock.fill", title: "Max Duration", value: "\(Int(AppConfig.Video.maxDurationSeconds/60)) minutes")
-                    ConfigInfoRow(icon: "tv", title: "Default Quality", value: AppConfig.Video.defaultQuality.rawValue)
-                }
-                
-                if AppConfig.Debug.isEnabled {
-                    Section("Debug") {
-                        FeatureRow(title: "Mock Data", enabled: AppConfig.Features.enableMockData)
-                        FeatureRow(title: "Network Logging", enabled: AppConfig.Features.enableNetworkLogging)
-                        FeatureRow(title: "Debug Menu", enabled: AppConfig.Features.showDebugMenu)
-                    }
-                }
-            }
-            .navigationTitle("App Configuration")
+    static func configure() {
+        // Configure based on environment
+        if isDebug {
+            print("🔧 Configuring for DEBUG environment")
+            // Debug-specific configurations
+        } else if isTestFlight {
+            print("🔧 Configuring for TESTFLIGHT environment")
+            // TestFlight-specific configurations
+        } else {
+            print("🔧 Configuring for PRODUCTION environment")
+            // Production-specific configurations
         }
     }
 }
-
-struct ConfigInfoRow: View {
-    let icon: String
-    let title: String
-    let value: String
-    
-    var body: some View {
-        HStack {
-            Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundColor(AppTheme.Colors.primary)
-                .frame(width: 24)
-            
-            Text(title)
-                .foregroundColor(AppTheme.Colors.textSecondary)
-            
-            Spacer()
-            
-            Text(value)
-                .foregroundColor(AppTheme.Colors.textPrimary)
-                .fontWeight(.medium)
-        }
-    }
-}
-
-struct FeatureRow: View {
-    let title: String
-    let enabled: Bool
-    
-    var body: some View {
-        HStack {
-            Text(title)
-                .foregroundColor(AppTheme.Colors.textSecondary)
-            Spacer()
-            Image(systemName: enabled ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .foregroundColor(enabled ? AppTheme.Colors.success : AppTheme.Colors.error)
-        }
-    }
-}
-
-#Preview("App Configuration") {
-    AppConfigPreview()
-}
-#endif

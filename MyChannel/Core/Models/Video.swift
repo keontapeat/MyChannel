@@ -1,3 +1,4 @@
+//
 //  Video.swift
 //  MyChannel
 //
@@ -40,6 +41,9 @@ struct Video: Identifiable, Codable, Hashable {
     var isVerified: Bool
     var monetization: MonetizationSettings?
     
+    // Additional properties for compatibility
+    var isSponsored: Bool?
+    
     // MARK: - Custom Coding Keys
     private enum CodingKeys: String, CodingKey {
         case id, title, description, thumbnailURL, videoURL, duration
@@ -47,7 +51,7 @@ struct Video: Identifiable, Codable, Hashable {
         case createdAt, updatedAt, creatorId, creator, category
         case tags, isPublic, quality, aspectRatio, isLiveStream
         case scheduledAt, contentSource, externalID, contentRating
-        case language, subtitles, isVerified, monetization
+        case language, subtitles, isVerified, monetization, isSponsored
     }
     
     // MARK: - Custom Decoding
@@ -86,6 +90,7 @@ struct Video: Identifiable, Codable, Hashable {
         subtitles = try container.decodeIfPresent([SubtitleTrack].self, forKey: .subtitles)
         isVerified = try container.decodeIfPresent(Bool.self, forKey: .isVerified) ?? false
         monetization = try container.decodeIfPresent(MonetizationSettings.self, forKey: .monetization)
+        isSponsored = try container.decodeIfPresent(Bool.self, forKey: .isSponsored)
     }
     
     // MARK: - Custom Encoding
@@ -120,6 +125,7 @@ struct Video: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(subtitles, forKey: .subtitles)
         try container.encode(isVerified, forKey: .isVerified)
         try container.encodeIfPresent(monetization, forKey: .monetization)
+        try container.encodeIfPresent(isSponsored, forKey: .isSponsored)
     }
     
     // Computed property for shareable link
@@ -154,7 +160,8 @@ struct Video: Identifiable, Codable, Hashable {
         language: String? = nil,
         subtitles: [SubtitleTrack]? = nil,
         isVerified: Bool = false,
-        monetization: MonetizationSettings? = nil
+        monetization: MonetizationSettings? = nil,
+        isSponsored: Bool? = nil
     ) {
         self.id = id
         self.title = title
@@ -184,6 +191,7 @@ struct Video: Identifiable, Codable, Hashable {
         self.subtitles = subtitles
         self.isVerified = isVerified
         self.monetization = monetization
+        self.isSponsored = isSponsored
     }
     
     // MARK: - Computed Properties
@@ -605,481 +613,160 @@ enum VideoCategory: String, Codable, CaseIterable, CustomStringConvertible {
     }
 }
 
-// MARK: - Sample Data Extension with REAL WORKING CONTENT 🔥
+// MARK: - Sample Data Extensions
 extension Video {
-    static var sampleVideos: [Video] {
-        var allVideos: [Video] = []
-        
-        // Add all categories with REAL working videos
-        allVideos.append(contentsOf: animeInspiredVideos) // Legal anime-inspired content
-        allVideos.append(contentsOf: kidsVideos) // Safe kids content
-        allVideos.append(contentsOf: mukbangVideos) // Food content
-        allVideos.append(contentsOf: trendingVideos) // Viral content
-        allVideos.append(contentsOf: gamingVideos) // Gaming content
-        allVideos.append(contentsOf: musicVideos) // Music content
-        allVideos.append(contentsOf: comedyVideos) // Comedy content
-        allVideos.append(contentsOf: educationalVideos) // Educational content
-        allVideos.append(contentsOf: lifestyleVideos) // Lifestyle content
-        allVideos.append(contentsOf: shortsVideos) // Viral shorts
-        
-        return allVideos
-    }
-    
-    // 🔥 ANIME-INSPIRED CONTENT (Legal & Working!)
-    static var animeInspiredVideos: [Video] {
-        let animeStudioCreator = User(
-            username: "EpicAnimeStudio",
-            displayName: "Epic Anime Studio 🎌",
-            email: "official@epicanimestudio.com",
-            profileImageURL: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=150&h=150&fit=crop&crop=face",
-            isVerified: true
+    static let sampleVideos: [Video] = [
+        Video(
+            title: "Amazing Sunset Timelapse",
+            description: "Beautiful sunset captured in 4K quality",
+            thumbnailURL: "https://picsum.photos/400/600?random=1",
+            videoURL: "https://sample-videos.com/zip/10/mp4/mp4-10.mp4",
+            duration: 45,
+            viewCount: 125000,
+            likeCount: 8950,
+            commentCount: 234,
+            creator: User.sampleUsers[0],
+            category: .lifestyle
+        ),
+        Video(
+            title: "Cooking the Perfect Pasta",
+            description: "Step-by-step guide to making restaurant-quality pasta at home",
+            thumbnailURL: "https://picsum.photos/400/600?random=2",
+            videoURL: "https://sample-videos.com/zip/10/mp4/mp4-15.mp4",
+            duration: 120,
+            viewCount: 89000,
+            likeCount: 6700,
+            commentCount: 189,
+            creator: User.sampleUsers[2],
+            category: .cooking
+        ),
+        Video(
+            title: "Latest Tech Gadgets Review",
+            description: "Comprehensive review of the newest tech gadgets",
+            thumbnailURL: "https://picsum.photos/400/600?random=3",
+            videoURL: "https://sample-videos.com/zip/10/mp4/mp4-20.mp4",
+            duration: 180,
+            viewCount: 234000,
+            likeCount: 12450,
+            commentCount: 567,
+            creator: User.sampleUsers[0],
+            category: .technology
+        ),
+        Video(
+            title: "Funny Pet Compilation",
+            description: "Hilarious moments with our furry friends",
+            thumbnailURL: "https://picsum.photos/400/600?random=4",
+            videoURL: "https://sample-videos.com/zip/10/mp4/mp4-25.mp4",
+            duration: 60,
+            viewCount: 456000,
+            likeCount: 23000,
+            commentCount: 1200,
+            creator: User.sampleUsers[4],
+            category: .entertainment
+        ),
+        Video(
+            title: "Travel Vlog: Tokyo Adventures",
+            description: "Exploring the vibrant streets of Tokyo",
+            thumbnailURL: "https://picsum.photos/400/600?random=5",
+            videoURL: "https://sample-videos.com/zip/10/mp4/mp4-30.mp4",
+            duration: 200,
+            viewCount: 178000,
+            likeCount: 9800,
+            commentCount: 345,
+            creator: User.sampleUsers[3],
+            category: .travel
+        ),
+        Video(
+            title: "Music Production Tutorial",
+            description: "Learn how to produce beats like a pro",
+            thumbnailURL: "https://picsum.photos/400/600?random=6",
+            videoURL: "https://sample-videos.com/zip/10/mp4/mp4-35.mp4",
+            duration: 150,
+            viewCount: 67000,
+            likeCount: 4500,
+            commentCount: 123,
+            creator: User.sampleUsers[1],
+            category: .music
+        ),
+        Video(
+            title: "Fitness Workout Routine",
+            description: "30-minute full body workout you can do at home",
+            thumbnailURL: "https://picsum.photos/400/600?random=7",
+            videoURL: "https://sample-videos.com/zip/10/mp4/mp4-40.mp4",
+            duration: 1800,
+            viewCount: 89000,
+            likeCount: 6700,
+            commentCount: 234,
+            creator: User.sampleUsers[0],
+            category: .fitness
+        ),
+        Video(
+            title: "Art Tutorial: Digital Painting",
+            description: "Create stunning digital art with these techniques",
+            thumbnailURL: "https://picsum.photos/400/600?random=8",
+            videoURL: "https://sample-videos.com/zip/10/mp4/mp4-45.mp4",
+            duration: 240,
+            viewCount: 34000,
+            likeCount: 2100,
+            commentCount: 89,
+            creator: User.sampleUsers[2],
+            category: .art
         )
-        
-        return [
-            Video(
-                title: "EPIC Warrior Battle: Power Unleashed! ⚡🔥",
-                description: "Watch this incredible anime-style battle animation! Two warriors clash with earth-shaking power in this action-packed episode. Amazing fight choreography and stunning visuals!",
-                thumbnailURL: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500&h=281&fit=crop",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-                duration: 596,
-                viewCount: 15600000,
-                likeCount: 2340000,
-                commentCount: 456000,
-                creator: animeStudioCreator,
-                category: .anime,
-                tags: ["anime", "battle", "warrior", "action", "epic", "animation"],
-                contentSource: .userUploaded,
-                contentRating: .TV_PG,
-                language: "English",
-                isVerified: true
-            ),
-            
-            Video(
-                title: "Mystical Academy: Magic School Adventures! ✨🏫",
-                description: "Join students at the most magical academy in the world! Watch as they learn powerful spells and face incredible challenges. Perfect anime-style storytelling!",
-                thumbnailURL: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=500&h=281&fit=crop",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-                duration: 653,
-                viewCount: 12800000,
-                likeCount: 1890000,
-                commentCount: 234000,
-                creator: animeStudioCreator,
-                category: .anime,
-                tags: ["anime", "magic", "school", "academy", "fantasy", "adventure"],
-                contentSource: .userUploaded,
-                contentRating: .TV_PG,
-                isVerified: true
-            ),
-            
-            Video(
-                title: "Ninja Chronicles: Shadow Warrior Training! 🥷",
-                description: "Follow young ninjas as they master ancient techniques and face ultimate challenges! Action-packed ninja adventure with incredible fight scenes!",
-                thumbnailURL: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=500&h=281&fit=crop&crop=center",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-                duration: 1380,
-                viewCount: 18900000,
-                likeCount: 2890000,
-                commentCount: 567000,
-                creator: animeStudioCreator,
-                category: .anime,
-                tags: ["ninja", "training", "warrior", "action", "adventure", "martial arts"],
-                contentSource: .userUploaded,
-                contentRating: .TV_PG,
-                isVerified: true
-            )
-        ]
-    }
-    
-    // 🎯 KIDS CONTENT - REAL & SAFE!
-    static var kidsVideos: [Video] {
-        let kidsCreator = User(
-            username: "SafeKidsLearning",
-            displayName: "Safe Kids Learning 🌈",
-            email: "safe@kidschannel.com",
-            profileImageURL: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face",
-            isVerified: true
-        )
-        
-        return [
-            Video(
-                title: "Learn Colors with Fun Animals! 🌈🦁",
-                description: "Educational and fun! Kids will learn all the colors of the rainbow with cute animals. Perfect for toddlers and preschoolers. Safe, verified content!",
-                thumbnailURL: "https://images.unsplash.com/photo-1551963831-b3b1ca40c98e?w=500&h=281&fit=crop",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-                duration: 180,
-                viewCount: 2300000,
-                likeCount: 345000,
-                commentCount: 12000,
-                creator: kidsCreator,
-                category: .kids,
-                tags: ["kids", "colors", "learning", "animals", "educational", "toddlers"],
-                contentSource: .userUploaded,
-                contentRating: .TV_Y,
-                language: "English",
-                isVerified: true
-            ),
-            
-            Video(
-                title: "Numbers 1-10 Fun Learning Song! 🔢🎵",
-                description: "Count along with our fun number song! Kids will learn numbers 1 through 10 with catchy music and colorful animations. Educational entertainment!",
-                thumbnailURL: "https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=500&h=281&fit=crop",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-                duration: 240,
-                viewCount: 1800000,
-                likeCount: 290000,
-                commentCount: 8500,
-                creator: kidsCreator,
-                category: .kids,
-                tags: ["numbers", "counting", "kids", "educational", "song", "learning"],
-                contentSource: .userUploaded,
-                contentRating: .TV_Y,
-                isVerified: true
-            )
-        ]
-    }
-    
-    // 🍽️ MUKBANG & FOOD CONTENT
-    static var mukbangVideos: [Video] {
-        let foodCreator = User(
-            username: "FoodieASMR",
-            displayName: "Foodie ASMR 🍽️",
-            email: "eat@foodieasmr.com",
-            profileImageURL: "https://images.unsplash.com/photo-1494790108755-2616b612b742?w=150&h=150&fit=crop&crop=face",
-            isVerified: true
-        )
-        
-        return [
-            Video(
-                title: "ASMR Food Challenge: Satisfying Eating Sounds! 🔥",
-                description: "The most satisfying food eating video! Watch and listen to amazing ASMR eating sounds that will relax and satisfy you. Pure eating bliss!",
-                thumbnailURL: "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=500&h=281&fit=crop",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
-                duration: 1800,
-                viewCount: 8900000,
-                likeCount: 1200000,
-                commentCount: 234000,
-                creator: foodCreator,
-                category: .mukbang,
-                tags: ["mukbang", "asmr", "eating", "food", "satisfying", "relaxing"],
-                contentSource: .userUploaded,
-                contentRating: .TV_G,
-                isVerified: true
-            )
-        ]
-    }
-    
-    // 🔥 TRENDING CONTENT
-    static var trendingVideos: [Video] {
-        let trendingCreator = User(
-            username: "ViralChallenges",
-            displayName: "Viral Challenges 🔥",
-            email: "viral@challenges.com",
-            profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-            isVerified: true
-        )
-        
-        return [
-            Video(
-                title: "24 Hour Challenge: Living in a Tiny House! 🏠",
-                description: "I spent 24 hours in the world's tiniest house! Watch me try to cook, sleep, and live in this incredible space. You won't believe what happens!",
-                thumbnailURL: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=281&fit=crop",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
-                duration: 1800,
-                viewCount: 12400000,
-                likeCount: 1890000,
-                commentCount: 345000,
-                creator: trendingCreator,
-                category: .lifestyle,
-                tags: ["24 hour challenge", "tiny house", "lifestyle", "adventure", "viral"],
-                contentSource: .userUploaded,
-                contentRating: .TV_PG,
-                isVerified: true
-            )
-        ]
-    }
-    
-    // 🎮 GAMING CONTENT
-    static var gamingVideos: [Video] {
-        let gamingCreator = User(
-            username: "ProGamerElite",
-            displayName: "Pro Gamer Elite 🎮",
-            email: "pro@gaming.com",
-            profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-            isVerified: true
-        )
-        
-        return [
-            Video(
-                title: "EPIC Gaming Moments Compilation! 🏆",
-                description: "The most epic gaming moments ever! Watch these incredible plays that will leave you speechless. Pro-level gameplay and amazing skills!",
-                thumbnailURL: "https://images.unsplash.com/photo-1552820728-8b83bb6b773f?w=500&h=281&fit=crop",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4",
-                duration: 900,
-                viewCount: 6700000,
-                likeCount: 890000,
-                commentCount: 156000,
-                creator: gamingCreator,
-                category: .gaming,
-                tags: ["gaming", "epic moments", "compilation", "pro player", "skills"],
-                contentSource: .userUploaded,
-                contentRating: .TV_PG,
-                isVerified: true
-            )
-        ]
-    }
-    
-    // 🎵 MUSIC CONTENT
-    static var musicVideos: [Video] {
-        let musicCreator = User(
-            username: "ChillVibesMusic",
-            displayName: "Chill Vibes Music 🎧",
-            email: "music@chillvibes.com",
-            profileImageURL: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=150&h=150&fit=crop&crop=face",
-            isVerified: true
-        )
-        
-        return [
-            Video(
-                title: "Chill Beats for Study & Relax 🌊🎵",
-                description: "The perfect background music for studying, working, or just chilling out. Smooth beats that will help you focus and feel good!",
-                thumbnailURL: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&h=281&fit=crop",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4",
-                duration: 3600,
-                viewCount: 5200000,
-                likeCount: 720000,
-                commentCount: 89000,
-                creator: musicCreator,
-                category: .music,
-                tags: ["chill", "study music", "beats", "relax", "background music"],
-                contentSource: .userUploaded,
-                contentRating: .TV_G,
-                isVerified: true
-            )
-        ]
-    }
-    
-    // 😂 COMEDY CONTENT  
-    static var comedyVideos: [Video] {
-        let comedyCreator = User(
-            username: "FunnySkits",
-            displayName: "Funny Skits Comedy 😂",
-            email: "laughs@funnyskits.com",
-            profileImageURL: "https://images.unsplash.com/photo-1517315003714-a071486bd9ea?w=150&h=150&fit=crop&crop=face",
-            isVerified: true
-        )
-        
-        return [
-            Video(
-                title: "Hilarious Life Situations Everyone Can Relate To! 😂",
-                description: "These funny situations happen to everyone! Watch these hilarious skits that perfectly capture everyday life. You'll be laughing non-stop!",
-                thumbnailURL: "https://images.unsplash.com/photo-1517315003714-a071486bd9ea?w=500&h=281&fit=crop",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
-                duration: 480,
-                viewCount: 4100000,
-                likeCount: 580000,
-                commentCount: 78000,
-                creator: comedyCreator,
-                category: .comedy,
-                tags: ["comedy", "funny", "relatable", "skits", "humor"],
-                contentSource: .userUploaded,
-                contentRating: .TV_PG,
-                isVerified: true
-            )
-        ]
-    }
-    
-    // 📚 EDUCATIONAL CONTENT
-    static var educationalVideos: [Video] {
-        let eduCreator = User(
-            username: "LearnWithUs",
-            displayName: "Learn With Us 📚",
-            email: "learn@educational.com",
-            profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-            isVerified: true
-        )
-        
-        return [
-            Video(
-                title: "How Technology Actually Works - Mind Blowing! 🤯",
-                description: "Ever wondered how your phone really works? This amazing explanation will blow your mind! Learn about technology in a fun and easy way!",
-                thumbnailURL: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=500&h=281&fit=crop",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4",
-                duration: 960,
-                viewCount: 2800000,
-                likeCount: 390000,
-                commentCount: 45000,
-                creator: eduCreator,
-                category: .education,
-                tags: ["technology", "education", "learning", "science", "how it works"],
-                contentSource: .userUploaded,
-                contentRating: .TV_G,
-                isVerified: true
-            )
-        ]
-    }
-    
-    // 💅 LIFESTYLE CONTENT
-    static var lifestyleVideos: [Video] {
-        let lifestyleCreator = User(
-            username: "LifestyleGuru",
-            displayName: "Lifestyle Guru ✨",
-            email: "lifestyle@guru.com",
-            profileImageURL: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face",
-            isVerified: true
-        )
-        
-        return [
-            Video(
-                title: "Transform Your Life: Morning Routine That Works! ☀️",
-                description: "This morning routine will completely change your life! Simple steps to boost your energy, productivity, and happiness. Start transforming today!",
-                thumbnailURL: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=281&fit=crop",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-                duration: 720,
-                viewCount: 1900000,
-                likeCount: 280000,
-                commentCount: 34000,
-                creator: lifestyleCreator,
-                category: .lifestyle,
-                tags: ["morning routine", "lifestyle", "productivity", "wellness", "self improvement"],
-                contentSource: .userUploaded,
-                contentRating: .TV_G,
-                isVerified: true
-            )
-        ]
-    }
-    
-    // 🩳 VIRAL SHORTS
-    static var shortsVideos: [Video] {
-        let shortsCreator = User(
-            username: "ViralShorts",
-            displayName: "Viral Shorts 🔥",
-            email: "shorts@viral.com",
-            profileImageURL: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face",
-            isVerified: true
-        )
-        
-        return [
-            Video(
-                title: "This Will Make You Smile! 😊❤️",
-                description: "Pure wholesome content that will instantly make your day better! Watch this heartwarming moment that's going viral! #shorts",
-                thumbnailURL: "https://images.unsplash.com/photo-1552053831-71594a27632d?w=500&h=889&fit=crop",
-                videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-                duration: 30,
-                viewCount: 15600000,
-                likeCount: 2340000,
-                commentCount: 456000,
-                creator: shortsCreator,
-                category: .shorts,
-                tags: ["wholesome", "viral", "shorts", "heartwarming", "smile"],
-                aspectRatio: .portrait,
-                contentSource: .userUploaded,
-                contentRating: .TV_G,
-                isVerified: true
-            )
-        ]
-    }
+    ]
 }
 
-#Preview {
-    ScrollView {
-        LazyVStack(spacing: 16) {
-            Text("MyChannel Video Library 🔥")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-                .padding(.top)
-            
-            ForEach(Video.sampleVideos.prefix(5)) { video in
-                VStack(alignment: .leading, spacing: 12) {
-                    AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(16/9, contentMode: .fill)
-                    } placeholder: {
-                        Rectangle()
-                            .fill(Color(.systemGray5))
-                            .aspectRatio(16/9, contentMode: .fill)
-                            .overlay(
-                                Image(systemName: video.category.iconName)
-                                    .font(.title)
-                                    .foregroundColor(.secondary)
-                            )
-                    }
-                    .frame(maxHeight: 200)
-                    .cornerRadius(12)
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(video.title)
-                            .font(.headline)
-                            .lineLimit(2)
-                        
-                        Text(video.description)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .lineLimit(3)
-                        
-                        HStack {
-                            AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                Circle()
-                                    .fill(Color(.systemGray4))
-                                    .overlay(
-                                        Image(systemName: "person.fill")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    )
-                            }
-                            .frame(width: 24, height: 24)
-                            .clipShape(Circle())
-                            
-                            Text(video.creator.displayName)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            if video.isVerified {
-                                Image(systemName: "checkmark.seal.fill")
-                                    .font(.caption)
-                                    .foregroundColor(.blue)
-                            }
-                            
-                            Spacer()
-                            
-                            Text(video.category.displayName)
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 2)
-                                .background(video.category.color.opacity(0.1))
-                                .foregroundColor(video.category.color)
-                                .cornerRadius(4)
-                        }
-                        
-                        HStack {
-                            Text("\(video.formattedViewCount) views")
-                            Text("•")
-                            Text(video.timeAgo)
-                            Text("•")
-                            Text(video.formattedDuration)
-                            
-                            Spacer()
-                            
-                            HStack(spacing: 2) {
-                                Image(systemName: "hand.thumbsup")
-                                Text(video.formattedLikeCount)
-                            }
-                        }
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    }
+#Preview("Video Model Preview") {
+    VStack(spacing: 20) {
+        Text("Video Models")
+            .font(AppTheme.Typography.largeTitle)
+        
+        ForEach(Video.sampleVideos.prefix(2)) { video in
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(video.title)
+                        .font(AppTheme.Typography.headline)
+                        .lineLimit(1)
+                    Spacer()
+                    Text(video.formattedDuration)
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
                 }
-                .padding()
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
-                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                
+                Text(video.description)
+                    .font(AppTheme.Typography.body)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .lineLimit(2)
+                
+                HStack {
+                    Label("\(video.formattedViewCount) views", systemImage: "eye")
+                    Spacer()
+                    Label("\(video.formattedLikeCount) likes", systemImage: "heart")
+                    Spacer()
+                    Label("\(video.timeAgo)", systemImage: "clock")
+                }
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.textTertiary)
+                
+                HStack {
+                    Text("@\(video.creator.username)")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.Colors.primary)
+                    
+                    Spacer()
+                    
+                    Text(video.category.displayName)
+                        .font(AppTheme.Typography.caption)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(video.category.color.opacity(0.2))
+                        .foregroundColor(video.category.color)
+                        .cornerRadius(8)
+                }
             }
+            .cardStyle()
+            .padding(.horizontal)
         }
-        .padding()
     }
-    .background(Color(.systemGroupedBackground))
+    .padding()
+    .background(AppTheme.Colors.background)
 }

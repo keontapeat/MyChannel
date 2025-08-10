@@ -396,15 +396,33 @@ struct HomeView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                     
-                    NavigationLink(destination: ProfileView()) {
-                        Circle()
-                            .fill(AppTheme.Colors.primary.opacity(0.3))
-                            .frame(width: 32, height: 32)
-                            .overlay(
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.white)
-                            )
+                    Button(action: {
+                        // Switch to profile tab
+                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToProfileTab"), object: nil)
+                    }) {
+                        AsyncImage(url: URL(string: appState.currentUser?.profileImageURL ?? "")) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 32, height: 32)
+                                .clipShape(Circle())
+                        } placeholder: {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 32, height: 32)
+                                .overlay(
+                                    Image(systemName: "person.fill")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.white)
+                                )
+                        }
+                        .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 4, x: 0, y: 2)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }

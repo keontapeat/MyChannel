@@ -25,6 +25,11 @@ struct User: Identifiable, Codable, Equatable, Hashable {
     let website: String?
     let socialLinks: [SocialLink]
     
+    // Additional properties for compatibility
+    let followerCount: Int
+    let followingCount: Int
+    let joinDate: Date
+    
     // Creator-specific properties
     let totalViews: Int?
     let totalEarnings: Double?
@@ -46,6 +51,9 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         location: String? = nil,
         website: String? = nil,
         socialLinks: [SocialLink] = [],
+        followerCount: Int? = nil,
+        followingCount: Int = 0,
+        joinDate: Date? = nil,
         totalViews: Int? = nil,
         totalEarnings: Double? = nil,
         membershipTiers: [MembershipTier]? = nil
@@ -65,6 +73,9 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         self.location = location
         self.website = website
         self.socialLinks = socialLinks
+        self.followerCount = followerCount ?? subscriberCount
+        self.followingCount = followingCount
+        self.joinDate = joinDate ?? createdAt
         self.totalViews = totalViews
         self.totalEarnings = totalEarnings
         self.membershipTiers = membershipTiers
@@ -181,155 +192,139 @@ struct MembershipTier: Identifiable, Codable, Equatable {
     }
 }
 
-// MARK: - Sample Data
+// MARK: - Sample Data Extensions  
 extension User {
     static let sampleUsers: [User] = [
         User(
-            username: "techcreator",
-            displayName: "Tech Creator",
-            email: "tech@example.com",
+            id: "user1",
+            username: "naturelover_sarah",
+            displayName: "Sarah Johnson",
+            email: "sarah@example.com",
             profileImageURL: "https://picsum.photos/200/200?random=1",
-            bannerImageURL: "https://picsum.photos/800/200?random=1",
-            bio: "Creating amazing tech content daily! 🚀",
-            subscriberCount: 125000,
-            videoCount: 245,
-            isVerified: true,
-            isCreator: true,
-            location: "San Francisco, CA",
-            website: "https://techcreator.com",
-            socialLinks: [
-                SocialLink(platform: .twitter, url: "https://twitter.com/techcreator", displayName: "@techcreator"),
-                SocialLink(platform: .instagram, url: "https://instagram.com/techcreator", displayName: "@techcreator")
-            ],
-            totalViews: 2500000,
-            totalEarnings: 15000.0,
-            membershipTiers: [
-                MembershipTier(
-                    name: "Supporter",
-                    description: "Support the channel and get exclusive perks",
-                    price: 4.99,
-                    benefits: ["Early access to videos", "Custom badge", "Monthly Q&A"],
-                    badgeColor: "4ECDC4"
-                ),
-                MembershipTier(
-                    name: "Pro Member",
-                    description: "Get premium content and direct access",
-                    price: 9.99,
-                    benefits: ["All Supporter benefits", "Private Discord", "1-on-1 monthly call"],
-                    badgeColor: "FF6B6B"
-                )
-            ]
-        ),
-        User(
-            username: "artisfun",
-            displayName: "Creative Artist",
-            email: "artist@example.com",
-            profileImageURL: "https://picsum.photos/200/200?random=2",
-            bannerImageURL: "https://picsum.photos/800/200?random=2",
-            bio: "Digital art tutorials and speedpaints ✨",
-            subscriberCount: 89000,
+            bio: "Nature photographer & adventure seeker 🌄 Capturing the world's beauty one frame at a time",
+            subscriberCount: 25400,
             videoCount: 156,
-            isVerified: false,
-            isCreator: true,
-            location: "New York, NY",
+            isVerified: true,
             socialLinks: [
-                SocialLink(platform: .instagram, url: "https://instagram.com/artisfun", displayName: "@artisfun"),
-                SocialLink(platform: .website, url: "https://artisfun.com", displayName: "artisfun.com")
+                SocialLink(platform: .instagram, url: "https://instagram.com/naturelover_sarah", displayName: "@naturelover_sarah"),
+                SocialLink(platform: .twitter, url: "https://twitter.com/sarah_nature", displayName: "@sarah_nature")
             ],
-            totalViews: 1800000,
-            totalEarnings: 8500.0
+            followingCount: 892
         ),
         User(
-            username: "gamingpro",
-            displayName: "Gaming Pro",
-            email: "gaming@example.com",
+            id: "user2", 
+            username: "chef_marco",
+            displayName: "Marco Rodriguez",
+            email: "marco@example.com",
+            profileImageURL: "https://picsum.photos/200/200?random=2",
+            bio: "Professional chef sharing family recipes 👨‍🍳 Making cooking accessible for everyone!",
+            subscriberCount: 89300,
+            videoCount: 203,
+            isVerified: true,
+            socialLinks: [
+                SocialLink(platform: .instagram, url: "https://instagram.com/chef_marco", displayName: "@chef_marco"),
+                SocialLink(platform: .website, url: "https://marcosrecipes.com", displayName: "Marco's Recipes")
+            ],
+            followingCount: 234
+        ),
+        User(
+            id: "user3",
+            username: "tokyo_artist",
+            displayName: "Yuki Tanaka", 
+            email: "yuki@example.com",
             profileImageURL: "https://picsum.photos/200/200?random=3",
-            bannerImageURL: "https://picsum.photos/800/200?random=3",
-            bio: "Professional gamer sharing tips and gameplay 🎮",
-            subscriberCount: 456000,
-            videoCount: 389,
-            isVerified: true,
-            isCreator: true,
-            location: "Los Angeles, CA",
+            bio: "Street artist from Tokyo 🎨 Bringing color to the concrete jungle",
+            subscriberCount: 15600,
+            videoCount: 89,
+            isVerified: false,
             socialLinks: [
-                SocialLink(platform: .twitch, url: "https://twitch.tv/gamingpro", displayName: "gamingpro"),
-                SocialLink(platform: .twitter, url: "https://twitter.com/gamingpro", displayName: "@gamingpro")
+                SocialLink(platform: .instagram, url: "https://instagram.com/tokyo_artist", displayName: "@tokyo_artist")
             ],
-            totalViews: 5600000,
-            totalEarnings: 28900.0
+            followingCount: 567
         ),
         User(
-            username: "musicmaker",
-            displayName: "Music Maker",
-            email: "music@example.com",
+            id: "user4",
+            username: "fitlife_emma",
+            displayName: "Emma Wilson",
+            email: "emma@example.com", 
             profileImageURL: "https://picsum.photos/200/200?random=4",
-            bannerImageURL: "https://picsum.photos/800/200?random=4",
-            bio: "Creating beats and teaching music production 🎵",
-            subscriberCount: 234000,
-            videoCount: 167,
+            bio: "Certified personal trainer 💪 Helping you achieve your fitness goals from home",
+            subscriberCount: 156700,
+            videoCount: 342,
             isVerified: true,
-            isCreator: true,
-            location: "Nashville, TN",
             socialLinks: [
-                SocialLink(platform: .youtube, url: "https://youtube.com/musicmaker", displayName: "Music Maker"),
-                SocialLink(platform: .website, url: "https://musicmaker.com", displayName: "musicmaker.com")
+                SocialLink(platform: .instagram, url: "https://instagram.com/fitlife_emma", displayName: "@fitlife_emma"),
+                SocialLink(platform: .website, url: "https://emmafitness.com", displayName: "Emma Fitness"),
+                SocialLink(platform: .youtube, url: "https://youtube.com/emmawilsonfitness", displayName: "Emma Wilson Fitness")
             ],
-            totalViews: 3400000,
-            totalEarnings: 19500.0
+            followingCount: 445
+        ),
+        User(
+            id: "user5",
+            username: "swift_dev_alex",
+            displayName: "Alex Chen",
+            email: "alex@example.com",
+            profileImageURL: "https://picsum.photos/200/200?random=5", 
+            bio: "iOS Developer & Swift enthusiast 📱 Teaching programming through simple tutorials",
+            subscriberCount: 45200,
+            videoCount: 178,
+            isVerified: true,
+            socialLinks: [
+                SocialLink(platform: .twitter, url: "https://twitter.com/swift_dev_alex", displayName: "@swift_dev_alex"),
+                SocialLink(platform: .website, url: "https://alexchen.dev", displayName: "Alex Chen Dev")
+            ],
+            followingCount: 234
         )
     ]
     
-    // Add a safe, default user to use as a fallback
     static let defaultUser = User(
-        username: "user",
-        displayName: "User",
-        email: "user@example.com",
-        bio: "Loading...",
-        isCreator: false
+        username: "default_user",
+        displayName: "Default User",
+        email: "default@mychannel.com",
+        profileImageURL: "https://picsum.photos/200/200?random=999",
+        bio: "Default user for the app"
     )
 }
 
-struct User_Previews: PreviewProvider {
-    static var previews: some View {
-        VStack(spacing: 20) {
-            Text("User Models")
-                .font(AppTheme.Typography.largeTitle)
-            
-            ForEach(User.sampleUsers.prefix(2)) { user in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text(user.displayName)
-                            .font(AppTheme.Typography.headline)
-                        if user.isVerified {
-                            Image(systemName: "checkmark.seal.fill")
-                                .foregroundColor(AppTheme.Colors.primary)
-                        }
-                        Spacer()
+#Preview("User Model Preview") {
+    VStack(spacing: 20) {
+        Text("User Models")
+            .font(AppTheme.Typography.largeTitle)
+        
+        ForEach(User.sampleUsers.prefix(2)) { user in
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(user.displayName)
+                        .font(AppTheme.Typography.headline)
+                    if user.isVerified {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundColor(AppTheme.Colors.primary)
                     }
-                    
-                    Text("@\(user.username)")
-                        .font(AppTheme.Typography.subheadline)
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                    
-                    if let bio = user.bio {
-                        Text(bio)
-                            .font(AppTheme.Typography.body)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                    
-                    HStack {
-                        Label("\(user.subscriberCount.formatted()) subscribers", systemImage: "person.2")
-                        Spacer()
-                        Label("\(user.videoCount) videos", systemImage: "play.rectangle")
-                    }
-                    .font(AppTheme.Typography.caption)
-                    .foregroundColor(AppTheme.Colors.textTertiary)
+                    Spacer()
                 }
-                .cardStyle()
-                .padding(.horizontal)
+                
+                Text("@\(user.username)")
+                    .font(AppTheme.Typography.subheadline)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                
+                if let bio = user.bio {
+                    Text(bio)
+                        .font(AppTheme.Typography.body)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                
+                HStack {
+                    Label("\(user.subscriberCount.formatted()) subscribers", systemImage: "person.2")
+                    Spacer()
+                    Label("\(user.videoCount) videos", systemImage: "play.rectangle")
+                }
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.textTertiary)
             }
+            .cardStyle()
+            .padding(.horizontal)
         }
-        .padding()
-        .background(AppTheme.Colors.background)
     }
+    .padding()
+    .background(AppTheme.Colors.background)
 }

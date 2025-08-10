@@ -76,8 +76,11 @@ struct ProfileRetryButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Notification Name Extensions - REMOVE DUPLICATE
+// MARK: - Notification Names Extension
 extension Notification.Name {
+    static let flicksResetToFirst = Notification.Name("FlicksResetToFirst")
+    static let homeScrollToTop = Notification.Name("HomeScrollToTop")
+    static let searchClearAndReset = Notification.Name("SearchClearAndReset")
     static let updateProfileData = Notification.Name("updateProfileData")
     static let profileSettingsChanged = Notification.Name("profileSettingsChanged")
 }

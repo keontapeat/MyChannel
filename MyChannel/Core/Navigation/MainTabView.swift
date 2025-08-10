@@ -50,7 +50,10 @@ struct MainTabView: View {
             selectedTab = .search
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToProfileTab"))) { _ in
-            selectedTab = .profile
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                selectedTab = .profile
+            }
+            HapticManager.shared.impact(style: .light)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowUpload"))) { _ in
             showingUpload = true
