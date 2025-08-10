@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 
 enum FeaturedItem: Identifiable, Equatable {
     case video(Video)
@@ -307,18 +308,24 @@ struct MinimalStoriesSection: View {
                                     )
                                     .frame(width: 64, height: 64)
                                 
-                                AsyncImage(url: URL(string: "https://picsum.photos/200/200?random=\(story.id.hashValue)")) { image in
-                                    image
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 58, height: 58)
-                                        .clipShape(Circle())
-                                } placeholder: {
+                                if UIImage(named: story.authorImageName) != nil {
                                     Image(story.authorImageName)
                                         .resizable()
                                         .scaledToFill()
                                         .frame(width: 58, height: 58)
                                         .clipShape(Circle())
+                                } else {
+                                    AsyncImage(url: URL(string: "https://picsum.photos/200/200?random=\(abs(story.id.hashValue))")) { image in
+                                        image
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 58, height: 58)
+                                            .clipShape(Circle())
+                                    } placeholder: {
+                                        Circle()
+                                            .fill(Color(.systemGray5))
+                                            .frame(width: 58, height: 58)
+                                    }
                                 }
                             }
                             
@@ -496,7 +503,7 @@ struct MinimalContentSections: View {
                 seeAllAction: { /* Navigate to movies */ }
             ) {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 16) {
+                    LazyHStack(alignment: .top, spacing: 16) {
                         ForEach(FreeMovie.sampleMovies.prefix(6)) { movie in
                             MinimalMovieCard(movie: movie, action: { onSelectMovie(movie) })
                         }
