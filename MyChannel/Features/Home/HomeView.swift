@@ -1,6 +1,22 @@
 import SwiftUI
 import Combine
 
+enum FeaturedItem: Identifiable, Equatable {
+    case video(Video)
+    case friend(AssetStory)
+
+    var id: String {
+        switch self {
+        case .video(let v): return "video-\(v.id)"
+        case .friend(let s): return "friend-\(s.id.uuidString)"
+        }
+    }
+
+    static func == (lhs: FeaturedItem, rhs: FeaturedItem) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
 // MARK: - HomeView
 struct HomeView: View {
     @EnvironmentObject private var appState: AppState
@@ -15,6 +31,8 @@ struct HomeView: View {
     @State private var showingSearchView: Bool = false
     @State private var featuredContent: [Video] = []
     @State private var heroVideoIndex: Int = 0
+    @State private var featuredItems: [FeaturedItem] = []
+    @State private var selectedCreator: User? = nil
     @State private var showingStories: Bool = true
     @State private var assetStories: [AssetStory] = AssetStory.sampleStories
     @State private var selectedAssetStory: AssetStory? = nil
@@ -83,6 +101,9 @@ struct HomeView: View {
                 )
             }
         }
+        .navigationDestination(item: $selectedCreator) { user in
+            CreatorProfileView(creator: user)
+        }
         .onAppear(perform: setupContent)
         .refreshable { await refreshContent() }
         .fullScreenCover(isPresented: $showingVideoPlayer) {
@@ -113,10 +134,18 @@ struct HomeView: View {
     
     // MARK: - Setup Methods
     private func setupContent() {
+        // Keep original list for other sections
         featuredContent = Video.sampleVideos.filter { $0.viewCount > 500000 }.shuffled()
         if featuredContent.isEmpty {
             featuredContent = Array(Video.sampleVideos.prefix(3))
         }
+
+        let friends = Array(assetStories.prefix(5))
+        var items: [FeaturedItem] = []
+        items.append(contentsOf: featuredContent.prefix(5).map { .video($0) })
+        items.append(contentsOf: friends.map { .friend($0) })
+        items.shuffle()
+        featuredItems = items
     }
     
     private func refreshContent() async {
@@ -136,6 +165,13 @@ struct HomeView: View {
     private func toggleWatchLater(_ video: Video) {
         appState.toggleWatchLater(for: video.id)
         HapticManager.shared.impact(style: .light)
+    }
+
+    private func mapStoryToUser(_ story: AssetStory) -> User {
+        let users = User.sampleUsers
+        if users.isEmpty { return User.defaultUser }
+        let idx = abs(story.id.hashValue) % users.count
+        return users[idx]
     }
 }
 
@@ -306,6 +342,9 @@ struct MinimalHeroSection: View {
     let heroVideoIndex: Int
     let onPlayVideo: (Video) -> Void
     let onAddToList: (Video) -> Void
+
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    private var isCompact: Bool { horizontalSizeClass == .compact }
     
     var body: some View {
         if !featuredContent.isEmpty {
@@ -318,7 +357,7 @@ struct MinimalHeroSection: View {
                         Image(systemName: "star.fill")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundColor(.yellow)
-                        
+
                         Text("FEATURED")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundColor(.primary)
@@ -326,32 +365,26 @@ struct MinimalHeroSection: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(Color(.systemGray6))
-                    )
-                    
+                    .background(Capsule().fill(Color(.systemGray6)))
+
                     Spacer()
                 }
                 .padding(.horizontal, 20)
-                
-                // Video Thumbnail
+
+                // Media Thumbnail
                 AsyncImage(url: URL(string: currentVideo.thumbnailURL)) { image in
                     image
                         .resizable()
                         .scaledToFill()
-                        .frame(height: 220)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 } placeholder: {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(Color(.systemGray6))
-                        .frame(height: 220)
                         .overlay(
                             VStack(spacing: 12) {
                                 Image(systemName: currentVideo.category.iconName)
                                     .font(.system(size: 32))
                                     .foregroundColor(.secondary)
-                                
+
                                 Text(currentVideo.title)
                                     .font(.system(size: 16, weight: .medium))
                                     .foregroundColor(.primary)
@@ -361,45 +394,35 @@ struct MinimalHeroSection: View {
                             }
                         )
                 }
+                .frame(height: 220)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .padding(.horizontal, 20)
-                
+
                 // Video Info
                 VStack(spacing: 12) {
                     Text(currentVideo.title)
                         .font(.system(size: 22, weight: .bold))
                         .foregroundColor(.primary)
-                        .multilineTextAlignment(.center)
+                        .multilineTextAlignment(isCompact ? .leading : .center)
+                        .frame(maxWidth: .infinity, alignment: isCompact ? .leading : .center)
                         .lineLimit(2)
                         .padding(.horizontal, 20)
                     
-                    // Metadata
-                    HStack(spacing: 16) {
-                        Text(currentVideo.category.displayName)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.secondary)
-                        
-                        Text("•")
-                            .foregroundColor(.secondary)
-                        
-                        Text(currentVideo.formattedDuration)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.secondary)
-                        
-                        Text("•")
-                            .foregroundColor(.secondary)
-                        
-                        Text("\(currentVideo.formattedViewCount) views")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.secondary)
-                    }
-                    
+                    Text("\(currentVideo.category.displayName) • \(currentVideo.formattedDuration) • \(currentVideo.formattedViewCount) views")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .minimumScaleFactor(0.85)
+                        .frame(maxWidth: .infinity, alignment: isCompact ? .leading : .center)
+                        .padding(.horizontal, 20)
+
                     // Action Buttons
                     HStack(spacing: 12) {
                         Button(action: { onPlayVideo(currentVideo) }) {
                             HStack(spacing: 8) {
                                 Image(systemName: "play.fill")
                                     .font(.system(size: 14, weight: .semibold))
-                                
                                 Text("Play")
                                     .font(.system(size: 16, weight: .semibold))
                             }
@@ -409,7 +432,7 @@ struct MinimalHeroSection: View {
                             .background(Color.black)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                        
+
                         Button(action: { onAddToList(currentVideo) }) {
                             Image(systemName: "plus")
                                 .font(.system(size: 16, weight: .semibold))
