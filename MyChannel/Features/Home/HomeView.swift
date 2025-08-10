@@ -995,30 +995,26 @@ struct AnimatedFilterChip: View {
                 .background(
                     Group {
                         if isSelected {
-                            LinearGradient(
-                                colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                            Color.white
                         } else {
                             Color(.systemGray5)
                         }
                     }
                 )
-                .foregroundColor(isSelected ? .white : .primary)
+                .foregroundColor(isSelected ? .black : .primary)
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
                         .stroke(
-                            isSelected ? Color.clear : Color(.systemGray4),
+                            isSelected ? Color(.systemGray4) : Color(.systemGray4),
                             lineWidth: 1
                         )
                 )
                 .shadow(
-                    color: isSelected ? AppTheme.Colors.primary.opacity(0.3) : Color.clear,
-                    radius: isSelected ? 8 : 0,
+                    color: isSelected ? Color.black.opacity(0.1) : Color.clear,
+                    radius: isSelected ? 4 : 0,
                     x: 0,
-                    y: isSelected ? 4 : 0
+                    y: isSelected ? 2 : 0
                 )
         }
         .buttonStyle(PlainButtonStyle())
@@ -1186,7 +1182,7 @@ enum ContentFilter: String, CaseIterable {
     var gradient: LinearGradient {
         let colors: [Color]
         switch self {
-        case .all: colors = [AppTheme.Colors.primary, AppTheme.Colors.secondary]
+        case .all: colors = [.white, .white] // Clean white for Home
         case .trending: colors = [.orange, .red]
         case .movies: colors = [.red, .pink]
         case .liveTV: colors = [.blue, .purple]

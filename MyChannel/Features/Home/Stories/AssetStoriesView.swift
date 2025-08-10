@@ -49,7 +49,7 @@ struct HeroMatch: ViewModifier {
     }
 }
 
-// 🔥 CLEAN & MINIMAL STORY BUBBLE (NO BOUNCE!)
+// 🔥 CLEAN & MINIMAL STORY BUBBLE - WHITE DESIGN LIKE PROFILE IMAGE
 struct AssetBouncyStoryBubble: View {
     let story: AssetStory
     let onTap: (AssetStory) -> Void
@@ -72,18 +72,11 @@ struct AssetBouncyStoryBubble: View {
                 HapticManager.shared.impact(style: .light)
             }) {
                 ZStack {
-                    // 🔥 SLEEK GRADIENT RING (SAME AS PROFILE ICON)
+                    // 🔥 CLEAN WHITE RING (LIKE PROFILE IMAGE)
                     Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 2.5
-                        )
+                        .stroke(Color.white, lineWidth: 2.5)
                         .frame(width: 80, height: 80)
-                        .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 4, x: 0, y: 2)
+                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
 
                     // CLEAN PROFILE IMAGE
                     AsyncImage(url: URL(string: "https://picsum.photos/200/200?random=\(story.id.hashValue)")) { image in
@@ -147,11 +140,8 @@ struct AssetBouncyStoriesRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // CLEAN HEADER
+            // CLEAN HEADER - REMOVED STORIES TEXT
             HStack {
-                Text("Stories")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.primary)
                 Spacer()
                 Button("See all") {
                     HapticManager.shared.impact(style: .light)
@@ -164,7 +154,6 @@ struct AssetBouncyStoriesRow: View {
             // CLEAN HORIZONTAL SCROLL
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    // ADD STORY BUTTON (CLEAN VERSION)
                     addStoryButton
                     
                     // STORY BUBBLES
@@ -185,7 +174,7 @@ struct AssetBouncyStoriesRow: View {
         .background(AppTheme.Colors.background)
     }
 
-    // 🔥 CLEAN ADD STORY BUTTON
+    // 🔥 CLEAN ADD STORY BUTTON - WHITE DESIGN
     private var addStoryButton: some View {
         Button(action: {
             onAddStory()
@@ -193,32 +182,27 @@ struct AssetBouncyStoriesRow: View {
         }) {
             VStack(spacing: 8) {
                 ZStack {
-                    // CLEAN BORDER
+                    // CLEAN WHITE BORDER
                     Circle()
-                        .stroke(AppTheme.Colors.divider, lineWidth: 2)
+                        .stroke(Color.white, lineWidth: 2.5)
                         .frame(width: 80, height: 80)
+                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                     
-                    // CLEAN BACKGROUND
+                    // CLEAN WHITE BACKGROUND
                     Circle()
-                        .fill(AppTheme.Colors.surface)
+                        .fill(Color.white)
                         .frame(width: 74, height: 74)
                         .overlay {
                             ZStack {
-                                // GRADIENT PLUS BUTTON
+                                // CLEAN WHITE PLUS BUTTON
                                 Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
+                                    .fill(Color.white)
                                     .frame(width: 28, height: 28)
-                                    .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 4, x: 0, y: 2)
+                                    .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
                                 
                                 Image(systemName: "plus")
                                     .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.black)
                             }
                         }
                 }
