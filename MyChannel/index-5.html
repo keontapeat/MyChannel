@@ -2629,7 +2629,7 @@
 
         /* Enhanced CTA Section */
         .cta-section {
-            padding: 30px 15px;
+            padding: 80px 15px 60px;
             background: radial-gradient(circle at center, rgba(255, 68, 68, 0.08) 0%, transparent 70%);
             text-align: center;
             position: relative;
@@ -3021,6 +3021,371 @@
             font-size: 0.9rem;
         }
 
+        .business-email-section {
+            background: linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05));
+            border: 1px solid rgba(255, 68, 68, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .business-email-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 68, 68, 0.1), transparent);
+            animation: shimmer 3s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .business-email-label {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .business-email {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--primary);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 1;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .business-email:hover {
+            color: #fff;
+            text-shadow: 0 0 15px rgba(255, 68, 68, 0.8);
+            transform: scale(1.05);
+        }
+
+        .email-icon {
+            font-size: 1.1rem;
+            opacity: 0.8;
+        }
+
+        .business-email:hover .email-icon {
+            animation: bounce 0.6s ease;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 60%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-8px); }
+            80% { transform: translateY(-4px); }
+        }
+
+        /* WHY MYCHANNEL WINS COMPARISON SECTION */
+        .comparison-section {
+            padding: 60px 40px;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 30%, #2a0505 50%, #1a0a0a 70%, #0a0a0a 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .comparison-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(255, 68, 68, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(255, 68, 68, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(255, 68, 68, 0.05) 0%, transparent 70%);
+            pointer-events: none;
+            animation: backgroundPulse 8s ease-in-out infinite;
+        }
+
+        @keyframes backgroundPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .comparison-section::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,68,68,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        .comparison-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .comparison-title {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .comparison-title h2 {
+            font-size: 3.5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--primary), #ff8a8a, #ffff00, var(--primary));
+            background-size: 300% 300%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: -2px;
+            animation: titleGradient 4s ease-in-out infinite;
+            text-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
+            position: relative;
+        }
+
+        @keyframes titleGradient {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .comparison-title h2::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            border-radius: 2px;
+            animation: underlineGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes underlineGlow {
+            0%, 100% { box-shadow: 0 0 5px rgba(255, 68, 68, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(255, 68, 68, 1); }
+        }
+
+        .comparison-subtitle {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 300;
+        }
+
+        .comparison-table {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 20px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .comparison-table:hover {
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .comparison-header {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .comparison-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            animation: headerShimmer 3s infinite;
+        }
+
+        @keyframes headerShimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .comparison-header-cell {
+            padding: 30px 20px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--light);
+        }
+
+        .platform-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 1.3rem;
+        }
+
+        .mychannel-header {
+            background: linear-gradient(135deg, var(--primary), #ff8a8a, #ffff00, var(--primary));
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: headerGlow 3s ease-in-out infinite;
+            position: relative;
+            z-index: 2;
+        }
+
+        @keyframes headerGlow {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .comparison-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .comparison-row:hover {
+            background: rgba(255, 68, 68, 0.08);
+            transform: translateX(5px);
+            border-left: 3px solid var(--primary);
+        }
+
+        .comparison-cell {
+            padding: 30px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+            min-height: 70px;
+        }
+
+        .feature-name {
+            font-weight: 600;
+            color: var(--light);
+            text-align: left;
+            justify-content: flex-start;
+            font-size: 1.1rem;
+        }
+
+        .feature-value {
+            font-weight: 700;
+            font-size: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            line-height: 1.3;
+            white-space: nowrap;
+        }
+
+        .mychannel-value {
+            color: var(--primary);
+            font-weight: 800;
+            position: relative;
+        }
+
+        .competitor-value {
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 600;
+        }
+
+        .winner-badge {
+            position: relative;
+            top: 0;
+            right: 0;
+            background: var(--primary);
+            color: white;
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 700;
+            margin-top: 5px;
+            opacity: 0.9;
+        }
+
+        .revenue-highlight {
+            background: rgba(255, 68, 68, 0.08);
+            border-left: 3px solid var(--primary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .revenue-highlight::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: revenue-shimmer 2s infinite;
+        }
+
+        @keyframes revenue-shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+
+
+        .comparison-cta {
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .comparison-cta-text {
+            font-size: 1.3rem;
+            color: var(--light);
+            margin-bottom: 25px;
+            font-weight: 600;
+        }
+
+        .revolution-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 18px 35px;
+            background: linear-gradient(135deg, var(--primary), #ff8a8a);
+            color: white;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(255, 68, 68, 0.3);
+        }
+
+        .revolution-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(255, 68, 68, 0.5);
+            filter: brightness(1.1);
+        }
+
         .social-links {
             display: flex;
             gap: 15px;
@@ -3209,7 +3574,7 @@
             .benefit:hover { transform: translateY(0); }
 
             .cta-section {
-                padding: 30px 10px;
+                padding: 60px 10px 40px;
             }
 
             .rocket-icon {
@@ -3266,6 +3631,20 @@
             footer { padding: 30px 20px 20px; }
             .footer-content { grid-template-columns: 1fr; gap: 25px; }
             .footer-bottom { flex-direction: column; gap: 15px; text-align: center; }
+            .business-email-section { margin: 15px 0; padding: 15px; }
+            .business-email { font-size: 1.1rem; }
+            
+            /* Comparison Section Mobile */
+            .comparison-section { padding: 40px 20px; }
+            .comparison-title { margin-bottom: 30px; }
+            .comparison-title h2 { font-size: 2.2rem; }
+            .comparison-header { grid-template-columns: 1.5fr 1fr 1fr 1fr; }
+            .comparison-row { grid-template-columns: 1.5fr 1fr 1fr 1fr; }
+            .comparison-header-cell { padding: 20px 8px; font-size: 0.85rem; }
+            .comparison-cell { padding: 25px 8px; min-height: 75px; }
+            .feature-value { font-size: 1rem; gap: 5px; }
+            .feature-name { font-size: 1rem; }
+            .winner-badge { font-size: 0.7rem; padding: 3px 8px; }
         }
 
         @media (max-width: 390px) {
@@ -4217,9 +4596,10 @@
             </div>
         </div>
     </section>
-    
+
+
     <!-- CTA Section -->
-    <section class="cta-section">
+    <section class="cta-section" id="cta-section">
         <div class="cta-container slide-in-up">
             <div class="rocket-icon">🚀</div>
             <h2 class="cta-title">Join The Revolution</h2>
@@ -4304,6 +4684,16 @@
                 <a href="#">Contact</a>
             </div>
         </div>
+        
+        <!-- Business Email Section -->
+        <div class="business-email-section">
+            <div class="business-email-label">Business Inquiries</div>
+            <a href="mailto:keontapeat@mychannel.live" class="business-email">
+                <i class="fas fa-envelope email-icon"></i>
+                keontapeat@mychannel.live
+            </a>
+        </div>
+        
         <div class="footer-bottom">
             <div>© 2025 MyChannel.live — The Revolution Starts Here</div>
             <div class="social-links">
