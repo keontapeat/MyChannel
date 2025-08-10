@@ -16,6 +16,10 @@ struct HomeView: View {
     @State private var showingSearchView: Bool = false
     @State private var featuredContent: [Video] = []
     @State private var heroVideoIndex: Int = 0
+    @State private var showingStories: Bool = true
+    @State private var assetStories: [AssetStory] = AssetStory.sampleStories
+    @State private var selectedAssetStory: AssetStory? = nil
+    @State private var showingAssetStoryViewer: Bool = false
     
     // MARK: - Main Body
     var body: some View {
@@ -28,6 +32,27 @@ struct HomeView: View {
                 GeometryReader { geometry in
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(spacing: 0) {
+                            // Stories Section (Above Header)
+                            if showingStories {
+                                AssetBouncyStoriesRow(
+                                    stories: assetStories,
+                                    onStoryTap: { story in
+                                        selectedAssetStory = story
+                                        showingAssetStoryViewer = true
+                                    },
+                                    onAddStory: {
+                                        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                                        impactFeedback.impactOccurred()
+                                    }
+                                )
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .top).combined(with: .opacity),
+                                    removal: .move(edge: .top).combined(with: .opacity)
+                                ))
+                                .padding(.top, 100) // Space for floating header
+                                .background(Color(.systemBackground)) // Light background
+                            }
+                            
                             // Hero Section
                             netflixStyleHeroSection
                             
@@ -64,15 +89,20 @@ struct HomeView: View {
             SearchView()
                 .onDisappear { showingSearchView = false }
         }
+        .fullScreenCover(item: $selectedAssetStory) { story in
+            AssetStoryViewerView(story: story) {
+                selectedAssetStory = nil
+            }
+        }
     }
     
-    // MARK: - Premium Background
+    // MARK: - Light Background
     private var premiumBackground: some View {
         LinearGradient(
             colors: [
-                Color.black,
-                Color.black.opacity(0.95),
-                Color.black.opacity(0.98)
+                Color(.systemBackground),
+                Color(.systemGroupedBackground),
+                Color(.systemBackground)
             ],
             startPoint: .top,
             endPoint: .bottom
@@ -336,7 +366,7 @@ struct HomeView: View {
                     Button(action: { showingSearchView = true }) {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 20, weight: .medium))
-                            .foregroundColor(.white)
+                            .foregroundColor(.primary)
                     }
                     .buttonStyle(PlainButtonStyle())
                     
@@ -344,7 +374,7 @@ struct HomeView: View {
                         ZStack {
                             Image(systemName: "bell")
                                 .font(.system(size: 20, weight: .medium))
-                                .foregroundColor(.white)
+                                .foregroundColor(.primary)
                             
                             // Notification Badge
                             Circle()
@@ -372,7 +402,7 @@ struct HomeView: View {
             .padding(.top, 50)
             .padding(.bottom, 10)
             .background(
-                .ultraThinMaterial.opacity(headerOpacity < 0.5 ? 1 - headerOpacity : 0)
+                Color(.systemBackground).opacity(headerOpacity < 0.5 ? 1 - headerOpacity : 0)
             )
             
             Spacer()
@@ -472,22 +502,48 @@ struct HomeView: View {
     
     // MARK: - Categories Section
     private var categoriesSection: some View {
-        PremiumContentSection(
-            title: "Browse by Category",
-            subtitle: "Discover content you love",
-            icon: "square.grid.2x2.fill"
-        ) {
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 16) {
-                ForEach(Array(ContentFilter.allCases.dropFirst().prefix(6)), id: \.self) { category in
-                    CategoryCard(category: category) {
-                        selectedFilter = category
+        VStack(alignment: .leading, spacing: 16) {
+            // Section Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "square.grid.2x2.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.primary)
+                        
+                        Text("Browse by Category")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.primary)
                     }
+                    
+                    Text("Discover content you love")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
                 }
+                
+                Spacer()
             }
             .padding(.horizontal, 20)
+            
+            // Animated Filter Chips
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(ContentFilter.allCases, id: \.self) { filter in
+                        AnimatedFilterChip(
+                            title: filter.displayName,
+                            isSelected: selectedFilter == filter,
+                            action: {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                    selectedFilter = filter
+                                }
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                impactFeedback.impactOccurred()
+                            }
+                        )
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
         }
     }
     
@@ -598,13 +654,13 @@ struct PremiumContentSection<Content: View>: View {
                         
                         Text(title)
                             .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(.primary)
                     }
                     
                     if let subtitle = subtitle {
                         Text(subtitle)
                             .font(.system(size: 14))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(.secondary)
                     }
                 }
                 
@@ -678,18 +734,18 @@ struct PremiumVideoCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(video.title)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.primary)
                         .lineLimit(2)
                         .frame(height: 36, alignment: .top)
                     
                     Text(video.creator.displayName)
                         .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(.secondary)
                         .lineLimit(1)
                     
                     Text("\(video.formattedViewCount) views")
                         .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(.secondary)
                 }
                 .padding(.top, 8)
                 .frame(width: 200, alignment: .leading)
@@ -755,7 +811,7 @@ struct HomeMovieCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(movie.title)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.primary)
                         .lineLimit(2)
                     
                     HStack(spacing: 4) {
@@ -763,13 +819,13 @@ struct HomeMovieCard: View {
                             Image(systemName: "star.fill")
                                 .font(.system(size: 8))
                                 .foregroundColor(
-                                    index < Int(movie.imdbRating / 2) ? .yellow : .white.opacity(0.3)
+                                    index < Int(movie.imdbRating / 2) ? .yellow : Color(.systemGray4)
                                 )
                         }
                         
                         Text("\(movie.imdbRating, specifier: "%.1f")")
                             .font(.system(size: 11))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(.secondary)
                     }
                 }
                 .padding(.top, 8)
@@ -836,12 +892,12 @@ struct ContinueWatchingCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(video.title)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white)
+                        .foregroundColor(.primary)
                         .lineLimit(2)
                     
                     Text("\(Int(progress * 100))% watched")
                         .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(.secondary)
                 }
                 .padding(.top, 8)
                 .frame(width: 180, alignment: .leading)
@@ -857,36 +913,53 @@ struct ContinueWatchingCard: View {
     }
 }
 
-// MARK: - Category Card
-struct CategoryCard: View {
-    let category: ContentFilter
+// MARK: - Animated Filter Chip
+struct AnimatedFilterChip: View {
+    let title: String
+    let isSelected: Bool
     let action: () -> Void
     
     @State private var isPressed = false
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(category.gradient)
-                        .frame(height: 80)
-                    
-                    Text(category.displayName.split(separator: " ").last?.uppercased() ?? "")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                        .shadow(radius: 2)
-                }
-                
-                Text(category.displayName)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-            }
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(
+                    Group {
+                        if isSelected {
+                            LinearGradient(
+                                colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        } else {
+                            Color(.systemGray5)
+                        }
+                    }
+                )
+                .foregroundColor(isSelected ? .white : .primary)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            isSelected ? Color.clear : Color(.systemGray4),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(
+                    color: isSelected ? AppTheme.Colors.primary.opacity(0.3) : Color.clear,
+                    radius: isSelected ? 8 : 0,
+                    x: 0,
+                    y: isSelected ? 4 : 0
+                )
         }
         .buttonStyle(PlainButtonStyle())
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isSelected)
         .onPressGesture(
             onPress: { isPressed = true },
             onRelease: { isPressed = false }
@@ -960,12 +1033,12 @@ struct LiveTVCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(channelName)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.primary)
                         .lineLimit(1)
                     
                     Text(programName)
                         .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
                 .padding(.top, 8)
