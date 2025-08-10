@@ -1,0 +1,36 @@
+openapi: 3.0.0
+info:
+  title: MyChannel API
+  version: 1.0.0
+servers:
+  - url: ${backend_url}
+paths:
+  /ai/summarize:
+    post:
+      x-google-backend:
+        address: ${backend_url}
+        deadline: 30.0
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                lang:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    type: string
+
+

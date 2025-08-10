@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 @main
 struct MyChannelApp: App {
@@ -34,6 +35,15 @@ struct MyChannelApp: App {
                 .preferredColorScheme(.light)
                 .onAppear {
                     print("📱 App appeared with MC logo splash!")
+                    Task {
+                        _ = await PushNotificationService.shared.getAuthorizationStatus()
+                    }
+                }
+                .onOpenURL { url in
+                    DeepLinkManager.shared.handle(url)
+                }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    _ = DeepLinkManager.shared.handleUniversalLink(activity)
                 }
         }
     }

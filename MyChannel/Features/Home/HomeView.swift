@@ -1,918 +1,974 @@
-// ... existing code ...
-
 import SwiftUI
 import Combine
 
-// MARK: - Enhanced Video Playback
-class RemoteConfigManager: ObservableObject {
-    @Published var config: RemoteConfig? = nil
-    
-    var chatModels: [RemoteChatModel] {
-        config?.chat_models ?? []
-    }
-    
-    init() {
-        self.fetch()
-        Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
-            self.fetch()
-        }
-    }
-    
-    func fetch() {
-        Task {
-            await MainActor.run {
-            }
-        }
-    }
-}
-
-// MARK: - Remote Config Model
-struct RemoteConfig {
-    let chat_models: [RemoteChatModel]
-}
-
-struct RemoteChatModel {
-    let id: String
-    let name: String
-}
-
-// MARK: - Home View
+// MARK: - HomeView
 struct HomeView: View {
     @EnvironmentObject private var appState: AppState
     @ObservedObject private var globalPlayer = GlobalVideoPlayerManager.shared
     @State private var selectedFilter: ContentFilter = .all
     @State private var searchText: String = ""
-    @State private var showingFilters: Bool = false
     @State private var scrollOffset: CGFloat = 0
-    @State private var isRefreshing: Bool = false
-    @State private var showingStories: Bool = true
     @State private var headerOpacity: Double = 1.0
-    @State private var isLoading: Bool = false
+    @State private var isRefreshing: Bool = false
     @State private var selectedVideo: Video? = nil
     @State private var showingVideoPlayer: Bool = false
-    @State private var selectedStory: Story? = nil
-    @State private var showingStoryViewer: Bool = false
-    @State private var stories: [Story] = Story.sampleStories
-    @State private var showingSearchView: Bool = false
-    @State private var assetStories: [AssetStory] = AssetStory.sampleStories
-    @State private var viewerStories: [Story] = Story.sampleStories
-    @State private var selectedAssetStory: AssetStory? = nil
-    @Namespace private var storyHeroNS
-    @State private var heroAsset: AssetStory? = nil
-    @State private var showHeroOverlay: Bool = false
-
     @State private var selectedMovie: FreeMovie? = nil
-
+    @State private var showingSearchView: Bool = false
+    @State private var featuredContent: [Video] = []
+    @State private var heroVideoIndex: Int = 0
+    
+    // MARK: - Main Body
     var body: some View {
         NavigationStack {
-            GeometryReader { _ in
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ParallaxHeaderView(
-                            scrollOffset: scrollOffset,
-                            headerOpacity: headerOpacity,
-                            selectedFilter: $selectedFilter,
-                            searchText: $searchText,
-                            showingFilters: $showingFilters,
-                            showingSearchView: $showingSearchView
-                        )
-                        
-                        if showingStories {
-                            AssetBouncyStoriesRow(
-                                stories: assetStories,
-                                onStoryTap: { asset in
-                                    startHeroTransition(for: asset)
-                                },
-                                onAddStory: {
-                                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                                    impactFeedback.impactOccurred()
-                                },
-                                ns: storyHeroNS,
-                                activeHeroId: heroAsset?.id
-                            )
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .top).combined(with: .opacity),
-                                removal: .move(edge: .top).combined(with: .opacity)
-                            ))
+            ZStack {
+                // Premium Background
+                premiumBackground
+                
+                // Main Content
+                GeometryReader { geometry in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(spacing: 0) {
+                            // Hero Section
+                            netflixStyleHeroSection
+                            
+                            // Premium Content Sections
+                            premiumContentSections
                         }
-                        
-                        ClickableTrendingCarousel(
-                            videos: Video.sampleVideos.filter { $0.viewCount > 100000 },
-                            onVideoTap: playVideoWithGlobalPlayer
-                        )
-
-                        if selectedFilter == .movies || selectedFilter == .all {
-                            PremiumMoviesHubSection(
-                                onMovieTap: { movie in
-                                    selectedMovie = movie
-                                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                                    impactFeedback.impactOccurred()
-                                }
-                            )
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .bottom).combined(with: .opacity),
-                                removal: .move(edge: .top).combined(with: .opacity)
-                            ))
-                        }
-
-                        AnimatedFilterChipsView(
-                            selectedFilter: $selectedFilter,
-                            scrollOffset: scrollOffset
-                        )
-                        
-                        ClickableLiveStreamsSection(
-                            onStreamTap: { _ in
-                                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                                impactFeedback.impactOccurred()
-                            }
-                        )
-                        
-                        if selectedFilter == .liveTV || selectedFilter == .all {
-                            PremiumLiveTVSection(
-                                onChannelTap: { channel in
-                                    print(" Live TV Channel tapped: \(channel.name)")
-                                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                                    impactFeedback.impactOccurred()
-                                }
-                            )
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .leading).combined(with: .opacity),
-                                removal: .move(edge: .trailing).combined(with: .opacity)
-                            ))
-                        }
-
-                        ClickableVideoFeedSection(
-                            videos: Video.sampleVideos,
-                            selectedFilter: selectedFilter,
-                            watchLaterVideos: $appState.watchLaterVideos,
-                            likedVideos: $appState.likedVideos,
-                            isLoading: $isLoading,
-                            onVideoTap: playVideoWithGlobalPlayer
-                        )
-                        
-                        if isLoading {
-                            PaginationLoadingView()
+                    }
+                    .coordinateSpace(name: "scroll")
+                    .onScrollOffsetChange { offset in
+                        withAnimation(.easeOut(duration: 0.1)) {
+                            scrollOffset = offset
+                            headerOpacity = min(1.0, max(0.0, 1.0 - (offset / 200.0)))
                         }
                     }
                 }
-                .coordinateSpace(name: "scroll")
-                .refreshable {
-                    await refreshContent()
-                }
-                .background(AppTheme.Colors.background)
+                
+                // Floating Navigation Header
+                floatingNavigationHeader
             }
         }
-        .onAppear {
-            loadMoreContent()
-        }
+        .onAppear(perform: setupContent)
+        .refreshable { await refreshContent() }
         .fullScreenCover(isPresented: $showingVideoPlayer) {
             if let video = selectedVideo {
                 VideoDetailView(video: video)
-                    .onAppear {
-                        print(" VideoDetailView appeared for: \(video.title)")
-                    }
-                    .onDisappear {
-                        print(" VideoDetailView disappeared")
-                        selectedVideo = nil
-                    }
-            } else {
-                Text("No video selected")
-                    .foregroundColor(.white)
-                    .background(Color.black)
+                    .onDisappear { selectedVideo = nil }
             }
-        }
-        .onChange(of: showingVideoPlayer) { oldValue, newValue in
-            print(" showingVideoPlayer changed: \(oldValue) -> \(newValue)")
-        }
-        .onChange(of: selectedVideo) { oldValue, newValue in
-            print(" selectedVideo changed: \(oldValue?.title ?? "nil") -> \(newValue?.title ?? "nil")")
-        }
-        .fullScreenCover(isPresented: $showingStoryViewer) {
-            let safeStory = selectedStory ?? viewerStories.first ?? Story.sampleStories.first!
-            let safeStories = viewerStories.isEmpty ? Story.sampleStories : viewerStories
-            
-            StoryViewerView(
-                stories: safeStories,
-                initialStory: safeStory,
-                onDismiss: {
-                    showingStoryViewer = false
-                    selectedStory = nil
-                }
-            )
-        }
-        .fullScreenCover(isPresented: $showingSearchView) {
-            SearchView()
-                .onAppear {
-                    print(" SearchView appeared")
-                }
-                .onDisappear {
-                    print(" SearchView disappeared")
-                    showingSearchView = false
-                }
         }
         .fullScreenCover(item: $selectedMovie) { movie in
             MovieDetailView(movie: movie)
-                .onDisappear {
-                    selectedMovie = nil
-                }
+                .onDisappear { selectedMovie = nil }
         }
-        .overlay {
-            if showHeroOverlay, let asset = heroAsset {
-                heroOverlay(for: asset)
+        .fullScreenCover(isPresented: $showingSearchView) {
+            SearchView()
+                .onDisappear { showingSearchView = false }
+        }
+    }
+    
+    // MARK: - Premium Background
+    private var premiumBackground: some View {
+        LinearGradient(
+            colors: [
+                Color.black,
+                Color.black.opacity(0.95),
+                Color.black.opacity(0.98)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+    }
+    
+    // MARK: - Netflix Style Hero Section
+    private var netflixStyleHeroSection: some View {
+        ZStack(alignment: .bottom) {
+            // Hero Background Video/Image
+            heroBackgroundContent
+            
+            // Hero Gradient Overlay
+            heroGradientOverlay
+            
+            // Hero Content Info
+            heroContentInfo
+        }
+        .frame(height: 600)
+        .clipped()
+    }
+    
+    // MARK: - Hero Background Content
+    private var heroBackgroundContent: some View {
+        GeometryReader { geometry in
+            if !featuredContent.isEmpty {
+                let currentVideo = featuredContent[heroVideoIndex % featuredContent.count]
+                
+                AsyncImage(url: URL(string: currentVideo.thumbnailURL)) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(
+                            width: geometry.size.width,
+                            height: 600 + max(0, scrollOffset)
+                        )
+                        .offset(y: -scrollOffset * 0.3)
+                        .blur(radius: max(0, scrollOffset * 0.005))
+                } placeholder: {
+                    heroPlaceholderContent(for: currentVideo)
+                }
+            } else {
+                defaultHeroPlaceholder
+            }
+        }
+        .onReceive(Timer.publish(every: 8.0, on: .main, in: .common).autoconnect()) { _ in
+            withAnimation(.easeInOut(duration: 1.0)) {
+                heroVideoIndex = (heroVideoIndex + 1) % max(1, featuredContent.count)
             }
         }
     }
     
-    // MARK: - Enhanced Video Playback
-    private func playVideoWithGlobalPlayer(_ video: Video) {
-        selectedVideo = video
-        showingVideoPlayer = true
+    // MARK: - Hero Placeholder Content
+    private func heroPlaceholderContent(for video: Video) -> some View {
+        LinearGradient(
+            colors: [
+                video.category.color.opacity(0.4),
+                Color.black.opacity(0.8),
+                Color.black
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .overlay(
+            VStack(spacing: 24) {
+                Image(systemName: video.category.iconName)
+                    .font(.system(size: 80, weight: .ultraLight))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.white.opacity(0.8), .white.opacity(0.4)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                
+                Text(video.title)
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .padding(.horizontal, 40)
+            }
+        )
+    }
+    
+    // MARK: - Default Hero Placeholder
+    private var defaultHeroPlaceholder: some View {
+        LinearGradient(
+            colors: [
+                AppTheme.Colors.primary.opacity(0.3),
+                Color.black.opacity(0.8),
+                Color.black
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .overlay(
+            VStack(spacing: 24) {
+                Image("MyChannel")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 120, height: 120)
+                    .opacity(0.6)
+                
+                Text("Welcome to MyChannel")
+                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+            }
+        )
+    }
+    
+    // MARK: - Hero Gradient Overlay
+    private var heroGradientOverlay: some View {
+        LinearGradient(
+            colors: [
+                Color.clear,
+                Color.black.opacity(0.2),
+                Color.black.opacity(0.6),
+                Color.black.opacity(0.9),
+                Color.black
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .allowsHitTesting(false)
+    }
+    
+    // MARK: - Hero Content Info
+    private var heroContentInfo: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            
+            if !featuredContent.isEmpty {
+                let currentVideo = featuredContent[heroVideoIndex % featuredContent.count]
+                
+                VStack(spacing: 16) {
+                    // Featured Badge
+                    HStack(spacing: 8) {
+                        Image(systemName: "crown.fill")
+                            .foregroundColor(.yellow)
+                            .font(.system(size: 16))
+                        
+                        Text("FEATURED")
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                            .tracking(2)
+                    }
+                    .opacity(0.9)
+                    
+                    // Title
+                    Text(currentVideo.title)
+                        .font(.system(size: 32, weight: .heavy, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.white, .white.opacity(0.8)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .shadow(color: .black.opacity(0.8), radius: 4, x: 0, y: 2)
+                    
+                    // Metadata
+                    HStack(spacing: 12) {
+                        heroMetadataChip(currentVideo.category.displayName, icon: "play.rectangle.fill")
+                        heroMetadataChip(currentVideo.formattedDuration, icon: "clock.fill")
+                        heroMetadataChip("\(currentVideo.formattedViewCount) views", icon: "eye.fill")
+                    }
+                    .opacity(0.9)
+                    
+                    // Action Buttons
+                    HStack(spacing: 16) {
+                        // Play Button
+                        Button(action: { playVideo(currentVideo) }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 20, weight: .bold))
+                                Text("Play")
+                                    .font(.system(size: 18, weight: .bold))
+                            }
+                            .foregroundColor(.black)
+                            .frame(width: 140, height: 56)
+                            .background(
+                                LinearGradient(
+                                    colors: [.white, .white.opacity(0.9)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            )
+                            .shadow(color: .white.opacity(0.3), radius: 8, x: 0, y: 4)
+                        }
+                        .buttonStyle(PremiumButtonStyle())
+                        
+                        // My List Button
+                        Button(action: { toggleWatchLater(currentVideo) }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: appState.isVideoInWatchLater(currentVideo.id) ? "checkmark.circle.fill" : "plus")
+                                    .font(.system(size: 18, weight: .bold))
+                                Text("My List")
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .frame(width: 120, height: 56)
+                            .background(
+                                .ultraThinMaterial.opacity(0.8),
+                                in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                                    .stroke(.white.opacity(0.2), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(PremiumButtonStyle())
+                    }
+                }
+                .padding(.horizontal, 32)
+                .padding(.bottom, 80)
+            }
+        }
+    }
+    
+    // MARK: - Hero Metadata Chip
+    private func heroMetadataChip(_ text: String, icon: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+            Text(text)
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            .ultraThinMaterial.opacity(0.6),
+            in: Capsule()
+        )
+        .overlay(Capsule().stroke(.white.opacity(0.2), lineWidth: 1))
+    }
+    
+    // MARK: - Floating Navigation Header
+    private var floatingNavigationHeader: some View {
+        VStack(spacing: 0) {
+            HStack {
+                // Logo
+                Button(action: {}) {
+                    Image("MyChannel")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Spacer()
+                
+                // Navigation Actions
+                HStack(spacing: 20) {
+                    Button(action: { showingSearchView = true }) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    NavigationLink(destination: NotificationsView()) {
+                        ZStack {
+                            Image(systemName: "bell")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundColor(.white)
+                            
+                            // Notification Badge
+                            Circle()
+                                .fill(AppTheme.Colors.primary)
+                                .frame(width: 8, height: 8)
+                                .offset(x: 8, y: -8)
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    NavigationLink(destination: ProfileView()) {
+                        Circle()
+                            .fill(AppTheme.Colors.primary.opacity(0.3))
+                            .frame(width: 32, height: 32)
+                            .overlay(
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.white)
+                            )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 50)
+            .padding(.bottom, 10)
+            .background(
+                .ultraThinMaterial.opacity(headerOpacity < 0.5 ? 1 - headerOpacity : 0)
+            )
+            
+            Spacer()
+        }
+    }
+    
+    // MARK: - Premium Content Sections
+    private var premiumContentSections: some View {
+        VStack(spacing: 40) {
+            // Continue Watching
+            if !appState.watchHistory.isEmpty {
+                continueWatchingSection
+            }
+            
+            // Trending Now
+            trendingSection
+            
+            // Movies Section
+            moviesSection
+            
+            // Categories Section
+            categoriesSection
+            
+            // Because You Watched
+            recommendedSection
+            
+            // Live TV
+            liveTVSection
+            
+            // Bottom Spacing
+            Color.clear.frame(height: 100)
+        }
+        .padding(.top, 20)
+    }
+    
+    // MARK: - Continue Watching Section
+    private var continueWatchingSection: some View {
+        PremiumContentSection(
+            title: "Continue Watching",
+            subtitle: "Pick up where you left off",
+            icon: "play.circle.fill"
+        ) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(Video.sampleVideos.prefix(5)) { video in
+                        ContinueWatchingCard(video: video) {
+                            playVideo(video)
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+    
+    // MARK: - Trending Section
+    private var trendingSection: some View {
+        PremiumContentSection(
+            title: "Trending Now",
+            subtitle: "What everyone's watching",
+            icon: "flame.fill",
+            seeAllAction: { /* Navigate to trending */ }
+        ) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(Video.sampleVideos.filter { $0.viewCount > 100000 }.prefix(8)) { video in
+                        PremiumVideoCard(video: video) {
+                            playVideo(video)
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+    
+    // MARK: - Movies Section
+    private var moviesSection: some View {
+        PremiumContentSection(
+            title: "Free Movies",
+            subtitle: "Classic films, completely free",
+            icon: "film.fill",
+            seeAllAction: { /* Navigate to movies */ }
+        ) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(FreeMovie.sampleMovies.prefix(6)) { movie in
+                        HomeMovieCard(movie: movie) {
+                            selectedMovie = movie
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+    
+    // MARK: - Categories Section
+    private var categoriesSection: some View {
+        PremiumContentSection(
+            title: "Browse by Category",
+            subtitle: "Discover content you love",
+            icon: "square.grid.2x2.fill"
+        ) {
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 16) {
+                ForEach(Array(ContentFilter.allCases.dropFirst().prefix(6)), id: \.self) { category in
+                    CategoryCard(category: category) {
+                        selectedFilter = category
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+    
+    // MARK: - Recommended Section
+    private var recommendedSection: some View {
+        PremiumContentSection(
+            title: "Because You Watched",
+            subtitle: "More content tailored for you",
+            icon: "heart.fill"
+        ) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(Video.sampleVideos.shuffled().prefix(6)) { video in
+                        PremiumVideoCard(video: video) {
+                            playVideo(video)
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+    
+    // MARK: - Live TV Section
+    private var liveTVSection: some View {
+        PremiumContentSection(
+            title: "Live TV",
+            subtitle: "Watch live channels 24/7",
+            icon: "tv.fill",
+            seeAllAction: { /* Navigate to live TV */ }
+        ) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(0..<5) { index in
+                        LiveTVCard(
+                            channelName: "Channel \(index + 1)",
+                            programName: "Live Program",
+                            isLive: true
+                        ) {
+                            // Handle live TV tap
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+    
+    // MARK: - Setup Methods
+    private func setupContent() {
+        featuredContent = Video.sampleVideos.filter { $0.viewCount > 500000 }.shuffled()
+        if featuredContent.isEmpty {
+            featuredContent = Array(Video.sampleVideos.prefix(3))
+        }
     }
     
     private func refreshContent() async {
         isRefreshing = true
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
-        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-        impactFeedback.impactOccurred()
-        stories = Story.sampleStories
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        setupContent()
         isRefreshing = false
     }
     
-    private func loadMoreContent() {
-        guard !isLoading else { return }
-        isLoading = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            isLoading = false
-        }
+    // MARK: - Action Methods
+    private func playVideo(_ video: Video) {
+        selectedVideo = video
+        showingVideoPlayer = true
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
     
-    private func prepareViewerForAsset(_ asset: AssetStory) {
-        let converted: [Story] = assetStories.map { s in
-            let creatorId = matchUserId(for: s.username) ?? User.sampleUsers.first?.id ?? UUID().uuidString
-            let imageName: String = {
-                switch s.media {
-                case .image(let name): return name
-                case .video(let name): return name
-                }
-            }()
-            return Story(
-                creatorId: creatorId,
-                mediaURL: imageName,
-                mediaType: .image,
-                duration: 12.0,
-                caption: nil,
-                text: nil,
-                createdAt: Date(),
-                expiresAt: Calendar.current.date(byAdding: .hour, value: 24, to: Date()) ?? Date(),
-                viewCount: Int.random(in: 100...5_000),
-                isViewed: false,
-                thumbnail: nil,
-                isLive: false,
-                content: [
-                    StoryContent(
-                        url: imageName,
-                        type: .image,
-                        duration: 12.0
-                    )
-                ]
-            )
-        }
-        viewerStories = converted
-        if let initial = converted.first(where: { story in
-            let display = story.creator?.displayName.lowercased()
-            let handle = story.creator?.username.lowercased()
-            return display == asset.username.lowercased() || handle == asset.username.lowercased()
-        }) ?? converted.first {
-            selectedStory = initial
-        } else {
-            selectedStory = Story.sampleStories.first!
-        }
-    }
-
-    private func presentViewer() {
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.9)) {
-            showingStoryViewer = true
-        }
-    }
-
-    private func startHeroTransition(for asset: AssetStory) {
-        prepareViewerForAsset(asset)
-        heroAsset = asset
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-            showHeroOverlay = true
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
-            presentViewer()
-            withAnimation(.easeInOut(duration: 0.22)) {
-                showHeroOverlay = false
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
-                heroAsset = nil
-            }
-        }
-    }
-
-    private func matchUserId(for username: String) -> String? {
-        let u = username.lowercased()
-        return User.sampleUsers.first(where: {
-            $0.username.lowercased() == u || $0.displayName.lowercased() == u
-        })?.id
-    }
-
-    private func heroOverlay(for asset: AssetStory) -> some View {
-        let imageName: String = {
-            switch asset.media {
-            case .image(let n): return n
-            case .video(let n): return n
-            }
-        }()
-        return ZStack {
-            Color.black.opacity(0.45)
-                .ignoresSafeArea()
-                .transition(.opacity)
-            Image(imageName)
-                .resizable()
-                .scaledToFill()
-                .matchedGeometryEffect(id: "storyHero-\(asset.id.uuidString)", in: storyHeroNS)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
-                .ignoresSafeArea()
-        }
+    private func toggleWatchLater(_ video: Video) {
+        appState.toggleWatchLater(for: video.id)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 }
 
-// MARK: - Parallax Header View
-struct ParallaxHeaderView: View {
-    let scrollOffset: CGFloat
-    let headerOpacity: Double
-    @Binding var selectedFilter: ContentFilter
-    @Binding var searchText: String
-    @Binding var showingFilters: Bool
-    @Binding var showingSearchView: Bool
+// MARK: - Premium Content Section
+struct PremiumContentSection<Content: View>: View {
+    let title: String
+    let subtitle: String?
+    let icon: String
+    let seeAllAction: (() -> Void)?
+    @ViewBuilder let content: Content
     
-    @State private var logoScale: CGFloat = 1.0
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 0) {
-                HStack {
-                    HStack(spacing: 12) {
-                        Image("MyChannel")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 36, height: 36)
-                            .scaleEffect(logoScale * max(0.8, 1.0 - abs(scrollOffset) / 200.0))
-                            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollOffset)
-                            .animation(.easeInOut(duration: 2.0), value: logoScale)
-                            .onAppear {
-                                startSubtleZoom()
-                            }
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("MyChannel")
-                                .font(AppTheme.Typography.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(AppTheme.Colors.textPrimary)
-                            
-                            Text("Welcome back!")
-                                .font(AppTheme.Typography.caption)
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                                .opacity(headerOpacity)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    HStack(spacing: 16) {
-                        Button(action: {
-                            showingSearchView = true
-                        }) {
-                            HomeActionButton(
-                                icon: "magnifyingglass",
-                                isActive: false
-                            )
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        QuickActionsMenu()
-                        
-                        NavigationLink(destination: NotificationsView()) {
-                            NotificationButton()
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                    .frame(height: 44)
-                }
-                .padding(.horizontal, AppTheme.Spacing.md)
-                .padding(.vertical, AppTheme.Spacing.sm)
-                .background(
-                    LinearGradient(
-                        colors: [
-                            AppTheme.Colors.background,
-                            AppTheme.Colors.background.opacity(0.95)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .opacity(headerOpacity)
-                )
-                .overlay(
-                    Rectangle()
-                        .fill(AppTheme.Colors.divider.opacity(0.2))
-                        .frame(height: 1)
-                        .opacity(1 - headerOpacity),
-                    alignment: .bottom
-                )
-            }
-            .offset(y: scrollOffset > 0 ? -scrollOffset * 0.5 : 0)
-            .opacity(headerOpacity)
-        }
+    init(
+        title: String,
+        subtitle: String? = nil,
+        icon: String,
+        seeAllAction: (() -> Void)? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.icon = icon
+        self.seeAllAction = seeAllAction
+        self.content = content()
     }
-    
-    private func startSubtleZoom() {
-        Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
-            withAnimation(.easeInOut(duration: 2.0)) {
-                logoScale = logoScale == 1.0 ? 1.08 : 1.0
-            }
-        }
-    }
-}
-
-// MARK: - Clickable Trending Carousel
-struct ClickableTrendingCarousel: View {
-    let videos: [Video]
-    let onVideoTap: (Video) -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // Section Header
             HStack {
-                HStack(spacing: 8) {
-                    Image(systemName: "flame.fill")
-                        .foregroundColor(AppTheme.Colors.primary)
-                        .font(.system(size: 16))
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Image(systemName: icon)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.primary)
+                        
+                        Text(title)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.white)
+                    }
                     
-                    Text("Trending Now")
-                        .font(AppTheme.Typography.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    if let subtitle = subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
                 }
                 
                 Spacer()
                 
-                NavigationLink("See all", destination: TrendingView())
-                    .font(AppTheme.Typography.subheadline)
-                    .foregroundColor(AppTheme.Colors.primary)
-            }
-            .padding(.horizontal, AppTheme.Spacing.md)
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(videos.filter { $0.viewCount > 100000 }.prefix(5)) { video in
-                        ClickableTrendingVideoCard(video: video) {
-                            onVideoTap(video)
-                        }
-                    }
+                if let seeAllAction = seeAllAction {
+                    Button("See all", action: seeAllAction)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.primary)
                 }
-                .padding(.horizontal, AppTheme.Spacing.md)
             }
+            .padding(.horizontal, 20)
+            
+            // Section Content
+            content
         }
-        .padding(.vertical, AppTheme.Spacing.md)
     }
 }
 
-// MARK: - Clickable Trending Video Card
-struct ClickableTrendingVideoCard: View {
+// MARK: - Premium Video Card
+struct PremiumVideoCard: View {
     let video: Video
     let action: () -> Void
     
-    @State private var isPressed: Bool = false
+    @State private var isPressed = false
     
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Thumbnail
                 ZStack(alignment: .bottomTrailing) {
-                    AsyncImage(url: URL(string: video.thumbnailURL)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(16/9, contentMode: .fill)
-                        case .failure(_):
-                            Rectangle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            video.category.color.opacity(0.3),
-                                            video.category.color.opacity(0.1)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
+                    AsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    } placeholder: {
+                        Rectangle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        video.category.color.opacity(0.3),
+                                        video.category.color.opacity(0.1)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
                                 )
-                                .overlay(
-                                    VStack(spacing: 8) {
-                                        Image(systemName: video.category.iconName)
-                                            .font(.system(size: 32))
-                                            .foregroundColor(video.category.color)
-                                        
-                                        Text(video.category.displayName)
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(video.category.color)
-                                    }
-                                )
-                        case .empty:
-                            Rectangle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            video.category.color.opacity(0.3),
-                                            video.category.color.opacity(0.1)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .overlay(
-                                    VStack(spacing: 8) {
-                                        Image(systemName: video.category.iconName)
-                                            .font(.system(size: 32))
-                                            .foregroundColor(video.category.color)
-                                        
-                                        Text(video.category.displayName)
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(video.category.color)
-                                    }
-                                )
-                        @unknown default:
-                            EmptyView()
-                        }
+                            )
+                            .overlay(
+                                Image(systemName: video.category.iconName)
+                                    .font(.system(size: 24))
+                                    .foregroundColor(video.category.color)
+                            )
                     }
-                    .frame(width: 180, height: 101)
-                    .clipped()
-                    .cornerRadius(AppTheme.CornerRadius.md)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md)
-                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
-                    )
+                    .frame(width: 200, height: 112)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            
-                            Circle()
-                                .fill(.white.opacity(0.9))
-                                .frame(width: 50, height: 50)
-                                .overlay(
-                                    Image(systemName: "play.fill")
-                                        .font(.system(size: 20))
-                                        .foregroundColor(.black)
-                                )
-                                .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
-                            
-                            Spacer()
-                        }
-                        Spacer()
-                    }
-                    .opacity(isPressed ? 1.0 : 0.8)
-                    
-                    VStack(alignment: .trailing) {
-                        Spacer()
-                        
-                        HStack(spacing: 4) {
-                            if video.isLive {
-                                Circle()
-                                    .fill(Color.white)
-                                    .frame(width: 4, height: 4)
-                                    .scaleEffect(1.0)
-                                    .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: true)
-                                
-                                Text("LIVE")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.white)
-                            } else {
-                                Text(video.formattedDuration)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(.white)
-                            }
-                        }
+                    // Duration Badge
+                    Text(video.formattedDuration)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(
                             Capsule()
-                                .fill(Color.black.opacity(0.8))
-                                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                                .fill(.black.opacity(0.8))
                         )
-                    }
-                    .padding(8)
+                        .padding(8)
                 }
                 
+                // Video Info
                 VStack(alignment: .leading, spacing: 6) {
                     Text(video.title)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .foregroundColor(.white)
                         .lineLimit(2)
                         .frame(height: 36, alignment: .top)
                     
-                    HStack(spacing: 6) {
-                        AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Circle()
-                                .fill(video.category.color.opacity(0.2))
-                                .overlay(
-                                    Text(String(video.creator.displayName.prefix(1)))
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(video.category.color)
-                                )
-                        }
-                        .frame(width: 16, height: 16)
-                        .clipShape(Circle())
-                        
-                        Text(video.creator.displayName)
-                            .font(.system(size: 12))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .lineLimit(1)
-                        
-                        if video.isVerified {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(AppTheme.Colors.primary)
-                        }
-                        
-                        Spacer()
-                    }
+                    Text(video.creator.displayName)
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.7))
+                        .lineLimit(1)
                     
-                    HStack(spacing: 4) {
-                        Text("\(video.formattedViewCount) views")
-                            .font(.system(size: 11))
-                            .foregroundColor(AppTheme.Colors.textTertiary)
-                        
-                        Text("•")
-                            .font(.system(size: 11))
-                            .foregroundColor(AppTheme.Colors.textTertiary)
-                        
-                        Text(video.timeAgo)
-                            .font(.system(size: 11))
-                            .foregroundColor(AppTheme.Colors.textTertiary)
-                    }
+                    Text("\(video.formattedViewCount) views")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.6))
                 }
-                .frame(width: 180, height: 64, alignment: .top)
+                .padding(.top, 8)
+                .frame(width: 200, alignment: .leading)
             }
         }
         .buttonStyle(PlainButtonStyle())
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
         .onPressGesture(
-            onPress: { 
-                isPressed = true
-                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                impactFeedback.impactOccurred()
-            },
-            onRelease: { 
-                isPressed = false 
-            }
-        )
-        .accessibilityLabel(video.title)
-        .accessibilityHint("Double tap to play video")
-    }
-}
-
-// MARK: - Animated Filter Chips View
-struct AnimatedFilterChipsView: View {
-    @Binding var selectedFilter: ContentFilter
-    let scrollOffset: CGFloat
-    
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(ContentFilter.allCases, id: \.self) { filter in
-                    AnimatedFilterChip(
-                        title: filter.displayName,
-                        isSelected: selectedFilter == filter,
-                        action: {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                selectedFilter = filter
-                            }
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                            impactFeedback.impactOccurred()
-                        }
-                    )
-                }
-            }
-            .padding(.horizontal, AppTheme.Spacing.md)
-        }
-        .padding(.vertical, AppTheme.Spacing.md)
-        .background(
-            AppTheme.Colors.background
-                .opacity(min(1.0, abs(scrollOffset) / 50.0))
+            onPress: { isPressed = true },
+            onRelease: { isPressed = false }
         )
     }
 }
 
-// MARK: - Animated Filter Chip
-struct AnimatedFilterChip: View {
-    let title: String
-    let isSelected: Bool
+// MARK: - Home Movie Card (Renamed to avoid conflicts)
+struct HomeMovieCard: View {
+    let movie: FreeMovie
     let action: () -> Void
     
-    @State private var isPressed: Bool = false
+    @State private var isPressed = false
     
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(.white)
-                        .transition(.scale.combined(with: .opacity))
-                }
+            VStack(alignment: .leading, spacing: 0) {
+                // Poster
+                MultiSourceAsyncImage(
+                    urls: movie.posterCandidates,
+                    content: { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 140, height: 210)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    },
+                    placeholder: {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(.ultraThinMaterial.opacity(0.3))
+                            .frame(width: 140, height: 210)
+                            .overlay(
+                                VStack(spacing: 8) {
+                                    Image(systemName: "film.stack")
+                                        .font(.system(size: 32))
+                                        .foregroundColor(.white.opacity(0.5))
+                                    
+                                    Text(movie.title)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.7))
+                                        .multilineTextAlignment(.center)
+                                        .lineLimit(2)
+                                        .padding(.horizontal, 8)
+                                }
+                            )
+                    }
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(.white.opacity(0.1), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
                 
-                Text(title)
-                    .font(AppTheme.Typography.subheadline)
-                    .fontWeight(.semibold)
-            }
-            .padding(.horizontal, isSelected ? 20 : 16)
-            .padding(.vertical, 10)
-            .background(
-                ZStack {
-                    if isSelected {
-                        LinearGradient(
-                            colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    } else {
-                        AppTheme.Colors.surface
-                    }
+                // Movie Info
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(movie.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(2)
                     
-                    if isPressed {
-                        Color.black.opacity(0.1)
+                    HStack(spacing: 4) {
+                        ForEach(0..<5) { index in
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 8))
+                                .foregroundColor(
+                                    index < Int(movie.imdbRating / 2) ? .yellow : .white.opacity(0.3)
+                                )
+                        }
+                        
+                        Text("\(movie.imdbRating, specifier: "%.1f")")
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.7))
                     }
                 }
-            )
-            .foregroundColor(
-                isSelected ? .white : AppTheme.Colors.textPrimary
-            )
-            .cornerRadius(AppTheme.CornerRadius.xl)
-            .shadow(
-                color: isSelected ? AppTheme.Colors.primary.opacity(0.3) : .clear,
-                radius: isSelected ? 8 : 0,
-                x: 0,
-                y: 2
-            )
-            .scaleEffect(isPressed ? 0.95 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isSelected)
+                .padding(.top, 8)
+                .frame(width: 140, alignment: .leading)
+            }
         }
         .buttonStyle(PlainButtonStyle())
+        .scaleEffect(isPressed ? 0.95 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
         .onPressGesture(
             onPress: { isPressed = true },
             onRelease: { isPressed = false }
         )
-        .accessibilityLabel(title)
-        .accessibilityHint(isSelected ? "Currently selected filter" : "Double tap to select filter")
     }
 }
 
-// MARK: - Clickable Live Streams Section
-struct ClickableLiveStreamsSection: View {
-    let onStreamTap: (User) -> Void
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(AppTheme.Colors.primary)
-                        .frame(width: 8, height: 8)
-                        .scaleEffect(1.0)
-                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: true)
-                    
-                    Text("Live Now")
-                        .font(AppTheme.Typography.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                }
-                
-                Spacer()
-                
-                NavigationLink("See all", destination: LiveStreamsView())
-                    .font(AppTheme.Typography.subheadline)
-                    .foregroundColor(AppTheme.Colors.primary)
-            }
-            .padding(.horizontal, AppTheme.Spacing.md)
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(0..<min(3, User.sampleUsers.count), id: \.self) { index in
-                        if !User.sampleUsers.isEmpty {
-                            ClickableLiveStreamCard(
-                                creator: User.sampleUsers[index],
-                                viewerCount: Int.random(in: 100...5000)
-                            ) {
-                                onStreamTap(User.sampleUsers[index])
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, AppTheme.Spacing.md)
-            }
-        }
-        .padding(.vertical, AppTheme.Spacing.md)
-    }
-}
-
-// MARK: - Clickable Live Stream Card
-struct ClickableLiveStreamCard: View {
-    let creator: User
-    let viewerCount: Int
+// MARK: - Continue Watching Card
+struct ContinueWatchingCard: View {
+    let video: Video
     let action: () -> Void
     
-    @State private var isPressed: Bool = false
+    @State private var isPressed = false
+    @State private var progress: Double = Double.random(in: 0.1...0.8)
     
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 0) {
+                ZStack(alignment: .bottom) {
+                    AsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    } placeholder: {
+                        Rectangle()
+                            .fill(video.category.color.opacity(0.3))
+                            .overlay(
+                                Image(systemName: video.category.iconName)
+                                    .font(.system(size: 24))
+                                    .foregroundColor(video.category.color)
+                            )
+                    }
+                    .frame(width: 180, height: 101)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    
+                    // Progress Bar
+                    VStack(spacing: 0) {
+                        Spacer()
+                        
+                        GeometryReader { geometry in
+                            ZStack(alignment: .leading) {
+                                Rectangle()
+                                    .fill(.black.opacity(0.3))
+                                    .frame(height: 3)
+                                
+                                Rectangle()
+                                    .fill(AppTheme.Colors.primary)
+                                    .frame(width: geometry.size.width * progress, height: 3)
+                            }
+                        }
+                        .frame(height: 3)
+                    }
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(video.title)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                        .lineLimit(2)
+                    
+                    Text("\(Int(progress * 100))% watched")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+                .padding(.top, 8)
+                .frame(width: 180, alignment: .leading)
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .scaleEffect(isPressed ? 0.95 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+        .onPressGesture(
+            onPress: { isPressed = true },
+            onRelease: { isPressed = false }
+        )
+    }
+}
+
+// MARK: - Category Card
+struct CategoryCard: View {
+    let category: ContentFilter
+    let action: () -> Void
+    
+    @State private var isPressed = false
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(category.gradient)
+                        .frame(height: 80)
+                    
+                    Text(category.displayName.split(separator: " ").last?.uppercased() ?? "")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                        .shadow(radius: 2)
+                }
+                
+                Text(category.displayName)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .scaleEffect(isPressed ? 0.95 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+        .onPressGesture(
+            onPress: { isPressed = true },
+            onRelease: { isPressed = false }
+        )
+    }
+}
+
+// MARK: - Live TV Card
+struct LiveTVCard: View {
+    let channelName: String
+    let programName: String
+    let isLive: Bool
+    let action: () -> Void
+    
+    @State private var isPressed = false
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 0) {
                 ZStack(alignment: .topLeading) {
-                    RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md)
+                    Rectangle()
                         .fill(
                             LinearGradient(
-                                colors: [AppTheme.Colors.primary.opacity(0.3), AppTheme.Colors.secondary.opacity(0.2)],
+                                colors: [.red.opacity(0.3), .black.opacity(0.8)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                         .frame(width: 160, height: 90)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(
                             VStack(spacing: 8) {
-                                Image(systemName: "play.circle.fill")
-                                    .font(.system(size: 32))
+                                Image(systemName: "tv.fill")
+                                    .font(.system(size: 24))
                                     .foregroundColor(.white)
-                                    .shadow(radius: 4)
                                 
-                                Text("GO LIVE")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .shadow(radius: 2)
+                                if isLive {
+                                    HStack(spacing: 4) {
+                                        Circle()
+                                            .fill(.red)
+                                            .frame(width: 6, height: 6)
+                                            .animation(.easeInOut(duration: 1).repeatForever(), value: isLive)
+                                        
+                                        Text("LIVE")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundColor(.white)
+                                    }
+                                }
                             }
                         )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppTheme.CornerRadius.md)
-                                .stroke(AppTheme.Colors.primary.opacity(0.3), lineWidth: 1)
-                        )
                     
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(.white)
-                            .frame(width: 6, height: 6)
-                            .scaleEffect(1.0)
-                            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: true)
-                        
-                        Text("LIVE")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.white)
+                    if isLive {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(.red)
+                                .frame(width: 6, height: 6)
+                            
+                            Text("LIVE")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            Capsule().fill(.black.opacity(0.8))
+                        )
+                        .padding(8)
                     }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(
-                        Capsule()
-                            .fill(AppTheme.Colors.primary)
-                            .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 2, x: 0, y: 1)
-                    )
-                    .padding(6)
                 }
                 
-                HStack(spacing: 8) {
-                    AsyncImage(url: URL(string: creator.profileImageURL ?? "")) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Circle()
-                            .fill(AppTheme.Colors.surface)
-                    }
-                    .frame(width: 20, height: 20)
-                    .clipShape(Circle())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(channelName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
                     
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(creator.displayName)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                        
-                        HStack(spacing: 4) {
-                            Image(systemName: "eye.fill")
-                                .font(.system(size: 8))
-                                .foregroundColor(AppTheme.Colors.textTertiary)
-                            
-                            Text("\(viewerCount.formatted()) watching")
-                                .font(.system(size: 10))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                    }
+                    Text(programName)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.7))
+                        .lineLimit(1)
                 }
+                .padding(.top, 8)
                 .frame(width: 160, alignment: .leading)
             }
         }
@@ -923,462 +979,25 @@ struct ClickableLiveStreamCard: View {
             onPress: { isPressed = true },
             onRelease: { isPressed = false }
         )
-        .accessibilityLabel("\(creator.displayName)'s live stream")
-        .accessibilityHint("Double tap to join live stream")
     }
 }
 
-// MARK: - Clickable Video Feed Section
-struct ClickableVideoFeedSection: View {
-    let videos: [Video]
-    let selectedFilter: ContentFilter
-    @Binding var watchLaterVideos: Set<String>
-    @Binding var likedVideos: Set<String>
-    @Binding var isLoading: Bool
-    let onVideoTap: (Video) -> Void
-    
-    var filteredVideos: [Video] {
-        if selectedFilter == .all {
-            return videos
-        } else {
-            return videos.filter { $0.category.rawValue == selectedFilter.rawValue }
-        }
-    }
-    
-    var body: some View {
-        LazyVStack(spacing: AppTheme.Spacing.lg) {
-            ForEach(filteredVideos) { video in
-                ProfessionalVideoCard(
-                    video: video,
-                    isLiked: likedVideos.contains(video.id),
-                    isWatchLater: watchLaterVideos.contains(video.id),
-                    onVideoTap: {
-                        onVideoTap(video)
-                    },
-                    onLike: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                            if likedVideos.contains(video.id) {
-                                likedVideos.remove(video.id)
-                            } else {
-                                likedVideos.insert(video.id)
-                            }
-                        }
-                    },
-                    onWatchLater: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.1)) {
-                            if watchLaterVideos.contains(video.id) {
-                                watchLaterVideos.remove(video.id)
-                            } else {
-                                watchLaterVideos.insert(video.id)
-                            }
-                        }
-                    }
-                )
-                .padding(.horizontal, AppTheme.Spacing.md)
-                .onAppear {
-                    if video.id == filteredVideos.last?.id {
-                        loadMoreContent()
-                    }
-                }
-            }
-        }
-        .padding(.top, AppTheme.Spacing.md)
-    }
-    
-    private func loadMoreContent() {
-        guard !isLoading else { return }
+// MARK: - Premium Button Style
+struct PremiumButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
 
-// MARK: - Professional Video Card
-struct ProfessionalVideoCard: View {
-    let video: Video
-    let isLiked: Bool
-    let isWatchLater: Bool
-    let onVideoTap: () -> Void
-    let onLike: () -> Void
-    let onWatchLater: () -> Void
-    
-    @State private var isPressed: Bool = false
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button(action: {
-                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                impactFeedback.impactOccurred()
-                onVideoTap()
-            }) {
-                ZStack(alignment: .center) {
-                    AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(16/9, contentMode: .fill)
-                    } placeholder: {
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        video.category.color.opacity(0.4),
-                                        video.category.color.opacity(0.1)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .overlay(
-                                VStack(spacing: 12) {
-                                    Image(systemName: video.category.iconName)
-                                        .font(.system(size: 40))
-                                        .foregroundColor(video.category.color)
-                                    
-                                    Text(video.title)
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(video.category.color)
-                                        .multilineTextAlignment(.center)
-                                        .lineLimit(2)
-                                        .padding(.horizontal, 20)
-                                    
-                                    Text(video.category.displayName)
-                                        .font(.system(size: 12))
-                                        .foregroundColor(video.category.color.opacity(0.8))
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            Capsule()
-                                                .fill(video.category.color.opacity(0.2))
-                                        )
-                                }
-                            )
-                    }
-                    .frame(width: 180, height: 101)
-                    .clipped()
-                    .cornerRadius(AppTheme.CornerRadius.lg)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.CornerRadius.lg)
-                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
-                    )
-                    
-                    Circle()
-                        .fill(.white.opacity(0.95))
-                        .frame(width: 70, height: 70)
-                        .overlay(
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 28))
-                                .foregroundColor(.black)
-                        )
-                        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-                        .scaleEffect(isPressed ? 0.9 : 1.0)
-                        .opacity(isPressed ? 1.0 : 0.9)
-                    
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            
-                            Text(video.formattedDuration)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule()
-                                        .fill(.black.opacity(0.8))
-                                )
-                        }
-                    }
-                    .padding(12)
-                }
-            }
-            .buttonStyle(PlainButtonStyle())
-            .scaleEffect(isPressed ? 0.98 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isPressed)
-            .onPressGesture(
-                onPress: { isPressed = true },
-                onRelease: { isPressed = false }
-            )
-            
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 12) {
-                    AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Circle()
-                            .fill(video.category.color.opacity(0.3))
-                            .overlay(
-                                Text(String(video.creator.displayName.prefix(1)))
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(video.category.color)
-                            )
-                    }
-                    .frame(width: 40, height: 40)
-                    .clipShape(Circle())
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        Button(action: {
-                            onVideoTap()
-                        }) {
-                            Text(video.title)
-                                .font(.system(size: 16, weight: .semibold))
-                                .lineLimit(2)
-                                .foregroundColor(AppTheme.Colors.textPrimary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .multilineTextAlignment(.leading)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 6) {
-                                Button(action: {}) {
-                                    Text(video.creator.displayName)
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(AppTheme.Colors.textSecondary)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                
-                                if video.creator.isVerified {
-                                    Image(systemName: "checkmark.seal.fill")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(AppTheme.Colors.primary)
-                                }
-                            }
-                            
-                            HStack(spacing: 4) {
-                                Text("\(video.formattedViewCount) views")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(AppTheme.Colors.textTertiary)
-                                
-                                Text("•")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(AppTheme.Colors.textTertiary)
-                                
-                                Text(video.timeAgo)
-                                    .font(.system(size: 13))
-                                    .foregroundColor(AppTheme.Colors.textTertiary)
-                            }
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    Menu {
-                        Button(action: {
-                            onWatchLater()
-                        }) {
-                            Label(
-                                isWatchLater ? "Remove from Watch Later" : "Save to Watch Later",
-                                systemImage: isWatchLater ? "bookmark.fill" : "bookmark"
-                            )
-                        }
-                        
-                        Button(action: {}) {
-                            Label("Share", systemImage: "square.and.arrow.up")
-                        }
-                        
-                        Button(action: {}) {
-                            Label("Not Interested", systemImage: "hand.thumbsdown")
-                        }
-                        
-                        Button(action: {}) {
-                            Label("Report", systemImage: "exclamationmark.triangle")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 16))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .padding(8)
-                    }
-                }
-                
-                HStack(spacing: 24) {
-                    Button(action: {
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                        impactFeedback.impactOccurred()
-                        onLike()
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: isLiked ? "heart.fill" : "heart")
-                                .font(.system(size: 16))
-                                .foregroundColor(isLiked ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
-                                .scaleEffect(isLiked ? 1.1 : 1.0)
-                                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isLiked)
-                            
-                            Text("\(video.likeCount)")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    Button(action: {}) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "bubble.right")
-                                .font(.system(size: 16))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                            
-                            Text("\(video.commentCount)")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    Button(action: {}) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 16))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                            
-                            Text("Share")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                        impactFeedback.impactOccurred()
-                        onWatchLater()
-                    }) {
-                        Image(systemName: isWatchLater ? "bookmark.fill" : "bookmark")
-                            .font(.system(size: 18))
-                            .foregroundColor(isWatchLater ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
-                            .scaleEffect(isWatchLater ? 1.1 : 1.0)
-                            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isWatchLater)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-        }
-        .background(AppTheme.Colors.cardBackground)
-        .cornerRadius(AppTheme.CornerRadius.lg)
-        .shadow(
-            color: AppTheme.Colors.textPrimary.opacity(0.08),
-            radius: 8,
-            x: 0,
-            y: 2
-        )
-    }
-}
-
-// MARK: - HomeActionButton
-struct HomeActionButton: View {
-    let icon: String
-    let isActive: Bool
-    let action: (() -> Void)?
-    
-    init(icon: String, isActive: Bool = false, action: (() -> Void)? = nil) {
-        self.icon = icon
-        self.isActive = isActive
-        self.action = action
-    }
-    
-    var body: some View {
-        Button(action: action ?? {}) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(isActive ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
-                .padding(8)
-                .background(
-                    Circle()
-                        .fill(isActive ? AppTheme.Colors.primary.opacity(0.1) : Color.clear)
-                        .shadow(
-                            color: isActive ? AppTheme.Colors.primary.opacity(0.2) : .clear,
-                            radius: isActive ? 4 : 0,
-                            x: 0,
-                            y: 2
-                        )
-                )
-                .scaleEffect(isActive ? 1.1 : 1.0)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .accessibilityLabel(icon)
-        .accessibilityHint(isActive ? "Active" : "Inactive")
-    }
-}
-
-struct NotificationButton: View {
-    @State private var badgeCount: Int = 3
-    
-    var body: some View {
-        ZStack {
-            Image(systemName: "bell")
-                .font(.title2)
-                .foregroundColor(AppTheme.Colors.textPrimary)
-            
-            if badgeCount > 0 {
-                Text("\(badgeCount)")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(4)
-                    .background(
-                        Circle()
-                            .fill(AppTheme.Colors.primary)
-                            .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 2, x: 0, y: 1)
-                    )
-                    .offset(x: 10, y: -10)
-                    .scaleEffect(badgeCount > 0 ? 1.0 : 0.0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: badgeCount)
-            }
-        }
-        .accessibilityLabel("Notifications")
-        .accessibilityValue(badgeCount > 0 ? "\(badgeCount) unread notifications" : "No unread notifications")
-    }
-}
-
-struct SkeletonView: View {
-    @State private var isAnimating: Bool = false
-    
-    var body: some View {
-        Rectangle()
-            .fill(AppTheme.Colors.surface)
-            .overlay(
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.clear, .white.opacity(0.4), .clear],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .offset(x: isAnimating ? 200 : -200)
-                    .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false), value: isAnimating)
-            )
-            .onAppear {
-                isAnimating = true
-            }
-    }
-}
-
-struct PaginationLoadingView: View {
-    var body: some View {
-        HStack(spacing: 12) {
-            ProgressView()
-                .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
-                .scaleEffect(0.8)
-            
-            Text("Loading more videos...")
-                .font(AppTheme.Typography.subheadline)
-                .foregroundColor(AppTheme.Colors.textSecondary)
-        }
-        .padding()
-        .accessibilityLabel("Loading more content")
-    }
-}
-
-// MARK: - Enhanced Content Filter
+// MARK: - Content Filter
 enum ContentFilter: String, CaseIterable {
     case all = "all"
     case trending = "trending"
-    case liveTV = "live_tv"
     case movies = "movies"
+    case liveTV = "live_tv"
     case gaming = "gaming"
     case music = "music"
     case education = "education"
@@ -1386,22 +1005,13 @@ enum ContentFilter: String, CaseIterable {
     case entertainment = "entertainment"
     case sports = "sports"
     case news = "news"
-    case live = "live"
-    case lifestyle = "lifestyle"
-    case food = "food"
-    case travel = "travel"
-    case comedy = "comedy"
-    case fitness = "fitness"
-    case business = "business"
-    case science = "science"
-    case fashion = "fashion"
     
     var displayName: String {
         switch self {
-        case .all: return "All"
+        case .all: return "🏠 Home"
         case .trending: return "🔥 Trending"
-        case .liveTV: return "📺 Live TV"
         case .movies: return "🎬 Movies"
+        case .liveTV: return "📺 Live TV"
         case .gaming: return "🎮 Gaming"
         case .music: return "🎵 Music"
         case .education: return "📚 Education"
@@ -1409,164 +1019,31 @@ enum ContentFilter: String, CaseIterable {
         case .entertainment: return "🎭 Entertainment"
         case .sports: return "⚽ Sports"
         case .news: return "📰 News"
-        case .live: return "🔴 Live"
-        case .lifestyle: return "✨ Lifestyle"
-        case .food: return "🍕 Food"
-        case .travel: return "✈️ Travel"
-        case .comedy: return "😂 Comedy"
-        case .fitness: return "💪 Fitness"
-        case .business: return "💼 Business"
-        case .science: return "🔬 Science"
-        case .fashion: return "👗 Fashion"
         }
     }
     
     var gradient: LinearGradient {
         let colors: [Color]
         switch self {
-        case .all:
-            colors = [AppTheme.Colors.primary, AppTheme.Colors.secondary]
-        case .trending:
-            colors = [.orange, .red]
-        case .liveTV:
-            colors = [.blue, .purple]
-        case .movies:
-            colors = [.red, .pink]
-        case .gaming:
-            colors = [.green, .blue]
-        case .music:
-            colors = [.purple, .pink]
-        case .education:
-            colors = [.blue, .indigo]
-        case .technology:
-            colors = [.gray, .blue]
-        case .entertainment:
-            colors = [.yellow, .orange]
-        case .sports:
-            colors = [.green, .yellow]
-        case .news:
-            colors = [.red, .orange]
-        case .live:
-            colors = [.red, .pink]
-        case .lifestyle:
-            colors = [.pink, .purple]
-        case .food:
-            colors = [.orange, .yellow]
-        case .travel:
-            colors = [.blue, .cyan]
-        case .comedy:
-            colors = [.yellow, .orange]
-        case .fitness:
-            colors = [.green, .mint]
-        case .business:
-            colors = [.gray, .blue]
-        case .science:
-            colors = [.blue, .purple]
-        case .fashion:
-            colors = [.pink, .purple]
+        case .all: colors = [AppTheme.Colors.primary, AppTheme.Colors.secondary]
+        case .trending: colors = [.orange, .red]
+        case .movies: colors = [.red, .pink]
+        case .liveTV: colors = [.blue, .purple]
+        case .gaming: colors = [.green, .blue]
+        case .music: colors = [.purple, .pink]
+        case .education: colors = [.blue, .indigo]
+        case .technology: colors = [.gray, .blue]
+        case .entertainment: colors = [.yellow, .orange]
+        case .sports: colors = [.green, .yellow]
+        case .news: colors = [.red, .orange]
         }
         return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 }
 
-// MARK: - Previews
+// MARK: - Preview
 #Preview("HomeView") {
     HomeView()
         .environmentObject(AppState())
-        .environmentObject(GlobalVideoPlayerManager.shared)
-}
-
-#Preview("ParallaxHeaderView") {
-    ParallaxHeaderView(
-        scrollOffset: 0,
-        headerOpacity: 1.0,
-        selectedFilter: .constant(.all),
-        searchText: .constant(""),
-        showingFilters: .constant(false),
-        showingSearchView: .constant(false)
-    )
-    .environmentObject(AppState())
-}
-
-#Preview("Trending Carousel") {
-    ClickableTrendingCarousel(videos: Video.sampleVideos, onVideoTap: { _ in })
-    .environmentObject(AppState())
-}
-
-#Preview("Trending Card") {
-    ClickableTrendingVideoCard(video: Video.sampleVideos.first!, action: {})
-    .environmentObject(AppState())
-}
-
-#Preview("Filter Chips") {
-    AnimatedFilterChipsView(selectedFilter: .constant(.all), scrollOffset: 0)
-    .environmentObject(AppState())
-}
-
-#Preview("Filter Chip") {
-    AnimatedFilterChip(title: "🔥 Trending", isSelected: true, action: {})
-    .environmentObject(AppState())
-}
-
-#Preview("Live Streams Section") {
-    ClickableLiveStreamsSection(onStreamTap: { _ in })
-    .environmentObject(AppState())
-}
-
-#Preview("Live Stream Card") {
-    ClickableLiveStreamCard(
-        creator: User.sampleUsers.first ?? User.sampleUsers[0],
-        viewerCount: 1234,
-        action: {}
-    )
-    .environmentObject(AppState())
-}
-
-#Preview("Video Feed Section") {
-    ClickableVideoFeedSection(
-        videos: Video.sampleVideos,
-        selectedFilter: .all,
-        watchLaterVideos: .constant([]),
-        likedVideos: .constant([]),
-        isLoading: .constant(false),
-        onVideoTap: { _ in }
-    )
-    .environmentObject(AppState())
-}
-
-#Preview("Video Card") {
-    ProfessionalVideoCard(
-        video: Video.sampleVideos.first!,
-        isLiked: false,
-        isWatchLater: false,
-        onVideoTap: {},
-        onLike: {},
-        onWatchLater: {}
-    )
-    .environmentObject(AppState())
-}
-
-#Preview("Notification Button") {
-    NotificationButton()
-    .environmentObject(AppState())
-}
-
-#Preview("Skeleton") {
-    SkeletonView()
-    .frame(height: 120)
-    .environmentObject(AppState())
-}
-
-#Preview("Pagination Loading View") {
-    PaginationLoadingView()
-    .environmentObject(AppState())
-}
-
-#Preview("Asset Stories Section") {
-    AssetBouncyStoriesRow(
-        stories: AssetStory.sampleStories,
-        onStoryTap: { _ in },
-        onAddStory: {}
-    )
-    .environmentObject(AppState())
+        .preferredColorScheme(.dark)
 }

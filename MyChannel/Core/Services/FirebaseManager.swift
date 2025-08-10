@@ -8,6 +8,10 @@ import FirebaseCore
 import FirebaseAnalytics
 #endif
 
+#if canImport(FirebaseMessaging)
+import FirebaseMessaging
+#endif
+
 final class FirebaseManager {
     static let shared = FirebaseManager()
     private init() {}
@@ -33,6 +37,30 @@ final class FirebaseManager {
         Analytics.logEvent(name, parameters: parameters)
         #else
         print("Analytics [stub] \(name): \(parameters)")
+        #endif
+    }
+
+    func setUserId(_ userId: String?) {
+        #if canImport(FirebaseAnalytics)
+        Analytics.setUserID(userId)
+        #endif
+    }
+
+    func setUserProperty(_ value: String?, forName name: String) {
+        #if canImport(FirebaseAnalytics)
+        Analytics.setUserProperty(value, forName: name)
+        #endif
+    }
+
+    func currentFcmToken() async -> String? {
+        #if canImport(FirebaseMessaging)
+        return await withCheckedContinuation { continuation in
+            Messaging.messaging().token { token, _ in
+                continuation.resume(returning: token)
+            }
+        }
+        #else
+        return nil
         #endif
     }
 }

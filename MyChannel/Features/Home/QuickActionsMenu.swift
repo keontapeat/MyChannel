@@ -66,12 +66,21 @@ struct QuickActionsMenu: View {
                 }
             }
         } label: {
-            HomeActionButton(
-                icon: "ellipsis.circle.fill",
-                isActive: false
-            )
+            Button(action: {}) {
+                Image(systemName: "ellipsis.circle.fill")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        Circle()
+                            .fill(AppTheme.Colors.surface)
+                            .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                    )
+                    .scaleEffect(1.0)
+                    .animation(.easeInOut(duration: 0.15), value: false)
+            }
+            .buttonStyle(PlainButtonStyle())
         }
-        .buttonStyle(PlainButtonStyle())
         .alert("Download Videos", isPresented: $showingDownloadAlert) {
             Button("Download") {
                 startDownload()

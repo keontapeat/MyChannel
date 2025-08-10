@@ -54,6 +54,17 @@ struct AppConfig {
                 return "https://your-prod-api.supabase.co"
             }
         }
+
+        static var cloudRunBaseURL: String {
+            switch environment {
+            case .development:
+                return "https://mychannel-gw-b9ljiz6f.uc.gateway.dev"
+            case .staging:
+                return "https://mychannel-gw-b9ljiz6f.uc.gateway.dev"
+            case .production:
+                return "https://mychannel-gw-b9ljiz6f.uc.gateway.dev"
+            }
+        }
         
         static var supabaseURL: String {
             return baseURL
