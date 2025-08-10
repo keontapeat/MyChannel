@@ -116,7 +116,6 @@ struct AssetBouncyStoryBubble: View {
     }
 }
 
-// 🔥 CLEAN STORIES ROW
 struct AssetBouncyStoriesRow: View {
     let stories: [AssetStory]
     let onStoryTap: (AssetStory) -> Void
@@ -139,38 +138,34 @@ struct AssetBouncyStoriesRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // CLEAN HEADER - REMOVED STORIES TEXT
-            HStack {
-                Spacer()
-                Button("See all") {
-                    HapticManager.shared.impact(style: .light)
-                }
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.primary)
-            }
-            .padding(.horizontal, 20)
-
-            // CLEAN HORIZONTAL SCROLL
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 16) {
-                    addStoryButton
-                    
-                    // STORY BUBBLES
-                    ForEach(stories) { story in
-                        AssetBouncyStoryBubble(
-                            story: story,
-                            onTap: onStoryTap,
-                            ns: ns,
-                            activeHeroId: activeHeroId
-                        )
-                    }
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            Rectangle()
+                .fill(Color.gray.opacity(0.2))
+                .frame(height: 0.5)
                 .padding(.horizontal, 20)
-                .padding(.vertical, 8)
+            
+            VStack(alignment: .leading, spacing: 12) {
+                // CLEAN HORIZONTAL SCROLL
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 16) {
+                        addStoryButton
+                        
+                        // STORY BUBBLES
+                        ForEach(stories) { story in
+                            AssetBouncyStoryBubble(
+                                story: story,
+                                onTap: onStoryTap,
+                                ns: ns,
+                                activeHeroId: activeHeroId
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
+                }
             }
+            .padding(.vertical, 16)
         }
-        .padding(.vertical, 16)
         .background(AppTheme.Colors.background)
     }
 

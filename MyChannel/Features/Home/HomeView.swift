@@ -18,7 +18,7 @@ struct HomeView: View {
     @State private var showingStories: Bool = true
     @State private var assetStories: [AssetStory] = AssetStory.sampleStories
     @State private var selectedAssetStory: AssetStory? = nil
-    @State private var showingAssetStoryViewer: Bool = false
+    @Namespace private var storiesNS
     
     var body: some View {
         NavigationStack {
@@ -35,15 +35,16 @@ struct HomeView: View {
                         
                         // Stories Section
                         if showingStories {
-                            MinimalStoriesSection(
+                            AssetBouncyStoriesRow(
                                 stories: assetStories,
                                 onStoryTap: { story in
                                     selectedAssetStory = story
-                                    showingAssetStoryViewer = true
                                 },
                                 onAddStory: {
                                     HapticManager.shared.impact(style: .medium)
-                                }
+                                },
+                                ns: storiesNS,
+                                activeHeroId: selectedAssetStory?.id
                             )
                             .padding(.bottom, 32)
                         }
