@@ -3842,7 +3842,7 @@
             <div class="payout-header slide-in-up">
             <div class="payout-badge"><span class="bolt" aria-hidden="true">⚡</span>24-HOUR PAYOUTS<div class="badge-ring"></div><div class="sweep"></div></div>
                 <h2 class="payout-title">Get Paid Tomorrow For What You Made Today</h2>
-                <p class="payout-subtitle">No 30-day waits. No “net-60.” We settle creator earnings in under 24 hours with automated risk controls and instant transfer rails.</p>
+                <p class="payout-subtitle">No 30-day waits. No "net-60." We settle creator earnings in under 24 hours with automated risk controls and instant transfer rails.</p>
             </div>
             <div class="payout-grid slide-in-up">
                 <div class="payout-card">
@@ -3867,7 +3867,7 @@
                 </div>
             </div>
             <div class="payout-dial slide-in-up"></div>
-            <div class="payout-meta fade-in">Average payout time: <strong>Coming soon — we haven’t even launched yet</strong></div>
+            <div class="payout-meta fade-in">Average payout time: <strong>Coming soon — we haven't even launched yet</strong></div>
             <div class="payout-steps slide-in-up">
                 <div class="payout-step">
                     <div>🎬</div>
@@ -4497,40 +4497,9 @@
             if (techBtn) {
                 techBtn.addEventListener('click', async (e) => {
                     e.preventDefault();
-                    const loadScript = (src) => new Promise((resolve, reject) => {
-                        const s = document.createElement('script');
-                        s.src = src;
-                        s.onload = resolve;
-                        s.onerror = reject;
-                        document.head.appendChild(s);
-                    });
-                    try {
-                        // Load html2pdf bundle only when needed
-                        if (typeof html2pdf === 'undefined') {
-                            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js');
-                        }
-                        const res = await fetch('technical-overview.html', { cache: 'no-store' });
-                        const html = await res.text();
-                        const container = document.createElement('div');
-                        container.style.position = 'fixed';
-                        container.style.left = '-99999px';
-                        container.style.top = '0';
-                        container.style.width = '800px';
-                        container.innerHTML = html;
-                        document.body.appendChild(container);
-                        const source = container.querySelector('.page') || container;
-                        await html2pdf().from(source).set({
-                            margin: 0.5,
-                            filename: 'MyChannel-Technical-Overview.pdf',
-                            html2canvas: { scale: 2, useCORS: true },
-                            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-                        }).save();
-                        container.remove();
-                    } catch (err) {
-                        // Mobile-safe fallback: open printable page in same tab and auto-return
+                    // Reliable path: open printable page that auto-triggers print dialog
                         const returnTo = encodeURIComponent('index-5.html#partners');
                         window.location.href = `technical-overview.html?print=1&return=${returnTo}`;
-                    }
                 });
             }
 

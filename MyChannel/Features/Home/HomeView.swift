@@ -349,15 +349,26 @@ struct HomeView: View {
     // MARK: - Floating Navigation Header
     private var floatingNavigationHeader: some View {
         VStack(spacing: 0) {
-            HStack {
-                // Logo
-                Button(action: {}) {
-                    Image("MyChannel")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 32, height: 32)
+            HStack(alignment: .top) {
+                // Logo with Welcome Text
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Image("MyChannel")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 32, height: 32)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("MyChannel")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.primary)
+                            
+                            Text("Welcome back!")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
-                .buttonStyle(PlainButtonStyle())
                 
                 Spacer()
                 
@@ -569,21 +580,57 @@ struct HomeView: View {
     
     // MARK: - Live TV Section
     private var liveTVSection: some View {
-        PremiumContentSection(
-            title: "Live TV",
-            subtitle: "Watch live channels 24/7",
-            icon: "tv.fill",
-            seeAllAction: { /* Navigate to live TV */ }
-        ) {
+        VStack(alignment: .leading, spacing: 20) {
+            // Premium Live TV Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 8, height: 8)
+                                .scaleEffect(1.0)
+                                .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: true)
+                            
+                            Circle()
+                                .stroke(Color.red.opacity(0.3), lineWidth: 6)
+                                .frame(width: 16, height: 16)
+                                .scaleEffect(1.2)
+                                .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: true)
+                        }
+                        
+                        Image(systemName: "tv.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.primary)
+                        
+                        Text("Live TV")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.primary)
+                    }
+                    
+                    Text("900+ Free Channels • HD Quality")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Button("See All") {
+                    // Navigate to full Live TV view
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.primary)
+            }
+            .padding(.horizontal, 20)
+            
+            // Professional Channel Cards
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
-                    ForEach(0..<5) { index in
-                        LiveTVCard(
-                            channelName: "Channel \(index + 1)",
-                            programName: "Live Program",
-                            isLive: true
-                        ) {
-                            // Handle live TV tap
+                    ForEach(LiveTVChannel.sampleChannels.prefix(8)) { channel in
+                        ProfessionalLiveTVCard(channel: channel) {
+                            // Handle channel tap
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                            impactFeedback.impactOccurred()
                         }
                     }
                 }
@@ -967,82 +1014,95 @@ struct AnimatedFilterChip: View {
     }
 }
 
-// MARK: - Live TV Card
-struct LiveTVCard: View {
-    let channelName: String
-    let programName: String
-    let isLive: Bool
+// MARK: - Professional Live TV Card (Simplified)
+struct ProfessionalLiveTVCard: View {
+    let channel: LiveTVChannel
     let action: () -> Void
     
     @State private var isPressed = false
     
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 0) {
-                ZStack(alignment: .topLeading) {
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [.red.opacity(0.3), .black.opacity(0.8)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 160, height: 90)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(
-                            VStack(spacing: 8) {
-                                Image(systemName: "tv.fill")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.white)
-                                
-                                if isLive {
-                                    HStack(spacing: 4) {
-                                        Circle()
-                                            .fill(.red)
-                                            .frame(width: 6, height: 6)
-                                            .animation(.easeInOut(duration: 1).repeatForever(), value: isLive)
-                                        
-                                        Text("LIVE")
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundColor(.white)
-                                    }
-                                }
-                            }
-                        )
+            VStack(alignment: .leading, spacing: 8) {
+                // Thumbnail Area
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(channel.category.color.opacity(0.6))
+                        .frame(width: 200, height: 112)
                     
-                    if isLive {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(.red)
-                                .frame(width: 6, height: 6)
-                            
-                            Text("LIVE")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
+                    VStack(spacing: 8) {
+                        // Channel Icon
+                        Circle()
+                            .fill(.white)
+                            .frame(width: 40, height: 40)
+                            .overlay(
+                                Text(channel.name.prefix(2).uppercased())
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(channel.category.color)
+                            )
+                        
+                        // Live Badge
+                        if channel.isLive {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(.red)
+                                    .frame(width: 6, height: 6)
+                                
+                                Text("LIVE")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(.red))
                         }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(
-                            Capsule().fill(.black.opacity(0.8))
-                        )
-                        .padding(8)
                     }
                 }
+                .overlay(
+                    VStack {
+                        HStack {
+                            // Quality Badge
+                            Text(channel.quality)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(.black.opacity(0.7)))
+                            
+                            Spacer()
+                        }
+                        .padding(8)
+                        
+                        Spacer()
+                    }
+                )
                 
+                // Channel Info
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(channelName)
-                        .font(.system(size: 13, weight: .semibold))
+                    Text(channel.name)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.primary)
                         .lineLimit(1)
                     
-                    Text(programName)
+                    Text(channel.description)
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                    
+                    HStack(spacing: 8) {
+                        Text(channel.language)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                        
+                        Text("•")
+                            .foregroundColor(.secondary)
+                        
+                        Text("\(formatViewerCount(channel.viewerCount)) viewers")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
                 }
-                .padding(.top, 8)
-                .frame(width: 160, alignment: .leading)
+                .frame(width: 200, alignment: .leading)
             }
         }
         .buttonStyle(PlainButtonStyle())
@@ -1052,6 +1112,16 @@ struct LiveTVCard: View {
             onPress: { isPressed = true },
             onRelease: { isPressed = false }
         )
+    }
+    
+    private func formatViewerCount(_ count: Int) -> String {
+        if count >= 1000000 {
+            return String(format: "%.1fM", Double(count) / 1000000.0)
+        } else if count >= 1000 {
+            return String(format: "%.1fK", Double(count) / 1000.0)
+        } else {
+            return "\(count)"
+        }
     }
 }
 
@@ -1118,5 +1188,5 @@ enum ContentFilter: String, CaseIterable {
 #Preview("HomeView") {
     HomeView()
         .environmentObject(AppState())
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
 }
