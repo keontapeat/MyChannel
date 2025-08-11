@@ -446,6 +446,8 @@ struct VideoDetailView: View {
             if !isViewAppeared {
                 print("🎬 Setting up video player for: \(video.title)")
                 
+                // Ensure any global playback from rapid taps is halted
+                GlobalVideoPlayerManager.shared.stopImmediately()
                 // Set up the player manager properly
                 playerManager.setupPlayer(with: video)
                 // Defer play until after view has laid out to avoid presentation jank

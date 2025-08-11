@@ -129,6 +129,15 @@ class GlobalVideoPlayerManager: ObservableObject {
             }
             .store(in: &cancellables)
     }
+
+    // Stop current playback immediately (used when switching videos fast)
+    func stopImmediately() {
+        playerManager?.pause()
+        playerManager?.player?.replaceCurrentItem(with: nil)
+        isPlaying = false
+        currentProgress = 0
+        currentTime = 0
+    }
     
     // MARK: - Adopt External Player
     /// Seamlessly adopt an existing VideoPlayerManager (and its AVPlayer)
@@ -157,6 +166,9 @@ class GlobalVideoPlayerManager: ObservableObject {
     // MARK: - Video Management
     func playVideo(_ video: Video, showFullscreen: Bool = true) {
         guard !isCleanedUp else { return }
+        
+        // Stop any current playback immediately to avoid overlap when switching fast
+        stopImmediately()
         
         // Ensure we have a player manager
         if playerManager == nil {

@@ -69,6 +69,7 @@ class VideoPlayerManager: ObservableObject {
         // Pause and clear player
         player?.pause()
         player?.replaceCurrentItem(with: nil)
+        player?.cancelPendingPrerolls()
         player = nil
         
         // Clear cancellables to break retain cycles

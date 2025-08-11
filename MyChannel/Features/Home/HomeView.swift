@@ -163,6 +163,8 @@ struct HomeView: View {
     
     // MARK: - Action Methods
     private func playVideo(_ video: Video) {
+        // Halt any existing playback immediately to prevent audio overlap
+        GlobalVideoPlayerManager.shared.stopImmediately()
         // Prime the global player immediately for instant visual feedback
         GlobalVideoPlayerManager.shared.currentVideo = video
         GlobalVideoPlayerManager.shared.showingFullscreen = true
