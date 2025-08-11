@@ -106,6 +106,12 @@ class VideoPlayerManager: ObservableObject {
         let asset = AVURLAsset(url: url, options: [
             AVURLAssetPreferPreciseDurationAndTimingKey: true
         ])
+        // Prime asset duration upfront to reduce first-load blank delay
+        Task.detached { [weak self] in
+            do {
+                _ = try await asset.load(.duration)
+            } catch { /* ignore */ }
+        }
         let playerItem = AVPlayerItem(asset: asset)
         // Create player early to allow immediate rendering
         let player = AVPlayer(playerItem: playerItem)

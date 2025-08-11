@@ -27,7 +27,7 @@ struct HomeView: View {
     @State private var scrollOffset: CGFloat = 0
     @State private var isRefreshing: Bool = false
     @State private var selectedVideo: Video? = nil
-    @State private var showingVideoPlayer: Bool = false
+    @State private var showingVideoPlayer: Bool = false // legacy flag (unused for presentation)
     @State private var selectedMovie: FreeMovie? = nil
     @State private var showingSearchView: Bool = false
     @State private var featuredContent: [Video] = []
@@ -109,11 +109,9 @@ struct HomeView: View {
         }
         .onAppear(perform: setupContent)
         .refreshable { await refreshContent() }
-        .fullScreenCover(isPresented: $showingVideoPlayer) {
-            if let video = selectedVideo {
-                VideoDetailView(video: video)
-                    .onDisappear { selectedVideo = nil }
-            }
+        .fullScreenCover(item: $selectedVideo) { video in
+            VideoDetailView(video: video)
+                .onDisappear { selectedVideo = nil }
         }
         .fullScreenCover(item: $selectedMovie) { movie in
             MovieDetailView(movie: movie)
@@ -165,14 +163,10 @@ struct HomeView: View {
     private func playVideo(_ video: Video) {
         // Halt any existing playback immediately to prevent audio overlap
         GlobalVideoPlayerManager.shared.stopImmediately()
-        // Prime the global player immediately for instant visual feedback
+        // Optionally prime global state (no auto-present side effects now)
         GlobalVideoPlayerManager.shared.currentVideo = video
-        GlobalVideoPlayerManager.shared.showingFullscreen = true
-        // Present detail next runloop to avoid layout hitches
-        DispatchQueue.main.async {
-            selectedVideo = video
-            showingVideoPlayer = true
-        }
+        // Present immediately with item-based cover to avoid empty content white screen
+        selectedVideo = video
         HapticManager.shared.impact(style: .medium)
     }
     

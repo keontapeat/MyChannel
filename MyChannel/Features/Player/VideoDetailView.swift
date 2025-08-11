@@ -450,7 +450,7 @@ struct VideoDetailView: View {
                 GlobalVideoPlayerManager.shared.stopImmediately()
                 // Set up the player manager properly
                 playerManager.setupPlayer(with: video)
-                // Defer play until after view has laid out to avoid presentation jank
+                // Start a tiny skeleton to hide any initial load flash
                 DispatchQueue.main.async { playerManager.play() }
                 
                 showVideoControls = true
