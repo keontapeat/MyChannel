@@ -141,15 +141,18 @@ class VideoPlayerManager: ObservableObject {
         
         // Use cached item if available for instant start
         let playerItem: AVPlayerItem
+        let asset: AVAsset
         if let cached = Self.cachedItem(for: video.videoURL) {
             playerItem = cached
+            asset = cached.asset
         } else {
-            let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+            let newAsset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
             // Prime duration upfront
-            Task.detached { _ = try? await asset.load(.duration) }
-            let item = AVPlayerItem(asset: asset)
+            Task.detached { _ = try? await newAsset.load(.duration) }
+            let item = AVPlayerItem(asset: newAsset)
             item.preferredForwardBufferDuration = 1
             playerItem = item
+            asset = newAsset
             Self.prewarm(urlString: video.videoURL)
         }
         // Create player early to allow immediate rendering
