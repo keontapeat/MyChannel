@@ -150,6 +150,7 @@ struct VideoDetailMetaView: View {
         .foregroundColor(AppTheme.Colors.textSecondary)
         .padding(.horizontal, 20)
         .padding(.top, 8)
+        .padding(.bottom, 10)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(video.formattedViewCount) views, \(video.timeAgo)")
     }
