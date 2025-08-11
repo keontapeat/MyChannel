@@ -158,30 +158,23 @@ struct ProfessionalVideoPlayer: View {
                                                     .foregroundStyle(.white)
                                             )
                                     }
-                                    .frame(width: 52, height: 52)
+                                    .frame(width: 40, height: 40)
                                     .clipShape(Circle())
                                     .overlay(
                                         Circle()
-                                            .stroke(.white.opacity(0.4), lineWidth: 2.5)
+                                            .stroke(.white.opacity(0.15), lineWidth: 1)
                                     )
-                                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+                                    .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
                                     .accessibilityLabel("\(video.creator.displayName) profile")
                                 }
                                 .buttonStyle(.plain)
                                 
-                                VStack(alignment: .leading, spacing: 6) {
+                                VStack(alignment: .leading, spacing: 4) {
                                     HStack(spacing: 8) {
                                                                             Text("@\(video.creator.username)")
-                                        .font(.system(size: 17, weight: .bold))
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: [.white, .white.opacity(0.95)],
-                                                startPoint: .top,
-                                                endPoint: .bottom
-                                            )
-                                        )
-                                        .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 2)
-                                        .shadow(color: .black.opacity(0.4), radius: 1, x: 0, y: 1)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .shadow(color: .black.opacity(0.5), radius: 1, x: 0, y: 0.5)
                                         
                                         if video.creator.isVerified {
                                             Image(systemName: "checkmark.seal.fill")
@@ -192,10 +185,10 @@ struct ProfessionalVideoPlayer: View {
                                         }
                                     }
                                     
-                                    Text("\(subscriberCount.formatted()) subscribers")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundStyle(.white.opacity(0.95))
-                                        .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
+                                    Text("\(formatCount(subscriberCount)) subscribers")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.7))
+                                        .shadow(color: .black.opacity(0.3), radius: 0.5, x: 0, y: 0.5)
                                 }
                                 
                                 Spacer()
@@ -203,12 +196,12 @@ struct ProfessionalVideoPlayer: View {
                                 if !isFollowing {
                                     Button(action: onFollow) {
                                         Text("Subscribe")
-                                            .font(.system(size: 14, weight: .bold))
+                                            .font(.system(size: 13, weight: .bold))
                                             .foregroundStyle(.black)
-                                            .padding(.horizontal, 20)
-                                            .padding(.vertical, 10)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 7)
                                             .background(.white, in: Capsule())
-                                            .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                                            .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
                                             .accessibilityLabel("Subscribe")
                                     }
                                     .buttonStyle(.plain)
@@ -216,28 +209,45 @@ struct ProfessionalVideoPlayer: View {
                             }
                             .padding(.bottom, 16)
                             
-                            VStack(alignment: .leading, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 8) {
                                 Text(video.title)
-                                    .font(.system(size: 17, weight: .bold))
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: [.white, .white.opacity(0.95)],
-                                            startPoint: .top,
-                                            endPoint: .bottom
-                                        )
-                                    )
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(.white)
                                     .lineLimit(2)
                                     .multilineTextAlignment(.leading)
-                                    .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 2)
-                                    .shadow(color: .black.opacity(0.4), radius: 1, x: 0, y: 1)
+                                    .shadow(color: .black.opacity(0.5), radius: 1, x: 0, y: 0.5)
+                                    .fixedSize(horizontal: false, vertical: true)
                                 
                                 if !video.description.isEmpty {
                                     Text(video.description)
-                                        .font(.system(size: 15, weight: .medium))
-                                        .foregroundStyle(.white.opacity(0.95))
-                                        .lineLimit(2)
-                                        .multilineTextAlignment(.leading)
-                                        .shadow(color: .black.opacity(0.7), radius: 2, x: 0, y: 1)
+                                        .font(.system(size: 14, weight: .regular))
+                                        .foregroundStyle(.white.opacity(0.85))
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                        .shadow(color: .black.opacity(0.3), radius: 0.5, x: 0, y: 0.5)
+                                }
+                                
+                                // Video stats row
+                                HStack(spacing: 16) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "eye.fill")
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(.white.opacity(0.6))
+                                        Text(formatCount(video.viewCount))
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundStyle(.white.opacity(0.8))
+                                    }
+                                    
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "heart.fill")
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(.red.opacity(0.8))
+                                        Text(formatCount(video.likeCount))
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundStyle(.white.opacity(0.8))
+                                    }
+                                    
+                                    Spacer()
                                 }
                             }
                             .frame(maxWidth: geometry.size.width * 0.65, alignment: .leading)
@@ -247,7 +257,7 @@ struct ProfessionalVideoPlayer: View {
                         
                         Spacer()
                         
-                        VStack(spacing: 32) {
+                        VStack(spacing: 24) {
                             Spacer()
                             
                             ZStack {
@@ -578,89 +588,44 @@ private struct ProfessionalActionButton: View {
     let action: () -> Void
     
     @State private var isPressed = false
-    @State private var showPulse = false
+
     
     var body: some View {
         Button(action: {
             action()
-            triggerPulseEffect()
             HapticManager.shared.impact(style: .light)
         }) {
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 ZStack {
-                    if showPulse {
-                        Circle()
-                            .fill(isActive ? activeColor.opacity(0.3) : .white.opacity(0.2))
-                            .frame(width: 60, height: 60)
-                            .scaleEffect(showPulse ? 1.3 : 1.0)
-                            .opacity(showPulse ? 0.0 : 1.0)
-                            .animation(AppTheme.AnimationPresets.easeInOut, value: showPulse)
-                    }
-                    
                     Circle()
-                        .fill(.ultraThinMaterial.opacity(0.9))
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 48, height: 48)
                         .overlay(
                             Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            isActive ? activeColor.opacity(0.3) : .white.opacity(0.1),
-                                            isActive ? activeColor.opacity(0.1) : .clear
-                                        ],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
+                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
                         )
-                        .overlay(
-                            Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [.white.opacity(0.4), .clear, .white.opacity(0.2)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1.5
-                                )
-                        )
-                        .frame(width: 56, height: 56)
                     
                     Image(systemName: icon)
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(
-                            isActive ? 
-                            LinearGradient(
-                                colors: [activeColor, activeColor.opacity(0.8)], 
-                                startPoint: .top, 
-                                endPoint: .bottom
-                            ) :
-                            LinearGradient(
-                                colors: [.white, .white.opacity(0.9)], 
-                                startPoint: .top, 
-                                endPoint: .bottom
-                            )
-                        )
-                        .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 2)
-                        .scaleEffect(isActive ? 1.05 : 1.0)
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(isActive ? activeColor : .white)
+                        .scaleEffect(isActive ? 1.1 : 1.0)
                 }
-                .scaleEffect(isPressed ? 0.92 : 1.0)
-                .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 6)
-                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                .scaleEffect(isPressed ? 0.9 : 1.0)
+                .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
                 
                 if !text.isEmpty {
                     Text(text)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.white)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
                         .lineLimit(1)
-                        .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.8)
                 }
             }
         }
         .buttonStyle(.plain)
         .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(AppTheme.AnimationPresets.bouncy, value: isPressed)
-        .animation(AppTheme.AnimationPresets.spring, value: isActive)
+        .animation(.easeInOut(duration: 0.2), value: isPressed)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
         .onLongPressGesture(minimumDuration: 0.01) { } onPressingChanged: { pressing in
             withAnimation(AppTheme.AnimationPresets.quick) {
                 isPressed = pressing
@@ -669,14 +634,7 @@ private struct ProfessionalActionButton: View {
         .accessibilityAddTraits(.isButton)
     }
     
-    private func triggerPulseEffect() {
-        withAnimation(AppTheme.AnimationPresets.easeInOut) {
-            showPulse = true
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            showPulse = false
-        }
-    }
+
 }
 
 #Preview {
