@@ -39,20 +39,19 @@ struct VideoDetailView: View {
     @State private var isViewAppeared = false
     @State private var showVideoControls = true
     @State private var controlsHideTimer: Timer?
+    @State private var showingFullscreenOverlay = false
 
     var body: some View {
         VStack(spacing: 0) {
             // ALL-IN-ONE Video Player with YouTube-style controls
             ZStack {
-                // MAIN VIDEO PLAYER - Built right in!
+                // MAIN VIDEO PLAYER - Edge-to-edge like YouTube
                 VideoPlayer(player: playerManager.player)
-                    .aspectRatio(16/9, contentMode: .fit)
-                    .frame(maxHeight: UIScreen.main.bounds.height * 0.3)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
                     .background(Color.black)
-                    .cornerRadius(12)
-                    .clipped()
                 
-                // Invisible tap area to show/hide controls - LOWER LAYER
+                // Invisible tap/drag area to show/hide controls and drive fullscreen/miniplayer gestures
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -65,10 +64,44 @@ struct VideoDetailView: View {
                             resetControlsHideTimer()
                         }
                     }
+                    .gesture(
+                        DragGesture(minimumDistance: 12, coordinateSpace: .local)
+                            .onEnded { value in
+                                // Swipe down -> enter fullscreen immersive player
+                                if value.translation.height > 60 {
+                                    presentFullscreenPlayer()
+                                }
+                                // Swipe up -> minimize to mini player
+                                else if value.translation.height < -60 {
+                                    minimizeToMiniPlayer()
+                                }
+                            }
+                    )
                     .zIndex(1) // Lower zIndex so buttons can be tapped
                 
                 // YouTube-style overlay controls - HIGHER LAYER
                 VStack(spacing: 0) {
+                    // Seek with double-tap
+                    HStack(spacing: 0) {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) {
+                                playerManager.seekBackward(10)
+                                HapticManager.shared.impact(style: .light)
+                                resetControlsHideTimer()
+                            }
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) {
+                                playerManager.seekForward(10)
+                                HapticManager.shared.impact(style: .light)
+                                resetControlsHideTimer()
+                            }
+                    }
+                    .allowsHitTesting(true)
+                    .frame(height: 1)
+                    .opacity(0.01)
+                    
                     // Top control bar
                     HStack {
                         // Close button (X out)
@@ -112,10 +145,7 @@ struct VideoDetailView: View {
                         
                         // Minimize to mini player button
                         Button(action: {
-                            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                globalPlayer.minimizePlayer()
-                                dismiss()
-                            }
+                            minimizeToMiniPlayer()
                         }) {
                             ZStack {
                                 Circle()
@@ -305,9 +335,6 @@ struct VideoDetailView: View {
                 }
             }
             .background(Color.black)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
 
             // Video metadata and controls
             VideoDetailMetaView(video: video,
@@ -321,6 +348,7 @@ struct VideoDetailView: View {
                                 onComment: { showingCommentComposer = true })
         }
         .navigationBarHidden(true)
+        // When user returns from fullscreen by dismissing, ensure state is consistent
         .sheet(isPresented: $showingCommentComposer) {
             CommentComposerView(video: video) { _ in }
                 .presentationDetents([.medium, .large])
@@ -328,6 +356,15 @@ struct VideoDetailView: View {
         .sheet(isPresented: $showingShareSheet) {
             VideoShareSheet(items: [video.link])
                 .presentationDetents([.medium])
+        }
+        .fullScreenCover(isPresented: $showingFullscreenOverlay) {
+            ImmersiveFullscreenPlayerView(video: video) {
+                // Exit fullscreen back to inline without breaking playback
+                globalPlayer.showingFullscreen = false
+                globalPlayer.shouldShowMiniPlayer = false
+                globalPlayer.isMiniplayer = false
+                showingFullscreenOverlay = false
+            }
         }
         .sheet(isPresented: $showingMoreOptions) {
             VideoMoreOptionsSheet(video: video,
@@ -355,9 +392,6 @@ struct VideoDetailView: View {
                 playerManager.setupPlayer(with: video)
                 playerManager.play()
                 
-                // Also set up global player for mini player
-                globalPlayer.playVideo(video, showFullscreen: true)
-                
                 showVideoControls = true
                 isViewAppeared = true
                 resetControlsHideTimer()
@@ -368,10 +402,10 @@ struct VideoDetailView: View {
             playerControlsTimer?.invalidate()
             controlsHideTimer?.invalidate()
             
-            playerManager.performCleanup()
-            
-            if globalPlayer.isPlaying && globalPlayer.currentVideo?.id == video.id && globalPlayer.showingFullscreen {
-                globalPlayer.minimizePlayer()
+            // Only cleanup if playback isn't being handed off to global mini player/fullscreen
+            if !(globalPlayer.isMiniplayer || globalPlayer.showingFullscreen),
+               globalPlayer.currentVideo?.id != video.id {
+                playerManager.performCleanup()
             }
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -403,6 +437,18 @@ struct VideoDetailView: View {
                 showVideoControls = false
             }
         }
+    }
+
+    // MARK: - Gesture Actions
+    private func presentFullscreenPlayer() {
+        // Hand off the existing manager to the global one and present a true fullscreen overlay
+        globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: true)
+        showingFullscreenOverlay = true
+    }
+
+    private func minimizeToMiniPlayer() {
+        globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
+        dismiss()
     }
     
     private func formatTime(_ timeInterval: TimeInterval) -> String {

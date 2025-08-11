@@ -485,12 +485,12 @@ struct FlicksView: View {
     private func handleDragGesture(value: DragGesture.Value) {
         dragOffset = value.translation
         isDragging = true
-        swipeVelocity = value.velocity.height
+        swipeVelocity = value.verticalMomentum
     }
     
     private func handleDragEnd(value: DragGesture.Value, geometry: GeometryProxy) {
         let threshold: CGFloat = 100
-        let velocity = value.velocity.height
+        let velocity = value.verticalMomentum
         
         if abs(velocity) > 500 || abs(value.translation.height) > threshold {
             if velocity > 0 && currentIndex > 0 {

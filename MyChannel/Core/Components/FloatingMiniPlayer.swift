@@ -249,17 +249,17 @@ struct FloatingMiniPlayer: View {
                 lastDragTranslation = 0
                 
                 let finalOffset = value.translation.height
-                let velocity = value.velocity.height
+                let momentum = value.verticalMomentum
                 
                 withAnimation(.interactiveSpring(response: 0.4, dampingFraction: 0.8)) {
                     dragOffset = 0
                     
                     // Determine action based on gesture
-                    if finalOffset > 120 || velocity > 1000 {
+                    if finalOffset > 120 || momentum > 160 {
                         // Dismiss
                         globalPlayer.closePlayer()
                         HapticManager.shared.impact(style: .heavy)
-                    } else if finalOffset < -60 || velocity < -800 {
+                    } else if finalOffset < -60 || momentum < -140 {
                         // Expand
                         globalPlayer.expandPlayer()
                         HapticManager.shared.impact(style: .medium)

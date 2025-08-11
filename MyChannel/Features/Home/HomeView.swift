@@ -188,21 +188,25 @@ struct MinimalNavigationHeader: View {
     let onProfileTap: () -> Void
     
     @EnvironmentObject private var appState: AppState
-    
     private var headerOpacity: Double {
         min(1.0, max(0.0, 1.0 - (scrollOffset / 100.0)))
+    }
+    private var logoSize: CGFloat {
+        UIDevice.current.userInterfaceIdiom == .phone ? 24 : 28
     }
     
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                // Clean Logo
                 HStack(spacing: 12) {
                     Image("MyChannel")
                         .resizable()
+                        .renderingMode(.original)
+                        .interpolation(.high)
+                        .antialiased(true)
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 28, height: 28)
-                    
+                        .frame(width: logoSize, height: logoSize) // ENSURED: 24pt on iPhone
+                        
                     Text("MyChannel")
                         .font(.system(size: 20, weight: .semibold, design: .rounded))
                         .foregroundColor(.primary)
@@ -224,7 +228,7 @@ struct MinimalNavigationHeader: View {
                                 .font(.system(size: 18, weight: .medium))
                                 .foregroundColor(.primary)
                             
-                            if true { // Has notifications
+                            if true {
                                 Circle()
                                     .fill(Color.red)
                                     .frame(width: 6, height: 6)
@@ -262,7 +266,7 @@ struct MinimalNavigationHeader: View {
                     .background(.ultraThinMaterial.opacity(scrollOffset > 50 ? 1 : 0))
             )
         }
-        .allowsHitTesting(true) // Only the actual header content is hit-testable
+        .allowsHitTesting(true)
     }
 }
 

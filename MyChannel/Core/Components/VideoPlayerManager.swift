@@ -97,7 +97,11 @@ class VideoPlayerManager: ObservableObject {
             return
         }
         
-        let playerItem = AVPlayerItem(url: url)
+        // Prefer HLS if provided, otherwise use direct MP4 URL
+        let asset = AVURLAsset(url: url, options: [
+            AVURLAssetPreferPreciseDurationAndTimingKey: true
+        ])
+        let playerItem = AVPlayerItem(asset: asset)
         player = AVPlayer(playerItem: playerItem)
         
         setupObservers(for: playerItem)
@@ -112,7 +116,7 @@ class VideoPlayerManager: ObservableObject {
         cancellables.removeAll()
         
         // Set up time observer with weak self to prevent retain cycle
-        let interval = CMTime(seconds: 0.5, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        let interval = CMTime(seconds: 0.25, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self = self, !self.isCleanedUp else { return }
             
@@ -161,6 +165,24 @@ class VideoPlayerManager: ObservableObject {
             .sink { [weak self] _ in
                 guard let self = self, !self.isCleanedUp else { return }
                 self.isLoading = true
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let self = self else { return }
+                if let typeValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                   let type = AVAudioSession.InterruptionType(rawValue: typeValue) {
+                    if type == .began {
+                        self.pause()
+                    } else if type == .ended, let optionsValue = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt {
+                        let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+                        if options.contains(.shouldResume) {
+                            self.play()
+                        }
+                    }
+                }
             }
             .store(in: &cancellables)
         

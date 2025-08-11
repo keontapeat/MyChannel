@@ -130,6 +130,30 @@ class GlobalVideoPlayerManager: ObservableObject {
             .store(in: &cancellables)
     }
     
+    // MARK: - Adopt External Player
+    /// Seamlessly adopt an existing VideoPlayerManager (and its AVPlayer)
+    /// so we can hand off playback to the global mini player without
+    /// interrupting playback or losing position.
+    func adoptExternalPlayerManager(_ externalManager: VideoPlayerManager,
+                                    video: Video,
+                                    showFullscreen: Bool) {
+        guard !isCleanedUp else { return }
+
+        // Point our manager to the external one and wire observers
+        playerManager = externalManager
+        setupObservers()
+
+        currentVideo = video
+        isPlaying = externalManager.isPlaying
+
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+            showingFullscreen = showFullscreen
+            isMiniplayer = !showFullscreen
+            shouldShowMiniPlayer = !showFullscreen
+            miniplayerOffset = 0
+        }
+    }
+
     // MARK: - Video Management
     func playVideo(_ video: Video, showFullscreen: Bool = true) {
         guard !isCleanedUp else { return }
