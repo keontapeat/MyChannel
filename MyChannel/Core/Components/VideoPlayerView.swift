@@ -12,6 +12,7 @@ import AVKit
 struct VideoPlayerView: View {
     let video: Video
     @StateObject private var playerManager = VideoPlayerManager()
+    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -37,11 +38,13 @@ struct VideoPlayerView: View {
             }
         }
         .onAppear {
+            // Setup local manager and hand off to global manager; start playback explicitly (no toggle)
             playerManager.setupPlayer(with: video)
             playerManager.play()
+            globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: true)
         }
         .onDisappear {
-            playerManager.pause()
+            // Do not pause here if global is in use; closing is handled by global player lifecycle
         }
     }
 }

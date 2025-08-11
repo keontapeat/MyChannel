@@ -109,10 +109,16 @@ struct ModernVideoPlayerView: View {
     }
     
     private func setupPlayer() {
+        // Ensure the global mini/fullscreen player is hidden so we don't get two players stacked
+        globalPlayer.stopImmediately()
+        globalPlayer.shouldShowMiniPlayer = false
+        globalPlayer.isMiniplayer = false
+        globalPlayer.showingFullscreen = false
+
+        // Use the local fullscreen player only in this view
         playerViewModel.setupPlayer(with: video)
         playerViewModel.play()
-        
-        // Haptic feedback
+
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
         impactFeedback.impactOccurred()
     }

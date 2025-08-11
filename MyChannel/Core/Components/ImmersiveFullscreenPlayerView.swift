@@ -48,6 +48,10 @@ struct ImmersiveFullscreenPlayerView: View {
                 globalPlayer.shouldShowMiniPlayer = false
                 globalPlayer.isMiniplayer = false
             }
+            // Ensure autoplay when presenting fullscreen using explicit play
+            if let player = globalPlayer.player {
+                player.play()
+            }
         }
         .onDisappear {
             // Do not stop playback; caller will keep same player in its inline view
@@ -71,6 +75,7 @@ struct ImmersiveFullscreenPlayerView: View {
                         .background(Color.black.opacity(0.35))
                         .clipShape(Circle())
                 }
+                .accessibilityLabel("Dismiss fullscreen")
 
                 Spacer()
 
@@ -126,6 +131,7 @@ struct ImmersiveFullscreenPlayerView: View {
                     .foregroundColor(.white)
                     .shadow(color: .black.opacity(0.6), radius: 8)
             }
+            .accessibilityLabel(globalPlayer.isPlaying ? "Pause" : "Play")
 
             Spacer()
 
@@ -199,6 +205,8 @@ struct ImmersiveFullscreenPlayerView: View {
     }
 
     private func dismissToInline() {
+        // Ensure playback stops completely when exiting fullscreen
+        globalPlayer.closePlayer()
         onExitFullscreen()
     }
 }

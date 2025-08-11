@@ -48,9 +48,15 @@ struct MovieDetailView: View {
         .onAppear(perform: setupVideo)
         .fullScreenCover(isPresented: $showPlayer) {
             if let video {
-                ModernVideoPlayerView(video: video)
-                    .background(Color.black.ignoresSafeArea())
-                    .preferredColorScheme(.dark)
+                // Use the immersive fullscreen that reuses the Global player
+                ImmersiveFullscreenPlayerView(video: video) {
+                    // Stop audio and fully dismiss fullscreen
+                    GlobalVideoPlayerManager.shared.closePlayer()
+                    GlobalVideoPlayerManager.shared.showingFullscreen = false
+                    showPlayer = false
+                }
+                .background(Color.black.ignoresSafeArea())
+                .preferredColorScheme(.dark)
             }
         }
         .alert("Stream Unavailable", isPresented: $showUnavailableAlert) {
@@ -561,7 +567,12 @@ struct MovieDetailView: View {
     // MARK: - Action Methods
     private func playAction() {
         if let directVideo = MoviePlaybackResolver.videoIfDirect(from: movie, creator: User.defaultUser) {
+            // Hand off the player used in detail to the global one for fullscreen playback
             video = directVideo
+            let vm = VideoPlayerManager()
+            vm.setupPlayer(with: directVideo)
+            vm.play() // autoplay before adopting so global state reflects Playing
+            GlobalVideoPlayerManager.shared.adoptExternalPlayerManager(vm, video: directVideo, showFullscreen: true)
             showPlayer = true
         } else {
             showUnavailableAlert = true

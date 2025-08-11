@@ -15,6 +15,7 @@ struct ProfessionalVideoPlayer: View {
     let onProfileTap: () -> Void
     
     @StateObject private var playerManager = VideoPlayerManager()
+    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
     @State private var isPlaying = true
     @State private var showPlayIcon = false
     @State private var currentProgress: Double = 0.0
@@ -43,6 +44,14 @@ struct ProfessionalVideoPlayer: View {
                     .onAppear {
                         setupPlayer()
                         addTimeObserver()
+                        if isCurrentVideo {
+                            globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
+                            globalPlayer.shouldShowMiniPlayer = false
+                            // Autoplay current item in feed
+                            playerManager.play()
+                            applyPlaybackSpeed()
+                            isPlaying = true
+                        }
                     }
                     .onDisappear {
                         cleanupPlayback()
@@ -60,9 +69,11 @@ struct ProfessionalVideoPlayer: View {
                     }
                     .onChange(of: isCurrentVideo) { _, newValue in
                         if newValue {
+                            // Start playback explicitly; avoid toggle race conditions
                             playerManager.play()
                             applyPlaybackSpeed()
                             isPlaying = true
+                            globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
                         } else {
                             playerManager.pause()
                             isPlaying = false

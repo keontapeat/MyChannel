@@ -19,6 +19,7 @@ struct LiveTVChannelsView: View {
     }
     
     private var allChannels: [LiveTVChannel] {
+        // Later replace with LiveTVService.shared.fetchChannels()
         LiveTVChannel.sampleChannels + [
             // Additional sample channels for variety
             LiveTVChannel(
@@ -230,8 +231,7 @@ struct LiveTVChannelsView: View {
                         ], spacing: 16) {
                             ForEach(filteredChannels) { channel in
                                 GridChannelCard(channel: channel) {
-                                    // Handle channel tap
-                                    print("Channel selected: \(channel.name)")
+                                    play(channel)
                                 }
                             }
                         }
@@ -241,8 +241,7 @@ struct LiveTVChannelsView: View {
                         LazyVStack(spacing: 12) {
                             ForEach(filteredChannels) { channel in
                                 ListChannelCard(channel: channel) {
-                                    // Handle channel tap
-                                    print("Channel selected: \(channel.name)")
+                                    play(channel)
                                 }
                             }
                         }
@@ -253,6 +252,46 @@ struct LiveTVChannelsView: View {
             }
         }
         .background(AppTheme.Colors.background)
+    }
+    
+    private func play(_ channel: LiveTVChannel) {
+        let video = Video(
+            title: channel.name,
+            description: channel.description,
+            thumbnailURL: channel.logoURL,
+            videoURL: channel.streamURL,
+            duration: 0,
+            viewCount: channel.viewerCount,
+            likeCount: 0,
+            creator: User.defaultUser,
+            category: mapCategory(channel.category),
+            tags: [channel.category.rawValue],
+            isPublic: true,
+            quality: [.quality720p, .quality1080p],
+            aspectRatio: .landscape,
+            isLiveStream: true,
+            contentSource: nil,
+            contentRating: nil,
+            language: channel.language,
+            isVerified: true
+        )
+        GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: true)
+        NotificationCenter.default.post(name: NSNotification.Name("PresentVideoDetailFromMiniPlayer"), object: nil)
+    }
+
+    private func mapCategory(_ c: LiveTVChannel.ChannelCategory) -> VideoCategory {
+        switch c {
+        case .news: return .news
+        case .sports: return .sports
+        case .entertainment: return .entertainment
+        case .movies: return .movies
+        case .music: return .music
+        case .kids: return .kids
+        case .documentary: return .documentaries
+        case .lifestyle: return .lifestyle
+        case .business: return .news
+        case .international: return .news
+        }
     }
 }
 

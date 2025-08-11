@@ -305,9 +305,11 @@ struct FreeMoviesView: View {
     private func initialFetch() async {
         isFetching = true
         defer { isFetching = false }
-        if let page1 = try? await ArchiveOrgService.shared.fetchPopular(page: 1, rows: 60) {
+        let query = searchText.isEmpty ? "classic" : searchText
+        let results = await FreeCatalogService.shared.searchAll(query: query, limitPerSource: 20)
+        await MainActor.run {
             withAnimation(AppTheme.AnimationPresets.easeInOut) {
-                remoteMovies = page1
+                remoteMovies = results
                 page = 1
             }
         }
@@ -316,12 +318,12 @@ struct FreeMoviesView: View {
     private func refresh() async {
         isFetching = true
         defer { isFetching = false }
-        if let page1 = try? await ArchiveOrgService.shared.fetchPopular(page: 1, rows: 60) {
-            await MainActor.run {
-                withAnimation(AppTheme.AnimationPresets.easeInOut) {
-                    remoteMovies = page1
-                    page = 1
-                }
+        let query = searchText.isEmpty ? "classic" : searchText
+        let results = await FreeCatalogService.shared.searchAll(query: query, limitPerSource: 20)
+        await MainActor.run {
+            withAnimation(AppTheme.AnimationPresets.easeInOut) {
+                remoteMovies = results
+                page = 1
             }
         }
     }
@@ -331,13 +333,14 @@ struct FreeMoviesView: View {
         isFetching = true
         Task {
             defer { isFetching = false }
-            let next = page + 1
-            if let results = try? await ArchiveOrgService.shared.fetchPopular(page: next, rows: 60) {
-                await MainActor.run {
-                    withAnimation(AppTheme.AnimationPresets.gentle) {
-                        page = next
-                        remoteMovies.append(contentsOf: results)
-                    }
+            let results = await FreeCatalogService.shared.searchAll(query: searchText.isEmpty ? "classic" : searchText, limitPerSource: 12)
+            await MainActor.run {
+                withAnimation(AppTheme.AnimationPresets.gentle) {
+                    page += 1
+                    // Deduplicate on append
+                    let existing = Set(remoteMovies.map { $0.streamURL })
+                    let newOnes = results.filter { !existing.contains($0.streamURL) }
+                    remoteMovies.append(contentsOf: newOnes)
                 }
             }
         }

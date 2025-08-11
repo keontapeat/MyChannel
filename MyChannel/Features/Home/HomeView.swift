@@ -29,6 +29,7 @@ struct HomeView: View {
     @State private var selectedVideo: Video? = nil
     @State private var showingVideoPlayer: Bool = false // legacy flag (unused for presentation)
     @State private var selectedMovie: FreeMovie? = nil
+    @State private var showAllFreeMovies: Bool = false
     @State private var showingSearchView: Bool = false
     @State private var featuredContent: [Video] = []
     @State private var heroVideoIndex: Int = 0
@@ -81,7 +82,8 @@ struct HomeView: View {
                         // Content Sections
                         MinimalContentSections(
                             onPlayVideo: playVideo,
-                            onSelectMovie: { movie in selectedMovie = movie }
+                            onSelectMovie: { movie in selectedMovie = movie },
+                            onSeeAllFreeMovies: { showAllFreeMovies = true }
                         )
                         
                         // Bottom Spacer
@@ -133,6 +135,10 @@ struct HomeView: View {
             withAnimation(.easeInOut(duration: 1.0)) {
                 heroVideoIndex = (heroVideoIndex + 1) % max(1, featuredContent.count)
             }
+        }
+        .fullScreenCover(isPresented: $showAllFreeMovies) {
+            FreeMoviesView()
+                .environmentObject(appState)
         }
     }
     
@@ -470,6 +476,7 @@ struct MinimalHeroSection: View {
 struct MinimalContentSections: View {
     let onPlayVideo: (Video) -> Void
     let onSelectMovie: (FreeMovie) -> Void
+    let onSeeAllFreeMovies: () -> Void
     
     @EnvironmentObject private var appState: AppState
     
@@ -507,10 +514,10 @@ struct MinimalContentSections: View {
                 }
             }
             
-            // Free Movies
+            // Free Movies (from legal sources via FreeCatalogService)
             MinimalSection(
                 title: "Free Movies",
-                seeAllAction: { /* Navigate to movies */ }
+                seeAllAction: { onSeeAllFreeMovies() }
             ) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 16) {

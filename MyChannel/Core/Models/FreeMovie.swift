@@ -31,6 +31,9 @@ struct FreeMovie: Identifiable, Codable {
         case internetArchive = "internet_archive"
         case imdbTV = "imdb_tv"
         case youtube = "youtube"
+        case pexels = "pexels"
+        case pixabay = "pixabay"
+        case nasa = "nasa"
         
         var displayName: String {
             switch self {
@@ -41,6 +44,9 @@ struct FreeMovie: Identifiable, Codable {
             case .internetArchive: return "Internet Archive"
             case .imdbTV: return "IMDb TV"
             case .youtube: return "YouTube Movies"
+            case .pexels: return "Pexels"
+            case .pixabay: return "Pixabay"
+            case .nasa: return "NASA"
             }
         }
         
@@ -53,6 +59,9 @@ struct FreeMovie: Identifiable, Codable {
             case .internetArchive: return "https://archive.org/images/ia_logo.png"
             case .imdbTV: return "https://m.media-amazon.com/images/G/01/IMDb/BG_rectangle.png"
             case .youtube: return "https://www.youtube.com/s/desktop/youtube-logo.png"
+            case .pexels: return "https://images.pexels.com/lib/api/pexels.png"
+            case .pixabay: return "https://pixabay.com/static/img/logo_square.png"
+            case .nasa: return "https://www.nasa.gov/wp-content/themes/nasa/assets/images/nasa-logo.svg"
             }
         }
         
@@ -65,6 +74,9 @@ struct FreeMovie: Identifiable, Codable {
             case .internetArchive: return .blue
             case .imdbTV: return .yellow
             case .youtube: return .red
+            case .pexels: return .green
+            case .pixabay: return .teal
+            case .nasa: return .indigo
             }
         }
     }

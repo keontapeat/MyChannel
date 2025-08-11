@@ -137,6 +137,11 @@ class GlobalVideoPlayerManager: ObservableObject {
         isPlaying = false
         currentProgress = 0
         currentTime = 0
+        // Ensure mini player and fullscreen UI are hidden when stopping abruptly
+        shouldShowMiniPlayer = false
+        isMiniplayer = false
+        showingFullscreen = false
+        currentVideo = nil
     }
     
     // MARK: - Adopt External Player
