@@ -239,6 +239,7 @@ class VideoPlayerManager: ObservableObject {
         isPlaying = true
         isLoading = false
         updateNowPlayingInfo()
+        Task { await AnalyticsService.shared.trackVideoPlay(videoId: currentVideo?.id ?? "unknown", position: currentTime) }
     }
     
     func pause() {
@@ -246,6 +247,7 @@ class VideoPlayerManager: ObservableObject {
         player.pause()
         isPlaying = false
         updateNowPlayingInfo()
+        Task { await AnalyticsService.shared.trackVideoPause(videoId: currentVideo?.id ?? "unknown", position: currentTime) }
     }
     
     func togglePlayPause() {
@@ -260,6 +262,7 @@ class VideoPlayerManager: ObservableObject {
     func seek(to progress: Double) {
         guard let player = player, duration > 0, !isCleanedUp else { return }
         
+        let previousTime = currentTime
         let targetTime = duration * progress
         let time = CMTime(seconds: targetTime, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         
@@ -271,6 +274,7 @@ class VideoPlayerManager: ObservableObject {
                     self.currentProgress = progress
                     self.persistResumePosition()
                 }
+                Task { await AnalyticsService.shared.trackVideoSeek(videoId: self.currentVideo?.id ?? "unknown", from: previousTime, to: targetTime) }
             }
         }
     }

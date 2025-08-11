@@ -41,6 +41,7 @@ struct ImmersiveFullscreenPlayerView: View {
             if showControls { overlayControls }
         }
         .statusBarHidden(true)
+        .onAppear { Orientation.lock(.landscape) }
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
                 globalPlayer.showingFullscreen = true
@@ -53,6 +54,7 @@ struct ImmersiveFullscreenPlayerView: View {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
                 globalPlayer.showingFullscreen = false
             }
+            Orientation.unlock()
         }
     }
 
@@ -84,8 +86,11 @@ struct ImmersiveFullscreenPlayerView: View {
                 Spacer()
 
                 Menu {
+                    // Placeholder menus; can be wired to real selectors from VideoPlayerManager
                     Button("Quality") {}
                     Button("Playback Speed") {}
+                    Button("Captions…") {}
+                    Button("Audio Track…") {}
                     Button("Share") {}
                 } label: {
                     Image(systemName: "gearshape")

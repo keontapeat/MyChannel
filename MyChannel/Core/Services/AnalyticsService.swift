@@ -23,4 +23,21 @@ class AnalyticsService {
     func trackEvent(_ eventName: String, parameters: [String: Any] = [:]) async {
         FirebaseManager.shared.logEvent(eventName, parameters: parameters)
     }
+
+    // MARK: - Video Analytics
+    func trackVideoPlay(videoId: String, position: TimeInterval) async {
+        FirebaseManager.shared.logEvent("video_play", parameters: ["video_id": videoId, "position": position])
+    }
+    
+    func trackVideoPause(videoId: String, position: TimeInterval) async {
+        FirebaseManager.shared.logEvent("video_pause", parameters: ["video_id": videoId, "position": position])
+    }
+    
+    func trackVideoSeek(videoId: String, from: TimeInterval, to: TimeInterval) async {
+        FirebaseManager.shared.logEvent("video_seek", parameters: ["video_id": videoId, "from": from, "to": to])
+    }
+    
+    func trackVideoComplete(videoId: String, duration: TimeInterval) async {
+        FirebaseManager.shared.logEvent("video_complete", parameters: ["video_id": videoId, "duration": duration])
+    }
 }
