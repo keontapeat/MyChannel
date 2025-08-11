@@ -163,8 +163,14 @@ struct HomeView: View {
     
     // MARK: - Action Methods
     private func playVideo(_ video: Video) {
-        selectedVideo = video
-        showingVideoPlayer = true
+        // Prime the global player immediately for instant visual feedback
+        GlobalVideoPlayerManager.shared.currentVideo = video
+        GlobalVideoPlayerManager.shared.showingFullscreen = true
+        // Present detail next runloop to avoid layout hitches
+        DispatchQueue.main.async {
+            selectedVideo = video
+            showingVideoPlayer = true
+        }
         HapticManager.shared.impact(style: .medium)
     }
     

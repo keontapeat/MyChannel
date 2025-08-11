@@ -106,7 +106,10 @@ class VideoPlayerManager: ObservableObject {
             AVURLAssetPreferPreciseDurationAndTimingKey: true
         ])
         let playerItem = AVPlayerItem(asset: asset)
-        player = AVPlayer(playerItem: playerItem)
+        // Create player early to allow immediate rendering
+        let player = AVPlayer(playerItem: playerItem)
+        player.automaticallyWaitsToMinimizeStalling = true
+        self.player = player
         imageGenerator = AVAssetImageGenerator(asset: asset)
         imageGenerator?.appliesPreferredTrackTransform = true
         

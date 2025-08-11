@@ -448,7 +448,8 @@ struct VideoDetailView: View {
                 
                 // Set up the player manager properly
                 playerManager.setupPlayer(with: video)
-                playerManager.play()
+                // Defer play until after view has laid out to avoid presentation jank
+                DispatchQueue.main.async { playerManager.play() }
                 
                 showVideoControls = true
                 isViewAppeared = true
