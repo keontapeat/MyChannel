@@ -18,6 +18,7 @@ struct MainTabView: View {
     @State private var previousTab: TabItem = .home
     @State private var showingUpload: Bool = false
     @State private var isInitialized: Bool = false
+    @State private var presentMiniPlayerDetail: Bool = false
     
     @State private var notificationBadges: [TabItem: Int] = [:]
     
@@ -63,16 +64,11 @@ struct MainTabView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PresentVideoDetailFromMiniPlayer"))) { _ in
             withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
-                globalPlayer.showingFullscreen = true
+                presentMiniPlayerDetail = true
             }
         }
-        // Present video detail when global player requests fullscreen (e.g., swipe up mini player)
-        .fullScreenCover(isPresented: Binding<Bool>(
-            get: { globalPlayer.showingFullscreen && globalPlayer.currentVideo != nil },
-            set: { newValue in
-                if !newValue { globalPlayer.showingFullscreen = false }
-            }
-        )) {
+        // Present video detail only when triggered by mini player event
+        .fullScreenCover(isPresented: $presentMiniPlayerDetail) {
             if let video = globalPlayer.currentVideo {
                 VideoDetailView(video: video)
             }
