@@ -543,8 +543,7 @@ struct FlicksView: View {
                 likedVideos.insert(video.id)
                 notificationFeedback.notificationOccurred(.success)
                 
-                // Show heart particles
-                showLikeParticles()
+                // Minimal like effect handled in ProfessionalVideoPlayer
             }
         }
         

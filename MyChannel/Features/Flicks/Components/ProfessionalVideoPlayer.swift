@@ -22,6 +22,7 @@ struct ProfessionalVideoPlayer: View {
     @State private var isMuted = false
     @State private var showSeekForward = false
     @State private var showSeekBackward = false
+    @State private var showLikeEffect = false
     @AppStorage("flicks_playback_speed") private var playbackSpeed: Double = 1.0
     
     var body: some View {
@@ -109,17 +110,21 @@ struct ProfessionalVideoPlayer: View {
                 ZStack {
                     VStack {
                         Spacer()
+                        // Enhanced gradient with more depth and sophistication
                         LinearGradient(
                             colors: [
                                 .clear,
+                                .clear,
+                                .black.opacity(0.1),
                                 .black.opacity(0.3),
-                                .black.opacity(0.7),
-                                .black.opacity(0.9)
+                                .black.opacity(0.6),
+                                .black.opacity(0.85),
+                                .black.opacity(0.95)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
                         )
-                        .frame(height: 350)
+                        .frame(height: 400)
                         .allowsHitTesting(false)
                     }
                     
@@ -155,10 +160,17 @@ struct ProfessionalVideoPlayer: View {
                                 
                                 VStack(alignment: .leading, spacing: 6) {
                                     HStack(spacing: 8) {
-                                        Text("@\(video.creator.username)")
-                                            .font(.system(size: 16, weight: .bold))
-                                            .foregroundStyle(.white)
-                                            .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                                                                            Text("@\(video.creator.username)")
+                                        .font(.system(size: 17, weight: .bold))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: [.white, .white.opacity(0.95)],
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            )
+                                        )
+                                        .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 2)
+                                        .shadow(color: .black.opacity(0.4), radius: 1, x: 0, y: 1)
                                         
                                         if video.creator.isVerified {
                                             Image(systemName: "checkmark.seal.fill")
@@ -170,9 +182,9 @@ struct ProfessionalVideoPlayer: View {
                                     }
                                     
                                     Text("\(subscriberCount.formatted()) subscribers")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(.white.opacity(0.9))
-                                        .shadow(color: .black.opacity(0.5), radius: 1, x: 0, y: 1)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(.white.opacity(0.95))
+                                        .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
                                 }
                                 
                                 Spacer()
@@ -193,21 +205,28 @@ struct ProfessionalVideoPlayer: View {
                             }
                             .padding(.bottom, 16)
                             
-                            VStack(alignment: .leading, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 12) {
                                 Text(video.title)
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(.white)
+                                    .font(.system(size: 17, weight: .bold))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [.white, .white.opacity(0.95)],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        )
+                                    )
                                     .lineLimit(2)
                                     .multilineTextAlignment(.leading)
-                                    .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                                    .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 2)
+                                    .shadow(color: .black.opacity(0.4), radius: 1, x: 0, y: 1)
                                 
                                 if !video.description.isEmpty {
                                     Text(video.description)
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundStyle(.white.opacity(0.9))
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.95))
                                         .lineLimit(2)
                                         .multilineTextAlignment(.leading)
-                                        .shadow(color: .black.opacity(0.5), radius: 1, x: 0, y: 1)
+                                        .shadow(color: .black.opacity(0.7), radius: 2, x: 0, y: 1)
                                 }
                             }
                             .frame(maxWidth: geometry.size.width * 0.65, alignment: .leading)
@@ -217,16 +236,31 @@ struct ProfessionalVideoPlayer: View {
                         
                         Spacer()
                         
-                        VStack(spacing: 28) {
+                        VStack(spacing: 32) {
                             Spacer()
                             
-                            ProfessionalActionButton(
-                                icon: isLiked ? "heart.fill" : "heart",
-                                text: formatCount(video.likeCount),
-                                isActive: isLiked,
-                                activeColor: .red,
-                                action: onLike
-                            )
+                            ZStack {
+                                ProfessionalActionButton(
+                                    icon: isLiked ? "heart.fill" : "heart",
+                                    text: formatCount(video.likeCount),
+                                    isActive: isLiked,
+                                    activeColor: .red,
+                                    action: {
+                                        onLike()
+                                        if !isLiked { // About to become liked
+                                            showLikeEffect = true
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                                showLikeEffect = false
+                                            }
+                                        }
+                                    }
+                                )
+                                
+                                if showLikeEffect {
+                                    MinimalLikeEffect()
+                                        .allowsHitTesting(false)
+                                }
+                            }
                             
                             ProfessionalActionButton(
                                 icon: "bubble.right.fill",
@@ -266,18 +300,18 @@ struct ProfessionalVideoPlayer: View {
                             }
                             .buttonStyle(.plain)
                         }
-                        .padding(.trailing, 20)
-                        .padding(.bottom, 120)
+                        .padding(.trailing, 24)
+                        .padding(.bottom, 130)
                     }
                 }
             }
             
-            VStack(spacing: 8) {
+            VStack(spacing: 12) {
                 Spacer()
                 
                 progressBar
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 44)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 50)
             }
         }
     }
@@ -335,20 +369,49 @@ struct ProfessionalVideoPlayer: View {
     private var progressBar: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
+                // Enhanced background with glassmorphic effect
                 Capsule()
-                    .fill(.white.opacity(0.35))
-                    .frame(height: 4)
+                    .fill(.ultraThinMaterial.opacity(0.6))
+                    .overlay(
+                        Capsule()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.3), .clear],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 0.5
+                            )
+                    )
+                    .frame(height: 5)
+                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
                 
+                // Enhanced progress fill
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [AppTheme.Colors.primary, .white],
+                            colors: [
+                                AppTheme.Colors.primary,
+                                AppTheme.Colors.primary.opacity(0.8),
+                                .white.opacity(0.9)
+                            ],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
-                    .frame(width: max(4, CGFloat(currentProgress) * proxy.size.width), height: 4)
-                    .shadow(color: .white.opacity(0.5), radius: 2, x: 0, y: 0)
+                    .overlay(
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.4), .clear],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                    )
+                    .frame(width: max(5, CGFloat(currentProgress) * proxy.size.width), height: 5)
+                    .shadow(color: AppTheme.Colors.primary.opacity(0.6), radius: 3, x: 0, y: 0)
+                    .shadow(color: .white.opacity(0.3), radius: 1, x: 0, y: 0)
             }
             .contentShape(Rectangle())
             .gesture(
@@ -359,7 +422,7 @@ struct ProfessionalVideoPlayer: View {
                     }
             )
         }
-        .frame(height: 16)
+        .frame(height: 18)
         .accessibilityLabel("Playback progress")
     }
     
@@ -524,28 +587,62 @@ private struct ProfessionalActionButton: View {
                     }
                     
                     Circle()
-                        .fill(isActive ? activeColor.opacity(0.2) : .black.opacity(0.3))
-                        .frame(width: 52, height: 52)
-                        .background(.ultraThinMaterial, in: Circle())
+                        .fill(.ultraThinMaterial.opacity(0.9))
                         .overlay(
                             Circle()
-                                .stroke(.white.opacity(0.3), lineWidth: 1)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            isActive ? activeColor.opacity(0.3) : .white.opacity(0.1),
+                                            isActive ? activeColor.opacity(0.1) : .clear
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
                         )
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [.white.opacity(0.4), .clear, .white.opacity(0.2)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1.5
+                                )
+                        )
+                        .frame(width: 56, height: 56)
                     
                     Image(systemName: icon)
-                        .font(.system(size: 26, weight: .medium))
-                        .foregroundStyle(isActive ? activeColor : .white)
-                        .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(
+                            isActive ? 
+                            LinearGradient(
+                                colors: [activeColor, activeColor.opacity(0.8)], 
+                                startPoint: .top, 
+                                endPoint: .bottom
+                            ) :
+                            LinearGradient(
+                                colors: [.white, .white.opacity(0.9)], 
+                                startPoint: .top, 
+                                endPoint: .bottom
+                            )
+                        )
+                        .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 2)
+                        .scaleEffect(isActive ? 1.05 : 1.0)
                 }
-                .scaleEffect(isPressed ? 0.9 : 1.0)
-                .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                .scaleEffect(isPressed ? 0.92 : 1.0)
+                .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 6)
+                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
                 
                 if !text.isEmpty {
                     Text(text)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
-                        .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                        .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
+                        .minimumScaleFactor(0.7)
                 }
             }
         }
