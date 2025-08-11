@@ -40,4 +40,8 @@ class AnalyticsService {
     func trackVideoComplete(videoId: String, duration: TimeInterval) async {
         FirebaseManager.shared.logEvent("video_complete", parameters: ["video_id": videoId, "duration": duration])
     }
+
+    func trackChapterTap(videoId: String, title: String, start: TimeInterval) async {
+        FirebaseManager.shared.logEvent("video_chapter_tap", parameters: ["video_id": videoId, "title": title, "start": start])
+    }
 }

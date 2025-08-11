@@ -232,7 +232,7 @@ struct VideoDetailView: View {
                     
                     // Bottom progress bar and time
                     VStack(spacing: 12) {
-                        // YouTube-style progress bar
+                        // YouTube-style progress bar with chapter markers
                         GeometryReader { geometry in
                             ZStack(alignment: .leading) {
                                 // Background track
@@ -257,6 +257,17 @@ struct VideoDetailView: View {
                                         height: isDraggingSeeker ? 6 : 4
                                     )
                                     .animation(.linear(duration: 0.1), value: playerManager.currentProgress)
+
+                                // Chapter markers
+                                if let chapters = video.chapters {
+                                    ForEach(chapters, id: \.id) { ch in
+                                        let x = geometry.size.width * CGFloat(min(max(ch.start / max(playerManager.duration, 1), 0), 1))
+                                        Rectangle()
+                                            .fill(Color.white.opacity(0.9))
+                                            .frame(width: 2, height: isDraggingSeeker ? 10 : 8)
+                                            .offset(x: x - 1)
+                                    }
+                                }
                                 
                                 // Scrubber dot
                                 Circle()
