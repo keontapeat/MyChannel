@@ -43,6 +43,12 @@ struct VideoDetailView: View {
     @State private var showSeekRippleForward = false
     @State private var showSeekRippleBackward = false
     @State private var showingChapters = false
+    @State private var currentChapterTitle: String = ""
+    @State private var showingChapterTooltip = false
+    @State private var chapterTooltipX: CGFloat = 0
+    @State private var showUpNext = false
+    @State private var upNextCountdown = 5
+    @State private var upNextVideo: Video? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -287,25 +293,46 @@ struct VideoDetailView: View {
                                         let progress = min(max(value.location.x / geometry.size.width, 0), 1)
                                         playerManager.seek(to: progress)
                                         HapticManager.shared.impact(style: .light)
+                                        if let chapters = video.chapters, !chapters.isEmpty {
+                                            let time = playerManager.duration * progress
+                                            if let nearest = nearestChapter(for: time, in: chapters) {
+                                                currentChapterTitle = nearest.title
+                                                showingChapterTooltip = true
+                                                chapterTooltipX = max(0, min(geometry.size.width - 120, geometry.size.width * CGFloat(progress) - 60))
+                                            }
+                                        }
                                     }
                                     .onEnded { _ in
                                         isDraggingSeeker = false
                                         resetControlsHideTimer()
+                                        showingChapterTooltip = false
                                     }
                             )
                             .overlay(alignment: .topLeading) {
-                                if isDraggingSeeker, playerManager.duration > 0 {
-                                    let previewTime = playerManager.duration * playerManager.currentProgress
-                                    if let img = playerManager.thumbnail(at: previewTime) {
-                                        Image(uiImage: img)
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .frame(width: 120, height: 68)
-                                            .clipped()
-                                            .background(Color.black)
-                                            .cornerRadius(8)
-                                            .offset(x: max(0, min(geometry.size.width - 120, geometry.size.width * CGFloat(playerManager.currentProgress) - 60)), y: -76)
-                                            .shadow(radius: 4)
+                                ZStack(alignment: .topLeading) {
+                                    if isDraggingSeeker, playerManager.duration > 0 {
+                                        let previewTime = playerManager.duration * playerManager.currentProgress
+                                        if let img = playerManager.thumbnail(at: previewTime) {
+                                            Image(uiImage: img)
+                                                .resizable()
+                                                .aspectRatio(contentMode: .fill)
+                                                .frame(width: 120, height: 68)
+                                                .clipped()
+                                                .background(Color.black)
+                                                .cornerRadius(8)
+                                                .offset(x: max(0, min(geometry.size.width - 120, geometry.size.width * CGFloat(playerManager.currentProgress) - 60)), y: -76)
+                                                .shadow(radius: 4)
+                                        }
+                                    }
+                                    if showingChapterTooltip && !currentChapterTitle.isEmpty {
+                                        Text(currentChapterTitle)
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 6)
+                                            .background(Color.black.opacity(0.8))
+                                            .foregroundColor(.white)
+                                            .cornerRadius(10)
+                                            .offset(x: chapterTooltipX, y: -112)
                                     }
                                 }
                             }
@@ -456,6 +483,14 @@ struct VideoDetailView: View {
         }
         .onChange(of: playerManager.isPlaying) { _, newValue in
             print("🎵 Player state changed to: \(newValue ? "Playing" : "Paused")")
+        }
+        .onChange(of: playerManager.currentTime) { _, newTime in
+            if let chapters = video.chapters, !chapters.isEmpty {
+                let sorted = chapters.sorted { $0.start < $1.start }
+                if let current = sorted.last(where: { $0.start <= newTime }) {
+                    currentChapterTitle = current.title
+                }
+            }
         }
     }
     
