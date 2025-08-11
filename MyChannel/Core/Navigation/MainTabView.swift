@@ -463,68 +463,154 @@ struct CustomTabBar: View {
     let onUploadTap: () -> Void
     let onTabSelected: (TabItem) -> Void
     
+    // Separate tabs into main group and profile
+    private var mainTabs: [TabItem] {
+        [.home, .flicks, .search]
+    }
+    
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(TabItem.allCases.filter { $0 != .upload }, id: \.self) { tab in
-                CustomTabBarButton(
-                    tab: tab,
-                    isSelected: selectedTab == tab,
-                    badgeCount: notificationBadges[tab] ?? 0,
-                    action: {
-                        onTabSelected(tab)
+        HStack(spacing: 16) {
+            // Main tab group (Home, Flicks, Upload, Search)
+            HStack(spacing: 0) {
+                ForEach(mainTabs, id: \.self) { tab in
+                    CustomTabBarButton(
+                        tab: tab,
+                        isSelected: selectedTab == tab,
+                        badgeCount: notificationBadges[tab] ?? 0,
+                        action: {
+                            onTabSelected(tab)
+                        }
+                    )
+                    .frame(maxWidth: .infinity)
+                    
+                    // Add upload button after flicks
+                    if tab == .flicks {
+                        UploadTabButton(action: onUploadTap)
+                            .frame(maxWidth: .infinity)
                     }
-                )
-                .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(
+                ZStack {
+                    // Main background with stronger blur
+                    VisualEffectBlur(blurStyle: .systemUltraThinMaterial)
+                        .clipShape(Capsule())
+                    
+                    // Subtle border
+                    Capsule()
+                        .stroke(
+                            Color.white.opacity(0.2),
+                            lineWidth: 0.5
+                        )
+                    
+                    // Subtle inner glow
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.1),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                }
+            )
+            .shadow(
+                color: Color.black.opacity(0.15),
+                radius: 16,
+                x: 0,
+                y: 8
+            )
+            .shadow(
+                color: Color.black.opacity(0.05),
+                radius: 4,
+                x: 0,
+                y: 2
+            )
+            
+            // Separated Profile Button
+            SeparatedProfileButton(
+                isSelected: selectedTab == .profile,
+                badgeCount: notificationBadges[.profile] ?? 0,
+                action: {
+                    onTabSelected(.profile)
+                }
+            )
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 16)
+    }
+}
+
+// MARK: - Separated Profile Button
+struct SeparatedProfileButton: View {
+    let isSelected: Bool
+    let badgeCount: Int
+    let action: () -> Void
+    
+    @State private var isPressed: Bool = false
+    
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                // Background
+                Circle()
+                    .fill(
+                        isSelected ? AppTheme.Colors.primary : VisualEffectBlur(blurStyle: .systemUltraThinMaterial)
+                    )
+                    .frame(width: 48, height: 48)
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                Color.white.opacity(0.2),
+                                lineWidth: 0.5
+                            )
+                    )
                 
-                if tab == .flicks {
-                    UploadTabButton(action: onUploadTap)
-                        .frame(maxWidth: .infinity)
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: TabItem.profile.iconName(isSelected: isSelected))
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(
+                            isSelected ? .white : AppTheme.Colors.textSecondary
+                        )
+                        .scaleEffect(isPressed ? 0.9 : 1.0)
+                    
+                    if badgeCount > 0 {
+                        NotificationBadge(count: badgeCount)
+                            .offset(x: 8, y: -8)
+                    }
                 }
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(
-            ZStack {
-                // Main background with stronger blur
-                VisualEffectBlur(blurStyle: .systemUltraThinMaterial)
-                    .clipShape(Capsule())
-                
-                // Subtle border
-                Capsule()
-                    .stroke(
-                        Color.white.opacity(0.2),
-                        lineWidth: 0.5
-                    )
-                
-                // Subtle inner glow
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.1),
-                                Color.clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            }
-        )
-        .padding(.horizontal, 24)
-        .padding(.bottom, 16)
+        .buttonStyle(PlainButtonStyle())
+        .scaleEffect(isPressed ? 0.95 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
         .shadow(
-            color: Color.black.opacity(0.15),
-            radius: 16,
+            color: Color.black.opacity(isSelected ? 0.2 : 0.1),
+            radius: isSelected ? 12 : 8,
             x: 0,
-            y: 8
+            y: isSelected ? 6 : 4
         )
-        .shadow(
-            color: Color.black.opacity(0.05),
-            radius: 4,
-            x: 0,
-            y: 2
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !isPressed {
+                        isPressed = true
+                    }
+                }
+                .onEnded { _ in
+                    isPressed = false
+                }
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(TabItem.profile.accessibilityLabel)
+        .accessibilityHint(isSelected ? "Currently selected" : "Double tap to select")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 
