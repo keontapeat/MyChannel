@@ -43,6 +43,7 @@ struct Video: Identifiable, Codable, Hashable {
     
     // Additional properties for compatibility
     var isSponsored: Bool?
+        var chapters: [Chapter]? // YouTube-style chapters
     
     // MARK: - Custom Coding Keys
     private enum CodingKeys: String, CodingKey {
@@ -51,7 +52,7 @@ struct Video: Identifiable, Codable, Hashable {
         case createdAt, updatedAt, creatorId, creator, category
         case tags, isPublic, quality, aspectRatio, isLiveStream
         case scheduledAt, contentSource, externalID, contentRating
-        case language, subtitles, isVerified, monetization, isSponsored
+        case language, subtitles, isVerified, monetization, isSponsored, chapters
     }
     
     // MARK: - Custom Decoding
@@ -91,6 +92,7 @@ struct Video: Identifiable, Codable, Hashable {
         isVerified = try container.decodeIfPresent(Bool.self, forKey: .isVerified) ?? false
         monetization = try container.decodeIfPresent(MonetizationSettings.self, forKey: .monetization)
         isSponsored = try container.decodeIfPresent(Bool.self, forKey: .isSponsored)
+        chapters = try container.decodeIfPresent([Chapter].self, forKey: .chapters)
     }
     
     // MARK: - Custom Encoding
@@ -126,6 +128,7 @@ struct Video: Identifiable, Codable, Hashable {
         try container.encode(isVerified, forKey: .isVerified)
         try container.encodeIfPresent(monetization, forKey: .monetization)
         try container.encodeIfPresent(isSponsored, forKey: .isSponsored)
+        try container.encodeIfPresent(chapters, forKey: .chapters)
     }
     
     // Computed property for shareable link
@@ -161,7 +164,8 @@ struct Video: Identifiable, Codable, Hashable {
         subtitles: [SubtitleTrack]? = nil,
         isVerified: Bool = false,
         monetization: MonetizationSettings? = nil,
-        isSponsored: Bool? = nil
+        isSponsored: Bool? = nil,
+        chapters: [Chapter]? = nil
     ) {
         self.id = id
         self.title = title
@@ -192,6 +196,22 @@ struct Video: Identifiable, Codable, Hashable {
         self.isVerified = isVerified
         self.monetization = monetization
         self.isSponsored = isSponsored
+        self.chapters = chapters
+    }
+
+    // MARK: - Chapters
+    struct Chapter: Codable, Identifiable, Hashable {
+        let id: String
+        let title: String
+        let start: TimeInterval
+        let thumbnailURL: String?
+        
+        init(id: String = UUID().uuidString, title: String, start: TimeInterval, thumbnailURL: String? = nil) {
+            self.id = id
+            self.title = title
+            self.start = start
+            self.thumbnailURL = thumbnailURL
+        }
     }
     
     // MARK: - Computed Properties
@@ -626,7 +646,12 @@ extension Video {
             likeCount: 8950,
             commentCount: 234,
             creator: User.sampleUsers[0],
-            category: .lifestyle
+            category: .lifestyle,
+            chapters: [
+                Chapter(title: "Intro", start: 0),
+                Chapter(title: "Golden Hour", start: 10),
+                Chapter(title: "Afterglow", start: 25)
+            ]
         ),
         Video(
             title: "Cooking the Perfect Pasta",
@@ -638,7 +663,12 @@ extension Video {
             likeCount: 6700,
             commentCount: 189,
             creator: User.sampleUsers[2],
-            category: .cooking
+            category: .cooking,
+            chapters: [
+                Chapter(title: "Ingredients", start: 0),
+                Chapter(title: "Sauce", start: 30),
+                Chapter(title: "Plating", start: 90)
+            ]
         ),
         Video(
             title: "Latest Tech Gadgets Review",

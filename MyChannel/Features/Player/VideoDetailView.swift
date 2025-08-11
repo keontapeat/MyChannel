@@ -42,6 +42,7 @@ struct VideoDetailView: View {
     @State private var showingFullscreenOverlay = false
     @State private var showSeekRippleForward = false
     @State private var showSeekRippleBackward = false
+    @State private var showingChapters = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -124,6 +125,17 @@ struct VideoDetailView: View {
                         
                         Spacer()
                         
+                        // Chapters button
+                        if let chapters = video.chapters, !chapters.isEmpty {
+                            Button(action: { showingChapters = true }) {
+                                ZStack {
+                                    Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
+                                    Image(systemName: "list.bullet.rectangle").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
+                                }
+                            }
+                            .buttonStyle(ScaleButtonStyle())
+                        }
+
                         // Minimize to mini player button
                         Button(action: {
                             minimizeToMiniPlayer()
@@ -362,6 +374,14 @@ struct VideoDetailView: View {
                 globalPlayer.isMiniplayer = false
                 showingFullscreenOverlay = false
             }
+        }
+        .sheet(isPresented: $showingChapters) {
+            VideoChaptersSheet(video: video) { t in
+                let progress = playerManager.duration > 0 ? t / playerManager.duration : 0
+                playerManager.seek(to: progress)
+                playerManager.play()
+            }
+            .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showingMoreOptions) {
             VideoMoreOptionsSheet(video: video,
