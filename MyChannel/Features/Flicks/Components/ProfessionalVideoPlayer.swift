@@ -23,7 +23,7 @@ struct ProfessionalVideoPlayer: View {
     @State private var isMuted = false
     @State private var showSeekForward = false
     @State private var showSeekBackward = false
-    @State private var showLikeEffect = false
+
     @AppStorage("flicks_playback_speed") private var playbackSpeed: Double = 1.0
     
     var body: some View {
@@ -260,28 +260,13 @@ struct ProfessionalVideoPlayer: View {
                         VStack(spacing: 24) {
                             Spacer()
                             
-                            ZStack {
-                                ProfessionalActionButton(
-                                    icon: isLiked ? "heart.fill" : "heart",
-                                    text: formatCount(video.likeCount),
-                                    isActive: isLiked,
-                                    activeColor: .red,
-                                    action: {
-                                        onLike()
-                                        if !isLiked { // About to become liked
-                                            showLikeEffect = true
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                                                showLikeEffect = false
-                                            }
-                                        }
-                                    }
-                                )
-                                
-                                if showLikeEffect {
-                                    MinimalLikeEffect()
-                                        .allowsHitTesting(false)
-                                }
-                            }
+                            ProfessionalActionButton(
+                                icon: isLiked ? "heart.fill" : "heart",
+                                text: formatCount(video.likeCount),
+                                isActive: isLiked,
+                                activeColor: .red,
+                                action: onLike
+                            )
                             
                             ProfessionalActionButton(
                                 icon: "bubble.right.fill",
