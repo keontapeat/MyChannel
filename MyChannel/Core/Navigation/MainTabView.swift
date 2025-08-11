@@ -482,34 +482,48 @@ struct CustomTabBar: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
         .background(
             ZStack {
-                VisualEffectBlur(blurStyle: .systemMaterial)
-                    .cornerRadius(24)
+                // Main background with stronger blur
+                VisualEffectBlur(blurStyle: .systemUltraThinMaterial)
+                    .clipShape(Capsule())
                 
-                RoundedRectangle(cornerRadius: 24)
+                // Subtle border
+                Capsule()
                     .stroke(
+                        Color.white.opacity(0.2),
+                        lineWidth: 0.5
+                    )
+                
+                // Subtle inner glow
+                Capsule()
+                    .fill(
                         LinearGradient(
                             colors: [
-                                AppTheme.Colors.primary.opacity(0.3),
-                                AppTheme.Colors.secondary.opacity(0.1)
+                                Color.white.opacity(0.1),
+                                Color.clear
                             ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     )
             }
         )
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 24)
+        .padding(.bottom, 16)
         .shadow(
-            color: AppTheme.Colors.textPrimary.opacity(0.1),
-            radius: 20,
+            color: Color.black.opacity(0.15),
+            radius: 16,
             x: 0,
-            y: -5
+            y: 8
+        )
+        .shadow(
+            color: Color.black.opacity(0.05),
+            radius: 4,
+            x: 0,
+            y: 2
         )
     }
 }
@@ -527,16 +541,16 @@ struct UploadTabButton: View {
             ZStack {
                 Circle()
                     .fill(AppTheme.Colors.primary)
-                    .frame(width: 50, height: 50)
+                    .frame(width: 44, height: 44)
                     .shadow(
-                        color: AppTheme.Colors.primary.opacity(0.4),
-                        radius: 8,
+                        color: AppTheme.Colors.primary.opacity(0.3),
+                        radius: 12,
                         x: 0,
-                        y: 4
+                        y: 6
                     )
                 
                 Image(systemName: "plus")
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.white)
                     .scaleEffect(isPressed ? 0.9 : 1.0)
             }
@@ -571,39 +585,43 @@ struct CustomTabBarButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: 0) {
                 ZStack {
+                    // Selected background
                     if isSelected {
-                        Circle()
-                            .fill(AppTheme.Colors.primary.opacity(0.2))
-                            .frame(width: 40, height: 40)
+                        Capsule()
+                            .fill(AppTheme.Colors.primary)
+                            .frame(width: 48, height: 32)
                             .transition(.scale.combined(with: .opacity))
                     }
                     
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: tab.iconName(isSelected: isSelected))
-                            .font(.system(size: 20, weight: .medium))
+                            .font(.system(size: 18, weight: .medium))
                             .foregroundColor(
-                                isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary
+                                isSelected ? .white : AppTheme.Colors.textSecondary
                             )
                             .scaleEffect(isPressed ? 0.9 : 1.0)
                         
                         if badgeCount > 0 {
                             NotificationBadge(count: badgeCount)
-                                .offset(x: 8, y: -8)
+                                .offset(x: 10, y: -6)
                         }
                     }
                 }
+                .frame(height: 32)
                 
-                Text(tab.title)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(
-                        isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary
-                    )
-                    .opacity(isSelected ? 1.0 : 0.8)
+                // Only show label for selected tab
+                if isSelected {
+                    Text(tab.title)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                        .padding(.top, 2)
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                }
             }
-            .padding(.vertical, 4)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+            .frame(height: 48)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isSelected)
         }
         .buttonStyle(PlainButtonStyle())
         .scaleEffect(isPressed ? 0.95 : 1.0)
