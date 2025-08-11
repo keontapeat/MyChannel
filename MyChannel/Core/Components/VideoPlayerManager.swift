@@ -8,6 +8,8 @@
 import SwiftUI
 import AVFoundation
 import Combine
+import MediaPlayer
+import UIKit
 
 @MainActor
 class VideoPlayerManager: ObservableObject {
@@ -25,6 +27,8 @@ class VideoPlayerManager: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var currentVideo: Video?
     private var isCleanedUp = false
+    private var lastSavedSecond: Int = -1
+    private var imageGenerator: AVAssetImageGenerator?
     
     var currentTimeString: String {
         formatTime(currentTime)
@@ -103,8 +107,11 @@ class VideoPlayerManager: ObservableObject {
         ])
         let playerItem = AVPlayerItem(asset: asset)
         player = AVPlayer(playerItem: playerItem)
+        imageGenerator = AVAssetImageGenerator(asset: asset)
+        imageGenerator?.appliesPreferredTrackTransform = true
         
         setupObservers(for: playerItem)
+        configureAudioSession()
         
         Task {
             await loadAssetProperties(for: playerItem.asset)
@@ -124,6 +131,12 @@ class VideoPlayerManager: ObservableObject {
             
             if self.duration > 0 {
                 self.currentProgress = self.currentTime / self.duration
+            }
+            let currentSecond = Int(self.currentTime)
+            if currentSecond != self.lastSavedSecond, currentSecond % 2 == 0 {
+                self.lastSavedSecond = currentSecond
+                self.persistResumePosition()
+                self.updateNowPlayingInfo()
             }
         }
         
@@ -205,6 +218,10 @@ class VideoPlayerManager: ObservableObject {
                 guard let self = self, !self.isCleanedUp else { return }
                 self.duration = CMTimeGetSeconds(duration)
                 self.isLoading = false
+                if let resume = self.loadResumePosition(), resume > 2, resume < self.duration - 2 {
+                    let progress = resume / self.duration
+                    self.seek(to: progress)
+                }
             }
         } catch {
             await MainActor.run { [weak self] in
@@ -221,12 +238,14 @@ class VideoPlayerManager: ObservableObject {
         player.play()
         isPlaying = true
         isLoading = false
+        updateNowPlayingInfo()
     }
     
     func pause() {
         guard let player = player, !isCleanedUp else { return }
         player.pause()
         isPlaying = false
+        updateNowPlayingInfo()
     }
     
     func togglePlayPause() {
@@ -250,6 +269,7 @@ class VideoPlayerManager: ObservableObject {
                 DispatchQueue.main.async {
                     self.currentTime = targetTime
                     self.currentProgress = progress
+                    self.persistResumePosition()
                 }
             }
         }
@@ -272,6 +292,7 @@ class VideoPlayerManager: ObservableObject {
     func setPlaybackRate(_ rate: Float) {
         guard !isCleanedUp else { return }
         player?.rate = rate
+        updateNowPlayingInfo()
     }
     
     func setLooping(_ shouldLoop: Bool) {
@@ -319,6 +340,93 @@ class VideoPlayerManager: ObservableObject {
         cleanup()
     }
     
+    // MARK: - Audio Session / Now Playing
+    private func configureAudioSession() {
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay])
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("AudioSession error: \(error)")
+        }
+    }
+
+    private func updateNowPlayingInfo() {
+        guard let currentVideo = currentVideo else { return }
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: currentVideo.title,
+            MPMediaItemPropertyArtist: currentVideo.creator.displayName,
+            MPMediaItemPropertyPlaybackDuration: duration,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0
+        ]
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        UIApplication.shared.beginReceivingRemoteControlEvents()
+        let commandCenter = MPRemoteCommandCenter.shared()
+        commandCenter.playCommand.isEnabled = true
+        commandCenter.pauseCommand.isEnabled = true
+        commandCenter.playCommand.addTarget { [weak self] _ in self?.play(); return .success }
+        commandCenter.pauseCommand.addTarget { [weak self] _ in self?.pause(); return .success }
+    }
+
+    // MARK: - Resume Position Persistence
+    private func persistResumePosition() {
+        guard let currentVideo = currentVideo else { return }
+        let key = "resume_\(currentVideo.id)"
+        UserDefaults.standard.set(currentTime, forKey: key)
+    }
+
+    private func loadResumePosition() -> TimeInterval? {
+        guard let currentVideo = currentVideo else { return nil }
+        let key = "resume_\(currentVideo.id)"
+        let value = UserDefaults.standard.double(forKey: key)
+        return value > 0 ? value : nil
+    }
+
+    private func clearResumePosition() {
+        guard let currentVideo = currentVideo else { return }
+        UserDefaults.standard.removeObject(forKey: "resume_\(currentVideo.id)")
+    }
+
+    // MARK: - Subtitles / Audio Tracks
+    func availableSubtitleOptions() -> [AVMediaSelectionOption] {
+        guard let group = player?.currentItem?.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) else { return [] }
+        return group.options
+    }
+
+    func selectSubtitle(option: AVMediaSelectionOption?) {
+        guard let item = player?.currentItem,
+              let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) else { return }
+        if let option = option {
+            item.select(option, in: group)
+        } else {
+            item.select(nil, in: group)
+        }
+    }
+
+    func availableAudioOptions() -> [AVMediaSelectionOption] {
+        guard let group = player?.currentItem?.asset.mediaSelectionGroup(forMediaCharacteristic: .audible) else { return [] }
+        return group.options
+    }
+
+    func selectAudio(option: AVMediaSelectionOption?) {
+        guard let item = player?.currentItem,
+              let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .audible) else { return }
+        if let option = option {
+            item.select(option, in: group)
+        }
+    }
+
+    // MARK: - Thumbnails
+    func thumbnail(at time: TimeInterval) -> UIImage? {
+        guard let generator = imageGenerator else { return nil }
+        let cmTime = CMTime(seconds: time, preferredTimescale: 600)
+        do {
+            let cgImage = try generator.copyCGImage(at: cmTime, actualTime: nil)
+            return UIImage(cgImage: cgImage)
+        } catch {
+            return nil
+        }
+    }
     // MARK: - Helper Methods
     private func formatTime(_ time: TimeInterval) -> String {
         let hours = Int(time) / 3600

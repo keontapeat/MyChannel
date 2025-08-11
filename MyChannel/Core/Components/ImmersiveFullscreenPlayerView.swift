@@ -15,6 +15,8 @@ struct ImmersiveFullscreenPlayerView: View {
     @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
     @State private var showControls = true
     @State private var dragOffset: CGFloat = 0
+    @State private var isPiPActive: Bool = false
+    @State private var showRoutePicker = false
 
     var body: some View {
         ZStack {
@@ -22,12 +24,16 @@ struct ImmersiveFullscreenPlayerView: View {
 
             // Reuse the global player's AVPlayer (already adopted from caller)
             if let player = globalPlayer.player {
-                VideoPlayer(player: player)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black)
-                    .offset(y: dragOffset)
-                    .gesture(dragGesture)
-                    .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() } }
+                ZStack {
+                    PlayerPiPContainerView(player: player, isPictureInPictureActive: $isPiPActive)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Tap to toggle controls
+                        .contentShape(Rectangle())
+                        .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() } }
+                }
+                .background(Color.black)
+                .offset(y: dragOffset)
+                .gesture(dragGesture)
             } else {
                 ProgressView().tint(.white)
             }
@@ -89,6 +95,17 @@ struct ImmersiveFullscreenPlayerView: View {
                         .background(Color.black.opacity(0.35))
                         .clipShape(Circle())
                 }
+
+                Button {
+                    isPiPActive.toggle()
+                } label: {
+                    Image(systemName: isPiPActive ? "pip.exit" : "pip.enter")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(12)
+                        .background(Color.black.opacity(0.35))
+                        .clipShape(Circle())
+                }
             }
             .padding(.top, 18)
             .padding(.horizontal, 16)
@@ -133,10 +150,24 @@ struct ImmersiveFullscreenPlayerView: View {
                     Button { globalPlayer.seekForward() } label: {
                         Image(systemName: "goforward.10").foregroundColor(.white).font(.title3)
                     }
+                    Button {
+                        showRoutePicker.toggle()
+                    } label: {
+                        Image(systemName: "airplayaudio").foregroundColor(.white).font(.title3)
+                    }
                     Spacer()
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
+                .background(
+                    Group {
+                        if showRoutePicker {
+                            AirPlayRouteView()
+                                .frame(height: 44)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                    }
+                )
             }
             .background(
                 LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)

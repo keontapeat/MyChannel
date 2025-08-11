@@ -287,6 +287,22 @@ struct VideoDetailView: View {
                                         resetControlsHideTimer()
                                     }
                             )
+                            .overlay(alignment: .topLeading) {
+                                if isDraggingSeeker, playerManager.duration > 0 {
+                                    let previewTime = playerManager.duration * playerManager.currentProgress
+                                    if let img = playerManager.thumbnail(at: previewTime) {
+                                        Image(uiImage: img)
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 120, height: 68)
+                                            .clipped()
+                                            .background(Color.black)
+                                            .cornerRadius(8)
+                                            .offset(x: max(0, min(geometry.size.width - 120, geometry.size.width * CGFloat(playerManager.currentProgress) - 60)), y: -76)
+                                            .shadow(radius: 4)
+                                    }
+                                }
+                            }
                         }
                         .frame(height: 20)
                         
