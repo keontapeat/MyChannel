@@ -177,7 +177,7 @@ struct FlicksView: View {
                 DragGesture()
                     .onEnded { value in
                         // Check if swipe started from left edge (within 50 points)
-                        if value.startLocation.x < 50 && value.translation.x > 100 {
+                        if value.startLocation.x < 50 && value.translation.width > 100 {
                             // Quick exit to home with haptic feedback
                             NotificationCenter.default.post(name: NSNotification.Name("SwitchToHomeTab"), object: nil)
                             HapticManager.shared.impact(style: .medium)
