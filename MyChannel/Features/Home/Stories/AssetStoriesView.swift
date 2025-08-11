@@ -49,14 +49,12 @@ struct HeroMatch: ViewModifier {
     }
 }
 
-// 🔥 CLEAN & MINIMAL STORY BUBBLE - WHITE DESIGN LIKE PROFILE IMAGE
+// MARK: - Story Bubble
 struct AssetBouncyStoryBubble: View {
     let story: AssetStory
     let onTap: (AssetStory) -> Void
     let ns: Namespace.ID?
     let activeHeroId: UUID?
-
-    @State private var isPressed = false
 
     init(story: AssetStory, onTap: @escaping (AssetStory) -> Void, ns: Namespace.ID? = nil, activeHeroId: UUID? = nil) {
         self.story = story
@@ -66,56 +64,69 @@ struct AssetBouncyStoryBubble: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            Button(action: { 
-                onTap(story)
-                HapticManager.shared.impact(style: .light)
-            }) {
+        Button(action: {
+            HapticManager.shared.impact(style: .light)
+            onTap(story)
+        }) {
+            VStack(spacing: 8) {
                 ZStack {
-                    // 🔥 CLEAN WHITE RING (LIKE PROFILE IMAGE)
                     Circle()
-                        .stroke(Color.white, lineWidth: 2.5)
+                        .fill(Color.white)
                         .frame(width: 80, height: 80)
-                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                        .shadow(color: .black.opacity(0.12), radius: 5, x: 0, y: 2)
 
-                    // CLEAN PROFILE IMAGE
-                    AsyncImage(url: URL(string: "https://picsum.photos/200/200?random=\(story.id.hashValue)")) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 74, height: 74)
-                            .clipShape(Circle())
-                    } placeholder: {
-                        // Fallback to local image
-                        Image(story.authorImageName)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 74, height: 74)
-                            .clipShape(Circle())
-                    }
+                    Circle()
+                        .fill(Color(.systemGray5))
+                        .frame(width: 74, height: 74)
+                        .overlay(
+                            Group {
+                                if let uiImage = UIImage(named: story.authorImageName) {
+                                    Image(uiImage: uiImage)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 74, height: 74)
+                                        .clipShape(Circle())
+                                } else {
+                                    ZStack {
+                                        LinearGradient(
+                                            colors: [.blue.opacity(0.28), .purple.opacity(0.28)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                        Text(String(story.username.prefix(2)).uppercased())
+                                            .font(.system(size: 20, weight: .bold))
+                                            .foregroundColor(.white)
+                                    }
+                                    .frame(width: 74, height: 74)
+                                    .clipShape(Circle())
+                                }
+                            }
+                        )
+
+                    Circle()
+                        .stroke(Color.white, lineWidth: 3)
+                        .frame(width: 80, height: 80)
                 }
                 .opacity(activeHeroId == story.id ? 0 : 1)
                 .modifier(HeroMatch(ns: ns, id: story.id))
-                .scaleEffect(isPressed ? 0.95 : 1.0)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .onPressGesture(
-                onPress: { isPressed = true },
-                onRelease: { isPressed = false }
-            )
 
-            // CLEAN USERNAME
-            Text(story.username)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.primary)
-                .lineLimit(1)
-                .frame(width: 80)
+                Text(story.username)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                    .frame(width: 80)
+            }
+            .frame(width: 88, height: 124)
+            .contentShape(Rectangle())
         }
-        .frame(width: 80)
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .accessibilityLabel("\(story.username) story")
+        .accessibilityAddTraits(.isButton)
     }
 }
 
+// MARK: - Stories Row
 struct AssetBouncyStoriesRow: View {
     let stories: [AssetStory]
     let onStoryTap: (AssetStory) -> Void
@@ -143,77 +154,76 @@ struct AssetBouncyStoriesRow: View {
                 .fill(Color.gray.opacity(0.2))
                 .frame(height: 0.5)
                 .padding(.horizontal, 20)
-            
-            VStack(alignment: .leading, spacing: 12) {
-                // CLEAN HORIZONTAL SCROLL
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 16) {
-                        addStoryButton
-                        
-                        // STORY BUBBLES
-                        ForEach(stories) { story in
-                            AssetBouncyStoryBubble(
-                                story: story,
-                                onTap: onStoryTap,
-                                ns: ns,
-                                activeHeroId: activeHeroId
-                            )
-                        }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 16) {
+                    addStoryButton
+                        .padding(.leading, 20)
+
+                    ForEach(stories) { story in
+                        AssetBouncyStoryBubble(
+                            story: story,
+                            onTap: onStoryTap,
+                            ns: ns,
+                            activeHeroId: activeHeroId
+                        )
+                        .id(story.id)
+                        .contentShape(Rectangle())
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
+
+                    Color.clear.frame(width: 20)
                 }
+                .padding(.vertical, 16)
+                .contentShape(Rectangle())
             }
-            .padding(.vertical, 16)
+            .scrollIndicators(.hidden)
+            .contentShape(Rectangle())
         }
         .background(AppTheme.Colors.background)
+        .contentShape(Rectangle())
     }
 
-    // 🔥 CLEAN ADD STORY BUTTON - WHITE DESIGN
     private var addStoryButton: some View {
         Button(action: {
-            onAddStory()
             HapticManager.shared.impact(style: .medium)
+            onAddStory()
         }) {
             VStack(spacing: 8) {
                 ZStack {
-                    // CLEAN WHITE BORDER
-                    Circle()
-                        .stroke(Color.white, lineWidth: 2.5)
-                        .frame(width: 80, height: 80)
-                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                    
-                    // CLEAN WHITE BACKGROUND
                     Circle()
                         .fill(Color.white)
+                        .frame(width: 80, height: 80)
+                        .shadow(color: .black.opacity(0.12), radius: 5, x: 0, y: 2)
+
+                    Circle()
+                        .fill(Color(.systemGray6))
                         .frame(width: 74, height: 74)
                         .overlay {
-                            ZStack {
-                                // CLEAN WHITE PLUS BUTTON
-                                Circle()
-                                    .fill(Color.white)
-                                    .frame(width: 28, height: 28)
-                                    .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
-                                
-                                Image(systemName: "plus")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(.black)
-                            }
+                            Image(systemName: "plus")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.primary)
                         }
+
+                    Circle()
+                        .stroke(Color.white, lineWidth: 3)
+                        .frame(width: 80, height: 80)
                 }
-                
+
                 Text("Your story")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.secondary)
                     .frame(width: 80)
             }
+            .frame(width: 88, height: 124)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
         .accessibilityLabel("Add your story")
     }
 }
 
-// STORY VIEWER (UNCHANGED - ALREADY CLEAN)
+// STORY VIEWER
 struct AssetStoryViewerView: View {
     let story: AssetStory
     let onDismiss: () -> Void

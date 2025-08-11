@@ -41,7 +41,7 @@ struct HomeView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .top) {
                 // Clean Background
                 Color(.systemBackground)
                     .ignoresSafeArea()
@@ -65,6 +65,7 @@ struct HomeView: View {
                                 ns: storiesNS,
                                 activeHeroId: selectedAssetStory?.id
                             )
+                            .zIndex(2)
                             .padding(.bottom, 32)
                         }
                         
@@ -92,7 +93,6 @@ struct HomeView: View {
                     scrollOffset = offset
                 }
                 
-                // Minimal Navigation Header
                 MinimalNavigationHeader(
                     scrollOffset: scrollOffset,
                     onSearchTap: { showingSearchView = true },
@@ -100,6 +100,8 @@ struct HomeView: View {
                         NotificationCenter.default.post(name: NSNotification.Name("SwitchToProfileTab"), object: nil)
                     }
                 )
+                .allowsHitTesting(true)
+                .zIndex(1)
             }
         }
         .navigationDestination(item: $selectedCreator) { user in
@@ -122,7 +124,10 @@ struct HomeView: View {
                 .onDisappear { showingSearchView = false }
         }
         .fullScreenCover(item: $selectedAssetStory) { story in
-            AssetStoryViewerView(story: story) {
+            AssetStoriesPagerView(
+                stories: assetStories,
+                initialIndex: assetStories.firstIndex(where: { $0.id == story.id }) ?? 0
+            ) {
                 selectedAssetStory = nil
             }
         }
@@ -256,9 +261,8 @@ struct MinimalNavigationHeader: View {
                     .opacity(scrollOffset > 50 ? 0.95 : 0)
                     .background(.ultraThinMaterial.opacity(scrollOffset > 50 ? 1 : 0))
             )
-            
-            Spacer()
         }
+        .allowsHitTesting(true) // Only the actual header content is hit-testable
     }
 }
 
