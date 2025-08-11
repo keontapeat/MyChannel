@@ -46,3 +46,80 @@ jobs:
             build | xcpretty
         env:
           NSUnbufferedIO: YES
+
+      - name: 🎉 Build Success Notification
+        if: success()
+        run: |
+          echo "🔥 BUILD SUCCEEDED! 🔥"
+          echo "✅ MyChannel iOS app built successfully on commit ${{ github.sha }}"
+          echo "🚀 Branch: ${{ github.ref_name }}"
+          echo "👤 Pushed by: ${{ github.actor }}"
+          echo "📱 Platform: iOS Simulator (iPhone 15)"
+          echo "⏰ Build completed at: $(date)"
+
+      - name: 📧 Send Success Email
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "🔥 BUILD SUCCESS: MyChannel iOS App (${{ github.ref_name }})"
+          to: ${{ secrets.EMAIL_TO }}
+          from: GitHub Actions <${{ secrets.EMAIL_USERNAME }}>
+          html_body: |
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 12px; text-align: center; margin-bottom: 20px;">
+                <h1 style="margin: 0; font-size: 28px;">🔥 BUILD SUCCESS! 🔥</h1>
+                <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">MyChannel iOS App</p>
+              </div>
+              
+              <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h2 style="color: #28a745; margin-top: 0;">✅ Build Details</h2>
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr style="border-bottom: 1px solid #dee2e6;">
+                    <td style="padding: 8px 0; font-weight: bold;">Repository:</td>
+                    <td style="padding: 8px 0;">keontapeat/MyChannel</td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid #dee2e6;">
+                    <td style="padding: 8px 0; font-weight: bold;">Branch:</td>
+                    <td style="padding: 8px 0;">${{ github.ref_name }}</td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid #dee2e6;">
+                    <td style="padding: 8px 0; font-weight: bold;">Commit:</td>
+                    <td style="padding: 8px 0;"><code>${{ github.sha }}</code></td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid #dee2e6;">
+                    <td style="padding: 8px 0; font-weight: bold;">Pushed by:</td>
+                    <td style="padding: 8px 0;">${{ github.actor }}</td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid #dee2e6;">
+                    <td style="padding: 8px 0; font-weight: bold;">Platform:</td>
+                    <td style="padding: 8px 0;">📱 iOS Simulator (iPhone 15)</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold;">Configuration:</td>
+                    <td style="padding: 8px 0;">Debug</td>
+                  </tr>
+                </table>
+              </div>
+              
+              <div style="text-align: center; padding: 20px;">
+                <a href="https://github.com/keontapeat/MyChannel/actions" style="display: inline-block; background: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Build Details</a>
+              </div>
+              
+              <div style="text-align: center; color: #6c757d; font-size: 14px; border-top: 1px solid #dee2e6; padding-top: 20px;">
+                <p>🚀 Your iOS app is ready to rock! Keep building awesome features! 😤🔥</p>
+                <p>Sent by GitHub Actions • <a href="https://github.com/keontapeat/MyChannel">MyChannel Repository</a></p>
+              </div>
+            </div>
+
+      - name: 💥 Build Failure Notification
+        if: failure()
+        run: |
+          echo "❌ BUILD FAILED!"
+          echo "💔 MyChannel iOS app build failed on commit ${{ github.sha }}"
+          echo "🚨 Branch: ${{ github.ref_name }}"
+          echo "👤 Pushed by: ${{ github.actor }}"
+          echo "⏰ Build failed at: $(date)"
