@@ -367,7 +367,8 @@ struct VideoDetailView: View {
                                 expandedDescription: $expandedDescription,
                                 onShare: { showingShareSheet = true },
                                 onMore: { showingMoreOptions = true },
-                                onComment: { showingCommentComposer = true })
+                                onComment: { showingCommentComposer = true },
+                                onChapters: { showingChapters = true })
         }
         .navigationBarHidden(true)
         // When user returns from fullscreen by dismissing, ensure state is consistent

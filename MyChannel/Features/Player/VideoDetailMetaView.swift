@@ -21,6 +21,7 @@ struct VideoDetailMetaView: View {
     let onShare: () -> Void
     let onMore: () -> Void
     let onComment: () -> Void
+    var onChapters: (() -> Void)? = nil
     
     // MARK: - Animation States
     @State private var likeAnimationScale: CGFloat = 1.0
@@ -141,6 +142,17 @@ struct VideoDetailMetaView: View {
                 Text(video.timeAgo)
                     .font(.system(size: 14, weight: .medium))
             }
+
+            Circle()
+                .fill(AppTheme.Colors.textSecondary.opacity(0.6))
+                .frame(width: 3, height: 3)
+
+            Button(action: { onShare() }) {
+                Label("Share", systemImage: "square.and.arrow.up")
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(AppTheme.Colors.textSecondary)
             
             Spacer()
         }
@@ -154,7 +166,7 @@ struct VideoDetailMetaView: View {
     // MARK: - YouTube-Style Action Buttons
     private var youtubeActionButtons: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 24) {
+            HStack(spacing: 16) {
                 // Like Button with Advanced Animation
                 VideoMetaActionButton(
                     icon: isLiked ? "hand.thumbsup.fill" : "hand.thumbsup",
@@ -185,6 +197,18 @@ struct VideoDetailMetaView: View {
                     performShareAction()
                 }
                 
+                // Chapters Button (if available)
+                if let onChapters {
+                    if let chapters = video.chapters, !chapters.isEmpty {
+                        VideoMetaActionButton(
+                            icon: "list.bullet.rectangle",
+                            title: "Chapters"
+                        ) {
+                            onChapters()
+                        }
+                    }
+                }
+
                 // Save Button
                 VideoMetaActionButton(
                     icon: isWatchLater ? "bookmark.fill" : "bookmark",
@@ -212,9 +236,16 @@ struct VideoDetailMetaView: View {
                     performMoreAction()
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 14)
         }
-        .padding(.top, 20)
+        .padding(.top, 14)
+        .padding(.vertical, 2)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+        )
+        .padding(.horizontal, 14)
     }
     
     // MARK: - Modern Divider
