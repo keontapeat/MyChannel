@@ -83,44 +83,6 @@ struct VideoDetailView: View {
                 
                 // YouTube-style overlay controls - HIGHER LAYER
                 VStack(spacing: 0) {
-                    // Seek with double-tap zones + ripple overlay
-                    ZStack {
-                        HStack(spacing: 0) {
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .onTapGesture(count: 2) {
-                                    playerManager.seekBackward(10)
-                                    showSeekRippleBackward = true
-                                    HapticManager.shared.impact(style: .light)
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { showSeekRippleBackward = false }
-                                    resetControlsHideTimer()
-                                }
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .onTapGesture(count: 2) {
-                                    playerManager.seekForward(10)
-                                    showSeekRippleForward = true
-                                    HapticManager.shared.impact(style: .light)
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { showSeekRippleForward = false }
-                                    resetControlsHideTimer()
-                                }
-                        }
-                        .allowsHitTesting(true)
-
-                        HStack {
-                            SeekRippleOverlay(direction: .backward, seconds: 10, isVisible: $showSeekRippleBackward)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.leading, 48)
-                                .opacity(showSeekRippleBackward ? 1 : 0)
-                            SeekRippleOverlay(direction: .forward, seconds: 10, isVisible: $showSeekRippleForward)
-                                .frame(maxWidth: .infinity, alignment: .trailing)
-                                .padding(.trailing, 48)
-                                .opacity(showSeekRippleForward ? 1 : 0)
-                        }
-                    }
-                    .frame(height: 160)
-                    .padding(.horizontal, 16)
-
                     // Top control bar
                     HStack {
                         // Close button (X out)
