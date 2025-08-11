@@ -143,16 +143,7 @@ struct VideoDetailMetaView: View {
                     .font(.system(size: 14, weight: .medium))
             }
 
-            Circle()
-                .fill(AppTheme.Colors.textSecondary.opacity(0.6))
-                .frame(width: 3, height: 3)
-
-            Button(action: { onShare() }) {
-                Label("Share", systemImage: "square.and.arrow.up")
-                    .labelStyle(.iconOnly)
-            }
-            .buttonStyle(.plain)
-            .foregroundColor(AppTheme.Colors.textSecondary)
+            // Removed inline share button (already available in action row)
             
             Spacer()
         }
