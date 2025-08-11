@@ -258,14 +258,16 @@ struct VideoDetailView: View {
                                     )
                                     .animation(.linear(duration: 0.1), value: playerManager.currentProgress)
 
-                                // Chapter markers
+                                // Chapter markers (subtle like YouTube)
                                 if let chapters = video.chapters {
                                     ForEach(chapters, id: \.id) { ch in
-                                        let x = geometry.size.width * CGFloat(min(max(ch.start / max(playerManager.duration, 1), 0), 1))
+                                        let progress = ch.start / max(playerManager.duration, 1)
+                                        let x = geometry.size.width * CGFloat(min(max(progress, 0), 1))
                                         Rectangle()
-                                            .fill(Color.white.opacity(0.9))
-                                            .frame(width: 2, height: isDraggingSeeker ? 10 : 8)
-                                            .offset(x: x - 1)
+                                            .fill(Color.white.opacity(0.45))
+                                            .frame(width: 1, height: isDraggingSeeker ? 6 : 3)
+                                            .offset(x: x - 0.5, y: isDraggingSeeker ? 2 : 3)
+                                            .opacity((showVideoControls || isDraggingSeeker) ? 1.0 : 0.0)
                                     }
                                 }
                                 
