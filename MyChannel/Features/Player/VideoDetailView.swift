@@ -529,6 +529,22 @@ struct VideoDetailView: View {
             return String(format: "%d:%02d", minutes, seconds)
         }
     }
+
+    // MARK: - Chapters Helpers
+    private func nearestChapter(for time: TimeInterval, in chapters: [Video.Chapter]) -> Video.Chapter? {
+        // Find the last chapter whose start time is <= current time
+        // Keep logic simple to help the compiler
+        let sorted = chapters.sorted { $0.start < $1.start }
+        var candidate: Video.Chapter?
+        for chapter in sorted {
+            if chapter.start <= time {
+                candidate = chapter
+            } else {
+                break
+            }
+        }
+        return candidate
+    }
 }
 
 // MARK: - Custom Button Style

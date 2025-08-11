@@ -61,6 +61,22 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .scrollToTopProfile)) { _ in
             // Handle scroll to top for profile
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PresentVideoDetailFromMiniPlayer"))) { _ in
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+                globalPlayer.showingFullscreen = true
+            }
+        }
+        // Present video detail when global player requests fullscreen (e.g., swipe up mini player)
+        .fullScreenCover(isPresented: Binding<Bool>(
+            get: { globalPlayer.showingFullscreen && globalPlayer.currentVideo != nil },
+            set: { newValue in
+                if !newValue { globalPlayer.showingFullscreen = false }
+            }
+        )) {
+            if let video = globalPlayer.currentVideo {
+                VideoDetailView(video: video)
+            }
+        }
     }
     
     @ViewBuilder

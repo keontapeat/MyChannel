@@ -260,8 +260,11 @@ struct FloatingMiniPlayer: View {
                         globalPlayer.closePlayer()
                         HapticManager.shared.impact(style: .heavy)
                     } else if finalOffset < -60 || momentum < -140 {
-                        // Expand
+                        // Expand to fullscreen and present VideoDetail
                         globalPlayer.expandPlayer()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            NotificationCenter.default.post(name: NSNotification.Name("PresentVideoDetailFromMiniPlayer"), object: nil)
+                        }
                         HapticManager.shared.impact(style: .medium)
                     } else {
                         // Reset position
