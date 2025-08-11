@@ -75,6 +75,7 @@ struct FlicksView: View {
     @State private var showingFlicksSettings = false
     @State private var commentsVideo: Video?
     @State private var shareVideo: Video?
+    @State private var showNavigationHint = false
     
     // MARK: - Advanced Performance State
     @State private var preloadedIndices: Set<Int> = []
@@ -126,13 +127,63 @@ struct FlicksView: View {
                     
                     topOverlay
                         .zIndex(2)
+                    
+                    // Bottom edge hint for navigation
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            
+                            // Subtle navigation hint
+                            VStack(spacing: 8) {
+                                Text("Swipe from left edge to exit")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.6))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(.black.opacity(0.3), in: Capsule())
+                                    .opacity(showNavigationHint ? 1 : 0)
+                                    .animation(.easeInOut(duration: 0.3), value: showNavigationHint)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.bottom, 32)
+                    }
+                    .zIndex(1)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
             .statusBarHidden()
             .task {
                 if videos.isEmpty { loadFlicksContent() }
+                
+                // Show navigation hint briefly when first opening Flicks
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        showNavigationHint = true
+                    }
+                    
+                    // Hide hint after 3 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                        withAnimation(.easeInOut(duration: 0.5)) {
+                            showNavigationHint = false
+                        }
+                    }
+                }
             }
+            .gesture(
+                // Left edge swipe to exit
+                DragGesture()
+                    .onEnded { value in
+                        // Check if swipe started from left edge (within 50 points)
+                        if value.startLocation.x < 50 && value.translation.x > 100 {
+                            // Quick exit to home with haptic feedback
+                            NotificationCenter.default.post(name: NSNotification.Name("SwitchToHomeTab"), object: nil)
+                            HapticManager.shared.impact(style: .medium)
+                        }
+                    }
+            )
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("FlicksResetToFirst"))) { _ in
                 resetToFirstVideo()
             }
@@ -232,21 +283,45 @@ struct FlicksView: View {
     private var topOverlay: some View {
         VStack {
             HStack {
-                Button(action: {
-                    NotificationCenter.default.post(name: NSNotification.Name("SwitchToHomeTab"), object: nil)
-                    HapticManager.shared.impact(style: .medium)
-                }) {
-                    Image(systemName: "house.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .background(.ultraThinMaterial, in: Circle())
-                        .overlay(
-                            Circle()
-                                .stroke(.white.opacity(0.3), lineWidth: 1)
-                        )
-                        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
-                        .accessibilityLabel("Home")
+                // Quick Exit Menu
+                Menu {
+                    Button(action: {
+                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToHomeTab"), object: nil)
+                        HapticManager.shared.impact(style: .medium)
+                    }) {
+                        Label("Home", systemImage: "house.fill")
+                    }
+                    
+                    Button(action: {
+                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToSearchTab"), object: nil)
+                        HapticManager.shared.impact(style: .medium)
+                    }) {
+                        Label("Search", systemImage: "magnifyingglass")
+                    }
+                    
+                    Button(action: {
+                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToProfileTab"), object: nil)
+                        HapticManager.shared.impact(style: .medium)
+                    }) {
+                        Label("Profile", systemImage: "person.fill")
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .bold))
+                        Text("Exit")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(.white.opacity(0.3), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                    .accessibilityLabel("Exit Flicks")
                 }
                 .buttonStyle(.plain)
                 
