@@ -469,7 +469,7 @@ struct CustomTabBar: View {
     }
     
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: selectedTab == .profile ? 16 : 0) {
             // Main tab group (Home, Flicks, Upload, Search)
             HStack(spacing: 0) {
                 ForEach(mainTabs, id: \.self) { tab in
@@ -488,6 +488,18 @@ struct CustomTabBar: View {
                         UploadTabButton(action: onUploadTap)
                             .frame(maxWidth: .infinity)
                     }
+                }
+                
+                // Add profile button when connected (not on profile tab)
+                if selectedTab != .profile {
+                    ConnectedProfileButton(
+                        isSelected: false,
+                        badgeCount: notificationBadges[.profile] ?? 0,
+                        action: {
+                            onTabSelected(.profile)
+                        }
+                    )
+                    .frame(maxWidth: .infinity)
                 }
             }
             .padding(.horizontal, 20)
@@ -532,17 +544,73 @@ struct CustomTabBar: View {
                 y: 2
             )
             
-            // Separated Profile Button
-            SeparatedProfileButton(
-                isSelected: selectedTab == .profile,
-                badgeCount: notificationBadges[.profile] ?? 0,
-                action: {
-                    onTabSelected(.profile)
-                }
-            )
+            // Separated Profile Button (only when profile is selected)
+            if selectedTab == .profile {
+                SeparatedProfileButton(
+                    isSelected: true,
+                    badgeCount: notificationBadges[.profile] ?? 0,
+                    action: {
+                        onTabSelected(.profile)
+                    }
+                )
+                .transition(.asymmetric(
+                    insertion: .scale.combined(with: .opacity),
+                    removal: .scale.combined(with: .opacity)
+                ))
+            }
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 16)
+        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: selectedTab)
+    }
+}
+
+// MARK: - Connected Profile Button (when in main tab bar)
+struct ConnectedProfileButton: View {
+    let isSelected: Bool
+    let badgeCount: Int
+    let action: () -> Void
+    
+    @State private var isPressed: Bool = false
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 0) {
+                ZStack {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: TabItem.profile.iconName(isSelected: isSelected))
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .scaleEffect(isPressed ? 0.9 : 1.0)
+                        
+                        if badgeCount > 0 {
+                            NotificationBadge(count: badgeCount)
+                                .offset(x: 10, y: -6)
+                        }
+                    }
+                }
+                .frame(height: 32)
+            }
+            .frame(height: 48)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isSelected)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .scaleEffect(isPressed ? 0.95 : 1.0)
+        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !isPressed {
+                        isPressed = true
+                    }
+                }
+                .onEnded { _ in
+                    isPressed = false
+                }
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(TabItem.profile.accessibilityLabel)
+        .accessibilityHint("Double tap to select profile")
     }
 }
 
