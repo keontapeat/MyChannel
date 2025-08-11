@@ -368,6 +368,11 @@ struct ProfessionalVideoPlayer: View {
         if let player = playerManager.player {
             player.isMuted = isMuted
         }
+        // Session resume (minimal)
+        if let resume = VideoPlayerManager.resumeTime(videoId: video.id), resume > 1, playerManager.duration > 0 {
+            let progress = resume / playerManager.duration
+            playerManager.seek(to: progress)
+        }
         playerManager.play()
         applyPlaybackSpeed()
         isPlaying = true

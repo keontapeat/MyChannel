@@ -29,6 +29,43 @@ class VideoPlayerManager: ObservableObject {
     private var isCleanedUp = false
     private var lastSavedSecond: Int = -1
     private var imageGenerator: AVAssetImageGenerator?
+
+    // MARK: - Lightweight LRU Cache for AVPlayerItem and Session Resume
+    private static var itemCache: [String: AVPlayerItem] = [:]
+    private static var itemOrder: [String] = []
+    private static let maxCacheItems: Int = 10
+    private static var sessionResume: [String: TimeInterval] = [:]
+
+    @MainActor
+    static func prewarm(urlString: String) {
+        guard itemCache[urlString] == nil, let url = URL(string: urlString) else { return }
+        let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+        let item = AVPlayerItem(asset: asset)
+        item.preferredForwardBufferDuration = 1
+        cache(item: item, for: urlString)
+    }
+
+    @MainActor
+    private static func cache(item: AVPlayerItem, for key: String) {
+        itemCache[key] = item
+        itemOrder.removeAll(where: { $0 == key })
+        itemOrder.insert(key, at: 0)
+        if itemOrder.count > maxCacheItems, let last = itemOrder.last {
+            itemCache[last] = nil
+            itemOrder.removeLast()
+        }
+    }
+
+    @MainActor
+    static func cachedItem(for key: String) -> AVPlayerItem? { itemCache[key] }
+
+    @MainActor
+    static func rememberResume(videoId: String, time: TimeInterval) {
+        sessionResume[videoId] = time
+    }
+
+    @MainActor
+    static func resumeTime(videoId: String) -> TimeInterval? { sessionResume[videoId] }
     
     var currentTimeString: String {
         formatTime(currentTime)
@@ -102,17 +139,19 @@ class VideoPlayerManager: ObservableObject {
             return
         }
         
-        // Prefer HLS if provided, otherwise use direct MP4 URL
-        let asset = AVURLAsset(url: url, options: [
-            AVURLAssetPreferPreciseDurationAndTimingKey: true
-        ])
-        // Prime asset duration upfront to reduce first-load blank delay
-        Task.detached { [weak self] in
-            do {
-                _ = try await asset.load(.duration)
-            } catch { /* ignore */ }
+        // Use cached item if available for instant start
+        let playerItem: AVPlayerItem
+        if let cached = Self.cachedItem(for: video.videoURL) {
+            playerItem = cached
+        } else {
+            let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+            // Prime duration upfront
+            Task.detached { _ = try? await asset.load(.duration) }
+            let item = AVPlayerItem(asset: asset)
+            item.preferredForwardBufferDuration = 1
+            playerItem = item
+            Self.prewarm(urlString: video.videoURL)
         }
-        let playerItem = AVPlayerItem(asset: asset)
         // Create player early to allow immediate rendering
         let player = AVPlayer(playerItem: playerItem)
         player.automaticallyWaitsToMinimizeStalling = true

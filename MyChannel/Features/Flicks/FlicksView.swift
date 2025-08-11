@@ -590,9 +590,11 @@ struct FlicksView: View {
     }
     
     private func preloadVideo(at index: Int) async {
-        // Simulate video preloading
         guard index < videos.count else { return }
-        // In real implementation, this would preload video data
+        // Prewarm AVPlayerItem in cache for instant start
+        await MainActor.run {
+            VideoPlayerManager.prewarm(urlString: videos[index].videoURL)
+        }
     }
     
     private func startViewTimeTracking(for video: Video) {
@@ -613,6 +615,8 @@ struct FlicksView: View {
         if let startTime = videoViewTimes[video.id] {
             let watchDuration = Date().timeIntervalSince1970 - startTime
             trackVideoWatchTime(for: video, duration: watchDuration)
+            // Remember resume time for session
+            VideoPlayerManager.rememberResume(videoId: video.id, time: watchDuration)
         }
     }
     
