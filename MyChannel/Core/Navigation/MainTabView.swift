@@ -558,10 +558,15 @@ struct SeparatedProfileButton: View {
         Button(action: action) {
             ZStack {
                 // Background
-                Circle()
-                    .fill(
-                        isSelected ? AppTheme.Colors.primary : VisualEffectBlur(blurStyle: .systemUltraThinMaterial)
-                    )
+                ZStack {
+                    if isSelected {
+                        Circle()
+                            .fill(AppTheme.Colors.primary)
+                    } else {
+                        VisualEffectBlur(blurStyle: .systemUltraThinMaterial)
+                            .clipShape(Circle())
+                    }
+                }
                     .frame(width: 48, height: 48)
                     .overlay(
                         Circle()
