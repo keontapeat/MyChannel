@@ -587,7 +587,7 @@ private struct ProfessionalActionButton: View {
     var activeColor: Color = AppTheme.Colors.primary
     let action: () -> Void
     
-    @State private var isPressed = false
+
 
     
     var body: some View {
@@ -608,9 +608,7 @@ private struct ProfessionalActionButton: View {
                     Image(systemName: icon)
                         .font(.system(size: 20, weight: .medium))
                         .foregroundStyle(isActive ? activeColor : .white)
-                        .scaleEffect(isActive ? 1.1 : 1.0)
                 }
-                .scaleEffect(isPressed ? 0.9 : 1.0)
                 .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
                 
                 if !text.isEmpty {
@@ -623,14 +621,7 @@ private struct ProfessionalActionButton: View {
             }
         }
         .buttonStyle(.plain)
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.easeInOut(duration: 0.2), value: isPressed)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
-        .onLongPressGesture(minimumDuration: 0.01) { } onPressingChanged: { pressing in
-            withAnimation(AppTheme.AnimationPresets.quick) {
-                isPressed = pressing
-            }
-        }
+
         .accessibilityAddTraits(.isButton)
     }
     
