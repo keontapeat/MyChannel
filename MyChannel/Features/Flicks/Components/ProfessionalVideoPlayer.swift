@@ -257,7 +257,7 @@ struct ProfessionalVideoPlayer: View {
                         
                         Spacer()
                         
-                        VStack(spacing: 12) {
+                        VStack(spacing: 8) {
                             Spacer()
                             
                             ProfessionalActionButton(
@@ -582,15 +582,15 @@ private struct ProfessionalActionButton: View {
             VStack(spacing: 6) {
                 ZStack {
                     Circle()
-                        .fill(.ultraThinMaterial)
-                        .frame(width: 52, height: 52)
+                        .fill(isPressed ? .white.opacity(0.2) : .ultraThinMaterial)
+                        .frame(width: 56, height: 56)
                         .overlay(
                             Circle()
-                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                .stroke(.white.opacity(isPressed ? 0.3 : 0.1), lineWidth: 0.5)
                         )
                     
                     Image(systemName: icon)
-                        .font(.system(size: 22, weight: .medium))
+                        .font(.system(size: 24, weight: .medium))
                         .foregroundStyle(isActive ? activeColor : .white)
                 }
                 .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
@@ -603,15 +603,19 @@ private struct ProfessionalActionButton: View {
                         .minimumScaleFactor(0.8)
                 }
             }
-            .frame(width: 80, height: 90) // Even larger tap area
+            .frame(width: 100, height: 110) // HUGE tap area
+            .background(Color.red.opacity(isPressed ? 0.3 : 0.1)) // DEBUG: Show tap area
             .contentShape(Rectangle()) // Make entire area tappable
-            .opacity(isPressed ? 0.7 : 1.0) // Subtle feedback
+            .scaleEffect(isPressed ? 0.9 : 1.0) // Visual press feedback
+            .opacity(isPressed ? 0.8 : 1.0) // Opacity feedback
         }
         .buttonStyle(.plain)
         .onLongPressGesture(minimumDuration: 0) { 
             // Action happens here
         } onPressingChanged: { pressing in
-            isPressed = pressing
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = pressing
+            }
         }
 
         .accessibilityAddTraits(.isButton)
