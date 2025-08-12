@@ -472,13 +472,28 @@ struct CustomTabBar: View {
     let onUploadTap: () -> Void
     let onTabSelected: (TabItem) -> Void
     
-    // Separate tabs into main group and profile
+    // Separate tabs into main group and profile. When Home is selected, show it as a separated button on the left.
     private var mainTabs: [TabItem] {
-        [.home, .flicks, .search]
+        if selectedTab == .home {
+            return [.flicks, .search]
+        } else {
+            return [.home, .flicks, .search]
+        }
     }
     
     var body: some View {
-        HStack(spacing: selectedTab == .profile ? 16 : 0) {
+        HStack(spacing: (selectedTab == .profile || selectedTab == .home) ? 16 : 0) {
+            // Separated Home Button (only when home is selected)
+            if selectedTab == .home {
+                SeparatedHomeButton(
+                    isSelected: true,
+                    action: { onTabSelected(.home) }
+                )
+                .transition(.asymmetric(
+                    insertion: .scale.combined(with: .opacity),
+                    removal: .scale.combined(with: .opacity)
+                ))
+            }
             // Main tab group (Home, Flicks, Upload, Search)
             HStack(spacing: 0) {
                 ForEach(mainTabs, id: \.self) { tab in
@@ -674,6 +689,45 @@ struct SeparatedProfileButton: View {
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(TabItem.profile.accessibilityLabel)
+        .accessibilityHint(isSelected ? "Currently selected" : "Double tap to select")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+}
+
+// MARK: - Separated Home Button (mirrors profile style, left-aligned)
+struct SeparatedHomeButton: View {
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var isPressed: Bool = false
+    
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                ZStack {
+                    Circle().fill(AppTheme.Colors.primary)
+                }
+                .frame(width: 48, height: 48)
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                )
+                
+                Image(systemName: TabItem.home.iconName(isSelected: isSelected))
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(.white)
+                    .scaleEffect(isPressed ? 0.9 : 1.0)
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .scaleEffect(isPressed ? 0.95 : 1.0)
+        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in if !isPressed { isPressed = true } }
+                .onEnded { _ in isPressed = false }
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(TabItem.home.accessibilityLabel)
         .accessibilityHint(isSelected ? "Currently selected" : "Double tap to select")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
