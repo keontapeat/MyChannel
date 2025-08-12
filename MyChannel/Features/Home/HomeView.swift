@@ -135,13 +135,9 @@ struct HomeView: View {
         }
         .sheet(isPresented: $presentStoryCreator) {
             CreateStoryView { newStory in
-                // Prepend a lightweight AssetStory placeholder so the user sees it immediately
-                let placeholder = AssetStory(
-                    id: UUID(),
-                    username: appState.currentUser?.username ?? "you",
-                    authorImageName: "",
-                    mediaURL: newStory.mediaURL
-                )
+                // Map new story into AssetStory data model
+                let media: AssetMedia = (newStory.mediaType == .video) ? .video(newStory.mediaURL) : .image(newStory.mediaURL)
+                let placeholder = AssetStory(media: media, username: appState.currentUser?.username ?? "you", authorImageName: "")
                 assetStories.insert(placeholder, at: 0)
                 presentStoryCreator = false
             }

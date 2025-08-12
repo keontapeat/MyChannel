@@ -43,11 +43,15 @@ struct CreateStoryView: View {
                         geometry: geometry
                     )
                     .gesture(
-                        TapGesture()
-                            .onEnded { location in
+                        DragGesture(minimumDistance: 0)
+                            .onEnded { value in
                                 // Convert to normalized coordinates within the canvas frame
                                 let size = geometry.size
-                                let normalized = CGPoint(x: max(0,min(1, location.x / size.width)), y: max(0,min(1, location.y / size.height)))
+                                let loc = value.location
+                                let normalized = CGPoint(
+                                    x: max(0, min(1, loc.x / size.width)),
+                                    y: max(0, min(1, loc.y / size.height))
+                                )
                                 viewModel.focus(at: normalized)
                             }
                     )
