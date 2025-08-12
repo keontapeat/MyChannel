@@ -134,8 +134,12 @@ struct HomeView: View {
             }
         }
         .sheet(isPresented: $presentStoryCreator) {
-            StoryCreationView()
-                .preferredColorScheme(.dark)
+            CreateStoryView { _ in
+                // Optionally refresh stories or add to top
+                // For now, just dismiss via callback
+                presentStoryCreator = false
+            }
+            .preferredColorScheme(.dark)
         }
         .onReceive(Timer.publish(every: 10.0, on: .main, in: .common).autoconnect()) { _ in
             withAnimation(.easeInOut(duration: 1.0)) {
