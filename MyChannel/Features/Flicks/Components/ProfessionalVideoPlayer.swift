@@ -581,13 +581,20 @@ private struct ProfessionalActionButton: View {
         }) {
             VStack(spacing: 6) {
                 ZStack {
-                    Circle()
-                        .fill(isPressed ? .white.opacity(0.2) : .ultraThinMaterial)
-                        .frame(width: 56, height: 56)
-                        .overlay(
+                    ZStack {
+                        if isPressed {
                             Circle()
-                                .stroke(.white.opacity(isPressed ? 0.3 : 0.1), lineWidth: 0.5)
-                        )
+                                .fill(.white.opacity(0.2))
+                        } else {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                        }
+                    }
+                    .frame(width: 56, height: 56)
+                    .overlay(
+                        Circle()
+                            .stroke(.white.opacity(isPressed ? 0.3 : 0.1), lineWidth: 0.5)
+                    )
                     
                     Image(systemName: icon)
                         .font(.system(size: 24, weight: .medium))
