@@ -18,6 +18,7 @@ struct CreateStoryView: View {
     @State private var showingTextEditor = false
     @State private var showingStickers = false
     @State private var showingMusicPicker = false
+    @State private var showCaptionEditor = false
     @State private var dragOffset = CGSize.zero
     @State private var lastScale: CGFloat = 1.0
     @State private var currentScale: CGFloat = 1.0
@@ -128,8 +129,12 @@ struct CreateStoryView: View {
                             }
                         }
                     )
-                    // Publish extras
-                    PublishExtrasView(caption: $viewModel.caption, audience: $viewModel.audience)
+                    // Minimal publish options (compact pill buttons)
+                    PublishCompactBar(
+                        captionPreview: viewModel.caption,
+                        audience: $viewModel.audience,
+                        onEditCaption: { showCaptionEditor = true }
+                    )
                 }
                 .padding()
                 
@@ -170,6 +175,11 @@ struct CreateStoryView: View {
             }
             .presentationDetents([.height(500), .large])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showCaptionEditor) {
+            CaptionEditorSheet(text: $viewModel.caption)
+                .presentationDetents([.height(220), .large])
+                .presentationDragIndicator(.visible)
         }
         .alert("Error", isPresented: $viewModel.showingError) {
             Button("OK") { }
@@ -464,6 +474,35 @@ struct PublishExtrasView: View {
     }
 }
 
+// MARK: - Compact publish bar + caption editor sheet
+private struct PublishCompactBar: View {
+    let captionPreview: String
+    @Binding var audience: CreateStoryViewModel.Audience
+    let onEditCaption: () -> Void
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: onEditCaption) {
+                HStack(spacing: 6) {
+                    Image(systemName: captionPreview.isEmpty ? "text.bubble" : "text.bubble.fill")
+                    Text(captionPreview.isEmpty ? "Add caption" : String(captionPreview.prefix(18)))
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(.white.opacity(0.12), in: Capsule())
+            }
+            Spacer()
+            Picker("Audience", selection: $audience) {
+                ForEach(CreateStoryViewModel.Audience.allCases, id: \.self) { a in
+                    Text(a.rawValue.capitalized).tag(a)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 180)
+        }
+    }
+}
+
 // MARK: - Creation Tool Button
 struct CreationToolButton: View {
     let icon: String
@@ -562,6 +601,33 @@ struct ProcessingOverlay: View {
             .background(.black.opacity(0.8))
             .cornerRadius(16)
         }
+    }
+}
+
+// MARK: - Caption Editor Sheet
+private struct CaptionEditorSheet: View {
+    @Binding var text: String
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(.secondary.opacity(0.4))
+                .frame(width: 40, height: 4)
+                .padding(.top, 6)
+            Text("Caption")
+                .font(.headline)
+                .foregroundStyle(.white)
+            TextField("Add a caption...", text: $text, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .tint(.white)
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding()
+        .background(Color.black.ignoresSafeArea())
     }
 }
 
