@@ -12,6 +12,7 @@ struct SplashContainer: View {
     @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var appState: AppState
     @State private var showSplash = true
+    @AppStorage("didCompleteOnboarding") private var didCompleteOnboarding: Bool = false
     
     var body: some View {
         ZStack {
@@ -21,13 +22,18 @@ struct SplashContainer: View {
                 }
                 .transition(.opacity)
             } else {
-                // Main app content
-                if authManager.isAuthenticated {
-                    MainTabView()
+                // Onboarding gate then main app content
+                if !didCompleteOnboarding {
+                    OnboardingView()
                         .transition(.opacity)
                 } else {
-                    AuthenticationView()
-                        .transition(.opacity)
+                    if authManager.isAuthenticated {
+                        MainTabView()
+                            .transition(.opacity)
+                    } else {
+                        AuthenticationView()
+                            .transition(.opacity)
+                    }
                 }
             }
         }
