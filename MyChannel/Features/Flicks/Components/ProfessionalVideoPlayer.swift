@@ -189,23 +189,23 @@ struct ProfessionalVideoPlayer: View {
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundStyle(.white.opacity(0.7))
                                         .shadow(color: .black.opacity(0.3), radius: 0.5, x: 0, y: 0.5)
+                                    
+                                    if !isFollowing {
+                                        Button(action: onFollow) {
+                                            Text("Subscribe")
+                                                .font(.system(size: 13, weight: .bold))
+                                                .foregroundStyle(.black)
+                                                .padding(.horizontal, 16)
+                                                .padding(.vertical, 7)
+                                                .background(.white, in: Capsule())
+                                                .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
+                                                .accessibilityLabel("Subscribe")
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
                                 }
                                 
                                 Spacer()
-                                
-                                if !isFollowing {
-                                    Button(action: onFollow) {
-                                        Text("Subscribe")
-                                            .font(.system(size: 13, weight: .bold))
-                                            .foregroundStyle(.black)
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 7)
-                                            .background(.white, in: Capsule())
-                                            .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
-                                            .accessibilityLabel("Subscribe")
-                                    }
-                                    .buttonStyle(.plain)
-                                }
                             }
                             .padding(.bottom, 16)
                             
@@ -257,7 +257,7 @@ struct ProfessionalVideoPlayer: View {
                         
                         Spacer()
                         
-                        VStack(spacing: 16) {
+                        VStack(spacing: 12) {
                             Spacer()
                             
                             ProfessionalActionButton(
@@ -583,14 +583,14 @@ private struct ProfessionalActionButton: View {
                 ZStack {
                     Circle()
                         .fill(.ultraThinMaterial)
-                        .frame(width: 48, height: 48)
+                        .frame(width: 52, height: 52)
                         .overlay(
                             Circle()
                                 .stroke(.white.opacity(0.1), lineWidth: 0.5)
                         )
                     
                     Image(systemName: icon)
-                        .font(.system(size: 20, weight: .medium))
+                        .font(.system(size: 22, weight: .medium))
                         .foregroundStyle(isActive ? activeColor : .white)
                 }
                 .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
@@ -603,7 +603,7 @@ private struct ProfessionalActionButton: View {
                         .minimumScaleFactor(0.8)
                 }
             }
-            .frame(width: 70, height: 80) // Larger tap area
+            .frame(width: 80, height: 90) // Even larger tap area
             .contentShape(Rectangle()) // Make entire area tappable
             .opacity(isPressed ? 0.7 : 1.0) // Subtle feedback
         }
