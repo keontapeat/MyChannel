@@ -170,9 +170,12 @@ struct CreateStoryView: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingMusicPicker) {
-            MusicPickerSheet { music in
-                viewModel.setBackgroundMusic(music)
-            }
+            MusicPickerSheet(
+                selectedMusic: $viewModel.backgroundMusic,
+                onMusicSelected: { music in
+                    viewModel.setBackgroundMusic(music)
+                }
+            )
             .presentationDetents([.height(500), .large])
             .presentationDragIndicator(.visible)
         }
@@ -240,6 +243,16 @@ struct StoryPreviewCanvas: View {
                         colors: viewModel.backgroundGradient,
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
+                    )
+                    .overlay(
+                        // Text mode controls overlay
+                        if viewModel.storyType == .text {
+                            VStack {
+                                Spacer()
+                                TextModeControls(viewModel: viewModel)
+                                    .padding(.bottom, 120) // Above bottom controls
+                            }
+                        }
                     )
                 }
             }
@@ -417,6 +430,12 @@ struct StoryCreationControls: View {
                         .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 8, x: 0, y: 4)
                     }
                     .disabled(viewModel.isProcessing)
+                    .overlay(alignment: .bottom) {
+                        if viewModel.isProcessing {
+                            UploadProgressToast(progress: viewModel.uploadProgress)
+                                .offset(y: -70)
+                        }
+                    }
                 } else {
                     // Capture button for camera mode
                     if viewModel.storyType == .camera {
@@ -637,6 +656,136 @@ private struct CaptionEditorSheet: View {
         }
         .padding()
         .background(Color.black.ignoresSafeArea())
+    }
+}
+
+// MARK: - Text Mode Controls
+struct TextModeControls: View {
+    @ObservedObject var viewModel: CreateStoryViewModel
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            // Font Size Slider
+            VStack(spacing: 8) {
+                HStack {
+                    Image(systemName: "textformat.size.smaller")
+                        .foregroundStyle(.white.opacity(0.7))
+                    Slider(value: $viewModel.textFontSize, in: 12...72)
+                        .tint(.white)
+                    Image(systemName: "textformat.size.larger")
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .font(.system(size: 16))
+                
+                Text("Font Size: \(Int(viewModel.textFontSize))")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+            
+            // Color Strip
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(TextColorPalette.colors, id: \.self) { color in
+                        Circle()
+                            .fill(color)
+                            .frame(width: 32, height: 32)
+                            .overlay(
+                                Circle()
+                                    .stroke(.white, lineWidth: viewModel.textColor == color ? 3 : 0)
+                            )
+                            .onTapGesture {
+                                viewModel.textColor = color
+                                HapticManager.shared.selection()
+                            }
+                    }
+                }
+                .padding(.horizontal)
+            }
+            
+            // Alignment Controls
+            HStack(spacing: 20) {
+                ForEach([TextAlignment.leading, TextAlignment.center, TextAlignment.trailing], id: \.self) { alignment in
+                    Button(action: {
+                        viewModel.textAlignment = alignment
+                        HapticManager.shared.selection()
+                    }) {
+                        Image(systemName: alignment.iconName)
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(viewModel.textAlignment == alignment ? AppTheme.Colors.primary : .white.opacity(0.7))
+                            .frame(width: 44, height: 44)
+                            .background(.white.opacity(viewModel.textAlignment == alignment ? 0.2 : 0.1), in: Circle())
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal)
+    }
+}
+
+// MARK: - Text Color Palette
+struct TextColorPalette {
+    static let colors: [Color] = [
+        .white, .black, .red, .orange, .yellow, .green, .blue, .purple, .pink,
+        Color(red: 1.0, green: 0.8, blue: 0.0), // Gold
+        Color(red: 0.6, green: 0.4, blue: 0.2), // Brown
+        Color(red: 0.5, green: 0.5, blue: 0.5), // Gray
+        Color(red: 0.0, green: 0.8, blue: 1.0), // Cyan
+        Color(red: 1.0, green: 0.4, blue: 0.8), // Hot Pink
+        Color(red: 0.6, green: 0.0, blue: 1.0), // Violet
+        Color(red: 0.0, green: 0.6, blue: 0.3)  // Emerald
+    ]
+}
+
+// MARK: - Text Alignment Extension
+extension TextAlignment {
+    var iconName: String {
+        switch self {
+        case .leading: return "text.alignleft"
+        case .center: return "text.aligncenter"
+        case .trailing: return "text.alignright"
+        }
+    }
+}
+
+// MARK: - Upload Progress Toast
+struct UploadProgressToast: View {
+    let progress: Double
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Circular progress
+            ZStack {
+                Circle()
+                    .stroke(.white.opacity(0.3), lineWidth: 3)
+                    .frame(width: 24, height: 24)
+                
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(.white, lineWidth: 3)
+                    .frame(width: 24, height: 24)
+                    .rotationEffect(.degrees(-90))
+                    .animation(.linear(duration: 0.3), value: progress)
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Uploading story...")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white)
+                
+                Text("\(Int(progress * 100))% complete")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 2)
     }
 }
 

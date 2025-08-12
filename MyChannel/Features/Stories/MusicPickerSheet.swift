@@ -8,10 +8,12 @@
 import SwiftUI
 
 struct MusicPickerSheet: View {
+    @Binding var selectedMusic: CreateStoryViewModel.MusicItem?
     let onMusicSelected: (CreateStoryViewModel.MusicItem) -> Void
     
     @State private var searchText = ""
     @State private var selectedCategory: MusicCategory = .trending
+    @State private var currentlyPlaying: String? = nil
     @Environment(\.dismiss) private var dismiss
     
     enum MusicCategory: CaseIterable {
@@ -112,10 +114,18 @@ struct MusicPickerSheet: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(sampleMusic, id: \.id) { music in
-                            MusicRowView(music: music) {
-                                onMusicSelected(music)
-                                dismiss()
-                            }
+                            MusicRowView(
+                                music: music,
+                                isSelected: selectedMusic?.id == music.id,
+                                isPlaying: currentlyPlaying == music.id,
+                                onPlayPause: { 
+                                    togglePlayback(for: music)
+                                },
+                                onSelect: {
+                                    onMusicSelected(music)
+                                    dismiss()
+                                }
+                            )
                         }
                     }
                     .padding()
@@ -132,14 +142,24 @@ struct MusicPickerSheet: View {
             }
         }
     }
+    
+    private func togglePlayback(for music: CreateStoryViewModel.MusicItem) {
+        if currentlyPlaying == music.id {
+            currentlyPlaying = nil // Stop
+        } else {
+            currentlyPlaying = music.id // Play
+        }
+        HapticManager.shared.selection()
+    }
 }
 
 // MARK: - Music Row View
 struct MusicRowView: View {
     let music: CreateStoryViewModel.MusicItem
+    let isSelected: Bool
+    let isPlaying: Bool
+    let onPlayPause: () -> Void
     let onSelect: () -> Void
-    
-    @State private var isPlaying = false
     
     var body: some View {
         Button(action: onSelect) {
@@ -173,24 +193,29 @@ struct MusicRowView: View {
                         .lineLimit(1)
                     
                     HStack(spacing: 4) {
-                        Image(systemName: "clock")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text("\(Int(music.duration))s")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        if isPlaying {
+                            // Waveform visualization
+                            HStack(spacing: 2) {
+                                ForEach(0..<8, id: \.self) { _ in
+                                    WaveformBar()
+                                }
+                            }
+                        } else {
+                            Image(systemName: "clock")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            Text("\(Int(music.duration))s")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
                 
                 Spacer()
                 
                 // Play button
-                Button(action: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                        isPlaying.toggle()
-                    }
-                }) {
+                Button(action: onPlayPause) {
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 16))
                         .foregroundColor(AppTheme.Colors.primary)
@@ -201,9 +226,9 @@ struct MusicRowView: View {
                 .buttonStyle(PlainButtonStyle())
                 
                 // Select indicator
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(.gray)
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20))
+                    .foregroundColor(isSelected ? AppTheme.Colors.primary : .gray)
             }
             .padding()
             .background(Color(.systemGray6))
@@ -213,8 +238,25 @@ struct MusicRowView: View {
     }
 }
 
+// MARK: - Waveform Bar
+struct WaveformBar: View {
+    @State private var height: CGFloat = 2
+    
+    var body: some View {
+        RoundedRectangle(cornerRadius: 1)
+            .fill(AppTheme.Colors.primary)
+            .frame(width: 2, height: height)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
+                    height = CGFloat.random(in: 2...12)
+                }
+            }
+    }
+}
+
 #Preview {
-    MusicPickerSheet { music in
+    @State var selectedMusic: CreateStoryViewModel.MusicItem? = nil
+    return MusicPickerSheet(selectedMusic: $selectedMusic) { music in
         print("Music selected: \(music.title)")
     }
 }

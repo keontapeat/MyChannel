@@ -45,6 +45,14 @@ class CreateStoryViewModel: ObservableObject {
     @Published var caption: String = ""
     @Published var audience: Audience = .public
     
+    // Text editing properties
+    @Published var textFontSize: Double = 32
+    @Published var textColor: Color = .white
+    @Published var textAlignment: TextAlignment = .center
+    
+    // Upload progress
+    @Published var uploadProgress: Double = 0.0
+    
     // MARK: - Private Properties
     private var recordingTimer: Timer?
     private var recordingStartTime: Date?
@@ -335,9 +343,13 @@ class CreateStoryViewModel: ObservableObject {
     
     func createStory() async -> Story {
         isProcessing = true
+        uploadProgress = 0.0
         
-        // Simulate processing time
-        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        // Simulate upload progress
+        for i in 1...10 {
+            uploadProgress = Double(i) / 10.0
+            try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+        }
         
         let storyContent = createStoryContent()
         let storyStickers = createStoryStickers()
@@ -358,6 +370,7 @@ class CreateStoryViewModel: ObservableObject {
         )
         
         isProcessing = false
+        uploadProgress = 0.0
         return story
     }
     
