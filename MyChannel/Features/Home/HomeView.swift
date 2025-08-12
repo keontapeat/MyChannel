@@ -61,7 +61,9 @@ struct HomeView: View {
                                     selectedAssetStory = story
                                 },
                                 onAddStory: {
+                                    // Open professional story creation
                                     HapticManager.shared.impact(style: .medium)
+                                    showStoryCreator()
                                 },
                                 ns: storiesNS,
                                 activeHeroId: selectedAssetStory?.id
@@ -131,6 +133,10 @@ struct HomeView: View {
                 selectedAssetStory = nil
             }
         }
+        .sheet(isPresented: $presentStoryCreator) {
+            StoryCreationView()
+                .preferredColorScheme(.dark)
+        }
         .onReceive(Timer.publish(every: 10.0, on: .main, in: .common).autoconnect()) { _ in
             withAnimation(.easeInOut(duration: 1.0)) {
                 heroVideoIndex = (heroVideoIndex + 1) % max(1, featuredContent.count)
@@ -143,6 +149,7 @@ struct HomeView: View {
     }
     
     // MARK: - Setup Methods
+    @State private var presentStoryCreator: Bool = false
     private func setupContent() {
         // Keep original list for other sections
         featuredContent = Video.sampleVideos.filter { $0.viewCount > 500000 }.shuffled()
@@ -166,6 +173,9 @@ struct HomeView: View {
     }
     
     // MARK: - Action Methods
+    private func showStoryCreator() {
+        presentStoryCreator = true
+    }
     private func playVideo(_ video: Video) {
         // Halt any existing playback immediately to prevent audio overlap
         GlobalVideoPlayerManager.shared.stopImmediately()
