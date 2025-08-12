@@ -246,11 +246,13 @@ struct StoryPreviewCanvas: View {
                     )
                     .overlay(
                         // Text mode controls overlay
-                        if viewModel.storyType == .text {
-                            VStack {
-                                Spacer()
-                                TextModeControls(viewModel: viewModel)
-                                    .padding(.bottom, 120) // Above bottom controls
+                        Group {
+                            if viewModel.storyType == .text {
+                                VStack {
+                                    Spacer()
+                                    TextModeControls(viewModel: viewModel)
+                                        .padding(.bottom, 120) // Above bottom controls
+                                }
                             }
                         }
                     )

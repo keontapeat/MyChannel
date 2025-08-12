@@ -74,62 +74,9 @@ struct MusicPickerSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Search bar
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
-                    
-                    TextField("Search music...", text: $searchText)
-                        .textFieldStyle(PlainTextFieldStyle())
-                }
-                .padding()
-                .background(Color(.systemGray6))
-                .cornerRadius(12)
-                .padding()
-                
-                // Category selector
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
-                        ForEach(MusicCategory.allCases, id: \.self) { category in
-                            Button(action: { selectedCategory = category }) {
-                                Text(category.title)
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(selectedCategory == category ? .white : .primary)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        selectedCategory == category ? AppTheme.Colors.primary : Color(.systemGray6)
-                                    )
-                                    .cornerRadius(20)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-                .padding(.bottom)
-                
-                // Music list
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(sampleMusic, id: \.id) { music in
-                            MusicRowView(
-                                music: music,
-                                isSelected: selectedMusic?.id == music.id,
-                                isPlaying: currentlyPlaying == music.id,
-                                onPlayPause: { 
-                                    togglePlayback(for: music)
-                                },
-                                onSelect: {
-                                    onMusicSelected(music)
-                                    dismiss()
-                                }
-                            )
-                        }
-                    }
-                    .padding()
-                }
+                searchBar
+                categorySelector
+                musicList
             }
             .navigationTitle("Add Music")
             .navigationBarTitleDisplayMode(.inline)
@@ -144,12 +91,77 @@ struct MusicPickerSheet: View {
     }
     
     private func togglePlayback(for music: CreateStoryViewModel.MusicItem) {
-        if currentlyPlaying == music.id {
+        if currentlyPlaying == music.id.uuidString {
             currentlyPlaying = nil // Stop
         } else {
-            currentlyPlaying = music.id // Play
+            currentlyPlaying = music.id.uuidString // Play
         }
         HapticManager.shared.selection()
+    }
+    
+    // MARK: - View Components
+    private var searchBar: some View {
+        HStack {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.gray)
+            
+            TextField("Search music...", text: $searchText)
+                .textFieldStyle(PlainTextFieldStyle())
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+        .padding()
+    }
+    
+    private var categorySelector: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 16) {
+                ForEach(MusicCategory.allCases, id: \.self) { category in
+                    categoryButton(for: category)
+                }
+            }
+            .padding(.horizontal)
+        }
+        .padding(.bottom)
+    }
+    
+    private func categoryButton(for category: MusicCategory) -> some View {
+        Button(action: { selectedCategory = category }) {
+            Text(category.title)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(selectedCategory == category ? .white : .primary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    selectedCategory == category ? AppTheme.Colors.primary : Color(.systemGray6)
+                )
+                .cornerRadius(20)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    private var musicList: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(sampleMusic, id: \.id) { music in
+                    MusicRowView(
+                        music: music,
+                        isSelected: selectedMusic?.id == music.id,
+                        isPlaying: currentlyPlaying == music.id.uuidString,
+                        onPlayPause: { 
+                            togglePlayback(for: music)
+                        },
+                        onSelect: {
+                            onMusicSelected(music)
+                            dismiss()
+                        }
+                    )
+                }
+            }
+            .padding()
+        }
     }
 }
 
