@@ -42,6 +42,15 @@ struct CreateStoryView: View {
                         viewModel: viewModel,
                         geometry: geometry
                     )
+                    .gesture(
+                        TapGesture()
+                            .onEnded { location in
+                                // Convert to normalized coordinates within the canvas frame
+                                let size = geometry.size
+                                let normalized = CGPoint(x: max(0,min(1, location.x / size.width)), y: max(0,min(1, location.y / size.height)))
+                                viewModel.focus(at: normalized)
+                            }
+                    )
                     
                     // Overlays and interactive elements
                     ForEach(viewModel.stickers) { sticker in
@@ -115,6 +124,8 @@ struct CreateStoryView: View {
                             }
                         }
                     )
+                    // Publish extras
+                    PublishExtrasView(caption: $viewModel.caption, audience: $viewModel.audience)
                 }
                 .padding()
                 
@@ -229,6 +240,31 @@ struct StoryPreviewCanvas: View {
         .aspectRatio(9/16, contentMode: .fit)
         .cornerRadius(20)
         .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
+        .overlay(alignment: .topLeading) {
+            if let fp = viewModel.focusPoint {
+                FocusPulseView()
+                    .position(x: fp.x * geometry.size.width, y: fp.y * geometry.size.height)
+                    .id(viewModel.focusPulseID)
+            }
+        }
+    }
+}
+
+// MARK: - Focus Pulse
+struct FocusPulseView: View {
+    @State private var animate = false
+    var body: some View {
+        ZStack {
+            Circle().stroke(Color.white.opacity(0.9), lineWidth: 2)
+                .frame(width: 60, height: 60)
+                .scaleEffect(animate ? 1.15 : 0.9)
+                .opacity(animate ? 0.0 : 1.0)
+            Circle().stroke(Color.white.opacity(0.6), lineWidth: 1)
+                .frame(width: 30, height: 30)
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.8)) { animate = true }
+        }
     }
 }
 
@@ -381,10 +417,46 @@ struct StoryCreationControls: View {
                                 }
                             }
                         )
+                        .overlay(alignment: .topTrailing) {
+                            if viewModel.isRecording {
+                                Text(viewModel.recordingDuration)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundStyle(.white)
+                                    .padding(6)
+                                    .background(.red.opacity(0.8), in: Capsule())
+                                    .offset(y: -54)
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+// MARK: - Publish extras (caption + audience)
+struct PublishExtrasView: View {
+    @Binding var caption: String
+    @Binding var audience: CreateStoryViewModel.Audience
+    var body: some View {
+        VStack(spacing: 10) {
+            TextField("Add a caption...", text: $caption, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .foregroundStyle(.white)
+                .tint(.white)
+            HStack {
+                Text("Audience").foregroundStyle(.white.opacity(0.8))
+                Spacer()
+                Picker("Audience", selection: $audience) {
+                    ForEach(CreateStoryViewModel.Audience.allCases, id: \.self) { a in
+                        Text(a.rawValue.capitalized).tag(a)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 200)
+            }
+        }
+        .padding(.top, 8)
     }
 }
 

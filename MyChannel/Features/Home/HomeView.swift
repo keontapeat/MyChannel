@@ -134,9 +134,15 @@ struct HomeView: View {
             }
         }
         .sheet(isPresented: $presentStoryCreator) {
-            CreateStoryView { _ in
-                // Optionally refresh stories or add to top
-                // For now, just dismiss via callback
+            CreateStoryView { newStory in
+                // Prepend a lightweight AssetStory placeholder so the user sees it immediately
+                let placeholder = AssetStory(
+                    id: UUID(),
+                    username: appState.currentUser?.username ?? "you",
+                    authorImageName: "",
+                    mediaURL: newStory.mediaURL
+                )
+                assetStories.insert(placeholder, at: 0)
                 presentStoryCreator = false
             }
             .preferredColorScheme(.dark)

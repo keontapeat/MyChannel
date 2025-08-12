@@ -37,6 +37,13 @@ class CreateStoryViewModel: ObservableObject {
     
     // Recording duration
     @Published var recordingDuration = "00:00"
+    // Focus point (0...1 normalized in preview coordinates)
+    @Published var focusPoint: CGPoint? = nil
+    @Published var focusPulseID: UUID = UUID()
+    
+    // Publish
+    @Published var caption: String = ""
+    @Published var audience: Audience = .public
     
     // MARK: - Private Properties
     private var recordingTimer: Timer?
@@ -66,6 +73,8 @@ class CreateStoryViewModel: ObservableObject {
         case video
         case text
     }
+
+    enum Audience: String, CaseIterable { case `public`, friends }
     
     // MARK: - Flash Mode
     enum FlashMode {
@@ -286,6 +295,17 @@ class CreateStoryViewModel: ObservableObject {
         
         haptic.impactOccurred()
     }
+
+    // MARK: - Focus / Tap-to-focus (visual only for now)
+    func focus(at point: CGPoint) {
+        // point is normalized (0...1)
+        focusPoint = point
+        focusPulseID = UUID()
+        haptic.impactOccurred()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.focusPoint = nil
+        }
+    }
     
     private func updateRecordingDuration() {
         guard let startTime = recordingStartTime else { return }
@@ -328,7 +348,7 @@ class CreateStoryViewModel: ObservableObject {
             mediaURL: selectedMedia?.url.absoluteString ?? "",
             mediaType: getStoryMediaType(),
             duration: getStoryDuration(),
-            caption: nil,
+            caption: caption.isEmpty ? nil : caption,
             text: textOverlay?.text,
             content: [storyContent],
             backgroundColor: storyType == .text ? colorToHex(backgroundGradient.first ?? .blue) : nil,
