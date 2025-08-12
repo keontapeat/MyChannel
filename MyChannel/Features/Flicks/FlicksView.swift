@@ -91,8 +91,7 @@ struct FlicksView: View {
     @State private var dragOffset: CGSize = .zero
     @State private var isDragging = false
     @State private var lastTapTime: Date?
-    @State private var doubleTapLocation: CGPoint?
-    @State private var showingDoubleTapHeart = false
+
     @State private var swipeVelocity: CGFloat = 0
     
     // MARK: - AI & Recommendations
@@ -435,13 +434,7 @@ struct FlicksView: View {
                             }
                         )
                         
-                        // Double Tap Heart Animation
-                        if showingDoubleTapHeart && index == currentIndex {
-                            FlicksDoubleTapHeartAnimation(
-                                location: doubleTapLocation,
-                                isShowing: showingDoubleTapHeart
-                            )
-                        }
+
                     }
                     .id(videos[index].id)
                     .tag(index)
@@ -520,13 +513,7 @@ struct FlicksView: View {
     
     // MARK: - Advanced Gesture Handlers
     private func handleDoubleTap(location: CGPoint, video: Video, geometry: GeometryProxy) {
-        doubleTapLocation = location
-        
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-            showingDoubleTapHeart = true
-        }
-        
-        // Auto-like on double tap
+        // Auto-like on double tap (no animation)
         if !likedVideos.contains(video.id) {
             toggleLikeWithAnimation(for: video)
         }
@@ -536,13 +523,6 @@ struct FlicksView: View {
         
         // Haptic feedback
         notificationFeedback.notificationOccurred(.success)
-        
-        // Hide heart after animation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            withAnimation(.easeOut(duration: 0.3)) {
-                showingDoubleTapHeart = false
-            }
-        }
     }
     
     private func handleSingleTap(video: Video) {
