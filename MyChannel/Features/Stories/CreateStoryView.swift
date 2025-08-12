@@ -479,6 +479,7 @@ private struct PublishCompactBar: View {
     let captionPreview: String
     @Binding var audience: CreateStoryViewModel.Audience
     let onEditCaption: () -> Void
+    @State private var showAudienceDialog = false
     var body: some View {
         HStack(spacing: 10) {
             Button(action: onEditCaption) {
@@ -492,13 +493,21 @@ private struct PublishCompactBar: View {
                 .background(.white.opacity(0.12), in: Capsule())
             }
             Spacer()
-            Picker("Audience", selection: $audience) {
-                ForEach(CreateStoryViewModel.Audience.allCases, id: \.self) { a in
-                    Text(a.rawValue.capitalized).tag(a)
+            Button(action: { showAudienceDialog = true }) {
+                HStack(spacing: 6) {
+                    Image(systemName: audience == .public ? "globe" : "person.2.fill")
+                    Text(audience.rawValue.capitalized)
                 }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(.white.opacity(0.12), in: Capsule())
             }
-            .pickerStyle(.segmented)
-            .frame(width: 180)
+            .confirmationDialog("Audience", isPresented: $showAudienceDialog, titleVisibility: .visible) {
+                Button("Public") { audience = .public }
+                Button("Friends") { audience = .friends }
+                Button("Cancel", role: .cancel) {}
+            }
         }
     }
 }
