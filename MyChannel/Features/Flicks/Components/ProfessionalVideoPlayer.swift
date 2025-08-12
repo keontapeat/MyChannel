@@ -257,7 +257,7 @@ struct ProfessionalVideoPlayer: View {
                         
                         Spacer()
                         
-                        VStack(spacing: 24) {
+                        VStack(spacing: 16) {
                             Spacer()
                             
                             ProfessionalActionButton(
@@ -572,8 +572,7 @@ private struct ProfessionalActionButton: View {
     var activeColor: Color = AppTheme.Colors.primary
     let action: () -> Void
     
-
-
+    @State private var isPressed = false
     
     var body: some View {
         Button(action: {
@@ -604,8 +603,16 @@ private struct ProfessionalActionButton: View {
                         .minimumScaleFactor(0.8)
                 }
             }
+            .frame(width: 70, height: 80) // Larger tap area
+            .contentShape(Rectangle()) // Make entire area tappable
+            .opacity(isPressed ? 0.7 : 1.0) // Subtle feedback
         }
         .buttonStyle(.plain)
+        .onLongPressGesture(minimumDuration: 0) { 
+            // Action happens here
+        } onPressingChanged: { pressing in
+            isPressed = pressing
+        }
 
         .accessibilityAddTraits(.isButton)
     }
