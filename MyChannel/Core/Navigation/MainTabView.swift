@@ -92,15 +92,15 @@ struct MainTabView: View {
                 .background(AppTheme.Colors.background)
                 .zIndex(1)
 
-            // Floating Mini Player - Above content, below tab bar (only for non-Flicks tabs)
+            // Floating Mini Player - Above content, below tab bar (suppress on Flicks for minimal UI)
             if selectedTab != .flicks {
                 SafeFloatingMiniPlayer()
                     .environmentObject(globalPlayer)
                     .zIndex(998)
             }
 
-            // Custom Tab Bar - Hidden for Flicks, visible for others
-            if selectedTab != .flicks {
+            // Custom Tab Bar - Keep visible for all tabs (including Flicks)
+            if true {
                 VStack {
                     Spacer()
                     CustomTabBar(
@@ -227,7 +227,16 @@ struct SafeContentView: View {
             case .home:
                 SafeHomeView()
             case .flicks:
-                SafeFlicksView()
+                // Embed Flicks inside the tab with embedded flag on
+                ErrorBoundary {
+                    FlicksView(isEmbeddedInTab: true)
+                } fallback: {
+                    ContentUnavailableView(
+                        "Flicks Unavailable",
+                        systemImage: "play.slash",
+                        description: Text("Please try again later")
+                    )
+                }
             case .search:
                 SafeSearchView()
             case .profile:
@@ -506,29 +515,12 @@ struct CustomTabBar: View {
             .padding(.vertical, 12)
             .background(
                 ZStack {
-                    // Main background with stronger blur
-                    VisualEffectBlur(blurStyle: .systemUltraThinMaterial)
-                        .clipShape(Capsule())
-                    
-                    // Subtle border
+                    // Solid white background (non-translucent)
                     Capsule()
-                        .stroke(
-                            Color.white.opacity(0.2),
-                            lineWidth: 0.5
-                        )
-                    
-                    // Subtle inner glow
+                        .fill(Color.white)
+                    // Light border for definition
                     Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.1),
-                                    Color.clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                        .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
                 }
             )
             .shadow(
@@ -631,8 +623,8 @@ struct SeparatedProfileButton: View {
                         Circle()
                             .fill(AppTheme.Colors.primary)
                     } else {
-                        VisualEffectBlur(blurStyle: .systemUltraThinMaterial)
-                            .clipShape(Circle())
+                        Circle()
+                            .fill(Color.white)
                     }
                 }
                     .frame(width: 48, height: 48)

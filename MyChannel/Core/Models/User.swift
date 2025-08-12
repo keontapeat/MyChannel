@@ -15,6 +15,10 @@ struct User: Identifiable, Codable, Equatable, Hashable {
     let email: String
     let profileImageURL: String?
     let bannerImageURL: String?
+    // Optional video banner. If present, header shows a looping video background instead of an image banner
+    let bannerVideoURL: String?
+    let bannerVideoMuted: Bool?
+    let bannerVideoContentMode: BannerContentMode?
     let bio: String?
     let subscriberCount: Int
     let videoCount: Int
@@ -56,7 +60,10 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         joinDate: Date? = nil,
         totalViews: Int? = nil,
         totalEarnings: Double? = nil,
-        membershipTiers: [MembershipTier]? = nil
+        membershipTiers: [MembershipTier]? = nil,
+        bannerVideoURL: String? = nil,
+        bannerVideoMuted: Bool? = nil,
+        bannerVideoContentMode: BannerContentMode? = nil
     ) {
         self.id = id
         self.username = username
@@ -64,6 +71,9 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         self.email = email
         self.profileImageURL = profileImageURL
         self.bannerImageURL = bannerImageURL
+        self.bannerVideoURL = bannerVideoURL
+        self.bannerVideoMuted = bannerVideoMuted
+        self.bannerVideoContentMode = bannerVideoContentMode
         self.bio = bio
         self.subscriberCount = subscriberCount
         self.videoCount = videoCount
@@ -90,6 +100,12 @@ struct User: Identifiable, Codable, Equatable, Hashable {
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
+}
+
+// MARK: - Banner Content Mode
+enum BannerContentMode: String, Codable {
+    case fill // resizeAspectFill
+    case fit  // resizeAspect
 }
 
 // MARK: - Social Link Model

@@ -20,6 +20,7 @@ struct EditProfileView: View {
     @State private var website: String = ""
     @State private var selectedProfileImage: PhotosPickerItem?
     @State private var selectedBannerImage: PhotosPickerItem?
+    @State private var selectedBannerVideo: PhotosPickerItem?
     @State private var isSaving = false
     @State private var showingImagePicker = false
     @State private var imagePickerType: ImagePickerType = .profile
@@ -27,9 +28,13 @@ struct EditProfileView: View {
     @State private var hasUnsavedChanges = false
     @State private var showingDiscardAlert = false
     
-    private enum ImagePickerType {
-        case profile, banner
-    }
+    private enum ImagePickerType { case profile, banner }
+
+    @State private var isVideoCover: Bool = false
+    @State private var showingVideoPicker = false
+    @State private var bannerVideoLocalURL: URL?
+    @State private var bannerVideoMuted: Bool = true
+    @State private var bannerContentMode: BannerContentMode = .fill
     
     var body: some View {
         ZStack {
@@ -153,6 +158,12 @@ struct EditProfileView: View {
             matching: .images,
             photoLibrary: .shared()
         )
+            .photosPicker(
+                isPresented: $showingVideoPicker,
+                selection: $selectedBannerVideo,
+                matching: .videos,
+                photoLibrary: .shared()
+            )
         .alert("Discard Changes?", isPresented: $showingDiscardAlert) {
             Button("Discard", role: .destructive) {
                 dismiss()
@@ -161,6 +172,10 @@ struct EditProfileView: View {
         } message: {
             Text("You have unsaved changes. Are you sure you want to discard them?")
         }
+            .onChange(of: selectedBannerVideo) { _, item in
+                guard let item else { return }
+                Task { await processSelectedBannerVideo(item) }
+            }
     }
     
     // MARK: - Header Section
@@ -207,15 +222,83 @@ struct EditProfileView: View {
         }
     }
     
-    // MARK: - Profile Images Section
+    // MARK: - Profile Images / Banner Section
     private var profileImagesSection: some View {
         VStack(spacing: 20) {
             // Banner Image
             VStack(alignment: .leading, spacing: 12) {
-                Text("Cover Photo")
+                Text("Cover")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
                 
+                Picker("Cover Type", selection: $isVideoCover) {
+                    Text("Photo").tag(false)
+                    Text("Video").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: isVideoCover) { _, _ in
+                    hasUnsavedChanges = true
+                }
+
+                if isVideoCover {
+                    // Video options
+                    VStack(spacing: 8) {
+                        Toggle("Mute Video", isOn: $bannerVideoMuted)
+                            .tint(AppTheme.Colors.primary)
+                        Picker("Scale", selection: $bannerContentMode) {
+                            Text("Fill").tag(BannerContentMode.fill)
+                            Text("Fit").tag(BannerContentMode.fit)
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    .onChange(of: bannerVideoMuted) { _, _ in hasUnsavedChanges = true }
+                    .onChange(of: bannerContentMode) { _, _ in hasUnsavedChanges = true }
+
+                    Button(action: {
+                        showingVideoPicker = true
+                        HapticManager.shared.impact(style: .light)
+                    }) {
+                        ZStack {
+                            if let urlString = user.bannerVideoURL, let url = URL(string: urlString) {
+                                VideoBannerPreview(url: url)
+                            } else if let local = bannerVideoLocalURL {
+                                VideoBannerPreview(url: local)
+                            } else {
+                                Rectangle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [AppTheme.Colors.primary.opacity(0.3), AppTheme.Colors.secondary.opacity(0.3)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .overlay(
+                                        Image(systemName: "video.fill")
+                                            .font(.system(size: 36))
+                                            .foregroundColor(.white)
+                                    )
+                            }
+                            VStack(spacing: 8) {
+                                Image(systemName: "video.badge.plus")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.white)
+                                Text("Choose Cover Video")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                            .padding(16)
+                            .background(.black.opacity(0.35))
+                            .cornerRadius(12)
+                        }
+                        .frame(height: 140)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                } else {
                 Button(action: {
                     imagePickerType = .banner
                     showingImagePicker = true
@@ -267,6 +350,7 @@ struct EditProfileView: View {
                     )
                 }
                 .buttonStyle(PlainButtonStyle())
+                }
             }
             
             // Profile Image
@@ -469,14 +553,28 @@ struct EditProfileView: View {
         bio = user.bio ?? ""
         location = user.location ?? ""
         website = user.website ?? ""
+        isVideoCover = user.bannerVideoURL != nil
     }
     
     private func saveProfile() {
         isSaving = true
         HapticManager.shared.impact(style: .medium)
         
-        // Simulate save operation with realistic delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        Task {
+            var remoteBannerURL: String? = user.bannerVideoURL
+            if isVideoCover, let localURL = bannerVideoLocalURL {
+                // Prepare (trim/compress) and upload banner video
+                do {
+                    let prepared = try await ProfileMediaUploader.prepareBannerVideo(from: localURL)
+                    let remote = try await ProfileMediaUploader.uploadBannerVideo(prepared, fileName: "banner_\(user.id).mp4")
+                    remoteBannerURL = remote
+                } catch {
+                    print("Banner upload failed: \(error)")
+                    // Fallback to local file path to keep UI updated; server sync can happen later
+                    remoteBannerURL = localURL.absoluteString
+                }
+            }
+            
             // Update user with new values
             var updatedUser = user
             updatedUser = User(
@@ -485,7 +583,7 @@ struct EditProfileView: View {
                 displayName: displayName.isEmpty ? user.displayName : displayName,
                 email: user.email,
                 profileImageURL: user.profileImageURL,
-                bannerImageURL: user.bannerImageURL,
+                bannerImageURL: isVideoCover ? nil : user.bannerImageURL,
                 bio: bio.isEmpty ? nil : bio,
                 subscriberCount: user.subscriberCount,
                 videoCount: user.videoCount,
@@ -497,7 +595,10 @@ struct EditProfileView: View {
                 socialLinks: user.socialLinks,
                 totalViews: user.totalViews,
                 totalEarnings: user.totalEarnings,
-                membershipTiers: user.membershipTiers
+                membershipTiers: user.membershipTiers,
+                bannerVideoURL: isVideoCover ? remoteBannerURL : nil,
+                bannerVideoMuted: isVideoCover ? bannerVideoMuted : nil,
+                bannerVideoContentMode: isVideoCover ? bannerContentMode : nil
             )
             
             user = updatedUser
@@ -527,6 +628,46 @@ struct EditProfileView: View {
                 dismiss()
             }
         }
+    }
+
+    // MARK: - Video processing
+    private func processSelectedBannerVideo(_ item: PhotosPickerItem) async {
+        do {
+            if let data = try await item.loadTransferable(type: Data.self), !data.isEmpty {
+                let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                let fileURL = docs.appendingPathComponent("banner_\(user.id).mov")
+                try? FileManager.default.removeItem(at: fileURL)
+                try data.write(to: fileURL, options: .atomic)
+                await MainActor.run {
+                    bannerVideoLocalURL = fileURL
+                    isVideoCover = true
+                    hasUnsavedChanges = true
+                }
+            }
+        } catch {
+            print("Failed to load video: \(error)")
+        }
+    }
+}
+
+// MARK: - Simple inline preview for banner video
+import AVFoundation
+private struct VideoBannerPreview: View {
+    let url: URL
+    @State private var player = AVPlayer()
+    var body: some View {
+        FlicksPlayerLayerView(player: player, videoGravity: .resizeAspectFill)
+            .onAppear {
+                let item = AVPlayerItem(url: url)
+                NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { _ in
+                    item.seek(to: .zero, completionHandler: nil)
+                    player.play()
+                }
+                player.replaceCurrentItem(with: item)
+                player.isMuted = true
+                player.play()
+            }
+            .onDisappear { player.pause() }
     }
 }
 

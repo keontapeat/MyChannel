@@ -64,6 +64,11 @@ struct FlicksSettingsPanel: View {
 
 // MARK: - Senior Level FlicksView 🔥
 struct FlicksView: View {
+    // When true, Flicks is embedded inside main tabs (no custom exit UI)
+    var isEmbeddedInTab: Bool = false
+    // MARK: - Environment
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // MARK: - Core State Management
     @State private var currentIndex: Int = 0
     @State private var videos: [Video] = []
@@ -76,6 +81,7 @@ struct FlicksView: View {
     @State private var commentsVideo: Video?
     @State private var shareVideo: Video?
     @State private var showNavigationHint = false
+    @State private var lastActiveVideoId: String?
     
     // MARK: - Advanced Performance State
     @State private var preloadedIndices: Set<Int> = []
@@ -124,32 +130,40 @@ struct FlicksView: View {
                         verticalVideoFeed(geometry: geometry)
                     }
                     
-                    topOverlay
+                    if !isEmbeddedInTab {
+                        topOverlay
+                            .zIndex(2)
+                    }
+
+                    // Connectivity status banner
+                    connectivityBanner
                         .zIndex(2)
                     
-                    // Bottom edge hint for navigation
-                    VStack {
-                        Spacer()
-                        HStack {
+                    if !isEmbeddedInTab {
+                        // Bottom edge hint for navigation
+                        VStack {
                             Spacer()
-                            
-                            // Subtle navigation hint
-                            VStack(spacing: 8) {
-                                Text("Swipe from left edge to exit")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.6))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(.black.opacity(0.3), in: Capsule())
-                                    .opacity(showNavigationHint ? 1 : 0)
-                                    .animation(.easeInOut(duration: 0.3), value: showNavigationHint)
+                            HStack {
+                                Spacer()
+                                
+                                // Subtle navigation hint
+                                VStack(spacing: 8) {
+                                    Text("Swipe from left edge to exit")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.6))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(.black.opacity(0.3), in: Capsule())
+                                        .opacity(showNavigationHint ? 1 : 0)
+                                        .animation(.easeInOut(duration: 0.3), value: showNavigationHint)
+                                }
+                                
+                                Spacer()
                             }
-                            
-                            Spacer()
+                            .padding(.bottom, 32)
                         }
-                        .padding(.bottom, 32)
+                        .zIndex(1)
                     }
-                    .zIndex(1)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -157,24 +171,45 @@ struct FlicksView: View {
             .task {
                 if videos.isEmpty { loadFlicksContent() }
                 
-                // Show navigation hint briefly when first opening Flicks
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    withAnimation(.easeInOut(duration: 0.5)) {
-                        showNavigationHint = true
-                    }
-                    
-                    // Hide hint after 3 seconds
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                if !isEmbeddedInTab {
+                    // Show navigation hint briefly when first opening Flicks
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                         withAnimation(.easeInOut(duration: 0.5)) {
-                            showNavigationHint = false
+                            showNavigationHint = true
+                        }
+                        
+                        // Hide hint after 3 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                            withAnimation(.easeInOut(duration: 0.5)) {
+                                showNavigationHint = false
+                            }
                         }
                     }
                 }
             }
+            // Keep internal timers and UX in sync with app lifecycle
+            .onChange(of: scenePhase) { _, newPhase in
+                switch newPhase {
+                case .inactive, .background:
+                    if currentIndex < videos.count {
+                        lastActiveVideoId = videos[currentIndex].id
+                        stopViewTimeTracking(for: videos[currentIndex])
+                    }
+                case .active:
+                    if let resumeId = lastActiveVideoId,
+                       let video = videos.first(where: { $0.id == resumeId }),
+                       viewTimeTimer == nil {
+                        startViewTimeTracking(for: video)
+                    }
+                @unknown default:
+                    break
+                }
+            }
             .gesture(
-                // Left edge swipe to exit
+                // Left edge swipe to exit (disabled when embedded)
                 DragGesture()
                     .onEnded { value in
+                        guard !isEmbeddedInTab else { return }
                         // Check if swipe started from left edge (within 50 points)
                         if value.startLocation.x < 50 && value.translation.width > 100 {
                             // Quick exit to home with haptic feedback
@@ -185,6 +220,10 @@ struct FlicksView: View {
             )
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("FlicksResetToFirst"))) { _ in
                 resetToFirstVideo()
+            }
+            // Reflect connectivity in local state
+            .onReceive(networkMonitor.$isConnected) { isConnected in
+                isNetworkAvailable = isConnected
             }
             .sheet(item: $commentsVideo) { video in
                 FlicksCommentsSheet(video: video)
@@ -450,7 +489,7 @@ struct FlicksView: View {
             }
             .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
             .ignoresSafeArea()
-            .animation(.interpolatingSpring(stiffness: 300, damping: 30), value: currentIndex)
+            .animation(reduceMotion ? .easeOut(duration: 0.12) : .interpolatingSpring(stiffness: 300, damping: 30), value: currentIndex)
             .onChange(of: currentIndex) { oldValue, newValue in
                 handleVideoChange(from: oldValue, to: newValue)
             }
@@ -630,11 +669,13 @@ struct FlicksView: View {
     // MARK: - Advanced Performance & Analytics
     private func preloadVideoIfNeeded(at index: Int) {
         guard !preloadedIndices.contains(index) else { return }
+        guard networkMonitor.isConnected else { return }
         
         preloadedIndices.insert(index)
         
         // Preload adjacent videos for smooth playback
-        let preloadRange = max(0, index - 1)...min(videos.count - 1, index + 2)
+        let aheadCount = max(1, performanceMonitor.getRecommendedPreloadCount())
+        let preloadRange = max(0, index - 1)...min(videos.count - 1, index + aheadCount)
         
         Task {
             for i in preloadRange {
@@ -740,7 +781,7 @@ struct FlicksView: View {
     // MARK: - Smart Preloading with Performance Monitoring
     private func preloadNextVideos(currentIndex: Int) {
         // Smart preloading based on performance
-        let shouldPreload = performanceMonitor.shouldPreloadVideos()
+        let shouldPreload = performanceMonitor.shouldPreloadVideos() && networkMonitor.isConnected
         guard shouldPreload else { return }
         
         if currentIndex >= videos.count - 3 {
@@ -760,6 +801,44 @@ struct FlicksView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - UI Helpers
+private extension FlicksView {
+    var connectivityBanner: some View {
+        Group {
+            if !networkMonitor.isConnected {
+                bannerView(icon: "wifi.slash", text: "You're offline. Some features may be unavailable.")
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .padding(.top, 56)
+            } else if networkMonitor.connectionQuality == .poor {
+                bannerView(icon: "wifi.exclamationmark", text: "Poor connection. Optimizing for smooth playback…")
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .padding(.top, 56)
+            }
+        }
+        .animation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.9), value: networkMonitor.isConnected)
+        .animation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.9), value: networkMonitor.connectionQuality)
+    }
+
+    func bannerView(icon: String, text: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+            Text(text)
+                .font(.system(size: 12, weight: .semibold))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.black.opacity(0.55), in: Capsule())
+        .overlay(
+            Capsule().stroke(.white.opacity(0.15), lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, alignment: .top)
+        .allowsHitTesting(false)
     }
 }
 

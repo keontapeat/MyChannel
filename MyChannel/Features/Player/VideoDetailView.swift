@@ -55,10 +55,17 @@ struct VideoDetailView: View {
             // ALL-IN-ONE Video Player with YouTube-style controls
             ZStack {
                 // MAIN VIDEO PLAYER - Edge-to-edge like YouTube
-                VideoPlayer(player: playerManager.player)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
-                    .background(Color.black)
+                // Wrap with Group so modifiers apply regardless of preview conditional
+                Group {
+                    if AppConfig.isPreview {
+                        Rectangle().fill(Color.black)
+                    } else {
+                        VideoPlayer(player: playerManager.player)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
+                .background(Color.black)
                 
                 // Invisible tap/drag area to show/hide controls and drive fullscreen/miniplayer gestures
                 Color.clear

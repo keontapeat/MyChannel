@@ -20,7 +20,14 @@ struct ProfileHeaderView: View {
         ZStack {
             GeometryReader { geometry in
                 ZStack {
-                    if let bannerURL = user.bannerImageURL {
+                    // Prefer video banner if available
+                    if let videoURL = user.bannerVideoURL, let url = URL(string: videoURL) {
+                        ProfileVideoBackground(
+                            url: url,
+                            isMuted: user.bannerVideoMuted ?? true,
+                            contentMode: user.bannerVideoContentMode ?? .fill
+                        )
+                    } else if let bannerURL = user.bannerImageURL {
                         CachedAsyncImage(url: URL(string: bannerURL)) { image in
                             image
                                 .resizable()
@@ -222,6 +229,45 @@ struct ProfileHeaderView: View {
         } else {
             return "\(count)"
         }
+    }
+}
+
+// MARK: - Lightweight video banner background
+import AVFoundation
+private struct ProfileVideoBackground: View {
+    let url: URL
+    var isMuted: Bool = true
+    var contentMode: BannerContentMode = .fill
+    @State private var player: AVPlayer = AVPlayer()
+    @State private var isReady = false
+    @Environment(\.scenePhase) private var scenePhase
+    
+    var body: some View {
+        FlicksPlayerLayerView(player: player, videoGravity: contentMode == .fill ? .resizeAspectFill : .resizeAspect)
+            .onAppear { setup() }
+            .onChange(of: scenePhase) { _, newPhase in
+                switch newPhase {
+                case .active: if isReady { player.play() }
+                case .inactive, .background: player.pause()
+                @unknown default: break
+                }
+            }
+            .onDisappear { player.pause() }
+            .allowsHitTesting(false)
+            .clipped()
+    }
+    
+    private func setup() {
+        let item = AVPlayerItem(url: url)
+        NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { _ in
+            // loop
+            item.seek(to: .zero, completionHandler: nil)
+            player.play()
+        }
+        player.replaceCurrentItem(with: item)
+        player.isMuted = isMuted
+        player.play()
+        isReady = true
     }
 }
 
