@@ -29,11 +29,11 @@ struct PremiumMoviesHubSection: View {
                         .foregroundColor(AppTheme.Colors.primary)
                     
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("🎬 MyChannel Movies")
+                        Text("🎬 Movies")
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(AppTheme.Colors.textPrimary)
                         
-                        Text("Exclusive Library • Premium Quality")
+                        Text("Popular trailers • Latest hits")
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                     }
@@ -106,7 +106,7 @@ struct PremiumMoviesHubSection: View {
             )
         )
         .fullScreenCover(isPresented: $isShowingAllMovies) {
-            FreeMoviesView()
+            MoviesView()
         }
     }
 }

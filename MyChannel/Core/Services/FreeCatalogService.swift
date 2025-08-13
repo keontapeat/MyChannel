@@ -1,6 +1,6 @@
 import Foundation
 
-/// Aggregates multiple legal free sources (Internet Archive, Pexels, Pixabay, NASA)
+/// Aggregates multiple legal free sources (Internet Archive, Pexels, Pixabay, NASA, TMDB)
 final class FreeCatalogService {
     static let shared = FreeCatalogService()
     private init() {}
@@ -8,10 +8,11 @@ final class FreeCatalogService {
     struct Keys {
         static var pexels: String { ProcessInfo.processInfo.environment["PEXELS_API_KEY"] ?? "" }
         static var pixabay: String { ProcessInfo.processInfo.environment["PIXABAY_API_KEY"] ?? "" }
+        static var tmdb: String { ProcessInfo.processInfo.environment["TMDB_API_KEY"] ?? "" }
     }
 
     enum Source: CaseIterable {
-        case internetArchive, pexels, pixabay, nasa
+        case internetArchive, pexels, pixabay, nasa, tmdb
     }
 
     func searchAll(query: String, limitPerSource: Int = 12) async -> [FreeMovie] {
@@ -27,17 +28,29 @@ final class FreeCatalogService {
                         do { return try await PixabayService.shared.search(query: query, perPage: limitPerSource, apiKey: Keys.pixabay) } catch { return [] }
                     case .nasa:
                         do { return try await NASAImagesService.shared.search(query: query, limit: limitPerSource) } catch { return [] }
+                    case .tmdb:
+                        // Use TMDB only if API key is available (via Info.plist or env)
+                        guard !AppSecrets.tmdbAPIKey.isEmpty else { return [] }
+                        // Fetch more from TMDB to surface modern titles
+                        let tmdbLimit = max(limitPerSource * 2, 20)
+                        do { return try await TMDBService.shared.fetchFreeWithAdsMoviesUS(page: 1, limit: tmdbLimit) } catch { return [] }
                     }
                 }
             }
             var combined: [FreeMovie] = []
             for await chunk in group { combined.append(contentsOf: chunk) }
-            // Deduplicate by streamURL
+            // Prefer TMDB (modern) and newer titles before deduping
+            combined.sort { a, b in
+                let aIsTMDB = a.id.hasPrefix("tmdb-")
+                let bIsTMDB = b.id.hasPrefix("tmdb-")
+                if aIsTMDB != bIsTMDB { return aIsTMDB && !bIsTMDB }
+                if a.year != b.year { return a.year > b.year }
+                return a.imdbRating > b.imdbRating
+            }
+            // Deduplicate by streamURL (preserves the preferred order)
             var seen = Set<String>()
             let unique = combined.filter { seen.insert($0.streamURL).inserted }
             return unique
         }
     }
 }
-
-

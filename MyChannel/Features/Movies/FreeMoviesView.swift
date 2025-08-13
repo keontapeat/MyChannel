@@ -29,7 +29,9 @@ struct FreeMoviesView: View {
     }
     
     private var allMovies: [FreeMovie] {
-        FreeMovie.sampleMovies + remoteMovies
+        // Prefer remote results; fall back to samples only if empty
+        if !remoteMovies.isEmpty { return remoteMovies }
+        return FreeMovie.sampleMovies
     }
     
     private var filteredMovies: [FreeMovie] {
@@ -54,7 +56,11 @@ struct FreeMoviesView: View {
         
         switch sortBy {
         case .popular:
-            return movies.sorted { $0.imdbRating > $1.imdbRating }
+            // Prefer newer with decent rating
+            return movies.sorted { (lhs, rhs) in
+                if lhs.year != rhs.year { return lhs.year > rhs.year }
+                return lhs.imdbRating > rhs.imdbRating
+            }
         case .newest:
             return movies.sorted { $0.year > $1.year }
         case .rating:
@@ -305,11 +311,14 @@ struct FreeMoviesView: View {
     private func initialFetch() async {
         isFetching = true
         defer { isFetching = false }
-        let query = searchText.isEmpty ? "classic" : searchText
+        let query = searchText.isEmpty ? "" : searchText
         let results = await FreeCatalogService.shared.searchAll(query: query, limitPerSource: 20)
         await MainActor.run {
             withAnimation(AppTheme.AnimationPresets.easeInOut) {
-                remoteMovies = results
+                // Prioritize modern (TMDB) results first
+                let tmdb = results.filter { $0.id.hasPrefix("tmdb-") }.sorted { $0.year > $1.year }
+                let others = results.filter { !$0.id.hasPrefix("tmdb-") }
+                remoteMovies = tmdb + others
                 page = 1
             }
         }
@@ -318,11 +327,13 @@ struct FreeMoviesView: View {
     private func refresh() async {
         isFetching = true
         defer { isFetching = false }
-        let query = searchText.isEmpty ? "classic" : searchText
+        let query = searchText.isEmpty ? "" : searchText
         let results = await FreeCatalogService.shared.searchAll(query: query, limitPerSource: 20)
         await MainActor.run {
             withAnimation(AppTheme.AnimationPresets.easeInOut) {
-                remoteMovies = results
+                let tmdb = results.filter { $0.id.hasPrefix("tmdb-") }.sorted { $0.year > $1.year }
+                let others = results.filter { !$0.id.hasPrefix("tmdb-") }
+                remoteMovies = tmdb + others
                 page = 1
             }
         }
@@ -333,7 +344,7 @@ struct FreeMoviesView: View {
         isFetching = true
         Task {
             defer { isFetching = false }
-            let results = await FreeCatalogService.shared.searchAll(query: searchText.isEmpty ? "classic" : searchText, limitPerSource: 12)
+            let results = await FreeCatalogService.shared.searchAll(query: searchText.isEmpty ? "" : searchText, limitPerSource: 12)
             await MainActor.run {
                 withAnimation(AppTheme.AnimationPresets.gentle) {
                     page += 1
@@ -341,6 +352,10 @@ struct FreeMoviesView: View {
                     let existing = Set(remoteMovies.map { $0.streamURL })
                     let newOnes = results.filter { !existing.contains($0.streamURL) }
                     remoteMovies.append(contentsOf: newOnes)
+                    // Keep TMDB-first ordering after append
+                    let tmdb = remoteMovies.filter { $0.id.hasPrefix("tmdb-") }.sorted { $0.year > $1.year }
+                    let others = remoteMovies.filter { !$0.id.hasPrefix("tmdb-") }
+                    remoteMovies = tmdb + others
                 }
             }
         }

@@ -9,6 +9,7 @@ struct MovieDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
     @State private var showPlayer = false
+    @State private var showTrailerPlayer = false
     @State private var video: Video?
     @State private var isWatchlisted = false
     @State private var showUnavailableAlert = false
@@ -56,6 +57,14 @@ struct MovieDetailView: View {
                     showPlayer = false
                 }
                 .background(Color.black.ignoresSafeArea())
+                .preferredColorScheme(.dark)
+            }
+        }
+        .fullScreenCover(isPresented: $showTrailerPlayer) {
+            if let t = movie.trailerURL {
+                TrailerPlayerView(trailerURLString: t) {
+                    showTrailerPlayer = false
+                }
                 .preferredColorScheme(.dark)
             }
         }
@@ -334,8 +343,8 @@ struct MovieDetailView: View {
         HStack(spacing: 16) {
             primaryPlayButton
             
-            if let trailer = movie.trailerURL, let url = URL(string: trailer) {
-                trailerButton(url: url)
+            if movie.trailerURL != nil {
+                trailerButton()
             }
             
             shareButton
@@ -345,7 +354,10 @@ struct MovieDetailView: View {
     // MARK: - Primary Play Button
     private var primaryPlayButton: some View {
         Button(action: playAction) {
-            Label("Play Now", systemImage: "play.fill")
+            let isDirect = MoviePlaybackResolver.directPlayableURL(for: movie) != nil
+            let title = isDirect ? "Play Now" : "Play Trailer"
+            let icon = "play.fill"
+            Label(title, systemImage: icon)
                 .font(.system(size: 16, weight: .bold))
                 .foregroundColor(.black)
                 .frame(maxWidth: .infinity)
@@ -364,8 +376,12 @@ struct MovieDetailView: View {
     }
     
     // MARK: - Trailer Button
-    private func trailerButton(url: URL) -> some View {
-        Link(destination: url) {
+    private func trailerButton() -> some View {
+        Button {
+            withAnimation(AppTheme.AnimationPresets.easeInOut) {
+                showTrailerPlayer = true
+            }
+        } label: {
             Image(systemName: "play.rectangle")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(.white)
@@ -575,7 +591,14 @@ struct MovieDetailView: View {
             GlobalVideoPlayerManager.shared.adoptExternalPlayerManager(vm, video: directVideo, showFullscreen: true)
             showPlayer = true
         } else {
-            showUnavailableAlert = true
+            // Prefer in-app trailer playback
+            if movie.trailerURL != nil {
+                showTrailerPlayer = true
+            } else if URL(string: movie.streamURL) != nil {
+                showUnavailableAlert = true
+            } else {
+                showUnavailableAlert = true
+            }
         }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }

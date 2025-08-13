@@ -2,6 +2,20 @@ import SwiftUI
 import Combine
 import UIKit
 
+// MARK: - Preview-safe onReceive helper
+struct ConditionalOnReceiveModifier<P: Publisher>: ViewModifier where P.Failure == Never {
+    let publisher: P?
+    let action: (P.Output) -> Void
+
+    func body(content: Content) -> some View {
+        if let publisher {
+            content.onReceive(publisher, perform: action)
+        } else {
+            content
+        }
+    }
+}
+
 enum FeaturedItem: Identifiable, Equatable {
     case video(Video)
     case friend(AssetStory)
@@ -22,38 +36,39 @@ enum FeaturedItem: Identifiable, Equatable {
 struct HomeView: View {
     @EnvironmentObject private var appState: AppState
     @ObservedObject private var globalPlayer = GlobalVideoPlayerManager.shared
-    @State private var selectedFilter: ContentFilter = .all
-    @State private var searchText: String = ""
+
     @State private var scrollOffset: CGFloat = 0
     @State private var isRefreshing: Bool = false
     @State private var selectedVideo: Video? = nil
-    @State private var showingVideoPlayer: Bool = false // legacy flag (unused for presentation)
     @State private var selectedMovie: FreeMovie? = nil
     @State private var showAllFreeMovies: Bool = false
+    @State private var showAllLiveTV: Bool = false
     @State private var showingSearchView: Bool = false
     @State private var featuredContent: [Video] = []
     @State private var heroVideoIndex: Int = 0
-    @State private var featuredItems: [FeaturedItem] = []
-    @State private var selectedCreator: User? = nil
     @State private var showingStories: Bool = true
     @State private var assetStories: [AssetStory] = AssetStory.sampleStories
     @State private var selectedAssetStory: AssetStory? = nil
     @Namespace private var storiesNS
-    
+
+    private var isRunningInPreview: Bool {
+        #if DEBUG
+        return ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+        #else
+        return false
+        #endif
+    }
+
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                // Clean Background
                 Color(.systemBackground)
                     .ignoresSafeArea()
-                
-                // Main Content
+
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: 0) {
-                        // Header Spacer
                         Color.clear.frame(height: 100)
-                        
-                        // Stories Section
+
                         if showingStories {
                             AssetBouncyStoriesRow(
                                 stories: assetStories,
@@ -61,7 +76,6 @@ struct HomeView: View {
                                     selectedAssetStory = story
                                 },
                                 onAddStory: {
-                                    // Open professional story creation
                                     HapticManager.shared.impact(style: .medium)
                                     showStoryCreator()
                                 },
@@ -71,8 +85,7 @@ struct HomeView: View {
                             .zIndex(2)
                             .padding(.bottom, 32)
                         }
-                        
-                        // Featured Hero Section
+
                         MinimalHeroSection(
                             featuredContent: featuredContent,
                             heroVideoIndex: heroVideoIndex,
@@ -80,15 +93,14 @@ struct HomeView: View {
                             onAddToList: toggleWatchLater
                         )
                         .padding(.bottom, 40)
-                        
-                        // Content Sections
+
                         MinimalContentSections(
                             onPlayVideo: playVideo,
                             onSelectMovie: { movie in selectedMovie = movie },
-                            onSeeAllFreeMovies: { showAllFreeMovies = true }
+                            onSeeAllFreeMovies: { showAllFreeMovies = true },
+                            onSeeAllLiveTV: { showAllLiveTV = true }
                         )
-                        
-                        // Bottom Spacer
+
                         Color.clear.frame(height: 100)
                     }
                 }
@@ -96,7 +108,7 @@ struct HomeView: View {
                 .onScrollOffsetChange { offset in
                     scrollOffset = offset
                 }
-                
+
                 MinimalNavigationHeader(
                     scrollOffset: scrollOffset,
                     onSearchTap: { showingSearchView = true },
@@ -107,9 +119,6 @@ struct HomeView: View {
                 .allowsHitTesting(true)
                 .zIndex(1)
             }
-        }
-        .navigationDestination(item: $selectedCreator) { user in
-            CreatorProfileView(creator: user)
         }
         .onAppear(perform: setupContent)
         .refreshable { await refreshContent() }
@@ -135,7 +144,6 @@ struct HomeView: View {
         }
         .sheet(isPresented: $presentStoryCreator) {
             CreateStoryView { newStory in
-                // Map new story into AssetStory data model
                 let media: AssetMedia = (newStory.mediaType == .video) ? .video(newStory.mediaURL) : .image(newStory.mediaURL)
                 let placeholder = AssetStory(media: media, username: appState.currentUser?.username ?? "you", authorImageName: "")
                 assetStories.insert(placeholder, at: 0)
@@ -143,65 +151,57 @@ struct HomeView: View {
             }
             .preferredColorScheme(.dark)
         }
-        .onReceive(Timer.publish(every: 10.0, on: .main, in: .common).autoconnect()) { _ in
-            withAnimation(.easeInOut(duration: 1.0)) {
-                heroVideoIndex = (heroVideoIndex + 1) % max(1, featuredContent.count)
-            }
-        }
+        .modifier(
+            ConditionalOnReceiveModifier(
+                publisher: isRunningInPreview ? nil : Timer.publish(every: 10.0, on: .main, in: .common).autoconnect(),
+                action: { _ in
+                    withAnimation(.easeInOut(duration: 1.0)) {
+                        heroVideoIndex = (heroVideoIndex + 1) % max(1, featuredContent.count)
+                    }
+                }
+            )
+        )
         .fullScreenCover(isPresented: $showAllFreeMovies) {
-            FreeMoviesView()
+            MoviesView()
+                .environmentObject(appState)
+        }
+        .fullScreenCover(isPresented: $showAllLiveTV) {
+            LiveTVChannelsView()
                 .environmentObject(appState)
         }
     }
-    
+
     // MARK: - Setup Methods
     @State private var presentStoryCreator: Bool = false
     private func setupContent() {
-        // Keep original list for other sections
-        featuredContent = Video.sampleVideos.filter { $0.viewCount > 500000 }.shuffled()
+        featuredContent = Video.sampleVideos.filter { $0.viewCount > 500_000 }.shuffled()
         if featuredContent.isEmpty {
             featuredContent = Array(Video.sampleVideos.prefix(3))
         }
-
-        let friends = Array(assetStories.prefix(5))
-        var items: [FeaturedItem] = []
-        items.append(contentsOf: featuredContent.prefix(5).map { .video($0) })
-        items.append(contentsOf: friends.map { .friend($0) })
-        items.shuffle()
-        featuredItems = items
     }
-    
+
     private func refreshContent() async {
         isRefreshing = true
         try? await Task.sleep(nanoseconds: 1_000_000_000)
         setupContent()
         isRefreshing = false
     }
-    
+
     // MARK: - Action Methods
     private func showStoryCreator() {
         presentStoryCreator = true
     }
+
     private func playVideo(_ video: Video) {
-        // Halt any existing playback immediately to prevent audio overlap
         GlobalVideoPlayerManager.shared.stopImmediately()
-        // Optionally prime global state (no auto-present side effects now)
         GlobalVideoPlayerManager.shared.currentVideo = video
-        // Present immediately with item-based cover to avoid empty content white screen
         selectedVideo = video
         HapticManager.shared.impact(style: .medium)
     }
-    
+
     private func toggleWatchLater(_ video: Video) {
         appState.toggleWatchLater(for: video.id)
         HapticManager.shared.impact(style: .light)
-    }
-
-    private func mapStoryToUser(_ story: AssetStory) -> User {
-        let users = User.sampleUsers
-        if users.isEmpty { return User.defaultUser }
-        let idx = abs(story.id.hashValue) % users.count
-        return users[idx]
     }
 }
 
@@ -210,15 +210,13 @@ struct MinimalNavigationHeader: View {
     let scrollOffset: CGFloat
     let onSearchTap: () -> Void
     let onProfileTap: () -> Void
-    
+
     @EnvironmentObject private var appState: AppState
-    private var headerOpacity: Double {
-        min(1.0, max(0.0, 1.0 - (scrollOffset / 100.0)))
-    }
+
     private var logoSize: CGFloat {
         UIDevice.current.userInterfaceIdiom == .phone ? 24 : 28
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -229,38 +227,36 @@ struct MinimalNavigationHeader: View {
                         .interpolation(.high)
                         .antialiased(true)
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: logoSize, height: logoSize) // ENSURED: 24pt on iPhone
-                        
+                        .frame(width: logoSize, height: logoSize)
+
                     Text("MyChannel")
                         .font(.system(size: 20, weight: .semibold, design: .rounded))
                         .foregroundColor(.primary)
                 }
-                
+
                 Spacer()
-                
-                // Minimal Actions
+
                 HStack(spacing: 24) {
                     Button(action: onSearchTap) {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 18, weight: .medium))
                             .foregroundColor(.primary)
                     }
-                    
+
                     NavigationLink(destination: NotificationsView()) {
                         ZStack {
                             Image(systemName: "bell")
                                 .font(.system(size: 18, weight: .medium))
                                 .foregroundColor(.primary)
-                            
-                            if true {
-                                Circle()
-                                    .fill(Color.red)
-                                    .frame(width: 6, height: 6)
-                                    .offset(x: 6, y: -6)
-                            }
+
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 6, height: 6)
+                                .offset(x: 6, y: -6)
+                                .opacity(1)
                         }
                     }
-                    
+
                     Button(action: onProfileTap) {
                         AsyncImage(url: URL(string: appState.currentUser?.profileImageURL ?? "")) { image in
                             image
@@ -270,13 +266,20 @@ struct MinimalNavigationHeader: View {
                                 .clipShape(Circle())
                         } placeholder: {
                             Circle()
-                                .fill(Color(.systemGray5))
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color(white: 0.97), Color(white: 0.92)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
                                 .frame(width: 28, height: 28)
                                 .overlay(
                                     Image(systemName: "person.fill")
-                                        .font(.system(size: 14))
+                                        .font(.system(size: 13, weight: .semibold))
                                         .foregroundColor(.secondary)
                                 )
+                                .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
                         }
                     }
                 }
@@ -285,10 +288,17 @@ struct MinimalNavigationHeader: View {
             .padding(.top, 50)
             .padding(.bottom, 16)
             .background(
-                Color(.systemBackground)
-                    .opacity(scrollOffset > 50 ? 0.95 : 0)
-                    .background(.ultraThinMaterial.opacity(scrollOffset > 50 ? 1 : 0))
+                Group {
+                    if scrollOffset > 50 {
+                        Rectangle()
+                            .fill(.ultraThinMaterial)
+                            .transition(.opacity)
+                    } else {
+                        Color.clear
+                    }
+                }
             )
+            .animation(.easeInOut(duration: 0.25), value: scrollOffset > 50)
         }
         .allowsHitTesting(true)
     }
@@ -299,23 +309,22 @@ struct MinimalStoriesSection: View {
     let stories: [AssetStory]
     let onStoryTap: (AssetStory) -> Void
     let onAddStory: () -> Void
-    
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: 16) {
-                // Add Story Button
                 Button(action: onAddStory) {
                     VStack(spacing: 8) {
                         ZStack {
                             Circle()
                                 .fill(Color(.systemGray6))
                                 .frame(width: 60, height: 60)
-                            
+
                             Image(systemName: "plus")
                                 .font(.system(size: 20, weight: .medium))
                                 .foregroundColor(.primary)
                         }
-                        
+
                         Text("Your Story")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.secondary)
@@ -323,8 +332,7 @@ struct MinimalStoriesSection: View {
                     }
                 }
                 .buttonStyle(PlainButtonStyle())
-                
-                // Stories
+
                 ForEach(stories) { story in
                     Button(action: { onStoryTap(story) }) {
                         VStack(spacing: 8) {
@@ -339,7 +347,7 @@ struct MinimalStoriesSection: View {
                                         lineWidth: 2
                                     )
                                     .frame(width: 64, height: 64)
-                                
+
                                 if UIImage(named: story.authorImageName) != nil {
                                     Image(story.authorImageName)
                                         .resizable()
@@ -360,7 +368,7 @@ struct MinimalStoriesSection: View {
                                     }
                                 }
                             }
-                            
+
                             Text(story.username)
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(.primary)
@@ -373,7 +381,10 @@ struct MinimalStoriesSection: View {
             .padding(.horizontal, 20)
         }
     }
+
 }
+
+// (Moved loadBlockbusters() into MinimalContentSections below)
 
 // MARK: - Minimal Hero Section
 struct MinimalHeroSection: View {
@@ -384,13 +395,12 @@ struct MinimalHeroSection: View {
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     private var isCompact: Bool { horizontalSizeClass == .compact }
-    
+
     var body: some View {
         if !featuredContent.isEmpty {
             let currentVideo = featuredContent[heroVideoIndex % featuredContent.count]
-            
+
             VStack(spacing: 20) {
-                // Featured Badge
                 HStack {
                     HStack(spacing: 6) {
                         Image(systemName: "star.fill")
@@ -410,7 +420,6 @@ struct MinimalHeroSection: View {
                 }
                 .padding(.horizontal, 20)
 
-                // Media Thumbnail
                 AsyncImage(url: URL(string: currentVideo.thumbnailURL)) { image in
                     image
                         .resizable()
@@ -437,7 +446,6 @@ struct MinimalHeroSection: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .padding(.horizontal, 20)
 
-                // Video Info
                 VStack(spacing: 12) {
                     Text(currentVideo.title)
                         .font(.system(size: 22, weight: .bold))
@@ -446,7 +454,7 @@ struct MinimalHeroSection: View {
                         .frame(maxWidth: .infinity, alignment: isCompact ? .leading : .center)
                         .lineLimit(2)
                         .padding(.horizontal, 20)
-                    
+
                     Text("\(currentVideo.category.displayName) • \(currentVideo.formattedDuration) • \(currentVideo.formattedViewCount) views")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.secondary)
@@ -456,7 +464,6 @@ struct MinimalHeroSection: View {
                         .frame(maxWidth: .infinity, alignment: isCompact ? .leading : .center)
                         .padding(.horizontal, 20)
 
-                    // Action Buttons
                     HStack(spacing: 12) {
                         Button(action: { onPlayVideo(currentVideo) }) {
                             HStack(spacing: 8) {
@@ -468,6 +475,7 @@ struct MinimalHeroSection: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 48)
+                            .padding(.horizontal, 12)
                             .background(Color.black)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
@@ -486,6 +494,7 @@ struct MinimalHeroSection: View {
             }
         }
     }
+
 }
 
 // MARK: - Minimal Content Sections
@@ -493,12 +502,14 @@ struct MinimalContentSections: View {
     let onPlayVideo: (Video) -> Void
     let onSelectMovie: (FreeMovie) -> Void
     let onSeeAllFreeMovies: () -> Void
-    
+    let onSeeAllLiveTV: () -> Void
+
     @EnvironmentObject private var appState: AppState
-    
+    @State private var blockbusterMovies: [FreeMovie] = []
+    @State private var loadingBlockbusters: Bool = false
+
     var body: some View {
         VStack(spacing: 40) {
-            // Continue Watching
             if !appState.watchHistory.isEmpty {
                 MinimalSection(
                     title: "Continue Watching",
@@ -514,51 +525,99 @@ struct MinimalContentSections: View {
                     }
                 }
             }
-            
-            // Trending Now
+
             MinimalSection(
                 title: "Trending Now",
-                seeAllAction: { /* Navigate to trending */ }
+                seeAllAction: { }
             ) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
-                        ForEach(Video.sampleVideos.filter { $0.viewCount > 100000 }.prefix(8)) { video in
+                        ForEach(Video.sampleVideos.filter { $0.viewCount > 100_000 }.prefix(8)) { video in
                             MinimalVideoCard(video: video, action: { onPlayVideo(video) })
                         }
                     }
                     .padding(.horizontal, 20)
                 }
             }
-            
-            // Free Movies (from legal sources via FreeCatalogService)
+
             MinimalSection(
-                title: "Free Movies",
+                title: "Movies",
                 seeAllAction: { onSeeAllFreeMovies() }
             ) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 16) {
-                        ForEach(FreeMovie.sampleMovies.prefix(6)) { movie in
+                        let movies = blockbusterMovies.isEmpty ? Array(FreeMovie.sampleMovies.prefix(6)) : Array(blockbusterMovies.prefix(12))
+                        ForEach(movies) { movie in
                             MinimalMovieCard(movie: movie, action: { onSelectMovie(movie) })
                         }
                     }
                     .padding(.horizontal, 20)
                 }
             }
-            
-            // Live TV
+
             MinimalSection(
                 title: "Live TV",
-                seeAllAction: { /* Navigate to live TV */ }
+                seeAllAction: { onSeeAllLiveTV() }
             ) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
                         ForEach(LiveTVChannel.sampleChannels.prefix(8)) { channel in
-                            MinimalChannelCard(channel: channel)
+                            NavigationLink(destination: LiveTVPlayerView(channel: channel)) {
+                                MinimalChannelCard(channel: channel)
+                            }
+                            .buttonStyle(PlainButtonStyle())
                         }
                     }
                     .padding(.horizontal, 20)
                 }
             }
+        }
+        .task { await loadBlockbusters() }
+    }
+
+    // Loader for TMDB popular trailers powering the Home Free Movies row
+    fileprivate func loadBlockbusters() async {
+        guard blockbusterMovies.isEmpty else { return }
+        loadingBlockbusters = true
+        defer { loadingBlockbusters = false }
+        do {
+            guard !AppSecrets.tmdbAPIKey.isEmpty else {
+                print("[TMDB] API key missing. Showing sample movies.")
+                return
+            }
+
+            // First attempt: popular with official trailers
+            let items = try await TMDBService.shared.fetchPopularWithTrailersUS(page: 1, limit: 30)
+            var chosen: [FreeMovie] = items.filter { $0.trailerURL != nil }
+
+            if chosen.isEmpty {
+                print("[TMDB] No trailer-attached items returned. Falling back to popular items without trailer filter.")
+                chosen = items
+            }
+
+            if chosen.isEmpty {
+                print("[TMDB] Popular items still empty. Falling back to free-with-ads providers list.")
+                let freeList = try await TMDBService.shared.fetchFreeWithAdsMoviesUS(page: 1, limit: 20)
+                chosen = freeList
+            }
+
+            // Boost preferred titles and sort by recency/rating
+            let boosted = chosen.sorted { lhs, rhs in
+                let boost: (FreeMovie) -> Int = { m in
+                    let t = m.title.lowercased()
+                    return (t.contains("smile 2") || t.contains("sinners")) ? 1 : 0
+                }
+                if boost(lhs) != boost(rhs) { return boost(lhs) > boost(rhs) }
+                if lhs.year != rhs.year { return lhs.year > rhs.year }
+                return lhs.imdbRating > rhs.imdbRating
+            }
+
+            await MainActor.run {
+                self.blockbusterMovies = boosted
+            }
+        } catch {
+            print("[TMDB] Error loading blockbusters: \(error)")
+            // Keep samples if TMDB fails
         }
     }
 }
@@ -568,16 +627,16 @@ struct MinimalSection<Content: View>: View {
     let title: String
     let seeAllAction: (() -> Void)?
     @ViewBuilder let content: Content
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text(title)
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.primary)
-                
+
                 Spacer()
-                
+
                 if let seeAllAction = seeAllAction {
                     Button("See all", action: seeAllAction)
                         .font(.system(size: 14, weight: .medium))
@@ -585,7 +644,7 @@ struct MinimalSection<Content: View>: View {
                 }
             }
             .padding(.horizontal, 20)
-            
+
             content
         }
     }
@@ -595,11 +654,10 @@ struct MinimalSection<Content: View>: View {
 struct MinimalVideoCard: View {
     let video: Video
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
-                // Thumbnail
                 AsyncImage(url: URL(string: video.thumbnailURL)) { image in
                     image
                         .resizable()
@@ -634,19 +692,19 @@ struct MinimalVideoCard: View {
                         }
                     }
                 )
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(video.title)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.primary)
                         .lineLimit(2)
                         .frame(height: 36, alignment: .top)
-                    
+
                     Text(video.creator.displayName)
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
-                    
+
                     Text("\(video.formattedViewCount) views")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
@@ -662,7 +720,7 @@ struct MinimalVideoCard: View {
 struct MinimalMovieCard: View {
     let movie: FreeMovie
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
@@ -684,7 +742,7 @@ struct MinimalMovieCard: View {
                                     Image(systemName: "film.stack")
                                         .font(.system(size: 24))
                                         .foregroundColor(.secondary)
-                                    
+
                                     Text(movie.title)
                                         .font(.system(size: 11, weight: .medium))
                                         .foregroundColor(.primary)
@@ -695,13 +753,13 @@ struct MinimalMovieCard: View {
                             )
                     }
                 )
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(movie.title)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.primary)
                         .lineLimit(2)
-                    
+
                     HStack(spacing: 2) {
                         ForEach(0..<5) { index in
                             Image(systemName: "star.fill")
@@ -710,7 +768,7 @@ struct MinimalMovieCard: View {
                                     index < Int(movie.imdbRating / 2) ? .yellow : Color(.systemGray4)
                                 )
                         }
-                        
+
                         Text("\(movie.imdbRating, specifier: "%.1f")")
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
@@ -726,44 +784,63 @@ struct MinimalMovieCard: View {
 // MARK: - Minimal Channel Card
 struct MinimalChannelCard: View {
     let channel: LiveTVChannel
-    
+    @State private var showPreview: Bool = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(.systemGray6))
-                    .frame(width: 160, height: 90)
-                
-                VStack(spacing: 6) {
-                    Circle()
-                        .fill(.white)
-                        .frame(width: 32, height: 32)
-                        .overlay(
-                            Text(channel.name.prefix(2).uppercased())
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.primary)
-                        )
-                    
-                    if channel.isLive {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(.red)
-                                .frame(width: 4, height: 4)
-                            
-                            Text("LIVE")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundColor(.red)
-                        }
+                // Live video thumbnail (muted preview)
+                if showPreview {
+                    LiveChannelThumbnailView(streamURL: channel.streamURL)
+                        .frame(width: 160, height: 90)
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else {
+                    // Fallback logo while offscreen
+                    AsyncImage(url: URL(string: channel.logoURL)) { image in
+                        image
+                            .resizable()
+                            .scaledToFit()
+                    } placeholder: {
+                        Image(systemName: "tv")
+                            .font(.system(size: 20))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
+                    .frame(width: 160, height: 90)
+                    .background(Color(.systemGray6))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+
+                // LIVE badge overlay
+                if channel.isLive {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(.white)
+                            .frame(width: 4, height: 4)
+                            .scaleEffect(1.0)
+                            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: true)
+
+                        Text("LIVE")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(Color.red.opacity(0.9)))
+                    .padding(8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
-            
+            .onAppear { showPreview = true }
+            .onDisappear { showPreview = false }
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(channel.name)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.primary)
                     .lineLimit(1)
-                
+
                 Text("\(formatViewerCount(channel.viewerCount)) viewers")
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
@@ -771,12 +848,12 @@ struct MinimalChannelCard: View {
             .frame(width: 160, alignment: .leading)
         }
     }
-    
+
     private func formatViewerCount(_ count: Int) -> String {
-        if count >= 1000000 {
-            return String(format: "%.1fM", Double(count) / 1000000.0)
-        } else if count >= 1000 {
-            return String(format: "%.1fK", Double(count) / 1000.0)
+        if count >= 1_000_000 {
+            return String(format: "%.1fM", Double(count) / 1_000_000.0)
+        } else if count >= 1_000 {
+            return String(format: "%.1fK", Double(count) / 1_000.0)
         } else {
             return "\(count)"
         }
@@ -792,7 +869,7 @@ enum ContentFilter: String, CaseIterable {
     case gaming = "gaming"
     case music = "music"
     case education = "education"
-    
+
     var displayName: String {
         switch self {
         case .all: return "Home"
@@ -805,6 +882,8 @@ enum ContentFilter: String, CaseIterable {
         }
     }
 }
+
+// (moved ConditionalOnReceiveModifier to the top of file)
 
 // MARK: - Preview
 #Preview("HomeView") {

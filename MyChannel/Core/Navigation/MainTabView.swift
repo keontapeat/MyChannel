@@ -139,6 +139,13 @@ struct MainTabView: View {
             // Sync user state safely
             appState.currentUser = authManager.currentUser
             isInitialized = true
+
+            // Ensure correct initial preview state
+            if selectedTab == .home {
+                NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
+            } else {
+                NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldPause"), object: nil)
+            }
         } catch {
             handleError("Failed to initialize app state: \(error.localizedDescription)")
         }
@@ -161,6 +168,12 @@ struct MainTabView: View {
                 // Normal tab change
                 previousTab = selectedTab
                 selectedTab = tab
+                // Pause/Resume heavy home previews to avoid freezes
+                if tab == .home {
+                    NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
+                } else {
+                    NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldPause"), object: nil)
+                }
             }
             
             // Clear badge for selected tab
