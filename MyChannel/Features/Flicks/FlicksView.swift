@@ -72,7 +72,6 @@ struct FlicksView: View {
     // MARK: - Core State Management
     @State private var currentIndex: Int = 0
     @State private var videos: [Video] = []
-    @State private var isLoading = true
     @State private var likedVideos: Set<String> = []
     @State private var followedCreators: Set<String> = []
     @State private var selectedCreator: User?
@@ -123,13 +122,9 @@ struct FlicksView: View {
             GeometryReader { geometry in
                 ZStack {
                     Color.black.ignoresSafeArea()
-                    
-                    if isLoading {
-                        loadingView
-                    } else {
-                        verticalVideoFeed(geometry: geometry)
-                    }
-                    
+
+                    verticalVideoFeed(geometry: geometry)
+
                     if !isEmbeddedInTab {
                         topOverlay
                             .zIndex(2)
@@ -138,15 +133,12 @@ struct FlicksView: View {
                     // Connectivity status banner
                     connectivityBanner
                         .zIndex(2)
-                    
+
                     if !isEmbeddedInTab {
-                        // Bottom edge hint for navigation
                         VStack {
                             Spacer()
                             HStack {
                                 Spacer()
-                                
-                                // Subtle navigation hint
                                 VStack(spacing: 8) {
                                     Text("Swipe from left edge to exit")
                                         .font(.system(size: 11, weight: .medium))
@@ -157,7 +149,6 @@ struct FlicksView: View {
                                         .opacity(showNavigationHint ? 1 : 0)
                                         .animation(.easeInOut(duration: 0.3), value: showNavigationHint)
                                 }
-                                
                                 Spacer()
                             }
                             .padding(.bottom, 32)
@@ -170,19 +161,12 @@ struct FlicksView: View {
             .statusBarHidden()
             .task {
                 if videos.isEmpty { loadFlicksContent() }
-                
+
                 if !isEmbeddedInTab {
-                    // Show navigation hint briefly when first opening Flicks
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        withAnimation(.easeInOut(duration: 0.5)) {
-                            showNavigationHint = true
-                        }
-                        
-                        // Hide hint after 3 seconds
+                        withAnimation(.easeInOut(duration: 0.5)) { showNavigationHint = true }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                            withAnimation(.easeInOut(duration: 0.5)) {
-                                showNavigationHint = false
-                            }
+                            withAnimation(.easeInOut(duration: 0.5)) { showNavigationHint = false }
                         }
                     }
                 }
@@ -244,76 +228,6 @@ struct FlicksView: View {
                     .presentationDetents([.height(600), .large])
                     .presentationDragIndicator(.visible)
                     .presentationBackground(.ultraThinMaterial)
-            }
-        }
-    }
-    
-    private var loadingView: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color.black,
-                    Color.black.opacity(0.8),
-                    Color.black
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-            
-            VStack(spacing: 32) {
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.Colors.primary.opacity(0.2))
-                        .frame(width: 120, height: 120)
-                        .scaleEffect(1.0)
-                        .animation(
-                            .easeInOut(duration: 2.0)
-                            .repeatForever(autoreverses: true),
-                            value: UUID()
-                        )
-                    
-                    Circle()
-                        .fill(AppTheme.Colors.primary.opacity(0.3))
-                        .frame(width: 80, height: 80)
-                        .scaleEffect(1.0)
-                        .animation(
-                            .easeInOut(duration: 1.5)
-                            .repeatForever(autoreverses: true)
-                            .delay(0.3),
-                            value: UUID()
-                        )
-                    
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 40, weight: .bold))
-                        .foregroundStyle(AppTheme.Colors.primary)
-                }
-                
-                VStack(spacing: 12) {
-                    Text("Flicks")
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
-                    
-                    Text("Loading amazing content...")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.8))
-                }
-                
-                HStack(spacing: 12) {
-                    ForEach(0..<3) { index in
-                        Circle()
-                            .fill(.white.opacity(0.9))
-                            .frame(width: 8, height: 8)
-                            .scaleEffect(1.0)
-                            .animation(
-                                .easeInOut(duration: 0.8)
-                                .repeatForever(autoreverses: true)
-                                .delay(Double(index) * 0.2),
-                                value: UUID()
-                            )
-                    }
-                }
             }
         }
     }
@@ -508,12 +422,7 @@ struct FlicksView: View {
 
     
     private func loadFlicksContent() {
-        Task {
-            isLoading = true
-            try? await Task.sleep(nanoseconds: 750_000_000)
-            videos = Video.sampleVideos.shuffled()
-            isLoading = false
-        }
+        videos = Video.sampleVideos.shuffled()
     }
     
     private func resetToFirstVideo() {

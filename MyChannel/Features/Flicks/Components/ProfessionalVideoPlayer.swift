@@ -571,64 +571,49 @@ private struct ProfessionalActionButton: View {
     var isActive: Bool = false
     var activeColor: Color = AppTheme.Colors.primary
     let action: () -> Void
-    
-    @State private var isPressed = false
-    
-    var body: some View {
-        Button(action: {
-            action()
-            HapticManager.shared.impact(style: .light)
-        }) {
-            VStack(spacing: 6) {
-                ZStack {
-                    ZStack {
-                        if isPressed {
-                            Circle()
-                                .fill(.white.opacity(0.2))
-                        } else {
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                        }
-                    }
-                    .frame(width: 56, height: 56)
-                    .overlay(
-                        Circle()
-                            .stroke(.white.opacity(isPressed ? 0.3 : 0.1), lineWidth: 0.5)
-                    )
-                    
-                    Image(systemName: icon)
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundStyle(isActive ? activeColor : .white)
-                }
-                .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-                
-                if !text.isEmpty {
-                    Text(text)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-            }
-            .frame(width: 100, height: 110) // HUGE tap area
-            .background(Color.red.opacity(isPressed ? 0.3 : 0.1)) // DEBUG: Show tap area
-            .contentShape(Rectangle()) // Make entire area tappable
-            .scaleEffect(isPressed ? 0.9 : 1.0) // Visual press feedback
-            .opacity(isPressed ? 0.8 : 1.0) // Opacity feedback
-        }
-        .buttonStyle(.plain)
-        .onLongPressGesture(minimumDuration: 0) { 
-            // Action happens here
-        } onPressingChanged: { pressing in
-            withAnimation(.easeInOut(duration: 0.1)) {
-                isPressed = pressing
-            }
-        }
 
+    @State private var isPressed = false
+    private let diameter: CGFloat = 44
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Button {
+                action()
+                HapticManager.shared.impact(style: .light)
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            Circle().stroke(.white.opacity(isActive ? 0.3 : 0.12), lineWidth: 0.7)
+                        )
+                        .frame(width: diameter, height: diameter)
+
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(isActive ? activeColor : .white)
+                        .contentTransition(.opacity)
+                }
+                .scaleEffect(isPressed ? 0.94 : 1.0)
+                .animation(.easeInOut(duration: 0.12), value: isPressed)
+            }
+            .buttonStyle(.plain)
+            .contentShape(Circle())
+            .onLongPressGesture(minimumDuration: 0, perform: {}) { pressing in
+                withAnimation(.easeInOut(duration: 0.12)) { isPressed = pressing }
+            }
+
+            if !text.isEmpty {
+                Text(text)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .frame(width: 60)
         .accessibilityAddTraits(.isButton)
     }
-    
-
 }
 
 #Preview {
