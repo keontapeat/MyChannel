@@ -121,145 +121,105 @@ struct ProfessionalVideoPlayer: View {
                 ZStack {
                     VStack {
                         Spacer()
-                        // Enhanced gradient with more depth and sophistication
                         LinearGradient(
-                            colors: [
-                                .clear,
-                                .clear,
-                                .black.opacity(0.1),
-                                .black.opacity(0.3),
-                                .black.opacity(0.6),
-                                .black.opacity(0.85),
-                                .black.opacity(0.95)
-                            ],
+                            colors: [.clear, .black.opacity(0.6), .black.opacity(0.92)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
-                        .frame(height: 400)
+                        .frame(height: 280)
                         .allowsHitTesting(false)
                     }
-                    
+
                     HStack(alignment: .bottom) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            Spacer()
-                            
-                            HStack(spacing: 16) {
+                        // LEFT: Minimal info block
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(spacing: 10) {
                                 Button(action: onProfileTap) {
                                     AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
+                                        image.resizable().scaledToFill()
                                     } placeholder: {
-                                        Circle()
-                                            .fill(AppTheme.Colors.primary)
-                                            .overlay(
-                                                Text(String(video.creator.displayName.prefix(1)))
-                                                    .font(.system(size: 18, weight: .bold))
-                                                    .foregroundStyle(.white)
-                                            )
+                                        Circle().fill(.white.opacity(0.25))
                                     }
-                                    .frame(width: 40, height: 40)
+                                    .frame(width: 36, height: 36)
                                     .clipShape(Circle())
-                                    .overlay(
-                                        Circle()
-                                            .stroke(.white.opacity(0.15), lineWidth: 1)
-                                    )
-                                    .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                                    .overlay(Circle().stroke(.white.opacity(0.15), lineWidth: 1))
                                     .accessibilityLabel("\(video.creator.displayName) profile")
                                 }
                                 .buttonStyle(.plain)
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack(spacing: 8) {
-                                                                            Text("@\(video.creator.username)")
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(.white)
-                                        .shadow(color: .black.opacity(0.5), radius: 1, x: 0, y: 0.5)
-                                        
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text("@\(video.creator.username)")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(.white)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.8)
+
                                         if video.creator.isVerified {
                                             Image(systemName: "checkmark.seal.fill")
-                                                .font(.system(size: 16))
-                                                .foregroundStyle(AppTheme.Colors.primary)
-                                                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
-                                                .accessibilityLabel("Verified")
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundColor(AppTheme.Colors.primary)
+                                                .accessibilityLabel("Verified account")
                                         }
                                     }
-                                    
-                                    Text("\(formatCount(subscriberCount)) subscribers")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundStyle(.white.opacity(0.7))
-                                        .shadow(color: .black.opacity(0.3), radius: 0.5, x: 0, y: 0.5)
-                                    
+
                                     if !isFollowing {
                                         Button(action: onFollow) {
                                             Text("Subscribe")
-                                                .font(.system(size: 13, weight: .bold))
-                                                .foregroundStyle(.black)
-                                                .padding(.horizontal, 16)
-                                                .padding(.vertical, 7)
-                                                .background(.white, in: Capsule())
-                                                .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
-                                                .accessibilityLabel("Subscribe")
+                                                .font(.system(size: 12, weight: .bold))
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 6)
+                                                .background(Color.black.opacity(0.55), in: Capsule())
                                         }
                                         .buttonStyle(.plain)
+                                        .accessibilityLabel("Subscribe to \(video.creator.displayName)")
                                     }
                                 }
-                                
-                                Spacer()
+
+                                Spacer(minLength: 0)
                             }
-                            .padding(.bottom, 16)
-                            
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(video.title)
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
-                                    .shadow(color: .black.opacity(0.5), radius: 1, x: 0, y: 0.5)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                
-                                if !video.description.isEmpty {
-                                    Text(video.description)
-                                        .font(.system(size: 14, weight: .regular))
-                                        .foregroundStyle(.white.opacity(0.85))
-                                        .lineLimit(1)
-                                        .truncationMode(.tail)
-                                        .shadow(color: .black.opacity(0.3), radius: 0.5, x: 0, y: 0.5)
+
+                            // Title
+                            Text(video.title)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.white)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+
+                            // Meta row
+                            HStack(spacing: 12) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "eye.fill")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.7))
+                                    Text(formatCount(video.viewCount))
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.9))
                                 }
-                                
-                                // Video stats row
-                                HStack(spacing: 16) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "eye.fill")
-                                            .font(.system(size: 11))
-                                            .foregroundStyle(.white.opacity(0.6))
-                                        Text(formatCount(video.viewCount))
-                                            .font(.system(size: 12, weight: .medium))
-                                            .foregroundStyle(.white.opacity(0.8))
-                                    }
-                                    
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "heart.fill")
-                                            .font(.system(size: 11))
-                                            .foregroundStyle(.red.opacity(0.8))
-                                        Text(formatCount(video.likeCount))
-                                            .font(.system(size: 12, weight: .medium))
-                                            .foregroundStyle(.white.opacity(0.8))
-                                    }
-                                    
-                                    Spacer()
+
+                                HStack(spacing: 4) {
+                                    Image(systemName: "heart.fill")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(.red.opacity(0.9))
+                                    Text(formatCount(video.likeCount))
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.9))
                                 }
+
+                                Spacer(minLength: 0)
                             }
-                            .frame(maxWidth: geometry.size.width * 0.65, alignment: .leading)
-                            .padding(.bottom, 120)
                         }
+                        .frame(maxWidth: geometry.size.width * 0.68, alignment: .leading)
                         .padding(.leading, 20)
-                        
-                        Spacer()
-                        
-                        VStack(spacing: 8) {
-                            Spacer()
-                            
+                        .padding(.bottom, 90)
+
+                        Spacer(minLength: 0)
+
+                        // RIGHT: Minimal vertical actions, anchored bottom-right
+                        VStack(spacing: 12) {
+                            Spacer(minLength: 0)
+
                             ProfessionalActionButton(
                                 icon: isLiked ? "heart.fill" : "heart",
                                 text: formatCount(video.likeCount),
@@ -267,47 +227,40 @@ struct ProfessionalVideoPlayer: View {
                                 activeColor: .red,
                                 action: onLike
                             )
-                            
+
                             ProfessionalActionButton(
                                 icon: "bubble.right.fill",
                                 text: formatCount(video.commentCount),
                                 action: onComment
                             )
-                            
+
                             ProfessionalActionButton(
                                 icon: "arrowshape.turn.up.right.fill",
                                 text: "Share",
                                 action: onShare
                             )
-                            
+
                             ProfessionalActionButton(
                                 icon: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
                                 text: "",
                                 action: toggleMute
                             )
-                            
+
                             Button(action: onProfileTap) {
                                 AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
+                                    image.resizable().scaledToFill()
                                 } placeholder: {
-                                    Circle()
-                                        .fill(AppTheme.Colors.primary.opacity(0.8))
+                                    Circle().fill(.white.opacity(0.25))
                                 }
-                                .frame(width: 36, height: 36)
+                                .frame(width: 34, height: 34)
                                 .clipShape(Circle())
-                                .overlay(
-                                    Circle()
-                                        .stroke(.white, lineWidth: 2.5)
-                                )
-                                .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                                .overlay(Circle().stroke(.white, lineWidth: 2))
                                 .accessibilityHidden(true)
                             }
                             .buttonStyle(.plain)
                         }
-                        .padding(.trailing, 24)
-                        .padding(.bottom, 130)
+                        .padding(.trailing, 18)
+                        .padding(.bottom, 96)
                     }
                 }
             }

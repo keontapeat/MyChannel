@@ -30,16 +30,16 @@ struct LiveTVChannel: Identifiable, Codable {
         
         var displayName: String {
             switch self {
-            case .news: return "📰 News"
-            case .sports: return "⚽ Sports"
-            case .entertainment: return "🎭 Entertainment"
-            case .movies: return "🎬 Movies"
-            case .music: return "🎵 Music"
-            case .kids: return "👶 Kids"
-            case .documentary: return "📽️ Documentary"
-            case .lifestyle: return "✨ Lifestyle"
-            case .business: return "💼 Business"
-            case .international: return "🌍 International"
+            case .news: return "News"
+            case .sports: return "Sports"
+            case .entertainment: return "Entertainment"
+            case .movies: return "Movies"
+            case .music: return "Music"
+            case .kids: return "Kids"
+            case .documentary: return "Documentary"
+            case .lifestyle: return "Lifestyle"
+            case .business: return "Business"
+            case .international: return "International"
             }
         }
         
@@ -147,6 +147,104 @@ extension LiveTVChannel {
             quality: "HD",
             language: "English",
             country: "US",
+            epgURL: nil
+        ),
+        LiveTVChannel(
+            id: "aje-english",
+            name: "Al Jazeera English",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Al_Jazeera_English_logo.svg/512px-Al_Jazeera_English_logo.svg.png",
+            streamURL: "https://live-hls-web-aje.getaj.net/AJE/01.m3u8",
+            category: .news,
+            description: "Global news and analysis from Al Jazeera English",
+            isLive: true,
+            viewerCount: 31200,
+            quality: "HD",
+            language: "English",
+            country: "International",
+            epgURL: nil
+        ),
+        LiveTVChannel(
+            id: "dw-english",
+            name: "DW English",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Deutsche_Welle_logo.svg/512px-Deutsche_Welle_logo.svg.png",
+            streamURL: "https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8",
+            category: .international,
+            description: "Deutsche Welle’s international news channel",
+            isLive: true,
+            viewerCount: 22100,
+            quality: "HD",
+            language: "English",
+            country: "International",
+            epgURL: nil
+        ),
+        LiveTVChannel(
+            id: "france24-en",
+            name: "France 24 (English)",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/FRANCE_24_logo.svg/512px-FRANCE_24_logo.svg.png",
+            streamURL: "https://static.france24.com/live/F24_EN_LO_HLS/live_web.m3u8",
+            category: .international,
+            description: "International news from France 24 in English",
+            isLive: true,
+            viewerCount: 18750,
+            quality: "HD",
+            language: "English",
+            country: "International",
+            epgURL: nil
+        ),
+        LiveTVChannel(
+            id: "trt-world",
+            name: "TRT World",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/TRT_World_logo.svg/512px-TRT_World_logo.svg.png",
+            streamURL: "https://tv-trtworld.live.trt.com.tr/master_720.m3u8",
+            category: .international,
+            description: "Global news and current affairs from TRT World",
+            isLive: true,
+            viewerCount: 16340,
+            quality: "HD",
+            language: "English",
+            country: "International",
+            epgURL: nil
+        ),
+        LiveTVChannel(
+            id: "bloomberg-us",
+            name: "Bloomberg TV",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Bloomberg_logo.svg/512px-Bloomberg_logo.svg.png",
+            streamURL: "https://www.bloomberg.com/media-manifest/streams/us.m3u8",
+            category: .business,
+            description: "Live business and financial news from Bloomberg",
+            isLive: true,
+            viewerCount: 29870,
+            quality: "HD",
+            language: "English",
+            country: "US",
+            epgURL: nil
+        ),
+        LiveTVChannel(
+            id: "nasa-public",
+            name: "NASA TV Public",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/NASA_logo.svg/512px-NASA_logo.svg.png",
+            streamURL: "https://ntv1-aka.akamaized.net/hls/live/2014075/NASA-NTV1-HLS/master.m3u8",
+            category: .documentary,
+            description: "Live NASA events, launches, and educational programming",
+            isLive: true,
+            viewerCount: 15450,
+            quality: "HD",
+            language: "English",
+            country: "US",
+            epgURL: nil
+        ),
+        LiveTVChannel(
+            id: "nhk-world",
+            name: "NHK World Japan",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/NHK-World.svg/512px-NHK-World.svg.png",
+            streamURL: "https://nhkworld.webcdn.stream.ne.jp/www11/nhkworld-tv/global/2639429/live.m3u8",
+            category: .international,
+            description: "Japan’s international broadcasting service in English",
+            isLive: true,
+            viewerCount: 14210,
+            quality: "HD",
+            language: "English",
+            country: "Japan",
             epgURL: nil
         )
     ]
