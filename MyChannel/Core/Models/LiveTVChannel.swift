@@ -63,7 +63,52 @@ struct LiveTVChannel: Identifiable, Codable {
 // MARK: - Sample Live TV Channels
 extension LiveTVChannel {
     static let sampleChannels: [LiveTVChannel] = [
-        // Pluto TV Channels
+        // 1) Al Jazeera English (stable)
+        LiveTVChannel(
+            id: "aje-english",
+            name: "Al Jazeera English",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Al_Jazeera_English_logo.svg/512px-Al_Jazeera_English_logo.svg.png",
+            streamURL: "https://live-hls-web-aje.getaj.net/AJE/01.m3u8",
+            category: .news,
+            description: "Global news and analysis from Al Jazeera English",
+            isLive: true,
+            viewerCount: 31200,
+            quality: "HD",
+            language: "English",
+            country: "International",
+            epgURL: nil
+        ),
+        // 2) DW English (stable)
+        LiveTVChannel(
+            id: "dw-english",
+            name: "DW English",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Deutsche_Welle_logo.svg/512px-Deutsche_Welle_logo.svg.png",
+            streamURL: "https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8",
+            category: .international,
+            description: "Deutsche Welle’s international news channel",
+            isLive: true,
+            viewerCount: 22100,
+            quality: "HD",
+            language: "English",
+            country: "International",
+            epgURL: nil
+        ),
+        // 3) France 24 English (stable)
+        LiveTVChannel(
+            id: "france24-en",
+            name: "France 24 (English)",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/FRANCE_24_logo.svg/512px-FRANCE_24_logo.svg.png",
+            streamURL: "https://static.france24.com/live/F24_EN_LO_HLS/live_web.m3u8",
+            category: .international,
+            description: "International news from France 24 in English",
+            isLive: true,
+            viewerCount: 18750,
+            quality: "HD",
+            language: "English",
+            country: "International",
+            epgURL: nil
+        ),
+        // The rest of the sample lineup (unchanged order is fine for demo)
         LiveTVChannel(
             id: "pluto-cbs-news",
             name: "CBS News",
@@ -106,7 +151,6 @@ extension LiveTVChannel {
             country: "US",
             epgURL: nil
         ),
-        // Plex Live TV Channels
         LiveTVChannel(
             id: "plex-classic-movies",
             name: "Plex Classic Movies",
@@ -147,48 +191,6 @@ extension LiveTVChannel {
             quality: "HD",
             language: "English",
             country: "US",
-            epgURL: nil
-        ),
-        LiveTVChannel(
-            id: "aje-english",
-            name: "Al Jazeera English",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Al_Jazeera_English_logo.svg/512px-Al_Jazeera_English_logo.svg.png",
-            streamURL: "https://live-hls-web-aje.getaj.net/AJE/01.m3u8",
-            category: .news,
-            description: "Global news and analysis from Al Jazeera English",
-            isLive: true,
-            viewerCount: 31200,
-            quality: "HD",
-            language: "English",
-            country: "International",
-            epgURL: nil
-        ),
-        LiveTVChannel(
-            id: "dw-english",
-            name: "DW English",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Deutsche_Welle_logo.svg/512px-Deutsche_Welle_logo.svg.png",
-            streamURL: "https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8",
-            category: .international,
-            description: "Deutsche Welle’s international news channel",
-            isLive: true,
-            viewerCount: 22100,
-            quality: "HD",
-            language: "English",
-            country: "International",
-            epgURL: nil
-        ),
-        LiveTVChannel(
-            id: "france24-en",
-            name: "France 24 (English)",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/FRANCE_24_logo.svg/512px-FRANCE_24_logo.svg.png",
-            streamURL: "https://static.france24.com/live/F24_EN_LO_HLS/live_web.m3u8",
-            category: .international,
-            description: "International news from France 24 in English",
-            isLive: true,
-            viewerCount: 18750,
-            quality: "HD",
-            language: "English",
-            country: "International",
             epgURL: nil
         ),
         LiveTVChannel(

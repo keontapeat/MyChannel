@@ -7,6 +7,7 @@
 
 import SwiftUI
 import PhotosUI
+import AVFoundation
 
 // MARK: - Edit Profile View (Enhanced)
 struct EditProfileView: View {
@@ -35,6 +36,10 @@ struct EditProfileView: View {
     @State private var bannerVideoLocalURL: URL?
     @State private var bannerVideoMuted: Bool = true
     @State private var bannerContentMode: BannerContentMode = .fill
+    
+    @State private var showingDefaultBannerPicker = false
+    @State private var selectedDefaultBannerImageURL: String? = nil
+    @State private var selectedDefaultBannerVideoURL: String? = nil
     
     var body: some View {
         ZStack {
@@ -238,6 +243,13 @@ struct EditProfileView: View {
                 .pickerStyle(.segmented)
                 .onChange(of: isVideoCover) { _, _ in
                     hasUnsavedChanges = true
+                    // Clear opposite selection when switching modes
+                    if isVideoCover {
+                        selectedDefaultBannerImageURL = nil
+                    } else {
+                        selectedDefaultBannerVideoURL = nil
+                        bannerVideoLocalURL = nil
+                    }
                 }
 
                 if isVideoCover {
@@ -254,15 +266,43 @@ struct EditProfileView: View {
                     .onChange(of: bannerVideoMuted) { _, _ in hasUnsavedChanges = true }
                     .onChange(of: bannerContentMode) { _, _ in hasUnsavedChanges = true }
 
-                    Button(action: {
-                        showingVideoPicker = true
-                        HapticManager.shared.impact(style: .light)
-                    }) {
+                    // Video source buttons
+                    HStack(spacing: 12) {
+                        Button {
+                            showingVideoPicker = true
+                            HapticManager.shared.impact(style: .light)
+                        } label: {
+                            Label("Pick from Library", systemImage: "video.badge.plus")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(AppTheme.Colors.primary, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            showingDefaultBannerPicker = true
+                            HapticManager.shared.impact(style: .light)
+                        } label: {
+                            Label("Choose from Defaults", systemImage: "sparkles")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.primary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(AppTheme.Colors.surface, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Button(action: {}) {
                         ZStack {
-                            if let urlString = user.bannerVideoURL, let url = URL(string: urlString) {
+                            if let urlStr = selectedDefaultBannerVideoURL, let url = URL(string: urlStr) {
                                 VideoBannerPreview(url: url)
                             } else if let local = bannerVideoLocalURL {
                                 VideoBannerPreview(url: local)
+                            } else if let currentRemote = user.bannerVideoURL, let url = URL(string: currentRemote) {
+                                VideoBannerPreview(url: url)
                             } else {
                                 Rectangle()
                                     .fill(
@@ -278,17 +318,6 @@ struct EditProfileView: View {
                                             .foregroundColor(.white)
                                     )
                             }
-                            VStack(spacing: 8) {
-                                Image(systemName: "video.badge.plus")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.white)
-                                Text("Choose Cover Video")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.white)
-                            }
-                            .padding(16)
-                            .background(.black.opacity(0.35))
-                            .cornerRadius(12)
                         }
                         .frame(height: 140)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -297,59 +326,71 @@ struct EditProfileView: View {
                                 .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
                         )
                     }
-                    .buttonStyle(PlainButtonStyle())
+                    .buttonStyle(.plain)
                 } else {
-                Button(action: {
-                    imagePickerType = .banner
-                    showingImagePicker = true
-                    HapticManager.shared.impact(style: .light)
-                }) {
-                    ZStack {
-                        if let bannerURL = user.bannerImageURL {
-                            CachedAsyncImage(url: URL(string: bannerURL)) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                Rectangle()
-                                    .fill(AppTheme.Colors.surface)
-                                    .overlay(
-                                        ProgressView()
-                                            .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
-                                    )
-                            }
-                        } else {
-                            Rectangle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [AppTheme.Colors.primary.opacity(0.3), AppTheme.Colors.secondary.opacity(0.3)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                        }
-                        
-                        VStack(spacing: 8) {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 24))
-                                .foregroundColor(.white)
-                            
-                            Text("Change Cover")
+                    // Photo source buttons
+                    HStack(spacing: 12) {
+                        Button {
+                            imagePickerType = .banner
+                            showingImagePicker = true
+                            HapticManager.shared.impact(style: .light)
+                        } label: {
+                            Label("Pick from Library", systemImage: "photo.badge.plus")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(AppTheme.Colors.primary, in: Capsule())
                         }
-                        .padding(16)
-                        .background(.black.opacity(0.5))
-                        .cornerRadius(12)
+                        .buttonStyle(.plain)
+
+                        Button {
+                            showingDefaultBannerPicker = true
+                            HapticManager.shared.impact(style: .light)
+                        } label: {
+                            Label("Choose from Defaults", systemImage: "sparkles")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.primary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(AppTheme.Colors.surface, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .frame(height: 140)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(PlainButtonStyle())
+
+                    Button(action: {}) {
+                        ZStack {
+                            if let urlStr = selectedDefaultBannerImageURL, let url = URL(string: urlStr) {
+                                CachedAsyncImage(url: url) { image in
+                                    image.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Rectangle().fill(AppTheme.Colors.surface)
+                                }
+                            } else if let bannerURL = user.bannerImageURL {
+                                CachedAsyncImage(url: URL(string: bannerURL)) { image in
+                                    image.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Rectangle().fill(AppTheme.Colors.surface)
+                                }
+                            } else {
+                                Rectangle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [AppTheme.Colors.primary.opacity(0.3), AppTheme.Colors.secondary.opacity(0.3)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                        }
+                        .frame(height: 140)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             
@@ -421,6 +462,23 @@ struct EditProfileView: View {
                     Spacer()
                 }
             }
+        }
+        .sheet(isPresented: $showingDefaultBannerPicker) {
+            DefaultBannerPickerView(
+                mode: isVideoCover ? .video : .image,
+                onSelect: { banner in
+                    if banner.kind == .video {
+                        selectedDefaultBannerVideoURL = banner.assetURL
+                        // Clear local pick if switching to default
+                        bannerVideoLocalURL = nil
+                        isVideoCover = true
+                    } else {
+                        selectedDefaultBannerImageURL = banner.assetURL
+                        isVideoCover = false
+                    }
+                    hasUnsavedChanges = true
+                }
+            )
         }
     }
     
@@ -562,20 +620,27 @@ struct EditProfileView: View {
         
         Task {
             var remoteBannerURL: String? = user.bannerVideoURL
-            if isVideoCover, let localURL = bannerVideoLocalURL {
-                // Prepare (trim/compress) and upload banner video
-                do {
-                    let prepared = try await ProfileMediaUploader.prepareBannerVideo(from: localURL)
-                    let remote = try await ProfileMediaUploader.uploadBannerVideo(prepared, fileName: "banner_\(user.id).mp4")
-                    remoteBannerURL = remote
-                } catch {
-                    print("Banner upload failed: \(error)")
-                    // Fallback to local file path to keep UI updated; server sync can happen later
-                    remoteBannerURL = localURL.absoluteString
+
+            if isVideoCover {
+                if let defaultVideoURL = selectedDefaultBannerVideoURL {
+                    remoteBannerURL = defaultVideoURL
+                } else if let localURL = bannerVideoLocalURL {
+                    do {
+                        let prepared = try await ProfileMediaUploader.prepareBannerVideo(from: localURL)
+                        let remote = try await ProfileMediaUploader.uploadBannerVideo(prepared, fileName: "banner_\(user.id).mp4")
+                        remoteBannerURL = remote
+                    } catch {
+                        print("Banner upload failed: \(error)")
+                        remoteBannerURL = localURL.absoluteString
+                    }
                 }
             }
-            
-            // Update user with new values
+
+            var imageBannerURL: String? = user.bannerImageURL
+            if !isVideoCover, let defaultImageURL = selectedDefaultBannerImageURL {
+                imageBannerURL = defaultImageURL
+            }
+
             var updatedUser = user
             updatedUser = User(
                 id: user.id,
@@ -583,7 +648,7 @@ struct EditProfileView: View {
                 displayName: displayName.isEmpty ? user.displayName : displayName,
                 email: user.email,
                 profileImageURL: user.profileImageURL,
-                bannerImageURL: isVideoCover ? nil : user.bannerImageURL,
+                bannerImageURL: isVideoCover ? nil : imageBannerURL,
                 bio: bio.isEmpty ? nil : bio,
                 subscriberCount: user.subscriberCount,
                 videoCount: user.videoCount,
@@ -605,28 +670,13 @@ struct EditProfileView: View {
             isSaving = false
             hasUnsavedChanges = false
             
-            // Show success confirmation
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                showingSaveConfirmation = true
-            }
-            
-            // Hide confirmation after 2 seconds
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showingSaveConfirmation = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    showingSaveConfirmation = false
-                }
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showingSaveConfirmation = false }
             }
-            
-            // Notify that profile was updated
             NotificationCenter.default.post(name: .userProfileUpdated, object: updatedUser)
-            
-            // Success haptic
             HapticManager.shared.impact(style: .light)
-            
-            // Auto-dismiss after showing confirmation
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                dismiss()
-            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { dismiss() }
         }
     }
 
@@ -797,7 +847,7 @@ struct ModernTextEditor: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isFocused ? AppTheme.Colors.primary : AppTheme.Colors.divider.opacity(0.3), lineWidth: isFocused ? 2 : 1)
+                    .stroke(isFocused ? AppTheme.Colors.primary : AppTheme.Colors.divider.opacity(0.2), lineWidth: isFocused ? 2 : 1)
             )
             .animation(.easeInOut(duration: 0.2), value: isFocused)
         }
@@ -841,6 +891,98 @@ struct PrivacyToggleRow: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
         )
+    }
+}
+
+private struct DefaultProfileBanner: Identifiable, Hashable {
+    enum Kind { case image, video }
+    let id: String
+    let title: String
+    let subtitle: String
+    let kind: Kind
+    let assetURL: String
+    let previewURL: String?
+    
+    static let all: [DefaultProfileBanner] = [
+        .init(id: "b1", title: "Golden Hour Mountains", subtitle: "Warm cinematic tones", kind: .image, assetURL: "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1600&q=80", previewURL: nil),
+        .init(id: "b2", title: "Ocean Sunset", subtitle: "Soft gradients and waves", kind: .image, assetURL: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1600&q=80", previewURL: nil),
+        .init(id: "b3", title: "City Lights", subtitle: "Modern urban vibe", kind: .image, assetURL: "https://images.unsplash.com/photo-1499346030926-9a72daac6c63?w=1600&q=80", previewURL: nil),
+        .init(id: "b4", title: "Cinematic Nature", subtitle: "Subtle motion video", kind: .video, assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", previewURL: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1600&q=80"),
+        .init(id: "b5", title: "Abstract Flow", subtitle: "Minimal gradient waves", kind: .image, assetURL: "https://images.unsplash.com/photo-1549880338-65ddcdfd017b?w=1600&q=80", previewURL: nil),
+        .init(id: "b6", title: "Sintel Trailer", subtitle: "Cinematic video banner", kind: .video, assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4", previewURL: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1600&q=80")
+    ]
+}
+
+private struct DefaultBannerPickerView: View {
+    enum Mode { case image, video }
+    let mode: Mode
+    let onSelect: (DefaultProfileBanner) -> Void
+    @Environment(\.dismiss) private var dismiss
+    
+    var filtered: [DefaultProfileBanner] {
+        DefaultProfileBanner.all.filter { mode == .image ? $0.kind == .image : $0.kind == .video }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                    ForEach(filtered) { banner in
+                        Button {
+                            onSelect(banner)
+                            dismiss()
+                        } label: {
+                            ZStack(alignment: .bottomLeading) {
+                                bannerThumb(banner)
+                                    .frame(height: 120)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(banner.title)
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                    Text(banner.subtitle)
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.9))
+                                }
+                                .padding(10)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(16)
+            }
+            .navigationTitle("Choose Banner")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
+            }
+        }
+    }
+    
+    private func bannerThumb(_ banner: DefaultProfileBanner) -> some View {
+        Group {
+            if banner.kind == .video {
+                ZStack {
+                    CachedAsyncImage(url: URL(string: banner.previewURL ?? "")) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        RoundedRectangle(cornerRadius: 14).fill(AppTheme.Colors.textTertiary.opacity(0.15))
+                    }
+                    Circle()
+                        .fill(.black.opacity(0.5))
+                        .frame(width: 32, height: 32)
+                        .overlay(Image(systemName: "play.fill").foregroundStyle(.white).font(.system(size: 14, weight: .bold)))
+                }
+            } else {
+                CachedAsyncImage(url: URL(string: banner.assetURL)) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    RoundedRectangle(cornerRadius: 14).fill(AppTheme.Colors.textTertiary.opacity(0.15))
+                }
+            }
+        }
     }
 }
 

@@ -5,6 +5,8 @@ struct LiveTVChannelsView: View {
     @State private var selectedCategory: LiveTVChannel.ChannelCategory? = nil
     @State private var searchText: String = ""
     @State private var viewMode: ViewMode = .grid
+    @State private var healthyChannels: [LiveTVChannel] = []
+    @State private var isCheckingHealth = true
 
     enum ViewMode: String, CaseIterable {
         case grid = "grid"
@@ -66,7 +68,9 @@ struct LiveTVChannelsView: View {
     }
 
     private var filteredChannels: [LiveTVChannel] {
-        var channels = allChannels
+        // Prefer health-checked set; otherwise fall back to all
+        var channels = healthyChannels.isEmpty ? allChannels : healthyChannels
+
         if let category = selectedCategory {
             channels = channels.filter { $0.category == category }
         }
@@ -88,6 +92,10 @@ struct LiveTVChannelsView: View {
                 categoryChips
 
                 ScrollView {
+                    if isCheckingHealth {
+                        ProgressView("Checking channels…")
+                            .padding(.top, 40)
+                    }
                     if viewMode == .grid {
                         LazyVGrid(columns: [GridItem(.flexible(), spacing: 16),
                                             GridItem(.flexible(), spacing: 16)],
@@ -112,6 +120,14 @@ struct LiveTVChannelsView: View {
             }
             .background(AppTheme.Colors.background)
             .toolbar(.hidden, for: .navigationBar)
+        }
+        .task {
+            // Health-rank in the background
+            let ranked = await LiveStreamHealthChecker.rankHealthyChannels(allChannels, timeout: 1.5)
+            await MainActor.run {
+                healthyChannels = ranked
+                isCheckingHealth = false
+            }
         }
     }
 
@@ -276,7 +292,7 @@ private struct MinimalGridChannelCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
                     if showPreview {
-                        LiveChannelThumbnailView(streamURL: channel.streamURL)
+                        LiveChannelThumbnailView(streamURL: channel.streamURL, posterURL: channel.logoURL)
                             .aspectRatio(16/9, contentMode: .fill)
                             .frame(maxWidth: .infinity)
                             .background(Color(.systemGray6))
@@ -284,27 +300,18 @@ private struct MinimalGridChannelCard: View {
                     } else {
                         AsyncImage(url: URL(string: channel.logoURL)) { image in
                             image.resizable().scaledToFit()
-                        } placeholder: {
-                            Image(systemName: "tv")
-                                .font(.system(size: 20))
-                                .foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
+                        } placeholder: { Color(.systemGray6) }
                         .aspectRatio(16/9, contentMode: .fit)
                         .frame(maxWidth: .infinity)
-                        .background(Color(.systemGray6))
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
 
                     if channel.isLive {
                         HStack(spacing: 4) {
                             Circle().fill(.white).frame(width: 4, height: 4)
-                            Text("LIVE")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
+                            Text("LIVE").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
                         .background(Capsule().fill(Color.red.opacity(0.9)))
                         .padding(8)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -352,33 +359,24 @@ private struct MinimalListChannelCard: View {
             HStack(spacing: 12) {
                 ZStack {
                     if showPreview {
-                        LiveChannelThumbnailView(streamURL: channel.streamURL)
+                        LiveChannelThumbnailView(streamURL: channel.streamURL, posterURL: channel.logoURL)
                             .frame(width: 160, height: 90)
                             .background(Color(.systemGray6))
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     } else {
                         AsyncImage(url: URL(string: channel.logoURL)) { image in
                             image.resizable().scaledToFit()
-                        } placeholder: {
-                            Image(systemName: "tv")
-                                .font(.system(size: 20))
-                                .foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
+                        } placeholder: { Color(.systemGray6) }
                         .frame(width: 160, height: 90)
-                        .background(Color(.systemGray6))
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
 
                     if channel.isLive {
                         HStack(spacing: 4) {
                             Circle().fill(.white).frame(width: 4, height: 4)
-                            Text("LIVE")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
+                            Text("LIVE").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
                         .background(Capsule().fill(Color.red.opacity(0.9)))
                         .padding(6)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

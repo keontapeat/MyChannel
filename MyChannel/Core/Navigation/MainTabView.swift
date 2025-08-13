@@ -54,7 +54,6 @@ struct MainTabView: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 selectedTab = .profile
             }
-            HapticManager.shared.impact(style: .light)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowUpload"))) { _ in
             showingUpload = true
@@ -161,14 +160,11 @@ struct MainTabView: View {
         guard tab != .upload else { return }
         
         do {
-            // Handle tab reselection - if same tab is tapped, pop to root or scroll to top
             if tab == selectedTab {
                 handleTabReselection(tab)
             } else {
-                // Normal tab change
                 previousTab = selectedTab
                 selectedTab = tab
-                // Pause/Resume heavy home previews to avoid freezes
                 if tab == .home {
                     NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
                 } else {
@@ -176,13 +172,12 @@ struct MainTabView: View {
                 }
             }
             
-            // Clear badge for selected tab
             notificationBadges[tab] = 0
             
-            // Haptic feedback
-            HapticManager.shared.impact(style: .light)
+            if tab != .profile {
+                HapticManager.shared.impact(style: .light)
+            }
             
-            // Analytics tracking (safe async)
             Task { @MainActor in
                 do {
                     await AnalyticsService.shared.trackScreenView(tab.title)
@@ -196,26 +191,22 @@ struct MainTabView: View {
     }
     
     private func handleTabReselection(_ tab: TabItem) {
-        // Handle reselection of the same tab
         switch tab {
         case .home:
-            // Send notification to HomeView to scroll to top
             NotificationCenter.default.post(name: NSNotification.Name("HomeScrollToTop"), object: nil)
         case .flicks:
-            // Send notification to FlicksView to reset to first video
             NotificationCenter.default.post(name: NSNotification.Name("FlicksResetToFirst"), object: nil)
         case .search:
-            // Send notification to SearchView to clear search and scroll to top
             NotificationCenter.default.post(name: NSNotification.Name("SearchClearAndReset"), object: nil)
         case .profile:
-            // Send notification to ProfileView to scroll to top
-            NotificationCenter.default.post(name: .scrollToTopProfile, object: nil)
+            break
         case .upload:
             break
         }
         
-        // Stronger haptic feedback for reselection
-        HapticManager.shared.impact(style: .medium)
+        if tab != .profile {
+            HapticManager.shared.impact(style: .medium)
+        }
     }
     
     private func handleError(_ message: String) {
@@ -805,7 +796,6 @@ struct CustomTabBarButton: View {
         Button(action: action) {
             VStack(spacing: 0) {
                 ZStack {
-                    // Selected background
                     if isSelected {
                         Capsule()
                             .fill(AppTheme.Colors.primary)
@@ -828,15 +818,6 @@ struct CustomTabBarButton: View {
                     }
                 }
                 .frame(height: 32)
-                
-                // Only show label for selected tab
-                if isSelected {
-                    Text(tab.title)
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.primary)
-                        .padding(.top, 2)
-                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                }
             }
             .frame(height: 48)
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isSelected)

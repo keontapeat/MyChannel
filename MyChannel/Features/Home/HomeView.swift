@@ -32,6 +32,27 @@ enum FeaturedItem: Identifiable, Equatable {
     }
 }
 
+// MARK: - Centralized Full Screen Routing
+enum FullScreenRoute: Identifiable {
+    case video(Video)
+    case movie(FreeMovie)
+    case search
+    case stories(AssetStory)
+    case allMovies
+    case allLiveTV
+
+    var id: String {
+        switch self {
+        case .video(let v): return "video-\(v.id)"
+        case .movie(let m): return "movie-\(m.id)"
+        case .search: return "search"
+        case .stories(let s): return "stories-\(s.id)"
+        case .allMovies: return "allMovies"
+        case .allLiveTV: return "allLiveTV"
+        }
+    }
+}
+
 // MARK: - HomeView
 struct HomeView: View {
     @EnvironmentObject private var appState: AppState
@@ -39,17 +60,20 @@ struct HomeView: View {
 
     @State private var scrollOffset: CGFloat = 0
     @State private var isRefreshing: Bool = false
-    @State private var selectedVideo: Video? = nil
-    @State private var selectedMovie: FreeMovie? = nil
-    @State private var showAllFreeMovies: Bool = false
-    @State private var showAllLiveTV: Bool = false
-    @State private var showingSearchView: Bool = false
+
+    // Route-driven presentation (fixes white screen when dismissing covers)
+    @State private var route: FullScreenRoute? = nil
+
     @State private var featuredContent: [Video] = []
     @State private var heroVideoIndex: Int = 0
     @State private var showingStories: Bool = true
     @State private var assetStories: [AssetStory] = AssetStory.sampleStories
-    @State private var selectedAssetStory: AssetStory? = nil
     @Namespace private var storiesNS
+
+    private var activeStoriesHeroId: UUID? {
+        if case let .stories(story) = route { return story.id }
+        return nil
+    }
 
     private var isRunningInPreview: Bool {
         #if DEBUG
@@ -73,14 +97,14 @@ struct HomeView: View {
                             AssetBouncyStoriesRow(
                                 stories: assetStories,
                                 onStoryTap: { story in
-                                    selectedAssetStory = story
+                                    route = .stories(story)
                                 },
                                 onAddStory: {
                                     HapticManager.shared.impact(style: .medium)
                                     showStoryCreator()
                                 },
                                 ns: storiesNS,
-                                activeHeroId: selectedAssetStory?.id
+                                activeHeroId: activeStoriesHeroId
                             )
                             .zIndex(2)
                             .padding(.bottom, 32)
@@ -89,16 +113,18 @@ struct HomeView: View {
                         MinimalHeroSection(
                             featuredContent: featuredContent,
                             heroVideoIndex: heroVideoIndex,
-                            onPlayVideo: playVideo,
+                            onPlayVideo: { video in
+                                route = .video(video)
+                            },
                             onAddToList: toggleWatchLater
                         )
                         .padding(.bottom, 40)
 
                         MinimalContentSections(
-                            onPlayVideo: playVideo,
-                            onSelectMovie: { movie in selectedMovie = movie },
-                            onSeeAllFreeMovies: { showAllFreeMovies = true },
-                            onSeeAllLiveTV: { showAllLiveTV = true }
+                            onPlayVideo: { video in route = .video(video) },
+                            onSelectMovie: { movie in route = .movie(movie) },
+                            onSeeAllFreeMovies: { route = .allMovies },
+                            onSeeAllLiveTV: { route = .allLiveTV }
                         )
 
                         Color.clear.frame(height: 100)
@@ -111,7 +137,7 @@ struct HomeView: View {
 
                 MinimalNavigationHeader(
                     scrollOffset: scrollOffset,
-                    onSearchTap: { showingSearchView = true },
+                    onSearchTap: { route = .search },
                     onProfileTap: {
                         NotificationCenter.default.post(name: NSNotification.Name("SwitchToProfileTab"), object: nil)
                     }
@@ -122,26 +148,6 @@ struct HomeView: View {
         }
         .onAppear(perform: setupContent)
         .refreshable { await refreshContent() }
-        .fullScreenCover(item: $selectedVideo) { video in
-            VideoDetailView(video: video)
-                .onDisappear { selectedVideo = nil }
-        }
-        .fullScreenCover(item: $selectedMovie) { movie in
-            MovieDetailView(movie: movie)
-                .onDisappear { selectedMovie = nil }
-        }
-        .fullScreenCover(isPresented: $showingSearchView) {
-            SearchView()
-                .onDisappear { showingSearchView = false }
-        }
-        .fullScreenCover(item: $selectedAssetStory) { story in
-            AssetStoriesPagerView(
-                stories: assetStories,
-                initialIndex: assetStories.firstIndex(where: { $0.id == story.id }) ?? 0
-            ) {
-                selectedAssetStory = nil
-            }
-        }
         .sheet(isPresented: $presentStoryCreator) {
             CreateStoryView { newStory in
                 let media: AssetMedia = (newStory.mediaType == .video) ? .video(newStory.mediaURL) : .image(newStory.mediaURL)
@@ -161,13 +167,48 @@ struct HomeView: View {
                 }
             )
         )
-        .fullScreenCover(isPresented: $showAllFreeMovies) {
-            MoviesView()
-                .environmentObject(appState)
+        .fullScreenCover(item: $route) { route in
+            switch route {
+            case .video(let video):
+                VideoDetailView(video: video)
+                    .onDisappear { self.route = nil }
+
+            case .movie(let movie):
+                MovieDetailView(movie: movie)
+                    .onDisappear { self.route = nil }
+
+            case .search:
+                SearchView()
+                    .onDisappear { self.route = nil }
+
+            case .stories(let story):
+                AssetStoriesPagerView(
+                    stories: assetStories,
+                    initialIndex: assetStories.firstIndex(where: { $0.id == story.id }) ?? 0
+                ) {
+                    self.route = nil
+                }
+                .onDisappear { self.route = nil }
+
+            case .allMovies:
+                MoviesView()
+                    .environmentObject(appState)
+                    .background(Color(.systemBackground).ignoresSafeArea())
+                    .onDisappear { self.route = nil }
+
+            case .allLiveTV:
+                LiveTVChannelsView()
+                    .environmentObject(appState)
+                    .background(Color(.systemBackground).ignoresSafeArea())
+                    .onDisappear { self.route = nil }
+            }
         }
-        .fullScreenCover(isPresented: $showAllLiveTV) {
-            LiveTVChannelsView()
-                .environmentObject(appState)
+        .onChange(of: route?.id) { _, newValue in
+            let shouldPause = newValue != nil
+            NotificationCenter.default.post(
+                name: NSNotification.Name(shouldPause ? "LivePreviewsShouldPause" : "LivePreviewsShouldResume"),
+                object: nil
+            )
         }
     }
 
@@ -190,13 +231,6 @@ struct HomeView: View {
     // MARK: - Action Methods
     private func showStoryCreator() {
         presentStoryCreator = true
-    }
-
-    private func playVideo(_ video: Video) {
-        GlobalVideoPlayerManager.shared.stopImmediately()
-        GlobalVideoPlayerManager.shared.currentVideo = video
-        selectedVideo = video
-        HapticManager.shared.impact(style: .medium)
     }
 
     private func toggleWatchLater(_ video: Video) {
@@ -586,7 +620,6 @@ struct MinimalContentSections: View {
                 return
             }
 
-            // First attempt: popular with official trailers
             let items = try await TMDBService.shared.fetchPopularWithTrailersUS(page: 1, limit: 30)
             var chosen: [FreeMovie] = items.filter { $0.trailerURL != nil }
 
@@ -601,7 +634,6 @@ struct MinimalContentSections: View {
                 chosen = freeList
             }
 
-            // Boost preferred titles and sort by recency/rating
             let boosted = chosen.sorted { lhs, rhs in
                 let boost: (FreeMovie) -> Int = { m in
                     let t = m.title.lowercased()
@@ -617,7 +649,6 @@ struct MinimalContentSections: View {
             }
         } catch {
             print("[TMDB] Error loading blockbusters: \(error)")
-            // Keep samples if TMDB fails
         }
     }
 }
@@ -781,7 +812,6 @@ struct MinimalMovieCard: View {
     }
 }
 
-// MARK: - Minimal Channel Card
 struct MinimalChannelCard: View {
     let channel: LiveTVChannel
     @State private var showPreview: Bool = false
@@ -789,44 +819,27 @@ struct MinimalChannelCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack {
-                // Live video thumbnail (muted preview)
                 if showPreview {
-                    LiveChannelThumbnailView(streamURL: channel.streamURL)
+                    LiveChannelThumbnailView(streamURL: channel.streamURL, posterURL: channel.logoURL)
                         .frame(width: 160, height: 90)
                         .background(Color(.systemGray6))
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 } else {
-                    // Fallback logo while offscreen
                     AsyncImage(url: URL(string: channel.logoURL)) { image in
-                        image
-                            .resizable()
-                            .scaledToFit()
+                        image.resizable().scaledToFit()
                     } placeholder: {
-                        Image(systemName: "tv")
-                            .font(.system(size: 20))
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        Color(.systemGray6)
                     }
                     .frame(width: 160, height: 90)
-                    .background(Color(.systemGray6))
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
 
-                // LIVE badge overlay
                 if channel.isLive {
                     HStack(spacing: 4) {
-                        Circle()
-                            .fill(.white)
-                            .frame(width: 4, height: 4)
-                            .scaleEffect(1.0)
-                            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: true)
-
-                        Text("LIVE")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.white)
+                        Circle().fill(.white).frame(width: 4, height: 4)
+                        Text("LIVE").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
                     .background(Capsule().fill(Color.red.opacity(0.9)))
                     .padding(8)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -882,8 +895,6 @@ enum ContentFilter: String, CaseIterable {
         }
     }
 }
-
-// (moved ConditionalOnReceiveModifier to the top of file)
 
 // MARK: - Preview
 #Preview("HomeView") {

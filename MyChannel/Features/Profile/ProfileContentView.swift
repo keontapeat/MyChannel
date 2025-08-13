@@ -56,21 +56,79 @@ struct ProfileVideosView: View {
     let videos: [Video]
     let user: User
     
+    @State private var layoutMode: VideoLayoutMode = .grid2
+    private let columns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
+    ]
+    
     var body: some View {
-        LazyVGrid(columns: [
-            GridItem(.flexible(), spacing: 8),
-            GridItem(.flexible(), spacing: 8)
-        ], spacing: 12) {
-            ForEach(videos) { video in
-                ProfileVideoCard(video: video)
-                    .onTapGesture {
-                        // Handle video tap
-                        HapticManager.shared.impact(style: .light)
+        VStack(spacing: 16) {
+            // Stock Banners Carousel (beautiful defaults)
+            StockVideoBannersCarousel(banners: StockVideoBanner.defaults)
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+            
+            // Layout toggle
+            HStack {
+                Text("Videos")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                
+                Spacer()
+                
+                HStack(spacing: 8) {
+                    ForEach(VideoLayoutMode.allCases, id: \.self) { mode in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                layoutMode = mode
+                            }
+                            HapticManager.shared.impact(style: .light)
+                        } label: {
+                            Image(systemName: mode.icon)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(layoutMode == mode ? .white : AppTheme.Colors.textSecondary)
+                                .frame(width: 32, height: 32)
+                                .background(
+                                    Circle()
+                                        .fill(layoutMode == mode ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+                                )
+                        }
+                        .buttonStyle(.plain)
                     }
+                }
             }
+            .padding(.horizontal, 16)
+            
+            // Content
+            Group {
+                if layoutMode == .grid2 {
+                    LazyVGrid(columns: columns, spacing: 12) {
+                        ForEach(videos) { video in
+                            ProfileVideoCard(video: video)
+                                .onTapGesture {
+                                    HapticManager.shared.impact(style: .light)
+                                }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                } else {
+                    LazyVStack(spacing: 12) {
+                        ForEach(videos) { video in
+                            ProfileVideoListRow(video: video)
+                                .onTapGesture {
+                                    HapticManager.shared.impact(style: .light)
+                                }
+                                .padding(.horizontal, 16)
+                        }
+                    }
+                }
+            }
+            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            
+            Color.clear.frame(height: 8)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 20)
+        .padding(.bottom, 12)
     }
 }
 
@@ -721,4 +779,190 @@ struct ProfileContentFallback: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 20)
     }
+}
+
+private enum VideoLayoutMode: String, CaseIterable {
+    case grid2
+    case list1
+    
+    var icon: String {
+        switch self {
+        case .grid2: return "square.grid.2x2"
+        case .list1: return "list.bullet"
+        }
+    }
+    
+    var title: String {
+        switch self {
+        case .grid2: return "Grid"
+        case .list1: return "List"
+        }
+    }
+}
+
+private struct StockVideoBannersCarousel: View {
+    let banners: [StockVideoBanner]
+    @State private var current: Int = 0
+    
+    var body: some View {
+        TabView(selection: $current) {
+            ForEach(Array(banners.enumerated()), id: \.offset) { idx, banner in
+                ZStack(alignment: .bottomLeading) {
+                    AsyncImage(url: URL(string: banner.imageURL)) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    } placeholder: {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(AppTheme.Colors.textTertiary.opacity(0.15))
+                    }
+                    .frame(height: 150)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        LinearGradient(
+                            colors: [Color.black.opacity(0.0), Color.black.opacity(0.55)],
+                            startPoint: .center,
+                            endPoint: .bottom
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    )
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(banner.title)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        Text(banner.subtitle)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                }
+                .tag(idx)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .automatic))
+        .frame(height: 150)
+    }
+}
+
+private struct StockVideoBanner: Identifiable {
+    let id = UUID()
+    let imageURL: String
+    let title: String
+    let subtitle: String
+    
+    static let defaults: [StockVideoBanner] = [
+        .init(
+            imageURL: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1600&q=80",
+            title: "Travel Vlog",
+            subtitle: "Explore the world in 4K"
+        ),
+        .init(
+            imageURL: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1600&q=80",
+            title: "Cinematic Nature",
+            subtitle: "Relaxing landscapes and skies"
+        ),
+        .init(
+            imageURL: "https://images.unsplash.com/photo-1518770660439-b723cf961d3e?w=1600&q=80",
+            title: "Tech Reviews",
+            subtitle: "Latest gadgets and gear"
+        ),
+        .init(
+            imageURL: "https://images.unsplash.com/photo-1495195134817-aeb325a55b65?w=1600&q=80",
+            title: "Cooking Series",
+            subtitle: "Delicious recipes made simple"
+        )
+    ]
+}
+
+private struct ProfileVideoListRow: View {
+    let video: Video
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            AsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                image
+                    .resizable()
+                    .aspectRatio(16/9, contentMode: .fill)
+            } placeholder: {
+                Rectangle()
+                    .fill(AppTheme.Colors.textTertiary.opacity(0.3))
+                    .overlay(
+                        Image(systemName: "play.rectangle")
+                            .font(.title2)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                    )
+            }
+            .frame(width: 160, height: 90)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                Text(video.formattedDuration)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(.black.opacity(0.75))
+                    .clipShape(Capsule())
+                    .padding(6),
+                alignment: .bottomTrailing
+            )
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text(video.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .lineLimit(2)
+                
+                HStack(spacing: 6) {
+                    Text(video.creator.displayName)
+                    Text("•")
+                    Text("\(video.formattedViewCount) views")
+                    Text("•")
+                    Text(video.uploadTimeAgo)
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                
+                HStack(spacing: 12) {
+                    Label("Like", systemImage: "hand.thumbsup")
+                    Label("Share", systemImage: "square.and.arrow.up")
+                    Label("Save", systemImage: "bookmark")
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(10)
+        .background(AppTheme.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.06), radius: 4, x: 0, y: 2)
+        .contextMenu {
+            Button { HapticManager.shared.impact(style: .light) } label: {
+                Label("Save to Watch Later", systemImage: "bookmark")
+            }
+            Button { HapticManager.shared.impact(style: .light) } label: {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+            Button(role: .destructive) { HapticManager.shared.impact(style: .light) } label: {
+                Label("Not interested", systemImage: "hand.thumbsdown")
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(video.title)
+    }
+}
+
+#Preview("Profile Videos Layout Toggle") {
+    ScrollView {
+        ProfileVideosView(
+            videos: Array(Video.sampleVideos.prefix(8)),
+            user: User.sampleUsers.first ?? .defaultUser
+        )
+    }
+    .background(AppTheme.Colors.background)
+    .preferredColorScheme(.light)
 }

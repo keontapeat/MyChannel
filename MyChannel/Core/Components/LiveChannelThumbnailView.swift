@@ -1,27 +1,69 @@
 import SwiftUI
 import AVFoundation
 import AVKit
+import UIKit
 
 struct LiveChannelThumbnailView: View {
     let streamURL: String
+    let posterURL: String?
+
+    @State private var isReady: Bool = false
+    @State private var snapshot: UIImage?
+
+    init(streamURL: String, posterURL: String? = nil) {
+        self.streamURL = streamURL
+        self.posterURL = posterURL
+    }
 
     var body: some View {
-        LivePreviewPlayer(urlString: streamURL)
+        ZStack {
+            if let snap = snapshot, !isReady {
+                Image(uiImage: snap)
+                    .resizable()
+                    .scaledToFill()
+                    .transition(.opacity)
+            } else if let poster = posterURL, !isReady {
+                AsyncImage(url: URL(string: poster)) { image in
+                    image.resizable().scaledToFit().padding(12)
+                } placeholder: {
+                    Color(.systemGray6)
+                }
+            }
+
+            LivePreviewPlayer(
+                urlString: streamURL,
+                onReady: {
+                    if !isReady {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            isReady = true
+                        }
+                    }
+                },
+                onSnapshot: { img in
+                    if snapshot == nil {
+                        snapshot = img
+                    }
+                }
+            )
             .clipped()
+        }
+        .background(Color(.systemGray6))
     }
 }
 
 private struct LivePreviewPlayer: UIViewRepresentable {
     let urlString: String
+    let onReady: () -> Void
+    let onSnapshot: (UIImage) -> Void
 
     func makeUIView(context: Context) -> PlayerContainerView {
         let view = PlayerContainerView()
-        view.backgroundColor = .black
+        view.backgroundColor = .clear
         return view
     }
 
     func updateUIView(_ uiView: PlayerContainerView, context: Context) {
-        uiView.configure(with: urlString)
+        uiView.configure(with: urlString, onReady: onReady, onSnapshot: onSnapshot)
     }
 }
 
@@ -29,43 +71,141 @@ private final class PlayerContainerView: UIView {
     private var player: AVPlayer?
     private var playerLayer: AVPlayerLayer?
     private var currentURL: String?
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        layer.masksToBounds = true
-        clipsToBounds = true
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
+    private var timeControlObserver: NSKeyValueObservation?
+    private var statusObserver: NSKeyValueObservation?
+    private var endObserver: NSObjectProtocol?
+    private var readyTimeoutWork: DispatchWorkItem?
+    private var retryWork: DispatchWorkItem?
+    private var hasNotifiedReady = false
 
     override func layoutSubviews() {
         super.layoutSubviews()
         playerLayer?.frame = bounds
     }
 
-    func configure(with urlString: String) {
-        guard currentURL != urlString else { return }
+    func configure(with urlString: String, onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void) {
+        guard currentURL != urlString else {
+            player?.play()
+            return
+        }
         currentURL = urlString
         teardown()
+
         guard let url = URL(string: urlString) else { return }
-        let item = AVPlayerItem(url: url)
+        let asset = AVURLAsset(url: url)
+        let item = AVPlayerItem(asset: asset)
+        item.preferredForwardBufferDuration = 0
+        item.canUseNetworkResourcesForLiveStreamingWhilePaused = true
+
         let player = AVPlayer(playerItem: item)
         player.isMuted = true
-        player.automaticallyWaitsToMinimizeStalling = false
-        player.play()
-        self.player = player
+        player.automaticallyWaitsToMinimizeStalling = true
+        player.preventsDisplaySleepDuringVideoPlayback = false
+        player.currentItem?.preferredPeakBitRate = 1_800_000
 
         let layer = AVPlayerLayer(player: player)
         layer.videoGravity = .resizeAspectFill
+        layer.needsDisplayOnBoundsChange = true
         self.layer.addSublayer(layer)
+
+        self.player = player
         self.playerLayer = layer
+        self.hasNotifiedReady = false
+
+        statusObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+            guard let self else { return }
+            if item.status == .readyToPlay {
+                self.notifyReadyIfNeeded(onReady)
+                player.play()
+            }
+        }
+
+        timeControlObserver = player.observe(\.timeControlStatus, options: [.new, .initial]) { [weak self] p, _ in
+            guard let self else { return }
+            if p.timeControlStatus == .playing {
+                self.notifyReadyIfNeeded(onReady)
+            }
+        }
+
+        endObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            self?.player?.seek(to: .zero)
+            self?.player?.play()
+        }
+
+        let readyWork = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            if self.player?.timeControlStatus != .playing {
+                self.generateSnapshot(from: asset) { img in
+                    if let img { onSnapshot(img) }
+                }
+            }
+        }
+        self.readyTimeoutWork = readyWork
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.5, execute: readyWork)
+
+        let retry = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            if self.player?.timeControlStatus != .playing {
+                self.recreatePlayer(with: url, onReady: onReady)
+            }
+        }
+        self.retryWork = retry
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 4.0, execute: retry)
 
         NotificationCenter.default.addObserver(self, selector: #selector(handleAppBackground), name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handleAppForeground), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handlePreviewsPause), name: NSNotification.Name("LivePreviewsShouldPause"), object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handlePreviewsResume), name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
+
+        player.play()
+    }
+
+    private func notifyReadyIfNeeded(_ onReady: @escaping () -> Void) {
+        if !hasNotifiedReady {
+            hasNotifiedReady = true
+            DispatchQueue.main.async { onReady() }
+        }
+    }
+
+    private func recreatePlayer(with url: URL, onReady: @escaping () -> Void) {
+        let asset = AVURLAsset(url: url)
+        let item = AVPlayerItem(asset: asset)
+        let p = AVPlayer(playerItem: item)
+        p.isMuted = true
+        p.automaticallyWaitsToMinimizeStalling = true
+        p.currentItem?.preferredPeakBitRate = 1_800_000
+        playerLayer?.player = p
+        player = p
+
+        statusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+            guard let self else { return }
+            if item.status == .readyToPlay {
+                self.notifyReadyIfNeeded(onReady)
+                p.play()
+            }
+        }
+        p.play()
+    }
+
+    private func generateSnapshot(from asset: AVAsset, completion: @escaping (UIImage?) -> Void) {
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 640, height: 360)
+        let time = CMTime(seconds: 1, preferredTimescale: 600)
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let cgImage = try generator.copyCGImage(at: time, actualTime: nil)
+                let image = UIImage(cgImage: cgImage)
+                DispatchQueue.main.async { completion(image) }
+            } catch {
+                DispatchQueue.main.async { completion(nil) }
+            }
+        }
     }
 
     @objc private func handleAppBackground() {
@@ -78,6 +218,16 @@ private final class PlayerContainerView: UIView {
 
     func teardown() {
         NotificationCenter.default.removeObserver(self)
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        endObserver = nil
+        readyTimeoutWork?.cancel()
+        retryWork?.cancel()
+        readyTimeoutWork = nil
+        retryWork = nil
+        statusObserver?.invalidate()
+        timeControlObserver?.invalidate()
+        statusObserver = nil
+        timeControlObserver = nil
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         player = nil
@@ -85,15 +235,18 @@ private final class PlayerContainerView: UIView {
         playerLayer = nil
     }
 
-    @objc private func handlePreviewsPause() {
-        player?.pause()
-    }
-    
-    @objc private func handlePreviewsResume() {
-        player?.play()
-    }
+    @objc private func handlePreviewsPause() { player?.pause() }
+    @objc private func handlePreviewsResume() { player?.play() }
 
-    deinit {
-        teardown()
-    }
+    deinit { teardown() }
+}
+
+#Preview("LiveChannelThumbnailView") {
+    LiveChannelThumbnailView(
+        streamURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+        posterURL: "https://upload.wikimedia.org/wikipedia/commons/3/31/Red_dot.svg"
+    )
+    .frame(width: 200, height: 112)
+    .background(Color(.systemGray6))
+    .preferredColorScheme(.light)
 }

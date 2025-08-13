@@ -101,24 +101,31 @@ struct SearchView: View {
                     .padding(.horizontal, 16)
                 }
                 .padding(.vertical, 8)
-                
-                // Search content
-                if searchText.isEmpty {
-                    SearchEmptyState(recentSearches: recentSearches) { search in
-                        searchText = search
-                        performSearch()
+
+                ZStack(alignment: .topLeading) {
+                    if searchText.isEmpty {
+                        SearchEmptyState(recentSearches: recentSearches) { search in
+                            searchText = search
+                            performSearch()
+                        }
+                    } else if isSearching {
+                        SearchLoadingState()
+                    } else {
+                        ModernSearchResultsList(results: searchService.searchResults)
                     }
-                } else if isSearching {
-                    SearchLoadingState()
-                } else {
-                    ModernSearchResultsList(results: searchService.searchResults)
                 }
-                
-                Spacer()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+                // Spacer()
             }
             .background(AppTheme.Colors.background)
-            .navigationBarHidden(true) // Hide default navigation
+            .toolbar(.hidden, for: .navigationBar)
+            .transaction { $0.animation = nil }
+            .animation(.none, value: isSearching)
+            .animation(.none, value: searchText)
+            .animation(.none, value: selectedScope)
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .onAppear {
             // Auto-focus search bar when view appears
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
