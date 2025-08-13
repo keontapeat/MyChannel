@@ -120,6 +120,8 @@ struct AppConfig {
         static let enableOfflineDownload = true
         static let enableMockData = isDebug // Enable mock data in debug mode
         static let enableNetworkLogging = isDebug // Enable network logging in debug mode
+
+        static let enableFlicksPeek = false
     }
     
     // MARK: - Performance Settings

@@ -16,68 +16,13 @@ struct SearchView: View {
     @State private var recentSearches: [String] = ["SwiftUI", "iOS Development", "Gaming"]
     @State private var searchFilters = SearchFilters()
     @State private var showingFilters = false
-    @FocusState private var isSearchFieldFocused: Bool  // Add focus state
-    
+    @FocusState private var isSearchFieldFocused: Bool
+
     var body: some View {
         NavigationStack {
+            // Main content
             VStack(spacing: 0) {
-                // Custom header with back button
-                HStack(spacing: 16) {
-                    // Back/Close button
-                    Button(action: {
-                        dismiss()
-                    }) {
-                        Image(systemName: "arrow.left")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .frame(width: 40, height: 40)
-                            .background(AppTheme.Colors.surface)
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    
-                    // Professional search bar
-                    HStack(spacing: 12) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        
-                        TextField("Search videos, creators, and more...", text: $searchText)
-                            .font(AppTheme.Typography.body)
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .textFieldStyle(PlainTextFieldStyle())
-                            .focused($isSearchFieldFocused)  // Bind focus state
-                            .onSubmit {
-                                performSearch()
-                            }
-                        
-                        if !searchText.isEmpty {
-                            Button("Clear") {
-                                searchText = ""
-                            }
-                            .font(AppTheme.Typography.caption)
-                            .foregroundColor(AppTheme.Colors.primary)
-                        }
-                    }
-                    .padding()
-                    .background(AppTheme.Colors.surface)
-                    .cornerRadius(AppTheme.CornerRadius.md)
-                    
-                    // Filters button
-                    Button(action: { showingFilters.toggle() }) {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.primary)
-                            .frame(width: 40, height: 40)
-                            .background(AppTheme.Colors.surface)
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(AppTheme.Colors.background)
-                
-                // Search scopes
+                // Scopes directly below the pinned header (safeAreaInset will push this down)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(SearchScope.allCases, id: \.self) { scope in
@@ -89,12 +34,8 @@ struct SearchView: View {
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(
-                                selectedScope == scope ? AppTheme.Colors.primary : AppTheme.Colors.surface
-                            )
-                            .foregroundColor(
-                                selectedScope == scope ? .white : AppTheme.Colors.textPrimary
-                            )
+                            .background(selectedScope == scope ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+                            .foregroundColor(selectedScope == scope ? .white : AppTheme.Colors.textPrimary)
                             .cornerRadius(AppTheme.CornerRadius.md)
                         }
                     }
@@ -115,8 +56,6 @@ struct SearchView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
-                // Spacer()
             }
             .background(AppTheme.Colors.background)
             .toolbar(.hidden, for: .navigationBar)
@@ -125,92 +64,120 @@ struct SearchView: View {
             .animation(.none, value: searchText)
             .animation(.none, value: selectedScope)
             .animation(.none, value: isSearchFieldFocused)
+            .safeAreaInset(edge: .top) { header } // Pinned header with proper safe-area handling
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
-        .onAppear {
-            // Auto-focus search bar when view appears WITHOUT animation
-            DispatchQueue.main.async {
-                var tx = Transaction()
-                tx.disablesAnimations = true
-                withTransaction(tx) {
-                    isSearchFieldFocused = true
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("FocusSearchBar"))) { _ in
-            // Focus search bar when notification is received WITHOUT animation
-            DispatchQueue.main.async {
-                var tx = Transaction()
-                tx.disablesAnimations = true
-                withTransaction(tx) {
-                    isSearchFieldFocused = true
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchClearAndReset"))) { _ in
-            // Clear search and reset when tab is reselected WITHOUT animation
-            var tx = Transaction()
-            tx.disablesAnimations = true
+
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchLoseFocus"))) { _ in
+            var tx = Transaction(); tx.disablesAnimations = true
             withTransaction(tx) {
-                searchText = ""
-                selectedScope = .all
-                isSearchFieldFocused = true
+                isSearchFieldFocused = false
             }
         }
+
+        // Always resign focus when leaving the Search tab
+        .onDisappear {
+            var tx = Transaction(); tx.disablesAnimations = true
+            withTransaction(tx) {
+                isSearchFieldFocused = false
+            }
+        }
+
         .sheet(isPresented: $showingFilters) {
             SearchFiltersView(filters: $searchFilters) {
-                if !searchText.isEmpty {
-                    performSearch()
-                }
+                if !searchText.isEmpty { performSearch() }
             }
         }
         .onChange(of: searchText) { oldValue, newValue in
             if !newValue.isEmpty && newValue != oldValue {
-                // Debounced search
                 Task {
-                    try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
-                    if searchText == newValue { // Still the same query
+                    try await Task.sleep(nanoseconds: 300_000_000)
+                    if searchText == newValue {
                         await searchService.getSearchSuggestions(for: newValue)
                     }
                 }
             }
         }
     }
-    
-    private func performSearch() {
-        guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        
-        isSearching = true
-        
-        Task {
-            do {
-                let _ = try await searchService.search(
-                    query: searchText,
-                    filters: searchFilters
-                )
-                
-                // Add to recent searches
-                if !recentSearches.contains(searchText) {
-                    recentSearches.insert(searchText, at: 0)
-                    if recentSearches.count > 10 {
-                        recentSearches.removeLast()
+
+    // MARK: - Header
+    private var header: some View {
+        HStack(spacing: 16) {
+            Button(action: { dismiss() }) {
+                Image(systemName: "arrow.left")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .frame(width: 40, height: 40)
+                    .background(AppTheme.Colors.surface)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+
+            HStack(spacing: 12) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+
+                TextField("Search videos, creators, and more...", text: $searchText)
+                    .font(AppTheme.Typography.body)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .focused($isSearchFieldFocused)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    .keyboardType(.webSearch)
+                    .onSubmit { performSearch() }
+
+                if !searchText.isEmpty {
+                    Button {
+                        var tx = Transaction(); tx.disablesAnimations = true
+                        withTransaction(tx) { searchText = "" }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(AppTheme.Colors.textSecondary)
                     }
                 }
-                
-                await MainActor.run {
-                    isSearching = false
+            }
+            .padding()
+            .background(AppTheme.Colors.surface)
+            .cornerRadius(AppTheme.CornerRadius.md)
+
+            Button(action: { showingFilters.toggle() }) {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.primary)
+                    .frame(width: 40, height: 40)
+                    .background(AppTheme.Colors.surface)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 6) // subtle breathing room under status bar
+        .padding(.bottom, 8)
+        .background(AppTheme.Colors.background)
+    }
+
+    // MARK: - Actions
+    private func performSearch() {
+        guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        isSearching = true
+        Task {
+            do {
+                let _ = try await searchService.search(query: searchText, filters: searchFilters)
+                if !recentSearches.contains(searchText) {
+                    recentSearches.insert(searchText, at: 0)
+                    if recentSearches.count > 10 { recentSearches.removeLast() }
                 }
+                await MainActor.run { isSearching = false }
             } catch {
                 print("Search error: \(error)")
-                await MainActor.run {
-                    isSearching = false
-                }
+                await MainActor.run { isSearching = false }
             }
         }
     }
 }
 
-// MARK: - Search Empty State
+// MARK: - Supporting Views and Models (unchanged)
 struct SearchEmptyState: View {
     let recentSearches: [String]
     let onSearchTap: (String) -> Void
@@ -282,33 +249,28 @@ struct SearchEmptyState: View {
     }
 }
 
-// MARK: - Search Loading State
 struct SearchLoadingState: View {
     var body: some View {
         VStack(spacing: 20) {
             Spacer()
-            
             ProgressView()
                 .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
                 .scaleEffect(1.2)
-            
             Text("Searching...")
                 .font(AppTheme.Typography.subheadline)
                 .foregroundColor(AppTheme.Colors.textSecondary)
-            
             Spacer()
         }
     }
 }
 
-// MARK: - Modern Search Results List
 struct ModernSearchResultsList: View {
     let results: [SearchResult]
     
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
-                ForEach(Array(results.enumerated()), id: \.offset) { index, result in
+                ForEach(Array(results.enumerated()), id: \.offset) { _, result in
                     ModernSearchResultCard(result: result)
                         .padding(.horizontal)
                 }
@@ -337,7 +299,6 @@ struct ModernSearchResultsList: View {
     }
 }
 
-// MARK: - Modern Search Result Card
 struct ModernSearchResultCard: View {
     let result: SearchResult
     
@@ -367,10 +328,7 @@ struct VideoSearchCard: View {
             } placeholder: {
                 Rectangle()
                     .fill(AppTheme.Colors.surface)
-                    .overlay(
-                        Image(systemName: "play.rectangle.fill")
-                            .foregroundColor(AppTheme.Colors.textTertiary)
-                    )
+                    .overlay(Image(systemName: "play.rectangle.fill").foregroundColor(AppTheme.Colors.textTertiary))
             }
             .frame(width: 120, height: 68)
             .cornerRadius(AppTheme.CornerRadius.sm)
@@ -402,22 +360,15 @@ struct VideoSearchCard: View {
                         .background(AppTheme.Colors.primary.opacity(0.1))
                         .foregroundColor(AppTheme.Colors.primary)
                         .cornerRadius(4)
-                    
                     Spacer()
                 }
             }
-            
             Spacer()
         }
         .padding()
         .background(AppTheme.Colors.cardBackground)
         .cornerRadius(AppTheme.CornerRadius.md)
-        .shadow(
-            color: AppTheme.Colors.textPrimary.opacity(0.05),
-            radius: 4,
-            x: 0,
-            y: 2
-        )
+        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
 
@@ -433,10 +384,7 @@ struct CreatorSearchCard: View {
             } placeholder: {
                 Circle()
                     .fill(AppTheme.Colors.surface)
-                    .overlay(
-                        Image(systemName: "person.fill")
-                            .foregroundColor(AppTheme.Colors.textTertiary)
-                    )
+                    .overlay(Image(systemName: "person.fill").foregroundColor(AppTheme.Colors.textTertiary))
             }
             .frame(width: 60, height: 60)
             .clipShape(Circle())
@@ -461,27 +409,18 @@ struct CreatorSearchCard: View {
                         .lineLimit(2)
                 }
             }
-            
             Spacer()
-            
-            Button("Subscribe") {
-                // Handle subscription
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(AppTheme.Colors.primary)
-            .foregroundColor(.white)
-            .cornerRadius(AppTheme.CornerRadius.sm)
+            Button("Subscribe") {}
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(AppTheme.Colors.primary)
+                .foregroundColor(.white)
+                .cornerRadius(AppTheme.CornerRadius.sm)
         }
         .padding()
         .background(AppTheme.Colors.cardBackground)
         .cornerRadius(AppTheme.CornerRadius.md)
-        .shadow(
-            color: AppTheme.Colors.textPrimary.opacity(0.05),
-            radius: 4,
-            x: 0,
-            y: 2
-        )
+        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
 
@@ -515,18 +454,12 @@ struct PlaylistSearchCard: View {
                     .font(AppTheme.Typography.caption)
                     .foregroundColor(AppTheme.Colors.textTertiary)
             }
-            
             Spacer()
         }
         .padding()
         .background(AppTheme.Colors.cardBackground)
         .cornerRadius(AppTheme.CornerRadius.md)
-        .shadow(
-            color: AppTheme.Colors.textPrimary.opacity(0.05),
-            radius: 4,
-            x: 0,
-            y: 2
-        )
+        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
 
@@ -541,8 +474,7 @@ struct LiveStreamSearchCard: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                 } placeholder: {
-                    Rectangle()
-                        .fill(AppTheme.Colors.surface)
+                    Rectangle().fill(AppTheme.Colors.surface)
                 }
                 .frame(width: 120, height: 68)
                 .cornerRadius(AppTheme.CornerRadius.sm)
@@ -575,36 +507,26 @@ struct LiveStreamSearchCard: View {
                     .foregroundColor(AppTheme.Colors.textSecondary)
                 
                 HStack {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 8, height: 8)
-                    
+                    Circle().fill(Color.red).frame(width: 8, height: 8)
                     Text("\(liveResult.viewerCount) watching")
                         .font(AppTheme.Typography.caption)
                         .foregroundColor(AppTheme.Colors.textTertiary)
                 }
             }
-            
             Spacer()
         }
         .padding()
         .background(AppTheme.Colors.cardBackground)
         .cornerRadius(AppTheme.CornerRadius.md)
-        .shadow(
-            color: AppTheme.Colors.textPrimary.opacity(0.05),
-            radius: 4,
-            x: 0,
-            y: 2
-        )
+        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
 
-// MARK: - Search Filters View
 struct SearchFiltersView: View {
     @Binding var filters: SearchFilters
     let onApply: () -> Void
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         NavigationView {
             Form {
@@ -616,7 +538,7 @@ struct SearchFiltersView: View {
                         }
                     }
                 }
-                
+
                 Section("Duration") {
                     Picker("Duration", selection: $filters.duration) {
                         Text("Any Duration").tag(SearchFilters.DurationFilter?.none)
@@ -625,7 +547,7 @@ struct SearchFiltersView: View {
                         }
                     }
                 }
-                
+
                 Section("Upload Date") {
                     Picker("Upload Date", selection: $filters.uploadDate) {
                         Text("Any Time").tag(SearchFilters.UploadDateFilter?.none)
@@ -634,7 +556,7 @@ struct SearchFiltersView: View {
                         }
                     }
                 }
-                
+
                 Section("Sort By") {
                     Picker("Sort By", selection: $filters.sortBy) {
                         Text("Relevance").tag(SearchFilters.SortOption?.none)
@@ -649,11 +571,8 @@ struct SearchFiltersView: View {
             .navigationBarBackButtonHidden()
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+                    Button("Cancel") { dismiss() }
                 }
-                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Apply") {
                         onApply()
@@ -671,7 +590,7 @@ enum SearchScope: String, CaseIterable {
     case all = "all"
     case videos = "videos"
     case creators = "creators"
-    case community = "community"  // Added Community
+    case community = "community"
     case playlists = "playlists"
     case live = "live"
     
@@ -680,7 +599,7 @@ enum SearchScope: String, CaseIterable {
         case .all: return "All"
         case .videos: return "Videos"
         case .creators: return "Creators"
-        case .community: return "Community"  // New scope
+        case .community: return "Community"
         case .playlists: return "Playlists"
         case .live: return "Live"
         }
@@ -691,7 +610,7 @@ enum SearchScope: String, CaseIterable {
         case .all: return "magnifyingglass"
         case .videos: return "play.rectangle"
         case .creators: return "person.circle"
-        case .community: return "person.3"  // Community icon
+        case .community: return "person.3"
         case .playlists: return "rectangle.stack"
         case .live: return "dot.radiowaves.left.and.right"
         }

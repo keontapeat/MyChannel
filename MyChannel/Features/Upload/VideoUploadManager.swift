@@ -28,30 +28,37 @@ class VideoUploadManager: ObservableObject {
     @Published var isPublic: Bool = true
     @Published var monetizationEnabled: Bool = false
     
+    // Added metadata
+    @Published var videoDuration: TimeInterval = 0
+    @Published var videoDimensions: CGSize = .zero
+    @Published var fileSizeMB: Double = 0
+    @Published var thumbnailTime: TimeInterval = 1.0
+    
     private let maxVideoSize: Int64 = 2_000_000_000 // 2GB
     private let allowedFormats = ["mp4", "mov", "avi", "mkv"]
     
-    // MARK: - Video Selection
+    // MARK: - Prepare from URL (Grid picker or Camera)
+    func prepareVideo(from url: URL) async {
+        self.videoURL = url
+        await refreshMetadataAndPreview(from: url)
+    }
+    
+    // MARK: - Video Selection (PhotosPickerItem)
     func loadSelectedVideo() async {
         guard let selectedVideo = selectedVideo else { return }
         
         do {
-            // Load video data
             if let data = try await selectedVideo.loadTransferable(type: Data.self) {
                 self.videoData = data
                 
-                // Create temporary URL for processing
                 let tempURL = FileManager.default.temporaryDirectory
                     .appendingPathComponent(UUID().uuidString)
                     .appendingPathExtension("mp4")
                 
                 try data.write(to: tempURL)
                 self.videoURL = tempURL
+                await refreshMetadataAndPreview(from: tempURL)
                 
-                // Generate thumbnail
-                await generateThumbnail(from: tempURL)
-                
-                // Validate video
                 try await validateVideo(at: tempURL)
             }
         } catch {
@@ -59,43 +66,64 @@ class VideoUploadManager: ObservableObject {
         }
     }
     
-    // MARK: - Video Processing
-    private func generateThumbnail(from url: URL) async {
-        let asset = AVAsset(url: url)
-        let imageGenerator = AVAssetImageGenerator(asset: asset)
-        imageGenerator.appliesPreferredTrackTransform = true
-        
+    // MARK: - Metadata + Preview
+    private func refreshMetadataAndPreview(from url: URL) async {
         do {
-            let cgImage = try await imageGenerator.image(at: CMTime(seconds: 1, preferredTimescale: 60)).image
-            thumbnail = UIImage(cgImage: cgImage)
+            let asset = AVAsset(url: url)
+            let duration = try await asset.load(.duration)
+            videoDuration = CMTimeGetSeconds(duration)
+            if let track = try await asset.loadTracks(withMediaType: .video).first {
+                let nat = try await track.load(.naturalSize)
+                let transform = try await track.load(.preferredTransform)
+                let size = nat.applying(transform)
+                videoDimensions = CGSize(width: abs(size.width), height: abs(size.height))
+            } else {
+                videoDimensions = .zero
+            }
+            fileSizeMB = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64)
+                .map { Double($0) / 1_000_000.0 } ?? 0
+            thumbnailTime = min(max(1.0, videoDuration * 0.1), max(1.0, videoDuration - 1.0))
+            await updateThumbnail(at: thumbnailTime)
         } catch {
-            print("Failed to generate thumbnail: \(error)")
+            await updateThumbnail(at: 1.0)
         }
     }
     
+    func updateThumbnail(at time: TimeInterval) async {
+        guard let videoURL else { return }
+        let asset = AVAsset(url: videoURL)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        let cmTime = CMTime(seconds: min(max(0, time), max(0.1, videoDuration - 0.1)), preferredTimescale: 600)
+        do {
+            let cg = try await generator.image(at: cmTime).image
+            await MainActor.run {
+                self.thumbnail = UIImage(cgImage: cg)
+                self.thumbnailTime = time
+            }
+        } catch { }
+    }
+    
+    // MARK: - Video Processing
     private func validateVideo(at url: URL) async throws {
         let asset = AVAsset(url: url)
         
-        // Check file size
         let fileSize = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64 ?? 0
         if fileSize > maxVideoSize {
             throw UploadError.fileTooLarge
         }
         
-        // Check format
         let fileExtension = url.pathExtension.lowercased()
         if !allowedFormats.contains(fileExtension) {
             throw UploadError.unsupportedFormat
         }
         
-        // Check duration (max 12 hours)
         let duration = try await asset.load(.duration)
         let durationSeconds = CMTimeGetSeconds(duration)
-        if durationSeconds > 43200 { // 12 hours
+        if durationSeconds > 43200 {
             throw UploadError.videoTooLong
         }
         
-        // Check if video has video track
         let videoTracks = try await asset.load(.tracks)
         if videoTracks.isEmpty {
             throw UploadError.noVideoTrack
@@ -104,7 +132,7 @@ class VideoUploadManager: ObservableObject {
     
     // MARK: - Upload Process
     func uploadVideo() async {
-        guard let videoData = videoData,
+        guard let videoData = videoData ?? (videoURL.flatMap { try? Data(contentsOf: $0) }),
               !title.isEmpty else {
             uploadError = "Please select a video and provide a title"
             return
@@ -115,7 +143,6 @@ class VideoUploadManager: ObservableObject {
         uploadError = nil
         
         do {
-            // Prepare metadata
             let metadata = VideoMetadata(
                 title: title,
                 description: description,
@@ -125,15 +152,9 @@ class VideoUploadManager: ObservableObject {
                 thumbnailData: thumbnail?.jpegData(compressionQuality: 0.8)
             )
             
-            // Upload to server
             uploadedVideo = try await uploadVideoWithProgress(videoData, metadata: metadata)
-            
-            // Clean up
             cleanupTempFiles()
-            
-            // Reset form
             resetForm()
-            
         } catch {
             uploadError = error.localizedDescription
         }
@@ -142,20 +163,18 @@ class VideoUploadManager: ObservableObject {
     }
     
     private func uploadVideoWithProgress(_ data: Data, metadata: VideoMetadata) async throws -> Video {
-        // Simulate progress updates
         let totalSteps = 10
         for step in 1...totalSteps {
-            try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+            try await Task.sleep(nanoseconds: 300_000_000)
             uploadProgress = Double(step) / Double(totalSteps)
         }
         
-        // For now, create a mock uploaded video since API doesn't exist yet
         let mockVideo = Video(
             title: metadata.title,
             description: metadata.description,
             thumbnailURL: "https://picsum.photos/400/225?random=\(Int.random(in: 1...100))",
             videoURL: "https://example.com/uploaded-video.mp4",
-            duration: 300,
+            duration: max(1, videoDuration),
             viewCount: 0,
             likeCount: 0,
             commentCount: 0,
@@ -170,12 +189,12 @@ class VideoUploadManager: ObservableObject {
     
     // MARK: - Cleanup
     private func cleanupTempFiles() {
-        if let videoURL = videoURL {
+        if let videoURL = videoURL, videoURL.path.contains(FileManager.default.temporaryDirectory.path) {
             try? FileManager.default.removeItem(at: videoURL)
         }
     }
     
-    private func resetForm() {
+    func resetForm() {
         selectedVideo = nil
         videoData = nil
         videoURL = nil
@@ -187,13 +206,15 @@ class VideoUploadManager: ObservableObject {
         isPublic = true
         monetizationEnabled = false
         uploadProgress = 0.0
+        videoDuration = 0
+        videoDimensions = .zero
+        fileSizeMB = 0
+        thumbnailTime = 1.0
     }
     
     // MARK: - Video Editing (Basic)
     func trimVideo(startTime: CMTime, endTime: CMTime) async throws -> URL {
-        guard let videoURL = videoURL else {
-            throw UploadError.noVideoSelected
-        }
+        guard let videoURL = videoURL else { throw UploadError.noVideoSelected }
         
         let asset = AVAsset(url: videoURL)
         let composition = AVMutableComposition()
@@ -210,7 +231,6 @@ class VideoUploadManager: ObservableObject {
         let timeRange = CMTimeRange(start: startTime, end: endTime)
         try compositionVideoTrack?.insertTimeRange(timeRange, of: videoTrack, at: .zero)
         
-        // Export trimmed video
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("trimmed_\(UUID().uuidString)")
             .appendingPathExtension("mp4")
@@ -221,18 +241,24 @@ class VideoUploadManager: ObservableObject {
         
         exportSession.outputURL = outputURL
         exportSession.outputFileType = .mp4
-        
         await exportSession.export()
         
         if exportSession.status == .completed {
+            self.videoURL = outputURL
+            await refreshMetadataAndPreview(from: outputURL)
             return outputURL
         } else {
             throw UploadError.exportFailed
         }
     }
+    
+    func autoTrimToFlicksIfNeeded(max seconds: TimeInterval = 60) async throws {
+        guard videoDuration > seconds else { return }
+        let end = CMTime(seconds: seconds, preferredTimescale: 600)
+        _ = try await trimVideo(startTime: .zero, endTime: end)
+    }
 }
 
-// MARK: - Upload Errors
 enum UploadError: Error, LocalizedError {
     case fileTooLarge
     case unsupportedFormat
@@ -263,7 +289,12 @@ enum UploadError: Error, LocalizedError {
 }
 
 #Preview {
-    Text("Video Upload Manager")
-        .font(.largeTitle)
-        .padding()
+    VStack {
+        Text("Video Upload Manager")
+            .font(.largeTitle)
+            .padding()
+        
+        Text("Handles video metadata, thumbnails, and uploads")
+            .foregroundColor(.secondary)
+    }
 }

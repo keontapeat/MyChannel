@@ -14,8 +14,14 @@ struct TrailerPlayerView: View {
             
             if let id = videoID {
                 VStack(spacing: 0) {
-                    YouTubePlayerView(videoID: id, autoplay: true)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    YouTubePlayerView(
+                        videoID: id,
+                        autoplay: true,
+                        startTime: 0,
+                        muted: true,
+                        showControls: true
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else {
                 VStack(spacing: 16) {

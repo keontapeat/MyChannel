@@ -26,6 +26,13 @@ struct MainTabView: View {
     @State private var hasError: Bool = false
     @State private var errorMessage: String = ""
 
+    @State private var presentAccountSwitcher: Bool = false
+    @State private var presentGoogleAccount: Bool = false
+    @State private var presentFullHistory: Bool = false
+    @State private var historyVideoToOpen: Video? = nil
+
+    @State private var flicksPeekVideo: Video? = nil
+
     var body: some View {
         ZStack {
             if hasError {
@@ -74,6 +81,36 @@ struct MainTabView: View {
             }
         }
         .ignoresSafeArea(.keyboard)
+
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToAccountSwitcher)) { _ in
+            presentAccountSwitcher = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openGoogleAccount)) { _ in
+            presentGoogleAccount = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openFullHistory)) { _ in
+            presentFullHistory = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openVideoFromHistory)) { note in
+            if let video = note.object as? Video {
+                historyVideoToOpen = video
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .flicksPeekUpdate)) { note in
+            flicksPeekVideo = note.object as? Video
+        }
+        .sheet(isPresented: $presentAccountSwitcher) {
+            AccountSwitcherView()
+        }
+        .sheet(isPresented: $presentGoogleAccount) {
+            GoogleAccountView()
+        }
+        .fullScreenCover(isPresented: $presentFullHistory) {
+            WatchHistoryView()
+        }
+        .fullScreenCover(item: $historyVideoToOpen) { video in
+            VideoDetailView(video: video)
+        }
     }
     
     @ViewBuilder
@@ -91,7 +128,8 @@ struct MainTabView: View {
             SafeContentView(selectedTab: selectedTab)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(AppTheme.Colors.background)
-                .zIndex(1)
+                .zIndex(5)
+                .allowsHitTesting(true)
 
             // Floating Mini Player - Above content, below tab bar (suppress on Flicks for minimal UI)
             if selectedTab != .flicks {
@@ -99,22 +137,6 @@ struct MainTabView: View {
                     .environmentObject(globalPlayer)
                     .zIndex(998)
             }
-
-            // if true {
-            //     VStack {
-            //         Spacer()
-            //         CustomTabBar(
-            //             selectedTab: $selectedTab,
-            //             notificationBadges: notificationBadges,
-            //             isHidden: false,
-            //             onUploadTap: {
-            //                 showingUpload = true
-            //             },
-            //             onTabSelected: handleTabSelection
-            //         )
-            //     }
-            //     .zIndex(999)
-            // }
         }
         .overlay(alignment: .bottom) {
             CustomTabBar(
@@ -125,10 +147,10 @@ struct MainTabView: View {
                 onTabSelected: handleTabSelection
             )
             .zIndex(999)
-            .ignoresSafeArea(.keyboard) // keep it stable when keyboard shows
+            .ignoresSafeArea(.keyboard)
             .allowsHitTesting(true)
         }
-        .ignoresSafeArea(.keyboard) // keep whole content stable on keyboard
+        .ignoresSafeArea(.keyboard)
         .fullScreenCover(isPresented: $showingUpload) {
             SafeUploadView()
         }
@@ -173,42 +195,39 @@ struct MainTabView: View {
         guard tab != .upload else { return }
         
         do {
-            let fromSearch = (selectedTab == .search)
-            UIApplication.shared.endEditing() // ensure keyboard is closed before switching
+            // Immediately drop any keyboard/search focus before switching
+            NotificationCenter.default.post(name: NSNotification.Name("SearchLoseFocus"), object: nil)
+            UIApplication.shared.endEditing()
             
-            if tab == selectedTab {
-                handleTabReselection(tab)
-            } else {
-                if fromSearch {
-                    var tx = Transaction()
-                    tx.disablesAnimations = true
-                    withTransaction(tx) {
-                        previousTab = selectedTab
-                        selectedTab = tab
+            let targetTab = tab
+            let wasSameTab = (targetTab == selectedTab)
+            previousTab = selectedTab
+
+            // Switch tabs on the next runloop tick so the focus change doesn't eat the tap
+            DispatchQueue.main.async {
+                var tx = Transaction()
+                tx.disablesAnimations = true
+                withTransaction(tx) {
+                    selectedTab = targetTab
+                }
+                
+                // If switching TO search, explicitly focus the field after selection
+                if targetTab == .search {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        NotificationCenter.default.post(name: NSNotification.Name("FocusSearchBar"), object: nil)
                     }
-                } else {
-                    previousTab = selectedTab
-                    selectedTab = tab
-                }
-                if tab == .home {
-                    NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
-                } else {
-                    NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldPause"), object: nil)
                 }
             }
-            
-            notificationBadges[tab] = 0
-            
-            if tab != .profile {
-                HapticManager.shared.impact(style: .light)
+
+            // Handle reselection behaviors without blocking the switch
+            if wasSameTab {
+                handleTabReselection(targetTab)
             }
+            
+            notificationBadges[targetTab] = 0
             
             Task { @MainActor in
-                do {
-                    await AnalyticsService.shared.trackScreenView(tab.title)
-                } catch {
-                    print("Analytics error: \(error)")
-                }
+                try? await AnalyticsService.shared.trackScreenView(targetTab.title)
             }
         } catch {
             handleError("Tab selection error: \(error.localizedDescription)")

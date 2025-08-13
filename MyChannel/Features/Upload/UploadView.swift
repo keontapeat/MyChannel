@@ -15,18 +15,21 @@ struct UploadView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
     
-    // Steps
     @State private var uploadStep: UploadStep = .selectMedia
-    
-    // Creation Controls
     @State private var creationMode: CreationMode = .video
     @State private var showingCamera = false
     @State private var showLiveSetup = false
     @State private var showPostComposer = false
     
-    // Animations/UI
     @State private var showingSuccessAnimation = false
     @State private var isAnimating = false
+    
+    // New states
+    @State private var showCancelConfirm = false
+    @State private var showRestorePrompt = false
+    @State private var restoreDraft: UploadDraft?
+    @State private var isSavingDraft = false
+    @State private var showAIActions = false
     
     enum UploadStep {
         case selectMedia
@@ -80,7 +83,7 @@ struct UploadView: View {
                 ToolbarItemGroup(placement: .navigationBarLeading) {
                     Button {
                         HapticManager.shared.impact(style: .light)
-                        dismiss()
+                        showCancelConfirm = true
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "chevron.left")
@@ -96,7 +99,56 @@ struct UploadView: View {
                 }
             }
         }
-        // Bottom pill selector pinned above home indicator
+        .confirmationDialog("Leave creator?", isPresented: $showCancelConfirm, titleVisibility: .visible) {
+            Button("Save Draft & Close") {
+                Task {
+                    isSavingDraft = true
+                    do {
+                        let draft = try UploadDraftStorage.shared.saveDraft(from: uploadManager)
+                        restoreDraft = draft
+                        dismiss()
+                    } catch {
+                        // If no video yet, just close
+                        dismiss()
+                    }
+                    isSavingDraft = false
+                }
+            }
+            Button("Discard Changes", role: .destructive) {
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("You can save your progress as a draft and continue later.")
+        }
+        .task {
+            if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" {
+                if let draft = UploadDraftStorage.shared.latest(),
+                   uploadManager.videoURL == nil {
+                    restoreDraft = draft
+                    showRestorePrompt = true
+                }
+            }
+        }
+        .alert("Restore draft?", isPresented: $showRestorePrompt, presenting: restoreDraft) { draft in
+            Button("Restore") {
+                Task {
+                    await UploadDraftStorage.shared.hydrateManager(uploadManager, with: draft)
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        uploadStep = .editVideo
+                    }
+                }
+            }
+            Button("Delete Draft", role: .destructive) {
+                if let draft = restoreDraft {
+                    UploadDraftStorage.shared.delete(draft)
+                    restoreDraft = nil
+                }
+            }
+            Button("Not Now", role: .cancel) { }
+        } message: { draft in
+            Text("Draft from \(draft.createdAt.formatted(date: .abbreviated, time: .shortened)).")
+        }
         .safeAreaInset(edge: .bottom) {
             UploadCreationModeBar(
                 selected: $creationMode,
@@ -117,17 +169,17 @@ struct UploadView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 6)
         }
-        // Camera
         .fullScreenCover(isPresented: $showingCamera) {
             ProfessionalCameraView { videoURL in
-                uploadManager.videoURL = videoURL
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                    uploadStep = .editVideo
+                Task {
+                    await uploadManager.prepareVideo(from: videoURL)
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        uploadStep = .editVideo
+                    }
                 }
                 HapticManager.shared.impact(style: .medium)
             }
         }
-        // Live setup
         .fullScreenCover(isPresented: $showLiveSetup) {
             GoLiveSetupView {
                 showLiveSetup = false
@@ -136,7 +188,6 @@ struct UploadView: View {
                 HapticManager.shared.impact(style: .heavy)
             }
         }
-        // Community post
         .fullScreenCover(isPresented: $showPostComposer) {
             NavigationStack {
                 CreateCommunityPostView(
@@ -150,7 +201,6 @@ struct UploadView: View {
                 }
             }
         }
-        // Auto-progress when a video is selected via grid/camera
         .onChange(of: uploadManager.selectedVideo) { _, newValue in
             if newValue != nil {
                 Task {
@@ -168,7 +218,6 @@ struct UploadView: View {
     @ViewBuilder
     private var content: some View {
         VStack(spacing: 0) {
-            // Progress header
             enhancedProgressHeader
             
             ZStack {
@@ -179,9 +228,11 @@ struct UploadView: View {
                         title: "Upload video",
                         onClose: { dismiss() },
                         onPick: { url in
-                            uploadManager.videoURL = url
-                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                                uploadStep = .editVideo
+                            Task {
+                                await uploadManager.prepareVideo(from: url)
+                                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                    uploadStep = .editVideo
+                                }
                             }
                         }
                     )
@@ -190,8 +241,8 @@ struct UploadView: View {
                 case .editVideo:
                     videoEditingView
                         .transition(.asymmetric(
-                            insertion: .move(edge: .bottom).combined(with: .opacity),
-                            removal: .move(edge: .top).combined(with: .opacity)
+                            insertion: .scale(scale: 0.98).combined(with: .opacity),
+                            removal: .scale(scale: 0.98).combined(with: .opacity)
                         ))
                 case .addDetails:
                     videoDetailsView
@@ -208,8 +259,8 @@ struct UploadView: View {
                 case .completed:
                     completedView
                         .transition(.asymmetric(
-                            insertion: .scale.combined(with: .opacity),
-                            removal: .scale.combined(with: .opacity)
+                            insertion: .scale(scale: 0.98, anchor: .center).combined(with: .opacity),
+                            removal: .scale(scale: 0.98, anchor: .center).combined(with: .opacity)
                         ))
                 }
             }
@@ -217,7 +268,6 @@ struct UploadView: View {
         }
     }
     
-    // MARK: - Progress Header
     private var enhancedProgressHeader: some View {
         VStack(spacing: 16) {
             HStack(spacing: 8) {
@@ -331,19 +381,67 @@ struct UploadView: View {
                                 )
                                 .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
                         }
-                        
-                        Button {
-                            HapticManager.shared.impact(style: .light)
-                        } label: {
-                            ZStack {
-                                Circle().fill(.black.opacity(0.6)).frame(width: 60, height: 60)
-                                Image(systemName: "play.fill").font(.system(size: 24)).foregroundColor(.white)
+                    }
+                    
+                    if uploadManager.videoDuration > 0 {
+                        VStack(spacing: 10) {
+                            HStack {
+                                Text("Thumbnail Time")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                                Spacer()
+                                Text(formattedTime(uploadManager.thumbnailTime))
+                                    .font(.system(size: 13))
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
                             }
+                            
+                            Slider(value: Binding(
+                                get: { uploadManager.thumbnailTime },
+                                set: { newValue in
+                                    Task { await uploadManager.updateThumbnail(at: newValue) }
+                                }
+                            ), in: 0...(max(1, uploadManager.videoDuration - 0.1)), step: 0.1)
+                            .tint(AppTheme.Colors.primary)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 20)
+                
+                VStack(spacing: 20) {
+                    Text("Video Info")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    HStack(spacing: 16) {
+                        infoChip("Duration", formattedDuration(uploadManager.videoDuration), "clock")
+                        infoChip("Size", String(format: "%.1f MB", uploadManager.fileSizeMB), "externaldrive")
+                        infoChip("Resolution", resolutionText(uploadManager.videoDimensions), "rectangle.on.rectangle")
+                    }
+                }
+                .padding(.horizontal, 20)
+                
+                if creationMode == .flicks, uploadManager.videoDuration > 60 {
+                    HStack {
+                        Image(systemName: "scissors")
+                        Text("Auto-trim to 60s for Flicks")
+                        Spacer()
+                        Text(formattedDuration(60))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .font(.footnote)
+                    }
+                    .padding()
+                    .background(AppTheme.Colors.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1))
+                    .padding(.horizontal, 20)
+                    .onTapGesture {
+                        Task {
+                            try? await uploadManager.autoTrimToFlicksIfNeeded()
+                            HapticManager.shared.impact(style: .medium)
+                        }
+                    }
+                }
                 
                 VStack(spacing: 20) {
                     Text("Editing Tools")
@@ -352,10 +450,10 @@ struct UploadView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 16) {
-                        EditingToolCard(title: "Trim & Cut", subtitle: "Perfect timing", icon: "scissors", color: .blue) {}
-                        EditingToolCard(title: "Filters", subtitle: "Visual effects", icon: "camera.filters", color: .purple) {}
-                        EditingToolCard(title: "Add Music", subtitle: "Perfect soundtrack", icon: "music.note", color: .green) {}
-                        EditingToolCard(title: "Text & Titles", subtitle: "Engaging captions", icon: "text.bubble", color: .orange) {}
+                        EditingToolCard(title: "Trim & Cut", subtitle: "Perfect timing", icon: "scissors", color: .blue) { }
+                        EditingToolCard(title: "Filters", subtitle: "Visual effects", icon: "camera.filters", color: .purple) { }
+                        EditingToolCard(title: "Add Music", subtitle: "Perfect soundtrack", icon: "music.note", color: .green) { }
+                        EditingToolCard(title: "Text & Titles", subtitle: "Engaging captions", icon: "text.bubble", color: .orange) { }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -377,7 +475,7 @@ struct UploadView: View {
                         .padding(.vertical, 16)
                         .background(LinearGradient(colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary], startPoint: .leading, endPoint: .trailing))
                         .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 15, x: 0, y: 8)
+                        .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 15, x: 0, y: 8);
                     }
                     .buttonStyle(.plain)
                     
@@ -414,6 +512,73 @@ struct UploadView: View {
                             .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
                     }
                 }
+                
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("Smart Assist")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                        Spacer()
+                        Menu {
+                            Button("Suggest Title") {
+                                uploadManager.title = CreatorAssistService.suggestTitle(
+                                    fromExisting: uploadManager.title,
+                                    category: uploadManager.selectedCategory,
+                                    duration: uploadManager.videoDuration
+                                )
+                                HapticManager.shared.impact(style: .light)
+                            }
+                            Button("Suggest Tags") {
+                                let tags = CreatorAssistService.suggestTags(
+                                    title: uploadManager.title,
+                                    description: uploadManager.description,
+                                    category: uploadManager.selectedCategory
+                                )
+                                uploadManager.selectedTags.formUnion(tags)
+                                HapticManager.shared.impact(style: .light)
+                            }
+                            Button("Suggest Description") {
+                                uploadManager.description = CreatorAssistService.suggestDescription(
+                                    from: uploadManager.title.isEmpty ? "Your Video" : uploadManager.title,
+                                    category: uploadManager.selectedCategory
+                                )
+                                HapticManager.shared.impact(style: .light)
+                            }
+                        } label: {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(AppTheme.Colors.primary, in: Capsule())
+                        }
+                    }
+                    
+                    HStack {
+                        Button {
+                            do {
+                                let draft = try UploadDraftStorage.shared.saveDraft(from: uploadManager)
+                                restoreDraft = draft
+                                HapticManager.shared.notification(type: .success)
+                            } catch {
+                                HapticManager.shared.notification(type: .warning)
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "tray.and.arrow.down")
+                                Text("Save Draft")
+                            }
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.primary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(AppTheme.Colors.surface, in: Capsule())
+                            .overlay(Capsule().stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1))
+                        }
+                        Spacer()
+                    }
+                }
+                .padding(.horizontal, 20)
                 
                 VStack(spacing: 20) {
                     ProfessionalInputField(title: "Title", text: $uploadManager.title, placeholder: "Give your video a catchy title...", icon: "text.cursor", isRequired: true, maxLength: 100)
@@ -459,12 +624,16 @@ struct UploadView: View {
                                         showingSuccessAnimation = false
                                     }
                                 }
+                            } else {
+                                withAnimation {
+                                    uploadStep = .addDetails
+                                }
                             }
                         }
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "icloud.and.arrow.up").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
-                            Text("Upload Video").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
+                            Text("Upload Video").font(.system(size: 18, weight: .semibold)).foregroundColor(.white);
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 18)
@@ -611,12 +780,7 @@ struct UploadView: View {
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                         uploadStep = .selectMedia
                     }
-                    uploadManager.selectedVideo = nil
-                    uploadManager.videoData = nil
-                    uploadManager.thumbnail = nil
-                    uploadManager.title = ""
-                    uploadManager.description = ""
-                    uploadManager.selectedTags.removeAll()
+                    uploadManager.resetForm()
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "plus.circle").font(.system(size: 18, weight: .semibold)).foregroundColor(AppTheme.Colors.primary)
@@ -687,6 +851,10 @@ struct UploadView: View {
                             withAnimation(.spring(response: 0.8, dampingFraction: 0.6)) {
                                 uploadStep = .completed
                             }
+                        } else {
+                            withAnimation {
+                                uploadStep = .addDetails
+                            }
                         }
                     }
                 }
@@ -697,9 +865,43 @@ struct UploadView: View {
             }
         }
     }
+    
+    // MARK: - Helpers
+    private func formattedDuration(_ seconds: TimeInterval) -> String {
+        let s = Int(seconds.rounded())
+        let h = s / 3600
+        let m = (s % 3600) / 60
+        let sec = s % 60
+        if h > 0 { return String(format: "%d:%02d:%02d", h, m, sec) }
+        return String(format: "%d:%02d", m, sec)
+    }
+    
+    private func formattedTime(_ seconds: TimeInterval) -> String {
+        formattedDuration(seconds)
+    }
+    
+    private func resolutionText(_ size: CGSize) -> String {
+        guard size.width > 0 && size.height > 0 else { return "—" }
+        return "\(Int(size.width))×\(Int(size.height))"
+    }
+    
+    private func infoChip(_ title: String, _ value: String, _ icon: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon).foregroundColor(AppTheme.Colors.primary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.caption).foregroundColor(AppTheme.Colors.textSecondary)
+                Text(value).font(.subheadline).fontWeight(.semibold).foregroundColor(AppTheme.Colors.textPrimary)
+            }
+            Spacer()
+        }
+        .padding(12)
+        .background(AppTheme.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1))
+    }
 }
 
-// MARK: - UI Pieces
+// MARK: - UI Pieces (unchanged below)
 
 struct EditingToolCard: View {
     let title: String
@@ -1001,7 +1203,6 @@ struct ProfessionalToggleRow: View {
     }
 }
 
-// MARK: - Bottom Creation Mode Bar (scoped to avoid name collisions)
 struct UploadCreationModeBar: View {
     @Binding var selected: UploadView.CreationMode
     let onTap: (UploadView.CreationMode) -> Void

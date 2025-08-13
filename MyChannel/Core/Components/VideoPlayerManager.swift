@@ -130,14 +130,6 @@ class VideoPlayerManager: ObservableObject {
         cleanup()
         isCleanedUp = false // Reset cleanup flag
         
-        // In SwiftUI previews, avoid attaching real AVPlayerItem to prevent simulator preview crashes
-        if AppConfig.isPreview {
-            currentVideo = video
-            player = AVPlayer()
-            isLoading = false
-            hasError = false
-            return
-        }
 
         currentVideo = video
         isLoading = true
@@ -408,6 +400,7 @@ class VideoPlayerManager: ObservableObject {
     
     // MARK: - Audio Session / Now Playing
     private func configureAudioSession() {
+        guard !AppConfig.isPreview else { return }
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay])
             try AVAudioSession.sharedInstance().setActive(true)

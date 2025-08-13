@@ -28,6 +28,13 @@ struct AppSecrets {
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
         return ProcessInfo.processInfo.environment["PIXABAY_API_KEY"] ?? ""
     }
+
+    static var youtubeAPIKey: String {
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "YOUTUBE_API_KEY") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        return (ProcessInfo.processInfo.environment["YOUTUBE_API_KEY"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
 
 private extension String {

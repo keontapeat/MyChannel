@@ -19,24 +19,12 @@ struct LiveChannelThumbnailView: View {
 
     var body: some View {
         ZStack {
-            if let snap = snapshot, !isReady {
-                Image(uiImage: snap)
-                    .resizable()
-                    .scaledToFill()
-                    .transition(.opacity)
-            } else if let poster = posterURL, !isReady {
-                AsyncImage(url: URL(string: poster)) { image in
-                    image.resizable().scaledToFit().padding(12)
-                } placeholder: {
-                    Color(.systemGray6)
-                }
-            }
-
+            // Video preview sits in the back and fades in when ready
             LivePreviewPlayer(
                 urls: [streamURL] + (fallbackStreamURL != nil ? [fallbackStreamURL!] : []),
                 onReady: {
                     if !isReady {
-                        withAnimation(.easeInOut(duration: 0.15)) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
                             isReady = true
                         }
                     }
@@ -47,8 +35,28 @@ struct LiveChannelThumbnailView: View {
                     }
                 }
             )
-            .clipped()
+            .opacity(isReady ? 1 : 0)
+            .transition(.opacity)
+
+            // Placeholder layer stays on top until video is ready
+            if !isReady {
+                if let snap = snapshot {
+                    Image(uiImage: snap)
+                        .resizable()
+                        .scaledToFill()
+                        .transition(.opacity)
+                } else if let poster = posterURL {
+                    AsyncImage(url: URL(string: poster)) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Color(.systemGray6)
+                    }
+                } else {
+                    Color(.systemGray6)
+                }
+            }
         }
+        .clipped()
         .background(Color(.systemGray6))
     }
 }

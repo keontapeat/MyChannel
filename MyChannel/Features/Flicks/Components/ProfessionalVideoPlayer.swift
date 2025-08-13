@@ -3,6 +3,8 @@ import AVKit
 import AVFoundation
 
 struct ProfessionalVideoPlayer: View {
+    enum OverlayStyle { case minimal, classic }
+
     let video: Video
     let isCurrentVideo: Bool
     let isLiked: Bool
@@ -13,49 +15,45 @@ struct ProfessionalVideoPlayer: View {
     let onComment: () -> Void
     let onShare: () -> Void
     let onProfileTap: () -> Void
-    
+    var overlayStyle: OverlayStyle = .minimal
+
     @StateObject private var playerManager = VideoPlayerManager()
     @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
+
     @State private var isPlaying = true
+    @State private var isMuted = true
     @State private var showPlayIcon = false
-    @State private var currentProgress: Double = 0.0
+    @State private var showHeartPulse = false
+    @State private var overlayVisible = true
+    @State private var showUnmuteTip = true
     @State private var timeObserverToken: Any?
-    @State private var isMuted = false
-    @State private var showSeekForward = false
-    @State private var showSeekBackward = false
 
     @AppStorage("flicks_playback_speed") private var playbackSpeed: Double = 1.0
-    
+
     var body: some View {
         ZStack {
             if isCurrentVideo {
-                FlicksPlayerLayerView(
-                    player: playerManager.player,
-                    videoGravity: .resizeAspectFill
-                )
+                FlicksPlayerLayerView(player: playerManager.player, videoGravity: .resizeAspectFill)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
                     .contentShape(Rectangle())
                     .onTapGesture {
                         togglePlayPause()
                         showPlayPauseIcon()
+                        revealOverlayTemporarily()
                     }
-                    .overlay(alignment: .center) { seekGestureOverlay }
+                    .onTapGesture(count: 2) {
+                        if !isLiked { onLike() }
+                        heartPulse()
+                        revealOverlayTemporarily()
+                    }
                     .onAppear {
                         setupPlayer()
-                        addTimeObserver()
-                        if isCurrentVideo {
-                            globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
-                            globalPlayer.shouldShowMiniPlayer = false
-                            // Autoplay current item in feed
-                            playerManager.play()
-                            applyPlaybackSpeed()
-                            isPlaying = true
-                        }
+                        attachTimeObserver()
+                        adoptGlobalManager()
+                        scheduleOverlayAutohide()
                     }
-                    .onDisappear {
-                        cleanupPlayback()
-                    }
+                    .onDisappear { cleanupPlayback() }
                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                         playerManager.pause()
                         isPlaying = false
@@ -65,332 +63,176 @@ struct ProfessionalVideoPlayer: View {
                             playerManager.play()
                             applyPlaybackSpeed()
                             isPlaying = true
+                            scheduleOverlayAutohide()
                         }
                     }
                     .onChange(of: isCurrentVideo) { _, newValue in
                         if newValue {
-                            // Start playback explicitly; avoid toggle race conditions
                             playerManager.play()
                             applyPlaybackSpeed()
                             isPlaying = true
-                            globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
+                            adoptGlobalManager()
+                            scheduleOverlayAutohide()
                         } else {
                             playerManager.pause()
                             isPlaying = false
                         }
                     }
                     .onChange(of: playbackSpeed) { _, _ in
-                        if isPlaying {
-                            applyPlaybackSpeed()
-                        }
+                        if isPlaying { applyPlaybackSpeed() }
                     }
             } else {
                 AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
+                    image.resizable().aspectRatio(contentMode: .fill)
                 } placeholder: {
-                    ZStack {
-                        Rectangle()
-                            .fill(.black)
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    }
+                    ZStack { Rectangle().fill(.black); ProgressView().tint(.white) }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
             }
-            
+
+            if playerManager.isLoading {
+                ProgressView().tint(.white).scaleEffect(1.2)
+            }
+
+            if overlayStyle == .minimal { minimalOverlay.opacity(overlayVisible ? 1 : 0) } else { classicOverlay.opacity(overlayVisible ? 1 : 0) }
+
             if showPlayIcon {
                 ZStack {
-                    Circle()
-                        .fill(.black.opacity(0.3))
-                        .frame(width: 120, height: 120)
-                        .background(.ultraThinMaterial, in: Circle())
+                    Circle().fill(.black.opacity(0.28)).frame(width: 110, height: 110).background(.ultraThinMaterial, in: Circle())
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 50, weight: .medium))
+                        .font(.system(size: 46, weight: .medium))
                         .foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
                 }
-                .scaleEffect(showPlayIcon ? 1.0 : 0.8)
+                .scaleEffect(showPlayIcon ? 1.0 : 0.85)
                 .opacity(showPlayIcon ? 1.0 : 0.0)
-                .animation(AppTheme.AnimationPresets.bouncy, value: showPlayIcon)
+                .animation(.spring(response: 0.35, dampingFraction: 0.75), value: showPlayIcon)
             }
-            
-            GeometryReader { geometry in
-                ZStack {
-                    VStack {
-                        Spacer()
-                        LinearGradient(
-                            colors: [.clear, .black.opacity(0.6), .black.opacity(0.92)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: 280)
-                        .allowsHitTesting(false)
-                    }
 
-                    HStack(alignment: .bottom) {
-                        // LEFT: Minimal info block
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack(spacing: 10) {
-                                Button(action: onProfileTap) {
-                                    AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
-                                        image.resizable().scaledToFill()
-                                    } placeholder: {
-                                        Circle().fill(.white.opacity(0.25))
-                                    }
-                                    .frame(width: 36, height: 36)
-                                    .clipShape(Circle())
-                                    .overlay(Circle().stroke(.white.opacity(0.15), lineWidth: 1))
-                                    .accessibilityLabel("\(video.creator.displayName) profile")
-                                }
-                                .buttonStyle(.plain)
+            if showHeartPulse {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 68))
+                    .foregroundStyle(.red)
+                    .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                    .scaleEffect(showHeartPulse ? 1.0 : 0.8)
+                    .opacity(showHeartPulse ? 0.95 : 0.0)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.7), value: showHeartPulse)
+            }
 
-                                VStack(alignment: .leading, spacing: 2) {
-                                    HStack(spacing: 6) {
-                                        Text("@\(video.creator.username)")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(.white)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.8)
-
-                                        if video.creator.isVerified {
-                                            Image(systemName: "checkmark.seal.fill")
-                                                .font(.system(size: 13, weight: .semibold))
-                                                .foregroundColor(AppTheme.Colors.primary)
-                                                .accessibilityLabel("Verified account")
-                                        }
-                                    }
-
-                                    if !isFollowing {
-                                        Button(action: onFollow) {
-                                            Text("Subscribe")
-                                                .font(.system(size: 12, weight: .bold))
-                                                .foregroundColor(.white)
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 6)
-                                                .background(Color.black.opacity(0.55), in: Capsule())
-                                        }
-                                        .buttonStyle(.plain)
-                                        .accessibilityLabel("Subscribe to \(video.creator.displayName)")
-                                    }
-                                }
-
-                                Spacer(minLength: 0)
-                            }
-
-                            // Title
-                            Text(video.title)
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(.white)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-
-                            // Meta row
-                            HStack(spacing: 12) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "eye.fill")
-                                        .font(.system(size: 10, weight: .semibold))
-                                        .foregroundColor(.white.opacity(0.7))
-                                    Text(formatCount(video.viewCount))
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.9))
-                                }
-
-                                HStack(spacing: 4) {
-                                    Image(systemName: "heart.fill")
-                                        .font(.system(size: 10, weight: .semibold))
-                                        .foregroundColor(.red.opacity(0.9))
-                                    Text(formatCount(video.likeCount))
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.9))
-                                }
-
-                                Spacer(minLength: 0)
-                            }
-                        }
-                        .frame(maxWidth: geometry.size.width * 0.68, alignment: .leading)
-                        .padding(.leading, 20)
-                        .padding(.bottom, 90)
-
-                        Spacer(minLength: 0)
-
-                        // RIGHT: Minimal vertical actions, anchored bottom-right
-                        VStack(spacing: 12) {
-                            Spacer(minLength: 0)
-
-                            ProfessionalActionButton(
-                                icon: isLiked ? "heart.fill" : "heart",
-                                text: formatCount(video.likeCount),
-                                isActive: isLiked,
-                                activeColor: .red,
-                                action: onLike
-                            )
-
-                            ProfessionalActionButton(
-                                icon: "bubble.right.fill",
-                                text: formatCount(video.commentCount),
-                                action: onComment
-                            )
-
-                            ProfessionalActionButton(
-                                icon: "arrowshape.turn.up.right.fill",
-                                text: "Share",
-                                action: onShare
-                            )
-
-                            ProfessionalActionButton(
-                                icon: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-                                text: "",
-                                action: toggleMute
-                            )
-
-                            Button(action: onProfileTap) {
-                                AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
-                                    image.resizable().scaledToFill()
-                                } placeholder: {
-                                    Circle().fill(.white.opacity(0.25))
-                                }
-                                .frame(width: 34, height: 34)
-                                .clipShape(Circle())
-                                .overlay(Circle().stroke(.white, lineWidth: 2))
-                                .accessibilityHidden(true)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.trailing, 18)
-                        .padding(.bottom, 96)
+            if showUnmuteTip && isMuted && isCurrentVideo {
+                HStack(spacing: 6) {
+                    Image(systemName: "speaker.slash.fill").font(.caption.bold())
+                    Text("Sound off").font(.caption.weight(.semibold))
+                }
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().stroke(.white.opacity(0.15), lineWidth: 0.6))
+                .foregroundStyle(.white)
+                .padding(.bottom, 180)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        withAnimation(.easeOut(duration: 0.25)) { showUnmuteTip = false }
                     }
                 }
             }
-            
-            VStack(spacing: 12) {
+        }
+        .animation(.easeInOut(duration: 0.22), value: overlayVisible)
+    }
+
+    private var minimalOverlay: some View {
+        VStack(spacing: 0) {
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.22)).frame(height: 3)
+                    Capsule()
+                        .fill(.white.opacity(0.5))
+                        .frame(width: max(6, CGFloat(playerManager.bufferedProgress) * proxy.size.width), height: 3)
+                    Capsule()
+                        .fill(.white)
+                        .frame(width: max(6, CGFloat(playerManager.currentProgress) * proxy.size.width), height: 3)
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, 10)
+            }
+            .frame(height: 14)
+
+            Spacer()
+
+            LinearGradient(colors: [.clear, .black.opacity(0.08), .black.opacity(0.25)], startPoint: .top, endPoint: .bottom)
+                .frame(height: 96)
+                .allowsHitTesting(false)
+
+            HStack(spacing: 12) {
+                Button(action: onProfileTap) {
+                    AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Circle().fill(.white.opacity(0.25))
+                    }
+                    .frame(width: 36, height: 36)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(.white.opacity(0.2), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("@\(video.creator.username)").font(.subheadline.weight(.semibold)).foregroundStyle(.white).lineLimit(1)
+                        if video.creator.isVerified { Image(systemName: "checkmark.seal.fill").font(.caption2).foregroundStyle(AppTheme.Colors.primary) }
+                    }
+                    Text(video.title).font(.callout.weight(.semibold)).foregroundStyle(.white.opacity(0.95)).lineLimit(2)
+                }
+
                 Spacer()
-                
-                progressBar
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 50)
-            }
-        }
-    }
-    
-    private var seekGestureOverlay: some View {
-        GeometryReader { _ in
-            HStack(spacing: 0) {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2) {
-                        seek(by: -10)
-                        withAnimation(AppTheme.AnimationPresets.bouncy) { showSeekBackward = true }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            withAnimation(AppTheme.AnimationPresets.spring) { showSeekBackward = false }
-                        }
-                        HapticManager.shared.impact(style: .light)
-                    }
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2) {
-                        seek(by: 10)
-                        withAnimation(AppTheme.AnimationPresets.bouncy) { showSeekForward = true }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            withAnimation(AppTheme.AnimationPresets.spring) { showSeekForward = false }
-                        }
-                        HapticManager.shared.impact(style: .light)
-                    }
-            }
-            .overlay(alignment: .leading) {
-                if showSeekBackward {
-                    seekBadge(symbol: "gobackward.10")
-                        .padding(.leading, 24)
+
+                HStack(spacing: 10) {
+                    glassIconButton(system: isLiked ? "heart.fill" : "heart", tint: isLiked ? .red : .white) { onLike(); HapticManager.shared.impact(style: .light); revealOverlayTemporarily() }
+                    glassIconButton(system: "bubble.right.fill", tint: .white) { onComment(); revealOverlayTemporarily() }
+                    glassIconButton(system: "arrowshape.turn.up.right.fill", tint: .white) { onShare(); revealOverlayTemporarily() }
+                    glassIconButton(system: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill", tint: .white) { toggleMute(); revealOverlayTemporarily() }
                 }
             }
-            .overlay(alignment: .trailing) {
-                if showSeekForward {
-                    seekBadge(symbol: "goforward.10")
-                        .padding(.trailing, 24)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(.white.opacity(0.12), lineWidth: 0.6))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 106)
+        }
+    }
+
+    private var classicOverlay: some View {
+        VStack {
+            Spacer()
+            HStack {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(video.title).font(.headline.weight(.semibold)).foregroundStyle(.white).lineLimit(2)
+                    Text("@\(video.creator.username)").font(.subheadline).foregroundStyle(.white.opacity(0.9))
                 }
+                Spacer()
             }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 120)
         }
-        .allowsHitTesting(true)
     }
-    
-    private func seekBadge(symbol: String) -> some View {
-        Image(systemName: symbol)
-            .font(.system(size: 38, weight: .bold))
-            .foregroundStyle(.white)
-            .padding(14)
-            .background(.ultraThinMaterial, in: Capsule())
-            .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
-            .transition(.scale.combined(with: .opacity))
-    }
-    
-    private var progressBar: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                // Enhanced background with glassmorphic effect
-                Capsule()
-                    .fill(.ultraThinMaterial.opacity(0.6))
-                    .overlay(
-                        Capsule()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.3), .clear],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                ),
-                                lineWidth: 0.5
-                            )
-                    )
-                    .frame(height: 5)
-                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
-                
-                // Enhanced progress fill
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                AppTheme.Colors.primary,
-                                AppTheme.Colors.primary.opacity(0.8),
-                                .white.opacity(0.9)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .overlay(
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.4), .clear],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                    )
-                    .frame(width: max(5, CGFloat(currentProgress) * proxy.size.width), height: 5)
-                    .shadow(color: AppTheme.Colors.primary.opacity(0.6), radius: 3, x: 0, y: 0)
-                    .shadow(color: .white.opacity(0.3), radius: 1, x: 0, y: 0)
-            }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        let fraction = max(0, min(1, value.location.x / proxy.size.width))
-                        seek(toFraction: fraction, animateProgress: true)
-                    }
-            )
+
+    private func glassIconButton(system: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 36, height: 36)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(Circle().stroke(.white.opacity(0.12), lineWidth: 0.6))
         }
-        .frame(height: 18)
-        .accessibilityLabel("Playback progress")
+        .buttonStyle(.plain)
     }
-    
+
     private func setupPlayer() {
         playerManager.setupPlayer(with: video)
-        if let player = playerManager.player {
-            player.isMuted = isMuted
-        }
-        // Session resume (minimal)
+        playerManager.player?.isMuted = isMuted
         if let resume = VideoPlayerManager.resumeTime(videoId: video.id), resume > 1, playerManager.duration > 0 {
             let progress = resume / playerManager.duration
             playerManager.seek(to: progress)
@@ -399,14 +241,18 @@ struct ProfessionalVideoPlayer: View {
         applyPlaybackSpeed()
         isPlaying = true
     }
-    
+
+    private func adoptGlobalManager() {
+        globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
+        globalPlayer.shouldShowMiniPlayer = false
+    }
+
     private func cleanupPlayback() {
-        playerManager.pause()
         removeTimeObserver()
-        currentProgress = 0
+        playerManager.pause()
         isPlaying = false
     }
-    
+
     private func togglePlayPause() {
         if isPlaying {
             playerManager.pause()
@@ -417,155 +263,58 @@ struct ProfessionalVideoPlayer: View {
         isPlaying.toggle()
         HapticManager.shared.impact(style: .light)
     }
-    
+
     private func toggleMute() {
         isMuted.toggle()
-        if let player = playerManager.player {
-            player.isMuted = isMuted
-        }
+        playerManager.player?.isMuted = isMuted
+        if !isMuted { showUnmuteTip = false }
         HapticManager.shared.impact(style: .light)
     }
-    
-    private func seek(by seconds: Double) {
-        guard let player = playerManager.player,
-              let item = player.currentItem else { return }
-        let current = item.currentTime().seconds
-        let duration = item.duration.seconds
-        guard duration.isFinite && duration > 0 else { return }
-        let target = max(0, min(duration, current + seconds))
-        let time = CMTime(seconds: target, preferredTimescale: 600)
-        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
-    }
-    
-    private func seek(toFraction fraction: CGFloat, animateProgress: Bool) {
-        guard let player = playerManager.player,
-              let item = player.currentItem else { return }
-        let duration = item.duration
-        guard duration.isNumeric && duration.seconds > 0 else { return }
-        let targetSeconds = Double(fraction) * duration.seconds
-        let time = CMTime(seconds: targetSeconds, preferredTimescale: 600)
-        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
-        if animateProgress {
-            withAnimation(.linear(duration: 0.05)) {
-                currentProgress = max(0, min(1, Double(fraction)))
-            }
-        } else {
-            currentProgress = max(0, min(1, Double(fraction)))
-        }
-    }
-    
-    private func addTimeObserver() {
-        guard timeObserverToken == nil else { return }
-        guard let player = playerManager.player else { return }
+
+    private func attachTimeObserver() {
+        guard timeObserverToken == nil, let player = playerManager.player else { return }
         let interval = CMTime(seconds: 0.05, preferredTimescale: 600)
-        timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
-            updateProgress(currentTime: time)
-        }
+        timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { _ in }
     }
-    
+
     private func removeTimeObserver() {
         if let token = timeObserverToken, let player = playerManager.player {
             player.removeTimeObserver(token)
             timeObserverToken = nil
         }
     }
-    
-    private func updateProgress(currentTime: CMTime) {
-        guard let item = playerManager.player?.currentItem else {
-            currentProgress = 0
-            return
-        }
-        let duration = item.duration
-        if duration.isNumeric, duration.seconds > 0 {
-            let progress = currentTime.seconds / duration.seconds
-            withAnimation(.linear(duration: 0.05)) {
-                currentProgress = max(0, min(1, progress))
-            }
-        } else {
-            currentProgress = 0
-        }
-    }
-    
-    private func formatCount(_ count: Int) -> String {
-        if count >= 1_000_000 {
-            return String(format: "%.1fM", Double(count) / 1_000_000)
-        } else if count >= 1_000 {
-            return String(format: "%.1fK", Double(count) / 1_000)
-        } else {
-            return "\(count)"
-        }
-    }
-    
+
     private func showPlayPauseIcon() {
-        withAnimation(AppTheme.AnimationPresets.bouncy) {
-            showPlayIcon = true
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) { showPlayIcon = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { showPlayIcon = false }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            withAnimation(AppTheme.AnimationPresets.spring) {
-                showPlayIcon = false
+    }
+
+    private func heartPulse() {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.7)) { showHeartPulse = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { showHeartPulse = false }
+        }
+        HapticManager.shared.impact(style: .medium)
+    }
+
+    private func scheduleOverlayAutohide() {
+        revealOverlayTemporarily()
+    }
+
+    private func revealOverlayTemporarily() {
+        withAnimation(.easeInOut(duration: 0.2)) { overlayVisible = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) {
+            if isPlaying {
+                withAnimation(.easeOut(duration: 0.25)) { overlayVisible = false }
             }
         }
     }
-    
-    private func playAtCurrentSpeed() {
-        playerManager.play()
-        applyPlaybackSpeed()
-    }
-    
+
     private func applyPlaybackSpeed() {
         guard isPlaying, let player = playerManager.player else { return }
         player.rate = Float(playbackSpeed)
-    }
-}
-
-private struct ProfessionalActionButton: View {
-    let icon: String
-    let text: String
-    var isActive: Bool = false
-    var activeColor: Color = AppTheme.Colors.primary
-    let action: () -> Void
-
-    @State private var isPressed = false
-    private let diameter: CGFloat = 44
-
-    var body: some View {
-        VStack(spacing: 6) {
-            Button {
-                action()
-                HapticManager.shared.impact(style: .light)
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            Circle().stroke(.white.opacity(isActive ? 0.3 : 0.12), lineWidth: 0.7)
-                        )
-                        .frame(width: diameter, height: diameter)
-
-                    Image(systemName: icon)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(isActive ? activeColor : .white)
-                        .contentTransition(.opacity)
-                }
-                .scaleEffect(isPressed ? 0.94 : 1.0)
-                .animation(.easeInOut(duration: 0.12), value: isPressed)
-            }
-            .buttonStyle(.plain)
-            .contentShape(Circle())
-            .onLongPressGesture(minimumDuration: 0, perform: {}) { pressing in
-                withAnimation(.easeInOut(duration: 0.12)) { isPressed = pressing }
-            }
-
-            if !text.isEmpty {
-                Text(text)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-        }
-        .frame(width: 60)
-        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -582,7 +331,8 @@ private struct ProfessionalActionButton: View {
             onFollow: {},
             onComment: {},
             onShare: {},
-            onProfileTap: {}
+            onProfileTap: {},
+            overlayStyle: .minimal
         )
     }
     .preferredColorScheme(.dark)
