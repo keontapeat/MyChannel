@@ -34,7 +34,8 @@ struct LiveTVChannelsView: View {
                 quality: "HD",
                 language: "English",
                 country: "US",
-                epgURL: nil
+                epgURL: nil,
+                previewFallbackURL: nil
             ),
             LiveTVChannel(
                 id: "plex-bloomberg",
@@ -48,7 +49,8 @@ struct LiveTVChannelsView: View {
                 quality: "HD",
                 language: "English",
                 country: "US",
-                epgURL: nil
+                epgURL: nil,
+                previewFallbackURL: nil
             ),
             LiveTVChannel(
                 id: "roku-kids-tv",
@@ -62,7 +64,8 @@ struct LiveTVChannelsView: View {
                 quality: "HD",
                 language: "English",
                 country: "US",
-                epgURL: nil
+                epgURL: nil,
+                previewFallbackURL: nil
             )
         ]
     }
@@ -292,7 +295,7 @@ private struct MinimalGridChannelCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
                     if showPreview {
-                        LiveChannelThumbnailView(streamURL: channel.streamURL, posterURL: channel.logoURL)
+                        LiveChannelThumbnailView(streamURL: channel.streamURL, posterURL: channel.logoURL, fallbackStreamURL: channel.previewFallbackURL)
                             .aspectRatio(16/9, contentMode: .fill)
                             .frame(maxWidth: .infinity)
                             .background(Color(.systemGray6))
@@ -353,38 +356,26 @@ private struct MinimalListChannelCard: View {
     let action: () -> Void
 
     @State private var showPreview = false
+    private let thumbSize = CGSize(width: 160, height: 90)
+    private let rowHeight: CGFloat = 114
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 ZStack {
-                    if showPreview {
-                        LiveChannelThumbnailView(streamURL: channel.streamURL, posterURL: channel.logoURL)
-                            .frame(width: 160, height: 90)
-                            .background(Color(.systemGray6))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    } else {
-                        AsyncImage(url: URL(string: channel.logoURL)) { image in
-                            image.resizable().scaledToFit()
-                        } placeholder: { Color(.systemGray6) }
-                        .frame(width: 160, height: 90)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
+                    LiveChannelThumbnailView(streamURL: channel.streamURL, posterURL: channel.logoURL, fallbackStreamURL: channel.previewFallbackURL)
+                        .opacity(showPreview ? 1 : 0)
 
-                    if channel.isLive {
-                        HStack(spacing: 4) {
-                            Circle().fill(.white).frame(width: 4, height: 4)
-                            Text("LIVE").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
-                        }
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Capsule().fill(Color.red.opacity(0.9)))
-                        .padding(6)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    }
+                    AsyncImage(url: URL(string: channel.logoURL)) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: { Color(.systemGray6) }
+                    .opacity(showPreview ? 0 : 1)
                 }
-                .onAppear { showPreview = true }
-                .onDisappear { showPreview = false }
+                .frame(width: thumbSize.width, height: thumbSize.height)
+                .background(Color(.systemGray6))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
+                // Text area pinned to top, consistent height
                 VStack(alignment: .leading, spacing: 4) {
                     Text(channel.name)
                         .font(.system(size: 14, weight: .semibold))
@@ -405,8 +396,10 @@ private struct MinimalListChannelCard: View {
                             .foregroundColor(.secondary)
                     }
                 }
-                Spacer(minLength: 0)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
+            .frame(height: rowHeight, alignment: .center)
+            .contentShape(Rectangle())
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -414,6 +407,8 @@ private struct MinimalListChannelCard: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+        .onAppear { showPreview = true }
+        .onDisappear { showPreview = false }
     }
 
     private func formatViewerCount(_ count: Int) -> String {

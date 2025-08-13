@@ -8,12 +8,41 @@
 import SwiftUI
 
 struct TrendingView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var trendingVideos: [Video] = Video.sampleVideos.filter { $0.viewCount > 100000 }
     @State private var selectedTimeframe: TrendingTimeframe = .today
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                HStack {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .frame(width: 32, height: 32)
+                            .background(AppTheme.Colors.surface, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Spacer()
+                    
+                    Text("Trending")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    
+                    Spacer()
+                    
+                    // spacer to balance layout
+                    Color.clear.frame(width: 32, height: 32)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+                .padding(.bottom, 6)
+                .background(AppTheme.Colors.background)
+                
                 // Timeframe selector
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 16) {
@@ -50,8 +79,7 @@ struct TrendingView: View {
                 }
             }
             .background(AppTheme.Colors.background)
-            .navigationTitle("Trending")
-            .navigationBarTitleDisplayMode(.large)
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 }

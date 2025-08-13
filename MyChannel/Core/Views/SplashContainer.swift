@@ -38,6 +38,8 @@ struct SplashContainer: View {
             }
         }
         .animation(.easeInOut(duration: 0.5), value: showSplash)
+        .transaction { $0.animation = nil }
+        .ignoresSafeArea(.keyboard) // keep root stable when keyboard appears
     }
 }
 

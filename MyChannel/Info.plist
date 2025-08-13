@@ -4,5 +4,15 @@
 <dict>
 	<key>TMDB_API_KEY</key>
 	<string>$(TMDB_API_KEY)</string>
+
+	<!-- Privacy Usage Descriptions -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MyChannel needs access to your photo library to let you pick videos and images for upload.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>MyChannel saves exported videos or edited media to your library when you choose to.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>MyChannel uses the camera so you can record videos and create content.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>MyChannel uses the microphone to capture audio while recording videos or going live.</string>
 </dict>
 </plist>

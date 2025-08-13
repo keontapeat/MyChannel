@@ -6,13 +6,15 @@ import UIKit
 struct LiveChannelThumbnailView: View {
     let streamURL: String
     let posterURL: String?
+    let fallbackStreamURL: String?
 
     @State private var isReady: Bool = false
     @State private var snapshot: UIImage?
 
-    init(streamURL: String, posterURL: String? = nil) {
+    init(streamURL: String, posterURL: String? = nil, fallbackStreamURL: String? = nil) {
         self.streamURL = streamURL
         self.posterURL = posterURL
+        self.fallbackStreamURL = fallbackStreamURL
     }
 
     var body: some View {
@@ -31,7 +33,7 @@ struct LiveChannelThumbnailView: View {
             }
 
             LivePreviewPlayer(
-                urlString: streamURL,
+                urls: [streamURL] + (fallbackStreamURL != nil ? [fallbackStreamURL!] : []),
                 onReady: {
                     if !isReady {
                         withAnimation(.easeInOut(duration: 0.15)) {
@@ -52,7 +54,7 @@ struct LiveChannelThumbnailView: View {
 }
 
 private struct LivePreviewPlayer: UIViewRepresentable {
-    let urlString: String
+    let urls: [String]
     let onReady: () -> Void
     let onSnapshot: (UIImage) -> Void
 
@@ -63,14 +65,15 @@ private struct LivePreviewPlayer: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: PlayerContainerView, context: Context) {
-        uiView.configure(with: urlString, onReady: onReady, onSnapshot: onSnapshot)
+        uiView.configure(with: urls, onReady: onReady, onSnapshot: onSnapshot)
     }
 }
 
 private final class PlayerContainerView: UIView {
     private var player: AVPlayer?
     private var playerLayer: AVPlayerLayer?
-    private var currentURL: String?
+    private var urlCandidates: [String] = []
+    private var currentIndex: Int = 0
     private var timeControlObserver: NSKeyValueObservation?
     private var statusObserver: NSKeyValueObservation?
     private var endObserver: NSObjectProtocol?
@@ -83,15 +86,16 @@ private final class PlayerContainerView: UIView {
         playerLayer?.frame = bounds
     }
 
-    func configure(with urlString: String, onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void) {
-        guard currentURL != urlString else {
-            player?.play()
-            return
-        }
-        currentURL = urlString
+    func configure(with urls: [String], onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void) {
+        urlCandidates = urls
+        currentIndex = 0
         teardown()
+        startPlayer(onReady: onReady, onSnapshot: onSnapshot)
+    }
 
-        guard let url = URL(string: urlString) else { return }
+    private func startPlayer(onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void) {
+        guard currentIndex < urlCandidates.count, let url = URL(string: urlCandidates[currentIndex]) else { return }
+
         let asset = AVURLAsset(url: url)
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = 0
@@ -117,6 +121,8 @@ private final class PlayerContainerView: UIView {
             if item.status == .readyToPlay {
                 self.notifyReadyIfNeeded(onReady)
                 player.play()
+            } else if item.status == .failed {
+                self.tryNextCandidate(onReady: onReady, onSnapshot: onSnapshot)
             }
         }
 
@@ -150,7 +156,7 @@ private final class PlayerContainerView: UIView {
         let retry = DispatchWorkItem { [weak self] in
             guard let self else { return }
             if self.player?.timeControlStatus != .playing {
-                self.recreatePlayer(with: url, onReady: onReady)
+                self.tryNextCandidate(onReady: onReady, onSnapshot: onSnapshot)
             }
         }
         self.retryWork = retry
@@ -162,6 +168,16 @@ private final class PlayerContainerView: UIView {
         NotificationCenter.default.addObserver(self, selector: #selector(handlePreviewsResume), name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
 
         player.play()
+        setNeedsLayout()
+        layoutIfNeeded()
+    }
+
+    private func tryNextCandidate(onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void) {
+        currentIndex += 1
+        teardownPlayerOnly()
+        if currentIndex < urlCandidates.count {
+            startPlayer(onReady: onReady, onSnapshot: onSnapshot)
+        }
     }
 
     private func notifyReadyIfNeeded(_ onReady: @escaping () -> Void) {
@@ -169,26 +185,6 @@ private final class PlayerContainerView: UIView {
             hasNotifiedReady = true
             DispatchQueue.main.async { onReady() }
         }
-    }
-
-    private func recreatePlayer(with url: URL, onReady: @escaping () -> Void) {
-        let asset = AVURLAsset(url: url)
-        let item = AVPlayerItem(asset: asset)
-        let p = AVPlayer(playerItem: item)
-        p.isMuted = true
-        p.automaticallyWaitsToMinimizeStalling = true
-        p.currentItem?.preferredPeakBitRate = 1_800_000
-        playerLayer?.player = p
-        player = p
-
-        statusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-            guard let self else { return }
-            if item.status == .readyToPlay {
-                self.notifyReadyIfNeeded(onReady)
-                p.play()
-            }
-        }
-        p.play()
     }
 
     private func generateSnapshot(from asset: AVAsset, completion: @escaping (UIImage?) -> Void) {
@@ -208,18 +204,12 @@ private final class PlayerContainerView: UIView {
         }
     }
 
-    @objc private func handleAppBackground() {
-        player?.pause()
-    }
+    @objc private func handleAppBackground() { player?.pause() }
+    @objc private func handleAppForeground() { player?.play() }
+    @objc private func handlePreviewsPause() { player?.pause() }
+    @objc private func handlePreviewsResume() { player?.play() }
 
-    @objc private func handleAppForeground() {
-        player?.play()
-    }
-
-    func teardown() {
-        NotificationCenter.default.removeObserver(self)
-        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
-        endObserver = nil
+    private func teardownPlayerOnly() {
         readyTimeoutWork?.cancel()
         retryWork?.cancel()
         readyTimeoutWork = nil
@@ -235,8 +225,12 @@ private final class PlayerContainerView: UIView {
         playerLayer = nil
     }
 
-    @objc private func handlePreviewsPause() { player?.pause() }
-    @objc private func handlePreviewsResume() { player?.play() }
+    func teardown() {
+        NotificationCenter.default.removeObserver(self)
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        endObserver = nil
+        teardownPlayerOnly()
+    }
 
     deinit { teardown() }
 }

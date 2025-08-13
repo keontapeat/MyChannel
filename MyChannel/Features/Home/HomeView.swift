@@ -40,6 +40,7 @@ enum FullScreenRoute: Identifiable {
     case stories(AssetStory)
     case allMovies
     case allLiveTV
+    case trending
 
     var id: String {
         switch self {
@@ -49,6 +50,7 @@ enum FullScreenRoute: Identifiable {
         case .stories(let s): return "stories-\(s.id)"
         case .allMovies: return "allMovies"
         case .allLiveTV: return "allLiveTV"
+        case .trending: return "trending"
         }
     }
 }
@@ -124,7 +126,8 @@ struct HomeView: View {
                             onPlayVideo: { video in route = .video(video) },
                             onSelectMovie: { movie in route = .movie(movie) },
                             onSeeAllFreeMovies: { route = .allMovies },
-                            onSeeAllLiveTV: { route = .allLiveTV }
+                            onSeeAllLiveTV: { route = .allLiveTV },
+                            onSeeAllTrending: { route = .trending }
                         )
 
                         Color.clear.frame(height: 100)
@@ -199,6 +202,11 @@ struct HomeView: View {
             case .allLiveTV:
                 LiveTVChannelsView()
                     .environmentObject(appState)
+                    .background(Color(.systemBackground).ignoresSafeArea())
+                    .onDisappear { self.route = nil }
+
+            case .trending:
+                TrendingView()
                     .background(Color(.systemBackground).ignoresSafeArea())
                     .onDisappear { self.route = nil }
             }
@@ -537,6 +545,7 @@ struct MinimalContentSections: View {
     let onSelectMovie: (FreeMovie) -> Void
     let onSeeAllFreeMovies: () -> Void
     let onSeeAllLiveTV: () -> Void
+    let onSeeAllTrending: () -> Void
 
     @EnvironmentObject private var appState: AppState
     @State private var blockbusterMovies: [FreeMovie] = []
@@ -562,7 +571,7 @@ struct MinimalContentSections: View {
 
             MinimalSection(
                 title: "Trending Now",
-                seeAllAction: { }
+                seeAllAction: { onSeeAllTrending() }
             ) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
@@ -820,7 +829,11 @@ struct MinimalChannelCard: View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack {
                 if showPreview {
-                    LiveChannelThumbnailView(streamURL: channel.streamURL, posterURL: channel.logoURL)
+                    LiveChannelThumbnailView(
+                        streamURL: channel.streamURL,
+                        posterURL: channel.logoURL,
+                        fallbackStreamURL: channel.previewFallbackURL
+                    )
                         .frame(width: 160, height: 90)
                         .background(Color(.systemGray6))
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))

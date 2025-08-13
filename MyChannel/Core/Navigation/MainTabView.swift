@@ -51,6 +51,7 @@ struct MainTabView: View {
             selectedTab = .search
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToProfileTab"))) { _ in
+            UIApplication.shared.endEditing()
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 selectedTab = .profile
             }
@@ -72,6 +73,7 @@ struct MainTabView: View {
                 VideoDetailView(video: video)
             }
         }
+        .ignoresSafeArea(.keyboard)
     }
     
     @ViewBuilder
@@ -98,24 +100,35 @@ struct MainTabView: View {
                     .zIndex(998)
             }
 
-            // Custom Tab Bar - Keep visible for all tabs (including Flicks)
-            if true {
-                VStack {
-                    Spacer()
-                    CustomTabBar(
-                        selectedTab: $selectedTab,
-                        notificationBadges: notificationBadges,
-                        isHidden: false,
-                        onUploadTap: {
-                            showingUpload = true
-                        },
-                        onTabSelected: handleTabSelection
-                    )
-                }
-                .zIndex(999)
-            }
+            // if true {
+            //     VStack {
+            //         Spacer()
+            //         CustomTabBar(
+            //             selectedTab: $selectedTab,
+            //             notificationBadges: notificationBadges,
+            //             isHidden: false,
+            //             onUploadTap: {
+            //                 showingUpload = true
+            //             },
+            //             onTabSelected: handleTabSelection
+            //         )
+            //     }
+            //     .zIndex(999)
+            // }
         }
-        .ignoresSafeArea(.keyboard)
+        .overlay(alignment: .bottom) {
+            CustomTabBar(
+                selectedTab: $selectedTab,
+                notificationBadges: notificationBadges,
+                isHidden: false,
+                onUploadTap: { showingUpload = true },
+                onTabSelected: handleTabSelection
+            )
+            .zIndex(999)
+            .ignoresSafeArea(.keyboard) // keep it stable when keyboard shows
+            .allowsHitTesting(true)
+        }
+        .ignoresSafeArea(.keyboard) // keep whole content stable on keyboard
         .fullScreenCover(isPresented: $showingUpload) {
             SafeUploadView()
         }
@@ -160,11 +173,23 @@ struct MainTabView: View {
         guard tab != .upload else { return }
         
         do {
+            let fromSearch = (selectedTab == .search)
+            UIApplication.shared.endEditing() // ensure keyboard is closed before switching
+            
             if tab == selectedTab {
                 handleTabReselection(tab)
             } else {
-                previousTab = selectedTab
-                selectedTab = tab
+                if fromSearch {
+                    var tx = Transaction()
+                    tx.disablesAnimations = true
+                    withTransaction(tx) {
+                        previousTab = selectedTab
+                        selectedTab = tab
+                    }
+                } else {
+                    previousTab = selectedTab
+                    selectedTab = tab
+                }
                 if tab == .home {
                     NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
                 } else {
@@ -409,6 +434,15 @@ struct TabErrorButtonStyle: ButtonStyle {
     }
 }
 
+struct PressableScaleButtonStyle: ButtonStyle {
+    var scale: CGFloat = 0.95
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
 // MARK: - Notification Model
 struct AppNotification: Identifiable {
     let id = UUID().uuidString
@@ -582,7 +616,6 @@ struct ConnectedProfileButton: View {
     let badgeCount: Int
     let action: () -> Void
     
-    @State private var isPressed: Bool = false
     
     var body: some View {
         Button(action: action) {
@@ -592,7 +625,6 @@ struct ConnectedProfileButton: View {
                         Image(systemName: TabItem.profile.iconName(isSelected: isSelected))
                             .font(.system(size: 18, weight: .medium))
                             .foregroundColor(AppTheme.Colors.textSecondary)
-                            .scaleEffect(isPressed ? 0.9 : 1.0)
                         
                         if badgeCount > 0 {
                             NotificationBadge(count: badgeCount)
@@ -605,23 +637,10 @@ struct ConnectedProfileButton: View {
             .frame(height: 48)
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isSelected)
         }
-        .buttonStyle(PlainButtonStyle())
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    isPressed = false
-                }
-        )
+        .buttonStyle(PressableScaleButtonStyle(scale: 0.95))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(TabItem.profile.accessibilityLabel)
-        .accessibilityHint("Double tap to select profile")
+        .accessibilityHint("Opens your profile")
     }
 }
 
@@ -630,8 +649,6 @@ struct SeparatedProfileButton: View {
     let isSelected: Bool
     let badgeCount: Int
     let action: () -> Void
-    
-    @State private var isPressed: Bool = false
     
     var body: some View {
         Button(action: action) {
@@ -661,7 +678,6 @@ struct SeparatedProfileButton: View {
                         .foregroundColor(
                             isSelected ? .white : AppTheme.Colors.textSecondary
                         )
-                        .scaleEffect(isPressed ? 0.9 : 1.0)
                     
                     if badgeCount > 0 {
                         NotificationBadge(count: badgeCount)
@@ -670,30 +686,17 @@ struct SeparatedProfileButton: View {
                 }
             }
         }
-        .buttonStyle(PlainButtonStyle())
-        .scaleEffect(isPressed ? 0.95 : 1.0)
+        .buttonStyle(PressableScaleButtonStyle(scale: 0.95))
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
-        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
         .shadow(
             color: Color.black.opacity(isSelected ? 0.2 : 0.1),
             radius: isSelected ? 12 : 8,
             x: 0,
             y: isSelected ? 6 : 4
         )
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    isPressed = false
-                }
-        )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(TabItem.profile.accessibilityLabel)
-        .accessibilityHint(isSelected ? "Currently selected" : "Double tap to select")
+        .accessibilityHint(isSelected ? "Currently selected" : "Opens your profile")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
@@ -702,7 +705,6 @@ struct SeparatedProfileButton: View {
 struct SeparatedHomeButton: View {
     let isSelected: Bool
     let action: () -> Void
-    @State private var isPressed: Bool = false
     
     var body: some View {
         Button(action: action) {
@@ -719,20 +721,13 @@ struct SeparatedHomeButton: View {
                 Image(systemName: TabItem.home.iconName(isSelected: isSelected))
                     .font(.system(size: 20, weight: .medium))
                     .foregroundColor(.white)
-                    .scaleEffect(isPressed ? 0.9 : 1.0)
             }
         }
-        .buttonStyle(PlainButtonStyle())
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in if !isPressed { isPressed = true } }
-                .onEnded { _ in isPressed = false }
-        )
+        .buttonStyle(PressableScaleButtonStyle(scale: 0.95))
+        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isSelected)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(TabItem.home.accessibilityLabel)
-        .accessibilityHint(isSelected ? "Currently selected" : "Double tap to select")
+        .accessibilityHint(isSelected ? "Currently selected" : "Open Home")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
@@ -740,7 +735,6 @@ struct SeparatedHomeButton: View {
 // MARK: - Upload Tab Button
 struct UploadTabButton: View {
     let action: () -> Void
-    @State private var isPressed: Bool = false
     
     var body: some View {
         Button(action: {
@@ -761,25 +755,11 @@ struct UploadTabButton: View {
                 Image(systemName: "plus")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.white)
-                    .scaleEffect(isPressed ? 0.9 : 1.0)
             }
         }
-        .buttonStyle(PlainButtonStyle())
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    isPressed = false
-                }
-        )
+        .buttonStyle(PressableScaleButtonStyle(scale: 0.94))
         .accessibilityLabel("Create content")
-        .accessibilityHint("Double tap to create new content")
+        .accessibilityHint("Open the upload flow")
     }
 }
 
@@ -789,8 +769,6 @@ struct CustomTabBarButton: View {
     let isSelected: Bool
     let badgeCount: Int
     let action: () -> Void
-    
-    @State private var isPressed: Bool = false
     
     var body: some View {
         Button(action: action) {
@@ -809,7 +787,6 @@ struct CustomTabBarButton: View {
                             .foregroundColor(
                                 isSelected ? .white : AppTheme.Colors.textSecondary
                             )
-                            .scaleEffect(isPressed ? 0.9 : 1.0)
                         
                         if badgeCount > 0 {
                             NotificationBadge(count: badgeCount)
@@ -822,23 +799,10 @@ struct CustomTabBarButton: View {
             .frame(height: 48)
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isSelected)
         }
-        .buttonStyle(PlainButtonStyle())
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    isPressed = false
-                }
-        )
+        .buttonStyle(PressableScaleButtonStyle(scale: 0.95))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(tab.accessibilityLabel)
-        .accessibilityHint(isSelected ? "Currently selected" : "Double tap to select")
+        .accessibilityHint(isSelected ? "Currently selected" : "Open \(tab.title)")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
@@ -1090,4 +1054,10 @@ struct SimpleMainTabPreview: View {
         .onAppear {
             print("🎬 Advanced MainTabView preview loaded")
         }
+}
+
+extension UIApplication {
+    func endEditing(_ force: Bool = true) {
+        sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
 }

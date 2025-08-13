@@ -124,25 +124,38 @@ struct SearchView: View {
             .animation(.none, value: isSearching)
             .animation(.none, value: searchText)
             .animation(.none, value: selectedScope)
+            .animation(.none, value: isSearchFieldFocused)
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .onAppear {
-            // Auto-focus search bar when view appears
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isSearchFieldFocused = true
+            // Auto-focus search bar when view appears WITHOUT animation
+            DispatchQueue.main.async {
+                var tx = Transaction()
+                tx.disablesAnimations = true
+                withTransaction(tx) {
+                    isSearchFieldFocused = true
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("FocusSearchBar"))) { _ in
-            // Focus search bar when notification is received
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                isSearchFieldFocused = true
+            // Focus search bar when notification is received WITHOUT animation
+            DispatchQueue.main.async {
+                var tx = Transaction()
+                tx.disablesAnimations = true
+                withTransaction(tx) {
+                    isSearchFieldFocused = true
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchClearAndReset"))) { _ in
-            // Clear search and reset when tab is reselected
-            searchText = ""
-            selectedScope = .all
-            isSearchFieldFocused = true
+            // Clear search and reset when tab is reselected WITHOUT animation
+            var tx = Transaction()
+            tx.disablesAnimations = true
+            withTransaction(tx) {
+                searchText = ""
+                selectedScope = .all
+                isSearchFieldFocused = true
+            }
         }
         .sheet(isPresented: $showingFilters) {
             SearchFiltersView(filters: $searchFilters) {
@@ -320,6 +333,7 @@ struct ModernSearchResultsList: View {
             }
             .padding(.vertical)
         }
+        .scrollDismissesKeyboard(.immediately)
     }
 }
 

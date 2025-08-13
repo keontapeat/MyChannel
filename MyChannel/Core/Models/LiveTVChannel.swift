@@ -15,6 +15,7 @@ struct LiveTVChannel: Identifiable, Codable {
     let language: String
     let country: String
     let epgURL: String? // Electronic Program Guide
+    let previewFallbackURL: String?
     
     enum ChannelCategory: String, CaseIterable, Codable {
         case news = "news"
@@ -63,7 +64,7 @@ struct LiveTVChannel: Identifiable, Codable {
 // MARK: - Sample Live TV Channels
 extension LiveTVChannel {
     static let sampleChannels: [LiveTVChannel] = [
-        // 1) Al Jazeera English (stable)
+
         LiveTVChannel(
             id: "aje-english",
             name: "Al Jazeera English",
@@ -76,9 +77,10 @@ extension LiveTVChannel {
             quality: "HD",
             language: "English",
             country: "International",
-            epgURL: nil
+            epgURL: nil,
+            previewFallbackURL: nil
         ),
-        // 2) DW English (stable)
+
         LiveTVChannel(
             id: "dw-english",
             name: "DW English",
@@ -91,9 +93,26 @@ extension LiveTVChannel {
             quality: "HD",
             language: "English",
             country: "International",
-            epgURL: nil
+            epgURL: nil,
+            previewFallbackURL: nil
         ),
-        // 3) France 24 English (stable)
+
+        LiveTVChannel(
+            id: "nhk-world",
+            name: "NHK World Japan",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/NHK-World.svg/512px-NHK-World.svg.png",
+            streamURL: "https://nhkworld.webcdn.stream.ne.jp/www11/nhkworld-tv/global/2639429/live.m3u8",
+            category: .international,
+            description: "Japan’s international broadcasting service in English",
+            isLive: true,
+            viewerCount: 14210,
+            quality: "HD",
+            language: "English",
+            country: "Japan",
+            epgURL: nil,
+            previewFallbackURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+        ),
+
         LiveTVChannel(
             id: "france24-en",
             name: "France 24 (English)",
@@ -106,9 +125,9 @@ extension LiveTVChannel {
             quality: "HD",
             language: "English",
             country: "International",
-            epgURL: nil
+            epgURL: nil,
+            previewFallbackURL: nil
         ),
-        // The rest of the sample lineup (unchanged order is fine for demo)
         LiveTVChannel(
             id: "pluto-cbs-news",
             name: "CBS News",
@@ -121,7 +140,8 @@ extension LiveTVChannel {
             quality: "HD",
             language: "English",
             country: "US",
-            epgURL: "https://service-stitcher.clusters.pluto.tv/stitch/hls/channel/5421409d14549f8c5b457090/guide.json"
+            epgURL: "https://service-stitcher.clusters.pluto.tv/stitch/hls/channel/5421409d14549f8c5b457090/guide.json",
+            previewFallbackURL: nil
         ),
         LiveTVChannel(
             id: "pluto-mtv-music",
@@ -135,7 +155,8 @@ extension LiveTVChannel {
             quality: "HD",
             language: "English",
             country: "US",
-            epgURL: nil
+            epgURL: nil,
+            previewFallbackURL: nil
         ),
         LiveTVChannel(
             id: "pluto-comedy-central",
@@ -149,7 +170,8 @@ extension LiveTVChannel {
             quality: "HD",
             language: "English",
             country: "US",
-            epgURL: nil
+            epgURL: nil,
+            previewFallbackURL: nil
         ),
         LiveTVChannel(
             id: "plex-classic-movies",
@@ -163,7 +185,8 @@ extension LiveTVChannel {
             quality: "HD",
             language: "English",
             country: "US",
-            epgURL: nil
+            epgURL: nil,
+            previewFallbackURL: nil
         ),
         LiveTVChannel(
             id: "roku-nbc-news",
@@ -177,7 +200,8 @@ extension LiveTVChannel {
             quality: "HD",
             language: "English",
             country: "US",
-            epgURL: nil
+            epgURL: nil,
+            previewFallbackURL: nil
         ),
         LiveTVChannel(
             id: "samsung-fox-sports",
@@ -191,7 +215,8 @@ extension LiveTVChannel {
             quality: "HD",
             language: "English",
             country: "US",
-            epgURL: nil
+            epgURL: nil,
+            previewFallbackURL: nil
         ),
         LiveTVChannel(
             id: "trt-world",
@@ -205,7 +230,8 @@ extension LiveTVChannel {
             quality: "HD",
             language: "English",
             country: "International",
-            epgURL: nil
+            epgURL: nil,
+            previewFallbackURL: nil
         ),
         LiveTVChannel(
             id: "bloomberg-us",
@@ -219,7 +245,8 @@ extension LiveTVChannel {
             quality: "HD",
             language: "English",
             country: "US",
-            epgURL: nil
+            epgURL: nil,
+            previewFallbackURL: nil
         ),
         LiveTVChannel(
             id: "nasa-public",
@@ -233,21 +260,8 @@ extension LiveTVChannel {
             quality: "HD",
             language: "English",
             country: "US",
-            epgURL: nil
-        ),
-        LiveTVChannel(
-            id: "nhk-world",
-            name: "NHK World Japan",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/NHK-World.svg/512px-NHK-World.svg.png",
-            streamURL: "https://nhkworld.webcdn.stream.ne.jp/www11/nhkworld-tv/global/2639429/live.m3u8",
-            category: .international,
-            description: "Japan’s international broadcasting service in English",
-            isLive: true,
-            viewerCount: 14210,
-            quality: "HD",
-            language: "English",
-            country: "Japan",
-            epgURL: nil
+            epgURL: nil,
+            previewFallbackURL: nil
         )
     ]
 }
