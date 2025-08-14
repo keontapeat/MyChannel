@@ -56,8 +56,8 @@ class AppState: ObservableObject {
     
     // MARK: - Setup
     private func setupObservers() {
-        let loginPublisher = NotificationCenter.default.publisher(for: .userDidLogin)
-        loginPublisher
+        // Monitor authentication changes
+        NotificationCenter.default.publisher(for: .userDidLogin)
             .sink { [weak self] notification in
                 if let user = notification.object as? User {
                     self?.currentUser = user
@@ -66,31 +66,23 @@ class AppState: ObservableObject {
                 }
             }
             .store(in: &cancellables)
-
-        let logoutPublisher = NotificationCenter.default.publisher(for: .userDidLogout)
-        logoutPublisher
+        
+        NotificationCenter.default.publisher(for: .userDidLogout)
             .sink { [weak self] _ in
                 self?.currentUser = nil
                 self?.isAuthenticated = false
                 self?.resetState()
             }
             .store(in: &cancellables)
-
-        let profileUpdatedPublisher = NotificationCenter.default.publisher(for: .userProfileUpdated)
-        profileUpdatedPublisher
-            .compactMap { $0.object as? User }
-            .sink { [weak self] updated in
-                self?.updateUser(updated)
-            }
-            .store(in: &cancellables)
-
+        
+        // Auto-save user data when collections change
         $watchLaterVideos
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
             .sink { [weak self] _ in
                 self?.saveUserData()
             }
             .store(in: &cancellables)
-
+        
         $likedVideos
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
             .sink { [weak self] _ in

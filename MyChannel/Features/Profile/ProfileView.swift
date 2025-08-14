@@ -52,11 +52,6 @@ struct ProfileView: View {
         .onChange(of: appState.currentUser) { _, newUser in
             handleUserChange(newUser)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .userProfileUpdated)) { note in
-            if let updated = note.object as? User {
-                user = updated
-            }
-        }
     }
 
     // MARK: - Main Profile Content
