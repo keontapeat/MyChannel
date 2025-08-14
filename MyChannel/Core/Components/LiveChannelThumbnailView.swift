@@ -20,33 +20,35 @@ struct LiveChannelThumbnailView: View {
     var body: some View {
         ZStack {
             // Video preview sits in the back and fades in when ready
-            LivePreviewPlayer(
-                urls: [streamURL] + (fallbackStreamURL != nil ? [fallbackStreamURL!] : []),
-                onReady: {
-                    if !isReady {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isReady = true
+            if !AppConfig.isPreview {
+                LivePreviewPlayer(
+                    urls: [streamURL] + (fallbackStreamURL != nil ? [fallbackStreamURL!] : []),
+                    onReady: {
+                        if !isReady {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isReady = true
+                            }
+                        }
+                    },
+                    onSnapshot: { img in
+                        if snapshot == nil {
+                            snapshot = img
                         }
                     }
-                },
-                onSnapshot: { img in
-                    if snapshot == nil {
-                        snapshot = img
-                    }
-                }
-            )
-            .opacity(isReady ? 1 : 0)
-            .transition(.opacity)
+                )
+                .opacity(isReady ? 1 : 0)
+                .transition(.opacity)
+            }
 
-            // Placeholder layer stays on top until video is ready
-            if !isReady {
+            // Placeholder layer stays on top until video is ready (or always in previews)
+            if AppConfig.isPreview || !isReady {
                 if let snap = snapshot {
                     Image(uiImage: snap)
                         .resizable()
                         .scaledToFill()
                         .transition(.opacity)
-                } else if let poster = posterURL {
-                    AsyncImage(url: URL(string: poster)) { image in
+                } else if let poster = posterURL, let url = URL(string: poster) {
+                    AsyncImage(url: url) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Color(.systemGray6)

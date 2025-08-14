@@ -21,7 +21,7 @@ struct SplashContainer: View {
     }
 
     // This has no effect in the real app; previews can set a different mode in #Preview
-    var previewMode: PreviewMode = .splashOnly
+    var previewMode: PreviewMode = .safeMainTab
 
     var body: some View {
         Group {
@@ -105,7 +105,7 @@ private struct PreviewTransitionContainer<Content: View>: View {
 }
 
 #Preview("Splash Container • App Behavior") {
-    SplashContainer() // Real app logic; preview stays on splash to avoid crashes
+    SplashContainer(previewMode: .safeMainTab)
         .environmentObject(AuthenticationManager.shared)
         .environmentObject(AppState())
         .preferredColorScheme(.light)

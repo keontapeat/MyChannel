@@ -551,6 +551,45 @@ struct MinimalContentSections: View {
     @State private var blockbusterMovies: [FreeMovie] = []
     @State private var loadingBlockbusters: Bool = false
 
+    private var friendVideoId: String { "friend_video_yt_71GJrAY54Ew" }
+
+    private func makeFriendTrendingVideo() -> Video {
+        let friendUser = User(
+            username: "scatz",
+            displayName: "Scatz",
+            email: "music@artist.com",
+            profileImageURL: "https://i.ytimg.com/vi/71GJrAY54Ew/hqdefault.jpg",
+            bannerImageURL: nil,
+            bio: "Artist",
+            subscriberCount: 21_300,
+            videoCount: 0,
+            isVerified: true,
+            isCreator: true
+        )
+        return Video(
+            id: friendVideoId,
+            title: "Scatz - Rebound ( Official Music Video ) Shot By @ImmortalVision",
+            description: "Official music video. Shot by @ImmortalVision.",
+            thumbnailURL: "https://i.ytimg.com/vi/71GJrAY54Ew/hqdefault.jpg",
+            videoURL: "https://www.youtube.com/watch?v=71GJrAY54Ew",
+            duration: 94,
+            viewCount: 5_000,
+            likeCount: 191,
+            commentCount: 12,
+            createdAt: Calendar.current.date(byAdding: .weekOfYear, value: -4, to: Date()) ?? Date(),
+            creator: friendUser,
+            category: .music,
+            tags: ["music","official","video","scatz","immortalvision"],
+            isPublic: true,
+            quality: [.quality720p],
+            aspectRatio: .landscape,
+            isLiveStream: false,
+            contentSource: .youtube,
+            externalID: "71GJrAY54Ew",
+            isVerified: true
+        )
+    }
+
     var body: some View {
         VStack(spacing: 40) {
             if !appState.watchHistory.isEmpty {
@@ -575,8 +614,15 @@ struct MinimalContentSections: View {
             ) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
-                        ForEach(Video.sampleVideos.filter { $0.viewCount > 100_000 }.prefix(8)) { video in
-                            MinimalVideoCard(video: video, action: { onPlayVideo(video) })
+                        let base = Video.sampleVideos.filter { $0.viewCount > 100_000 }.prefix(8)
+                        let friend = makeFriendTrendingVideo()
+                        let videos = [friend] + base.filter { $0.id != friendVideoId }
+                        ForEach(videos) { video in
+                            MinimalVideoCard(
+                                video: video,
+                                action: { onPlayVideo(video) },
+                                useLivePreview: video.id == friendVideoId
+                            )
                         }
                     }
                     .padding(.horizontal, 20)
@@ -694,25 +740,33 @@ struct MinimalSection<Content: View>: View {
 struct MinimalVideoCard: View {
     let video: Video
     let action: () -> Void
+    var useLivePreview: Bool = false
 
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
-                AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 180, height: 101)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                } placeholder: {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(.systemGray6))
-                        .frame(width: 180, height: 101)
-                        .overlay(
-                            Image(systemName: video.category.iconName)
-                                .font(.system(size: 24))
-                                .foregroundColor(.secondary)
-                        )
+                Group {
+                    if useLivePreview {
+                        VideoLiveThumbnailView(video: video, cornerRadius: 12)
+                            .frame(width: 180, height: 101)
+                    } else {
+                        AsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 180, height: 101)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        } placeholder: {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color(.systemGray6))
+                                .frame(width: 180, height: 101)
+                                .overlay(
+                                    Image(systemName: video.category.iconName)
+                                        .font(.system(size: 24))
+                                        .foregroundColor(.secondary)
+                                )
+                        }
+                    }
                 }
                 .overlay(
                     VStack {
@@ -724,10 +778,7 @@ struct MinimalVideoCard: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 3)
-                                .background(
-                                    Capsule()
-                                        .fill(.black.opacity(0.7))
-                                )
+                                .background(Capsule().fill(.black.opacity(0.7)))
                                 .padding(8)
                         }
                     }

@@ -50,6 +50,9 @@ struct FlicksView: View {
     @State private var preloadedIndices: Set<Int> = []
     @State private var videoViewTimes: [String: TimeInterval] = [:]
     @State private var viewTimeTimer: Timer?
+    @State private var didEngageWithFeed = false
+
+    @AppStorage("flicks_feed_muted") private var flicksMuted: Bool = true
 
     // Network/Perf monitors
     @StateObject private var networkMonitor = FlicksNetworkMonitor()
@@ -63,6 +66,9 @@ struct FlicksView: View {
     // Loading state
     @State private var isLoading = true
     @State private var loadError: String?
+
+    @State private var showLikeBurst = false
+    @State private var likeBurstID = UUID()
 
     var body: some View {
         NavigationStack {
@@ -98,75 +104,104 @@ struct FlicksView: View {
             @unknown default: break
             }
         }
+        .onAppear {
+            didEngageWithFeed = false
+        }
+        .onDisappear {
+            GlobalVideoPlayerManager.shared.resumeAfterLeavingFlicks()
+        }
     }
 
     // MARK: - Fullscreen feed
     private var feed: some View {
         GeometryReader { geo in
-            TabView(selection: $currentIndex) {
-                ForEach(videos.indices, id: \.self) { index in
-                    ZStack {
-                        if videos[index].contentSource == .youtube, let ytId = videos[index].externalID {
-                            // Clean YouTube shorts player
-                            YouTubePlayerView(videoID: ytId, autoplay: true, startTime: 0, muted: true, showControls: false)
-                                .background(Color.black)
-                                .ignoresSafeArea()
-                        } else {
-                            // Fallback to our AVPlayer-based short player
-                            ProfessionalVideoPlayer(
-                                video: videos[index],
-                                isCurrentVideo: index == currentIndex,
-                                isLiked: likedVideos.contains(videos[index].id),
-                                isFollowing: followedCreators.contains(videos[index].creator.id),
-                                subscriberCount: subscriberCounts[videos[index].creator.id] ?? videos[index].creator.subscriberCount,
-                                onLike: { toggleLikeWithAnimation(for: videos[index]) },
-                                onFollow: { toggleFollowWithAnimation(for: videos[index].creator) },
-                                onComment: {
-                                    commentsVideo = videos[index]
-                                },
-                                onShare: {
-                                    shareVideo = videos[index]
-                                },
-                                onProfileTap: {
-                                    selectedCreator = videos[index].creator
-                                },
-                                overlayStyle: .minimal
-                            )
+            ZStack {
+                TabView(selection: $currentIndex) {
+                    ForEach(videos.indices, id: \.self) { index in
+                        ZStack {
+                            if videos[index].contentSource == .youtube, let ytId = videos[index].externalID {
+                                YouTubePlayerView(videoID: ytId, autoplay: true, startTime: 0, muted: flicksMuted, showControls: false)
+                                    .background(Color.black)
+                                    .ignoresSafeArea()
+                            } else {
+                                ProfessionalVideoPlayer(
+                                    video: videos[index],
+                                    isCurrentVideo: index == currentIndex,
+                                    isLiked: likedVideos.contains(videos[index].id),
+                                    isFollowing: followedCreators.contains(videos[index].creator.id),
+                                    subscriberCount: subscriberCounts[videos[index].creator.id] ?? videos[index].creator.subscriberCount,
+                                    onLike: {
+                                        toggleLikeWithAnimation(for: videos[index])
+                                        triggerLikeBurst()
+                                    },
+                                    onFollow: { toggleFollowWithAnimation(for: videos[index].creator) },
+                                    onComment: { commentsVideo = videos[index] },
+                                    onShare: { shareVideo = videos[index] },
+                                    onProfileTap: { selectedCreator = videos[index].creator },
+                                    overlayStyle: .minimal
+                                )
+                            }
+                        }
+                        .tag(index)
+                        .onAppear {
+                            preloadVideoIfNeeded(at: index)
+                            startViewTimeTracking(for: videos[index])
+                        }
+                        .onDisappear {
+                            stopViewTimeTracking(for: videos[index])
                         }
                     }
-                    .tag(index)
-                    .onAppear {
-                        postPeek(for: videos[index])
-                        preloadVideoIfNeeded(at: index)
-                        startViewTimeTracking(for: videos[index])
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .animation(reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.4, dampingFraction: 0.9), value: currentIndex)
+                .onChange(of: currentIndex) { old, new in
+                    engageIfNeeded()
+                    impactFeedback.impactOccurred()
+                    if old < videos.count { trackVideoCompletion(for: videos[old]) }
+                    preloadNextVideos(currentIndex: new)
+                }
+
+                HStack(spacing: 12) {
+                    Spacer()
+                    Button {
+                        flicksMuted.toggle()
+                        HapticManager.shared.impact(style: .light)
+                    } label: {
+                        ZStack {
+                            Circle().fill(Color.black.opacity(0.35))
+                            Image(systemName: flicksMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                                .foregroundColor(.white)
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .frame(width: 36, height: 36)
                     }
-                    .onDisappear {
-                        stopViewTimeTracking(for: videos[index])
+                    .buttonStyle(ScaleButtonStyle())
+                }
+                .padding(.top, 44)
+                .padding(.trailing, 16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .allowsHitTesting(true)
+
+                Group {
+                    if showLikeBurst {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 96, weight: .bold))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.4), radius: 8)
+                            .transition(.scale.combined(with: .opacity))
+                            .id(likeBurstID)
                     }
                 }
+                .animation(.spring(response: 0.35, dampingFraction: 0.65), value: showLikeBurst)
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .animation(reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.4, dampingFraction: 0.9), value: currentIndex)
-            .onChange(of: currentIndex) { old, new in
-                impactFeedback.impactOccurred()
-                if old < videos.count { trackVideoCompletion(for: videos[old]) }
-                if new < videos.count { postPeek(for: videos[new]) }
-                preloadNextVideos(currentIndex: new)
-            }
-            .sheet(item: $commentsVideo) { video in
-                FlicksCommentsSheet(video: video)
-                    .presentationDetents([.height(200), .medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .presentationBackground(.ultraThinMaterial)
-            }
-            .sheet(item: $shareVideo) { video in
-                FlicksShareSheet(video: video)
-                    .presentationDetents([.height(400)])
-                    .presentationDragIndicator(.visible)
-            }
-            .fullScreenCover(item: $selectedCreator) { creator in
-                FlicksCreatorProfileView(creator: creator)
-            }
+            .highPriorityGesture(
+                TapGesture(count: 2).onEnded {
+                    if currentIndex < videos.count {
+                        toggleLikeWithAnimation(for: videos[currentIndex])
+                        triggerLikeBurst()
+                    }
+                }
+            )
         }
     }
 
@@ -197,14 +232,6 @@ struct FlicksView: View {
         } else {
             videos = Video.sampleVideos
         }
-        if !videos.isEmpty {
-            postPeek(for: videos[0])
-        }
-    }
-
-    // MARK: - Peek card (notify MainTabView)
-    private func postPeek(for video: Video) {
-        NotificationCenter.default.post(name: .flicksPeekUpdate, object: video)
     }
 
     // MARK: - Tracking
@@ -256,7 +283,7 @@ struct FlicksView: View {
     private func preloadVideoIfNeeded(at index: Int) {
         guard !preloadedIndices.contains(index), networkMonitor.isConnected else { return }
         preloadedIndices.insert(index)
-        let ahead = max(1, performanceMonitor.getRecommendedPreloadCount())
+        let ahead = max(2, performanceMonitor.getRecommendedPreloadCount())
         let range = max(0, index - 1)...min(videos.count - 1, index + ahead)
         Task {
             for i in range {
@@ -278,6 +305,25 @@ struct FlicksView: View {
         guard performanceMonitor.shouldPreloadVideos(), networkMonitor.isConnected else { return }
         if currentIndex >= videos.count - 3 {
             // No-op for now; YouTube feed is large enough
+        }
+    }
+
+    private func triggerLikeBurst() {
+        likeBurstID = UUID()
+        withAnimation {
+            showLikeBurst = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            withAnimation {
+                showLikeBurst = false
+            }
+        }
+    }
+
+    private func engageIfNeeded() {
+        if !didEngageWithFeed {
+            GlobalVideoPlayerManager.shared.pauseForFlicksEngagement()
+            didEngageWithFeed = true
         }
     }
 }

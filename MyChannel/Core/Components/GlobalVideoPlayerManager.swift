@@ -24,11 +24,13 @@ class GlobalVideoPlayerManager: ObservableObject {
     @Published var miniPlayerHeight: CGFloat = 80
     @Published var shouldShowMiniPlayer = false
     @Published var isTransitioning = false
+    @Published var pausedByFlicks = false
     
     private var playerManager: VideoPlayerManager?
     private var cancellables = Set<AnyCancellable>()
     private var isCleanedUp = false
-    
+    private var wasPlayingBeforeFlicks = false
+
     var player: AVPlayer? {
         playerManager?.player
     }
@@ -312,6 +314,26 @@ class GlobalVideoPlayerManager: ObservableObject {
     // MARK: - Manual Cleanup (for explicit cleanup)
     func performCleanup() {
         cleanup()
+    }
+
+    // MARK: - Flicks Engagement Controls (temporary pause/resume)
+    func pauseForFlicksEngagement() {
+        guard !isCleanedUp, currentVideo != nil else { return }
+        guard !pausedByFlicks else { return }
+        wasPlayingBeforeFlicks = isPlaying
+        playerManager?.pause()
+        isPlaying = false
+        pausedByFlicks = true
+    }
+    
+    func resumeAfterLeavingFlicks() {
+        guard !isCleanedUp else { return }
+        guard pausedByFlicks else { return }
+        pausedByFlicks = false
+        if wasPlayingBeforeFlicks {
+            playerManager?.play()
+            isPlaying = true
+        }
     }
 }
 

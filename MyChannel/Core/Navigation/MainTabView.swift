@@ -31,8 +31,6 @@ struct MainTabView: View {
     @State private var presentFullHistory: Bool = false
     @State private var historyVideoToOpen: Video? = nil
 
-    @State private var flicksPeekVideo: Video? = nil
-
     var body: some View {
         ZStack {
             if hasError {
@@ -96,9 +94,6 @@ struct MainTabView: View {
                 historyVideoToOpen = video
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .flicksPeekUpdate)) { note in
-            flicksPeekVideo = note.object as? Video
-        }
         .sheet(isPresented: $presentAccountSwitcher) {
             AccountSwitcherView()
         }
@@ -110,6 +105,14 @@ struct MainTabView: View {
         }
         .fullScreenCover(item: $historyVideoToOpen) { video in
             VideoDetailView(video: video)
+        }
+        // Ensure mini-player pauses on Flicks, resumes otherwise (covers programmatic tab changes too)
+        .onChange(of: selectedTab) { _, newTab in
+            if newTab == .flicks {
+                GlobalVideoPlayerManager.shared.pauseForFlicksEngagement()
+            } else {
+                GlobalVideoPlayerManager.shared.resumeAfterLeavingFlicks()
+            }
         }
     }
     
@@ -131,7 +134,7 @@ struct MainTabView: View {
                 .zIndex(5)
                 .allowsHitTesting(true)
 
-            // Floating Mini Player - Above content, below tab bar (suppress on Flicks for minimal UI)
+            // Keep global mini player hidden on Flicks
             if selectedTab != .flicks {
                 SafeFloatingMiniPlayer()
                     .environmentObject(globalPlayer)
@@ -202,6 +205,13 @@ struct MainTabView: View {
             let targetTab = tab
             let wasSameTab = (targetTab == selectedTab)
             previousTab = selectedTab
+
+            // Pause mini-player when entering Flicks; resume when leaving
+            if targetTab == .flicks {
+                GlobalVideoPlayerManager.shared.pauseForFlicksEngagement()
+            } else {
+                GlobalVideoPlayerManager.shared.resumeAfterLeavingFlicks()
+            }
 
             // Switch tabs on the next runloop tick so the focus change doesn't eat the tap
             DispatchQueue.main.async {
@@ -1064,15 +1074,6 @@ struct SimpleMainTabPreview: View {
         .padding()
     }
     .background(AppTheme.Colors.background)
-}
-
-#Preview("Full MainTabView - Advanced") {
-    // Only show this if you want to test the full complexity
-    PreviewSafeMainTabWrapper()
-        .preferredColorScheme(.light)
-        .onAppear {
-            print("🎬 Advanced MainTabView preview loaded")
-        }
 }
 
 extension UIApplication {

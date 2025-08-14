@@ -126,11 +126,20 @@ class VideoPlayerManager: ObservableObject {
     
     // MARK: - Safe Setup
     func setupPlayer(with video: Video) {
+        // Avoid AVFoundation in Xcode previews to prevent crashes
+        if AppConfig.isPreview {
+            currentVideo = video
+            isLoading = false
+            hasError = false
+            player = nil
+            duration = max(0, video.duration)
+            return
+        }
+
         // Clean up any existing player first
         cleanup()
         isCleanedUp = false // Reset cleanup flag
         
-
         currentVideo = video
         isLoading = true
         hasError = false
