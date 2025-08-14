@@ -114,7 +114,7 @@ struct HomeView: View {
 
                         MinimalHeroSection(
                             featuredContent: featuredContent,
-                            selectedIndex: $heroVideoIndex,
+                            heroVideoIndex: heroVideoIndex,
                             onPlayVideo: { video in
                                 route = .video(video)
                             },
@@ -223,16 +223,7 @@ struct HomeView: View {
     // MARK: - Setup Methods
     @State private var presentStoryCreator: Bool = false
     private func setupContent() {
-        // Base picks
-        var base = Video.sampleVideos.filter { $0.viewCount > 500_000 }
-
-        let friend = friendHeroVideos()
-        // Deduplicate by id while preserving order
-        let combined = (friend + base).reduce(into: [String: Video]()) { acc, v in
-            if acc[v.id] == nil { acc[v.id] = v }
-        }
-        featuredContent = Array(combined.values)
-
+        featuredContent = Video.sampleVideos.filter { $0.viewCount > 500_000 }.shuffled()
         if featuredContent.isEmpty {
             featuredContent = Array(Video.sampleVideos.prefix(3))
         }
@@ -253,69 +244,6 @@ struct HomeView: View {
     private func toggleWatchLater(_ video: Video) {
         appState.toggleWatchLater(for: video.id)
         HapticManager.shared.impact(style: .light)
-    }
-
-    private func friendHeroVideos() -> [Video] {
-        let friendUser = User(
-            username: "scatz",
-            displayName: "Scatz",
-            email: "music@artist.com",
-            profileImageURL: "https://i.ytimg.com/vi/71GJrAY54Ew/hqdefault.jpg",
-            bannerImageURL: nil,
-            bio: "Artist",
-            subscriberCount: 21_300,
-            videoCount: 0,
-            isVerified: true,
-            isCreator: true
-        )
-
-        let v1 = Video(
-            id: "friend_yt_71GJrAY54Ew",
-            title: "Scatz - Rebound ( Official Music Video ) Shot By @ImmortalVision",
-            description: "Official music video. Shot by @ImmortalVision.",
-            thumbnailURL: "https://i.ytimg.com/vi/71GJrAY54Ew/maxresdefault.jpg",
-            videoURL: "https://www.youtube.com/watch?v=71GJrAY54Ew",
-            duration: 94,
-            viewCount: 5_000,
-            likeCount: 191,
-            commentCount: 12,
-            createdAt: Calendar.current.date(byAdding: .weekOfYear, value: -4, to: Date()) ?? Date(),
-            creator: friendUser,
-            category: .music,
-            tags: ["music","official","video","scatz","immortalvision"],
-            isPublic: true,
-            quality: [.quality720p],
-            aspectRatio: .landscape,
-            isLiveStream: false,
-            contentSource: .youtube,
-            externalID: "71GJrAY54Ew",
-            isVerified: true
-        )
-
-        let v2 = Video(
-            id: "friend_yt_d17K2Tl_Ljg",
-            title: "Scatz - Hibachi ( Official Music Video )",
-            description: "Official music video.",
-            thumbnailURL: "https://i.ytimg.com/vi/d17K2Tl_Ljg/maxresdefault.jpg",
-            videoURL: "https://www.youtube.com/watch?v=d17K2Tl_Ljg",
-            duration: 120,
-            viewCount: 4_200,
-            likeCount: 150,
-            commentCount: 8,
-            createdAt: Calendar.current.date(byAdding: .weekOfYear, value: -10, to: Date()) ?? Date(),
-            creator: friendUser,
-            category: .music,
-            tags: ["music","official","video","scatz"],
-            isPublic: true,
-            quality: [.quality720p],
-            aspectRatio: .landscape,
-            isLiveStream: false,
-            contentSource: .youtube,
-            externalID: "d17K2Tl_Ljg",
-            isVerified: true
-        )
-
-        return [v1, v2]
     }
 }
 
@@ -372,7 +300,7 @@ struct MinimalNavigationHeader: View {
                     }
 
                     Button(action: onProfileTap) {
-                        AppAsyncImage(url: URL(string: appState.currentUser?.profileImageURL ?? "")) { image in
+                        AsyncImage(url: URL(string: appState.currentUser?.profileImageURL ?? "")) { image in
                             image
                                 .resizable()
                                 .scaledToFill()
@@ -469,7 +397,7 @@ struct MinimalStoriesSection: View {
                                         .frame(width: 58, height: 58)
                                         .clipShape(Circle())
                                 } else {
-                                    AppAsyncImage(url: URL(string: "https://picsum.photos/200/200?random=\(abs(story.id.hashValue))")) { image in
+                                    AsyncImage(url: URL(string: "https://picsum.photos/200/200?random=\(abs(story.id.hashValue))")) { image in
                                         image
                                             .resizable()
                                             .scaledToFill()
@@ -498,10 +426,12 @@ struct MinimalStoriesSection: View {
 
 }
 
-// MARK: - Minimal Hero Section (now a pager)
+// (Moved loadBlockbusters() into MinimalContentSections below)
+
+// MARK: - Minimal Hero Section
 struct MinimalHeroSection: View {
     let featuredContent: [Video]
-    @Binding var selectedIndex: Int
+    let heroVideoIndex: Int
     let onPlayVideo: (Video) -> Void
     let onAddToList: (Video) -> Void
 
@@ -510,190 +440,103 @@ struct MinimalHeroSection: View {
 
     var body: some View {
         if !featuredContent.isEmpty {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 6) {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.yellow)
-                    Text("FEATURED")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.primary)
-                        .tracking(1)
+            let currentVideo = featuredContent[heroVideoIndex % featuredContent.count]
+
+            VStack(spacing: 20) {
+                HStack {
+                    HStack(spacing: 6) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.yellow)
+
+                        Text("FEATURED")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.primary)
+                            .tracking(1)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color(.systemGray6)))
+
+                    Spacer()
                 }
                 .padding(.horizontal, 20)
 
-                TabView(selection: $selectedIndex) {
-                    ForEach(Array(featuredContent.enumerated()), id: \.offset) { index, vid in
-                        FeaturedHeroCard(
-                            video: vid,
-                            isCompact: isCompact,
-                            onPlay: { onPlayVideo(vid) },
-                            onAddToList: { onAddToList(vid) }
+                AsyncImage(url: URL(string: currentVideo.thumbnailURL)) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(.systemGray6))
+                        .overlay(
+                            VStack(spacing: 12) {
+                                Image(systemName: currentVideo.category.iconName)
+                                    .font(.system(size: 32))
+                                    .foregroundColor(.secondary)
+
+                                Text(currentVideo.title)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.primary)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                    .padding(.horizontal, 40)
+                            }
                         )
-                        .padding(.horizontal, 20)
-                        .tag(index)
-                    }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .automatic))
-                .frame(height: 250)
-            }
-        }
-    }
-}
-
-private struct FeaturedHeroCard: View {
-    let video: Video
-    let isCompact: Bool
-    let onPlay: () -> Void
-    let onAddToList: () -> Void
-
-    @State private var isPressed = false
-    @EnvironmentObject private var appState: AppState
-
-    var body: some View {
-        let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
-        ZStack {
-            Group {
-                if isPreview {
-                    AppAsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    } placeholder: {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color(.systemGray6))
-                    }
-                    .frame(height: 230)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                } else {
-                    VideoLiveThumbnailView(video: video, cornerRadius: 16)
-                        .frame(height: 230)
-                }
-            }
-            .overlay(
-                LinearGradient(
-                    colors: [Color.black.opacity(0.35), .clear, Color.black.opacity(0.55)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                .frame(height: 220)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            )
+                .padding(.horizontal, 20)
 
-            VStack(spacing: 12) {
-                // Top chips
-                HStack {
-                    HStack(spacing: 6) {
-                        Image(systemName: video.category.iconName)
-                        Text(video.category.displayName)
-                    }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(Color.black.opacity(0.35)))
+                VStack(spacing: 12) {
+                    Text(currentVideo.title)
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(isCompact ? .leading : .center)
+                        .frame(maxWidth: .infinity, alignment: isCompact ? .leading : .center)
+                        .lineLimit(2)
+                        .padding(.horizontal, 20)
 
-                    Spacer()
-
-                    HStack(spacing: 6) {
-                        Image(systemName: "clock")
-                        Text(video.formattedDuration)
-                    }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(Color.black.opacity(0.35)))
-                }
-                .padding(.horizontal, 14)
-                .padding(.top, 14)
-
-                Spacer()
-
-                // Bottom controls (title REMOVED for clean video view)
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 12) {
-                        Label(video.creator.displayName, systemImage: "person.crop.circle")
-                        Label("\(video.formattedViewCount) views", systemImage: "eye")
-                    }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
+                    Text("\(currentVideo.category.displayName) • \(currentVideo.formattedDuration) • \(currentVideo.formattedViewCount) views")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .minimumScaleFactor(0.85)
+                        .frame(maxWidth: .infinity, alignment: isCompact ? .leading : .center)
+                        .padding(.horizontal, 20)
 
                     HStack(spacing: 12) {
-                        Button(action: {
-                            HapticManager.shared.impact(style: .medium)
-                            onPlay()
-                        }) {
+                        Button(action: { onPlayVideo(currentVideo) }) {
                             HStack(spacing: 8) {
                                 Image(systemName: "play.fill")
-                                    .font(.system(size: 14, weight: .bold))
+                                    .font(.system(size: 14, weight: .semibold))
                                 Text("Play")
                                     .font(.system(size: 16, weight: .semibold))
                             }
                             .foregroundColor(.white)
-                            .frame(height: 48)
                             .frame(maxWidth: .infinity)
-                            .background(Color.black.opacity(0.7))
+                            .frame(height: 48)
+                            .padding(.horizontal, 12)
+                            .background(Color.black)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                        .buttonStyle(PressableScaleButtonStyle(scale: 0.98))
 
-                        Button(action: {
-                            HapticManager.shared.impact(style: .light)
-                            onAddToList()
-                        }) {
-                            let saved = appState.isVideoInWatchLater(video.id)
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.white)
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
-                                Image(systemName: saved ? "checkmark" : "plus")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(saved ? AppTheme.Colors.primary : .black)
-                            }
-                            .frame(width: 48, height: 48)
-                            .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+                        Button(action: { onAddToList(currentVideo) }) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.primary)
+                                .frame(width: 48, height: 48)
+                                .background(Color(.systemGray6))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                        .buttonStyle(PressableScaleButtonStyle(scale: 0.95))
-                        .accessibilityLabel("Watch later")
-                        .accessibilityHint("Add or remove from your Watch Later")
                     }
+                    .padding(.horizontal, 20)
                 }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 14)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .compositingGroup()
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
-        )
-        .shadow(color: Color.black.opacity(0.12), radius: 18, x: 0, y: 12)
-        .scaleEffect(isPressed ? 0.99 : 1.0)
-        .animation(.spring(response: 0.25, dampingFraction: 0.9), value: isPressed)
-        .onLongPressGesture(minimumDuration: 0.01, pressing: { pressing in
-            isPressed = pressing
-        }, perform: {})
-        .padding(.bottom, 8)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(video.creator.displayName) • \(video.formattedViewCount) views")
-        .accessibilityHint("Plays the featured video")
     }
-}
 
-#Preview("FeaturedHeroCard – Premium") {
-    FeaturedHeroCard(
-        video: Video.sampleVideos.first ?? Video.sampleVideos[0],
-        isCompact: true,
-        onPlay: {},
-        onAddToList: {}
-    )
-    .padding()
-    .background(Color(.systemBackground))
-    .preferredColorScheme(.light)
-    .environmentObject(AppState())
 }
 
 // MARK: - Minimal Content Sections
@@ -747,85 +590,6 @@ struct MinimalContentSections: View {
         )
     }
 
-    private func detroitFlintArtistsTrending() -> [Video] {
-        func yt(_ id: String, _ title: String, _ artist: String, views: Int) -> Video {
-            Video(
-                id: "yt_\(id)",
-                title: title,
-                description: "\(artist) • Official Video",
-                thumbnailURL: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg",
-                videoURL: "https://www.youtube.com/watch?v=\(id)",
-                duration: Double.random(in: 120.0...240.0),
-                viewCount: views,
-                likeCount: Int(Double(views) * 0.06),
-                commentCount: Int(Double(views) * 0.01),
-                creator: User(username: artist.replacingOccurrences(of: " ", with: "_").lowercased(),
-                              displayName: artist,
-                              email: "artist@music.com",
-                              profileImageURL: "https://i.pravatar.cc/200?u=\(artist)",
-                              isVerified: true,
-                              isCreator: true),
-                category: .music,
-                tags: ["detroit","flint","music","rap"],
-                isPublic: true,
-                quality: [.quality720p],
-                aspectRatio: .landscape,
-                isLiveStream: false,
-                contentSource: .youtube,
-                externalID: id,
-                isVerified: true
-            )
-        }
-        return [
-            yt("qGQhX_iQZu4", "Tee Grizzley - First Day Out", "Tee Grizzley", views: 265_000_000),
-            yt("3Btk3asR_vc", "Sada Baby - Whole Lotta Choppas", "Sada Baby", views: 96_000_000),
-            yt("7bUr0vbJIUK", "Icewear Vezzo - Up The Scoe ft. Lil Durk", "Icewear Vezzo", views: 47_000_000),
-            yt("N8WcJ5d0-YI", "Babyface Ray - What The Business Is", "Babyface Ray", views: 20_000_000),
-            yt("kQ3JrQxv7CM", "Peezy - 2 Million Up", "Peezy", views: 56_000_000),
-            yt("cQ8rpZ8gXyQ", "Payroll Giovanni - Hustle Muzik 3", "Payroll Giovanni", views: 12_000_000),
-            yt("8i5mQwGJv0Y", "YN Jay - Coochie", "YN Jay", views: 23_000_000),
-            yt("6S2t6j9m1yU", "RMC Mike - Keep Going", "RMC Mike", views: 9_800_000),
-            yt("6H3Jr0b8f-4", "Louie Ray - Givenchy", "Louie Ray", views: 5_600_000),
-            yt("kN6Q7lqP8xE", "Veeze - GOMD", "Veeze", views: 18_000_000),
-            yt("n0fWc3k2pEw", "Skilla Baby - Leave It In The Streets", "Skilla Baby", views: 14_000_000),
-            yt("U4ek7e4j1Hg", "Allstar JR - Legends", "Allstar JR", views: 4_200_000)
-        ]
-    }
-
-    private func gamingCOD() -> [Video] {
-        func yt(_ id: String, _ title: String, views: Int) -> Video {
-            Video(
-                id: "yt_\(id)",
-                title: title,
-                description: "Call of Duty gameplay",
-                thumbnailURL: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg",
-                videoURL: "https://www.youtube.com/watch?v=\(id)",
-                duration: Double.random(in: 600.0...1800.0),
-                viewCount: views,
-                likeCount: Int(Double(views) * 0.05),
-                commentCount: Int(Double(views) * 0.007),
-                creator: User(username: "cod_channel", displayName: "COD Highlights", email: "cod@yt.com", profileImageURL: "https://i.pravatar.cc/200?u=cod", isVerified: true, isCreator: true),
-                category: .gaming,
-                tags: ["gaming","cod","modern warfare","warzone"],
-                isPublic: true,
-                quality: [.quality720p],
-                aspectRatio: .landscape,
-                isLiveStream: false,
-                contentSource: .youtube,
-                externalID: id,
-                isVerified: true
-            )
-        }
-        return [
-            yt("x9v2Q8l2dY4", "Warzone 2: 20 Kill Solo Win!", views: 2_400_000),
-            yt("b8r0Jk1aZsQ", "MW3 Ranked Play – Tactical Nuke!", views: 1_200_000),
-            yt("p7C1LkQ0vPY", "Best Kastov‑74u Class Setup (MWII)", views: 980_000),
-            yt("w6B2Kp4eX1M", "Rebirth Island High Kill Gameplay", views: 1_650_000),
-            yt("q1Zk3Lm0TyU", "Top 10 Tips to Win More Gunfights", views: 1_050_000),
-            yt("m2N9rV3xQeE", "Warzone Movement Guide", views: 880_000)
-        ]
-    }
-
     var body: some View {
         VStack(spacing: 40) {
             if !appState.watchHistory.isEmpty {
@@ -850,12 +614,10 @@ struct MinimalContentSections: View {
             ) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
-                        let base = Video.sampleVideos.filter { $0.viewCount > 100_000 }
-                        let detroit = detroitFlintArtistsTrending()
+                        let base = Video.sampleVideos.filter { $0.viewCount > 100_000 }.prefix(8)
                         let friend = makeFriendTrendingVideo()
-                        let full = [friend] + detroit + base
-                        let dedup = Array(Dictionary(grouping: full, by: { $0.id }).values.compactMap { $0.first })
-                        ForEach(dedup.prefix(20)) { video in
+                        let videos = [friend] + base.filter { $0.id != friendVideoId }
+                        ForEach(videos) { video in
                             MinimalVideoCard(
                                 video: video,
                                 action: { onPlayVideo(video) },
@@ -866,18 +628,6 @@ struct MinimalContentSections: View {
                     .padding(.horizontal, 20)
                 }
             }
-
-            MinimalCategoriesSection(
-                onPlayVideo: onPlayVideo,
-                codVideos: gamingCOD(),
-                musicVideos: detroitFlintArtistsTrending(),
-                allVideos: {
-                    var vids = detroitFlintArtistsTrending() + gamingCOD() + Video.sampleVideos
-                    // Boost friend video
-                    vids.insert(makeFriendTrendingVideo(), at: 0)
-                    return vids
-                }()
-            )
 
             MinimalSection(
                 title: "Movies",
@@ -910,11 +660,6 @@ struct MinimalContentSections: View {
                     .padding(.horizontal, 20)
                 }
             }
-
-            TopArtistsSection(
-                sourceVideos: detroitFlintArtistsTrending() + [makeFriendTrendingVideo()] + Video.sampleVideos
-            )
-            .padding(.horizontal, 20)
         }
         .task { await loadBlockbusters() }
     }
@@ -998,15 +743,14 @@ struct MinimalVideoCard: View {
     var useLivePreview: Bool = false
 
     var body: some View {
-        let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
                 Group {
-                    if useLivePreview && !isPreview {
+                    if useLivePreview {
                         VideoLiveThumbnailView(video: video, cornerRadius: 12)
                             .frame(width: 180, height: 101)
                     } else {
-                        AppAsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                        AsyncImage(url: URL(string: video.thumbnailURL)) { image in
                             image
                                 .resizable()
                                 .scaledToFill()
@@ -1077,6 +821,8 @@ struct MinimalMovieCard: View {
                         image
                             .resizable()
                             .scaledToFill()
+                            .frame(width: 120, height: 180)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     },
                     placeholder: {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -1131,7 +877,6 @@ struct MinimalChannelCard: View {
     @State private var showPreview: Bool = false
 
     var body: some View {
-        let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
         VStack(alignment: .leading, spacing: 8) {
             ZStack {
                 if showPreview {
@@ -1144,7 +889,7 @@ struct MinimalChannelCard: View {
                         .background(Color(.systemGray6))
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 } else {
-                    AppAsyncImage(url: URL(string: channel.logoURL)) { image in
+                    AsyncImage(url: URL(string: channel.logoURL)) { image in
                         image.resizable().scaledToFit()
                     } placeholder: {
                         Color(.systemGray6)
@@ -1164,7 +909,7 @@ struct MinimalChannelCard: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
-            .onAppear { showPreview = !isPreview }
+            .onAppear { showPreview = true }
             .onDisappear { showPreview = false }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -1211,179 +956,6 @@ enum ContentFilter: String, CaseIterable {
         case .gaming: return "Gaming"
         case .music: return "Music"
         case .education: return "Education"
-        }
-    }
-}
-
-// MARK: - Sleek Categories Section
-private struct MinimalCategoriesSection: View {
-    let onPlayVideo: (Video) -> Void
-    let codVideos: [Video]
-    let musicVideos: [Video]
-    let allVideos: [Video]
-
-    @State private var selection: Category = .all
-
-    enum Category: String, CaseIterable {
-        case all = "All"
-        case music = "Music"
-        case gaming = "Gaming"
-        case sports = "Sports"
-        case news = "News"
-        case tech = "Tech"
-    }
-
-    var current: [Video] {
-        switch selection {
-        case .all: return allVideos
-        case .music: return musicVideos
-        case .gaming: return codVideos
-        case .sports: return Video.sampleVideos.shuffled()
-        case .news: return Video.sampleVideos.shuffled()
-        case .tech: return Video.sampleVideos.filter { $0.category == .technology } + Video.sampleVideos
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Categories")
-                    .font(.system(size: 20, weight: .bold))
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-
-            // Chips
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(Category.allCases, id: \.self) { cat in
-                        Button {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-                                selection = cat
-                            }
-                        } label: {
-                            HStack(spacing: 8) {
-                                Text(cat.rawValue)
-                                    .font(.system(size: 13, weight: .semibold))
-                            }
-                            .foregroundColor(selection == cat ? .white : .primary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(
-                                Capsule()
-                                    .fill(selection == cat ? AppTheme.Colors.primary : Color(.systemGray6))
-                            )
-                        }
-                        .buttonStyle(PressableScaleButtonStyle(scale: 0.97))
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-
-            // Carousel
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 16) {
-                    ForEach(current.prefix(18)) { video in
-                        MinimalVideoCard(video: video) {
-                            onPlayVideo(video)
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-        }
-    }
-}
-
-// MARK: - Top Artists Section
-private struct TopArtistsSection: View {
-    let sourceVideos: [Video]
-
-    private var rankings: [ArtistRank] {
-        let grouped = Dictionary(grouping: sourceVideos) { $0.creator.displayName }
-        let ranks = grouped.map { (name, vids) -> ArtistRank in
-            let views = vids.reduce(0) { $0 + $1.viewCount }
-            return ArtistRank(name: name,
-                              views: views,
-                              avatar: vids.first?.creator.profileImageURL ?? "https://i.pravatar.cc/200?u=\(name)")
-        }
-        return ranks.sorted { $0.views > $1.views }.prefix(10).map { $0 }
-    }
-
-    struct ArtistRank: Identifiable {
-        let id = UUID()
-        let name: String
-        let views: Int
-        let avatar: String
-    }
-
-    private func format(_ n: Int) -> String {
-        if n >= 1_000_000 { return String(format: "%.1fM", Double(n)/1_000_000) }
-        if n >= 1_000 { return String(format: "%.1fK", Double(n)/1_000) }
-        return "\(n)"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Top Artists")
-                .font(.system(size: 20, weight: .bold))
-                .padding(.top, 4)
-
-            VStack(spacing: 0) {
-                ForEach(Array(rankings.enumerated()), id: \.offset) { idx, a in
-                    HStack(spacing: 12) {
-                        // Rank badge
-                        ZStack {
-                            Circle().fill(AppTheme.Colors.primary.opacity(0.12))
-                            Text("\(idx + 1)")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(AppTheme.Colors.primary)
-                        }
-                        .frame(width: 32, height: 32)
-
-                        // Avatar + name
-                        HStack(spacing: 12) {
-                            AppAsyncImage(url: URL(string: a.avatar)) { img in
-                                img.resizable().scaledToFill()
-                            } placeholder: {
-                                Color(.systemGray5)
-                            }
-                            .frame(width: 40, height: 40)
-                            .clipShape(Circle())
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(a.name)
-                                    .font(.system(size: 15, weight: .semibold))
-                                Text("\(format(a.views)) total views")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .padding(.vertical, 10)
-                    .contentShape(Rectangle())
-                    .background(Color.white)
-                    .overlay(alignment: .bottom) {
-                        if idx < rankings.count - 1 {
-                            Rectangle()
-                                .fill(Color.black.opacity(0.06))
-                                .frame(height: 0.5)
-                                .padding(.leading, 56)
-                        }
-                    }
-                }
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.white)
-                    .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 6)
-            )
         }
     }
 }
