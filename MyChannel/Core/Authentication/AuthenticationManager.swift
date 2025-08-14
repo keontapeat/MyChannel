@@ -40,8 +40,13 @@ class AuthenticationManager: ObservableObject {
     }
     
     private init() {
-        // Simple initialization without complex dependencies
         checkAuthenticationStatus()
+        NotificationCenter.default.publisher(for: .userProfileUpdated)
+            .compactMap { $0.object as? User }
+            .sink { [weak self] updated in
+                self?.currentUser = updated
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Authentication Status
@@ -248,10 +253,14 @@ class AuthenticationManager: ObservableObject {
     
     // MARK: - Private Helper Methods
     private func setMockAuthenticatedUser() async {
-        currentUser = User.sampleUsers[0]
+        currentUser = OwnerProfile.user
         applyLocalProfileAvatarIfAvailable()
         isAuthenticated = true
         authState = .authenticated
+        NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
+        if let user = currentUser {
+            NotificationCenter.default.post(name: .userProfileUpdated, object: user)
+        }
     }
     
     private func setMockUserForEmail(_ email: String) async {

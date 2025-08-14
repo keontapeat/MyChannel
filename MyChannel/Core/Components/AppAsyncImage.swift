@@ -80,6 +80,13 @@ struct AppAsyncImage<Content: View, Placeholder: View>: View {
             return
         }
 
+        if url.isFileURL {
+            if let data = try? Data(contentsOf: url), let img = UIImage(data: data) {
+                await MainActor.run { self.uiImage = img }
+            }
+            return
+        }
+
         if let name = assetName(from: url), let img = UIImage(named: name) {
             await MainActor.run { self.uiImage = img }
             return
