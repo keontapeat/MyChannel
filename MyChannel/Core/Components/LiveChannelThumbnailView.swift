@@ -48,10 +48,21 @@ struct LiveChannelThumbnailView: View {
                         .scaledToFill()
                         .transition(.opacity)
                 } else if let poster = posterURL, let url = URL(string: poster) {
-                    AsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Color(.systemGray6)
+                    if poster.lowercased().hasSuffix(".svg") {
+                        ZStack {
+                            Color(.systemGray6)
+                            VStack(spacing: 8) {
+                                Image(systemName: "tv.fill")
+                                    .font(.system(size: 22, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    } else {
+                        AsyncImage(url: url) { image in
+                            image.resizable().scaledToFit()
+                        } placeholder: {
+                            Color(.systemGray6)
+                        }
                     }
                 } else {
                     Color(.systemGray6)
@@ -98,6 +109,10 @@ private final class PlayerContainerView: UIView {
 
     func configure(with urls: [String], onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void) {
         urlCandidates = urls
+        let defaultFallback = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+        if !urlCandidates.contains(where: { $0 == defaultFallback }) {
+            urlCandidates.append(defaultFallback)
+        }
         currentIndex = 0
         teardown()
         startPlayer(onReady: onReady, onSnapshot: onSnapshot)

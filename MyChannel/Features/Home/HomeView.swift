@@ -900,9 +900,10 @@ struct MinimalContentSections: View {
             ) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
-                        ForEach(LiveTVChannel.sampleChannels.prefix(8)) { channel in
+                        let channels = Array(LiveTVChannel.sampleChannels.prefix(8))
+                        ForEach(Array(channels.enumerated()), id: \.element.id) { index, channel in
                             NavigationLink(destination: LiveTVPlayerView(channel: channel)) {
-                                MinimalChannelCard(channel: channel)
+                                MinimalChannelCard(channel: channel, autoPreview: index < 3)
                             }
                             .buttonStyle(PlainButtonStyle())
                         }
@@ -1077,6 +1078,8 @@ struct MinimalMovieCard: View {
                         image
                             .resizable()
                             .scaledToFill()
+                            .frame(width: 120, height: 180)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     },
                     placeholder: {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -1128,6 +1131,7 @@ struct MinimalMovieCard: View {
 
 struct MinimalChannelCard: View {
     let channel: LiveTVChannel
+    var autoPreview: Bool = false
     @State private var showPreview: Bool = false
 
     var body: some View {
@@ -1164,7 +1168,9 @@ struct MinimalChannelCard: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
-            .onAppear { showPreview = !isPreview }
+            .onAppear {
+                showPreview = autoPreview && !isPreview
+            }
             .onDisappear { showPreview = false }
 
             VStack(alignment: .leading, spacing: 2) {

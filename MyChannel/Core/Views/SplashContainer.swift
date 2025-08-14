@@ -25,7 +25,18 @@ struct SplashContainer: View {
     var body: some View {
         Group {
             if isRunningInPreviews {
-                PreviewSplashStandalone()
+                switch previewMode {
+                case .splashOnly:
+                    PreviewSplashStandalone()
+                case .simpleHome:
+                    PreviewTransitionContainer {
+                        HomeView()
+                    }
+                case .safeMainTab:
+                    PreviewTransitionContainer {
+                        MainTabView()
+                    }
+                }
             } else {
                 ZStack {
                     if showSplash {
@@ -36,7 +47,7 @@ struct SplashContainer: View {
                         }
                         .transition(.opacity)
                     } else {
-                        MainTabView()
+                        HomeView()
                             .transition(.opacity)
                     }
                 }

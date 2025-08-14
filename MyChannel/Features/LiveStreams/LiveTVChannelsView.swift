@@ -21,53 +21,12 @@ struct LiveTVChannelsView: View {
     }
 
     private var allChannels: [LiveTVChannel] {
-        LiveTVChannel.sampleChannels + [
-            LiveTVChannel(
-                id: "pluto-espn",
-                name: "ESPN Classic",
-                logoURL: "https://images.pluto.tv/channels/espn-classic/colorLogoPNG.png",
-                streamURL: "https://service-stitcher.clusters.pluto.tv/stitch/hls/channel/espn-classic/master.m3u8",
-                category: .sports,
-                description: "Classic sports moments and games",
-                isLive: true,
-                viewerCount: 25430,
-                quality: "HD",
-                language: "English",
-                country: "US",
-                epgURL: nil,
-                previewFallbackURL: nil
-            ),
-            LiveTVChannel(
-                id: "plex-bloomberg",
-                name: "Bloomberg TV",
-                logoURL: "https://provider-static.plex.tv/epg/images/ott_channels/logos/bloomberg-tv.png",
-                streamURL: "https://bloomberg.com/media-manifest/streams/qt.m3u8",
-                category: .business,
-                description: "Financial news and market analysis",
-                isLive: true,
-                viewerCount: 12890,
-                quality: "HD",
-                language: "English",
-                country: "US",
-                epgURL: nil,
-                previewFallbackURL: nil
-            ),
-            LiveTVChannel(
-                id: "roku-kids-tv",
-                name: "Kids TV",
-                logoURL: "https://image.roku.com/developer_channels/prod/kids-tv-logo.png",
-                streamURL: "https://service-stitcher.clusters.pluto.tv/stitch/hls/channel/kids-tv/master.m3u8",
-                category: .kids,
-                description: "Educational and entertaining content for children",
-                isLive: true,
-                viewerCount: 18750,
-                quality: "HD",
-                language: "English",
-                country: "US",
-                epgURL: nil,
-                previewFallbackURL: nil
-            )
-        ]
+        LiveTVChannel.sampleChannels.filter { channel in
+            // Remove NASA and keep only the good channels
+            !channel.name.contains("NASA") && 
+            !channel.name.contains("Bloomberg") &&
+            channel.category != .documentary
+        }
     }
 
     private var filteredChannels: [LiveTVChannel] {
