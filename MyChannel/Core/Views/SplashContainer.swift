@@ -15,34 +15,18 @@ struct SplashContainer: View {
     }
 
     enum PreviewMode {
-        case splashOnly       // Default: avoid crashing previews
-        case simpleHome       // Transitions to a lightweight, AV-free tab preview
-        case safeMainTab      // Transitions to a safer MainTab wrapper (reduced risk)
+        case splashOnly
+        case simpleHome
+        case safeMainTab
     }
 
-    // This has no effect in the real app; previews can set a different mode in #Preview
-    var previewMode: PreviewMode = .safeMainTab
+    var previewMode: PreviewMode = .splashOnly
 
     var body: some View {
         Group {
             if isRunningInPreviews {
-                // Preview-safe modes
-                switch previewMode {
-                case .splashOnly:
-                    PreviewSplashStandalone()
-                case .simpleHome:
-                    PreviewTransitionContainer {
-                        SimpleMainTabPreview()
-                            .preferredColorScheme(.light)
-                    }
-                case .safeMainTab:
-                    PreviewTransitionContainer {
-                        PreviewSafeMainTabWrapper()
-                            .preferredColorScheme(.light)
-                    }
-                }
+                PreviewSplashStandalone()
             } else {
-                // Real app runtime
                 ZStack {
                     if showSplash {
                         SplashView {
@@ -58,7 +42,6 @@ struct SplashContainer: View {
                 }
                 .animation(.easeInOut(duration: 0.4), value: showSplash)
                 .onAppear {
-                    // Fallback: ensure we always advance in case onComplete doesn't fire
                     DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
                         if showSplash {
                             withAnimation(.easeInOut(duration: 0.4)) {
@@ -70,15 +53,31 @@ struct SplashContainer: View {
             }
         }
         .ignoresSafeArea(.keyboard)
+        .onAppear {
+            if isRunningInPreviews {
+                disablePreviewURLProtocolStubIfAny()
+            }
+        }
+    }
+
+    private func disablePreviewURLProtocolStubIfAny() {
+        let names = [
+            "PreviewImageURLProtocol",
+            (Bundle.main.infoDictionary?["CFBundleName"] as? String).map { "\($0).PreviewImageURLProtocol" }
+        ].compactMap { $0 }
+
+        for name in names {
+            if let cls = NSClassFromString(name) {
+                _ = (cls as? AnyClass).map { URLProtocol.unregisterClass($0) }
+            }
+        }
     }
 }
 
 private struct PreviewSplashStandalone: View {
     var body: some View {
-        SplashView {
-            // No-op in splash-only preview to avoid transitioning into heavy views
-        }
-        .preferredColorScheme(.light)
+        SplashView { }
+            .preferredColorScheme(.light)
     }
 }
 
@@ -104,21 +103,14 @@ private struct PreviewTransitionContainer<Content: View>: View {
     }
 }
 
-#Preview("Splash Container • App Behavior") {
-    SplashContainer(previewMode: .safeMainTab)
+#Preview("Splash Only (Safe)") {
+    SplashContainer(previewMode: .splashOnly)
         .environmentObject(AuthenticationManager.shared)
         .environmentObject(AppState())
         .preferredColorScheme(.light)
 }
 
-#Preview("Splash → Simple Home (Safe)") {
-    SplashContainer(previewMode: .simpleHome)
-        .environmentObject(AuthenticationManager.shared)
-        .environmentObject(AppState())
-        .preferredColorScheme(.light)
-}
-
-#Preview("Splash → Safe MainTab (Safer)") {
+#Preview("Splash (All Modes Safe In Preview)") {
     SplashContainer(previewMode: .safeMainTab)
         .environmentObject(AuthenticationManager.shared)
         .environmentObject(AppState())
