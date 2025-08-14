@@ -79,8 +79,8 @@ struct PremiumLiveTVSection: View {
             // Live Channel Grid
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
-                    ForEach(filteredChannels.prefix(8)) { channel in
-                        PremiumChannelCard(channel: channel) {
+                    ForEach(Array(filteredChannels.prefix(8).enumerated()), id: \.element.id) { index, channel in
+                        PremiumChannelCard(channel: channel, showPreview: index < 3) {
                             onChannelTap(channel)
                         }
                     }
@@ -180,6 +180,7 @@ struct CategoryChip: View {
 // MARK: - Premium Channel Card
 struct PremiumChannelCard: View {
     let channel: LiveTVChannel
+    var showPreview: Bool = false
     let action: () -> Void
     
     @State private var isPressed: Bool = false
@@ -195,19 +196,14 @@ struct PremiumChannelCard: View {
             VStack(spacing: 12) {
                 // Channel Logo with Live Indicator
                 ZStack {
-                    // Premium background with gradient
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    channel.category.color.opacity(0.1),
-                                    channel.category.color.opacity(0.05)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                    if showPreview {
+                        LiveChannelThumbnailView(
+                            streamURL: channel.streamURL,
+                            posterURL: channel.logoURL,
+                            fallbackStreamURL: channel.previewFallbackURL
                         )
                         .frame(width: 120, height: 80)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
                         .overlay(
                             RoundedRectangle(cornerRadius: 16)
                                 .stroke(
@@ -222,18 +218,45 @@ struct PremiumChannelCard: View {
                                     lineWidth: 1
                                 )
                         )
-                    
-                    // Channel Logo - ALWAYS SHOW WORKING CONTENT
-                    VStack(spacing: 8) {
-                        // TV Icon for all channels
-                        Image(systemName: "tv.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(channel.category.color)
+                    } else {
+                        // Premium background with gradient
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        channel.category.color.opacity(0.1),
+                                        channel.category.color.opacity(0.05)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 120, height: 80)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                channel.category.color.opacity(0.3),
+                                                channel.category.color.opacity(0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1
+                                    )
+                            )
                         
-                        // Channel name abbreviation  
-                        Text(String(channel.name.prefix(3)).uppercased())
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(channel.category.color)
+                        // Channel Logo - ALWAYS SHOW WORKING CONTENT
+                        VStack(spacing: 8) {
+                            Image(systemName: "tv.fill")
+                                .font(.system(size: 28))
+                                .foregroundColor(channel.category.color)
+                            
+                            Text(String(channel.name.prefix(3)).uppercased())
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(channel.category.color)
+                        }
                     }
                     
                     // CLICKABLE PLAY OVERLAY
