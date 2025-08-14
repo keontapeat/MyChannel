@@ -332,6 +332,9 @@ struct MinimalNavigationHeader: View {
     }
 
     var body: some View {
+        let clamped = max(-120, min(120, scrollOffset))
+        let logoScale = 1.0 + max(0, min(0.12, -clamped / 300))  // zoom slightly when pulling down
+        let logoYOffset = (clamped * 0.06)                        // light parallax
         VStack(spacing: 0) {
             HStack {
                 HStack(spacing: 12) {
@@ -342,6 +345,8 @@ struct MinimalNavigationHeader: View {
                         .antialiased(true)
                         .aspectRatio(contentMode: .fit)
                         .frame(width: logoSize, height: logoSize)
+                        .scaleEffect(logoScale, anchor: .leading)
+                        .offset(y: logoYOffset)
 
                     Text("MyChannel")
                         .font(.system(size: 20, weight: .semibold, design: .rounded))
@@ -372,29 +377,7 @@ struct MinimalNavigationHeader: View {
                     }
 
                     Button(action: onProfileTap) {
-                        AppAsyncImage(url: URL(string: appState.currentUser?.profileImageURL ?? "")) { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 28, height: 28)
-                                .clipShape(Circle())
-                        } placeholder: {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color(white: 0.97), Color(white: 0.92)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: 28, height: 28)
-                                .overlay(
-                                    Image(systemName: "person.fill")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(.secondary)
-                                )
-                                .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-                        }
+                        ProfileAvatarView(urlString: appState.currentUser?.profileImageURL, size: 28)
                     }
                 }
             }
@@ -413,6 +396,7 @@ struct MinimalNavigationHeader: View {
                 }
             )
             .animation(.easeInOut(duration: 0.25), value: scrollOffset > 50)
+            .animation(.spring(response: 0.45, dampingFraction: 0.85), value: clamped)
         }
         .allowsHitTesting(true)
     }
@@ -552,24 +536,31 @@ private struct FeaturedHeroCard: View {
 
     var body: some View {
         let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+
         ZStack {
-            Group {
-                if isPreview {
-                    AppAsyncImage(url: URL(string: video.thumbnailURL)) { image in
+            // Media layer (poster + optional live autoplay)
+            ZStack {
+                MultiSourceAsyncImage(
+                    urls: video.posterCandidates,
+                    content: { image in
                         image
                             .resizable()
                             .scaledToFill()
-                    } placeholder: {
+                    },
+                    placeholder: {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(Color(.systemGray6))
                     }
-                    .frame(height: 230)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                } else {
+                )
+
+                if !isPreview {
                     VideoLiveThumbnailView(video: video, cornerRadius: 16)
-                        .frame(height: 230)
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
                 }
             }
+            .frame(height: 230)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
                 LinearGradient(
                     colors: [Color.black.opacity(0.35), .clear, Color.black.opacity(0.55)],
@@ -579,8 +570,8 @@ private struct FeaturedHeroCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             )
 
+            // Overlayed content
             VStack(spacing: 12) {
-                // Top chips
                 HStack {
                     HStack(spacing: 6) {
                         Image(systemName: video.category.iconName)
@@ -609,7 +600,6 @@ private struct FeaturedHeroCard: View {
 
                 Spacer()
 
-                // Bottom controls (title REMOVED for clean video view)
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 12) {
                         Label(video.creator.displayName, systemImage: "person.crop.circle")
@@ -680,20 +670,41 @@ private struct FeaturedHeroCard: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(video.creator.displayName) • \(video.formattedViewCount) views")
         .accessibilityHint("Plays the featured video")
+        .onAppear {
+            NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
+        }
+        .onDisappear {
+            NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldPause"), object: nil)
+        }
     }
 }
 
-#Preview("FeaturedHeroCard – Premium") {
-    FeaturedHeroCard(
-        video: Video.sampleVideos.first ?? Video.sampleVideos[0],
-        isCompact: true,
-        onPlay: {},
-        onAddToList: {}
-    )
-    .padding()
-    .background(Color(.systemBackground))
-    .preferredColorScheme(.light)
-    .environmentObject(AppState())
+extension Video {
+    var posterCandidates: [URL] {
+        var urls: [URL] = []
+        var seen = Set<String>()
+
+        func add(_ s: String) {
+            if !s.isEmpty, seen.insert(s).inserted, let u = URL(string: s) {
+                urls.append(u)
+            }
+        }
+
+        // 1) Use provided thumbnail if present
+        add(thumbnailURL)
+
+        // 2) Prefer YouTube covers when applicable
+        if contentSource == .youtube {
+            let yid = externalID.flatMap { $0.isEmpty ? nil : $0 } ?? id
+            add("https://i.ytimg.com/vi/\(yid)/maxresdefault.jpg")
+            add("https://i.ytimg.com/vi/\(yid)/hqdefault.jpg")
+        }
+
+        // 3) Seeded fallback to guarantee an image
+        add("https://picsum.photos/seed/\(abs(id.hashValue))/400/225")
+
+        return urls
+    }
 }
 
 // MARK: - Minimal Content Sections
@@ -707,8 +718,10 @@ struct MinimalContentSections: View {
     @EnvironmentObject private var appState: AppState
     @State private var blockbusterMovies: [FreeMovie] = []
     @State private var loadingBlockbusters: Bool = false
+    @State private var friendChannelVideos: [Video] = []
 
     private var friendVideoId: String { "friend_video_yt_71GJrAY54Ew" }
+    private var friendChannelID: String { "UCITAM_FKtyKEq40aHVXFTcQ" }
 
     private func makeFriendTrendingVideo() -> Video {
         let friendUser = User(
@@ -747,6 +760,49 @@ struct MinimalContentSections: View {
         )
     }
 
+    private func extraTrendingVideos() -> [Video] {
+        let friendUser = User(
+            username: "scatz",
+            displayName: "Scatz",
+            email: "music@artist.com",
+            profileImageURL: "https://i.ytimg.com/vi/71GJrAY54Ew/hqdefault.jpg",
+            bannerImageURL: nil,
+            bio: "Artist",
+            subscriberCount: 21_300,
+            videoCount: 0,
+            isVerified: true,
+            isCreator: true
+        )
+        let entries: [(id: String, title: String)] = [
+            ("71GJrAY54Ew", "Scatz - Rebound (Official Music Video)"),
+            ("F98vGhQDrB8", "YouTube Video F98vGhQDrB8")
+        ]
+        return entries.map { e in
+            Video(
+                id: "yt_\(e.id)",
+                title: e.title,
+                description: "Official video",
+                thumbnailURL: "https://i.ytimg.com/vi/\(e.id)/hqdefault.jpg",
+                videoURL: "https://www.youtube.com/watch?v=\(e.id)",
+                duration: Double.random(in: 90...300),
+                viewCount: Int.random(in: 3_000...2_000_000),
+                likeCount: Int.random(in: 100...50_000),
+                commentCount: Int.random(in: 10...10_000),
+                createdAt: Date(),
+                creator: friendUser,
+                category: .music,
+                tags: ["music","official","video","friend"],
+                isPublic: true,
+                quality: [.quality720p],
+                aspectRatio: .landscape,
+                isLiveStream: false,
+                contentSource: .youtube,
+                externalID: e.id,
+                isVerified: true
+            )
+        }
+    }
+
     private func detroitFlintArtistsTrending() -> [Video] {
         func yt(_ id: String, _ title: String, _ artist: String, views: Int) -> Video {
             Video(
@@ -782,13 +838,9 @@ struct MinimalContentSections: View {
             yt("7bUr0vbJIUK", "Icewear Vezzo - Up The Scoe ft. Lil Durk", "Icewear Vezzo", views: 47_000_000),
             yt("N8WcJ5d0-YI", "Babyface Ray - What The Business Is", "Babyface Ray", views: 20_000_000),
             yt("kQ3JrQxv7CM", "Peezy - 2 Million Up", "Peezy", views: 56_000_000),
-            yt("cQ8rpZ8gXyQ", "Payroll Giovanni - Hustle Muzik 3", "Payroll Giovanni", views: 12_000_000),
-            yt("8i5mQwGJv0Y", "YN Jay - Coochie", "YN Jay", views: 23_000_000),
-            yt("6S2t6j9m1yU", "RMC Mike - Keep Going", "RMC Mike", views: 9_800_000),
-            yt("6H3Jr0b8f-4", "Louie Ray - Givenchy", "Louie Ray", views: 5_600_000),
-            yt("kN6Q7lqP8xE", "Veeze - GOMD", "Veeze", views: 18_000_000),
-            yt("n0fWc3k2pEw", "Skilla Baby - Leave It In The Streets", "Skilla Baby", views: 14_000_000),
-            yt("U4ek7e4j1Hg", "Allstar JR - Legends", "Allstar JR", views: 4_200_000)
+            yt("w6B2Kp4eX1M", "Rebirth Island High Kill Gameplay", "Peezy", views: 1_650_000),
+            yt("q1Zk3Lm0TyU", "Top 10 Tips to Win More Gunfights", "Peezy", views: 1_050_000),
+            yt("m2N9rV3xQeE", "Warzone Movement Guide", "Peezy", views: 880_000)
         ]
     }
 
@@ -850,16 +902,18 @@ struct MinimalContentSections: View {
             ) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
-                        let base = Video.sampleVideos.filter { $0.viewCount > 100_000 }
-                        let detroit = detroitFlintArtistsTrending()
-                        let friend = makeFriendTrendingVideo()
-                        let full = [friend] + detroit + base
-                        let dedup = Array(Dictionary(grouping: full, by: { $0.id }).values.compactMap { $0.first })
+                        let base = friendChannelVideos.isEmpty ? [] : friendChannelVideos
+                        let merged = [makeFriendTrendingVideo()] + base + extraTrendingVideos()
+                        var seen = Set<String>()
+                        let dedup = merged.filter { v in
+                            if seen.contains(v.id) { return false }
+                            seen.insert(v.id)
+                            return true
+                        }
                         ForEach(dedup.prefix(20)) { video in
                             MinimalVideoCard(
                                 video: video,
-                                action: { onPlayVideo(video) },
-                                useLivePreview: video.id == friendVideoId
+                                action: { onPlayVideo(video) }
                             )
                         }
                     }
@@ -873,7 +927,6 @@ struct MinimalContentSections: View {
                 musicVideos: detroitFlintArtistsTrending(),
                 allVideos: {
                     var vids = detroitFlintArtistsTrending() + gamingCOD() + Video.sampleVideos
-                    // Boost friend video
                     vids.insert(makeFriendTrendingVideo(), at: 0)
                     return vids
                 }()
@@ -916,12 +969,20 @@ struct MinimalContentSections: View {
                 sourceVideos: detroitFlintArtistsTrending() + [makeFriendTrendingVideo()] + Video.sampleVideos
             )
             .padding(.horizontal, 20)
+            TopIndieFilmmakersSection()
+            .padding(.horizontal, 20)
+
+            TopMyChannelsSection(
+                sourceVideos: detroitFlintArtistsTrending() + gamingCOD() + Video.sampleVideos
+            )
+            .padding(.horizontal, 20)
         }
         .task { await loadBlockbusters() }
+        .task { await loadFriendChannelVideos() }
     }
 
     // Loader for TMDB popular trailers powering the Home Free Movies row
-    fileprivate func loadBlockbusters() async {
+    private func loadBlockbusters() async {
         guard blockbusterMovies.isEmpty else { return }
         loadingBlockbusters = true
         defer { loadingBlockbusters = false }
@@ -962,6 +1023,18 @@ struct MinimalContentSections: View {
             print("[TMDB] Error loading blockbusters: \(error)")
         }
     }
+
+    private func loadFriendChannelVideos() async {
+        guard friendChannelVideos.isEmpty else { return }
+        do {
+            let items = try await YouTubeAPIService.shared.fetchChannelVideos(channelID: friendChannelID, maxResults: 24)
+            await MainActor.run {
+                self.friendChannelVideos = items
+            }
+        } catch {
+            print("[YouTube] Error loading friend channel: \(error)")
+        }
+    }
 }
 
 // MARK: - Minimal Section
@@ -975,8 +1048,6 @@ struct MinimalSection<Content: View>: View {
             HStack {
                 Text(title)
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.primary)
-
                 Spacer()
 
                 if let seeAllAction = seeAllAction {
@@ -1007,22 +1078,26 @@ struct MinimalVideoCard: View {
                         VideoLiveThumbnailView(video: video, cornerRadius: 12)
                             .frame(width: 180, height: 101)
                     } else {
-                        AppAsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 180, height: 101)
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        } placeholder: {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color(.systemGray6))
-                                .frame(width: 180, height: 101)
-                                .overlay(
-                                    Image(systemName: video.category.iconName)
-                                        .font(.system(size: 24))
-                                        .foregroundColor(.secondary)
-                                )
-                        }
+                        MultiSourceAsyncImage(
+                            urls: video.posterCandidates,
+                            content: { image in
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 180, height: 101)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            },
+                            placeholder: {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color(.systemGray6))
+                                    .frame(width: 180, height: 101)
+                                    .overlay(
+                                        Image(systemName: video.category.iconName)
+                                            .font(.system(size: 24))
+                                            .foregroundColor(.secondary)
+                                    )
+                            }
+                        )
                     }
                 }
                 .overlay(
@@ -1241,12 +1316,18 @@ private struct MinimalCategoriesSection: View {
 
     var current: [Video] {
         switch selection {
-        case .all: return allVideos
-        case .music: return musicVideos
-        case .gaming: return codVideos
-        case .sports: return Video.sampleVideos.shuffled()
-        case .news: return Video.sampleVideos.shuffled()
-        case .tech: return Video.sampleVideos.filter { $0.category == .technology } + Video.sampleVideos
+        case .all:
+            return allVideos.shuffled()
+        case .music:
+            return musicVideos.shuffled()
+        case .gaming:
+            return codVideos.shuffled()
+        case .sports:
+            return Video.sampleVideos.shuffled()
+        case .news:
+            return Video.sampleVideos.shuffled()
+        case .tech:
+            return (Video.sampleVideos.filter { $0.category == .technology } + Video.sampleVideos).shuffled()
         }
     }
 
@@ -1290,9 +1371,9 @@ private struct MinimalCategoriesSection: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
                     ForEach(current.prefix(18)) { video in
-                        MinimalVideoCard(video: video) {
+                        MinimalVideoCard(video: video, action: {
                             onPlayVideo(video)
-                        }
+                        }, useLivePreview: true)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -1309,9 +1390,11 @@ private struct TopArtistsSection: View {
         let grouped = Dictionary(grouping: sourceVideos) { $0.creator.displayName }
         let ranks = grouped.map { (name, vids) -> ArtistRank in
             let views = vids.reduce(0) { $0 + $1.viewCount }
-            return ArtistRank(name: name,
-                              views: views,
-                              avatar: vids.first?.creator.profileImageURL ?? "https://i.pravatar.cc/200?u=\(name)")
+            return ArtistRank(
+                name: name,
+                views: views,
+                avatar: vids.first?.creator.profileImageURL ?? "https://i.pravatar.cc/200?u=\(name)"
+            )
         }
         return ranks.sorted { $0.views > $1.views }.prefix(10).map { $0 }
     }
@@ -1338,7 +1421,6 @@ private struct TopArtistsSection: View {
             VStack(spacing: 0) {
                 ForEach(Array(rankings.enumerated()), id: \.offset) { idx, a in
                     HStack(spacing: 12) {
-                        // Rank badge
                         ZStack {
                             Circle().fill(AppTheme.Colors.primary.opacity(0.12))
                             Text("\(idx + 1)")
@@ -1347,27 +1429,23 @@ private struct TopArtistsSection: View {
                         }
                         .frame(width: 32, height: 32)
 
-                        // Avatar + name
-                        HStack(spacing: 12) {
-                            AppAsyncImage(url: URL(string: a.avatar)) { img in
-                                img.resizable().scaledToFill()
-                            } placeholder: {
-                                Color(.systemGray5)
-                            }
-                            .frame(width: 40, height: 40)
-                            .clipShape(Circle())
+                        AppAsyncImage(url: URL(string: a.avatar)) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            Color(.systemGray5)
+                        }
+                        .frame(width: 40, height: 40)
+                        .clipShape(Circle())
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(a.name)
-                                    .font(.system(size: 15, weight: .semibold))
-                                Text("\(format(a.views)) total views")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.secondary)
-                            }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(a.name)
+                                .font(.system(size: 15, weight: .semibold))
+                            Text("\(format(a.views)) total views")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
                         }
 
                         Spacer()
-
                         Image(systemName: "chevron.right")
                             .foregroundColor(.secondary)
                             .font(.system(size: 14, weight: .semibold))
@@ -1377,6 +1455,186 @@ private struct TopArtistsSection: View {
                     .background(Color.white)
                     .overlay(alignment: .bottom) {
                         if idx < rankings.count - 1 {
+                            Rectangle()
+                                .fill(Color.black.opacity(0.06))
+                                .frame(height: 0.5)
+                                .padding(.leading, 56)
+                        }
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white)
+                    .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 6)
+            )
+        }
+    }
+}
+
+// MARK: - Top Indie Filmmakers Section
+private struct TopIndieFilmmakersSection: View {
+    struct Filmmaker: Identifiable {
+        let id = UUID()
+        let name: String
+        let films: Int
+        let score: Int
+        let avatar: String
+    }
+
+    private var filmmakers: [Filmmaker] {
+        let names = [
+            "A. Rivers", "N. Carter", "M. Sloan", "J. Patel", "R. Alvarez",
+            "S. Kim", "D. Morgan", "K. O’Neal", "B. Laurent", "T. Ito"
+        ]
+        let items = names.enumerated().map { idx, n in
+            Filmmaker(
+                name: n,
+                films: Int.random(in: 2...12),
+                score: Int.random(in: 60...99),
+                avatar: "https://i.pravatar.cc/200?u=indie_\(idx)"
+            )
+        }
+        return items.sorted { $0.score > $1.score }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Top Indie Filmmakers")
+                .font(.system(size: 20, weight: .bold))
+                .padding(.top, 4)
+
+            VStack(spacing: 0) {
+                ForEach(Array(filmmakers.enumerated()), id: \.offset) { idx, f in
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle().fill(AppTheme.Colors.primary.opacity(0.12))
+                            Text("\(idx + 1)")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(AppTheme.Colors.primary)
+                        }
+                        .frame(width: 32, height: 32)
+
+                        AppAsyncImage(url: URL(string: f.avatar)) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            Color(.systemGray5)
+                        }
+                        .frame(width: 40, height: 40)
+                        .clipShape(Circle())
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(f.name)
+                                .font(.system(size: 15, weight: .semibold))
+                            Text("\(f.films) films • Score \(f.score)")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .padding(.vertical, 10)
+                    .overlay(alignment: .bottom) {
+                        if idx < filmmakers.count - 1 {
+                            Rectangle()
+                                .fill(Color.black.opacity(0.06))
+                                .frame(height: 0.5)
+                                .padding(.leading, 56)
+                        }
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white)
+                    .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 6)
+            )
+        }
+    }
+}
+
+// MARK: - Top MyChannels Section (ranks creators from provided videos)
+private struct TopMyChannelsSection: View {
+    let sourceVideos: [Video]
+
+    private struct ChannelRank: Identifiable {
+        let id = UUID()
+        let name: String
+        let avatar: String
+        let subscribers: Int
+        let totalViews: Int
+    }
+
+    private var ranks: [ChannelRank] {
+        let grouped = Dictionary(grouping: sourceVideos) { $0.creator.id }
+        let items = grouped.values.compactMap { vids -> ChannelRank? in
+            guard let first = vids.first else { return nil }
+            let total = vids.reduce(0) { $0 + $1.viewCount }
+            return ChannelRank(
+                name: first.creator.displayName,
+                avatar: first.creator.profileImageURL ?? "https://i.pravatar.cc/200?u=\(first.creator.id)",
+                subscribers: first.creator.subscriberCount,
+                totalViews: total
+            )
+        }
+        return items.sorted {
+            if $0.subscribers != $1.subscribers { return $0.subscribers > $1.subscribers }
+            return $0.totalViews > $1.totalViews
+        }.prefix(10).map { $0 }
+    }
+
+    private func fmt(_ n: Int) -> String {
+        if n >= 1_000_000 { return String(format: "%.1fM", Double(n)/1_000_000) }
+        if n >= 1_000 { return String(format: "%.1fK", Double(n)/1_000) }
+        return "\(n)"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Top MyChannels")
+                .font(.system(size: 20, weight: .bold))
+                .padding(.top, 4)
+
+            VStack(spacing: 0) {
+                ForEach(Array(ranks.enumerated()), id: \.offset) { idx, c in
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle().fill(AppTheme.Colors.primary.opacity(0.12))
+                            Text("\(idx + 1)")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(AppTheme.Colors.primary)
+                        }
+                        .frame(width: 32, height: 32)
+
+                        AppAsyncImage(url: URL(string: c.avatar)) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            Color(.systemGray5)
+                        }
+                        .frame(width: 40, height: 40)
+                        .clipShape(Circle())
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(c.name)
+                                .font(.system(size: 15, weight: .semibold))
+                            Text("\(fmt(c.subscribers)) subs • \(fmt(c.totalViews)) views")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                    .background(Color.white)
+                    .overlay(alignment: .bottom) {
+                        if idx < ranks.count - 1 {
                             Rectangle()
                                 .fill(Color.black.opacity(0.06))
                                 .frame(height: 0.5)

@@ -9,9 +9,45 @@ import SwiftUI
 
 struct TrendingView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var trendingVideos: [Video] = Video.sampleVideos.filter { $0.viewCount > 100000 }
+    @State private var trendingVideos: [Video] = []
     @State private var selectedTimeframe: TrendingTimeframe = .today
-    
+    private let friendChannelID: String = "UCITAM_FKtyKEq40aHVXFTcQ"
+
+    private func extraTrendingVideos() -> [Video] {
+        let entries: [(id: String, title: String)] = [
+            ("71GJrAY54Ew", "Scatz - Rebound (Official Music Video)"),
+            ("F98vGhQDrB8", "YouTube Video F98vGhQDrB8")
+        ]
+        return entries.map { e in
+            Video(
+                id: "yt_\(e.id)",
+                title: e.title,
+                description: "Official video",
+                thumbnailURL: "https://i.ytimg.com/vi/\(e.id)/hqdefault.jpg",
+                videoURL: "https://www.youtube.com/watch?v=\(e.id)",
+                duration: Double.random(in: 90...300),
+                viewCount: Int.random(in: 3_000...2_000_000),
+                likeCount: Int.random(in: 100...50_000),
+                creator: User(username: "scatz", displayName: "Scatz", email: "noreply@yt.com", profileImageURL: "https://i.ytimg.com/vi/\(e.id)/hqdefault.jpg", isVerified: true, isCreator: true),
+                category: .music,
+                tags: ["music","friend","youtube"],
+                isPublic: true,
+                quality: [.quality720p],
+                aspectRatio: .landscape,
+                isLiveStream: false,
+                contentSource: .youtube,
+                externalID: e.id,
+                contentRating: nil,
+                language: "en",
+                subtitles: nil,
+                isVerified: true,
+                monetization: nil,
+                isSponsored: nil,
+                chapters: nil
+            )
+        }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -80,6 +116,52 @@ struct TrendingView: View {
             }
             .background(AppTheme.Colors.background)
             .toolbar(.hidden, for: .navigationBar)
+        }
+        .task {
+            await loadFriendChannelVideos()
+        }
+    }
+
+    private func loadFriendChannelVideos() async {
+        do {
+            let items = try await YouTubeAPIService.shared.fetchChannelVideos(channelID: friendChannelID, maxResults: 30)
+            let merged = items + extraTrendingVideos()
+            let dedup = Array(Dictionary(grouping: merged, by: { $0.id }).values.compactMap { $0.first })
+            await MainActor.run {
+                self.trendingVideos = dedup
+            }
+        } catch {
+            // Fallback to a single known friend video if API key missing or call fails
+            let vid = "71GJrAY54Ew"
+            let friend = Video(
+                id: "yt_\(vid)",
+                title: "Scatz - Rebound ( Official Music Video ) Shot By @ImmortalVision",
+                description: "Official music video. Shot by @ImmortalVision.",
+                thumbnailURL: "https://i.ytimg.com/vi/\(vid)/hqdefault.jpg",
+                videoURL: "https://www.youtube.com/watch?v=\(vid)",
+                duration: 120,
+                viewCount: 5000,
+                likeCount: 200,
+                creator: User(username: "scatz", displayName: "Scatz", email: "noreply@yt.com", profileImageURL: "https://i.ytimg.com/vi/\(vid)/hqdefault.jpg", isVerified: true, isCreator: true),
+                category: .music,
+                tags: ["music","friend","youtube"],
+                isPublic: true,
+                quality: [.quality720p],
+                aspectRatio: .landscape,
+                isLiveStream: false,
+                contentSource: .youtube,
+                externalID: vid,
+                contentRating: nil,
+                language: "en",
+                subtitles: nil,
+                isVerified: true,
+                monetization: nil,
+                isSponsored: nil,
+                chapters: nil
+            )
+            await MainActor.run {
+                self.trendingVideos = [friend] + extraTrendingVideos()
+            }
         }
     }
 }

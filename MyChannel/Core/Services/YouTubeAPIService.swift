@@ -105,6 +105,68 @@ final class YouTubeAPIService {
         // Put newest "feeling" first
         return vids.shuffled()
     }
+
+    func fetchChannelVideos(channelID: String, maxResults: Int = 24) async throws -> [Video] {
+        guard !AppSecrets.youtubeAPIKey.isEmpty else { return [] }
+
+        var comps = URLComponents(string: "\(base)/search")!
+        comps.queryItems = [
+            .init(name: "key", value: AppSecrets.youtubeAPIKey),
+            .init(name: "part", value: "snippet"),
+            .init(name: "channelId", value: channelID),
+            .init(name: "order", value: "date"),
+            .init(name: "type", value: "video"),
+            .init(name: "maxResults", value: String(max(1, min(maxResults, 50))))
+        ]
+
+        let (data, _) = try await URLSession.shared.data(from: comps.url!)
+        let decoded = try JSONDecoder().decode(SearchResponse.self, from: data)
+
+        let vids: [Video] = decoded.items.compactMap { item in
+            guard let vid = item.id.videoId else { return nil }
+            let sn = item.snippet
+            let thumb = sn.thumbnails.maxres?.url ??
+                        sn.thumbnails.standard?.url ??
+                        sn.thumbnails.high?.url ??
+                        sn.thumbnails.medium?.url ??
+                        "https://i.ytimg.com/vi/\(vid)/hqdefault.jpg"
+
+            return Video(
+                title: sn.title,
+                description: sn.description,
+                thumbnailURL: thumb,
+                videoURL: "https://www.youtube.com/watch?v=\(vid)",
+                duration: Double.random(in: 90...360),
+                viewCount: Int.random(in: 3_000...2_000_000),
+                likeCount: Int.random(in: 100...50_000),
+                creator: User(
+                    username: sn.channelTitle.replacingOccurrences(of: " ", with: "_").lowercased(),
+                    displayName: sn.channelTitle,
+                    email: "noreply@youtube.com",
+                    profileImageURL: "https://i.pravatar.cc/200?u=\(sn.channelTitle)",
+                    bio: "YouTube Creator",
+                    isVerified: true,
+                    isCreator: true
+                ),
+                category: .music,
+                tags: ["youtube","friend"],
+                isPublic: true,
+                quality: [.quality720p],
+                aspectRatio: .landscape,
+                isLiveStream: false,
+                contentSource: .youtube,
+                externalID: vid,
+                contentRating: nil,
+                language: "en",
+                subtitles: nil,
+                isVerified: true,
+                monetization: nil,
+                isSponsored: nil,
+                chapters: nil
+            )
+        }
+        return vids
+    }
 }
 
 #Preview("YouTube API Service (Mock Call)") {

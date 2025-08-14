@@ -880,12 +880,12 @@ struct PreviewSafeMainTabWrapper: View {
     
     private func createSafeAuthManager() -> AuthenticationManager {
         let manager = AuthenticationManager.shared
-        // Set a default user to prevent crashes
+        let avatar = (UIImage(named: "UserProfileAvatar") != nil) ? "asset://UserProfileAvatar" : "https://picsum.photos/200/200"
         manager.currentUser = User(
             username: "preview_user",
             displayName: "Preview User",
             email: "preview@mychannel.com",
-            profileImageURL: "https://picsum.photos/200/200",
+            profileImageURL: avatar,
             bio: "Preview user for testing"
         )
         return manager
@@ -893,12 +893,12 @@ struct PreviewSafeMainTabWrapper: View {
     
     private func createSafeAppState() -> AppState {
         let state = AppState()
-        // Set a safe default user
+        let avatar = (UIImage(named: "UserProfileAvatar") != nil) ? "asset://UserProfileAvatar" : "https://picsum.photos/200/200"
         state.currentUser = User(
             username: "preview_user",
             displayName: "Preview User",
             email: "preview@mychannel.com",
-            profileImageURL: "https://picsum.photos/200/200",
+            profileImageURL: avatar,
             bio: "Preview user for testing"
         )
         return state

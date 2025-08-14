@@ -52,10 +52,10 @@ class AuthenticationManager: ObservableObject {
         
         // Check if we have mock authentication enabled
         if AppConfig.Features.enableMockData {
-            // Delay mock authentication to avoid initialization issues
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 Task {
                     await self.setMockAuthenticatedUser()
+                    self.applyLocalProfileAvatarIfAvailable()
                 }
             }
         }
@@ -108,6 +108,8 @@ class AuthenticationManager: ObservableObject {
         )
         
         currentUser = newUser
+        applyLocalProfileAvatarIfAvailable()
+
         isAuthenticated = true
         authState = .authenticated
         
@@ -137,6 +139,9 @@ class AuthenticationManager: ObservableObject {
                     isCreator: true
                 )
                 currentUser = user
+                // At both success paths:
+                // after setting currentUser = user / appleUser
+                applyLocalProfileAvatarIfAvailable()
                 isAuthenticated = true
                 authState = .authenticated
                 return
@@ -160,6 +165,9 @@ class AuthenticationManager: ObservableObject {
             isCreator: true
         )
         currentUser = appleUser
+        // At both success paths:
+        // after setting currentUser = user / appleUser
+        applyLocalProfileAvatarIfAvailable()
         isAuthenticated = true
         authState = .authenticated
     }
@@ -187,6 +195,8 @@ class AuthenticationManager: ObservableObject {
         )
         
         currentUser = googleUser
+        applyLocalProfileAvatarIfAvailable()
+
         isAuthenticated = true
         authState = .authenticated
         
@@ -239,6 +249,7 @@ class AuthenticationManager: ObservableObject {
     // MARK: - Private Helper Methods
     private func setMockAuthenticatedUser() async {
         currentUser = User.sampleUsers[0]
+        applyLocalProfileAvatarIfAvailable()
         isAuthenticated = true
         authState = .authenticated
     }
@@ -258,7 +269,32 @@ class AuthenticationManager: ObservableObject {
         )
         
         currentUser = user
+        applyLocalProfileAvatarIfAvailable()
         isAuthenticated = true
         authState = .authenticated
+    }
+
+    private func applyLocalProfileAvatarIfAvailable() {
+        guard UIImage(named: "UserProfileAvatar") != nil, let user = currentUser else { return }
+        currentUser = User(
+            id: user.id,
+            username: user.username,
+            displayName: user.displayName,
+            email: user.email,
+            profileImageURL: "asset://UserProfileAvatar",
+            bannerImageURL: user.bannerImageURL,
+            bio: user.bio,
+            subscriberCount: user.subscriberCount,
+            videoCount: user.videoCount,
+            isVerified: user.isVerified,
+            isCreator: user.isCreator,
+            createdAt: user.createdAt,
+            location: user.location,
+            website: user.website,
+            socialLinks: user.socialLinks,
+            totalViews: user.totalViews,
+            totalEarnings: user.totalEarnings,
+            membershipTiers: user.membershipTiers
+        )
     }
 }

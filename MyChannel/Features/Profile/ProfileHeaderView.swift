@@ -152,35 +152,9 @@ struct ProfileHeaderView: View {
     
     // MARK: - Profile Image View
     private var profileImageView: some View {
-        ZStack {
-            if let profileImageURL = user.profileImageURL {
-                CachedAsyncImage(url: URL(string: profileImageURL)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Circle()
-                        .fill(AppTheme.Colors.surface)
-                        .overlay(
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 32))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        )
-                }
-            } else {
-                Circle()
-                    .fill(AppTheme.Colors.primary)
-                    .overlay(
-                        Text(String(user.displayName.prefix(1)))
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundColor(.white)
-                    )
-            }
-        }
-        .frame(width: profileImageSize, height: profileImageSize)
-        .clipShape(Circle())
-        .overlay(Circle().stroke(.white, lineWidth: 4))
-        .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 6)
+        ProfileAvatarView(urlString: user.profileImageURL, size: profileImageSize)
+            .overlay(Circle().stroke(.white, lineWidth: 4))
+            .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 6)
     }
     
     // MARK: - Action Buttons Row 🚀
@@ -370,7 +344,7 @@ private struct DefaultProfileBanner: Identifiable, Hashable {
             title: "Abstract Flow",
             subtitle: "Minimal gradient waves",
             kind: .image,
-            assetURL: "https://images.unsplash.com/photo-1549880338-65ddcdfd017b?w=1600&q=80",
+            assetURL: "https://images.unsplash.com/photo-154988033865ddcdfd017b?w=1600&q=80",
             previewURL: nil
         ),
         DefaultProfileBanner(

@@ -80,6 +80,11 @@ struct AppAsyncImage<Content: View, Placeholder: View>: View {
             return
         }
 
+        if let name = assetName(from: url), let img = UIImage(named: name) {
+            await MainActor.run { self.uiImage = img }
+            return
+        }
+
         if inPreviews() {
             // Try fast real fetch; fallback to generated image
             if let fetched = await tryFetch(url: url, timeout: 2.5) {
@@ -119,6 +124,13 @@ struct AppAsyncImage<Content: View, Placeholder: View>: View {
         } catch {
             return nil
         }
+    }
+
+    private func assetName(from url: URL) -> String? {
+        guard url.scheme == "asset" else { return nil }
+        if let host = url.host, !host.isEmpty { return host }
+        let p = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return p.isEmpty ? nil : p
     }
 }
 

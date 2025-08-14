@@ -206,6 +206,54 @@ struct FlicksView: View {
     }
 
     // MARK: - Data loading (YouTube API)
+
+    private func makeYouTubeDemoVideos() -> [Video] {
+        let demoUser = User(
+            username: "demo_creator",
+            displayName: "Demo Creator",
+            email: "demo@mychannel.app",
+            profileImageURL: "https://i.pravatar.cc/200?u=demo_creator",
+            bannerImageURL: nil,
+            bio: "Autoplay demo",
+            subscriberCount: 1_000_000,
+            videoCount: 100,
+            isVerified: true,
+            isCreator: true
+        )
+
+        // A few safe/popular video IDs that embed reliably
+        let ids: [(id: String, title: String)] = [
+            ("dQw4w9WgXcQ", "Never Gonna Give You Up"),
+            ("Zi_XLOBDo_Y", "Michael Jackson - Billie Jean"),
+            ("71GJrAY54Ew", "Scatz - Rebound (Official Music Video)")
+        ]
+
+        return ids.map { entry in
+            Video(
+                id: "yt_demo_\(entry.id)",
+                title: entry.title,
+                description: "Demo autoplay video",
+                thumbnailURL: "https://i.ytimg.com/vi/\(entry.id)/hqdefault.jpg",
+                videoURL: "https://www.youtube.com/watch?v=\(entry.id)",
+                duration: 120,
+                viewCount: Int.random(in: 1_000_000...900_000_000),
+                likeCount: Int.random(in: 10_000...8_000_000),
+                commentCount: Int.random(in: 2_000...500_000),
+                createdAt: Date(),
+                creator: demoUser,
+                category: .music,
+                tags: ["demo","autoplay","shorts"],
+                isPublic: true,
+                quality: [.quality720p],
+                aspectRatio: .portrait,
+                isLiveStream: false,
+                contentSource: .youtube,
+                externalID: entry.id,
+                isVerified: true
+            )
+        }
+    }
+
     private func loadFlicksContent() async {
         isLoading = true
         loadError = nil
@@ -213,24 +261,28 @@ struct FlicksView: View {
 
         if !AppSecrets.youtubeAPIKey.isEmpty {
             do {
-                // Fetch multiple themed lanes to diversify
                 async let a = YouTubeAPIService.shared.fetchShorts(query: "funny pets", maxResults: 20)
                 async let b = YouTubeAPIService.shared.fetchShorts(query: "sports highlights", maxResults: 20)
                 async let c = YouTubeAPIService.shared.fetchShorts(query: "tech tips", maxResults: 20)
                 let results = (try await a) + (try await b) + (try await c)
                 let dedup = Array(Dictionary(grouping: results, by: { $0.id }).values.compactMap { $0.first })
                 let sorted = dedup.shuffled()
-                if sorted.isEmpty {
-                    videos = Video.sampleVideos
-                } else {
-                    videos = sorted
+                await MainActor.run {
+                    self.videos = sorted.isEmpty ? makeYouTubeDemoVideos() : sorted
+                    self.currentIndex = 0
                 }
             } catch {
-                loadError = "Could not load YouTube shorts. Showing samples."
-                videos = Video.sampleVideos
+                await MainActor.run {
+                    self.loadError = "Could not load YouTube shorts. Showing demos."
+                    self.videos = makeYouTubeDemoVideos()
+                    self.currentIndex = 0
+                }
             }
         } else {
-            videos = Video.sampleVideos
+            await MainActor.run {
+                self.videos = makeYouTubeDemoVideos()
+                self.currentIndex = 0
+            }
         }
     }
 
