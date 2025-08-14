@@ -29,6 +29,8 @@ struct VideoLiveThumbnailView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .compositingGroup()
     }
 }
 
