@@ -213,11 +213,11 @@ extension User {
     static let sampleUsers: [User] = [
         User(
             id: "user1",
-            username: "naturelover_sarah",
-            displayName: "Sarah Johnson",
-            email: "sarah@example.com",
+            username: "sbkeonta_",
+            displayName: "Keonta Peat",
+            email: "keontapeat@mychannel.live",
             profileImageURL: "https://picsum.photos/200/200?random=1",
-            bio: "Nature photographer & adventure seeker 🌄 Capturing the world's beauty one frame at a time",
+            bio: "Shot By Keonta Flint, MI Videographer",
             subscriberCount: 25400,
             videoCount: 156,
             isVerified: true,

@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 
 // MARK: - Preview-safe onReceive helper
 struct ConditionalOnReceiveModifier<P: Publisher>: ViewModifier where P.Failure == Never {
@@ -40,6 +41,9 @@ enum FullScreenRoute: Identifiable {
     case allMovies
     case allLiveTV
     case trending
+    case artistDetail(name: String, avatar: String, videos: [Video], totalViews: Int)
+    case filmmakerDetail(name: String, films: [FreeMovie])
+    case channelDetail(name: String, avatar: String, subscribers: Int, totalViews: Int, videos: [Video])
 
     var id: String {
         switch self {
@@ -50,6 +54,9 @@ enum FullScreenRoute: Identifiable {
         case .allMovies: return "allMovies"
         case .allLiveTV: return "allLiveTV"
         case .trending: return "trending"
+        case .artistDetail(let name, _, _, _): return "artist-\(name)"
+        case .filmmakerDetail(let name, _): return "filmmaker-\(name)"
+        case .channelDetail(let name, _, _, _, _): return "channel-\(name)"
         }
     }
 }
@@ -114,6 +121,7 @@ struct HomeView: View {
                         MinimalHeroSection(
                             featuredContent: featuredContent,
                             selectedIndex: $heroVideoIndex,
+                            showLiveHeroPreviewInPreviews: true,
                             onPlayVideo: { video in
                                 route = .video(video)
                             },
@@ -126,7 +134,16 @@ struct HomeView: View {
                             onSelectMovie: { movie in route = .movie(movie) },
                             onSeeAllFreeMovies: { route = .allMovies },
                             onSeeAllLiveTV: { route = .allLiveTV },
-                            onSeeAllTrending: { route = .trending }
+                            onSeeAllTrending: { route = .trending },
+                            onOpenArtistDetail: { name, avatar, vids, total in
+                                route = .artistDetail(name: name, avatar: avatar, videos: vids.isEmpty ? Array(Video.sampleVideos.prefix(8)) : vids, totalViews: total)
+                            },
+                            onOpenFilmmakerDetail: { name, films in
+                                route = .filmmakerDetail(name: name, films: films)
+                            },
+                            onOpenChannelDetail: { name, avatar, subs, total, vids in
+                                route = .channelDetail(name: name, avatar: avatar, subscribers: subs, totalViews: total, videos: vids.isEmpty ? Array(Video.sampleVideos.prefix(12)) : vids)
+                            }
                         )
 
                         Color.clear.frame(height: 100)
@@ -208,6 +225,18 @@ struct HomeView: View {
                 TrendingView()
                     .background(Color(.systemBackground).ignoresSafeArea())
                     .onDisappear { self.route = nil }
+
+            case .artistDetail(let name, let avatar, let videos, let total):
+                ArtistDetailView(name: name, avatarURL: avatar, videos: videos, totalViews: total)
+                    .onDisappear { self.route = nil }
+
+            case .filmmakerDetail(let name, let films):
+                FilmmakerDetailView(name: name, films: films)
+                    .onDisappear { self.route = nil }
+
+            case .channelDetail(let name, let avatar, let subs, let total, let videos):
+                ChannelDetailView(name: name, avatarURL: avatar, subscribers: subs, totalViews: total, videos: videos)
+                    .onDisappear { self.route = nil }
             }
         }
         .onChange(of: route?.id) { _, newValue in
@@ -221,20 +250,80 @@ struct HomeView: View {
 
     // MARK: - Setup Methods
     @State private var presentStoryCreator: Bool = false
+
+    // Helper to pin specific YouTube link first
+    private var pinnedYouTubeURL: String {
+        "https://www.youtube.com/watch?v=71GJrAY54Ew&list=RD71GJrAY54Ew&start_radio=1"
+    }
+    private func parseYouTubeID(from urlString: String) -> String? {
+        guard let comps = URLComponents(string: urlString) else { return nil }
+        if let v = comps.queryItems?.first(where: { $0.name == "v" })?.value, !v.isEmpty {
+            return v
+        }
+        if let host = comps.host, host.contains("youtu.be"), let id = comps.path.split(separator: "/").last {
+            return String(id)
+        }
+        return nil
+    }
+    private func pinnedFeaturedVideo() -> Video {
+        let ytID = parseYouTubeID(from: pinnedYouTubeURL) ?? "71GJrAY54Ew"
+        let friendUser = User(
+            username: "scatz",
+            displayName: "Scatz",
+            email: "music@artist.com",
+            profileImageURL: "https://i.ytimg.com/vi/\(ytID)/hqdefault.jpg",
+            bannerImageURL: nil,
+            bio: "Artist",
+            subscriberCount: 21_300,
+            videoCount: 0,
+            isVerified: true,
+            isCreator: true
+        )
+        return Video(
+            id: "friend_yt_\(ytID)",
+            title: "Scatz - Rebound ( Official Music Video ) Shot By @ImmortalVision",
+            description: "Official music video. Shot by @ImmortalVision.",
+            thumbnailURL: "https://i.ytimg.com/vi/\(ytID)/maxresdefault.jpg",
+            videoURL: pinnedYouTubeURL,
+            duration: 94,
+            viewCount: 5_000,
+            likeCount: 191,
+            commentCount: 12,
+            createdAt: Calendar.current.date(byAdding: .weekOfYear, value: -4, to: Date()) ?? Date(),
+            creator: friendUser,
+            category: .music,
+            tags: ["music","official","video","scatz","immortalvision"],
+            isPublic: true,
+            quality: [.quality720p],
+            aspectRatio: .landscape,
+            isLiveStream: false,
+            contentSource: .youtube,
+            externalID: ytID,
+            isVerified: true
+        )
+    }
+
     private func setupContent() {
-        // Base picks
         var base = Video.sampleVideos.filter { $0.viewCount > 500_000 }
-
         let friend = friendHeroVideos()
-        // Deduplicate by id while preserving order
-        let combined = (friend + base).reduce(into: [String: Video]()) { acc, v in
-            if acc[v.id] == nil { acc[v.id] = v }
-        }
-        featuredContent = Array(combined.values)
 
-        if featuredContent.isEmpty {
-            featuredContent = Array(Video.sampleVideos.prefix(3))
+        // Always pin requested YouTube video first
+        let pinned = pinnedFeaturedVideo()
+
+        var seen = Set<String>([pinned.id])
+        var ordered: [Video] = [pinned]
+        for v in friend + base {
+            if seen.insert(v.id).inserted {
+                ordered.append(v)
+            }
         }
+
+        if ordered.isEmpty {
+            ordered = [pinned] + Array(Video.sampleVideos.prefix(3))
+        }
+
+        featuredContent = ordered
+        heroVideoIndex = 0
     }
 
     private func refreshContent() async {
@@ -318,7 +407,7 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Minimal Navigation Header
+// MARK: - Minimal Navigation Header (static, slightly larger)
 struct MinimalNavigationHeader: View {
     let scrollOffset: CGFloat
     let onSearchTap: () -> Void
@@ -418,10 +507,91 @@ struct MinimalNavigationHeader: View {
     }
 }
 
+// MARK: - Minimal Stories Section
+struct MinimalStoriesSection: View {
+    let stories: [AssetStory]
+    let onStoryTap: (AssetStory) -> Void
+    let onAddStory: () -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 16) {
+                Button(action: onAddStory) {
+                    VStack(spacing: 8) {
+                        ZStack {
+                            Circle()
+                                .fill(Color(.systemGray6))
+                                .frame(width: 60, height: 60)
+
+                            Image(systemName: "plus")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundColor(.primary)
+                        }
+
+                        Text("Your Story")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                ForEach(stories) { story in
+                    Button(action: { onStoryTap(story) }) {
+                        VStack(spacing: 8) {
+                            ZStack {
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [.pink, .orange],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 2
+                                    )
+                                    .frame(width: 64, height: 64)
+
+                                if UIImage(named: story.authorImageName) != nil {
+                                    Image(story.authorImageName)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 58, height: 58)
+                                        .clipShape(Circle())
+                                } else {
+                                    AppAsyncImage(url: URL(string: "https://picsum.photos/200/200?random=\(abs(story.id.hashValue))")) { image in
+                                        image
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 58, height: 58)
+                                            .clipShape(Circle())
+                                    } placeholder: {
+                                        Circle()
+                                            .fill(Color(.systemGray5))
+                                            .frame(width: 58, height: 58)
+                                    }
+                                }
+                            }
+
+                            Text(story.username)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.primary)
+                                .lineLimit(1)
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+}
+
 // MARK: - Minimal Hero Section (now a pager)
 struct MinimalHeroSection: View {
     let featuredContent: [Video]
     @Binding var selectedIndex: Int
+    let showLiveHeroPreviewInPreviews: Bool
     let onPlayVideo: (Video) -> Void
     let onAddToList: (Video) -> Void
 
@@ -447,6 +617,8 @@ struct MinimalHeroSection: View {
                         FeaturedHeroCard(
                             video: vid,
                             isCompact: isCompact,
+                            showLivePreview: (index == selectedIndex) || (index == 0),
+                            allowLiveInPreview: showLiveHeroPreviewInPreviews,
                             onPlay: { onPlayVideo(vid) },
                             onAddToList: { onAddToList(vid) }
                         )
@@ -464,6 +636,8 @@ struct MinimalHeroSection: View {
 private struct FeaturedHeroCard: View {
     let video: Video
     let isCompact: Bool
+    let showLivePreview: Bool
+    let allowLiveInPreview: Bool
     let onPlay: () -> Void
     let onAddToList: () -> Void
 
@@ -489,7 +663,7 @@ private struct FeaturedHeroCard: View {
                     }
                 )
 
-                if !isPreview {
+                if showLivePreview && (!isPreview || allowLiveInPreview) {
                     VideoLiveThumbnailView(video: video, cornerRadius: 16)
                         .transition(.opacity)
                         .allowsHitTesting(false)
@@ -511,6 +685,7 @@ private struct FeaturedHeroCard: View {
                 HStack {
                     HStack(spacing: 6) {
                         Image(systemName: video.category.iconName)
+                        Text(video.category.displayName)
                     }
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white)
@@ -633,6 +808,7 @@ extension Video {
             let yid = externalID.flatMap { $0.isEmpty ? nil : $0 } ?? id
             add("https://i.ytimg.com/vi/\(yid)/maxresdefault.jpg")
             add("https://i.ytimg.com/vi/\(yid)/hqdefault.jpg")
+            add("https://img.youtube.com/vi/\(yid)/hqdefault.jpg")
         }
 
         // 3) Seeded fallback to guarantee an image
@@ -649,6 +825,9 @@ struct MinimalContentSections: View {
     let onSeeAllFreeMovies: () -> Void
     let onSeeAllLiveTV: () -> Void
     let onSeeAllTrending: () -> Void
+    let onOpenArtistDetail: (String, String, [Video], Int) -> Void
+    let onOpenFilmmakerDetail: (String, [FreeMovie]) -> Void
+    let onOpenChannelDetail: (String, String, Int, Int, [Video]) -> Void
 
     @EnvironmentObject private var appState: AppState
     @State private var blockbusterMovies: [FreeMovie] = []
@@ -874,9 +1053,15 @@ struct MinimalContentSections: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
                         let channels = Array(LiveTVChannel.sampleChannels.prefix(8))
+                        let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+                        let previewTestHLS = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
                         ForEach(Array(channels.enumerated()), id: \.element.id) { index, channel in
                             NavigationLink(destination: LiveTVPlayerView(channel: channel)) {
-                                MinimalChannelCard(channel: channel, autoPreview: index < 3)
+                                MinimalChannelCard(
+                                    channel: channel,
+                                    autoPreview: index < 3,
+                                    previewOverrideStreamURL: (isPreview && index < 3) ? previewTestHLS : nil
+                                )
                             }
                             .buttonStyle(PlainButtonStyle())
                         }
@@ -901,14 +1086,24 @@ struct MinimalContentSections: View {
             }
 
             TopArtistsSection(
-                sourceVideos: detroitFlintArtistsTrending() + [makeFriendTrendingVideo()] + Video.sampleVideos
+                sourceVideos: detroitFlintArtistsTrending() + [makeFriendTrendingVideo()] + Video.sampleVideos,
+                onSelect: { name, avatar, vids, total in
+                    onOpenArtistDetail(name, avatar, vids, total)
+                }
             )
             .padding(.horizontal, 20)
-            TopIndieFilmmakersSection()
+            TopIndieFilmmakersSection(
+                onSelect: { name, films in
+                    onOpenFilmmakerDetail(name, films)
+                }
+            )
             .padding(.horizontal, 20)
 
             TopMyChannelsSection(
-                sourceVideos: detroitFlintArtistsTrending() + gamingCOD() + Video.sampleVideos
+                sourceVideos: detroitFlintArtistsTrending() + gamingCOD() + Video.sampleVideos,
+                onSelect: { name, avatar, subs, total, vids in
+                    onOpenChannelDetail(name, avatar, subs, total, vids)
+                }
             )
             .padding(.horizontal, 20)
         }
@@ -1006,7 +1201,6 @@ struct MinimalVideoCard: View {
 
     var body: some View {
         let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
-
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
                 Group {
@@ -1075,7 +1269,7 @@ struct MinimalVideoCard: View {
     }
 }
 
-// MARK: - Minimal Movie Card
+// MARK: - Minimal Movie Card (stable)
 struct MinimalMovieCard: View {
     let movie: FreeMovie
     let action: () -> Void
@@ -1140,18 +1334,19 @@ struct MinimalMovieCard: View {
     }
 }
 
+// MARK: - Minimal Channel Card (stable)
 struct MinimalChannelCard: View {
     let channel: LiveTVChannel
     var autoPreview: Bool = false
+    var previewOverrideStreamURL: String? = nil
     @State private var showPreview: Bool = false
 
     var body: some View {
-        let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
         VStack(alignment: .leading, spacing: 8) {
             ZStack {
                 if showPreview {
                     LiveChannelThumbnailView(
-                        streamURL: channel.streamURL,
+                        streamURL: previewOverrideStreamURL ?? channel.streamURL,
                         posterURL: channel.logoURL,
                         fallbackStreamURL: channel.previewFallbackURL
                     )
@@ -1180,7 +1375,7 @@ struct MinimalChannelCard: View {
                 }
             }
             .onAppear {
-                showPreview = autoPreview && !isPreview
+                showPreview = autoPreview
             }
             .onDisappear { showPreview = false }
 
@@ -1307,9 +1502,10 @@ private struct MinimalCategoriesSection: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
                     ForEach(current.prefix(18)) { video in
-                        MinimalVideoCard(video: video, action: {
-                            onPlayVideo(video)
-                        }, useLivePreview: true)
+                        MinimalVideoCard(
+                            video: video,
+                            action: { onPlayVideo(video) }
+                        )
                     }
                 }
                 .padding(.horizontal, 20)
@@ -1321,6 +1517,7 @@ private struct MinimalCategoriesSection: View {
 // MARK: - Top Artists Section
 private struct TopArtistsSection: View {
     let sourceVideos: [Video]
+    var onSelect: (String, String, [Video], Int) -> Void = { _,_,_,_  in }
 
     private var rankings: [ArtistRank] {
         let grouped = Dictionary(grouping: sourceVideos) { $0.creator.displayName }
@@ -1356,35 +1553,40 @@ private struct TopArtistsSection: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(rankings.enumerated()), id: \.offset) { idx, a in
-                    HStack(spacing: 12) {
-                        ZStack {
-                            Circle().fill(AppTheme.Colors.primary.opacity(0.12))
-                            Text("\(idx + 1)")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(AppTheme.Colors.primary)
-                        }
-                        .frame(width: 32, height: 32)
+                    Button {
+                        let vids = sourceVideos.filter { $0.creator.displayName == a.name }
+                        onSelect(a.name, a.avatar, vids, a.views)
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle().fill(AppTheme.Colors.primary.opacity(0.12))
+                                Text("\(idx + 1)")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                            }
+                            .frame(width: 32, height: 32)
 
-                        AppAsyncImage(url: URL(string: a.avatar)) { img in
-                            img.resizable().scaledToFill()
-                        } placeholder: {
-                            Color(.systemGray5)
-                        }
-                        .frame(width: 40, height: 40)
-                        .clipShape(Circle())
+                            AppAsyncImage(url: URL(string: a.avatar)) { img in
+                                img.resizable().scaledToFill()
+                            } placeholder: {
+                                Color(.systemGray5)
+                            }
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(a.name)
-                                .font(.system(size: 15, weight: .semibold))
-                            Text("\(format(a.views)) total views")
-                                .font(.system(size: 12))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(a.name)
+                                    .font(.system(size: 15, weight: .semibold))
+                                Text("\(format(a.views)) total views")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+                            Image(systemName: "chevron.right")
                                 .foregroundColor(.secondary)
+                                .font(.system(size: 14, weight: .semibold))
                         }
-
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 14, weight: .semibold))
                     }
                     .padding(.vertical, 10)
                     .contentShape(Rectangle())
@@ -1434,6 +1636,8 @@ private struct TopIndieFilmmakersSection: View {
         return items.sorted { $0.score > $1.score }
     }
 
+    var onSelect: (String, [FreeMovie]) -> Void = { _,_ in }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Top Indie Filmmakers")
@@ -1442,35 +1646,39 @@ private struct TopIndieFilmmakersSection: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(filmmakers.enumerated()), id: \.offset) { idx, f in
-                    HStack(spacing: 12) {
-                        ZStack {
-                            Circle().fill(AppTheme.Colors.primary.opacity(0.12))
-                            Text("\(idx + 1)")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(AppTheme.Colors.primary)
-                        }
-                        .frame(width: 32, height: 32)
+                    Button {
+                        onSelect(f.name, Array(FreeMovie.sampleMovies.shuffled().prefix(Int.random(in: 6...10))))
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle().fill(AppTheme.Colors.primary.opacity(0.12))
+                                Text("\(idx + 1)")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                            }
+                            .frame(width: 32, height: 32)
 
-                        AppAsyncImage(url: URL(string: f.avatar)) { img in
-                            img.resizable().scaledToFill()
-                        } placeholder: {
-                            Color(.systemGray5)
-                        }
-                        .frame(width: 40, height: 40)
-                        .clipShape(Circle())
+                            AppAsyncImage(url: URL(string: f.avatar)) { img in
+                                img.resizable().scaledToFill()
+                            } placeholder: {
+                                Color(.systemGray5)
+                            }
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(f.name)
-                                .font(.system(size: 15, weight: .semibold))
-                            Text("\(f.films) films • Score \(f.score)")
-                                .font(.system(size: 12))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(f.name)
+                                    .font(.system(size: 15, weight: .semibold))
+                                Text("\(f.films) films • Score \(f.score)")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+                            Image(systemName: "chevron.right")
                                 .foregroundColor(.secondary)
+                                .font(.system(size: 14, weight: .semibold))
                         }
-
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 14, weight: .semibold))
                     }
                     .padding(.vertical, 10)
                     .overlay(alignment: .bottom) {
@@ -1495,6 +1703,7 @@ private struct TopIndieFilmmakersSection: View {
 // MARK: - Top MyChannels Section (ranks creators from provided videos)
 private struct TopMyChannelsSection: View {
     let sourceVideos: [Video]
+    var onSelect: (String, String, Int, Int, [Video]) -> Void = { _,_,_,_,_ in }
 
     private struct ChannelRank: Identifiable {
         let id = UUID()
@@ -1536,35 +1745,40 @@ private struct TopMyChannelsSection: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(ranks.enumerated()), id: \.offset) { idx, c in
-                    HStack(spacing: 12) {
-                        ZStack {
-                            Circle().fill(AppTheme.Colors.primary.opacity(0.12))
-                            Text("\(idx + 1)")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(AppTheme.Colors.primary)
-                        }
-                        .frame(width: 32, height: 32)
+                    Button {
+                        let vids = sourceVideos.filter { $0.creator.displayName == c.name }
+                        onSelect(c.name, c.avatar, c.subscribers, c.totalViews, vids)
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle().fill(AppTheme.Colors.primary.opacity(0.12))
+                                Text("\(idx + 1)")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                            }
+                            .frame(width: 32, height: 32)
 
-                        AppAsyncImage(url: URL(string: c.avatar)) { img in
-                            img.resizable().scaledToFill()
-                        } placeholder: {
-                            Color(.systemGray5)
-                        }
-                        .frame(width: 40, height: 40)
-                        .clipShape(Circle())
+                            AppAsyncImage(url: URL(string: c.avatar)) { img in
+                                img.resizable().scaledToFill()
+                            } placeholder: {
+                                Color(.systemGray5)
+                            }
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(c.name)
-                                .font(.system(size: 15, weight: .semibold))
-                            Text("\(fmt(c.subscribers)) subs • \(fmt(c.totalViews)) views")
-                                .font(.system(size: 12))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(c.name)
+                                    .font(.system(size: 15, weight: .semibold))
+                                Text("\(fmt(c.subscribers)) subs • \(fmt(c.totalViews)) views")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+                            Image(systemName: "chevron.right")
                                 .foregroundColor(.secondary)
+                                .font(.system(size: 14, weight: .semibold))
                         }
-
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 14, weight: .semibold))
                     }
                     .padding(.vertical, 10)
                     .contentShape(Rectangle())
