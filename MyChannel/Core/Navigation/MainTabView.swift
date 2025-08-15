@@ -651,10 +651,9 @@ struct ConnectedProfileButton: View {
             VStack(spacing: 0) {
                 ZStack {
                     ZStack(alignment: .topTrailing) {
-                        Image(systemName: TabItem.profile.iconName(isSelected: isSelected))
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        
+                        ProfileGlitchIconView(isSelected: isSelected, size: 18)
+                            .frame(height: 32)
+
                         if badgeCount > 0 {
                             NotificationBadge(count: badgeCount)
                                 .offset(x: 10, y: -6)
@@ -682,7 +681,6 @@ struct SeparatedProfileButton: View {
     var body: some View {
         Button(action: action) {
             ZStack {
-                // Background
                 ZStack {
                     if isSelected {
                         Circle()
@@ -702,12 +700,8 @@ struct SeparatedProfileButton: View {
                     )
                 
                 ZStack(alignment: .topTrailing) {
-                    Image(systemName: TabItem.profile.iconName(isSelected: isSelected))
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(
-                            isSelected ? .white : AppTheme.Colors.textSecondary
-                        )
-                    
+                    ProfileGlitchIconView(isSelected: isSelected, size: 20)
+
                     if badgeCount > 0 {
                         NotificationBadge(count: badgeCount)
                             .offset(x: 8, y: -8)
@@ -738,9 +732,7 @@ struct SeparatedHomeButton: View {
     var body: some View {
         Button(action: action) {
             ZStack {
-                ZStack {
-                    Circle().fill(AppTheme.Colors.primary)
-                }
+                Circle().fill(AppTheme.Colors.primary)
                 .frame(width: 48, height: 48)
                 .overlay(
                     Circle()
@@ -987,6 +979,155 @@ struct SimpleMainTabPreview: View {
             }
             .padding()
             .background(.ultraThinMaterial)
+        }
+    }
+}
+
+struct ProfileGlitchIconView: View {
+    let isSelected: Bool
+    let size: CGFloat
+
+    @EnvironmentObject private var appState: AppState
+
+    @State private var showAvatar = false
+    @State private var glitchActive = false
+    @State private var turningOff = false
+    @State private var jitter: CGSize = .zero
+    @State private var loopTask: Task<Void, Never>? = nil
+
+    private var baseIconColor: Color {
+        isSelected ? .white : AppTheme.Colors.textSecondary
+    }
+
+    private var avatarURL: String? {
+        appState.currentUser?.profileImageURL
+    }
+
+    var body: some View {
+        ZStack {
+            Image(systemName: TabItem.profile.iconName(isSelected: isSelected))
+                .font(.system(size: size, weight: .medium))
+                .foregroundColor(baseIconColor)
+                .opacity(showAvatar ? 0 : 1)
+                .offset(jitter)
+
+            Group {
+                if let url = avatarURL, !url.isEmpty {
+                    ProfileAvatarView(urlString: url, size: size + 8)
+                        .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
+                } else {
+                    Circle()
+                        .fill(Color(.systemGray4))
+                        .frame(width: size + 8, height: size + 8)
+                        .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                }
+            }
+            .scaleEffect(y: turningOff ? 0.04 : 1.0, anchor: .center)
+            .opacity(showAvatar ? 1 : 0)
+            .offset(jitter)
+            .animation(.easeInOut(duration: turningOff ? 0.18 : 0.12), value: turningOff)
+
+            TVStaticOverlay(isActive: glitchActive)
+                .clipShape(Circle())
+                .frame(width: max(size + 12, 28), height: max(size + 12, 28))
+                .opacity(glitchActive ? 1 : 0)
+                .allowsHitTesting(false)
+        }
+        .onAppear { startLoop() }
+        .onDisappear { loopTask?.cancel() }
+    }
+
+    private func startLoop() {
+        loopTask?.cancel()
+        loopTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                await glitchIn()
+
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                await glitchOut()
+            }
+        }
+    }
+
+    @MainActor
+    private func glitchIn() async {
+        glitchActive = true
+        animateJitter()
+        try? await Task.sleep(nanoseconds: 250_000_000)
+
+        withAnimation(.easeOut(duration: 0.12)) {
+            showAvatar = true
+        }
+        glitchActive = false
+        resetJitter()
+    }
+
+    @MainActor
+    private func glitchOut() async {
+        glitchActive = true
+        animateJitter()
+        try? await Task.sleep(nanoseconds: 220_000_000)
+
+        turningOff = true
+        try? await Task.sleep(nanoseconds: 180_000_000)
+
+        withAnimation(.easeInOut(duration: 0.12)) {
+            showAvatar = false
+        }
+        turningOff = false
+        glitchActive = false
+        resetJitter()
+    }
+
+    private func animateJitter() {
+        withAnimation(.linear(duration: 0.06).repeatForever(autoreverses: true)) {
+            jitter = CGSize(width: 0.8, height: -0.8)
+        }
+    }
+
+    private func resetJitter() {
+        withAnimation(.linear(duration: 0.08)) {
+            jitter = .zero
+        }
+    }
+}
+
+struct TVStaticOverlay: View {
+    let isActive: Bool
+
+    var body: some View {
+        TimelineView(.animation) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            let seed = Int(t * 60) % 10
+
+            ZStack {
+                ForEach(0..<max(8, 12 + seed), id: \.self) { _ in
+                    let w = CGFloat(Int.random(in: 6...18))
+                    let h = CGFloat(Int.random(in: 1...3))
+                    let x = CGFloat.random(in: -6...6)
+                    let y = CGFloat.random(in: -10...10)
+                    Rectangle()
+                        .fill([.white.opacity(0.7), .black.opacity(0.6), .gray.opacity(0.5)].randomElement()!)
+                        .frame(width: w, height: h)
+                        .offset(x: x, y: y)
+                        .blendMode(.screen)
+                }
+
+                LinearGradient(
+                    gradient: Gradient(stops: [
+                        .init(color: .white.opacity(0.15), location: 0.48),
+                        .init(color: .white.opacity(0.85), location: 0.5),
+                        .init(color: .white.opacity(0.15), location: 0.52)
+                    ]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .opacity(0.6)
+            }
+            .opacity(isActive ? 1 : 0)
+            .animation(.linear(duration: 0.08), value: seed)
         }
     }
 }
