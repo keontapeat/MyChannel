@@ -1054,13 +1054,14 @@ struct MinimalContentSections: View {
                     LazyHStack(spacing: 16) {
                         let channels = Array(LiveTVChannel.sampleChannels.prefix(8))
                         let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
-                        let previewTestHLS = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
                         ForEach(Array(channels.enumerated()), id: \.element.id) { index, channel in
                             NavigationLink(destination: LiveTVPlayerView(channel: channel)) {
                                 MinimalChannelCard(
                                     channel: channel,
                                     autoPreview: index < 3,
-                                    previewOverrideStreamURL: (isPreview && index < 3) ? previewTestHLS : nil
+                                    previewOverrideStreamURL: nil,
+                                    previewOverridePosterURL: nil,
+                                    allowPlaybackInPreviews: isPreview && index < 3
                                 )
                             }
                             .buttonStyle(PlainButtonStyle())
@@ -1339,6 +1340,8 @@ struct MinimalChannelCard: View {
     let channel: LiveTVChannel
     var autoPreview: Bool = false
     var previewOverrideStreamURL: String? = nil
+    var previewOverridePosterURL: String? = nil
+    var allowPlaybackInPreviews: Bool = false
     @State private var showPreview: Bool = false
 
     var body: some View {
@@ -1347,20 +1350,19 @@ struct MinimalChannelCard: View {
                 if showPreview {
                     LiveChannelThumbnailView(
                         streamURL: previewOverrideStreamURL ?? channel.streamURL,
-                        posterURL: channel.logoURL,
-                        fallbackStreamURL: channel.previewFallbackURL
+                        posterURL: previewOverridePosterURL ?? channel.logoURL,
+                        fallbackStreamURL: channel.previewFallbackURL,
+                        allowPlaybackInPreviews: allowPlaybackInPreviews
                     )
                         .frame(width: 160, height: 90)
                         .background(Color(.systemGray6))
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 } else {
-                    AppAsyncImage(url: URL(string: channel.logoURL)) { image in
+                    AppAsyncImage(url: URL(string: previewOverridePosterURL ?? channel.logoURL)) { image in
                         image.resizable().scaledToFit()
-                    } placeholder: {
-                        Color(.systemGray6)
-                    }
-                    .frame(width: 160, height: 90)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    } placeholder: { Color(.systemGray6) }
+                        .frame(width: 160, height: 90)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
 
                 if channel.isLive {

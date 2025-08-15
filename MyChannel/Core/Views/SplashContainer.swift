@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SplashContainer: View {
     @State private var showSplash = true
+    @State private var showLaunchMask = false
 
     private var isRunningInPreviews: Bool {
         ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
@@ -44,19 +45,39 @@ struct SplashContainer: View {
                             withAnimation(.easeInOut(duration: 0.4)) {
                                 showSplash = false
                             }
+                            showLaunchMask = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    showLaunchMask = false
+                                }
+                            }
                         }
                         .transition(.opacity)
+                        .zIndex(1)
                     } else {
                         HomeView()
                             .transition(.opacity)
                     }
                 }
+                .overlay(
+                    Color(.systemBackground)
+                        .ignoresSafeArea()
+                        .opacity(showLaunchMask ? 1 : 0)
+                        .allowsHitTesting(false)
+                        .animation(.easeInOut(duration: 0.25), value: showLaunchMask)
+                )
                 .animation(.easeInOut(duration: 0.4), value: showSplash)
                 .onAppear {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
                         if showSplash {
                             withAnimation(.easeInOut(duration: 0.4)) {
                                 showSplash = false
+                            }
+                            showLaunchMask = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    showLaunchMask = false
+                                }
                             }
                         }
                     }
@@ -94,6 +115,7 @@ private struct PreviewSplashStandalone: View {
 
 private struct PreviewTransitionContainer<Content: View>: View {
     @State private var showSplash = true
+    @State private var showLaunchMask = false
     let content: () -> Content
 
     var body: some View {
@@ -103,13 +125,27 @@ private struct PreviewTransitionContainer<Content: View>: View {
                     withAnimation(.easeInOut(duration: 0.4)) {
                         showSplash = false
                     }
+                    showLaunchMask = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            showLaunchMask = false
+                        }
+                    }
                 }
                 .transition(.opacity)
+                .zIndex(1)
             } else {
                 content()
                     .transition(.opacity)
             }
         }
+        .overlay(
+            Color(.systemBackground)
+                .ignoresSafeArea()
+                .opacity(showLaunchMask ? 1 : 0)
+                .allowsHitTesting(false)
+                .animation(.easeInOut(duration: 0.25), value: showLaunchMask)
+        )
         .animation(.easeInOut(duration: 0.4), value: showSplash)
     }
 }

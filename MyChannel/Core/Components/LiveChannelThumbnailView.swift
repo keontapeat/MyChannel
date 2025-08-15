@@ -7,20 +7,22 @@ struct LiveChannelThumbnailView: View {
     let streamURL: String
     let posterURL: String?
     let fallbackStreamURL: String?
+    let allowPlaybackInPreviews: Bool
 
     @State private var isReady: Bool = false
     @State private var snapshot: UIImage?
 
-    init(streamURL: String, posterURL: String? = nil, fallbackStreamURL: String? = nil) {
+    init(streamURL: String, posterURL: String? = nil, fallbackStreamURL: String? = nil, allowPlaybackInPreviews: Bool = false) {
         self.streamURL = streamURL
         self.posterURL = posterURL
         self.fallbackStreamURL = fallbackStreamURL
+        self.allowPlaybackInPreviews = allowPlaybackInPreviews
     }
 
     var body: some View {
         ZStack {
             // Video preview sits in the back and fades in when ready
-            if !AppConfig.isPreview {
+            if !AppConfig.isPreview || allowPlaybackInPreviews {
                 LivePreviewPlayer(
                     urls: [streamURL] + (fallbackStreamURL != nil ? [fallbackStreamURL!] : []),
                     onReady: {
