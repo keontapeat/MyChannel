@@ -11,20 +11,18 @@ struct MyChannelLogo: View {
     let size: CGFloat
     let showText: Bool
     let animated: Bool
-    
-    @State private var scale: CGFloat = 1.0
-    
+
+    @State private var isVisible: Bool = false
+
     init(size: CGFloat = 120, showText: Bool = true, animated: Bool = false) {
         self.size = size
         self.showText = showText
         self.animated = animated
     }
-    
+
     var body: some View {
         VStack(spacing: showText ? 12 : 0) {
-            // Professional logo design with gradient background
             ZStack {
-                // Background circle with gradient
                 Circle()
                     .fill(
                         RadialGradient(
@@ -39,28 +37,22 @@ struct MyChannelLogo: View {
                     )
                     .frame(width: size, height: size)
                     .shadow(
-                        color: AppTheme.Colors.primary.opacity(0.4),
-                        radius: animated ? (scale > 1.0 ? 12 : 6) : 6,
+                        color: AppTheme.Colors.primary.opacity(0.35),
+                        radius: animated ? 8 : 6,
                         x: 0,
                         y: 2
                     )
-                    .scaleEffect(scale)
-                    .animation(.easeInOut(duration: 1.5), value: scale)
-                
-                // Inner content
+
                 ZStack {
-                    // Channel symbol
                     RoundedRectangle(cornerRadius: size * 0.08)
                         .fill(.white)
                         .frame(width: size * 0.5, height: size * 0.35)
                         .overlay(
-                            // Play triangle
                             Triangle()
                                 .fill(AppTheme.Colors.primary)
                                 .frame(width: size * 0.2, height: size * 0.2)
                         )
-                    
-                    // Accent dots
+
                     HStack(spacing: size * 0.15) {
                         ForEach(0..<3) { _ in
                             Circle()
@@ -71,7 +63,8 @@ struct MyChannelLogo: View {
                     .offset(y: size * 0.25)
                 }
             }
-            
+            .opacity(animated ? (isVisible ? 1.0 : 0.92) : 1.0)
+
             if showText {
                 Text("MyChannel")
                     .font(.system(size: size * 0.2, weight: .bold, design: .rounded))
@@ -82,19 +75,14 @@ struct MyChannelLogo: View {
                             endPoint: .trailing
                         )
                     )
+                    .opacity(animated ? (isVisible ? 1.0 : 0.9) : 1.0)
             }
         }
         .onAppear {
             if animated {
-                startSubtleZoom()
-            }
-        }
-    }
-    
-    private func startSubtleZoom() {
-        Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
-            withAnimation(.easeInOut(duration: 1.5)) {
-                scale = scale == 1.0 ? 1.05 : 1.0
+                withAnimation(.easeOut(duration: 0.5)) {
+                    isVisible = true
+                }
             }
         }
     }
@@ -104,12 +92,12 @@ struct MyChannelLogo: View {
 struct Triangle: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        
+
         path.move(to: CGPoint(x: rect.minX, y: rect.minY))
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
         path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
         path.closeSubpath()
-        
+
         return path
     }
 }
@@ -124,7 +112,7 @@ struct Triangle: Shape {
     .background(AppTheme.Colors.background)
 }
 
-#Preview("Animated Logo") {
+#Preview("Animated Logo (no bounce)") {
     MyChannelLogo(size: 120, showText: true, animated: true)
         .padding()
         .background(AppTheme.Colors.background)

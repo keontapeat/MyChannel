@@ -10,7 +10,8 @@ struct ProfileHeaderView: View {
 
     @EnvironmentObject private var appState: AppState
 
-    private let headerHeight: CGFloat = 365
+    private let headerHeight: CGFloat = 410
+
     private let profileImageSize: CGFloat = 80
 
     private var isCurrentUserProfile: Bool {
@@ -76,8 +77,10 @@ struct ProfileHeaderView: View {
             VStack {
                 Spacer()
                 profileInfoSection
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .offset(y: 6)
                 Spacer()
-                    .frame(height: 40)
+                    .frame(height: 28)
             }
         }
     }
@@ -144,12 +147,14 @@ struct ProfileHeaderView: View {
             actionButtonsRow
         }
         .padding(.bottom, 24)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private var profileImageView: some View {
         ProfileAvatarView(urlString: user.profileImageURL, size: profileImageSize)
             .overlay(Circle().stroke(.white, lineWidth: 4))
             .shadow(color: .black.opacity(0.5), radius: 14, x: 0, y: 6)
+            .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private var actionButtonsRow: some View {

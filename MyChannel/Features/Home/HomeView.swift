@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import UIKit
 
 // MARK: - Preview-safe onReceive helper
 struct ConditionalOnReceiveModifier<P: Publisher>: ViewModifier where P.Failure == Never {
@@ -328,13 +327,11 @@ struct MinimalNavigationHeader: View {
     @EnvironmentObject private var appState: AppState
 
     private var logoSize: CGFloat {
-        UIDevice.current.userInterfaceIdiom == .phone ? 24 : 28
+        UIDevice.current.userInterfaceIdiom == .phone ? 28 : 32
     }
 
     var body: some View {
-        let clamped = max(-120, min(120, scrollOffset))
-        let logoScale = 1.0 + max(0, min(0.12, -clamped / 300))  // zoom slightly when pulling down
-        let logoYOffset = (clamped * 0.06)                        // light parallax
+        let showBackground = scrollOffset > 50
         VStack(spacing: 0) {
             HStack {
                 HStack(spacing: 12) {
@@ -345,48 +342,68 @@ struct MinimalNavigationHeader: View {
                         .antialiased(true)
                         .aspectRatio(contentMode: .fit)
                         .frame(width: logoSize, height: logoSize)
-                        .scaleEffect(logoScale, anchor: .leading)
-                        .offset(y: logoYOffset)
 
                     Text("MyChannel")
-                        .font(.system(size: 20, weight: .semibold, design: .rounded))
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
                         .foregroundColor(.primary)
                 }
 
                 Spacer()
 
-                HStack(spacing: 24) {
-                    Button(action: onSearchTap) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(.primary)
+                HStack(spacing: 14) {
+                    Button(action: {
+                        HapticManager.shared.impact(style: .light)
+                        onSearchTap()
+                    }) {
+                        ZStack {
+                            Circle()
+                                .fill(Color(.systemGray6))
+                                .frame(width: 34, height: 34)
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.primary)
+                        }
                     }
+                    .buttonStyle(.plain)
 
                     NavigationLink(destination: NotificationsView()) {
                         ZStack {
+                            Circle()
+                                .fill(Color(.systemGray6))
+                                .frame(width: 34, height: 34)
                             Image(systemName: "bell")
-                                .font(.system(size: 18, weight: .medium))
+                                .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.primary)
 
                             Circle()
                                 .fill(Color.red)
                                 .frame(width: 6, height: 6)
-                                .offset(x: 6, y: -6)
+                                .offset(x: 8, y: -8)
                                 .opacity(1)
                         }
                     }
+                    .buttonStyle(.plain)
 
-                    Button(action: onProfileTap) {
+                    Button(action: {
+                        HapticManager.shared.impact(style: .light)
+                        onProfileTap()
+                    }) {
                         ProfileAvatarView(urlString: appState.currentUser?.profileImageURL, size: 28)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white, lineWidth: 1)
+                            )
+                            .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
                     }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.top, 50)
-            .padding(.bottom, 16)
+            .padding(.top, 44)
+            .padding(.bottom, 12)
             .background(
                 Group {
-                    if scrollOffset > 50 {
+                    if showBackground {
                         Rectangle()
                             .fill(.ultraThinMaterial)
                             .transition(.opacity)
@@ -395,91 +412,10 @@ struct MinimalNavigationHeader: View {
                     }
                 }
             )
-            .animation(.easeInOut(duration: 0.25), value: scrollOffset > 50)
-            .animation(.spring(response: 0.45, dampingFraction: 0.85), value: clamped)
+            .animation(.easeInOut(duration: 0.25), value: showBackground)
         }
         .allowsHitTesting(true)
     }
-}
-
-// MARK: - Minimal Stories Section
-struct MinimalStoriesSection: View {
-    let stories: [AssetStory]
-    let onStoryTap: (AssetStory) -> Void
-    let onAddStory: () -> Void
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 16) {
-                Button(action: onAddStory) {
-                    VStack(spacing: 8) {
-                        ZStack {
-                            Circle()
-                                .fill(Color(.systemGray6))
-                                .frame(width: 60, height: 60)
-
-                            Image(systemName: "plus")
-                                .font(.system(size: 20, weight: .medium))
-                                .foregroundColor(.primary)
-                        }
-
-                        Text("Your Story")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                .buttonStyle(PlainButtonStyle())
-
-                ForEach(stories) { story in
-                    Button(action: { onStoryTap(story) }) {
-                        VStack(spacing: 8) {
-                            ZStack {
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [.pink, .orange],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 2
-                                    )
-                                    .frame(width: 64, height: 64)
-
-                                if UIImage(named: story.authorImageName) != nil {
-                                    Image(story.authorImageName)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 58, height: 58)
-                                        .clipShape(Circle())
-                                } else {
-                                    AppAsyncImage(url: URL(string: "https://picsum.photos/200/200?random=\(abs(story.id.hashValue))")) { image in
-                                        image
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 58, height: 58)
-                                            .clipShape(Circle())
-                                    } placeholder: {
-                                        Circle()
-                                            .fill(Color(.systemGray5))
-                                            .frame(width: 58, height: 58)
-                                    }
-                                }
-                            }
-
-                            Text(story.username)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.primary)
-                                .lineLimit(1)
-                        }
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-    }
-
 }
 
 // MARK: - Minimal Hero Section (now a pager)

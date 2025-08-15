@@ -10,11 +10,10 @@ struct OwnerProfile {
             profileImageURL: "https://i.pravatar.cc/200?u=sbkeonta_",
             bannerImageURL: nil,
             bio: """
-Cinematographer
 Shot By Keonta
 Flint, MI Videographer
-shotbykeonta.store
 """,
+
             subscriberCount: 2230,
             videoCount: 336,
             isVerified: true,
