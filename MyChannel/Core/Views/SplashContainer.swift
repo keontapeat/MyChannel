@@ -2,7 +2,7 @@
 //  SplashContainer.swift
 //  MyChannel
 //
-//  Created by AI Assistant on 8/9/25.
+//  Created by Keonta on 7/9/25.
 //
 
 import SwiftUI

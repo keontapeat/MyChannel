@@ -575,7 +575,6 @@ private struct FeaturedHeroCard: View {
                 HStack {
                     HStack(spacing: 6) {
                         Image(systemName: video.category.iconName)
-                        Text(video.category.displayName)
                     }
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white)
@@ -933,21 +932,6 @@ struct MinimalContentSections: View {
             )
 
             MinimalSection(
-                title: "Movies",
-                seeAllAction: { onSeeAllFreeMovies() }
-            ) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(alignment: .top, spacing: 16) {
-                        let movies = blockbusterMovies.isEmpty ? Array(FreeMovie.sampleMovies.prefix(6)) : Array(blockbusterMovies.prefix(12))
-                        ForEach(movies) { movie in
-                            MinimalMovieCard(movie: movie, action: { onSelectMovie(movie) })
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-            }
-
-            MinimalSection(
                 title: "Live TV",
                 seeAllAction: { onSeeAllLiveTV() }
             ) {
@@ -959,6 +943,21 @@ struct MinimalContentSections: View {
                                 MinimalChannelCard(channel: channel, autoPreview: index < 3)
                             }
                             .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+            }
+
+            MinimalSection(
+                title: "Movies",
+                seeAllAction: { onSeeAllFreeMovies() }
+            ) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 16) {
+                        let movies = blockbusterMovies.isEmpty ? Array(FreeMovie.sampleMovies.prefix(6)) : Array(blockbusterMovies.prefix(12))
+                        ForEach(movies) { movie in
+                            MinimalMovieCard(movie: movie, action: { onSelectMovie(movie) })
                         }
                     }
                     .padding(.horizontal, 20)
@@ -1071,6 +1070,7 @@ struct MinimalVideoCard: View {
 
     var body: some View {
         let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
                 Group {

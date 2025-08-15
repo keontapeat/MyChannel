@@ -12,29 +12,26 @@ import UserNotifications
 struct MyChannelApp: App {
     @UIApplicationDelegateAdaptor(FirebaseAppDelegate.self) var firebaseDelegate
 
-    // Centralized state management for the entire app
     @StateObject private var authManager: AuthenticationManager = AuthenticationManager.shared
     @StateObject private var appState: AppState = AppState()
     
     init() {
         print("🚀 MyChannelApp init started...")
-        
-        // Configure app appearance
         setupAppearance()
-
-        
         print("✅ MyChannelApp init completed")
     }
     
     var body: some Scene {
         WindowGroup {
-            // SplashContainer now receives all necessary environment objects from the top level
             SplashContainer()
                 .environmentObject(authManager)
                 .environmentObject(appState)
                 .preferredColorScheme(.light)
                 .onAppear {
                     print("📱 App appeared with MC logo splash!")
+                    if appState.currentUser == nil {
+                        appState.updateUser(OwnerProfile.owner)
+                    }
                     Task {
                         _ = await PushNotificationService.shared.getAuthorizationStatus()
                     }
@@ -49,7 +46,6 @@ struct MyChannelApp: App {
     }
     
     private func setupAppearance() {
-        // Configure navigation bar appearance
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = UIColor(AppTheme.Colors.background)
@@ -66,7 +62,6 @@ struct MyChannelApp: App {
         UINavigationBar.appearance().scrollEdgeAppearance = appearance
         UINavigationBar.appearance().compactAppearance = appearance
         
-        // Configure tab bar appearance
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithOpaqueBackground()
         tabBarAppearance.backgroundColor = UIColor(AppTheme.Colors.background)
@@ -74,7 +69,6 @@ struct MyChannelApp: App {
         UITabBar.appearance().standardAppearance = tabBarAppearance
         UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
         
-        // Configure other UI elements
         UITextField.appearance().tintColor = UIColor(AppTheme.Colors.primary)
         UITextView.appearance().tintColor = UIColor(AppTheme.Colors.primary)
     }
