@@ -2629,7 +2629,7 @@
 
         /* Enhanced CTA Section */
         .cta-section {
-            padding: 30px 15px;
+            padding: 80px 15px 60px;
             background: radial-gradient(circle at center, rgba(255, 68, 68, 0.08) 0%, transparent 70%);
             text-align: center;
             position: relative;
@@ -3021,6 +3021,678 @@
             font-size: 0.9rem;
         }
 
+        .business-email-section {
+            background: linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05));
+            border: 1px solid rgba(255, 68, 68, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .business-email-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 68, 68, 0.1), transparent);
+            animation: shimmer 3s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .business-email-label {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .business-email {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--primary);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 1;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .business-email:hover {
+            color: #fff;
+            text-shadow: 0 0 15px rgba(255, 68, 68, 0.8);
+            transform: scale(1.05);
+        }
+
+        .email-icon {
+            font-size: 1.1rem;
+            opacity: 0.8;
+        }
+
+        .business-email:hover .email-icon {
+            animation: bounce 0.6s ease;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 60%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-8px); }
+            80% { transform: translateY(-4px); }
+        }
+
+        /* WHY MYCHANNEL WINS COMPARISON SECTION */
+        .comparison-section {
+            padding: 60px 40px;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 30%, #2a0505 50%, #1a0a0a 70%, #0a0a0a 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .comparison-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(255, 68, 68, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(255, 68, 68, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(255, 68, 68, 0.05) 0%, transparent 70%);
+            pointer-events: none;
+            animation: backgroundPulse 8s ease-in-out infinite;
+        }
+
+        @keyframes backgroundPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .comparison-section::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,68,68,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        .comparison-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .comparison-title {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .comparison-title h2 {
+            font-size: 3.5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--primary), #ff8a8a, #ffff00, var(--primary));
+            background-size: 300% 300%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: -2px;
+            animation: titleGradient 4s ease-in-out infinite;
+            text-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
+            position: relative;
+        }
+
+        @keyframes titleGradient {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .comparison-title h2::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            border-radius: 2px;
+            animation: underlineGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes underlineGlow {
+            0%, 100% { box-shadow: 0 0 5px rgba(255, 68, 68, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(255, 68, 68, 1); }
+        }
+
+        .comparison-subtitle {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 300;
+        }
+
+        .comparison-table {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 20px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .comparison-table:hover {
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .comparison-header {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .comparison-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            animation: headerShimmer 3s infinite;
+        }
+
+        @keyframes headerShimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .comparison-header-cell {
+            padding: 30px 20px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--light);
+        }
+
+        .platform-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 1.3rem;
+        }
+
+        .mychannel-header {
+            background: linear-gradient(135deg, var(--primary), #ff8a8a, #ffff00, var(--primary));
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: headerGlow 3s ease-in-out infinite;
+            position: relative;
+            z-index: 2;
+        }
+
+        @keyframes headerGlow {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .comparison-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .comparison-row:hover {
+            background: rgba(255, 68, 68, 0.08);
+            transform: translateX(5px);
+            border-left: 3px solid var(--primary);
+        }
+
+        .comparison-cell {
+            padding: 30px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+            min-height: 70px;
+        }
+
+        .feature-name {
+            font-weight: 600;
+            color: var(--light);
+            text-align: left;
+            justify-content: flex-start;
+            font-size: 1.1rem;
+        }
+
+        .feature-value {
+            font-weight: 700;
+            font-size: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            line-height: 1.3;
+            white-space: nowrap;
+        }
+
+        .mychannel-value {
+            color: var(--primary);
+            font-weight: 800;
+            position: relative;
+        }
+
+        .competitor-value {
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 600;
+        }
+
+        .winner-badge {
+            position: relative;
+            top: 0;
+            right: 0;
+            background: var(--primary);
+            color: white;
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 700;
+            margin-top: 5px;
+            opacity: 0.9;
+        }
+
+        .revenue-highlight {
+            background: rgba(255, 68, 68, 0.08);
+            border-left: 3px solid var(--primary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .revenue-highlight::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: revenue-shimmer 2s infinite;
+        }
+
+        @keyframes revenue-shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+
+
+        .comparison-cta {
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .comparison-cta-text {
+            font-size: 1.3rem;
+            color: var(--light);
+            margin-bottom: 25px;
+            font-weight: 600;
+        }
+
+        .revolution-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 18px 35px;
+            background: linear-gradient(135deg, var(--primary), #ff8a8a);
+            color: white;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(255, 68, 68, 0.3);
+        }
+
+        .revolution-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(255, 68, 68, 0.5);
+            filter: brightness(1.1);
+        }
+
+        /* PLATFORM SHOWCASE SECTION */
+        .platform-showcase {
+            padding: 80px 40px;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .platform-showcase::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 30% 20%, rgba(255, 68, 68, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .platform-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .platform-title {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .platform-title h2 {
+            font-size: 3rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--primary), #ff8a8a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: -1px;
+        }
+
+        .platform-subtitle {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 300;
+        }
+
+        .platforms-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+        }
+
+        .platform-preview {
+            text-align: center;
+            position: relative;
+        }
+
+        .platform-device {
+            position: relative;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+
+        .platform-device:hover {
+            transform: translateY(-10px);
+        }
+
+        /* Mobile App Preview */
+        .mobile-device {
+            width: 280px;
+            height: 560px;
+            background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
+            border-radius: 35px;
+            padding: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        .mobile-device::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+
+        .mobile-screen {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a0a, #1a0a0a);
+            border-radius: 25px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 68, 68, 0.2);
+        }
+
+        .mobile-content {
+            padding: 20px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .app-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .app-logo {
+            width: 30px;
+            height: 30px;
+            background: var(--primary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .app-title {
+            color: var(--light);
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .video-feed {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .video-placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 24px;
+        }
+
+        .app-nav {
+            display: flex;
+            justify-content: space-around;
+            padding: 15px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-item {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .nav-item.active {
+            color: var(--primary);
+        }
+
+        /* Desktop Browser Preview */
+        .desktop-device {
+            width: 400px;
+            height: 300px;
+            background: linear-gradient(135deg, #2a2a2a, #3a3a3a);
+            border-radius: 12px 12px 0 0;
+            position: relative;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .browser-bar {
+            height: 40px;
+            background: linear-gradient(135deg, #3a3a3a, #4a4a4a);
+            border-radius: 12px 12px 0 0;
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            gap: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .browser-dots {
+            display: flex;
+            gap: 5px;
+        }
+
+        .browser-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .dot-red { background: #ff5f57; }
+        .dot-yellow { background: #ffbd2e; }
+        .dot-green { background: #28ca42; }
+
+        .browser-url {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+            margin-left: 20px;
+        }
+
+        .browser-screen {
+            height: calc(100% - 40px);
+            background: linear-gradient(135deg, #0a0a0a, #1a0a0a);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .web-content {
+            padding: 20px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .web-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .web-logo {
+            width: 35px;
+            height: 35px;
+            background: var(--primary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .web-title {
+            color: var(--light);
+            font-weight: 700;
+            font-size: 20px;
+        }
+
+        .web-video-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .web-video-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .platform-label {
+            margin-top: 30px;
+        }
+
+        .platform-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--light);
+            margin-bottom: 10px;
+        }
+
+        .platform-description {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+
+        .platform-features {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .platform-feature {
+            background: rgba(255, 68, 68, 0.1);
+            color: var(--primary);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: 1px solid rgba(255, 68, 68, 0.2);
+        }
+
         .social-links {
             display: flex;
             gap: 15px;
@@ -3209,7 +3881,26 @@
             .benefit:hover { transform: translateY(0); }
 
             .cta-section {
-                padding: 30px 10px;
+                padding: 60px 10px 40px;
+            }
+
+            /* Platform Showcase Mobile */
+            .platform-showcase { padding: 50px 20px; }
+            .platform-title h2 { font-size: 2.2rem; }
+            .platforms-grid { 
+                grid-template-columns: 1fr; 
+                gap: 40px; 
+            }
+            .mobile-device { 
+                width: 240px; 
+                height: 480px; 
+            }
+            .desktop-device { 
+                width: 320px; 
+                height: 240px; 
+            }
+            .platform-features { 
+                justify-content: center; 
             }
 
             .rocket-icon {
@@ -3266,6 +3957,20 @@
             footer { padding: 30px 20px 20px; }
             .footer-content { grid-template-columns: 1fr; gap: 25px; }
             .footer-bottom { flex-direction: column; gap: 15px; text-align: center; }
+            .business-email-section { margin: 15px 0; padding: 15px; }
+            .business-email { font-size: 1.1rem; }
+            
+            /* Comparison Section Mobile */
+            .comparison-section { padding: 40px 20px; }
+            .comparison-title { margin-bottom: 30px; }
+            .comparison-title h2 { font-size: 2.2rem; }
+            .comparison-header { grid-template-columns: 1.5fr 1fr 1fr 1fr; }
+            .comparison-row { grid-template-columns: 1.5fr 1fr 1fr 1fr; }
+            .comparison-header-cell { padding: 20px 8px; font-size: 0.85rem; }
+            .comparison-cell { padding: 25px 8px; min-height: 75px; }
+            .feature-value { font-size: 1rem; gap: 5px; }
+            .feature-name { font-size: 1rem; }
+            .winner-badge { font-size: 0.7rem; padding: 3px 8px; }
         }
 
         @media (max-width: 390px) {
@@ -3295,6 +4000,405 @@
                 transition-duration: 0.01ms !important;
             }
             .cursor, .cursor-dot { display: none; }
+        }
+
+        /* Platform Showcase Section */
+        .platform-showcase {
+            padding: 80px 40px;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .platform-showcase::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 30% 20%, rgba(255, 68, 68, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 70% 80%, rgba(255, 68, 68, 0.08) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .platform-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 2;
+        }
+
+        .platform-title {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .platform-title h2 {
+            font-size: 3.5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #ffffff 0%, #ff4444 50%, #ffffff 100%);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 20px;
+            animation: titleGradient 3s ease-in-out infinite;
+            text-shadow: 0 0 30px rgba(255, 68, 68, 0.3);
+        }
+
+        .platform-subtitle {
+            font-size: 1.3rem;
+            color: rgba(255, 255, 255, 0.8);
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        .platforms-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: start;
+        }
+
+        .platform-preview {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .platform-device {
+            margin-bottom: 30px;
+            transition: transform 0.3s ease;
+        }
+
+        .platform-device:hover {
+            transform: translateY(-10px);
+        }
+
+        .platform-device {
+            animation: deviceFloat 6s ease-in-out infinite;
+        }
+
+        @keyframes deviceFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+        }
+
+        /* Mobile App Screenshot */
+        .mobile-app-screenshot {
+            width: 280px;
+            height: auto;
+            max-width: 100%;
+            display: block;
+        }
+
+        /* Desktop Browser Preview */
+        .desktop-device {
+            width: 400px;
+            height: 300px;
+            background: #1a1a1a;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .browser-bar {
+            height: 40px;
+            background: #2a2a2a;
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .browser-dots {
+            display: flex;
+            gap: 8px;
+            margin-right: 20px;
+        }
+
+        .browser-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .dot-red { background: #ff5f56; }
+        .dot-yellow { background: #ffbd2e; }
+        .dot-green { background: #27ca3f; }
+
+        .browser-url {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+            font-family: monospace;
+        }
+
+        .browser-screen {
+            padding: 20px;
+            height: calc(100% - 40px);
+        }
+
+        .web-content {
+            height: 100%;
+        }
+
+        .web-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .web-logo {
+            width: 40px;
+            height: 40px;
+            background: var(--primary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 900;
+            font-size: 1.2rem;
+        }
+
+        .web-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .web-video-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .web-video-card {
+            height: 80px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            gap: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .web-video-card:hover {
+            background: rgba(255, 68, 68, 0.1);
+            border-color: rgba(255, 68, 68, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .web-video-thumbnail {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, rgba(255, 68, 68, 0.2), rgba(255, 68, 68, 0.1));
+            border-radius: 8px;
+            border: 1px solid rgba(255, 68, 68, 0.3);
+        }
+
+        .web-video-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .web-video-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .web-video-stats {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .platform-label {
+            text-align: center;
+        }
+
+        .platform-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 15px;
+        }
+
+        .platform-description {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 25px;
+            line-height: 1.6;
+            max-width: 350px;
+        }
+
+        .platform-features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .platform-feature {
+            background: rgba(255, 68, 68, 0.1);
+            color: var(--primary);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border: 1px solid rgba(255, 68, 68, 0.2);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .platform-showcase {
+                padding: 50px 20px;
+            }
+
+            .platform-title h2 {
+                font-size: 2.2rem;
+            }
+
+            .platforms-grid {
+                grid-template-columns: 1fr;
+                gap: 40px;
+            }
+
+            .mobile-app-screenshot {
+                width: 220px;
+                height: 440px;
+            }
+
+            .desktop-device {
+                width: 320px;
+                height: 240px;
+            }
+
+            .platform-features {
+                justify-content: center;
+            }
+        }
+
+        /* 🔥 MYCHANNEL MERCH SECTION - ABSOLUTELY FIRE! 🔥 */
+        .merch-section {
+            padding: 80px 40px;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 30%, #2a0505 50%, #1a0a0a 70%, #0a0a0a 100%);
+            position: relative;
+            overflow: visible;
+        }
+
+        .merch-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="fire" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="rgba(255,68,68,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23fire)"/></svg>');
+            opacity: 0.3;
+            animation: fireFloat 20s infinite linear;
+        }
+
+        @keyframes fireFloat {
+            0% { transform: translateY(0px) rotate(0deg); }
+            100% { transform: translateY(-100px) rotate(360deg); }
+        }
+
+        .merch-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 2;
+        }
+
+        .merch-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px 0;
+            overflow: visible;
+            height: auto;
+        }
+
+        .merch-header h2 {
+            font-size: 2rem;
+            font-weight: 900;
+            color: #FF4444;
+            margin: 20px auto;
+            text-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
+            animation: fireGlow 2s ease-in-out infinite alternate;
+            line-height: 1.4;
+            white-space: nowrap;
+            padding: 15px 0;
+            overflow: visible;
+            display: inline-block;
+        }
+
+        @keyframes fireGlow {
+            0% { text-shadow: 0 0 30px rgba(255, 68, 68, 0.5); }
+            100% { text-shadow: 0 0 50px rgba(255, 68, 68, 0.8), 0 0 70px rgba(255, 68, 68, 0.4); }
+        }
+
+        .merch-subtitle {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            line-height: 1.4;
+            max-width: 600px;
+            margin: 0 auto;
+            white-space: nowrap;
+        }
+
+                .merch-display {
+            text-align: center;
+            margin: 40px 0;
+        }
+
+        .merch-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(255, 68, 68, 0.3);
+            transition: all 0.4s ease;
+        }
+
+        .merch-image:hover {
+            transform: scale(1.02);
+            box-shadow: 0 25px 80px rgba(255, 68, 68, 0.4);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .merch-section {
+                padding: 60px 20px;
+            }
+
+            .merch-header h2 {
+                font-size: 2rem;
+            }
+
+            .merch-grid {
+                grid-template-columns: 1fr;
+                gap: 30px;
+            }
+
+            .merch-cta {
+                padding: 40px 20px;
+            }
+
+            .merch-cta h3 {
+                font-size: 2rem;
+            }
         }
     </style>
 </head>
@@ -3639,7 +4743,7 @@
                 </div>
                 <h3 class="feature-title">90% Revenue Share</h3>
                 <p class="feature-description">
-                    We're not greedy. Creators keep 90% of all revenue. YouTube takes 45%. 
+                    We're not greedy. Creators keep 90% of all revenue. YouTube takes 55%. 
                     The math is simple — you deserve more.
                 </p>
             </div>
@@ -3836,6 +4940,20 @@
         </div>
     </section>
 
+    <!-- MyChannel Merch Section -->
+    <section class="merch-section">
+        <div class="merch-container">
+            <div class="merch-header">
+                <h2>🔥 MyChannel Merch</h2>
+                <p class="merch-subtitle">REP THE REVOLUTION. WEAR THE FUTURE.</p>
+            </div>
+            
+            <div class="merch-display">
+                <img src="images/merch.png" alt="MyChannel Merch" class="merch-image">
+            </div>
+        </div>
+    </section>
+
     <!-- 24-Hour Payouts Section -->
     <section class="payout-section" id="payouts">
         <div class="payout-container">
@@ -3867,7 +4985,7 @@
                 </div>
             </div>
             <div class="payout-dial slide-in-up"></div>
-            <div class="payout-meta fade-in">Average payout time: <strong>Coming soon — we haven't even launched yet</strong></div>
+            <div class="payout-meta fade-in">Average payout time: <strong>Coming soon</strong></div>
             <div class="payout-steps slide-in-up">
                 <div class="payout-step">
                     <div>🎬</div>
@@ -4217,9 +5335,98 @@
             </div>
         </div>
     </section>
-    
+
+    <!-- Platform Showcase Section -->
+    <section class="platform-showcase">
+        <div class="platform-container">
+            <div class="platform-title">
+                <h2>One Platform, Every Device</h2>
+                <p class="platform-subtitle">Experience MyChannel anywhere - mobile app for on-the-go, web browser for desktop power.</p>
+            </div>
+            
+            <div class="platforms-grid">
+                <!-- Mobile App Preview -->
+                <div class="platform-preview">
+                    <img src="images/MyChannel-App-Search.png" alt="MyChannel Search Screen" class="mobile-app-screenshot">
+                    <div class="platform-label">
+                        <div class="platform-name">📱 Mobile App</div>
+                        <div class="platform-description">
+                            Native iOS & Android app with offline downloads, push notifications, and optimized mobile streaming.
+                        </div>
+                        <div class="platform-features">
+                            <span class="platform-feature">Offline Viewing</span>
+                            <span class="platform-feature">Push Notifications</span>
+                            <span class="platform-feature">Touch Optimized</span>
+                            <span class="platform-feature">App Store & Play Store</span>
+                        </div>
+                    </div>
+                </div>
+
+
+
+                <!-- Desktop Browser Preview -->
+                <div class="platform-preview">
+                    <div class="platform-device">
+                        <div class="desktop-device">
+                            <div class="browser-bar">
+                                <div class="browser-dots">
+                                    <div class="browser-dot dot-red"></div>
+                                    <div class="browser-dot dot-yellow"></div>
+                                    <div class="browser-dot dot-green"></div>
+                                </div>
+                                <div class="browser-url">mychannel.live</div>
+                            </div>
+                            <div class="browser-screen">
+                                <div class="web-content">
+                                    <div class="web-header">
+                                        <div class="web-logo">
+                                            <img src="MyChannel.PNG" alt="MyChannel Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
+                                        </div>
+                                        <div class="web-title">MyChannel</div>
+                                    </div>
+                                    <div class="web-video-grid">
+                                        <div class="web-video-card">
+                                            <div class="web-video-thumbnail"></div>
+                                            <div class="web-video-info">
+                                                <div class="web-video-title">Creator Studio</div>
+                                                <div class="web-video-stats">Dashboard</div>
+                                            </div>
+                                        </div>
+                                        <div class="web-video-card">
+                                            <div class="web-video-thumbnail"></div>
+                                            <div class="web-video-info">
+                                                <div class="web-video-title">Analytics</div>
+                                                <div class="web-video-stats">Insights</div>
+                                            </div>
+                                        </div>
+                                        <div class="web-video-card">
+                                            <div class="web-video-thumbnail"></div>
+                                            <div class="web-video-info">
+                                                <div class="web-video-title">Live Stream</div>
+                                                <div class="web-video-stats">Control</div>
+                                            </div>
+                                        </div>
+                                        <div class="web-video-card">
+                                            <div class="web-video-thumbnail"></div>
+                                            <div class="web-video-info">
+                                                <div class="web-video-title">Upload</div>
+                                                <div class="web-video-stats">Manager</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="platform-label">
+                        <div class="platform-name">💻 Web Browser</div>
+                        <div class="platform-description">
+                            Full-featured web experience with advanced creator tools, analytics dashboard, and desktop-optimized interface.
+                        </div>
+
+
     <!-- CTA Section -->
-    <section class="cta-section">
+    <section class="cta-section" id="cta-section">
         <div class="cta-container slide-in-up">
             <div class="rocket-icon">🚀</div>
             <h2 class="cta-title">Join The Revolution</h2>
@@ -4304,6 +5511,16 @@
                 <a href="#">Contact</a>
             </div>
         </div>
+        
+        <!-- Business Email Section -->
+        <div class="business-email-section">
+            <div class="business-email-label">Business Inquiries</div>
+            <a href="mailto:keontapeat@mychannel.live" class="business-email">
+                <i class="fas fa-envelope email-icon"></i>
+                keontapeat@mychannel.live
+            </a>
+        </div>
+        
         <div class="footer-bottom">
             <div>© 2025 MyChannel.live — The Revolution Starts Here</div>
             <div class="social-links">

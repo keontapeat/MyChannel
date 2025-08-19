@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import UIKit
 
 // MARK: - Preview-safe onReceive helper
 struct ConditionalOnReceiveModifier<P: Publisher>: ViewModifier where P.Failure == Never {
@@ -781,7 +780,7 @@ private struct FeaturedHeroCard: View {
         .accessibilityLabel("\(video.creator.displayName) • \(video.formattedViewCount) views")
         .accessibilityHint("Plays the featured video")
         .onAppear {
-            NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
+           NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
         }
         .onDisappear {
             NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldPause"), object: nil)
@@ -833,6 +832,7 @@ struct MinimalContentSections: View {
     @State private var blockbusterMovies: [FreeMovie] = []
     @State private var loadingBlockbusters: Bool = false
     @State private var friendChannelVideos: [Video] = []
+    @State private var liveChannelsAPI: [LiveTVChannel] = []
 
     private var friendVideoId: String { "friend_video_yt_71GJrAY54Ew" }
     private var friendChannelID: String { "UCITAM_FKtyKEq40aHVXFTcQ" }
@@ -1052,14 +1052,20 @@ struct MinimalContentSections: View {
             ) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
-                        let channels = Array(LiveTVChannel.sampleChannels.prefix(8))
+                        let source = liveChannelsAPI.isEmpty ? LiveTVChannel.sampleChannels : liveChannelsAPI
+                        let channels = Array(source.prefix(8))
                         let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+                        let previewStreams = [
+                            "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+                            "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8",
+                            "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8"
+                        ]
                         ForEach(Array(channels.enumerated()), id: \.element.id) { index, channel in
                             NavigationLink(destination: LiveTVPlayerView(channel: channel)) {
                                 MinimalChannelCard(
                                     channel: channel,
                                     autoPreview: index < 3,
-                                    previewOverrideStreamURL: nil,
+                                    previewOverrideStreamURL: (isPreview && index < 3) ? previewStreams[index] : nil,
                                     previewOverridePosterURL: nil,
                                     allowPlaybackInPreviews: isPreview && index < 3
                                 )
@@ -1110,6 +1116,7 @@ struct MinimalContentSections: View {
         }
         .task { await loadBlockbusters() }
         .task { await loadFriendChannelVideos() }
+        .task { await loadLiveChannelsAPI() }
     }
 
     // Loader for TMDB popular trailers powering the Home Free Movies row
@@ -1164,6 +1171,14 @@ struct MinimalContentSections: View {
             }
         } catch {
             print("[YouTube] Error loading friend channel: \(error)")
+        }
+    }
+
+    private func loadLiveChannelsAPI() async {
+        guard liveChannelsAPI.isEmpty else { return }
+        let fetched = await IPTVOrgService.shared.fetchTopChannels(limit: 24, countries: ["US","GB","CA"], languages: ["eng"], categories: nil)
+        await MainActor.run {
+            self.liveChannelsAPI = fetched
         }
     }
 }
@@ -1810,3 +1825,4 @@ private struct TopMyChannelsSection: View {
         .environmentObject(AppState())
         .preferredColorScheme(.light)
 }
+import UIKit

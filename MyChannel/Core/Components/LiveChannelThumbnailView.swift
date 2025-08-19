@@ -43,7 +43,7 @@ struct LiveChannelThumbnailView: View {
             }
 
             // Placeholder layer stays on top until video is ready (or always in previews)
-            if AppConfig.isPreview || !isReady {
+            if (AppConfig.isPreview && !allowPlaybackInPreviews) || !isReady {
                 if let snap = snapshot {
                     Image(uiImage: snap)
                         .resizable()
