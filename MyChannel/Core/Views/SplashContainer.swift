@@ -37,19 +37,11 @@ struct SplashContainer: View {
             } else {
                 ZStack {
                     if showSplash {
-                        SplashView {
-                            withAnimation(.easeInOut(duration: 0.4)) {
-                                showSplash = false
-                            }
-                            showLaunchMask = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    showLaunchMask = false
-                                }
-                            }
-                        }
-                        .transition(.opacity)
-                        .zIndex(1)
+                        SplashView { proceedFromSplash() }
+                            .contentShape(Rectangle())
+                            .onTapGesture { proceedFromSplash() }
+                         .transition(.opacity)
+                         .zIndex(1)
                     } else {
                         MainTabView()
                             .transition(.opacity)
@@ -66,15 +58,7 @@ struct SplashContainer: View {
                 .onAppear {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
                         if showSplash {
-                            withAnimation(.easeInOut(duration: 0.4)) {
-                                showSplash = false
-                            }
-                            showLaunchMask = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    showLaunchMask = false
-                                }
-                            }
+                            proceedFromSplash()
                         }
                     }
                 }
@@ -84,6 +68,18 @@ struct SplashContainer: View {
         .onAppear {
             if isRunningInPreviews {
                 disablePreviewURLProtocolStubIfAny()
+            }
+        }
+    }
+
+    private func proceedFromSplash() {
+        withAnimation(.easeInOut(duration: 0.4)) {
+            showSplash = false
+        }
+        showLaunchMask = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showLaunchMask = false
             }
         }
     }
@@ -104,7 +100,8 @@ struct SplashContainer: View {
 
 private struct PreviewSplashStandalone: View {
     var body: some View {
-        SplashView { }
+        // Make the "splash only" preview interactive too: tap to fade to a simple Home.
+        PreviewTransitionContainer { HomeView() }
             .preferredColorScheme(.light)
     }
 }
@@ -117,19 +114,11 @@ private struct PreviewTransitionContainer<Content: View>: View {
     var body: some View {
         ZStack {
             if showSplash {
-                SplashView {
-                    withAnimation(.easeInOut(duration: 0.4)) {
-                        showSplash = false
-                    }
-                    showLaunchMask = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            showLaunchMask = false
-                        }
-                    }
-                }
-                .transition(.opacity)
-                .zIndex(1)
+                SplashView { proceed() }
+                    .contentShape(Rectangle())
+                    .onTapGesture { proceed() }
+                 .transition(.opacity)
+                 .zIndex(1)
             } else {
                 content()
                     .transition(.opacity)
@@ -143,6 +132,18 @@ private struct PreviewTransitionContainer<Content: View>: View {
                 .animation(.easeInOut(duration: 0.25), value: showLaunchMask)
         )
         .animation(.easeInOut(duration: 0.4), value: showSplash)
+    }
+
+    private func proceed() {
+        withAnimation(.easeInOut(duration: 0.4)) {
+            showSplash = false
+        }
+        showLaunchMask = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showLaunchMask = false
+            }
+        }
     }
 }
 

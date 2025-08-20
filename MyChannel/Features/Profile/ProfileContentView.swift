@@ -64,12 +64,10 @@ struct ProfileVideosView: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            // Stock Banners Carousel (beautiful defaults)
             StockVideoBannersCarousel(banners: StockVideoBanner.defaults)
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
             
-            // Layout toggle
             HStack {
                 Text("Videos")
                     .font(.system(size: 18, weight: .semibold))
@@ -80,7 +78,7 @@ struct ProfileVideosView: View {
                 HStack(spacing: 8) {
                     ForEach(VideoLayoutMode.allCases, id: \.self) { mode in
                         Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
                                 layoutMode = mode
                             }
                             HapticManager.shared.impact(style: .light)
@@ -95,40 +93,50 @@ struct ProfileVideosView: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .contentShape(Rectangle())
                     }
                 }
+                
+                // If you prefer a segmented control instead, uncomment:
+                // Picker("", selection: $layoutMode) {
+                //     Label("Grid", systemImage: "square.grid.2x2").tag(VideoLayoutMode.grid2)
+                //     Label("List", systemImage: "list.bullet").tag(VideoLayoutMode.list1)
+                // }
+                // .pickerStyle(.segmented)
+                // .frame(maxWidth: 220)
             }
             .padding(.horizontal, 16)
             
-            // Content
-            Group {
-                if layoutMode == .grid2 {
-                    LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(videos) { video in
-                            ProfileVideoCard(video: video)
-                                .onTapGesture {
-                                    HapticManager.shared.impact(style: .light)
-                                }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                } else {
-                    LazyVStack(spacing: 12) {
-                        ForEach(videos) { video in
-                            ProfileVideoListRow(video: video)
-                                .onTapGesture {
-                                    HapticManager.shared.impact(style: .light)
-                                }
-                                .padding(.horizontal, 16)
-                        }
-                    }
-                }
-            }
-            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            videosBody
+                .id(layoutMode) // force a rebuild when switching modes
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                .animation(.spring(response: 0.35, dampingFraction: 0.9), value: layoutMode)
             
             Color.clear.frame(height: 8)
         }
         .padding(.bottom, 12)
+    }
+    
+    @ViewBuilder
+    private var videosBody: some View {
+        if layoutMode == .grid2 {
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(videos) { video in
+                    ProfileVideoCard(video: video)
+                        .onTapGesture { HapticManager.shared.impact(style: .light) }
+                }
+            }
+            .padding(.horizontal, 16)
+        } else {
+            // Single video view: one full-width 16:9 card per row
+            LazyVStack(spacing: 12) {
+                ForEach(videos) { video in
+                    FullWidthVideoCard(video: video)
+                        .onTapGesture { HapticManager.shared.impact(style: .light) }
+                        .padding(.horizontal, 16)
+                }
+            }
+        }
     }
 }
 
@@ -138,22 +146,36 @@ struct ProfileVideoCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                image
-                    .resizable()
-                    .aspectRatio(16/9, contentMode: .fill)
-                    .clipped()
-            } placeholder: {
-                Rectangle()
-                    .fill(AppTheme.Colors.textTertiary.opacity(0.3))
-                    .aspectRatio(16/9, contentMode: .fit)
+            // Stable 16:9 container first, then draw image inside it.
+            ZStack(alignment: .bottomTrailing) {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(AppTheme.Colors.textTertiary.opacity(0.12))
                     .overlay(
-                        Image(systemName: "play.rectangle")
-                            .font(.title2)
-                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                        AsyncImage(url: URL(string: video.thumbnailURL)) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .transition(.opacity.combined(with: .scale))
+                            case .failure(_):
+                                Image(systemName: "photo.on.rectangle.angled")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                                    .padding(24)
+                            case .empty:
+                                ProgressView()
+                                    .tint(AppTheme.Colors.primary)
+                            @unknown default:
+                                Color.clear
+                            }
+                        }
+                        .clipped()
                     )
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-            .cornerRadius(8)
+            .aspectRatio(16/9, contentMode: .fit) // guarantees consistent height
             .overlay(
                 Text(video.formattedDuration)
                     .font(.system(size: 12, weight: .medium))
@@ -168,44 +190,20 @@ struct ProfileVideoCard: View {
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(video.title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
+                    .frame(height: 36, alignment: .topLeading) // keeps rows even
                 
                 HStack(spacing: 4) {
                     Text(video.formattedViewCount)
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-                    
                     Text("•")
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppTheme.Colors.textTertiary)
-                    
                     Text(video.uploadTimeAgo)
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
                 }
-            }
-        }
-        .background(AppTheme.Colors.surface)
-        .cornerRadius(12)
-        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.08), radius: 4, x: 0, y: 2)
-        .contextMenu {
-            Button {
-                HapticManager.shared.impact(style: .light)
-            } label: {
-                Label("Save to Watch Later", systemImage: "bookmark")
-            }
-            Button {
-                HapticManager.shared.impact(style: .light)
-            } label: {
-                Label("Share", systemImage: "square.and.arrow.up")
-            }
-            Button(role: .destructive) {
-                HapticManager.shared.impact(style: .light)
-            } label: {
-                Label("Not interested", systemImage: "hand.thumbsdown")
+                .font(.system(size: 12))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .frame(height: 16, alignment: .center) // keeps rows even
             }
         }
         .accessibilityElement(children: .combine)
@@ -878,43 +876,58 @@ private struct StockVideoBanner: Identifiable {
     ]
 }
 
-private struct ProfileVideoListRow: View {
+// MARK: - Full-width single video card (16:9)
+private struct FullWidthVideoCard: View {
     let video: Video
     
     var body: some View {
-        HStack(spacing: 12) {
-            AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                image
-                    .resizable()
-                    .aspectRatio(16/9, contentMode: .fill)
-            } placeholder: {
-                Rectangle()
-                    .fill(AppTheme.Colors.textTertiary.opacity(0.3))
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack(alignment: .bottomTrailing) {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(AppTheme.Colors.textTertiary.opacity(0.12))
                     .overlay(
-                        Image(systemName: "play.rectangle")
-                            .font(.title2)
-                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                        AsyncImage(url: URL(string: video.thumbnailURL)) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .transition(.opacity)
+                            case .failure(_):
+                                Image(systemName: "photo.on.rectangle.angled")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                                    .padding(28)
+                            case .empty:
+                                ProgressView().tint(AppTheme.Colors.primary)
+                            @unknown default:
+                                Color.clear
+                            }
+                        }
+                        .clipped()
                     )
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-            .frame(width: 160, height: 90)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .aspectRatio(16/9, contentMode: .fit)
             .overlay(
                 Text(video.formattedDuration)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(.black.opacity(0.75))
-                    .clipShape(Capsule())
-                    .padding(6),
+                    .padding(.vertical, 2)
+                    .background(.black.opacity(0.8))
+                    .cornerRadius(4)
+                    .padding(8),
                 alignment: .bottomTrailing
             )
             
             VStack(alignment: .leading, spacing: 6) {
                 Text(video.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                     .lineLimit(2)
+                    .frame(height: 40, alignment: .topLeading)
                 
                 HStack(spacing: 6) {
                     Text(video.creator.displayName)
@@ -925,30 +938,6 @@ private struct ProfileVideoListRow: View {
                 }
                 .font(.system(size: 12))
                 .foregroundStyle(AppTheme.Colors.textSecondary)
-                
-                HStack(spacing: 12) {
-                    Label("Like", systemImage: "hand.thumbsup")
-                    Label("Share", systemImage: "square.and.arrow.up")
-                    Label("Save", systemImage: "bookmark")
-                }
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(AppTheme.Colors.textSecondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(10)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .shadow(color: AppTheme.Colors.textPrimary.opacity(0.06), radius: 4, x: 0, y: 2)
-        .contextMenu {
-            Button { HapticManager.shared.impact(style: .light) } label: {
-                Label("Save to Watch Later", systemImage: "bookmark")
-            }
-            Button { HapticManager.shared.impact(style: .light) } label: {
-                Label("Share", systemImage: "square.and.arrow.up")
-            }
-            Button(role: .destructive) { HapticManager.shared.impact(style: .light) } label: {
-                Label("Not interested", systemImage: "hand.thumbsdown")
             }
         }
         .accessibilityElement(children: .combine)
