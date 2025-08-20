@@ -27,7 +27,7 @@ struct NotificationSettingsView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 10)
             }
-            .navigationTitle("Notifications")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.large)
             .background(Color(.systemGroupedBackground))
         }

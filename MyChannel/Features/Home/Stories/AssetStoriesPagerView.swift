@@ -5,96 +5,119 @@ struct AssetStoriesPagerView: View {
     let stories: [AssetStory]
     let initialIndex: Int
     let onDismiss: () -> Void
-    
+
     @State private var index: Int
     @State private var progress: Double = 0
     @State private var isPaused: Bool = false
     @State private var dragOffset: CGSize = .zero
     @State private var timer: Timer?
-    
+
+    // UX
+    @State private var showHeart: Bool = false
+    @State private var heartScale: CGFloat = 0.6
+    @State private var headerVisible: Bool = true
+
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    // Tunables
     private let imageDuration: TimeInterval = 5.0
     private let videoDuration: TimeInterval = 8.0
-    
+
     init(stories: [AssetStory], initialIndex: Int = 0, onDismiss: @escaping () -> Void) {
         self.stories = stories
         self.initialIndex = min(max(0, initialIndex), stories.count - 1)
         self.onDismiss = onDismiss
         _index = State(initialValue: self.initialIndex)
     }
-    
+
     var body: some View {
         GeometryReader { geo in
             ZStack {
                 Color.black.ignoresSafeArea()
-                
+
                 currentContent
                     .frame(width: geo.size.width, height: geo.size.height)
                     .clipped()
                     .scaleEffect(isPaused ? 1.02 : 1.0)
-                    .animation(.easeInOut(duration: 0.25), value: isPaused)
-                
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isPaused)
+
                 // Top overlays: progress + header
-                VStack(spacing: 10) {
-                    HStack(spacing: 4) {
-                        ForEach(0..<stories.count, id: \.self) { i in
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .fill(Color.white.opacity(0.25))
-                                Capsule()
-                                    .fill(Color.white)
-                                    .frame(width: fillWidth(for: i, totalWidth: (UIScreen.main.bounds.width - 16 - CGFloat(stories.count - 1) * 4) / CGFloat(stories.count)))
-                                    .animation(.linear(duration: 0.05), value: progress)
-                            }
-                            .frame(height: 3)
-                        }
-                    }
-                    .padding(.horizontal, 8)
-                    
-                    HStack {
-                        HStack(spacing: 10) {
-                            storyAvatar(for: stories[index])
-                                .frame(width: 34, height: 34)
-                                .clipShape(Circle())
-                                .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                            Text(stories[index].username)
-                                .foregroundStyle(.white)
-                                .font(.system(size: 15, weight: .semibold))
-                                .lineLimit(1)
-                        }
-                        Spacer()
-                        Button {
-                            onDismiss()
-                            HapticManager.shared.impact(style: .light)
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
-                                .padding(10)
-                                .background(Color.black.opacity(0.35), in: Circle())
-                        }
-                    }
-                    .padding(.horizontal, 12)
+                VStack(spacing: 12) {
+                    progressBars
+                        .padding(.horizontal, 10)
+
+                    header
+                        .padding(.horizontal, 12)
+                        .opacity(headerVisible ? 1 : 0)
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: headerVisible)
                 }
                 .padding(.top, 14)
                 .frame(maxHeight: .infinity, alignment: .top)
-                
-                // Invisible tap regions
+                .background(
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.85), Color.black.opacity(0.0)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    .frame(height: 160)
+                    .ignoresSafeArea()
+                    .frame(maxHeight: .infinity, alignment: .top)
+                )
+                // Scrub overlay over progress bars
+                .overlay(alignment: .top) {
+                    Color.clear
+                        .frame(height: 28)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    pause()
+                                    scrub(atX: value.location.x, totalWidth: geo.size.width)
+                                }
+                                .onEnded { _ in
+                                    resume()
+                                }
+                        )
+                        .padding(.top, 12)
+                }
+
+                // Bottom gradient + actions
+                VStack(spacing: 0) {
+                    Spacer()
+                    bottomActions
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 28)
+                        .opacity(headerVisible ? 1 : 0)
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: headerVisible)
+                }
+                .background(
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.0), Color.black.opacity(0.6)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    .frame(height: 200)
+                    .ignoresSafeArea()
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                )
+
+                // Invisible tap regions (prev/next)
                 HStack(spacing: 0) {
-                    Rectangle()
-                        .fill(Color.clear)
+                    Rectangle().fill(.clear)
                         .contentShape(Rectangle())
-                        .onTapGesture {
-                            previous()
-                        }
-                    Rectangle()
-                        .fill(Color.clear)
+                        .onTapGesture { previous() }
+                    Rectangle().fill(.clear)
                         .contentShape(Rectangle())
-                        .onTapGesture {
-                            next()
-                        }
+                        .onTapGesture { next() }
                 }
                 .allowsHitTesting(true)
-                
+
+                // Double‑tap like
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) {
+                        likeBurst()
+                    }
+
                 // Pause indicator
                 if isPaused {
                     Image(systemName: "pause.fill")
@@ -102,15 +125,27 @@ struct AssetStoriesPagerView: View {
                         .padding(10)
                         .background(Color.black.opacity(0.35), in: Capsule())
                         .transition(.scale.combined(with: .opacity))
-                        .frame(maxHeight: .infinity, alignment: .center)
+                }
+
+                // Heart animation
+                if showHeart {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 90))
+                        .foregroundStyle(.red)
+                        .scaleEffect(heartScale)
+                        .opacity(heartScale >= 1.0 ? 0.0 : 1.0)
+                        .shadow(color: .black.opacity(0.4), radius: 10, x: 0, y: 4)
+                        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7), value: heartScale)
                 }
             }
             .gesture(
                 DragGesture()
                     .onChanged { value in
                         dragOffset = value.translation
+                        headerVisible = false
                     }
                     .onEnded { value in
+                        defer { dragOffset = .zero; headerVisible = true }
                         if value.translation.height > 120 {
                             HapticManager.shared.impact(style: .light)
                             onDismiss()
@@ -121,12 +156,11 @@ struct AssetStoriesPagerView: View {
                         } else if value.translation.width > 80 {
                             previous()
                         }
-                        dragOffset = .zero
                     }
             )
             .offset(dragOffset)
             .scaleEffect(dragOffset.height > 0 ? max(0.85, 1 - dragOffset.height / 900) : 1)
-            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: dragOffset)
+            .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85), value: dragOffset)
             .onLongPressGesture(minimumDuration: 0.15) {
                 pause()
             } onPressingChanged: { pressing in
@@ -134,15 +168,26 @@ struct AssetStoriesPagerView: View {
             }
             .onAppear {
                 startTimer()
+                preloadAdjacentImages()
             }
-            .onDisappear {
-                stopTimer()
-            }
+            .onDisappear { stopTimer() }
         }
         .statusBarHidden()
         .ignoresSafeArea()
+        .onChange(of: index) { _, _ in
+            resetProgress()
+            preloadAdjacentImages()
+        }
+        .onChange(of: scenePhase) { _, newValue in
+            switch newValue {
+            case .active: resume()
+            case .inactive, .background: pause()
+            @unknown default: pause()
+            }
+        }
     }
-    
+
+    // MARK: - Content
     private var currentContent: some View {
         Group {
             switch stories[index].media {
@@ -157,7 +202,10 @@ struct AssetStoriesPagerView: View {
                         img.resizable().aspectRatio(contentMode: .fit)
                     } placeholder: {
                         ZStack {
-                            LinearGradient(colors: [.gray.opacity(0.3), .gray.opacity(0.15)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            LinearGradient(
+                                colors: [.gray.opacity(0.3), .gray.opacity(0.15)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            )
                             ProgressView().tint(.white)
                         }
                     }
@@ -168,10 +216,16 @@ struct AssetStoriesPagerView: View {
                         .transition(.opacity)
                 } else {
                     ZStack {
-                        LinearGradient(colors: [.purple.opacity(0.7), .blue.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        LinearGradient(
+                            colors: [.purple.opacity(0.7), .blue.opacity(0.7)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
                         VStack(spacing: 12) {
-                            Image(systemName: "play.circle.fill").font(.system(size: 72)).foregroundStyle(.white)
-                            Text("Video not found").foregroundStyle(.white.opacity(0.9))
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 72))
+                                .foregroundStyle(.white)
+                            Text("Video not found")
+                                .foregroundStyle(.white.opacity(0.9))
                         }
                     }
                 }
@@ -181,7 +235,98 @@ struct AssetStoriesPagerView: View {
             resetProgress()
         }
     }
-    
+
+    // MARK: - Overlays
+    private var progressBars: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<stories.count, id: \.self) { i in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.25))
+                    Capsule()
+                        .fill(Color.white)
+                        .frame(width: fillWidth(for: i, totalWidth: (UIScreen.main.bounds.width - 16 - CGFloat(stories.count - 1) * 4) / CGFloat(stories.count)))
+                        .animation(reduceMotion ? nil : .linear(duration: 0.05), value: progress)
+                }
+                .frame(height: 3)
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack {
+            HStack(spacing: 10) {
+                storyAvatar(for: stories[index])
+                    .frame(width: 34, height: 34)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
+                Text(stories[index].username)
+                    .foregroundStyle(.white)
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+            }
+            Spacer()
+            HStack(spacing: 10) {
+                Button {
+                    HapticManager.shared.selection()
+                    pause()
+                    headerVisible.toggle()
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(10)
+                        .background(Color.black.opacity(0.35), in: Circle())
+                }
+
+                Button {
+                    onDismiss()
+                    HapticManager.shared.impact(style: .light)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(10)
+                        .background(Color.black.opacity(0.35), in: Circle())
+                }
+            }
+        }
+    }
+
+    private var bottomActions: some View {
+        HStack(spacing: 14) {
+            HStack {
+                Text("Send message")
+                    .foregroundStyle(.white.opacity(0.85))
+                    .font(.system(size: 14, weight: .medium))
+                Spacer()
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 14)
+            .background(Color.white.opacity(0.12), in: Capsule())
+
+            Button {
+                likeBurst()
+            } label: {
+                Image(systemName: "heart\(showHeart ? ".fill" : "")")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(showHeart ? .red : .white)
+                    .padding(10)
+                    .background(Color.black.opacity(0.35), in: Circle())
+            }
+
+            Button {
+                HapticManager.shared.selection()
+            } label: {
+                Image(systemName: "paperplane.fill")
+                    .rotationEffect(.degrees(45))
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(10)
+                    .background(Color.black.opacity(0.35), in: Circle())
+            }
+        }
+    }
+
     private func storyAvatar(for story: AssetStory) -> some View {
         Group {
             if let img = UIImage(named: story.authorImageName) {
@@ -198,52 +343,58 @@ struct AssetStoriesPagerView: View {
             }
         }
     }
-    
+
+    // MARK: - Timing
     private func durationForCurrent() -> TimeInterval {
         switch stories[index].media {
         case .image: return imageDuration
         case .video: return videoDuration
         }
     }
-    
+
     private func startTimer() {
         stopTimer()
         timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
             guard !isPaused else { return }
             let step = 0.05 / max(0.2, durationForCurrent())
             progress += step
-            if progress >= 1.0 {
-                next()
-            }
+            if progress >= 1.0 { next() }
         }
     }
-    
+
     private func stopTimer() {
         timer?.invalidate()
         timer = nil
     }
-    
+
     private func resetProgress() {
         progress = 0
         startTimer()
     }
-    
+
     private func pause() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        if reduceMotion {
             isPaused = true
+        } else {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { isPaused = true }
         }
     }
-    
+
     private func resume() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        if reduceMotion {
             isPaused = false
+        } else {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { isPaused = false }
         }
     }
-    
+
+    // MARK: - Navigation
     private func next() {
         if index < stories.count - 1 {
-            withAnimation(.easeInOut(duration: 0.25)) {
+            if reduceMotion {
                 index += 1
+            } else {
+                withAnimation(.easeInOut(duration: 0.25)) { index += 1 }
             }
             HapticManager.shared.selection()
             resetProgress()
@@ -251,24 +402,74 @@ struct AssetStoriesPagerView: View {
             onDismiss()
         }
     }
-    
+
     private func previous() {
         if index > 0 {
-            withAnimation(.easeInOut(duration: 0.25)) {
+            if reduceMotion {
                 index -= 1
+            } else {
+                withAnimation(.easeInOut(duration: 0.25)) { index -= 1 }
             }
             HapticManager.shared.selection()
             resetProgress()
         } else {
-            // If first, a left tap could dismiss
             onDismiss()
         }
     }
-    
+
     private func fillWidth(for barIndex: Int, totalWidth: CGFloat) -> CGFloat {
         if barIndex < index { return totalWidth }
         if barIndex > index { return 0 }
         return totalWidth * CGFloat(min(1.0, max(0.0, progress)))
+    }
+
+    // MARK: - UX helpers
+    private func likeBurst() {
+        HapticManager.shared.impact(style: .soft)
+        showHeart = true
+        heartScale = 0.6
+        if reduceMotion {
+            heartScale = 1.25
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                showHeart = false
+                heartScale = 0.6
+            }
+        } else {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.65)) { heartScale = 1.25 }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                showHeart = false
+                heartScale = 0.6
+            }
+        }
+    }
+
+    private func preloadAdjacentImages() {
+        let candidates: [Int] = [index - 1, index + 1].filter { $0 >= 0 && $0 < stories.count }
+        for i in candidates {
+            if case let .image(name) = stories[i].media, UIImage(named: name) == nil {
+                _ = URL(string: "https://picsum.photos/10/10?preload=\(abs(stories[i].id.hashValue))")
+            }
+        }
+    }
+
+    // MARK: - Scrubbing
+    private func scrub(atX x: CGFloat, totalWidth: CGFloat) {
+        let spacing: CGFloat = 4
+        let bars = max(1, stories.count)
+        let innerWidth = totalWidth - 16 - CGFloat(bars - 1) * spacing
+        let step = innerWidth / CGFloat(bars)
+        let clampedX = max(0, min(x - 8, innerWidth + CGFloat(bars - 1) * spacing))
+        let newIndex = Int(clampedX / (step + spacing))
+        let remainder = clampedX - CGFloat(newIndex) * (step + spacing)
+        let localProgress = max(0, min(1, remainder / step))
+
+        if newIndex != index {
+            index = newIndex
+            progress = Double(localProgress)
+            startTimer()
+        } else {
+            progress = Double(localProgress)
+        }
     }
 }
 

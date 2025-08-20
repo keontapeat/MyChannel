@@ -13,7 +13,7 @@ struct StoryViewerView: View {
     let stories: [Story]
     let initialStory: Story
     let onDismiss: () -> Void
-    
+
     @State private var currentStoryIndex: Int = 0
     @State private var currentContentIndex: Int = 0
     @State private var progress: Double = 0.0
@@ -27,22 +27,25 @@ struct StoryViewerView: View {
     @State private var hasLiked: Bool = false
     @State private var showingProfile: Bool = false
     @State private var hapticFeedback = UIImpactFeedbackGenerator(style: .light)
-    
+
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private var currentStory: Story {
         stories[currentStoryIndex]
     }
-    
+
     private var currentContent: StoryContent? {
         guard currentContentIndex < currentStory.content.count else { return nil }
         return currentStory.content[currentContentIndex]
     }
-    
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 Color.black
                     .ignoresSafeArea()
-                
+
                 // Main story content
                 if let content = currentContent {
                     EnhancedStoryContentView(
@@ -54,18 +57,17 @@ struct StoryViewerView: View {
                         insertion: .opacity.combined(with: .scale(scale: 1.1)),
                         removal: .opacity.combined(with: .scale(scale: 0.9))
                     ))
-                    .animation(.easeInOut(duration: 0.3), value: currentContentIndex)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: currentContentIndex)
                 } else {
-                    // Fallback when no content is available
                     VStack(spacing: 20) {
                         Image(systemName: "photo.fill")
                             .font(.system(size: 64))
                             .foregroundColor(.white.opacity(0.6))
-                        
+
                         Text("Loading Story...")
                             .font(.title2)
                             .foregroundColor(.white)
-                        
+
                         Button("Close") {
                             onDismiss()
                         }
@@ -75,10 +77,9 @@ struct StoryViewerView: View {
                         .cornerRadius(12)
                     }
                 }
-                
+
                 // Professional gradient overlays
                 VStack {
-                    // Top gradient
                     LinearGradient(
                         colors: [
                             Color.black.opacity(0.8),
@@ -89,10 +90,9 @@ struct StoryViewerView: View {
                         endPoint: .bottom
                     )
                     .frame(height: 120)
-                    
+
                     Spacer()
-                    
-                    // Bottom gradient
+
                     LinearGradient(
                         colors: [
                             Color.clear,
@@ -105,7 +105,7 @@ struct StoryViewerView: View {
                     .frame(height: 140)
                 }
                 .ignoresSafeArea()
-                
+
                 // Enhanced story controls overlay
                 VStack(spacing: 0) {
                     EnhancedStoryHeaderView(
@@ -119,54 +119,52 @@ struct StoryViewerView: View {
                             showingProfile = true
                         }
                     )
-                    
+
                     Spacer()
-                    
-                    // Text overlay with better styling
+
                     if showingText, let text = currentContent?.text {
                         EnhancedStoryTextOverlay(
                             text: text,
                             backgroundColor: currentContent?.backgroundColor
                         )
                         .transition(.scale.combined(with: .opacity))
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showingText)
+                        .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8), value: showingText)
                     }
-                    
+
                     Spacer()
-                    
+
                     EnhancedStoryFooterView(
                         story: currentStory,
                         hasLiked: hasLiked,
-                        onReply: {
-                            showingReply = true
-                        },
+                        onReply: { showingReply = true },
                         onLike: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                            if reduceMotion {
                                 hasLiked.toggle()
-                                hapticFeedback.impactOccurred()
+                            } else {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                    hasLiked.toggle()
+                                }
                             }
-                        },
-                        onShare: {
-                            // Handle share
                             hapticFeedback.impactOccurred()
-                        }
+                        },
+                        onShare: { hapticFeedback.impactOccurred() }
                     )
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
                 .padding(.bottom, 32)
-                
+
                 // Pause indicator
                 if isPaused {
                     VStack {
                         Spacer()
-                        
+
                         HStack(spacing: 8) {
                             Rectangle()
                                 .fill(.white)
                                 .frame(width: 4, height: 20)
                                 .cornerRadius(2)
-                            
+
                             Rectangle()
                                 .fill(.white)
                                 .frame(width: 4, height: 20)
@@ -178,12 +176,29 @@ struct StoryViewerView: View {
                         .cornerRadius(20)
                         .scaleEffect(1.2)
                         .shadow(radius: 10)
-                        
+
                         Spacer()
                     }
                     .transition(.scale.combined(with: .opacity))
-                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPaused)
+                    .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6), value: isPaused)
                 }
+            }
+            // Scrub overlay at top over progress bars
+            .overlay(alignment: .top) {
+                Color.clear
+                    .frame(height: 28)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                pauseStory()
+                                scrub(atX: value.location.x, totalWidth: geometry.size.width)
+                            }
+                            .onEnded { _ in
+                                resumeStory()
+                            }
+                    )
+                    .padding(.top, 8)
             }
         }
         .onTapGesture { location in
@@ -200,8 +215,6 @@ struct StoryViewerView: View {
             DragGesture()
                 .onChanged { value in
                     dragOffset = value.translation
-                    
-                    // Add resistance for upward swipes
                     if dragOffset.height < 0 {
                         dragOffset.height = dragOffset.height * 0.3
                     }
@@ -213,25 +226,27 @@ struct StoryViewerView: View {
         )
         .offset(dragOffset)
         .scaleEffect(dragOffset.height > 0 ? max(0.8, 1 - dragOffset.height / 1000) : 1.0)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: dragOffset)
+        .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.8), value: dragOffset)
         .onAppear {
-            print("📖 StoryViewerView appeared with \(stories.count) stories")
-            print("📖 Initial story: \(initialStory.id)")
-            print("📖 Current story content count: \(currentStory.content.count)")
             setupInitialStory()
             startStoryTimer()
             simulateViewerCount()
         }
         .onDisappear {
             stopStoryTimer()
-            print("📖 StoryViewerView disappeared")
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .active: resumeStory()
+            case .inactive, .background: pauseStory()
+            @unknown default: pauseStory()
+            }
         }
         .statusBarHidden()
         .sheet(isPresented: $showingReply) {
             StoryReplyView(
                 story: currentStory,
                 onSend: { message in
-                    print("💬 Reply sent: \(message)")
                     showingReply = false
                 }
             )
@@ -257,23 +272,23 @@ struct StoryViewerView: View {
                         }
                         .frame(width: 100, height: 100)
                         .clipShape(Circle())
-                        
+
                         VStack(spacing: 8) {
                             HStack(spacing: 8) {
                                 Text(creator.displayName)
                                     .font(.title2)
                                     .fontWeight(.bold)
-                                
+
                                 if creator.isVerified {
                                     Image(systemName: "checkmark.seal.fill")
                                         .foregroundColor(AppTheme.Colors.primary)
                                 }
                             }
-                            
+
                             Text("@\(creator.username)")
                                 .font(.subheadline)
                                 .foregroundColor(AppTheme.Colors.textSecondary)
-                            
+
                             if let bio = creator.bio {
                                 Text(bio)
                                     .font(.body)
@@ -281,7 +296,7 @@ struct StoryViewerView: View {
                                     .padding(.horizontal)
                             }
                         }
-                        
+
                         HStack(spacing: 30) {
                             VStack {
                                 Text("\(creator.subscriberCount)")
@@ -291,7 +306,7 @@ struct StoryViewerView: View {
                                     .font(.caption)
                                     .foregroundColor(AppTheme.Colors.textSecondary)
                             }
-                            
+
                             VStack {
                                 Text("\(creator.videoCount)")
                                     .font(.title3)
@@ -301,10 +316,8 @@ struct StoryViewerView: View {
                                     .foregroundColor(AppTheme.Colors.textSecondary)
                             }
                         }
-                        
-                        Button(action: {
-                            // Handle subscribe
-                        }) {
+
+                        Button(action: {}) {
                             Text("Subscribe")
                                 .font(.headline)
                                 .foregroundColor(.white)
@@ -314,7 +327,7 @@ struct StoryViewerView: View {
                                 .cornerRadius(12)
                         }
                         .padding(.horizontal)
-                        
+
                         Spacer()
                     }
                     .padding()
@@ -332,40 +345,33 @@ struct StoryViewerView: View {
             }
         }
     }
-    
+
     // MARK: - Private Methods
-    
+
     private func simulateViewerCount() {
         viewerCount = Int.random(in: 50...2000)
-        
-        // Simulate live viewer count updates
         Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
             let change = Int.random(in: -5...15)
             viewerCount = max(1, viewerCount + change)
         }
     }
-    
+
     private func setupInitialStory() {
         if let initialIndex = stories.firstIndex(where: { $0.id == initialStory.id }) {
             currentStoryIndex = initialIndex
         }
-        
         updateTextVisibility()
     }
-    
+
     private func handleTapGesture(at location: CGPoint) {
         let screenWidth = UIScreen.main.bounds.width
-        
         hapticFeedback.impactOccurred()
-        
+
         if location.x < screenWidth / 3 {
-            // Left tap - previous content/story
             previousContent()
         } else if location.x > screenWidth * 2/3 {
-            // Right tap - next content/story
             nextContent()
         } else {
-            // Center tap - pause/resume
             if isPaused {
                 resumeStory()
             } else {
@@ -376,17 +382,14 @@ struct StoryViewerView: View {
             }
         }
     }
-    
+
     private func handleSwipeGesture(translation: CGSize) {
         if translation.height > 150 {
-            // Swipe down - dismiss with haptic feedback
             hapticFeedback.impactOccurred()
             onDismiss()
         } else if translation.height < -50 {
-            // Swipe up - show creator profile
             showingProfile = true
         } else if abs(translation.width) > 100 {
-            // Horizontal swipe - navigate stories
             if translation.width > 0 {
                 previousStory()
             } else {
@@ -394,104 +397,138 @@ struct StoryViewerView: View {
             }
         }
     }
-    
+
     private func nextContent() {
         if currentContentIndex < currentStory.content.count - 1 {
-            withAnimation(.easeInOut(duration: 0.2)) {
+            if reduceMotion {
                 currentContentIndex += 1
+            } else {
+                withAnimation(.easeInOut(duration: 0.2)) { currentContentIndex += 1 }
             }
             resetProgress()
         } else {
             nextStory()
         }
-        
         updateTextVisibility()
     }
-    
+
     private func previousContent() {
         if currentContentIndex > 0 {
-            withAnimation(.easeInOut(duration: 0.2)) {
+            if reduceMotion {
                 currentContentIndex -= 1
+            } else {
+                withAnimation(.easeInOut(duration: 0.2)) { currentContentIndex -= 1 }
             }
             resetProgress()
         } else {
             previousStory()
         }
-        
         updateTextVisibility()
     }
-    
+
     private func nextStory() {
         if currentStoryIndex < stories.count - 1 {
-            withAnimation(.easeInOut(duration: 0.3)) {
+            if reduceMotion {
                 currentStoryIndex += 1
                 currentContentIndex = 0
+            } else {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    currentStoryIndex += 1
+                    currentContentIndex = 0
+                }
             }
             resetProgress()
             simulateViewerCount()
         } else {
             onDismiss()
         }
-        
         updateTextVisibility()
     }
-    
+
     private func previousStory() {
         if currentStoryIndex > 0 {
-            withAnimation(.easeInOut(duration: 0.3)) {
+            if reduceMotion {
                 currentStoryIndex -= 1
                 currentContentIndex = max(0, currentStory.content.count - 1)
+            } else {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    currentStoryIndex -= 1
+                    currentContentIndex = max(0, currentStory.content.count - 1)
+                }
             }
             resetProgress()
             simulateViewerCount()
         } else {
             onDismiss()
         }
-        
         updateTextVisibility()
     }
-    
+
     private func updateTextVisibility() {
-        withAnimation(.easeInOut(duration: 0.3)) {
+        if reduceMotion {
             showingText = currentContent?.type == .text
+        } else {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showingText = currentContent?.type == .text
+            }
         }
     }
-    
+
     private func startStoryTimer() {
         guard let content = currentContent else { return }
-        
         timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
             if !isPaused {
                 progress += 0.05 / content.duration
-                
                 if progress >= 1.0 {
                     nextContent()
                 }
             }
         }
     }
-    
+
     private func stopStoryTimer() {
         timer?.invalidate()
         timer = nil
     }
-    
+
     private func resetProgress() {
         progress = 0.0
         stopStoryTimer()
         startStoryTimer()
     }
-    
+
     private func pauseStory() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+        if reduceMotion {
             isPaused = true
+        } else {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { isPaused = true }
         }
     }
-    
+
     private func resumeStory() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+        if reduceMotion {
             isPaused = false
+        } else {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { isPaused = false }
         }
+    }
+
+    // MARK: - Scrubbing
+    private func scrub(atX x: CGFloat, totalWidth: CGFloat) {
+        let bars = max(1, currentStory.content.count)
+        let spacing: CGFloat = 3
+        let innerWidth = totalWidth - 16 - CGFloat(bars - 1) * spacing
+        let step = innerWidth / CGFloat(bars)
+        let clampedX = max(0, min(x - 8, innerWidth + CGFloat(bars - 1) * spacing))
+        let newIndex = Int(clampedX / (step + spacing))
+        let remainder = clampedX - CGFloat(newIndex) * (step + spacing)
+        let localProgress = max(0, min(1, remainder / step))
+
+        if newIndex != currentContentIndex {
+            currentContentIndex = newIndex
+            startStoryTimer()
+        }
+        progress = Double(localProgress)
     }
 }
 
@@ -500,10 +537,10 @@ struct EnhancedStoryContentView: View {
     let content: StoryContent
     let isPaused: Bool
     let geometry: GeometryProxy
-    
+
     @State private var imageLoaded: Bool = false
     @State private var loadingAnimation: Bool = false
-    
+
     var body: some View {
         switch content.type {
         case .image:
@@ -539,39 +576,38 @@ struct EnhancedStoryContentView: View {
             } else {
                 failurePlaceholder
             }
-            
+
         case .video:
-            // Better video placeholder (kept as-is)
             ZStack {
                 LinearGradient(
                     colors: [AppTheme.Colors.primary.opacity(0.6), AppTheme.Colors.secondary.opacity(0.6)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
-                
+
                 VStack(spacing: 20) {
                     Image(systemName: "play.circle.fill")
                         .font(.system(size: 80))
                         .foregroundColor(.white)
                         .shadow(radius: 4)
-                    
+
                     Text("Video Story")
                         .font(.title)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
-                    
+
                     Text("Tap to play")
                         .font(.subheadline)
                         .foregroundColor(.white.opacity(0.8))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            
+
         case .text:
             ZStack {
                 let bgColor = content.backgroundColor ?? "#FF6B6B"
                 Color(hex: bgColor)
-                
+
                 if let text = content.text {
                     Text(text)
                         .font(.system(size: 28, weight: .bold, design: .rounded))
@@ -582,7 +618,7 @@ struct EnhancedStoryContentView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            
+
         case .music:
             ZStack {
                 LinearGradient(
@@ -590,19 +626,19 @@ struct EnhancedStoryContentView: View {
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
-                
+
                 VStack(spacing: 24) {
                     Image(systemName: "music.note.list")
                         .font(.system(size: 64))
                         .foregroundColor(.white)
                         .shadow(radius: 4)
-                    
+
                     VStack(spacing: 8) {
                         Text("Music Story")
                             .font(.title)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
-                        
+
                         Text("Now Playing")
                             .font(.subheadline)
                             .foregroundColor(.white.opacity(0.8))
@@ -612,7 +648,7 @@ struct EnhancedStoryContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
-    
+
     private var failurePlaceholder: some View {
         ZStack {
             LinearGradient(
@@ -635,7 +671,7 @@ struct EnhancedStoryContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    
+
     private var loadingPlaceholder: some View {
         ZStack {
             AppTheme.Colors.surface
@@ -661,10 +697,9 @@ struct EnhancedStoryHeaderView: View {
     let viewerCount: Int
     let onDismiss: () -> Void
     let onProfileTap: () -> Void
-    
+
     var body: some View {
         VStack(spacing: 16) {
-            // Enhanced progress bars
             HStack(spacing: 3) {
                 ForEach(0..<contentCount, id: \.self) { index in
                     GeometryReader { geometry in
@@ -673,7 +708,7 @@ struct EnhancedStoryHeaderView: View {
                                 .fill(.white.opacity(0.3))
                                 .frame(height: 3)
                                 .cornerRadius(1.5)
-                            
+
                             Rectangle()
                                 .fill(.white)
                                 .frame(width: geometry.size.width * progressForIndex(index), height: 3)
@@ -685,8 +720,7 @@ struct EnhancedStoryHeaderView: View {
                 }
             }
             .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
-            
-            // Enhanced story info
+
             HStack(spacing: 12) {
                 Button(action: onProfileTap) {
                     ZStack(alignment: .bottomTrailing) {
@@ -709,8 +743,7 @@ struct EnhancedStoryHeaderView: View {
                                 .stroke(.white, lineWidth: 2)
                         )
                         .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
-                        
-                        // Online indicator
+
                         if story.creator?.isCreator == true {
                             Circle()
                                 .fill(AppTheme.Colors.success)
@@ -724,19 +757,19 @@ struct EnhancedStoryHeaderView: View {
                     }
                 }
                 .buttonStyle(PlainButtonStyle())
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Text(story.creator?.displayName ?? "Unknown")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.white)
-                        
+
                         if story.creator?.isVerified == true {
                             Image(systemName: "checkmark.seal.fill")
                                 .font(.system(size: 14))
                                 .foregroundColor(AppTheme.Colors.primary)
                         }
-                        
+
                         if story.isLive {
                             HStack(spacing: 4) {
                                 Circle()
@@ -744,7 +777,7 @@ struct EnhancedStoryHeaderView: View {
                                     .frame(width: 4, height: 4)
                                     .scaleEffect(1.0)
                                     .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: true)
-                                
+
                                 Text("LIVE")
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(.white)
@@ -755,17 +788,17 @@ struct EnhancedStoryHeaderView: View {
                             .cornerRadius(8)
                         }
                     }
-                    
+
                     HStack(spacing: 8) {
                         Text(story.createdAt.timeAgoDisplay)
                             .font(.system(size: 13))
                             .foregroundColor(.white.opacity(0.8))
-                        
+
                         if viewerCount > 0 {
                             HStack(spacing: 4) {
                                 Image(systemName: "eye.fill")
                                     .font(.system(size: 10))
-                                
+
                                 Text("\(viewerCount)")
                                     .font(.system(size: 12, weight: .medium))
                             }
@@ -773,9 +806,9 @@ struct EnhancedStoryHeaderView: View {
                         }
                     }
                 }
-                
+
                 Spacer()
-                
+
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
                         .font(.system(size: 18, weight: .medium))
@@ -789,7 +822,7 @@ struct EnhancedStoryHeaderView: View {
             }
         }
     }
-    
+
     private func progressForIndex(_ index: Int) -> Double {
         if index < currentIndex {
             return 1.0
@@ -805,7 +838,7 @@ struct EnhancedStoryHeaderView: View {
 struct EnhancedStoryTextOverlay: View {
     let text: String
     let backgroundColor: String?
-    
+
     var body: some View {
         Text(text)
             .font(.system(size: 28, weight: .bold, design: .rounded))
@@ -818,7 +851,7 @@ struct EnhancedStoryTextOverlay: View {
                     RoundedRectangle(cornerRadius: 20)
                         .fill(.black.opacity(0.6))
                         .blur(radius: 1)
-                    
+
                     RoundedRectangle(cornerRadius: 20)
                         .stroke(.white.opacity(0.2), lineWidth: 1)
                 }
@@ -834,7 +867,7 @@ struct EnhancedStoryFooterView: View {
     let onReply: () -> Void
     let onLike: () -> Void
     let onShare: () -> Void
-    
+
     var body: some View {
         HStack(spacing: 16) {
             Button(action: onReply) {
@@ -842,11 +875,11 @@ struct EnhancedStoryFooterView: View {
                     Image(systemName: "bubble.right.fill")
                         .font(.system(size: 16))
                         .foregroundColor(.white)
-                    
+
                     Text("Comment")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.white)
-                    
+
                     Spacer()
                 }
                 .padding(.horizontal, 16)
@@ -861,7 +894,7 @@ struct EnhancedStoryFooterView: View {
                 )
             }
             .buttonStyle(PlainButtonStyle())
-            
+
             HStack(spacing: 16) {
                 Button(action: onLike) {
                     ZStack {
@@ -872,7 +905,7 @@ struct EnhancedStoryFooterView: View {
                                 Circle()
                                     .stroke(.white.opacity(0.3), lineWidth: 1)
                             )
-                        
+
                         Image(systemName: hasLiked ? "heart.fill" : "heart")
                             .font(.system(size: 20, weight: .medium))
                             .foregroundColor(hasLiked ? .red : .white)
@@ -882,7 +915,7 @@ struct EnhancedStoryFooterView: View {
                     .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
                 }
                 .buttonStyle(PlainButtonStyle())
-                
+
                 Button(action: onShare) {
                     ZStack {
                         Circle()
@@ -892,7 +925,7 @@ struct EnhancedStoryFooterView: View {
                                 Circle()
                                     .stroke(.white.opacity(0.3), lineWidth: 1)
                             )
-                        
+
                         Image(systemName: "paperplane.fill")
                             .font(.system(size: 18, weight: .medium))
                             .foregroundColor(.white)
@@ -910,18 +943,17 @@ struct EnhancedStoryFooterView: View {
 struct StoryReplyView: View {
     let story: Story
     let onSend: (String) -> Void
-    
+
     @State private var replyText: String = ""
     @FocusState private var isTextFieldFocused: Bool
-    
+
     var body: some View {
         VStack(spacing: 16) {
-            // Handle
             RoundedRectangle(cornerRadius: 3)
                 .fill(Color.gray.opacity(0.3))
                 .frame(width: 40, height: 6)
                 .padding(.top, 8)
-            
+
             HStack(spacing: 12) {
                 AsyncImage(url: URL(string: story.creator?.profileImageURL ?? "")) { image in
                     image
@@ -933,21 +965,21 @@ struct StoryReplyView: View {
                 }
                 .frame(width: 32, height: 32)
                 .clipShape(Circle())
-                
+
                 Text("Reply to \(story.creator?.displayName ?? "Unknown")")
                     .font(.headline)
                     .foregroundColor(AppTheme.Colors.textPrimary)
-                
+
                 Spacer()
             }
             .padding(.horizontal)
-            
+
             HStack(spacing: 12) {
                 TextField("Write a message...", text: $replyText, axis: .vertical)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .focused($isTextFieldFocused)
                     .lineLimit(1...3)
-                
+
                 Button(action: {
                     if !replyText.isEmpty {
                         onSend(replyText)
@@ -961,7 +993,7 @@ struct StoryReplyView: View {
                 .disabled(replyText.isEmpty)
             }
             .padding(.horizontal)
-            
+
             Spacer()
         }
         .onAppear {

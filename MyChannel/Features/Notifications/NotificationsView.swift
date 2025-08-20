@@ -67,7 +67,7 @@ struct NotificationsView: View {
                 Spacer()
             }
             .background(AppTheme.Colors.background)
-            .navigationTitle("Notifications")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
