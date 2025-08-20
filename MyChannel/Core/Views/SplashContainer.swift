@@ -24,81 +24,68 @@ struct SplashContainer: View {
     var previewMode: PreviewMode = .splashOnly
 
     var body: some View {
-        contentView
-            .ignoresSafeArea(.keyboard)
-            .onAppear {
-                if isRunningInPreviews {
-                    disablePreviewURLProtocolStubIfAny()
+        Group {
+            if isRunningInPreviews {
+                switch previewMode {
+                case .splashOnly:
+                    PreviewSplashStandalone()
+                case .simpleHome:
+                    PreviewTransitionContainer { HomeView() }
+                case .safeMainTab:
+                    PreviewTransitionContainer { MainTabView() }
                 }
-            }
-    }
-
-    @ViewBuilder
-    private var contentView: some View {
-        if isRunningInPreviews {
-            previewContent
-        } else {
-            liveContent
-        }
-    }
-
-    private var previewContent: AnyView {
-        switch previewMode {
-        case .splashOnly:
-            return AnyView(PreviewSplashStandalone())
-        case .simpleHome:
-            return AnyView(PreviewTransitionContainer { HomeView() })
-        case .safeMainTab:
-            return AnyView(PreviewTransitionContainer { MainTabView() })
-        }
-    }
-
-    private var liveContent: AnyView {
-        AnyView(
-            ZStack {
-                if showSplash {
-                    SplashView {
-                        withAnimation(.easeInOut(duration: 0.4)) {
-                            showSplash = false
-                        }
-                        showLaunchMask = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                showLaunchMask = false
-                            }
-                        }
-                    }
-                    .transition(AnyTransition.opacity)
-                    .zIndex(1)
-                } else {
-                    HomeView()
-                        .transition(AnyTransition.opacity)
-                }
-            }
-            .overlay(
-                Color(.systemBackground)
-                    .ignoresSafeArea()
-                    .opacity(showLaunchMask ? 1 : 0)
-                    .allowsHitTesting(false)
-                    .animation(.easeInOut(duration: 0.25), value: showLaunchMask)
-            )
-            .animation(.easeInOut(duration: 0.4), value: showSplash)
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+            } else {
+                ZStack {
                     if showSplash {
-                        withAnimation(.easeInOut(duration: 0.4)) {
-                            showSplash = false
+                        SplashView {
+                            withAnimation(.easeInOut(duration: 0.4)) {
+                                showSplash = false
+                            }
+                            showLaunchMask = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    showLaunchMask = false
+                                }
+                            }
                         }
-                        showLaunchMask = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                showLaunchMask = false
+                        .transition(.opacity)
+                        .zIndex(1)
+                    } else {
+                        MainTabView()
+                            .transition(.opacity)
+                    }
+                }
+                .overlay(
+                    Color(.systemBackground)
+                        .ignoresSafeArea()
+                        .opacity(showLaunchMask ? 1 : 0)
+                        .allowsHitTesting(false)
+                        .animation(.easeInOut(duration: 0.25), value: showLaunchMask)
+                )
+                .animation(.easeInOut(duration: 0.4), value: showSplash)
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                        if showSplash {
+                            withAnimation(.easeInOut(duration: 0.4)) {
+                                showSplash = false
+                            }
+                            showLaunchMask = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    showLaunchMask = false
+                                }
                             }
                         }
                     }
                 }
             }
-        )
+        }
+        .ignoresSafeArea(.keyboard)
+        .onAppear {
+            if isRunningInPreviews {
+                disablePreviewURLProtocolStubIfAny()
+            }
+        }
     }
 
     private func disablePreviewURLProtocolStubIfAny() {

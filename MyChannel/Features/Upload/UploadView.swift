@@ -9,6 +9,8 @@ import SwiftUI
 import PhotosUI
 import Photos
 import AVFoundation
+import AVKit
+import UIKit
 
 struct UploadView: View {
     @StateObject private var uploadManager = VideoUploadManager()
@@ -24,12 +26,20 @@ struct UploadView: View {
     @State private var showingSuccessAnimation = false
     @State private var isAnimating = false
     
-    // New states
+    // Enhanced states
     @State private var showCancelConfirm = false
     @State private var showRestorePrompt = false
     @State private var restoreDraft: UploadDraft?
     @State private var isSavingDraft = false
     @State private var showAIActions = false
+    
+    // New enhancement states
+    @State private var showUploadTips = false
+    @State private var selectedEditingTool: EditingTool?
+    @State private var showPreview = false
+    @State private var keyboardHeight: CGFloat = 0
+    @State private var showQualitySettings = false
+    @State private var uploadQuality: VideoQuality = .high
     
     enum UploadStep {
         case selectMedia
@@ -39,6 +49,19 @@ struct UploadView: View {
         case completed
     }
     
+    // Extracted to help the type checker
+    private var backgroundGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                AppTheme.Colors.primary.opacity(0.05),
+                AppTheme.Colors.secondary.opacity(0.03),
+                AppTheme.Colors.background
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
     enum CreationMode: String, CaseIterable, Identifiable {
         case video, flicks, live, post
         var id: String { rawValue }
@@ -60,44 +83,78 @@ struct UploadView: View {
         }
     }
     
+    enum EditingTool: String, CaseIterable, Identifiable {
+        case trim, filters, music, text, effects, speed
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .trim: return "Trim & Cut"
+            case .filters: return "Filters"
+            case .music: return "Add Music"
+            case .text: return "Text & Titles"
+            case .effects: return "Effects"
+            case .speed: return "Speed Control"
+            }
+        }
+        var subtitle: String {
+            switch self {
+            case .trim: return "Perfect timing"
+            case .filters: return "Visual effects"
+            case .music: return "Perfect soundtrack"
+            case .text: return "Engaging captions"
+            case .effects: return "Special effects"
+            case .speed: return "Slow/fast motion"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .trim: return "scissors"
+            case .filters: return "camera.filters"
+            case .music: return "music.note"
+            case .text: return "text.bubble"
+            case .effects: return "wand.and.stars"
+            case .speed: return "speedometer"
+            }
+        }
+        var color: Color {
+            switch self {
+            case .trim: return .blue
+            case .filters: return .purple
+            case .music: return .green
+            case .text: return .orange
+            case .effects: return .pink
+            case .speed: return .red
+            }
+        }
+    }
+    
+    enum VideoQuality: String, CaseIterable, Identifiable {
+        case low = "480p", medium = "720p", high = "1080p", ultra = "4K"
+        var id: String { rawValue }
+        var title: String { rawValue }
+        var description: String {
+            switch self {
+            case .low: return "Faster upload, smaller file"
+            case .medium: return "Good balance of quality and size"
+            case .high: return "Great quality, recommended"
+            case .ultra: return "Best quality, larger file"
+            }
+        }
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
-                LinearGradient(
-                    colors: [
-                        AppTheme.Colors.primary.opacity(0.05),
-                        AppTheme.Colors.secondary.opacity(0.03),
-                        AppTheme.Colors.background
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+                backgroundGradient
+                    .ignoresSafeArea()
                 
                 content
             }
             .navigationTitle("Create")
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
-            .toolbar {
-                ToolbarItemGroup(placement: .navigationBarLeading) {
-                    Button {
-                        HapticManager.shared.impact(style: .light)
-                        showCancelConfirm = true
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .medium))
-                            Text("Cancel")
-                                .font(.system(size: 16, weight: .medium))
-                        }
-                        .foregroundStyle(AppTheme.Colors.primary)
-                    }
-                }
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    navigationTrailingButton
-                }
-            }
+            .toolbar { uploadToolbar }
+            .toolbarBackground(.hidden, for: .navigationBar)
         }
         .confirmationDialog("Leave creator?", isPresented: $showCancelConfirm, titleVisibility: .visible) {
             Button("Save Draft & Close") {
@@ -108,7 +165,6 @@ struct UploadView: View {
                         restoreDraft = draft
                         dismiss()
                     } catch {
-                        // If no video yet, just close
                         dismiss()
                     }
                     isSavingDraft = false
@@ -168,6 +224,7 @@ struct UploadView: View {
             )
             .padding(.horizontal, 16)
             .padding(.bottom, 6)
+            .background(.clear)
         }
         .fullScreenCover(isPresented: $showingCamera) {
             ProfessionalCameraView { videoURL in
@@ -179,6 +236,15 @@ struct UploadView: View {
                 }
                 HapticManager.shared.impact(style: .medium)
             }
+        }
+        .sheet(isPresented: $showPreview) {
+            if let url = uploadManager.videoURL {
+                VideoPlayer(player: AVPlayer(url: url))
+                    .ignoresSafeArea()
+            }
+        }
+        .sheet(isPresented: $showQualitySettings) {
+            QualitySettingsView(selected: $uploadQuality)
         }
         .fullScreenCover(isPresented: $showLiveSetup) {
             GoLiveSetupView {
@@ -215,54 +281,35 @@ struct UploadView: View {
         }
     }
     
+    // MARK: - Toolbar
+    @ToolbarContentBuilder
+    private var uploadToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            Button {
+                HapticManager.shared.impact(style: .light)
+                showCancelConfirm = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .medium))
+                    Text("Cancel")
+                        .font(.system(size: 16, weight: .medium))
+                }
+                .foregroundStyle(AppTheme.Colors.primary)
+            }
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            navigationTrailingButton
+        }
+    }
+    
     @ViewBuilder
     private var content: some View {
         VStack(spacing: 0) {
             enhancedProgressHeader
             
             ZStack {
-                switch uploadStep {
-                case .selectMedia:
-                    MediaGridPickerView(
-                        mode: creationMode == .flicks ? .flicks : .video,
-                        title: "Upload video",
-                        onClose: { dismiss() },
-                        onPick: { url in
-                            Task {
-                                await uploadManager.prepareVideo(from: url)
-                                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                                    uploadStep = .editVideo
-                                }
-                            }
-                        }
-                    )
-                    .transition(.identity)
-                    
-                case .editVideo:
-                    videoEditingView
-                        .transition(.asymmetric(
-                            insertion: .scale(scale: 0.98).combined(with: .opacity),
-                            removal: .scale(scale: 0.98).combined(with: .opacity)
-                        ))
-                case .addDetails:
-                    videoDetailsView
-                        .transition(.asymmetric(
-                            insertion: .scale.combined(with: .opacity),
-                            removal: .scale.combined(with: .opacity)
-                        ))
-                case .uploading:
-                    uploadingView
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .bottom).combined(with: .opacity),
-                            removal: .move(edge: .top).combined(with: .opacity)
-                        ))
-                case .completed:
-                    completedView
-                        .transition(.asymmetric(
-                            insertion: .scale(scale: 0.98, anchor: .center).combined(with: .opacity),
-                            removal: .scale(scale: 0.98, anchor: .center).combined(with: .opacity)
-                        ))
-                }
+                currentStepView
             }
             .animation(.spring(response: 0.6, dampingFraction: 0.8), value: uploadStep)
         }
@@ -346,6 +393,63 @@ struct UploadView: View {
         case .uploading:   return "Your video is being processed and uploaded"
         case .completed:   return "Your video is live and ready to inspire!"
         }
+    }
+    
+    // MARK: - Type-erased current step (fixes type-checker blowup)
+    private var currentStepView: AnyView {
+        switch uploadStep {
+        case .selectMedia:
+            return AnyView(selectMediaView)
+        case .editVideo:
+            return AnyView(
+                videoEditingView
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.98).combined(with: .opacity),
+                        removal: .scale(scale: 0.98).combined(with: .opacity)
+                    ))
+            )
+        case .addDetails:
+            return AnyView(
+                videoDetailsView
+                    .transition(.asymmetric(
+                        insertion: .scale.combined(with: .opacity),
+                        removal: .scale.combined(with: .opacity)
+                    ))
+            )
+        case .uploading:
+            return AnyView(
+                uploadingView
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .move(edge: .top).combined(with: .opacity)
+                    ))
+            )
+        case .completed:
+            return AnyView(
+                completedView
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.98, anchor: .center).combined(with: .opacity),
+                        removal: .scale(scale: 0.98, anchor: .center).combined(with: .opacity)
+                    ))
+            )
+        }
+    }
+    
+    private var selectMediaView: some View {
+        MediaGridPickerView(
+            mode: creationMode == .flicks ? .flicks : .video,
+            title: "Upload video",
+            onClose: { dismiss() },
+            onPick: { url in
+                Task {
+                    await uploadManager.prepareVideo(from: url)
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        uploadStep = .editVideo
+                    }
+                }
+            }
+        )
+        .transition(.identity)
     }
     
     // MARK: - Edit View
@@ -450,47 +554,126 @@ struct UploadView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 16) {
-                        EditingToolCard(title: "Trim & Cut", subtitle: "Perfect timing", icon: "scissors", color: .blue) { }
-                        EditingToolCard(title: "Filters", subtitle: "Visual effects", icon: "camera.filters", color: .purple) { }
-                        EditingToolCard(title: "Add Music", subtitle: "Perfect soundtrack", icon: "music.note", color: .green) { }
-                        EditingToolCard(title: "Text & Titles", subtitle: "Engaging captions", icon: "text.bubble", color: .orange) { }
+                        ForEach(EditingTool.allCases) { tool in
+                            EditingToolCard(
+                                title: tool.title,
+                                subtitle: tool.subtitle,
+                                icon: tool.icon,
+                                color: tool.color
+                            ) {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                    selectedEditingTool = tool
+                                }
+                                HapticManager.shared.impact(style: .medium)
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
                 
                 Spacer(minLength: 40)
                 
-                VStack(spacing: 12) {
-                    Button {
-                        HapticManager.shared.impact(style: .medium)
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            uploadStep = .addDetails
-                        }
-                    } label: {
-                        HStack(spacing: 12) {
-                            Text("Continue").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
-                            Image(systemName: "arrow.right").font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(LinearGradient(colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary], startPoint: .leading, endPoint: .trailing))
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 15, x: 0, y: 8);
-                    }
-                    .buttonStyle(.plain)
-                    
-                    Button("Skip Editing") {
-                        HapticManager.shared.impact(style: .light)
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            uploadStep = .addDetails
-                        }
-                    }
-                    .font(.system(size: 16))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                }
+                editingActionButtons
                 .padding(.horizontal, 20)
             }
         }
+    }
+    
+    // MARK: - Extracted Button Views
+    @ViewBuilder
+    private var editingActionButtons: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                previewButton
+                qualityButton
+            }
+            
+            continueButton
+            
+            skipEditingButton
+        }
+    }
+    
+    private var previewButton: some View {
+        Button {
+            showPreview = true
+            HapticManager.shared.impact(style: .light)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "play.circle")
+                Text("Preview")
+            }
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundColor(AppTheme.Colors.primary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(AppTheme.Colors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.Colors.primary, lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private var qualityButton: some View {
+        Button {
+            showQualitySettings = true
+            HapticManager.shared.impact(style: .light)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "gear")
+                Text(uploadQuality.title)
+            }
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundColor(AppTheme.Colors.textPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(AppTheme.Colors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.Colors.divider, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private var continueButton: some View {
+        Button {
+            HapticManager.shared.impact(style: .medium)
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                uploadStep = .addDetails
+            }
+        } label: {
+            continueButtonLabel
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isAnimating = true }
+                .onEnded { _ in isAnimating = false }
+        )
+    }
+    
+    private var continueButtonLabel: some View {
+        HStack(spacing: 12) {
+            Text("Continue").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
+            Image(systemName: "arrow.right").font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+        .background(LinearGradient(colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary], startPoint: .leading, endPoint: .trailing))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 15, x: 0, y: 8)
+        .scaleEffect(isAnimating ? 1.02 : 1.0)
+        .animation(.easeInOut(duration: 0.1), value: isAnimating)
+    }
+    
+    private var skipEditingButton: some View {
+        Button("Skip Editing") {
+            HapticManager.shared.impact(style: .light)
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                uploadStep = .addDetails
+            }
+        }
+        .font(.system(size: 16))
+        .foregroundColor(AppTheme.Colors.textSecondary)
     }
     
     // MARK: - Details View
@@ -633,7 +816,7 @@ struct UploadView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "icloud.and.arrow.up").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
-                            Text("Upload Video").font(.system(size: 18, weight: .semibold)).foregroundColor(.white);
+                            Text("Upload Video").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 18)
@@ -653,6 +836,9 @@ struct UploadView: View {
                         .font(.system(size: 13))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                         .multilineTextAlignment(.center)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 20)
             }
@@ -901,8 +1087,6 @@ struct UploadView: View {
     }
 }
 
-// MARK: - UI Pieces (unchanged below)
-
 struct EditingToolCard: View {
     let title: String
     let subtitle: String
@@ -910,25 +1094,183 @@ struct EditingToolCard: View {
     let color: Color
     let action: () -> Void
     
+    @State private var isPressed = false
+    
     var body: some View {
         Button(action: action) {
             VStack(spacing: 12) {
                 ZStack {
-                    Circle().fill(color.opacity(0.1)).frame(width: 50, height: 50)
-                    Image(systemName: icon).font(.system(size: 22)).foregroundColor(color)
+                    Circle()
+                        .fill(color.opacity(isPressed ? 0.2 : 0.1))
+                        .frame(width: 50, height: 50)
+                        .overlay(
+                            Circle()
+                                .stroke(color.opacity(isPressed ? 0.6 : 0.3), lineWidth: isPressed ? 2 : 1)
+                        )
+                    Image(systemName: icon)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(color)
+                        .scaleEffect(isPressed ? 1.1 : 1.0)
                 }
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
+                
                 VStack(spacing: 4) {
-                    Text(title).font(.system(size: 16, weight: .semibold)).foregroundColor(AppTheme.Colors.textPrimary)
-                    Text(subtitle).font(.system(size: 12)).foregroundColor(AppTheme.Colors.textSecondary)
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
                 }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
-            .background(AppTheme.Colors.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(isPressed ? color.opacity(0.05) : AppTheme.Colors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(isPressed ? color.opacity(0.3) : .clear, lineWidth: 1.5)
+                    )
+            )
+            .shadow(
+                color: isPressed ? color.opacity(0.2) : .black.opacity(0.05),
+                radius: isPressed ? 8 : 5,
+                x: 0,
+                y: isPressed ? 4 : 2
+            )
+            .scaleEffect(isPressed ? 1.02 : 1.0)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isPressed)
         }
         .buttonStyle(.plain)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !isPressed {
+                        isPressed = true
+                        HapticManager.shared.impact(style: .light)
+                    }
+                }
+                .onEnded { _ in
+                    isPressed = false
+                }
+        )
+    }
+}
+
+struct UploadCreationModeBar: View {
+    @Binding var selected: UploadView.CreationMode
+    let onTap: (UploadView.CreationMode) -> Void
+    
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+    @Environment(\.sizeCategory) private var sizeCategory
+    @Namespace private var ns
+    
+    private var isPad: Bool { hSizeClass == .regular }
+    private var isCompactWidth: Bool {
+        UIScreen.main.bounds.width < 360
+    }
+    private var showLabels: Bool {
+        return isPad || (!isCompactWidth && sizeCategory <= .large)
+    }
+    
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(UploadView.CreationMode.allCases) { mode in
+                ModeButton(
+                    ns: ns,
+                    mode: mode,
+                    isSelected: selected == mode,
+                    showLabels: showLabels,
+                    onTap: {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            selected = mode
+                        }
+                        onTap(mode)
+                    }
+                )
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.12), radius: 16, x: 0, y: 8)
+        )
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: selected)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Creation mode")
+    }
+}
+
+private struct ModeButton: View {
+    let ns: Namespace.ID
+    let mode: UploadView.CreationMode
+    let isSelected: Bool
+    let showLabels: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            ZStack {
+                if isSelected {
+                    Capsule()
+                        .fill(Color.white)
+                        .matchedGeometryEffect(id: "selector", in: ns)
+                        .frame(height: 36)
+                        .shadow(color: Color.black.opacity(0.10), radius: 10, x: 0, y: 5)
+                }
+                
+                HStack(spacing: 8) {
+                    Image(systemName: mode.icon)
+                        .font(.system(size: 14, weight: .semibold))
+                    
+                    if showLabels {
+                        Text(mode.title)
+                            .font(.system(size: 14, weight: .semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .allowsTightening(true)
+                    }
+                }
+                .padding(.horizontal, showLabels ? 12 : 10)
+                .frame(height: 36)
+                .frame(minWidth: showLabels ? 0 : 44)
+                .foregroundColor(isSelected ? .black : .white)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(mode.title)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+}
+
+private struct QualitySettingsView: View {
+    @Binding var selected: UploadView.VideoQuality
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(UploadView.VideoQuality.allCases) { quality in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(quality.title).font(.headline)
+                            Text(quality.description).font(.caption).foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        if selected == quality {
+                            Image(systemName: "checkmark").foregroundColor(AppTheme.Colors.primary)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { selected = quality }
+                }
+            }
+            .navigationTitle("Upload Quality")
+        }
     }
 }
 
@@ -1200,50 +1542,6 @@ struct ProfessionalToggleRow: View {
         .background(AppTheme.Colors.surface)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1))
-    }
-}
-
-struct UploadCreationModeBar: View {
-    @Binding var selected: UploadView.CreationMode
-    let onTap: (UploadView.CreationMode) -> Void
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            ForEach(UploadView.CreationMode.allCases) { mode in
-                Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                        selected = mode
-                    }
-                    onTap(mode)
-                } label: {
-                    ZStack {
-                        if selected == mode {
-                            Capsule()
-                                .fill(Color.white)
-                                .frame(height: 36)
-                                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
-                                .transition(.scale.combined(with: .opacity))
-                        }
-                        HStack(spacing: 8) {
-                            Image(systemName: mode.icon).font(.system(size: 14, weight: .semibold))
-                            Text(mode.title).font(.system(size: 14, weight: .semibold))
-                        }
-                        .padding(.horizontal, 14)
-                        .frame(height: 36)
-                        .foregroundColor(selected == mode ? .black : .white)
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(8)
-        .frame(maxWidth: .infinity)
-        .background(Capsule().fill(Color.black.opacity(0.85)))
-        .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
-        .shadow(color: Color.black.opacity(0.25), radius: 20, x: 0, y: 10)
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: selected)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Creation mode")
     }
 }
 

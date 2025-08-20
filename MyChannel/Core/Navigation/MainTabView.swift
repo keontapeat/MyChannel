@@ -21,6 +21,7 @@ struct MainTabView: View {
     @State private var presentMiniPlayerDetail: Bool = false
     
     @State private var notificationBadges: [TabItem: Int] = [:]
+    private let tabBarReservedBottomInset: CGFloat = 72
     
     // Error handling state
     @State private var hasError: Bool = false
@@ -133,6 +134,10 @@ struct MainTabView: View {
                 .background(AppTheme.Colors.background)
                 .zIndex(5)
                 .allowsHitTesting(true)
+                .safeAreaInset(edge: .bottom) {
+                    // Reserve space so scrollable content does not sit beneath the flush tab bar
+                    Color.clear.frame(height: tabBarReservedBottomInset)
+                }
 
             // Keep global mini player hidden on Flicks
             if selectedTab != .flicks {
@@ -151,6 +156,7 @@ struct MainTabView: View {
             )
             .zIndex(999)
             .ignoresSafeArea(.keyboard)
+            .ignoresSafeArea(.container, edges: .bottom)
             .allowsHitTesting(true)
         }
         .ignoresSafeArea(.keyboard)
@@ -594,15 +600,13 @@ struct CustomTabBar: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .padding(.vertical, 4)
             .background(
                 ZStack {
-                    // Solid white background (non-translucent)
                     Capsule()
                         .fill(Color.white)
-                    // Light border for definition
                     Capsule()
-                        .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
+                        .stroke(AppTheme.Colors.textSecondary.opacity(0.08), lineWidth: 0.5)
                 }
             )
             .shadow(
@@ -634,7 +638,6 @@ struct CustomTabBar: View {
             }
         }
         .padding(.horizontal, 24)
-        .padding(.bottom, 16)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: selectedTab)
     }
 }
@@ -662,7 +665,7 @@ struct ConnectedProfileButton: View {
                 }
                 .frame(height: 32)
             }
-            .frame(height: 48)
+            .frame(height: 40)
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isSelected)
         }
         .buttonStyle(PressableScaleButtonStyle(scale: 0.95))
@@ -694,7 +697,7 @@ struct SeparatedProfileButton: View {
                     .overlay(
                         Circle()
                             .stroke(
-                                Color.white.opacity(0.2),
+                                AppTheme.Colors.textSecondary.opacity(0.08),
                                 lineWidth: 0.5
                             )
                     )
@@ -817,7 +820,7 @@ struct CustomTabBarButton: View {
                 }
                 .frame(height: 32)
             }
-            .frame(height: 48)
+            .frame(height: 40)
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isSelected)
         }
         .buttonStyle(PressableScaleButtonStyle(scale: 0.95))
@@ -1190,7 +1193,6 @@ struct TVStaticOverlay: View {
                         .font(.title2)
                     Text(tab.title)
                         .font(.caption)
-                        .fontWeight(.medium)
                 }
                 .foregroundColor(tab == .home ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
                 .frame(maxWidth: .infinity)
@@ -1210,7 +1212,7 @@ struct TVStaticOverlay: View {
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
-        .background(.ultraThinMaterial)
+        .background(Color.white)
         .cornerRadius(24)
         .padding()
     }

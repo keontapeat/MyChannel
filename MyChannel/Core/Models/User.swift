@@ -225,7 +225,8 @@ extension User {
                 SocialLink(platform: .instagram, url: "https://instagram.com/naturelover_sarah", displayName: "@naturelover_sarah"),
                 SocialLink(platform: .twitter, url: "https://twitter.com/sarah_nature", displayName: "@sarah_nature")
             ],
-            followingCount: 892
+            followingCount: 892,
+            totalViews: 2_000_000
         ),
         User(
             id: "user2", 

@@ -13,6 +13,8 @@ import AVFoundation
 struct EditProfileView: View {
     @Binding var user: User
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var authManager: AuthenticationManager
+    @EnvironmentObject private var appState: AppState
     
     @State private var displayName: String = ""
     @State private var username: String = ""
@@ -667,6 +669,9 @@ struct EditProfileView: View {
             )
             
             user = updatedUser
+            authManager.currentUser = updatedUser
+            appState.currentUser = updatedUser
+            
             isSaving = false
             hasUnsavedChanges = false
             
@@ -908,7 +913,7 @@ private struct DefaultProfileBanner: Identifiable, Hashable {
         .init(id: "b2", title: "Ocean Sunset", subtitle: "Soft gradients and waves", kind: .image, assetURL: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1600&q=80", previewURL: nil),
         .init(id: "b3", title: "City Lights", subtitle: "Modern urban vibe", kind: .image, assetURL: "https://images.unsplash.com/photo-1499346030926-9a72daac6c63?w=1600&q=80", previewURL: nil),
         .init(id: "b4", title: "Cinematic Nature", subtitle: "Subtle motion video", kind: .video, assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", previewURL: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1600&q=80"),
-        .init(id: "b5", title: "Abstract Flow", subtitle: "Minimal gradient waves", kind: .image, assetURL: "https://images.unsplash.com/photo-1549880338-65ddcdfd017b?w=1600&q=80", previewURL: nil),
+        .init(id: "b5", title: "Abstract Flow", subtitle: "Minimal gradient waves", kind: .image, assetURL: "https://images.unsplash.com/photo-154988033865ddcdfd017b?w=1600&q=80", previewURL: nil),
         .init(id: "b6", title: "Sintel Trailer", subtitle: "Cinematic video banner", kind: .video, assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4", previewURL: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1600&q=80")
     ]
 }
@@ -990,4 +995,7 @@ private struct DefaultBannerPickerView: View {
     NavigationStack {
         EditProfileView(user: .constant(User.sampleUsers[0]))
     }
+    .environmentObject(AuthenticationManager.shared)
+    .environmentObject(AppState())
+    .preferredColorScheme(.light)
 }

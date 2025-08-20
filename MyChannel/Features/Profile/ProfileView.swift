@@ -52,6 +52,11 @@ struct ProfileView: View {
         .onChange(of: appState.currentUser) { _, newUser in
             handleUserChange(newUser)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .userProfileUpdated)) { note in
+            if let updated = note.object as? User {
+                handleUserChange(updated)
+            }
+        }
     }
 
     // MARK: - Main Profile Content
@@ -298,7 +303,7 @@ private struct ProfileMainSection: View {
                         user: user,
                         scrollOffset: scrollOffset
                     )
-                    .padding(.top, -10)
+                    .padding(.top, -8)
 
                     ScrollViewReader { proxy in
                         ScrollView {
@@ -652,7 +657,9 @@ private struct HistoryVideoCard: View {
 struct ProfileEditWrapper: View {
     @Binding var user: User
     var body: some View {
-        EditProfileView(user: $user)
+        NavigationStack {
+            EditProfileView(user: $user)
+        }
     }
 }
 

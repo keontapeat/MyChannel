@@ -11,15 +11,34 @@ struct ProfileHeaderView: View {
     @EnvironmentObject private var appState: AppState
 
     private let headerHeight: CGFloat = 410
-
-    private let profileImageSize: CGFloat = 80
+    private let baseAvatarSize: CGFloat = 80
+    private let minAvatarSize: CGFloat = 52
+    private let collapseThreshold: CGFloat = 160
 
     private var isCurrentUserProfile: Bool {
         appState.currentUser?.id == user.id
     }
 
+    private var collapseProgress: CGFloat {
+        let p = min(max((-scrollOffset) / collapseThreshold, 0), 1)
+        return p
+    }
+
+    private var currentAvatarSize: CGFloat {
+        baseAvatarSize - (baseAvatarSize - minAvatarSize) * collapseProgress
+    }
+
+    private var parallaxOffset: CGFloat {
+        scrollOffset > 0 ? -scrollOffset * 0.35 : 0
+    }
+
+    private var stretchAmount: CGFloat {
+        max(0, scrollOffset)
+    }
+
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
+            // Background banner with parallax + stretch
             GeometryReader { _ in
                 ZStack {
                     if let videoURL = user.bannerVideoURL, let url = URL(string: videoURL) {
@@ -46,48 +65,126 @@ struct ProfileHeaderView: View {
                         endPoint: .bottom
                     )
                 }
+                .offset(y: parallaxOffset)
             }
-            .frame(height: headerHeight)
+            .frame(height: headerHeight + stretchAmount)
+            .clipped()
             .ignoresSafeArea(.all)
 
-            VStack {
-                HStack {
-                    Spacer()
+            // Top controls
+            HStack {
+                Spacer()
 
-                    Button {
-                        showingSettings = true
-                        HapticManager.shared.impact(style: .light)
-                    } label: {
-                        Image(systemName: "gearshape.fill")
-                            .font(.title2)
+                Button {
+                    showingSettings = true
+                    HapticManager.shared.impact(style: .light)
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .padding(14)
+                        .background(.black.opacity(0.55))
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 4)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 50)
+
+            // Main profile info
+            VStack(spacing: 16) {
+                Spacer()
+
+                ProfileAvatarView(urlString: user.profileImageURL, size: currentAvatarSize)
+                    .overlay(Circle().stroke(.white, lineWidth: 4))
+                    .shadow(color: .black.opacity(0.5), radius: 14, x: 0, y: 6)
+                    .transition(.scale.combined(with: .opacity))
+
+                VStack(spacing: 6) {
+                    HStack(spacing: 6) {
+                        Text(user.displayName)
+                            .font(.title2.weight(.bold))
                             .foregroundColor(.white)
-                            .padding(14)
-                            .background(.black.opacity(0.55))
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
-                            .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 4)
+                            .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+
+                        if user.isVerified {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.title3)
+                                .foregroundColor(.blue)
+                                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                        }
+                    }
+                    .opacity(opacityForFactor(0.08))
+
+                    Text("@\(user.username)")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.9))
+                        .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+                        .opacity(opacityForFactor(0.15))
+
+                    if let bio = user.bio {
+                        Text(bio)
+                            .font(.footnote)
+                            .foregroundColor(.white.opacity(0.95))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(4)
+                            .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+                            .padding(.horizontal, 20)
+                            .opacity(opacityForFactor(0.25))
+                            .transition(.opacity)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 50)
 
-                Spacer()
-            }
+                HStack(spacing: 32) {
+                    StatItem(value: formatCount(user.subscriberCount), label: "Subscribers")
+                    StatItem(value: formatCount(user.videoCount), label: "Videos")
+                    StatItem(value: formatCount(user.totalViews ?? estimatedTotalViews(for: user)), label: "Views")
+                }
+                .opacity(opacityForFactor(0.22))
+                .transition(.opacity)
 
-            VStack {
-                Spacer()
-                profileInfoSection
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .offset(y: 6)
-                Spacer()
-                    .frame(height: 28)
+                actionButtonsRow
+                    .opacity(opacityForFactor(0.25))
+                    .padding(.bottom, 24)
             }
+            .frame(maxWidth: .infinity, maxHeight: headerHeight, alignment: .bottom)
+            .animation(.spring(response: 0.35, dampingFraction: 0.9), value: collapseProgress)
+
+            // Compact sticky bar fades in while scrolling
+            CollapsedProfileBar(
+                user: user,
+                isCurrentUser: isCurrentUserProfile,
+                isFollowing: $isFollowing,
+                onEdit: {
+                    showingEditProfile = true
+                    HapticManager.shared.impact(style: .light)
+                },
+                onFollowToggle: {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        isFollowing.toggle()
+                    }
+                    HapticManager.shared.impact(style: .light)
+                }
+            )
+            .padding(.top, 10)
+            .opacity(Double(collapseProgress))
         }
     }
 
     @ViewBuilder
     private func defaultBannerView() -> some View {
-        let selected = getSelectedDefaultBanner(for: user.id) ?? DefaultProfileBanner.defaults.first!
+        let selected: DefaultProfileBanner = {
+            if let saved = getSelectedDefaultBanner(for: user.id) {
+                return saved
+            }
+            if let videoDefault = DefaultProfileBanner.defaults.first(where: { $0.kind == .video }) {
+                setSelectedDefaultBannerID(videoDefault.id, for: user.id)
+                return videoDefault
+            }
+            return DefaultProfileBanner.defaults.first!
+        }()
+
         if selected.kind == .video, let url = URL(string: selected.assetURL) {
             ProfileVideoBackground(url: url, isMuted: true, contentMode: .fill)
         } else {
@@ -97,64 +194,6 @@ struct ProfileHeaderView: View {
                 fallbackBanner()
             }
         }
-    }
-
-    private var profileInfoSection: some View {
-        VStack(spacing: 16) {
-            profileImageView
-
-            VStack(spacing: 6) {
-                HStack(spacing: 6) {
-                    Text(user.displayName)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
-
-                    if user.isVerified {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.title3)
-                            .foregroundColor(.blue)
-                            .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
-                    }
-                }
-
-                Text("@\(user.username)")
-                    .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.9))
-                    .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
-
-                if let bio = user.bio {
-                    Text(bio)
-                        .font(.footnote)
-                        .foregroundColor(.white.opacity(0.95))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(4)
-                        .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
-                        .padding(.horizontal, 20)
-                }
-            }
-
-            HStack(spacing: 32) {
-                StatItem(value: formatCount(user.subscriberCount), label: "Subscribers")
-                StatItem(value: formatCount(user.videoCount), label: "Videos")
-
-                if let totalViews = user.totalViews {
-                    StatItem(value: formatCount(totalViews), label: "Views")
-                }
-            }
-
-            actionButtonsRow
-        }
-        .padding(.bottom, 24)
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
-
-    private var profileImageView: some View {
-        ProfileAvatarView(urlString: user.profileImageURL, size: profileImageSize)
-            .overlay(Circle().stroke(.white, lineWidth: 4))
-            .shadow(color: .black.opacity(0.5), radius: 14, x: 0, y: 6)
-            .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private var actionButtonsRow: some View {
@@ -220,6 +259,69 @@ struct ProfileHeaderView: View {
             return "\(count)"
         }
     }
+
+    private func estimatedTotalViews(for user: User) -> Int {
+        max(user.videoCount * 1_500, user.subscriberCount * 50)
+    }
+
+    private func opacityForFactor(_ factor: CGFloat) -> Double {
+        let value = max(0, min(1, 1 - factor * collapseProgress))
+        return Double(value)
+    }
+}
+
+// MARK: - Compact Sticky Bar
+private struct CollapsedProfileBar: View {
+    let user: User
+    let isCurrentUser: Bool
+    @Binding var isFollowing: Bool
+    let onEdit: () -> Void
+    let onFollowToggle: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ProfileAvatarView(urlString: user.profileImageURL, size: 28)
+                .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 1))
+                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+
+            HStack(spacing: 6) {
+                Text(user.displayName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                if user.isVerified {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.Colors.primary)
+                }
+            }
+
+            Spacer()
+
+            if isCurrentUser {
+                Button("Edit") { onEdit() }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(AppTheme.Colors.primary, in: Capsule())
+            } else {
+                Button(isFollowing ? "Following" : "Follow") { onFollowToggle() }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(isFollowing ? AppTheme.Colors.textPrimary : .white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(isFollowing ? Color.white : AppTheme.Colors.primary, in: Capsule())
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(
+            Capsule()
+                .stroke(AppTheme.Colors.textSecondary.opacity(0.1), lineWidth: 0.5)
+        )
+        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+    }
 }
 
 // MARK: - Lightweight video banner background
@@ -230,26 +332,49 @@ private struct ProfileVideoBackground: View {
     @State private var player: AVPlayer = AVPlayer()
     @State private var isReady = false
     @Environment(\.scenePhase) private var scenePhase
+    @State private var endObserver: NSObjectProtocol?
+
+    private var isInPreviews: Bool {
+        ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+    }
 
     var body: some View {
         FlicksPlayerLayerView(player: player, videoGravity: contentMode == .fill ? .resizeAspectFill : .resizeAspect)
-            .onAppear { setup() }
+            .onAppear { setupAndPlay() }
             .onChange(of: scenePhase) { _, newPhase in
+                guard !isInPreviews else { return }
                 switch newPhase {
-                case .active: if isReady { player.play() }
-                case .inactive, .background: player.pause()
-                @unknown default: break
+                case .active:
+                    if isReady { player.play() }
+                case .inactive, .background:
+                    player.pause()
+                @unknown default:
+                    break
                 }
             }
-            .onDisappear { player.pause() }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                if isReady { player.play() }
+            }
+            .onDisappear {
+                player.pause()
+                if let token = endObserver {
+                    NotificationCenter.default.removeObserver(token)
+                    endObserver = nil
+                }
+            }
             .allowsHitTesting(false)
             .clipped()
     }
 
-    private func setup() {
+    private func setupAndPlay() {
         let item = AVPlayerItem(url: url)
-        NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { _ in
-            item.seek(to: CMTime.zero, completionHandler: nil)
+        player.actionAtItemEnd = .none
+        endObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { _ in
+            item.seek(to: .zero, completionHandler: nil)
             player.play()
         }
         player.replaceCurrentItem(with: item)
