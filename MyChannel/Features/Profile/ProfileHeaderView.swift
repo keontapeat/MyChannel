@@ -69,7 +69,7 @@ struct ProfileHeaderView: View {
             }
             .frame(height: headerHeight + stretchAmount)
             .clipped()
-            .ignoresSafeArea(.all)
+            .ignoresSafeArea(.all, edges: .top)
 
             // Top controls
             HStack {
@@ -135,6 +135,8 @@ struct ProfileHeaderView: View {
                             .transition(.opacity)
                     }
                 }
+                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
 
                 HStack(spacing: 32) {
                     StatItem(value: formatCount(user.subscriberCount), label: "Subscribers")
@@ -149,6 +151,7 @@ struct ProfileHeaderView: View {
                     .padding(.bottom, 24)
             }
             .frame(maxWidth: .infinity, maxHeight: headerHeight, alignment: .bottom)
+            .frame(maxWidth: .infinity) // ensure perfect centering
             .animation(.spring(response: 0.35, dampingFraction: 0.9), value: collapseProgress)
 
             // Compact sticky bar fades in while scrolling
@@ -478,6 +481,30 @@ private struct DefaultProfileBanner: Identifiable, Hashable {
             kind: .video,
             assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
             previewURL: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1600&q=80"
+        ),
+        DefaultProfileBanner(
+            id: "b7",
+            title: "Joyrides",
+            subtitle: "Dynamic city motion",
+            kind: .video,
+            assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
+            previewURL: "https://images.unsplash.com/photo-1493238792000-8113da705763?w=1600&q=80"
+        ),
+        DefaultProfileBanner(
+            id: "b8",
+            title: "Escapes",
+            subtitle: "Travel cinematic",
+            kind: .video,
+            assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+            previewURL: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=1600&q=80"
+        ),
+        DefaultProfileBanner(
+            id: "b9",
+            title: "Elephant Dream",
+            subtitle: "Moody animation",
+            kind: .video,
+            assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+            previewURL: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=1600&q=80"
         )
     ]
 }

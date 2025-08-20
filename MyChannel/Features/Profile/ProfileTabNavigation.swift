@@ -34,12 +34,17 @@ struct ProfileTabNavigation: View {
                         )
                     }
                 }
-                .padding(.horizontal, 16)
-                .background(Color.clear)
+                .padding(.horizontal, 12)
             }
-            .frame(height: 56)
+            .frame(height: 52)
         }
-        .background(isPinned ? AppTheme.Colors.background : Color.clear)
+        .background {
+            if isPinned {
+                Rectangle().fill(.ultraThinMaterial)
+            } else {
+                Color.clear
+            }
+        }
         .overlay(
             Group {
                 if isPinned {
@@ -82,7 +87,7 @@ struct ProfileTabButton: View {
                     isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary
                 )
                 .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.vertical, 10)
                 
                 // Selection Indicator
                 RoundedRectangle(cornerRadius: 1.5)

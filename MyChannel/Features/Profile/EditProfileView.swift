@@ -914,7 +914,10 @@ private struct DefaultProfileBanner: Identifiable, Hashable {
         .init(id: "b3", title: "City Lights", subtitle: "Modern urban vibe", kind: .image, assetURL: "https://images.unsplash.com/photo-1499346030926-9a72daac6c63?w=1600&q=80", previewURL: nil),
         .init(id: "b4", title: "Cinematic Nature", subtitle: "Subtle motion video", kind: .video, assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", previewURL: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1600&q=80"),
         .init(id: "b5", title: "Abstract Flow", subtitle: "Minimal gradient waves", kind: .image, assetURL: "https://images.unsplash.com/photo-154988033865ddcdfd017b?w=1600&q=80", previewURL: nil),
-        .init(id: "b6", title: "Sintel Trailer", subtitle: "Cinematic video banner", kind: .video, assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4", previewURL: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1600&q=80")
+        .init(id: "b6", title: "Sintel Trailer", subtitle: "Cinematic video banner", kind: .video, assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4", previewURL: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1600&q=80"),
+        .init(id: "b7", title: "Joyrides", subtitle: "Dynamic city motion", kind: .video, assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4", previewURL: "https://images.unsplash.com/photo-1493238792000-8113da705763?w=1600&q=80"),
+        .init(id: "b8", title: "Escapes", subtitle: "Travel cinematic", kind: .video, assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4", previewURL: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=1600&q=80"),
+        .init(id: "b9", title: "Elephant Dream", subtitle: "Moody animation", kind: .video, assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4", previewURL: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=1600&q=80")
     ]
 }
 

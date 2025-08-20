@@ -283,12 +283,21 @@ private struct ProfileMainSection: View {
     @State private var isIncognito: Bool = false
 
     var body: some View {
-        GeometryReader { _ in
-            ZStack(alignment: .top) {
-                AppTheme.Colors.background
-                    .ignoresSafeArea(.all)
+        ZStack(alignment: .top) {
+            AppTheme.Colors.background
+                .ignoresSafeArea(.all)
 
-                VStack(spacing: 0) {
+            ScrollView {
+                LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                    // Track scroll offset for header collapse animations
+                    GeometryReader { proxy in
+                        Color.clear
+                            .preference(key: ProfileScrollOffsetPreferenceKey.self,
+                                        value: proxy.frame(in: .named("profileScroll")).minY)
+                    }
+                    .frame(height: 0)
+
+                    // Header
                     ProfileHeaderSection(
                         user: user,
                         scrollOffset: scrollOffset,
@@ -296,90 +305,76 @@ private struct ProfileMainSection: View {
                         showingEditProfile: $showingEditProfile,
                         showingSettings: $showingSettings
                     )
-                    .ignoresSafeArea(edges: .top)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.clear)
 
-                    ProfileTabsSection(
-                        selectedTab: $selectedTab,
-                        user: user,
-                        scrollOffset: scrollOffset
-                    )
-                    .padding(.top, -8)
+                    // Pinned Tabs (flush under header)
+                    Section {
+                        // Content under tabs
+                        ProfileContentSection(
+                            selectedTab: selectedTab,
+                            user: user,
+                            videos: userVideos
+                        )
+                        .padding(.top, 8)
+                        .background(AppTheme.Colors.background)
 
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            VStack(spacing: 0) {
-                                Color.clear
-                                    .frame(height: 0)
-                                    .id("profileTop")
+                        VStack(spacing: 14) {
+                            Divider()
+                                .padding(.horizontal)
 
-                                GeometryReader { innerProxy in
-                                    Color.clear
-                                        .preference(
-                                            key: ProfileScrollOffsetPreferenceKey.self,
-                                            value: innerProxy.frame(in: .named("scroll")).minY
-                                        )
+                            ProfileQuickActionsChips(
+                                isIncognito: isIncognito,
+                                switchAccountAction: {
+                                    HapticManager.shared.impact(style: .light)
+                                    NotificationCenter.default.post(name: .navigateToAccountSwitcher, object: nil)
+                                },
+                                googleAccountAction: {
+                                    HapticManager.shared.impact(style: .light)
+                                    NotificationCenter.default.post(name: .openGoogleAccount, object: nil)
+                                },
+                                toggleIncognitoAction: {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                        isIncognito.toggle()
+                                    }
+                                    HapticManager.shared.impact(style: .rigid)
                                 }
-                                .frame(height: 0)
+                            )
+                            .padding(.horizontal)
 
-                                ProfileContentSection(
-                                    selectedTab: selectedTab,
-                                    user: user,
-                                    videos: userVideos
-                                )
-                                .padding(.top, 8)
-                                .background(AppTheme.Colors.background)
-
-                                VStack(spacing: 14) {
-                                    Divider()
-                                        .padding(.horizontal)
-
-                                    ProfileQuickActionsChips(
-                                        isIncognito: isIncognito,
-                                        switchAccountAction: {
-                                            HapticManager.shared.impact(style: .light)
-                                            NotificationCenter.default.post(name: .navigateToAccountSwitcher, object: nil)
-                                        },
-                                        googleAccountAction: {
-                                            HapticManager.shared.impact(style: .light)
-                                            NotificationCenter.default.post(name: .openGoogleAccount, object: nil)
-                                        },
-                                        toggleIncognitoAction: {
-                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                                isIncognito.toggle()
-                                            }
-                                            HapticManager.shared.impact(style: .rigid)
-                                        }
-                                    )
-                                    .padding(.horizontal)
-
-                                    ProfileHistorySection(
-                                        title: "History",
-                                        videos: watchHistory,
-                                        onViewAll: {
-                                            HapticManager.shared.impact(style: .light)
-                                            NotificationCenter.default.post(name: .openFullHistory, object: nil)
-                                        }
-                                    )
+                            ProfileHistorySection(
+                                title: "History",
+                                videos: watchHistory,
+                                onViewAll: {
+                                    HapticManager.shared.impact(style: .light)
+                                    NotificationCenter.default.post(name: .openFullHistory, object: nil)
                                 }
-                                .padding(.top, 8)
-                                .padding(.bottom, 24)
-                            }
+                            )
                         }
-                        .scrollContentBackground(.hidden)
-                        .background(Color.clear)
-                        .coordinateSpace(name: "scroll")
-                        .onPreferenceChange(ProfileScrollOffsetPreferenceKey.self) { value in
-                            withAnimation(.easeOut(duration: 0.12)) {
-                                scrollOffset = value
-                            }
-                        }
-                        .onReceive(NotificationCenter.default.publisher(for: .scrollToTopProfile)) { _ in
-                            withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                                proxy.scrollTo("profileTop", anchor: .top)
-                            }
-                            HapticManager.shared.impact(style: .light)
-                        }
+                        .padding(.top, 8)
+                        .padding(.bottom, 24)
+                    } header: {
+                        // Absolutely flush, pinned tabs
+                        ProfileTabNavigation(
+                            selectedTab: $selectedTab,
+                            user: user,
+                            scrollOffset: scrollOffset
+                        )
+                        .background(.ultraThinMaterial)
+                        .overlay(
+                            Rectangle()
+                                .fill(AppTheme.Colors.textSecondary.opacity(0.08))
+                                .frame(height: 0.5),
+                            alignment: .bottom
+                        )
                     }
+                }
+            }
+            .coordinateSpace(name: "profileScroll")
+            .ignoresSafeArea(.container, edges: .top)
+            .onPreferenceChange(ProfileScrollOffsetPreferenceKey.self) { value in
+                withAnimation(.easeOut(duration: 0.12)) {
+                    scrollOffset = value
                 }
             }
         }
