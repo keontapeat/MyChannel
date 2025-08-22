@@ -15,6 +15,8 @@ const STATIC_FILES = [
     '/video-player.html',
     '/manifest.json',
     '/firebase-config.js',
+    '/flicks.html',
+    '/flicks.js',
     // Add your image assets
     '/assets/MyChannel.imageset/MyChannelLaunch.PNG',
     '/assets/UserProfileAvatar.imageset/UserProfileAvatar.PNG'

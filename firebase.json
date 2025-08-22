@@ -33,6 +33,9 @@
         "source": "/sw.js",
         "headers": [ { "key": "Cache-Control", "value": "no-store, max-age=0" } ]
       }
+    ],
+    "redirects": [
+      { "source": "/flicks", "destination": "/flicks.html", "type": 301 }
     ]
   },
   "firestore": {
