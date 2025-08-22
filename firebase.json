@@ -1,28 +1,37 @@
 {
   "hosting": {
+    "site": "mychannel-ca26d",
     "public": ".",
     "ignore": [
       "firebase.json",
       "**/.*",
+      ".git/**",
+      "**/.git/**",
       "**/node_modules/**",
       "MyChannel.xcodeproj/**",
-      "MyChannel/**"
+      "MyChannel/**",
+      "snapshots/**",
+      "what should i use u recomend/**"
     ],
     "rewrites": [
-      {
-        "source": "/",
-        "destination": "/index.html"
-      }
+      { "source": "/api/tmdb_popular", "function": "tmdb_popular" },
+      { "source": "/api/tmdb_free_ads", "function": "tmdb_free_ads" },
+      { "source": "/api/tmdb_trending", "function": "tmdb_trending" },
+      { "source": "/api/tmdb_details", "function": "tmdb_details" },
+      { "source": "/", "destination": "/index.html" }
     ],
     "headers": [
       {
         "source": "**/*.@(js|css)",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "max-age=31536000"
-          }
-        ]
+        "headers": [ { "key": "Cache-Control", "value": "max-age=31536000" } ]
+      },
+      {
+        "source": "**/*.html",
+        "headers": [ { "key": "Cache-Control", "value": "no-store, max-age=0" } ]
+      },
+      {
+        "source": "/sw.js",
+        "headers": [ { "key": "Cache-Control", "value": "no-store, max-age=0" } ]
       }
     ]
   },

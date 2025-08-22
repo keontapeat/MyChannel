@@ -1,0 +1,18 @@
+[2025-08-22T17:34:21.016Z] >>> [apiv2][query] POST https://auth.firebase.tools/attest [none]
+[2025-08-22T17:34:21.017Z] >>> [apiv2][body] POST https://auth.firebase.tools/attest {"session_id":"67737e26-b129-4714-ae5f-6798cd85435b"}
+[2025-08-22T17:34:21.344Z] <<< [apiv2][status] POST https://auth.firebase.tools/attest 200
+[2025-08-22T17:34:21.345Z] <<< [apiv2][body] POST https://auth.firebase.tools/attest {"token":"4pRcZO6tWerl-XeiFdA84E_0Oikr029jhpWke3DyFU4"}
+
+To sign in to the Firebase CLI:
+
+1. Take note of your session ID:
+
+   67737
+
+2. Visit the URL below on any device and follow the instructions to get your code:
+
+   https://auth.firebase.tools/login?code_challenge=F-cu_u9jGTEj80_cMW2m4t2XbrOhRCErZ7uXI6IgFjQ&session=67737e26-b129-4714-ae5f-6798cd85435b&attest=4pRcZO6tWerl-XeiFdA84E_0Oikr029jhpWke3DyFU4
+
+3. Paste or enter the authorization code below once you have it:
+
+[34m?[39m [1mEnter authorization code:[22m[29G
