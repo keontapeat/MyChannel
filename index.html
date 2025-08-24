@@ -6799,9 +6799,73 @@
                 </div>
             `;
         }
+        // Movies See All - modal sheet styled like iOS MoviesView
         function openSeeAllMovies() {
-            try { if (typeof openMoviesList === 'function') return openMoviesList(); } catch {}
-            alert('Movies - See all coming soon');
+            const modal = document.createElement('div');
+            modal.className = 'upload-modal-backdrop';
+            modal.style.display = 'block';
+            modal.innerHTML = `
+                <div class="upload-modal" style="max-width:960px; display:flex;">
+                  <div class="upload-card" style="width:100%;">
+                    <div class="upload-header" style="align-items:center; gap:8px;">
+                      <button class="upload-close" aria-label="Close">&times;</button>
+                      <h3 style="margin:0; font-weight:700; color:var(--text-primary);">Movies</h3>
+                      <div style="margin-left:auto; display:flex; gap:8px;">
+                        <select id="moviesSort" class="upload-input-text" style="width:auto;">
+                          <option value="popular">🔥 Popular</option>
+                          <option value="newest">🆕 Newest</option>
+                          <option value="rating">⭐ Rating</option>
+                          <option value="az">🔤 A-Z</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="upload-body">
+                      <div style="margin-bottom:12px; display:flex; gap:8px;">
+                        <input id="moviesSearch" type="search" placeholder="Search movies..." class="upload-input-text" style="flex:1;">
+                      </div>
+                      <div id="moviesGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:12px;"></div>
+                    </div>
+                  </div>
+                </div>`;
+            document.body.appendChild(modal);
+            const close = () => { modal.remove(); };
+            modal.querySelector('.upload-close').onclick = close;
+            modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+            const grid = modal.querySelector('#moviesGrid');
+            const search = modal.querySelector('#moviesSearch');
+            const sortSel = modal.querySelector('#moviesSort');
+            let data = (window.fallbackMovies || []).slice();
+            const render = () => {
+              const q = (search.value||'').toLowerCase();
+              let items = data.filter(m => !q || (m.title||'').toLowerCase().includes(q));
+              const s = sortSel.value;
+              if (s==='newest') items.sort((a,b)=>(b.release_date||'').localeCompare(a.release_date||''));
+              else if (s==='rating') items.sort((a,b)=> (parseFloat(b.vote_average||0)) - (parseFloat(a.vote_average||0)) );
+              else if (s==='az') items.sort((a,b)=> (a.title||'').localeCompare(b.title||''));
+              else items.sort((a,b)=> (parseInt((b.views||'').replace(/\D/g,''))||0) - (parseInt((a.views||'').replace(/\D/g,''))||0));
+              grid.innerHTML = items.map(m => `
+                <div class="movie-card" style="cursor:pointer;">
+                  <div style="position:relative; border-radius:12px; overflow:hidden; aspect-ratio:2/3; background:#000;">
+                    <img src="${m.poster||m.thumbnail||''}" alt="${m.title||''}" onerror="this.style.display='none'" style="width:100%; height:100%; object-fit:cover;"/>
+                    <div style="position:absolute; right:8px; bottom:8px; background:rgba(0,0,0,.6); color:#fff; padding:2px 6px; border-radius:6px; font-size:11px;">${(m.year||'').toString()}</div>
+                  </div>
+                  <div style="margin-top:6px;">
+                    <div style="color:var(--text-primary); font-size:13px; font-weight:600; line-height:1.3;">${m.title||''}</div>
+                    <div style="color:var(--text-secondary); font-size:11px;">${m.imdb_rating?`⭐ ${m.imdb_rating}`:(m.vote_average?`⭐ ${m.vote_average}`:'')}</div>
+                  </div>
+                </div>`).join('');
+              grid.querySelectorAll('.movie-card').forEach((card, idx) => {
+                card.onclick = () => {
+                  const m = items[idx];
+                  // Try to play trailer or open detail
+                  if (m && m.id) { try { openMovieModal(m.id, 'movie'); } catch {} }
+                };
+              });
+            };
+            search.oninput = render; sortSel.onchange = render;
+            // fold in trending fallbacks to enlarge set
+            try { data = [...(window.fallbackMovies||[]), ...(window.fallbackTrending||[])]; } catch {}
+            render();
         }
 
         // Live TV See All - dataset and rendering
