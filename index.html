@@ -453,6 +453,21 @@
         .logo img { width: 32px; height: 32px; border-radius: 6px; object-fit: contain; display: block; }
         
         .main-content { margin-top: 64px; padding: 20px 16px 70px; background: var(--bg-primary); }
+
+        /* Video Detail: responsive layout + polished suggestions */
+        .video-detail-info-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        @media (min-width: 900px) {
+            .video-detail-info-grid { grid-template-columns: 2fr 1fr; align-items: start; }
+            .suggestions-sidebar { position: sticky; top: calc(64px + env(safe-area-inset-top) + 12px); }
+        }
+        .suggestions-list { display: grid; grid-template-columns: 1fr; gap: 12px; }
+        .suggestion-card { display: flex; gap: 12px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; cursor: pointer; }
+        .suggestion-card img.thumb { width: 168px; height: 94px; object-fit: cover; display: block; }
+        .suggestion-meta { min-width: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+        .suggestion-title { color: var(--text-primary); font-weight: 600; font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .suggestion-channel { color: var(--text-secondary); font-size: 12px; display: flex; align-items: center; gap: 8px; }
+        .suggestion-channel img { width: 20px; height: 20px; border-radius: 50%; }
+        .suggestion-views { color: var(--text-secondary); font-size: 12px; opacity: .8; }
         
         .stories-section {
             margin-bottom: 24px;
@@ -1688,7 +1703,7 @@
         <input type="file" id="storyGalleryInput" accept="image/*,video/*" style="display:none;">
     </div>
     <!-- Video Detail View - iOS App Style -->
-    <div id="videoDetailView" class="video-detail-view" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-primary); z-index: 10000; overflow-y: auto;">
+    <div id="videoDetailView" class="video-detail-view" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-primary); z-index: 30000; overflow-y: auto;">
         <!-- Video Player Container -->
         <div class="video-player-container" style="position: relative; width: 100%; aspect-ratio: 16/9; background: var(--bg-primary); max-height: 56.25vw;">
             <!-- Main Video Player -->
@@ -1708,7 +1723,7 @@
             <div id="videoControlsOverlay" class="video-controls-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10001; opacity: 1; transition: opacity 0.3s ease; pointer-events: none;">
                 
                 <!-- Top Controls Bar -->
-                <div class="top-controls" style="position: absolute; top: 0; left: 0; right: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); padding: 20px; display: flex; align-items: center; justify-content: space-between; pointer-events: auto;">
+                <div class="top-controls" style="position: absolute; top: 0; left: 0; right: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); padding: calc(20px + env(safe-area-inset-top)) 20px 20px; display: flex; align-items: center; justify-content: space-between; pointer-events: auto;">
                     <!-- Close Button -->
                     <div onclick="closeVideoDetail()" style="width: 40px; height: 40px; border-radius: 8px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; backdrop-filter: blur(10px);" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1800,6 +1815,8 @@
         </div>
         <!-- Video Info -->
         <div class="video-detail-info" style="padding: 20px; background: var(--bg-primary);">
+            <div class="video-detail-info-grid">
+                <div>
             <h1 id="detailVideoTitle" style="color: var(--text-primary); font-size: 20px; font-weight: 600; margin: 0 0 12px 0; line-height: 1.3;"></h1>
             
             <!-- Stats and Actions -->
@@ -1839,12 +1856,14 @@
                 </div>
                 <div id="commentsList"></div>
                 </div>
-                
-            <div id="suggestedContainer" style="margin-top:20px; display:none;">
-                <h3 style="color:white;margin:0 0 12px 0;font-size:16px;">Suggested videos</h3>
-                <div id="suggestedList" style="display:grid;grid-template-columns:1fr;gap:12px;"></div>
+                </div>
+                <aside class="suggestions-sidebar">
+                    <div id="suggestedContainer" style="display:none;">
+                        <h3 style="color:white;margin:0 0 12px 0;font-size:16px;">Suggested</h3>
+                        <div id="suggestedList" class="suggestions-list"></div>
                     </div>
-                    
+                </aside>
+            </div>
             <!-- Place comments above suggestions -->
             <!-- BEGIN_INLINE_MOVED
             try {
@@ -1912,19 +1931,29 @@
                             });
                         } catch {}
                     }
-                    pool.slice(0, 8).forEach(v => {
-                        const row = document.createElement('div');
-                        row.style.cssText = 'display:flex; gap:12px; cursor:pointer;';
-                        row.onclick = () => openVideoDetail(v);
+                    pool.slice(0, 12).forEach(v => {
+                        const item = document.createElement('div');
+                        item.className = 'suggestion-card';
+                        item.onclick = () => openVideoDetail(v);
                         const thumb = v.thumbnailUrl || v.thumb || v.thumbnail || v.poster || v.image || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&h=400&fit=crop';
-                        row.innerHTML = `
-                            <img src="${thumb}" alt="${v.title||''}" loading="lazy" style="width:160px; height:90px; object-fit:cover; border-radius:8px;" onerror="this.src='https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&h=400&fit=crop'">
-                            <div style=\"flex:1; min-width:0;\">
-                                <div style=\"color:#fff; font-size:14px; font-weight:600; line-height:1.3;\">${v.title || 'Untitled'}</div>
-                                <div style=\"color:#aaa; font-size:12px; margin-top:4px;\">${(v.channel && v.channel.name) || v.creator || 'Creator'}</div>
-                                <div style=\"color:#666; font-size:12px; margin-top:2px;\">${v.views || 0} views</div>
+                        const channelName = (v.channel && v.channel.name) || v.creator || 'Creator';
+                        const channelAvatar = (v.channel && v.channel.avatar) || 'https://i.pravatar.cc/200?u='+(channelName.replace(/\s+/g,'_'));
+                        item.innerHTML = `
+                            <img class="thumb" src="${thumb}" alt="${v.title||''}" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&h=400&fit=crop'">
+                            <div class="suggestion-meta">
+                                <div class="suggestion-title">${v.title || 'Untitled'}</div>
+                                <div class="suggestion-channel"><img src="${channelAvatar}"><span data-channel="${channelName}">${channelName}</span></div>
+                                <div class="suggestion-views">${(v.views||0)} views</div>
                             </div>`;
-                        list.appendChild(row);
+                        list.appendChild(item);
+                    });
+                    // Wire channel name/avatars inside suggestions
+                    list.querySelectorAll('.suggestion-channel [data-channel]').forEach(el => {
+                        el.onclick = (e) => {
+                            e.stopPropagation();
+                            const name = el.getAttribute('data-channel') || 'channel';
+                            openChannelDetail({ name, subs: Math.floor(Math.random()*100000)+1000, avatar: `https://i.pravatar.cc/200?u=${encodeURIComponent(name)}` });
+                        };
                     });
                 }
             } catch {}
@@ -3864,13 +3893,20 @@
                     if (listEl) {
                         listEl.innerHTML = arr.map(c => `
                             <div style=\"display:flex; gap:12px; margin-bottom:16px;\">
-                                <img src=\"${c.avatar}\" style=\"width:32px; height:32px; border-radius:50%; object-fit:cover;\">
+                                <img src=\"${c.avatar}\" data-channel=\"${(c.user||'').replace('@','')}\" style=\"width:32px; height:32px; border-radius:50%; object-fit:cover; cursor:pointer;\">
                                 <div>
-                                    <div style=\"color:white; font-size:13px; font-weight:500;\">${c.user}</div>
+                                    <div style=\"color:white; font-size:13px; font-weight:500;\"><span data-channel=\"${(c.user||'').replace('@','')}\" style=\"cursor:pointer;\">${c.user}</span></div>
                                     <div style=\"color:#ccc; font-size:14px; margin:4px 0;\">${c.text}</div>
                                     <div style=\"color:#666; font-size:12px;\">${c.ago}</div>
                                 </div>
                             </div>`).join('');
+                        // Wire avatar/name click to channel sheet
+                        listEl.querySelectorAll('[data-channel]').forEach(el => {
+                            el.onclick = () => {
+                                const name = el.getAttribute('data-channel') || 'channel';
+                                openChannelDetail({ name, subs: Math.floor(Math.random()*100000)+1000, avatar: `https://i.pravatar.cc/200?u=${encodeURIComponent(name)}` });
+                            };
+                        });
                     }
                 }
                 renderComments();
