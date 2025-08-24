@@ -3866,10 +3866,11 @@
             // Move comments section under info and wire comments logic
             try {
                 const infoEl = document.querySelector('.video-detail-info');
+                const primaryCol = document.querySelector('.video-detail-info-grid > div:first-child') || infoEl;
                 const commentsEl = document.getElementById('commentsSection');
                 const suggEl = document.getElementById('suggestedContainer');
-                if (infoEl && commentsEl && commentsEl.parentElement !== infoEl) {
-                    infoEl.appendChild(commentsEl);
+                if (primaryCol && commentsEl && commentsEl.parentElement !== primaryCol) {
+                    primaryCol.appendChild(commentsEl);
                 }
                 if (suggEl) suggEl.style.display = 'block';
             } catch (e) {}
