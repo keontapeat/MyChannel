@@ -1,0 +1,63 @@
+Subject: URGENT: Firebase Hosting API 404 Error on Finalize - Production Blocking Issue (Google for Startups Member)
+
+Dear Will,
+
+Hope you're doing well! As my new Google Cloud contact for the GFS Program, I need your urgent assistance with a critical production issue that's blocking my MyChannel app deployments.
+
+I am a member of the Google for Startups Cloud Program and am experiencing a critical production-blocking issue with Firebase Hosting that requires immediate attention.
+
+ISSUE SUMMARY:
+Firebase Hosting deployments are failing consistently with a 404 error during the version finalization step. This started on August 22, 2025, and affects my ability to deploy updates to my live production website.
+
+TECHNICAL DETAILS:
+- Project ID: mychannel-ca26d
+- Firebase CLI Version: 14.13.0
+- Node.js Version: v20.19.4
+- Environment: macOS 15.6
+- Google for Startups Program Member: Yes
+- Billing Account: 01987B-896185-140D6D (with active $2,000 startup credits)
+
+ERROR PATTERN:
+1. File upload completes successfully (5,200+ files)
+2. Finalization step fails with HTTP 404 error
+3. Specific API endpoint failing: https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/mychannel-ca26d/versions/[VERSION_ID]?updateMask=status%2Cconfig
+
+EXACT ERROR MESSAGE:
+"Error: Request to https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/mychannel-ca26d/versions/14318d6ebd705967?updateMask=status%2Cconfig had HTTP Error: 404, Requested entity was not found."
+
+TIMELINE:
+- August 21, 2025: Deployments working normally
+- August 22, 2025: All deployments failing at finalize step
+- Present: Issue persists consistently
+
+TROUBLESHOOTING ATTEMPTED:
+- Tested with multiple Node.js versions (18, 20, 22)
+- Reinstalled firebase-tools CLI
+- Attempted preview channel deployments
+- Tried minimal file deployments
+- Verified authentication and project configuration
+- All approaches fail at the same finalization API endpoint
+
+BUSINESS IMPACT:
+- Cannot deploy critical updates to production website (mychannel.live)
+- New features ready but blocked from release
+- Live site serving outdated version
+
+This appears to be a Firebase API regression that occurred between August 21-22, 2025. The consistent pattern of successful uploads followed by 404 errors on finalization suggests an issue with Firebase's hosting API infrastructure.
+
+As a Google for Startups program member, I would appreciate priority assistance in resolving this production-blocking issue. The problem affects my ability to maintain and update my live application.
+
+Please escalate this to the Firebase engineering team for immediate investigation.
+
+Thank you for your urgent attention to this matter.
+
+Thanks for your help with this urgent matter!
+
+Best regards,
+Keonta Peat
+keontapeat@mychannel.live
+MyChannel / MyLivechannel
+Google for Startups Cloud Program Member
+Project: mychannel-ca26d
+
+CC: Earlano Roldan (earlano@xwf.google.com)

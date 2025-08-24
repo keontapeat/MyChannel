@@ -1,0 +1,9 @@
+Firebase CLI Error Details:
+Project: mychannel-ca26d
+Error: HTTP 404 on finalize step
+URL: https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/mychannel-ca26d/versions/[VERSION_ID]?updateMask=status%2Cconfig
+Started: August 22, 2025
+Status: Files upload successfully, but finalize fails consistently
+Firebase CLI Version: 14.13.0
+Node Version: v20.19.4
+Environment: macOS 15.6

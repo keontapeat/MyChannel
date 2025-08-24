@@ -209,6 +209,7 @@ struct MembershipTier: Identifiable, Codable, Equatable {
 }
 
 // MARK: - Sample Data Extensions  
+#if DEBUG
 extension User {
     static let sampleUsers: [User] = [
         User(
@@ -297,11 +298,10 @@ extension User {
     static let defaultUser = User(
         username: "default_user",
         displayName: "Default User",
-        email: "default@mychannel.com",
-        profileImageURL: "https://picsum.photos/200/200?random=999",
-        bio: "Default user for the app"
+        email: "default@mychannel.com"
     )
 }
+#endif
 
 #Preview("User Model Preview") {
     VStack(spacing: 20) {

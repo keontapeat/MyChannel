@@ -23,4 +23,12 @@ Carthage/Build/
 *.env
 
 # ADD: local developer-only secrets (never commit)
-LocalSecrets.plist
+LocalSecrets.plist# Ignore vendor and ephemeral dirs
+**/.terraform/**
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/.terraform.tfstate.lock.info
+**/node_modules/**
+**/venv/**
+services/dist/
+.DS_Store

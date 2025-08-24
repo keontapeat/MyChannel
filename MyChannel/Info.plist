@@ -4,6 +4,21 @@
 <dict>
 	<key>TMDB_API_KEY</key>
 	<string>$(TMDB_API_KEY)</string>
+	<key>AI_API_KEY</key>
+	<string>$(AI_API_KEY)</string>
+
+	<!-- URL Types for Google Sign-In -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.124515086975-mu4mm52mrsp5k7n760g1q57llasrte5t</string>
+			</array>
+		</dict>
+	</array>
 
 	<!-- Privacy Usage Descriptions -->
 	<key>NSPhotoLibraryUsageDescription</key>

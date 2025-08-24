@@ -29,9 +29,6 @@ struct MyChannelApp: App {
                 .preferredColorScheme(.light)
                 .onAppear {
                     print("📱 App appeared with MC logo splash!")
-                    if appState.currentUser == nil {
-                        appState.updateUser(OwnerProfile.owner)
-                    }
                     Task {
                         _ = await PushNotificationService.shared.getAuthorizationStatus()
                     }

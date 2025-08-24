@@ -1,6 +1,22 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /videos/{videoId} {
+      allow read: if true;
+      allow write: if request.auth != null; // refine by ownership in production
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
     // Users can read and write their own user document
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;

@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct AuthenticationView: View {
-    @StateObject private var authManager = AuthenticationManager.shared
+    @StateObject private var authManager = AuthService.shared
     @State private var currentPage: AuthPage = .welcome
     @State private var animateBackground: Bool = false
     
@@ -231,7 +231,7 @@ struct WelcomeView: View {
 
 // MARK: - Sign In View
 struct SignInView: View {
-    @StateObject private var authManager = AuthenticationManager.shared
+    @StateObject private var authManager = AuthService.shared
     
     @State private var email: String = ""
     @State private var password: String = ""
@@ -418,6 +418,7 @@ struct SignInView: View {
                 // Haptic feedback
                 let notificationFeedback = UINotificationFeedbackGenerator()
                 notificationFeedback.notificationOccurred(.success)
+                await MainActor.run { isLoading = false }
                 
             } catch {
                 await MainActor.run {
@@ -436,21 +437,21 @@ struct SignInView: View {
     private func signInWithApple() {
         // Implement Apple Sign In
         Task {
-            await authManager.signInWithApple()
+            try? await authManager.signInWithApple()
         }
     }
     
     private func signInWithGoogle() {
         // Implement Google Sign In
         Task {
-            await authManager.signInWithGoogle()
+            try? await authManager.signInWithGoogle()
         }
     }
 }
 
 // MARK: - Sign Up View
 struct SignUpView: View {
-    @StateObject private var authManager = AuthenticationManager.shared
+    @StateObject private var authManager = AuthService.shared
     
     @State private var firstName: String = ""
     @State private var lastName: String = ""

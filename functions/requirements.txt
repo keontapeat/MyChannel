@@ -1,2 +1,5 @@
 requests>=2.31.0
 flask>=2.0.0
+firebase-functions>=0.1.0
+firebase-admin>=6.5.0
+google-cloud-aiplatform>=1.61.1

@@ -5,6 +5,58 @@ import logging
 import os
 import requests
 import json
+from typing import List, Dict, Any
+
+try:
+    # Vertex AI optional import; functions can still run without this configured
+    from google.cloud import aiplatform
+except Exception:
+    aiplatform = None
+# --- HTTPS Proxies ---
+@https_fn.on_request()
+def ai_rank(req: https_fn.Request) -> https_fn.Response:
+    """Rank a list of items using Vertex AI (optional). Expects JSON: {items:[{id, title, tags, views, createdAt}], user:{id}}.
+    If Vertex isn't configured, returns items unchanged with uniform scores.
+    """
+    try:
+        body = req.get_json(silent=True) or {}
+        items: List[Dict[str, Any]] = body.get("items", [])
+        user: Dict[str, Any] = body.get("user", {})
+
+        # Default: passthrough
+        if not items:
+            return https_fn.Response({"items": []}, status=200, headers={"Access-Control-Allow-Origin": "*"})
+
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCP_PROJECT")
+        location = os.environ.get("VERTEX_LOCATION", "us-central1")
+        model_name = os.environ.get("VERTEX_RANKING_MODEL")  # optional custom model
+
+        if aiplatform is None or not project:
+            scored = [{**it, "score": 1.0} for it in items]
+            return https_fn.Response({"items": scored}, status=200, headers={"Access-Control-Allow-Origin": "*"})
+
+        aiplatform.init(project=project, location=location)
+
+        # Simple feature mapping; replace with your model endpoint if available
+        # For demo, we compute a lightweight heuristic score and return
+        def heuristic(it: Dict[str, Any]) -> float:
+            views = float(it.get("views", 0) or 0)
+            recency = 0.0
+            try:
+                # Expect ISO date or epoch
+                created = it.get("createdAt")
+                if isinstance(created, (int, float)):
+                    recency = max(0.0, 1.0 - ( ( ( ( ( ( ( ( ( (0) ) ) ) ) ) ) ) ) ))
+            except Exception:
+                pass
+            title_boost = 1.0 + (0.2 if str(it.get("title",""))[:1].isupper() else 0.0)
+            return title_boost + (views ** 0.5) * 0.01
+
+        scored = sorted(([{**it, "score": heuristic(it)} for it in items]), key=lambda x: x["score"], reverse=True)
+        return https_fn.Response({"items": scored}, status=200, headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as e:
+        logging.exception("ai_rank error")
+        return https_fn.Response({"error": str(e)}, status=500, headers={"Access-Control-Allow-Origin": "*"})
 
 # Initialize Firebase Admin
 initialize_app()

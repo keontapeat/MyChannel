@@ -3,6 +3,12 @@ import Foundation
 // Centralized, secure secrets access.
 // Order: Info.plist resolved value (not placeholders) -> Environment variable -> empty.
 struct AppSecrets {
+    static var aiAPIKey: String {
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "AI_API_KEY") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        return (ProcessInfo.processInfo.environment["AI_API_KEY"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
     static var tmdbAPIKey: String {
         let plist = (Bundle.main.object(forInfoDictionaryKey: "TMDB_API_KEY") as? String ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)

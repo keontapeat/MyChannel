@@ -1,10 +1,204 @@
 {
   "version": 4,
   "terraform_version": "1.5.7",
-  "serial": 43,
+  "serial": 84,
   "lineage": "d8733d8a-19f4-0b6e-8535-57713b6e201a",
   "outputs": {},
   "resources": [
+    {
+      "mode": "data",
+      "type": "google_cloud_run_service",
+      "name": "ai",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "autogenerate_revision_name": false,
+            "id": "locations/us-central1/namespaces/mychannel-ca26d/services/mychannel-ai",
+            "location": "us-central1",
+            "metadata": [
+              {
+                "annotations": {},
+                "effective_annotations": {
+                  "run.googleapis.com/client-name": "gcloud",
+                  "run.googleapis.com/client-version": "533.0.0",
+                  "run.googleapis.com/ingress": "all",
+                  "run.googleapis.com/ingress-status": "all",
+                  "run.googleapis.com/operation-id": "c04217e4-82d3-4370-b7f7-7952108b1e35",
+                  "run.googleapis.com/urls": "[\"https://mychannel-ai-124515086975.us-central1.run.app\",\"https://mychannel-ai-fkri6ifojq-uc.a.run.app\"]",
+                  "serving.knative.dev/creator": "keontapeat@mychannel.live",
+                  "serving.knative.dev/lastModifier": "keontapeat@mychannel.live"
+                },
+                "effective_labels": {
+                  "cloud.googleapis.com/location": "us-central1"
+                },
+                "generation": 6,
+                "labels": {},
+                "namespace": "mychannel-ca26d",
+                "resource_version": "AAY8/VZRLtI",
+                "self_link": "/apis/serving.knative.dev/v1/namespaces/124515086975/services/mychannel-ai",
+                "terraform_labels": {},
+                "uid": "1d140740-a0d3-42a1-890b-f9b08f3ab768"
+              }
+            ],
+            "name": "mychannel-ai",
+            "project": "mychannel-ca26d",
+            "status": [
+              {
+                "conditions": [
+                  {
+                    "message": "",
+                    "reason": "",
+                    "status": "True",
+                    "type": "Ready"
+                  },
+                  {
+                    "message": "",
+                    "reason": "",
+                    "status": "True",
+                    "type": "ConfigurationsReady"
+                  },
+                  {
+                    "message": "",
+                    "reason": "",
+                    "status": "True",
+                    "type": "RoutesReady"
+                  }
+                ],
+                "latest_created_revision_name": "mychannel-ai-00006-2vg",
+                "latest_ready_revision_name": "mychannel-ai-00006-2vg",
+                "observed_generation": 6,
+                "traffic": [
+                  {
+                    "latest_revision": true,
+                    "percent": 100,
+                    "revision_name": "mychannel-ai-00006-2vg",
+                    "tag": "",
+                    "url": ""
+                  }
+                ],
+                "url": "https://mychannel-ai-fkri6ifojq-uc.a.run.app"
+              }
+            ],
+            "template": [
+              {
+                "metadata": [
+                  {
+                    "annotations": {
+                      "autoscaling.knative.dev/maxScale": "3",
+                      "run.googleapis.com/client-name": "gcloud",
+                      "run.googleapis.com/client-version": "533.0.0",
+                      "run.googleapis.com/startup-cpu-boost": "true"
+                    },
+                    "generation": 0,
+                    "labels": {
+                      "client.knative.dev/nonce": "ijtduunqfq",
+                      "run.googleapis.com/startupProbeType": "Default"
+                    },
+                    "name": "",
+                    "namespace": "",
+                    "resource_version": "",
+                    "self_link": "",
+                    "uid": ""
+                  }
+                ],
+                "spec": [
+                  {
+                    "container_concurrency": 80,
+                    "containers": [
+                      {
+                        "args": [],
+                        "command": [],
+                        "env": [
+                          {
+                            "name": "API_KEY",
+                            "value": "9e3fb4a06a672c519f2173544c6c31b9",
+                            "value_from": []
+                          },
+                          {
+                            "name": "GEN_MODEL",
+                            "value": "gemini-1.5-flash",
+                            "value_from": []
+                          },
+                          {
+                            "name": "GOOGLE_CLOUD_PROJECT",
+                            "value": "mychannel-ca26d",
+                            "value_from": []
+                          },
+                          {
+                            "name": "LOCATION",
+                            "value": "us-central1",
+                            "value_from": []
+                          },
+                          {
+                            "name": "MAX_TEXT_CHARS",
+                            "value": "4000",
+                            "value_from": []
+                          }
+                        ],
+                        "env_from": [],
+                        "image": "us-central1-docker.pkg.dev/mychannel-ca26d/app-repo/mychannel-ai",
+                        "liveness_probe": [],
+                        "name": "",
+                        "ports": [
+                          {
+                            "container_port": 8080,
+                            "name": "http1",
+                            "protocol": ""
+                          }
+                        ],
+                        "resources": [
+                          {
+                            "limits": {
+                              "cpu": "1",
+                              "memory": "512Mi"
+                            },
+                            "requests": {}
+                          }
+                        ],
+                        "startup_probe": [
+                          {
+                            "failure_threshold": 1,
+                            "grpc": [],
+                            "http_get": [],
+                            "initial_delay_seconds": 0,
+                            "period_seconds": 240,
+                            "tcp_socket": [
+                              {
+                                "port": 8080
+                              }
+                            ],
+                            "timeout_seconds": 240
+                          }
+                        ],
+                        "volume_mounts": [],
+                        "working_dir": ""
+                      }
+                    ],
+                    "node_selector": {},
+                    "service_account_name": "run-svc@mychannel-ca26d.iam.gserviceaccount.com",
+                    "serving_state": "",
+                    "timeout_seconds": 600,
+                    "volumes": []
+                  }
+                ]
+              }
+            ],
+            "traffic": [
+              {
+                "latest_revision": true,
+                "percent": 100,
+                "revision_name": "",
+                "tag": "",
+                "url": ""
+              }
+            ]
+          },
+          "sensitive_attributes": []
+        }
+      ]
+    },
     {
       "mode": "data",
       "type": "google_project",
@@ -17,20 +211,43 @@
             "auto_create_network": null,
             "billing_account": "01987B-896185-140D6D",
             "deletion_policy": "PREVENT",
-            "effective_labels": {},
+            "effective_labels": {
+              "firebase": "enabled",
+              "firebase-core": "disabled"
+            },
             "folder_id": "",
-            "id": "projects/mychannel-prod-mm7kvf",
-            "labels": {},
-            "name": "MyChannel Prod",
-            "number": "882899433879",
+            "id": "projects/mychannel-ca26d",
+            "labels": {
+              "firebase": "enabled",
+              "firebase-core": "disabled"
+            },
+            "name": "MyChannel",
+            "number": "124515086975",
             "org_id": "495229295861",
-            "project_id": "mychannel-prod-mm7kvf",
+            "project_id": "mychannel-ca26d",
             "tags": null,
-            "terraform_labels": {}
+            "terraform_labels": {
+              "firebase": "enabled",
+              "firebase-core": "disabled"
+            }
           },
           "sensitive_attributes": []
         }
       ]
+    },
+    {
+      "mode": "managed",
+      "type": "google_api_gateway_api_config",
+      "name": "api_config",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google-beta\"]",
+      "instances": []
+    },
+    {
+      "mode": "managed",
+      "type": "google_api_gateway_gateway",
+      "name": "gateway",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google-beta\"]",
+      "instances": []
     },
     {
       "mode": "managed",
@@ -64,7 +281,7 @@
               "goog-terraform-provisioned": "true"
             },
             "timeouts": null,
-            "update_time": "2025-08-09T22:37:49.805253Z",
+            "update_time": "2025-08-09T22:51:02.511252Z",
             "virtual_repository_config": [],
             "vulnerability_scanning_config": [
               {
@@ -190,32 +407,6 @@
     },
     {
       "mode": "managed",
-      "type": "google_bigquery_dataset_iam_member",
-      "name": "pubsub_bq_writer",
-      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
-      "instances": [
-        {
-          "schema_version": 0,
-          "attributes": {
-            "condition": [],
-            "dataset_id": "analytics",
-            "etag": "",
-            "id": "projects/mychannel-prod-mm7kvf/datasets/analytics/roles/bigquery.dataEditor/serviceAccount:service-882899433879@gcp-sa-pubsub.iam.gserviceaccount.com",
-            "member": "serviceAccount:service-882899433879@gcp-sa-pubsub.iam.gserviceaccount.com",
-            "project": "mychannel-prod-mm7kvf",
-            "role": "roles/bigquery.dataEditor"
-          },
-          "sensitive_attributes": [],
-          "private": "bnVsbA==",
-          "dependencies": [
-            "data.google_project.current",
-            "google_bigquery_dataset.analytics"
-          ]
-        }
-      ]
-    },
-    {
-      "mode": "managed",
       "type": "google_bigquery_table",
       "name": "events",
       "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
@@ -279,6 +470,30 @@
     {
       "mode": "managed",
       "type": "google_project_iam_member",
+      "name": "apigw_run_invoker",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "condition": [],
+            "etag": "BwY8/eHn3Mk=",
+            "id": "mychannel-ca26d/roles/run.invoker/serviceAccount:apigw-sa@mychannel-ca26d.iam.gserviceaccount.com",
+            "member": "serviceAccount:apigw-sa@mychannel-ca26d.iam.gserviceaccount.com",
+            "project": "mychannel-ca26d",
+            "role": "roles/run.invoker"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "google_service_account.apigw_sa"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "google_project_iam_member",
       "name": "cloudbuild_artifact_writer",
       "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
       "instances": [
@@ -286,10 +501,10 @@
           "schema_version": 0,
           "attributes": {
             "condition": [],
-            "etag": "BwY79mHb3Og=",
-            "id": "mychannel-prod-mm7kvf/roles/artifactregistry.writer/serviceAccount:882899433879@cloudbuild.gserviceaccount.com",
-            "member": "serviceAccount:882899433879@cloudbuild.gserviceaccount.com",
-            "project": "mychannel-prod-mm7kvf",
+            "etag": "BwY8/eE1RHE=",
+            "id": "mychannel-ca26d/roles/artifactregistry.writer/serviceAccount:124515086975@cloudbuild.gserviceaccount.com",
+            "member": "serviceAccount:124515086975@cloudbuild.gserviceaccount.com",
+            "project": "mychannel-ca26d",
             "role": "roles/artifactregistry.writer"
           },
           "sensitive_attributes": [],
@@ -310,11 +525,59 @@
           "schema_version": 0,
           "attributes": {
             "condition": [],
-            "etag": "BwY79mHb3Og=",
-            "id": "mychannel-prod-mm7kvf/roles/storage.admin/serviceAccount:882899433879@cloudbuild.gserviceaccount.com",
-            "member": "serviceAccount:882899433879@cloudbuild.gserviceaccount.com",
-            "project": "mychannel-prod-mm7kvf",
+            "etag": "BwY8/eGPb3k=",
+            "id": "mychannel-ca26d/roles/storage.admin/serviceAccount:124515086975@cloudbuild.gserviceaccount.com",
+            "member": "serviceAccount:124515086975@cloudbuild.gserviceaccount.com",
+            "project": "mychannel-ca26d",
             "role": "roles/storage.admin"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "data.google_project.current"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "google_project_iam_member",
+      "name": "compute_artifact_writer",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "condition": [],
+            "etag": "BwY8/eE1RHE=",
+            "id": "mychannel-ca26d/roles/artifactregistry.writer/serviceAccount:124515086975-compute@developer.gserviceaccount.com",
+            "member": "serviceAccount:124515086975-compute@developer.gserviceaccount.com",
+            "project": "mychannel-ca26d",
+            "role": "roles/artifactregistry.writer"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "data.google_project.current"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "google_project_iam_member",
+      "name": "compute_logging_writer",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "condition": [],
+            "etag": "BwY8/eE1RHE=",
+            "id": "mychannel-ca26d/roles/logging.logWriter/serviceAccount:124515086975-compute@developer.gserviceaccount.com",
+            "member": "serviceAccount:124515086975-compute@developer.gserviceaccount.com",
+            "project": "mychannel-ca26d",
+            "role": "roles/logging.logWriter"
           },
           "sensitive_attributes": [],
           "private": "bnVsbA==",
@@ -334,10 +597,10 @@
           "schema_version": 0,
           "attributes": {
             "condition": [],
-            "etag": "BwY79mHb3Og=",
-            "id": "mychannel-prod-mm7kvf/roles/storage.objectViewer/serviceAccount:882899433879-compute@developer.gserviceaccount.com",
-            "member": "serviceAccount:882899433879-compute@developer.gserviceaccount.com",
-            "project": "mychannel-prod-mm7kvf",
+            "etag": "BwY8/eE1RHE=",
+            "id": "mychannel-ca26d/roles/storage.objectViewer/serviceAccount:124515086975-compute@developer.gserviceaccount.com",
+            "member": "serviceAccount:124515086975-compute@developer.gserviceaccount.com",
+            "project": "mychannel-ca26d",
             "role": "roles/storage.objectViewer"
           },
           "sensitive_attributes": [],
@@ -359,11 +622,28 @@
           "schema_version": 0,
           "attributes": {
             "condition": [],
-            "etag": "BwY79mHb3Og=",
-            "id": "mychannel-prod-mm7kvf/roles/aiplatform.user/serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
+            "etag": "BwY8/eE1RHE=",
+            "id": "mychannel-ca26d/roles/aiplatform.user/serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
             "member": "serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
-            "project": "mychannel-prod-mm7kvf",
+            "project": "mychannel-ca26d",
             "role": "roles/aiplatform.user"
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA==",
+          "dependencies": [
+            "google_service_account.run_svc"
+          ]
+        },
+        {
+          "index_key": "roles/bigquery.dataEditor",
+          "schema_version": 0,
+          "attributes": {
+            "condition": [],
+            "etag": "BwY8/eE1RHE=",
+            "id": "mychannel-ca26d/roles/bigquery.dataEditor/serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
+            "member": "serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
+            "project": "mychannel-ca26d",
+            "role": "roles/bigquery.dataEditor"
           },
           "sensitive_attributes": [],
           "private": "bnVsbA==",
@@ -376,10 +656,10 @@
           "schema_version": 0,
           "attributes": {
             "condition": [],
-            "etag": "BwY79mHb3Og=",
-            "id": "mychannel-prod-mm7kvf/roles/logging.logWriter/serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
+            "etag": "BwY8/eGPb3k=",
+            "id": "mychannel-ca26d/roles/logging.logWriter/serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
             "member": "serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
-            "project": "mychannel-prod-mm7kvf",
+            "project": "mychannel-ca26d",
             "role": "roles/logging.logWriter"
           },
           "sensitive_attributes": [],
@@ -393,10 +673,10 @@
           "schema_version": 0,
           "attributes": {
             "condition": [],
-            "etag": "BwY79mHb3Og=",
-            "id": "mychannel-prod-mm7kvf/roles/monitoring.metricWriter/serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
+            "etag": "BwY8/eGPb3k=",
+            "id": "mychannel-ca26d/roles/monitoring.metricWriter/serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
             "member": "serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
-            "project": "mychannel-prod-mm7kvf",
+            "project": "mychannel-ca26d",
             "role": "roles/monitoring.metricWriter"
           },
           "sensitive_attributes": [],
@@ -410,10 +690,10 @@
           "schema_version": 0,
           "attributes": {
             "condition": [],
-            "etag": "BwY79mHb3Og=",
-            "id": "mychannel-prod-mm7kvf/roles/pubsub.publisher/serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
+            "etag": "BwY8/eGPb3k=",
+            "id": "mychannel-ca26d/roles/pubsub.publisher/serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
             "member": "serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
-            "project": "mychannel-prod-mm7kvf",
+            "project": "mychannel-ca26d",
             "role": "roles/pubsub.publisher"
           },
           "sensitive_attributes": [],
@@ -427,10 +707,10 @@
           "schema_version": 0,
           "attributes": {
             "condition": [],
-            "etag": "BwY79mHb3Og=",
-            "id": "mychannel-prod-mm7kvf/roles/run.invoker/serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
+            "etag": "BwY8/eGPb3k=",
+            "id": "mychannel-ca26d/roles/run.invoker/serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
             "member": "serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
-            "project": "mychannel-prod-mm7kvf",
+            "project": "mychannel-ca26d",
             "role": "roles/run.invoker"
           },
           "sensitive_attributes": [],
@@ -444,10 +724,10 @@
           "schema_version": 0,
           "attributes": {
             "condition": [],
-            "etag": "BwY79mHb3Og=",
-            "id": "mychannel-prod-mm7kvf/roles/secretmanager.secretAccessor/serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
+            "etag": "BwY8/eGPb3k=",
+            "id": "mychannel-ca26d/roles/secretmanager.secretAccessor/serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
             "member": "serviceAccount:run-svc@mychannel-prod-mm7kvf.iam.gserviceaccount.com",
-            "project": "mychannel-prod-mm7kvf",
+            "project": "mychannel-ca26d",
             "role": "roles/secretmanager.secretAccessor"
           },
           "sensitive_attributes": [],
@@ -473,6 +753,20 @@
             "id": "mychannel-prod-mm7kvf/aiplatform.googleapis.com",
             "project": "mychannel-prod-mm7kvf",
             "service": "aiplatform.googleapis.com",
+            "timeouts": null
+          },
+          "sensitive_attributes": [],
+          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjoxMjAwMDAwMDAwMDAwLCJkZWxldGUiOjEyMDAwMDAwMDAwMDAsInJlYWQiOjYwMDAwMDAwMDAwMCwidXBkYXRlIjoxMjAwMDAwMDAwMDAwfX0="
+        },
+        {
+          "index_key": "apigateway.googleapis.com",
+          "schema_version": 0,
+          "attributes": {
+            "disable_dependent_services": null,
+            "disable_on_destroy": true,
+            "id": "mychannel-ca26d/apigateway.googleapis.com",
+            "project": "mychannel-ca26d",
+            "service": "apigateway.googleapis.com",
             "timeouts": null
           },
           "sensitive_attributes": [],
@@ -606,7 +900,7 @@
               {
                 "drop_unknown_fields": false,
                 "service_account_email": "",
-                "table": "mychannel-prod-mm7kvf:analytics.events",
+                "table": "mychannel-ca26d:analytics.events",
                 "use_table_schema": true,
                 "use_topic_schema": false,
                 "write_metadata": false
@@ -626,7 +920,7 @@
             ],
             "filter": "",
             "id": "projects/mychannel-prod-mm7kvf/subscriptions/events-bq",
-            "labels": null,
+            "labels": {},
             "message_retention_duration": "604800s",
             "message_transforms": [],
             "name": "events-bq",
@@ -649,6 +943,13 @@
           ]
         }
       ]
+    },
+    {
+      "mode": "managed",
+      "type": "google_pubsub_subscription",
+      "name": "video_features_bq",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": []
     },
     {
       "mode": "managed",
@@ -679,6 +980,65 @@
           },
           "sensitive_attributes": [],
           "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjoxMjAwMDAwMDAwMDAwLCJkZWxldGUiOjEyMDAwMDAwMDAwMDAsInVwZGF0ZSI6MTIwMDAwMDAwMDAwMH19"
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "google_pubsub_topic",
+      "name": "video_features",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "effective_labels": {
+              "goog-terraform-provisioned": "true"
+            },
+            "id": "projects/mychannel-ca26d/topics/video-features",
+            "ingestion_data_source_settings": [],
+            "kms_key_name": "",
+            "labels": null,
+            "message_retention_duration": "",
+            "message_storage_policy": [],
+            "message_transforms": [],
+            "name": "video-features",
+            "project": "mychannel-ca26d",
+            "schema_settings": [],
+            "terraform_labels": {
+              "goog-terraform-provisioned": "true"
+            },
+            "timeouts": null
+          },
+          "sensitive_attributes": [],
+          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjoxMjAwMDAwMDAwMDAwLCJkZWxldGUiOjEyMDAwMDAwMDAwMDAsInVwZGF0ZSI6MTIwMDAwMDAwMDAwMH19"
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "google_service_account",
+      "name": "apigw_sa",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "account_id": "apigw-sa",
+            "create_ignore_already_exists": null,
+            "description": "",
+            "disabled": false,
+            "display_name": "API Gateway SA",
+            "email": "apigw-sa@mychannel-ca26d.iam.gserviceaccount.com",
+            "id": "projects/mychannel-ca26d/serviceAccounts/apigw-sa@mychannel-ca26d.iam.gserviceaccount.com",
+            "member": "serviceAccount:apigw-sa@mychannel-ca26d.iam.gserviceaccount.com",
+            "name": "projects/mychannel-ca26d/serviceAccounts/apigw-sa@mychannel-ca26d.iam.gserviceaccount.com",
+            "project": "mychannel-ca26d",
+            "timeouts": null,
+            "unique_id": "116668150107694389904"
+          },
+          "sensitive_attributes": [],
+          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjozMDAwMDAwMDAwMDB9fQ=="
         }
       ]
     },
@@ -733,7 +1093,7 @@
                 "enabled": false
               }
             ],
-            "id": "mychannel-media-4ixxw2",
+            "id": "mychannel-ca26d-media",
             "ip_filter": [],
             "labels": null,
             "lifecycle_rule": [
@@ -767,17 +1127,17 @@
             ],
             "location": "US-CENTRAL1",
             "logging": [],
-            "name": "mychannel-media-4ixxw2",
-            "project": "mychannel-prod-mm7kvf",
-            "project_number": 882899433879,
+            "name": "mychannel-ca26d-media",
+            "project": "mychannel-ca26d",
+            "project_number": 124515086975,
             "public_access_prevention": "inherited",
             "requester_pays": false,
             "retention_policy": [],
             "rpo": null,
-            "self_link": "https://www.googleapis.com/storage/v1/b/mychannel-media-4ixxw2",
+            "self_link": "https://www.googleapis.com/storage/v1/b/mychannel-ca26d-media",
             "soft_delete_policy": [
               {
-                "effective_time": "2025-08-09T22:41:22.149Z",
+                "effective_time": "2025-08-23T01:02:40.060Z",
                 "retention_duration_seconds": 604800
               }
             ],
@@ -785,16 +1145,47 @@
             "terraform_labels": {
               "goog-terraform-provisioned": "true"
             },
-            "time_created": "2025-08-09T22:41:22.149Z",
+            "time_created": "2025-08-23T01:02:40.060Z",
             "timeouts": null,
             "uniform_bucket_level_access": true,
-            "updated": "2025-08-09T22:41:22.149Z",
-            "url": "gs://mychannel-media-4ixxw2",
+            "updated": "2025-08-23T01:02:40.060Z",
+            "url": "gs://mychannel-ca26d-media",
             "versioning": [],
             "website": []
           },
           "sensitive_attributes": [],
           "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjo2MDAwMDAwMDAwMDAsInJlYWQiOjI0MDAwMDAwMDAwMCwidXBkYXRlIjoyNDAwMDAwMDAwMDB9LCJzY2hlbWFfdmVyc2lvbiI6IjMifQ=="
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "local_file",
+      "name": "apigw_openapi",
+      "provider": "provider[\"registry.terraform.io/hashicorp/local\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "content": "openapi: 3.0.0\ninfo:\n  title: MyChannel API\n  version: 1.0.0\nservers:\n  - url: https://mychannel-ai-fkri6ifojq-uc.a.run.app\ncomponents:\n  securitySchemes:\n    api_key:\n      type: apiKey\n      in: header\n      name: x-api-key\npaths:\n  /ai/summarize:\n    post:\n      x-google-backend:\n        address: https://mychannel-ai-fkri6ifojq-uc.a.run.app\n        deadline: 30.0\n      security:\n        - api_key: []\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema:\n              type: object\n              properties:\n                text:\n                  type: string\n                lang:\n                  type: string\n      responses:\n        '200':\n          description: OK\n          content:\n            application/json:\n              schema:\n                type: object\n                properties:\n                  summary:\n                    type: string\n\n  /ai/analyzeVideo:\n    post:\n      x-google-backend:\n        address: https://mychannel-ai-fkri6ifojq-uc.a.run.app\n        deadline: 60.0\n      security:\n        - api_key: []\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema:\n              type: object\n              properties:\n                gcs_uri:\n                  type: string\n                video_id:\n                  type: string\n                duration_seconds:\n                  type: number\n                features:\n                  type: array\n                  items:\n                    type: string\n      responses:\n        '200':\n          description: OK\n          content:\n            application/json:\n              schema:\n                type: object\n                properties:\n                  uri:\n                    type: string\n                  labels:\n                    type: array\n                    items:\n                      type: string\n                  shots:\n                    type: integer\n                  explicit_content:\n                    type: boolean\n                  text_annotations:\n                    type: array\n                    items:\n                      type: string\n                  object_annotations:\n                    type: array\n                    items:\n                      type: string\n\n  /ai/scoreVirality:\n    post:\n      x-google-backend:\n        address: https://mychannel-ai-fkri6ifojq-uc.a.run.app\n        deadline: 15.0\n      security:\n        - api_key: []\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema:\n              type: object\n              properties:\n                labels:\n                  type: array\n                  items:\n                    type: string\n                shots:\n                  type: integer\n                explicit_content:\n                  type: boolean\n                duration_seconds:\n                  type: number\n                text_annotations:\n                  type: array\n                  items:\n                    type: string\n                object_annotations:\n                  type: array\n                  items:\n                    type: string\n      responses:\n        '200':\n          description: OK\n          content:\n            application/json:\n              schema:\n                type: object\n                properties:\n                  score:\n                    type: number\n                  factors:\n                    type: object\n\n\n",
+            "content_base64": null,
+            "content_base64sha256": "Sacdd5NLuc5tpyEhFlvw8Ej2z+v9FdfZIY6bVbzlfpM=",
+            "content_base64sha512": "2ZRrgs2AA0wGTo177nZ2P9s1KSynFHQ9RbQJS12bkQRs6xvTwyeUffGY0oZDLFek21CXn4024QqHErRIWNp0vQ==",
+            "content_md5": "419e6e611ae9b389139b07f873e035f0",
+            "content_sha1": "2e67c0f78ee694bf7ac5a40fed842af96b1d975b",
+            "content_sha256": "49a71d77934bb9ce6da72121165bf0f048f6cfebfd15d7d9218e9b55bce57e93",
+            "content_sha512": "d9946b82cd80034c064e8d7bee76763fdb35292ca714743d45b4094b5d9b91046ceb1bd3c327947df198d286432c57a4db50979f8d36e10a8712b44858da74bd",
+            "directory_permission": "0777",
+            "file_permission": "0777",
+            "filename": "./apigateway_openapi.yaml",
+            "id": "2e67c0f78ee694bf7ac5a40fed842af96b1d975b",
+            "sensitive_content": null,
+            "source": null
+          },
+          "sensitive_attributes": [],
+          "dependencies": [
+            "data.google_cloud_run_service.ai"
+          ]
         }
       ]
     }

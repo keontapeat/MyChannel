@@ -5,10 +5,19 @@ terraform {
       source  = "hashicorp/google"
       version = ">= 5.29.0"
     }
+    google-beta = {
+      source  = "hashicorp/google-beta"
+      version = ">= 5.29.0"
+    }
   }
 }
 
 provider "google" {
+  project = var.project_id
+  region  = var.region
+}
+
+provider "google-beta" {
   project = var.project_id
   region  = var.region
 }
@@ -29,6 +38,16 @@ variable "region" {
 variable "media_bucket_name" {
   type        = string
   description = "Globally-unique bucket name for media"
+}
+
+variable "ingest_bucket_name" {
+  type        = string
+  description = "Bucket for raw uploads (ingest/)"
+}
+
+variable "public_bucket_name" {
+  type        = string
+  description = "Bucket for public HLS/MPD outputs"
 }
 
 resource "google_project_service" "services" {
@@ -54,9 +73,9 @@ resource "google_artifact_registry_repository" "repo" {
   depends_on    = [google_project_service.services]
 }
 
-resource "google_service_account" "run_svc" {
-  account_id   = "run-svc"
-  display_name = "Cloud Run SA"
+data "google_service_account" "run_svc" {
+  project    = var.project_id
+  account_id = "run-svc"
 }
 
 # API Gateway service account
@@ -72,11 +91,12 @@ resource "google_project_iam_member" "roles" {
     "roles/secretmanager.secretAccessor",
     "roles/logging.logWriter",
     "roles/monitoring.metricWriter",
-    "roles/pubsub.publisher"
+    "roles/pubsub.publisher",
+    "roles/bigquery.dataEditor"
   ])
   project = var.project_id
-  role   = each.value
-  member = "serviceAccount:${google_service_account.run_svc.email}"
+  role    = each.value
+  member  = "serviceAccount:${data.google_service_account.run_svc.email}"
 }
 
 # Grant API Gateway SA permission to invoke Cloud Run
@@ -92,27 +112,135 @@ data "google_cloud_run_service" "ai" {
   location = var.region
 }
 
+# Cloud Run services for core APIs (images must exist in Artifact Registry)
+resource "google_cloud_run_service" "upload" {
+  name     = "mychannel-upload"
+  location = var.region
+  template {
+    spec {
+      service_account_name = data.google_service_account.run_svc.email
+      containers {
+        image = "${var.region}-docker.pkg.dev/${var.project_id}/app-repo/mychannel-upload:latest"
+        env {
+          name  = "INGEST_BUCKET"
+          value = var.ingest_bucket_name
+        }
+        ports {
+          name           = "http1"
+          container_port = 8080
+        }
+      }
+    }
+  }
+  traffic {
+    percent         = 100
+    latest_revision = true
+  }
+}
+
+resource "google_cloud_run_service" "transcode" {
+  name     = "mychannel-transcode"
+  location = var.region
+  template {
+    spec {
+      service_account_name = data.google_service_account.run_svc.email
+      containers {
+        image = "${var.region}-docker.pkg.dev/${var.project_id}/app-repo/mychannel-transcode:latest"
+        ports {
+          name           = "http1"
+          container_port = 8080
+        }
+      }
+    }
+  }
+  traffic {
+    percent         = 100
+    latest_revision = true
+  }
+}
+
+resource "google_cloud_run_service" "content" {
+  name     = "mychannel-content"
+  location = var.region
+  template {
+    spec {
+      service_account_name = data.google_service_account.run_svc.email
+      containers {
+        image = "${var.region}-docker.pkg.dev/${var.project_id}/app-repo/mychannel-content:latest"
+        ports {
+          name           = "http1"
+          container_port = 8080
+        }
+      }
+    }
+  }
+  traffic {
+    percent         = 100
+    latest_revision = true
+  }
+}
+
+resource "google_cloud_run_service" "events" {
+  name     = "mychannel-events"
+  location = var.region
+  template {
+    spec {
+      service_account_name = data.google_service_account.run_svc.email
+      containers {
+        image = "${var.region}-docker.pkg.dev/${var.project_id}/app-repo/mychannel-events:latest"
+        env {
+          name  = "EVENTS_TOPIC"
+          value = google_pubsub_topic.events.name
+        }
+        ports {
+          name           = "http1"
+          container_port = 8080
+        }
+      }
+    }
+  }
+  traffic {
+    percent         = 100
+    latest_revision = true
+  }
+}
+
 # Render OpenAPI with backend URL
 resource "local_file" "apigw_openapi" {
   filename = "${path.module}/apigateway_openapi.yaml"
-  content  = templatefile("${path.module}/openapi.tmpl.yaml", {
-    backend_url = data.google_cloud_run_service.ai.status[0].url
+  content = templatefile("${path.module}/openapi.tmpl.yaml", {
+    backend_url   = data.google_cloud_run_service.ai.status[0].url,
+    upload_url    = google_cloud_run_service.upload.status[0].url,
+    content_url   = google_cloud_run_service.content.status[0].url,
+    events_url    = google_cloud_run_service.events.status[0].url,
+    transcode_url = google_cloud_run_service.transcode.status[0].url
   })
 }
 
 # API Gateway API and config
 resource "google_api_gateway_api" "api" {
-  api_id = "mychannel-api"
+  provider = google-beta
+  api_id   = "mychannel-api"
 }
 
 resource "google_api_gateway_api_config" "api_config" {
-  api      = google_api_gateway_api.api.name
-  config_id = "v1"
+  provider = google-beta
+  api      = google_api_gateway_api.api.api_id
+  lifecycle {
+    create_before_destroy = true
+  }
 
   openapi_documents {
     document {
-      path     = local_file.apigw_openapi.filename
-      contents = file(local_file.apigw_openapi.filename)
+      # Provide both a stable path and inline base64 contents
+      path = "${path.module}/openapi.tmpl.yaml"
+      contents = base64encode(templatefile("${path.module}/openapi.tmpl.yaml", {
+        backend_url   = data.google_cloud_run_service.ai.status[0].url,
+        upload_url    = google_cloud_run_service.upload.status[0].url,
+        content_url   = google_cloud_run_service.content.status[0].url,
+        events_url    = google_cloud_run_service.events.status[0].url,
+        transcode_url = google_cloud_run_service.transcode.status[0].url
+      }))
     }
   }
 
@@ -125,9 +253,36 @@ resource "google_api_gateway_api_config" "api_config" {
 }
 
 resource "google_api_gateway_gateway" "gateway" {
+  provider   = google-beta
   gateway_id = "mychannel-gw"
   api_config = google_api_gateway_api_config.api_config.id
-  location   = var.region
+  region     = var.region
+}
+
+# Outputs
+output "api_gateway_hostname" {
+  value       = google_api_gateway_gateway.gateway.default_hostname
+  description = "Default hostname for API Gateway"
+}
+
+output "upload_service_url" {
+  value       = google_cloud_run_service.upload.status[0].url
+  description = "Cloud Run URL for upload service"
+}
+
+output "transcode_service_url" {
+  value       = google_cloud_run_service.transcode.status[0].url
+  description = "Cloud Run URL for transcode service"
+}
+
+output "content_service_url" {
+  value       = google_cloud_run_service.content.status[0].url
+  description = "Cloud Run URL for content service"
+}
+
+output "events_service_url" {
+  value       = google_cloud_run_service.events.status[0].url
+  description = "Cloud Run URL for events service"
 }
 
 # Grant Cloud Build service account permissions to access Artifact Registry and GCS
@@ -167,6 +322,16 @@ resource "google_pubsub_topic" "events" {
   name = "events"
 }
 
+# Topic for media ingestion jobs
+resource "google_pubsub_topic" "media_ingest" {
+  name = "media-ingest"
+}
+
+# Topic for video features used for learning pipeline
+resource "google_pubsub_topic" "video_features" {
+  name = "video-features"
+}
+
 # BigQuery dataset for analytics
 resource "google_bigquery_dataset" "analytics" {
   dataset_id    = "analytics"
@@ -177,14 +342,32 @@ resource "google_bigquery_dataset" "analytics" {
 
 # BigQuery table for events
 resource "google_bigquery_table" "events" {
-  dataset_id = google_bigquery_dataset.analytics.dataset_id
-  table_id   = "events"
+  dataset_id          = google_bigquery_dataset.analytics.dataset_id
+  table_id            = "events"
   deletion_protection = false
   schema = jsonencode([
     { name = "timestamp", type = "TIMESTAMP", mode = "NULLABLE" },
-    { name = "type",      type = "STRING",     mode = "NULLABLE" },
-    { name = "ok",        type = "BOOLEAN",    mode = "NULLABLE" },
-    { name = "metadata",  type = "STRING",     mode = "NULLABLE" }
+    { name = "type", type = "STRING", mode = "NULLABLE" },
+    { name = "ok", type = "BOOLEAN", mode = "NULLABLE" },
+    { name = "metadata", type = "STRING", mode = "NULLABLE" }
+  ])
+}
+
+# BigQuery table for video features
+resource "google_bigquery_table" "video_features" {
+  dataset_id          = google_bigquery_dataset.analytics.dataset_id
+  table_id            = "video_features"
+  deletion_protection = false
+  schema = jsonencode([
+    { name = "ingested_at", type = "TIMESTAMP", mode = "NULLABLE" },
+    { name = "video_id", type = "STRING", mode = "NULLABLE" },
+    { name = "uri", type = "STRING", mode = "NULLABLE" },
+    { name = "labels", type = "STRING", mode = "REPEATED" },
+    { name = "shots", type = "INTEGER", mode = "NULLABLE" },
+    { name = "explicit_content", type = "BOOLEAN", mode = "NULLABLE" },
+    { name = "text_annotations", type = "STRING", mode = "REPEATED" },
+    { name = "object_annotations", type = "STRING", mode = "REPEATED" },
+    { name = "duration_seconds", type = "FLOAT", mode = "NULLABLE" }
   ])
 }
 
@@ -195,6 +378,18 @@ resource "google_pubsub_subscription" "events_bq" {
 
   bigquery_config {
     table            = "${var.project_id}:${google_bigquery_dataset.analytics.dataset_id}.${google_bigquery_table.events.table_id}"
+    use_table_schema = true
+    write_metadata   = false
+  }
+}
+
+# Pub/Sub subscription that writes video features into BigQuery table
+resource "google_pubsub_subscription" "video_features_bq" {
+  name  = "video-features-bq"
+  topic = google_pubsub_topic.video_features.name
+
+  bigquery_config {
+    table            = "${var.project_id}:${google_bigquery_dataset.analytics.dataset_id}.${google_bigquery_table.video_features.table_id}"
     use_table_schema = true
     write_metadata   = false
   }
@@ -217,6 +412,96 @@ resource "google_storage_bucket" "media" {
     action { type = "Delete" }
     condition { age = 365 }
   }
+}
+
+# Ingest bucket: receives raw uploads via signed URLs
+resource "google_storage_bucket" "ingest" {
+  name                        = var.ingest_bucket_name
+  location                    = var.region
+  uniform_bucket_level_access = true
+  force_destroy               = false
+  cors {
+    origin          = ["*"]
+    method          = ["GET", "PUT", "POST", "HEAD"]
+    response_header = ["*", "Authorization", "Content-Type"]
+    max_age_seconds = 3600
+  }
+}
+
+# Public bucket: serves transcoded HLS/MPD assets
+resource "google_storage_bucket" "public" {
+  name                        = var.public_bucket_name
+  location                    = var.region
+  uniform_bucket_level_access = true
+  force_destroy               = false
+  cors {
+    origin          = ["*"]
+    method          = ["GET", "HEAD", "OPTIONS"]
+    response_header = ["*"]
+    max_age_seconds = 3600
+  }
+}
+
+
+# Allow Cloud Run service account to read HLS output segments from the media bucket
+resource "google_storage_bucket_iam_member" "media_viewer_run_svc" {
+  bucket = var.media_bucket_name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:run-svc@${var.project_id}.iam.gserviceaccount.com"
+}
+
+# Allow transcode service to write outputs to public bucket
+resource "google_storage_bucket_iam_member" "public_object_admin_run_svc" {
+  bucket = var.public_bucket_name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:run-svc@${var.project_id}.iam.gserviceaccount.com"
+}
+
+# Allow runtime to read from ingest bucket if needed
+resource "google_storage_bucket_iam_member" "ingest_viewer_run_svc" {
+  bucket = var.ingest_bucket_name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:run-svc@${var.project_id}.iam.gserviceaccount.com"
+}
+
+# BigQuery tables for plays, impressions, likes
+resource "google_bigquery_table" "plays" {
+  dataset_id          = google_bigquery_dataset.analytics.dataset_id
+  table_id            = "plays"
+  deletion_protection = false
+  schema = jsonencode([
+    { name = "timestamp", type = "TIMESTAMP", mode = "REQUIRED" },
+    { name = "user_id", type = "STRING", mode = "NULLABLE" },
+    { name = "video_id", type = "STRING", mode = "REQUIRED" },
+    { name = "position", type = "FLOAT", mode = "NULLABLE" },
+    { name = "autoplay", type = "BOOLEAN", mode = "NULLABLE" },
+    { name = "device", type = "STRING", mode = "NULLABLE" },
+    { name = "session_id", type = "STRING", mode = "NULLABLE" }
+  ])
+}
+
+resource "google_bigquery_table" "impressions" {
+  dataset_id          = google_bigquery_dataset.analytics.dataset_id
+  table_id            = "impressions"
+  deletion_protection = false
+  schema = jsonencode([
+    { name = "timestamp", type = "TIMESTAMP", mode = "REQUIRED" },
+    { name = "user_id", type = "STRING", mode = "NULLABLE" },
+    { name = "video_id", type = "STRING", mode = "REQUIRED" },
+    { name = "context", type = "STRING", mode = "NULLABLE" },
+    { name = "rank", type = "INTEGER", mode = "NULLABLE" }
+  ])
+}
+
+resource "google_bigquery_table" "likes" {
+  dataset_id          = google_bigquery_dataset.analytics.dataset_id
+  table_id            = "likes"
+  deletion_protection = false
+  schema = jsonencode([
+    { name = "timestamp", type = "TIMESTAMP", mode = "REQUIRED" },
+    { name = "user_id", type = "STRING", mode = "REQUIRED" },
+    { name = "video_id", type = "STRING", mode = "REQUIRED" }
+  ])
 }
 
 

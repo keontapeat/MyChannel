@@ -18,6 +18,8 @@
 		0541DE722E470D3F001B3F9E /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 0541DE712E470D3F001B3F9E /* FirebaseMessaging */; };
 		0541DE742E470D3F001B3F9E /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = 0541DE732E470D3F001B3F9E /* FirebasePerformance */; };
 		0541DE762E470D3F001B3F9E /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 0541DE752E470D3F001B3F9E /* FirebaseStorage */; };
+		054581AC2E59637D00F067AA /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 054581AB2E59637D00F067AA /* GoogleSignIn */; };
+		054581AE2E59637D00F067AA /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 054581AD2E59637D00F067AA /* GoogleSignInSwift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +31,10 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				"infra/terraform/.terraform/providers/registry.terraform.io/hashicorp/google-beta/6.49.2/darwin_amd64/LICENSE.txt",
+				infra/terraform/.terraform/providers/registry.terraform.io/hashicorp/google/6.47.0/darwin_amd64/LICENSE.txt,
+				infra/terraform/.terraform/providers/registry.terraform.io/hashicorp/google/6.49.2/darwin_amd64/LICENSE.txt,
+				infra/terraform/.terraform/providers/registry.terraform.io/hashicorp/local/2.5.3/darwin_amd64/LICENSE.txt,
 			);
 			target = 055B9AC32E1F0BB6004E6282 /* MyChannel */;
 		};
@@ -55,6 +61,8 @@
 				0541DE742E470D3F001B3F9E /* FirebasePerformance in Frameworks */,
 				0541DE6A2E470D3F001B3F9E /* FirebaseCore in Frameworks */,
 				0541DE662E470D3F001B3F9E /* FirebaseAnalyticsCore in Frameworks */,
+				054581AE2E59637D00F067AA /* GoogleSignInSwift in Frameworks */,
+				054581AC2E59637D00F067AA /* GoogleSignIn in Frameworks */,
 				0541DE6C2E470D3F001B3F9E /* FirebaseCrashlytics in Frameworks */,
 				0541DE622E470D3F001B3F9E /* FirebaseAI in Frameworks */,
 				0541DE702E470D3F001B3F9E /* FirebaseFirestore in Frameworks */,
@@ -114,6 +122,8 @@
 				0541DE712E470D3F001B3F9E /* FirebaseMessaging */,
 				0541DE732E470D3F001B3F9E /* FirebasePerformance */,
 				0541DE752E470D3F001B3F9E /* FirebaseStorage */,
+				054581AB2E59637D00F067AA /* GoogleSignIn */,
+				054581AD2E59637D00F067AA /* GoogleSignInSwift */,
 			);
 			productName = MyChannel;
 			productReference = 055B9AC42E1F0BB6004E6282 /* MyChannel.app */;
@@ -145,6 +155,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				054581AA2E59637D00F067AA /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 055B9AC52E1F0BB6004E6282 /* Products */;
@@ -391,6 +402,14 @@
 				minimumVersion = 12.1.0;
 			};
 		};
+		054581AA2E59637D00F067AA /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -448,6 +467,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseStorage;
+		};
+		054581AB2E59637D00F067AA /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 054581AA2E59637D00F067AA /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		054581AD2E59637D00F067AA /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 054581AA2E59637D00F067AA /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

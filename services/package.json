@@ -1,0 +1,23 @@
+{
+  "name": "mychannel-services",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:upload": "tsx upload/main.ts",
+    "dev:transcode": "tsx transcode/main.ts",
+    "dev:content": "tsx content/main.ts",
+    "dev:events": "tsx events/main.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "@google-cloud/pubsub": "^4.7.6",
+    "@google-cloud/storage": "^7.11.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.16.2",
+    "typescript": "^5.4.0"
+  }
+}

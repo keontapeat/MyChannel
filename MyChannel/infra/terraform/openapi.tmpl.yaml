@@ -1,36 +1,267 @@
-openapi: 3.0.0
+swagger: '2.0'
 info:
   title: MyChannel API
-  version: 1.0.0
-servers:
-  - url: ${backend_url}
+  version: '1.0.0'
+basePath: /
+schemes:
+  - https
+consumes:
+  - application/json
+produces:
+  - application/json
+securityDefinitions:
+  api_key:
+    type: apiKey
+    name: x-api-key
+    in: header
 paths:
   /ai/summarize:
     post:
+      operationId: summarize
       x-google-backend:
         address: ${backend_url}
         deadline: 30.0
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                text:
-                  type: string
-                lang:
+      
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              text:
+                type: string
+              lang:
+                type: string
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            properties:
+              summary:
+                type: string
+
+  /ai/analyzeVideo:
+    post:
+      operationId: analyzeVideo
+      x-google-backend:
+        address: ${backend_url}
+        deadline: 60.0
+      
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              gcs_uri:
+                type: string
+              video_id:
+                type: string
+              duration_seconds:
+                type: number
+              features:
+                type: array
+                items:
                   type: string
       responses:
         '200':
           description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  summary:
-                    type: string
+          schema:
+            type: object
+            properties:
+              uri:
+                type: string
+              labels:
+                type: array
+                items:
+                  type: string
+              shots:
+                type: integer
+              explicit_content:
+                type: boolean
+              text_annotations:
+                type: array
+                items:
+                  type: string
+              object_annotations:
+                type: array
+                items:
+                  type: string
+
+  /v1/uploads/signed-url:
+    post:
+      operationId: signedUrl
+      x-google-backend:
+        address: ${upload_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+        deadline: 15.0
+      x-google-allow:
+        - all
+      x-google-extensions:
+        cors:
+          allowOrigins: ["*"]
+          allowMethods: ["POST", "OPTIONS"]
+          allowHeaders: ["Content-Type", "Authorization"]
+          maxAge: 3600
+      
+      responses:
+        '200':
+          description: OK
+    options:
+      operationId: signedUrlOptions
+      x-google-backend:
+        address: ${upload_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+        deadline: 5.0
+      responses:
+        '204':
+          description: CORS preflight
+
+  /v1/feed/home:
+    get:
+      operationId: feedHome
+      x-google-backend:
+        address: ${content_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+        deadline: 10.0
+      
+      responses:
+        '200':
+          description: OK
+
+  /v1/events:
+    post:
+      operationId: events
+      x-google-backend:
+        address: ${events_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+        deadline: 10.0
+      x-google-extensions:
+        cors:
+          allowOrigins: ["*"]
+          allowMethods: ["POST", "OPTIONS"]
+          allowHeaders: ["Content-Type", "Authorization"]
+          maxAge: 3600
+      
+      responses:
+        '200':
+          description: OK
+    options:
+      operationId: eventsOptions
+      x-google-backend:
+        address: ${events_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+        deadline: 5.0
+      responses:
+        '204':
+          description: CORS preflight
+
+  /v1/transcode/ingest:
+    post:
+      operationId: transcodeIngest
+      x-google-backend:
+        address: ${transcode_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+        deadline: 60.0
+      
+      responses:
+        '200':
+          description: OK
+
+  /ai/scoreVirality:
+    post:
+      operationId: scoreVirality
+      x-google-backend:
+        address: ${backend_url}
+        deadline: 15.0
+      
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              labels:
+                type: array
+                items:
+                  type: string
+              shots:
+                type: integer
+              explicit_content:
+                type: boolean
+              duration_seconds:
+                type: number
+              text_annotations:
+                type: array
+                items:
+                  type: string
+              object_annotations:
+                type: array
+                items:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            properties:
+              score:
+                type: number
+
+  /live/playlist:
+    get:
+      operationId: livePlaylist
+      x-google-backend:
+        address: ${backend_url}
+        deadline: 15.0
+      
+      responses:
+        '200':
+          description: HLS playlist
+          schema:
+            type: string
+
+  /live/segment:
+    get:
+      operationId: liveSegment
+      x-google-backend:
+        address: ${backend_url}
+        deadline: 15.0
+      
+      parameters:
+        - name: file
+          in: query
+          required: true
+          type: string
+      responses:
+        '200':
+          description: fMP4 segment
+
+  /live/status:
+    get:
+      operationId: liveStatus
+      x-google-backend:
+        address: ${backend_url}
+        deadline: 10.0
+      security:
+        - api_key: []
+      responses:
+        '200':
+          description: Live status
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+              has_recent_segments:
+                type: boolean
+              latest_object:
+                type: string
+              latest_updated:
+                type: string
 
 

@@ -1052,6 +1052,34 @@ struct MinimalContentSections: View {
             ) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
+                        // Our Go Live channel via Cloud Run proxy
+                        let myChannelLive = LiveTVChannel(
+                            id: "mychannel-live",
+                            name: "MyChannel Live",
+                            logoURL: "https://picsum.photos/seed/mychannel-live/320/180",
+                            streamURL: "\(AppConfig.API.cloudRunBaseURL)/live/playlist",
+                            category: .entertainment,
+                            description: "Go Live playback",
+                            isLive: true,
+                            viewerCount: 0,
+                            quality: "HD",
+                            language: "English",
+                            country: "US",
+                            epgURL: nil,
+                            previewFallbackURL: nil
+                        )
+
+                        NavigationLink(destination: LiveTVPlayerView(channel: myChannelLive)) {
+                            MinimalChannelCard(
+                                channel: myChannelLive,
+                                autoPreview: true,
+                                previewOverrideStreamURL: nil,
+                                previewOverridePosterURL: nil,
+                                allowPlaybackInPreviews: false
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+
                         let source = liveChannelsAPI.isEmpty ? LiveTVChannel.sampleChannels : liveChannelsAPI
                         let channels = Array(source.prefix(8))
                         let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"

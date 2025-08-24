@@ -7,6 +7,9 @@
 
 import SwiftUI
 import Combine
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
 
 @MainActor
 class AuthenticationManager: ObservableObject {
@@ -46,161 +49,142 @@ class AuthenticationManager: ObservableObject {
     
     // MARK: - Authentication Status
     func checkAuthenticationStatus() {
-        // For now, always start unauthenticated to avoid crashes
+        #if canImport(FirebaseAuth)
+        if let fuser = Auth.auth().currentUser {
+            currentUser = User(
+                id: fuser.uid,
+                username: fuser.email?.components(separatedBy: "@").first ?? "user",
+                displayName: fuser.displayName ?? (fuser.email ?? "User"),
+                email: fuser.email ?? "",
+                profileImageURL: fuser.photoURL?.absoluteString,
+                isVerified: fuser.isEmailVerified,
+                isCreator: true
+            )
+            isAuthenticated = true
+            authState = .authenticated
+            return
+        }
+        #endif
+        // Start unauthenticated; real auth providers will update state
         authState = .unauthenticated
         isAuthenticated = false
-        
-        // Check if we have mock authentication enabled
-        if AppConfig.Features.enableMockData {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                Task {
-                    await self.setMockAuthenticatedUser()
-                    self.applyLocalProfileAvatarIfAvailable()
-                }
-            }
-        }
     }
     
     // MARK: - Sign In
     func signIn(email: String, password: String) async throws {
         authState = .authenticating
         isLoading = true
-        
-        // Simulate network delay
-        try await Task.sleep(nanoseconds: 1_500_000_000)
-        
-        defer {
-            isLoading = false
+        defer { isLoading = false }
+        #if canImport(FirebaseAuth)
+        do {
+            let result = try await Auth.auth().signIn(withEmail: email, password: password)
+            let fuser = result.user
+            currentUser = User(
+                id: fuser.uid,
+                username: email.components(separatedBy: "@").first ?? "user",
+                displayName: fuser.displayName ?? email,
+                email: email,
+                profileImageURL: fuser.photoURL?.absoluteString,
+                isVerified: fuser.isEmailVerified,
+                isCreator: true
+            )
+            isAuthenticated = true
+            authState = .authenticated
+        } catch {
+            authState = .error(error.localizedDescription)
+            throw error
         }
-        
-        if email == "demo@mychannel.com" && password == "password123" {
-            await setMockAuthenticatedUser()
-        } else if email.contains("@") && password.count >= 6 {
-            await setMockUserForEmail(email)
-        } else {
-            authState = .error("Invalid email or password")
-            throw AuthError.invalidCredentials
-        }
+        #else
+        throw AuthError.invalidCredentials
+        #endif
     }
     
     // MARK: - Sign Up
     func signUp(firstName: String, lastName: String, username: String, email: String, password: String) async throws {
         authState = .authenticating
         isLoading = true
-        
-        // Simulate network delay
-        try await Task.sleep(nanoseconds: 2_000_000_000)
-        
-        defer {
-            isLoading = false
+        defer { isLoading = false }
+        #if canImport(FirebaseAuth)
+        do {
+            let result = try await Auth.auth().createUser(withEmail: email, password: password)
+            let fuser = result.user
+            let display = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
+            if !display.isEmpty {
+                let change = fuser.createProfileChangeRequest()
+                change.displayName = display
+                try await change.commitChanges()
+            }
+            currentUser = User(
+                id: fuser.uid,
+                username: username.lowercased(),
+                displayName: display.isEmpty ? (fuser.displayName ?? username) : display,
+                email: email,
+                profileImageURL: fuser.photoURL?.absoluteString,
+                isVerified: fuser.isEmailVerified,
+                isCreator: true
+            )
+            isAuthenticated = true
+            authState = .authenticated
+        } catch {
+            authState = .error(error.localizedDescription)
+            throw error
         }
-        
-        let newUser = User(
-            username: username.lowercased(),
-            displayName: "\(firstName) \(lastName)",
-            email: email,
-            profileImageURL: "https://picsum.photos/200/200?random=\(Int.random(in: 100...999))",
-            bio: "New to MyChannel! 🎬",
-            subscriberCount: 0,
-            videoCount: 0,
-            isVerified: false,
-            isCreator: true
-        )
-        
-        currentUser = newUser
-        applyLocalProfileAvatarIfAvailable()
-
-        isAuthenticated = true
-        authState = .authenticated
-        
-        print("Welcome to MyChannel, \(firstName)! 🎉")
+        #else
+        throw AuthError.invalidCredentials
+        #endif
     }
     
     // MARK: - Social Sign In
     func signInWithApple() async {
         authState = .authenticating
         isLoading = true
-
         defer { isLoading = false }
-
         if FirebaseAppleAuthService.shared.isAvailable {
             do {
                 let payload = try await FirebaseAppleAuthService.shared.signIn()
-                let user = User(
+                currentUser = User(
                     id: payload.uid,
                     username: payload.email?.components(separatedBy: "@").first ?? "apple_user",
                     displayName: payload.displayName,
-                    email: payload.email ?? "unknown@apple.com",
+                    email: payload.email ?? "",
                     profileImageURL: nil,
-                    bio: "Signed in with Apple 🍎",
-                    subscriberCount: 0,
-                    videoCount: 0,
                     isVerified: true,
                     isCreator: true
                 )
-                currentUser = user
-                // At both success paths:
-                // after setting currentUser = user / appleUser
-                applyLocalProfileAvatarIfAvailable()
                 isAuthenticated = true
                 authState = .authenticated
-                return
             } catch {
                 authState = .error(error.localizedDescription)
-                return
             }
+        } else {
+            authState = .unauthenticated
         }
-
-        // ... existing fallback mock sign-in with Apple ...
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
-        let appleUser = User(
-            username: "apple_user",
-            displayName: "Apple User",
-            email: "apple@user.com",
-            profileImageURL: "https://picsum.photos/200/200?random=200",
-            bio: "Signed in with Apple 🍎",
-            subscriberCount: 5,
-            videoCount: 2,
-            isVerified: true,
-            isCreator: true
-        )
-        currentUser = appleUser
-        // At both success paths:
-        // after setting currentUser = user / appleUser
-        applyLocalProfileAvatarIfAvailable()
-        isAuthenticated = true
-        authState = .authenticated
     }
     
     func signInWithGoogle() async {
         authState = .authenticating
         isLoading = true
-        
-        defer {
-            isLoading = false
+        defer { isLoading = false }
+        #if canImport(FirebaseAuth)
+        do {
+            let payload = try await GoogleAuthService.shared.signIn()
+            currentUser = User(
+                id: payload.uid,
+                username: payload.email.components(separatedBy: "@").first ?? "google_user",
+                displayName: payload.displayName,
+                email: payload.email,
+                profileImageURL: payload.photoURL,
+                isVerified: true,
+                isCreator: true
+            )
+            isAuthenticated = true
+            authState = .authenticated
+        } catch {
+            authState = .error(error.localizedDescription)
         }
-        
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
-        
-        let googleUser = User(
-            username: "google_user",
-            displayName: "Google User",
-            email: "google@user.com",
-            profileImageURL: "https://picsum.photos/200/200?random=300",
-            bio: "Signed in with Google 🔍",
-            subscriberCount: 12,
-            videoCount: 5,
-            isVerified: false,
-            isCreator: true
-        )
-        
-        currentUser = googleUser
-        applyLocalProfileAvatarIfAvailable()
-
-        isAuthenticated = true
-        authState = .authenticated
-        
-        print("Welcome, \(googleUser.displayName)!")
+        #else
+        authState = .error("Google Sign-In unavailable")
+        #endif
     }
     
     // MARK: - Sign Out
@@ -247,32 +231,9 @@ class AuthenticationManager: ObservableObject {
     }
     
     // MARK: - Private Helper Methods
-    private func setMockAuthenticatedUser() async {
-        currentUser = User.sampleUsers[0]
-        applyLocalProfileAvatarIfAvailable()
-        isAuthenticated = true
-        authState = .authenticated
-    }
+    private func setMockAuthenticatedUser() async { }
     
-    private func setMockUserForEmail(_ email: String) async {
-        let username = String(email.prefix(while: { $0 != "@" }))
-        let user = User(
-            username: username,
-            displayName: username.capitalized,
-            email: email,
-            profileImageURL: "https://picsum.photos/200/200?random=\(username.count)",
-            bio: "Welcome to MyChannel!",
-            subscriberCount: Int.random(in: 0...100),
-            videoCount: Int.random(in: 0...10),
-            isVerified: false,
-            isCreator: true
-        )
-        
-        currentUser = user
-        applyLocalProfileAvatarIfAvailable()
-        isAuthenticated = true
-        authState = .authenticated
-    }
+    private func setMockUserForEmail(_ email: String) async { }
 
     private func applyLocalProfileAvatarIfAvailable() {
         guard UIImage(named: "UserProfileAvatar") != nil, let user = currentUser else { return }

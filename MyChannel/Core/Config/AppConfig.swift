@@ -80,7 +80,8 @@ struct AppConfig {
     // MARK: - API Configuration
     struct API {
         static let baseURL = environment.apiBaseURL
-        static let cloudRunBaseURL = "https://mychannel-api-abcd123-uc.a.run.app"
+        static let cloudRunBaseURL = "https://mychannel-ai-124515086975.us-central1.run.app"
+        static let gatewayBaseURL = "https://mychannel-gw-1l792fzz.uc.gateway.dev"
         static let version = "v1"
         static let timeout: TimeInterval = 30.0
         static let supabaseAnonKey = "your-supabase-anon-key-here" // Replace with actual key
@@ -118,7 +119,7 @@ struct AppConfig {
         static let enablePushNotifications = true
         static let enableDeepLinks = true
         static let enableOfflineDownload = true
-        static let enableMockData = isDebug // Enable mock data in debug mode
+        static let enableMockData = false
         static let enableNetworkLogging = isDebug // Enable network logging in debug mode
 
         static let enableFlicksPeek = false

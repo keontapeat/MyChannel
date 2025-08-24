@@ -14,10 +14,11 @@
       "what should i use u recomend/**"
     ],
     "rewrites": [
-      { "source": "/api/tmdb_popular", "function": "tmdb_popular" },
-      { "source": "/api/tmdb_free_ads", "function": "tmdb_free_ads" },
-      { "source": "/api/tmdb_trending", "function": "tmdb_trending" },
-      { "source": "/api/tmdb_details", "function": "tmdb_details" },
+      { "source": "/api/tmdb_popular", "run": { "serviceId": "tmdb-popular", "region": "us-central1" } },
+      { "source": "/api/tmdb_free_ads", "run": { "serviceId": "tmdb-free-ads", "region": "us-central1" } },
+      { "source": "/api/tmdb_trending", "run": { "serviceId": "tmdb-trending", "region": "us-central1" } },
+      { "source": "/api/tmdb_details", "run": { "serviceId": "tmdb-details", "region": "us-central1" } },
+      { "source": "/api/ai_rank", "run": { "serviceId": "ai-rank", "region": "us-central1" } },
       { "source": "/", "destination": "/index.html" }
     ],
     "headers": [
@@ -56,7 +57,7 @@
         "firebase-debug.*.log",
         "*.local"
       ],
-      "runtime": "python313"
+      "runtime": "python312"
     }
   ]
 }

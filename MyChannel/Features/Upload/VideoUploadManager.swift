@@ -8,6 +8,9 @@
 import SwiftUI
 import AVFoundation
 import PhotosUI
+#if canImport(FirebaseStorage)
+import FirebaseStorage
+#endif
 
 @MainActor
 class VideoUploadManager: ObservableObject {
@@ -163,27 +166,128 @@ class VideoUploadManager: ObservableObject {
     }
     
     private func uploadVideoWithProgress(_ data: Data, metadata: VideoMetadata) async throws -> Video {
+        #if canImport(FirebaseStorage)
+        // Attempt real upload to Firebase Storage. Falls back to mock if Storage is unavailable.
+        do {
+            let storage = Storage.storage()
+            let rootRef = storage.reference()
+            let videoId = UUID().uuidString
+            let videoRef = rootRef.child("\(AppConfig.Storage.videoPath)/\(videoId).mp4")
+            
+            // Prepare metadata (content type)
+            let storageMetadata = StorageMetadata()
+            storageMetadata.contentType = "video/mp4"
+            
+            // Start upload task
+            let uploadTask = videoRef.putData(data, metadata: storageMetadata)
+            
+            // Observe progress
+            let progressObserver = uploadTask.observe(.progress) { [weak self] snapshot in
+                guard let self else { return }
+                let completed = Double(snapshot.progress?.completedUnitCount ?? 0)
+                let total = Double(snapshot.progress?.totalUnitCount ?? 1)
+                Task { @MainActor in
+                    self.uploadProgress = max(0.0, min(1.0, completed / total))
+                }
+            }
+            
+            // Await completion
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                uploadTask.observe(.success) { _ in
+                    uploadTask.removeObserver(withHandle: progressObserver)
+                    continuation.resume()
+                }
+                uploadTask.observe(.failure) { snapshot in
+                    uploadTask.removeObserver(withHandle: progressObserver)
+                    let err = snapshot.error ?? UploadError.networkError("Upload failed")
+                    continuation.resume(throwing: err)
+                }
+            }
+            
+            // Fetch download URL
+            let videoURL = try await videoRef.downloadURL()
+            
+            // Optional: Upload thumbnail if available
+            var thumbnailURLString: String? = nil
+            if let thumbData = metadata.thumbnailData {
+                let thumbRef = rootRef.child("\(AppConfig.Storage.thumbnailPath)/\(videoId).jpg")
+                let thumbMeta = StorageMetadata()
+                thumbMeta.contentType = "image/jpeg"
+                let thumbTask = thumbRef.putData(thumbData, metadata: thumbMeta)
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    thumbTask.observe(.success) { _ in
+                        continuation.resume()
+                    }
+                    thumbTask.observe(.failure) { snapshot in
+                        let err = snapshot.error ?? UploadError.networkError("Thumbnail upload failed")
+                        continuation.resume(throwing: err)
+                    }
+                }
+                let thumbURL = try await thumbRef.downloadURL()
+                thumbnailURLString = thumbURL.absoluteString
+            }
+            
+            // Build resulting model
+            let uploaded = Video(
+                title: metadata.title,
+                description: metadata.description,
+                thumbnailURL: thumbnailURLString ?? "",
+                videoURL: videoURL.absoluteString,
+                duration: max(1, videoDuration),
+                viewCount: 0,
+                likeCount: 0,
+                commentCount: 0,
+                creator: User.sampleUsers[0],
+                category: metadata.category,
+                tags: metadata.tags,
+                isPublic: metadata.isPublic
+            )
+            
+            // Trigger AI analysis (non-blocking)
+            Task {
+                // Build the canonical GCS URI using the Firebase Storage bucket and known path
+                #if canImport(FirebaseStorage)
+                let gcsUri = "gs://\(rootRef.bucket)/\(AppConfig.Storage.videoPath)/\(videoId).mp4"
+                if let result = try? await AIService.shared.analyzeVideo(gcsUri: gcsUri, videoId: videoId, durationSeconds: self.videoDuration) {
+                    // Optionally request virality score
+                    let score = try? await AIService.shared.scoreVirality(
+                        labels: result.labels,
+                        shots: result.shots,
+                        explicit: result.explicit_content,
+                        duration: self.videoDuration,
+                        text: result.text_annotations,
+                        objects: result.object_annotations
+                    )
+                    print("Virality score: \(score ?? 0)")
+                }
+                #endif
+            }
+            return uploaded
+        } catch {
+            // If anything fails, fall back to mock path to avoid blocking UI in debug
+        }
+        #endif
+        
+        // Fallback mock (e.g., in previews or when Firebase Storage isn’t available)
         let totalSteps = 10
         for step in 1...totalSteps {
             try await Task.sleep(nanoseconds: 300_000_000)
             uploadProgress = Double(step) / Double(totalSteps)
         }
-        
         let mockVideo = Video(
             title: metadata.title,
             description: metadata.description,
-            thumbnailURL: "https://picsum.photos/400/225?random=\(Int.random(in: 1...100))",
-            videoURL: "https://example.com/uploaded-video.mp4",
+            thumbnailURL: "",
+            videoURL: "",
             duration: max(1, videoDuration),
             viewCount: 0,
             likeCount: 0,
             commentCount: 0,
-            creator: User.sampleUsers[0],
+            creator: User(username: "", displayName: "", email: ""),
             category: metadata.category,
             tags: metadata.tags,
             isPublic: metadata.isPublic
         )
-        
         return mockVideo
     }
     

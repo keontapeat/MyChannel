@@ -1,0 +1,11 @@
+{
+  "name": "MyChannel",
+  "short_name": "MyChannel",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ff3b30",
+  "icons": [
+    { "src": "/assets/MyChannel.imageset/MyChannelLaunch.PNG", "sizes": "180x180", "type": "image/png" }
+  ]
+}
