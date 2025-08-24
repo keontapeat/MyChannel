@@ -468,12 +468,11 @@
         .suggestion-channel { color: var(--text-secondary); font-size: 12px; display: flex; align-items: center; gap: 8px; }
         .suggestion-channel img { width: 20px; height: 20px; border-radius: 50%; }
         .suggestion-views { color: var(--text-secondary); font-size: 12px; opacity: .8; }
+        /* Mobile defaults: keep suggestions as vertical list centered in the column */
         @media (max-width: 899px) {
-            /* Mobile: show suggestions as one centered horizontal row */
-            .suggestions-list { display: flex; gap: 12px; overflow-x: auto; padding: 8px 0; scroll-snap-type: x mandatory; justify-content: center; }
-            .suggestion-card { flex: 0 0 78%; max-width: 420px; scroll-snap-align: center; flex-direction: column; }
-            .suggestion-card img.thumb { width: 100%; height: 180px; }
-            .suggestion-meta { padding: 10px 12px 12px; }
+            .suggestions-list { grid-template-columns: 1fr; }
+            .suggestion-card { width: 100%; }
+            .suggestion-card img.thumb { width: 168px; height: 94px; }
         }
         
         .stories-section {
@@ -1927,6 +1926,12 @@
                 if (list) {
                     list.innerHTML = '';
                     let pool = (window.videoLibrary || []).filter(v => v.id !== video.id);
+                    // Duplicate and shuffle to simulate more variety
+                    pool = [...pool, ...pool, ...pool];
+                    for (let i = pool.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [pool[i], pool[j]] = [pool[j], pool[i]];
+                    }
                     if (!pool.length) {
                         try {
                             document.querySelectorAll('#videoGrid .video-item').forEach((card, i) => {
@@ -3833,7 +3838,13 @@
             const videoGrid = document.getElementById('videoGrid');
             if (!videoGrid) return;
             videoGrid.innerHTML = '';
-            videoLibrary.forEach(video => {
+            // Shuffle to avoid same order every time
+            const shuffled = [...videoLibrary];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            shuffled.forEach(video => {
                 const videoCard = document.createElement('div');
                 videoCard.className = 'video-item';
                 const thumb = video.thumbnailUrl || video.thumbnail || video.thumb || video.poster || video.image || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&h=400&fit=crop';
