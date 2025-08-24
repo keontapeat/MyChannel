@@ -1,9 +1,9 @@
 // MyChannel Service Worker
 // Enables offline functionality and caching for better performance
 
-const CACHE_NAME = 'mychannel-v1.0.4';
-const STATIC_CACHE = 'mychannel-static-v5';
-const DYNAMIC_CACHE = 'mychannel-dynamic-v5';
+const CACHE_NAME = 'mychannel-v1.0.12';
+const STATIC_CACHE = 'mychannel-static-v7';
+const DYNAMIC_CACHE = 'mychannel-dynamic-v7';
 
 // Files to cache for offline functionality
 const STATIC_FILES = [
@@ -14,6 +14,7 @@ const STATIC_FILES = [
     '/upload.html',
     '/video-player.html',
     '/manifest.json',
+    '/site.webmanifest',
     '/firebase-config.js',
     '/flicks.html',
     '/flicks.js',
@@ -27,7 +28,8 @@ const NETWORK_FIRST = [
     '/api/',
     'firestore.googleapis.com',
     'firebase.googleapis.com',
-    'googleapis.com'
+    'googleapis.com',
+    'image.tmdb.org'
 ];
 
 // Cache-first strategy for static assets
@@ -100,6 +102,12 @@ self.addEventListener('fetch', (event) => {
         return;
     }
     
+    // Bypass caching for media with Range requests
+    if (request.headers.get('range') || url.pathname.endsWith('.m3u8') || url.pathname.endsWith('.mpd') || url.pathname.endsWith('.ts') || url.pathname.endsWith('.mp4') || url.pathname.endsWith('.webm')) {
+        event.respondWith(fetch(request));
+        return;
+    }
+
     event.respondWith(handleRequest(request));
 });
 
