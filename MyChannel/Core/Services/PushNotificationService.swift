@@ -9,6 +9,10 @@ import SwiftUI
 import UserNotifications
 import Combine
 
+// MARK: - Development Team Compatibility
+// Note: Push notifications require a paid Apple Developer Program membership
+// This service will gracefully handle the case where push notifications are not available
+
 // MARK: - Supporting Models
 
 struct NotificationAnalytics {
@@ -73,6 +77,12 @@ class PushNotificationService: NSObject, ObservableObject, UNUserNotificationCen
     private let notificationCenter = UNUserNotificationCenter.current()
     private let smartScheduler = SmartNotificationScheduler()
     private let personalizationEngine = NotificationPersonalizationEngine()
+    
+    // Check if push notifications are available (requires paid Apple Developer Program)
+    private var isPushNotificationsAvailable: Bool {
+        // For personal development teams, push notifications are not available
+        return false
+    }
     private let analyticsTracker = NotificationAnalyticsTracker()
     
     // Configuration
@@ -149,6 +159,12 @@ class PushNotificationService: NSObject, ObservableObject, UNUserNotificationCen
     
     /// Request notification permissions with intelligent onboarding
     func requestNotificationPermissions() async -> Bool {
+        // Check if push notifications are available
+        guard isPushNotificationsAvailable else {
+            print("⚠️ Push notifications not available - requires paid Apple Developer Program membership")
+            return false
+        }
+        
         let options: UNAuthorizationOptions = [.alert, .sound, .badge]
         
         do {
@@ -282,6 +298,12 @@ class PushNotificationService: NSObject, ObservableObject, UNUserNotificationCen
     }
     
     private func setupRemoteNotifications() async {
+        // Only register for remote notifications if they are available
+        guard isPushNotificationsAvailable else {
+            print("⚠️ Remote notifications not available - requires paid Apple Developer Program membership")
+            return
+        }
+        
         await MainActor.run {
             #if !targetEnvironment(simulator)
             UIApplication.shared.registerForRemoteNotifications()

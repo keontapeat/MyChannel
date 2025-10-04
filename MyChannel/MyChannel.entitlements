@@ -2,13 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Associated Domains and Push Notifications disabled for personal development team -->
+	<!-- These capabilities require a paid Apple Developer Program membership -->
+	<!-- Uncomment and configure when you have a paid developer account:
 	<key>aps-environment</key>
-	<string>production</string>
+	<string>development</string>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:mychannel.live</string>
 		<string>applinks:www.mychannel.live</string>
 	</array>
+	-->
 </dict>
 </plist>
 

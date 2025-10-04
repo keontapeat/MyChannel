@@ -51,16 +51,18 @@ final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
         }
         #endif
 
-        // Set notification center delegate early
-        UNUserNotificationCenter.current().delegate = PushNotificationService.shared
-
+        // Set notification center delegate early (only if push notifications are available)
+        // Note: Push notifications require a paid Apple Developer Program membership
         #if canImport(FirebaseMessaging)
+        UNUserNotificationCenter.current().delegate = PushNotificationService.shared
         configureMessaging()
+        #else
+        print("⚠️ Push notifications disabled - requires paid Apple Developer Program membership")
         #endif
         return true
     }
 
-    // MARK: - APNs registration bridging
+    // MARK: - APNs registration bridging (disabled for personal development team)
     func application(
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
@@ -68,6 +70,8 @@ final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
         #if canImport(FirebaseMessaging)
         // Pass device token to FCM
         Messaging.messaging().apnsToken = deviceToken
+        #else
+        print("⚠️ APNs registration skipped - requires paid Apple Developer Program membership")
         #endif
     }
 
@@ -75,7 +79,7 @@ final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        print("APNs registration failed: \(error)")
+        print("⚠️ APNs registration failed (expected with personal development team): \(error)")
     }
 }
 

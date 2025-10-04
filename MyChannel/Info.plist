@@ -35,11 +35,13 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>MyChannel uses the microphone to capture audio while recording videos or going live.</string>
 
-	<!-- Background Modes -->
+	<!-- Background Modes - disabled for personal development team -->
+	<!-- Uncomment when you have a paid Apple Developer Program membership:
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
+	-->
 </dict>
 </plist>
