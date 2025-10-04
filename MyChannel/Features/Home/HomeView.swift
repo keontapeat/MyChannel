@@ -497,91 +497,85 @@ struct MinimalNavigationHeader: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
                     Spacer()
+                    
+                    // Navigation icons on the same line
+                    HStack(spacing: 14) {
+                        Button(action: {
+                            HapticManager.shared.impact(style: .light)
+                            onSearchTap()
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.white.opacity(0.2))
+                                    .frame(width: 34, height: 34)
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .buttonStyle(.plain)
+
+                        NavigationLink(destination: NotificationsView()) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.white.opacity(0.2))
+                                    .frame(width: 34, height: 34)
+                                Image(systemName: "bell")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.white)
+
+                                Circle()
+                                    .fill(Color.yellow)
+                                    .frame(width: 6, height: 6)
+                                    .offset(x: 8, y: -8)
+                                    .opacity(1)
+                            }
+                        }
+                        .buttonStyle(.plain)
+
+                        if appState.isAuthenticated {
+                            Button(action: {
+                                HapticManager.shared.impact(style: .light)
+                                onProfileTap()
+                            }) {
+                                ProfileAvatarView(urlString: appState.currentUser?.profileImageURL, size: 28)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.white, lineWidth: 1)
+                                    )
+                                    .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            Button(action: {
+                                HapticManager.shared.impact(style: .light)
+                                onProfileTap()
+                            }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "person.circle")
+                                        .font(.system(size: 16, weight: .medium))
+                                    Text("Sign in")
+                                        .font(.system(size: 14, weight: .medium))
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule()
+                                        .stroke(.white, lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                 }
                 .padding(.horizontal, 16)
             }
             .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
 
-            HStack {
-                HStack(spacing: 12) {
-                    // Left side empty to align with red bar
-                }
-
-                Spacer()
-
-                HStack(spacing: 14) {
-                    Button(action: {
-                        HapticManager.shared.impact(style: .light)
-                        onSearchTap()
-                    }) {
-                        ZStack {
-                            Circle()
-                                .fill(Color(.systemGray6))
-                                .frame(width: 34, height: 34)
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.primary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    NavigationLink(destination: NotificationsView()) {
-                        ZStack {
-                            Circle()
-                                .fill(Color(.systemGray6))
-                                .frame(width: 34, height: 34)
-                            Image(systemName: "bell")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.primary)
-
-                            Circle()
-                                .fill(Color.red)
-                                .frame(width: 6, height: 6)
-                                .offset(x: 8, y: -8)
-                                .opacity(1)
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    if appState.isAuthenticated {
-                        Button(action: {
-                            HapticManager.shared.impact(style: .light)
-                            onProfileTap()
-                        }) {
-                            ProfileAvatarView(urlString: appState.currentUser?.profileImageURL, size: 28)
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color.white, lineWidth: 1)
-                                )
-                                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        Button(action: {
-                            HapticManager.shared.impact(style: .light)
-                            onProfileTap()
-                        }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "person.circle")
-                                    .font(.system(size: 16, weight: .medium))
-                                Text("Sign in")
-                                    .font(.system(size: 14, weight: .medium))
-                            }
-                            .foregroundColor(.blue)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .stroke(.blue, lineWidth: 1)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 44)
-            .padding(.bottom, 12)
+            // Content area with proper spacing
+            Color.clear
+                .frame(height: 12)
             .background(
                 Group {
                     if showBackground {
