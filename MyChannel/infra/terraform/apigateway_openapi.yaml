@@ -1,0 +1,35 @@
+swagger: '2.0'
+info:
+  title: MyChannel API (materialized)
+  version: '1.0.0'
+basePath: /
+schemes: [https]
+consumes: [application/json]
+produces: [application/json]
+paths:
+  /v1/uploads/signed-url:
+    post:
+      operationId: signedUrl
+      x-google-backend:
+        address: https://mychannel-upload-fkri6ifojq-uc.a.run.app
+        path_translation: APPEND_PATH_TO_ADDRESS
+        deadline: 15.0
+      x-google-extensions:
+        cors:
+          allowOrigins: ["*"]
+          allowMethods: ["POST", "OPTIONS"]
+          allowHeaders: ["Content-Type", "Authorization"]
+          maxAge: 3600
+      responses:
+        '200':
+          description: OK
+    options:
+      operationId: signedUrlOptions
+      x-google-backend:
+        address: https://mychannel-upload-fkri6ifojq-uc.a.run.app
+        path_translation: APPEND_PATH_TO_ADDRESS
+        deadline: 5.0
+      responses:
+        '204':
+          description: CORS
+

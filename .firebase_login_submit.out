@@ -1,0 +1,2 @@
+
+Error: Cannot run login in non-interactive mode. See login:ci to generate a token for use in non-interactive environments.

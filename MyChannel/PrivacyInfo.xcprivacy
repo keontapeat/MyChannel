@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "privacyManifest": {
+    "collection": [
+      {
+        "category": "analytics",
+        "identifier": "firebase_analytics",
+        "userTrackingEnabled": false,
+        "linkedToUser": false,
+        "purposes": ["appFunctionality", "analytics"],
+        "retention": "noLongerThanNecessary"
+      }
+    ],
+    "requiredReasonAPIs": [],
+    "tracking": {
+      "usedForTracking": false
+    }
+  }
+}

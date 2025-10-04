@@ -1,0 +1,8 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build','-f','Dockerfile.upload','-t','${_REGION}-docker.pkg.dev/$PROJECT_ID/app-repo/mychannel-upload:latest','.']
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/app-repo/mychannel-upload:latest'
+options:
+  logging: CLOUD_LOGGING_ONLY
+

@@ -1,0 +1,11 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build','-f','Dockerfile.search','-t','${_REGION}-docker.pkg.dev/$PROJECT_ID/app-repo/mychannel-search:latest','.']
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/app-repo/mychannel-search:latest'
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+
+
+

@@ -1,0 +1,44 @@
+# Xcode
+DerivedData/
+build/
+*.xcuserdatad/
+*.xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+
+# SwiftPM
+.build/
+
+# CocoaPods
+Pods/
+*.xcworkspace/
+
+# Carthage
+Carthage/Build/
+
+# Secrets
+**/Secrets.local.xcconfig
+**/GoogleService-Info.plist
+.env
+*.env
+
+# ADD: local developer-only secrets (never commit)
+LocalSecrets.plist# Ignore vendor and ephemeral dirs
+**/.terraform/**
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/.terraform.tfstate.lock.info
+**/node_modules/**
+**/venv/**
+services/dist/
+.DS_Store
+
+# Large media files
+*.MP4
+*.mp4
+*.MOV
+*.mov
+*.AVI
+*.avi
+*.MKV
+*.mkv

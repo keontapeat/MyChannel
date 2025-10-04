@@ -1,0 +1,35 @@
+{
+  "name": "mychannel-services",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:upload": "tsx upload/main.ts",
+    "dev:transcode": "tsx transcode/main.ts",
+    "dev:content": "tsx content/main.ts",
+    "dev:events": "tsx events/main.ts",
+    "dev:search": "tsx search/main.ts",
+    "dev:moderation": "tsx moderation/main.ts",
+    "dev:creator": "tsx creator/main.ts",
+    "build": "tsc",
+    "build:content": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.1.5",
+    "@google-cloud/pubsub": "^4.7.6",
+    "@google-cloud/storage": "^7.11.2",
+    "@supabase/supabase-js": "^2.39.0",
+    "jsonwebtoken": "^9.0.2",
+    "bcrypt": "^5.1.1",
+    "fluent-ffmpeg": "^2.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/bcrypt": "^5.0.2",
+    "@types/fluent-ffmpeg": "^2.1.24",
+    "tsx": "^4.16.2",
+    "typescript": "^5.4.0"
+  }
+}

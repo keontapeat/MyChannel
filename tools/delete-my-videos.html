@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Delete My Videos - MyChannel Tools</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; margin: 24px; color: #111; background: #fafafa; }
+    .card { max-width: 720px; background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+    button { padding: 10px 16px; border-radius: 10px; border: 0; background: #e11d48; color: #fff; font-weight: 600; cursor: pointer; }
+    button[disabled] { opacity: .5; cursor: not-allowed; }
+    .muted { color: #666; }
+    pre { background: #0b1020; color: #d6e1ff; padding: 12px; border-radius: 8px; overflow: auto; max-height: 320px; }
+    .row { display: flex; gap: 8px; align-items: center; }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+</head>
+<body>
+  <div class="card">
+    <h2>Delete My Videos</h2>
+    <p class="muted">Deletes all of your videos from Firestore and Firebase Storage. This cannot be undone.</p>
+    <div class="row"><strong>Status:</strong><span id="status">Initializing…</span></div>
+    <div class="row"><strong>Signed in as:</strong><span id="user"></span><button id="signin">Sign In</button><button id="signout">Sign Out</button></div>
+    <p>
+      <label><input id="confirm" type="checkbox"/> I understand this is permanent.</label>
+    </p>
+    <button id="run" disabled>Delete all my videos</button>
+    <p class="muted">Progress:</p>
+    <pre id="log"></pre>
+  </div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBXy89aYxkfImhy6LYiAP-84DoZHY87ITY",
+  authDomain: "mychannel-ca26d.firebaseapp.com",
+  projectId: "mychannel-ca26d",
+  storageBucket: "mychannel-ca26d.firebasestorage.app",
+  messagingSenderId: "124515086975",
+  appId: "1:124515086975:ios:f3683f5fb93c02d2c3454a"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const storage = firebase.storage();
+
+const statusEl = document.getElementById('status');
+const userEl = document.getElementById('user');
+const runBtn = document.getElementById('run');
+const logEl = document.getElementById('log');
+
+function logLine(line){ logEl.textContent += line + "\n"; logEl.scrollTop = logEl.scrollHeight; }
+
+document.getElementById('signin').onclick = async () => {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  await auth.signInWithPopup(provider);
+};
+document.getElementById('signout').onclick = async () => { await auth.signOut(); };
+
+auth.onAuthStateChanged(u => {
+  if (u) {
+    userEl.textContent = u.email || u.uid;
+    statusEl.textContent = 'Ready';
+    runBtn.disabled = !(document.getElementById('confirm').checked);
+  } else {
+    userEl.textContent = '(signed out)';
+    statusEl.textContent = 'Please sign in';
+    runBtn.disabled = true;
+  }
+});
+
+document.getElementById('confirm').onchange = (e) => {
+  runBtn.disabled = !e.target.checked || !(auth.currentUser);
+};
+
+async function deleteQueryBatch(query, batchSize = 20) {
+  const snapshot = await query.limit(batchSize).get();
+  if (snapshot.empty) return 0;
+  const batch = db.batch();
+  snapshot.docs.forEach(doc => batch.delete(doc.ref));
+  await batch.commit();
+  return snapshot.size;
+}
+
+async function deleteAllVideosForUser(uid){
+  // 1) Firestore: delete video docs
+  const videoQuery = db.collection('videos').where('ownerId','==',uid);
+  let totalDeleted = 0; let n;
+  do { n = await deleteQueryBatch(videoQuery); totalDeleted += n; logLine(`Deleted ${n} Firestore docs… total ${totalDeleted}`); } while(n > 0);
+
+  // 2) Storage: list and delete objects under videos/{uid}
+  const listRef = storage.ref().child(`videos/${uid}`);
+  async function deleteFolder(ref){
+    const res = await ref.listAll();
+    for (const item of res.items) {
+      try { await item.delete(); logLine(`Deleted ${item.fullPath}`); } catch(e){ logLine(`Failed ${item.fullPath}: ${e.message}`); }
+    }
+    for (const prefix of res.prefixes) { await deleteFolder(prefix); }
+  }
+  try { await deleteFolder(listRef); } catch(e){ logLine('Storage delete error: ' + e.message); }
+
+  // 3) Storage: delete thumbnails under thumbnails/{uid}
+  const thumbsRef = storage.ref().child(`thumbnails/${uid}`);
+  try { await deleteFolder(thumbsRef); } catch(e){ logLine('Thumbnail delete error: ' + e.message); }
+}
+
+runBtn.onclick = async () => {
+  if (!auth.currentUser) { alert('Sign in first.'); return; }
+  if (!document.getElementById('confirm').checked) { alert('Check the confirmation.'); return; }
+  runBtn.disabled = true; statusEl.textContent = 'Running…'; logEl.textContent='';
+  try {
+    const uid = auth.currentUser.uid;
+    logLine('Deleting videos for uid=' + uid);
+    await deleteAllVideosForUser(uid);
+    statusEl.textContent = 'Done'; logLine('Complete.');
+  } catch(e){ statusEl.textContent = 'Error'; logLine('Error: ' + (e && e.message || e)); }
+  runBtn.disabled = false;
+};
+</script>
+</body>
+</html>
+
+

@@ -1,0 +1,27 @@
+swagger: '2.0'
+info:
+  title: MyChannel Health API
+  version: 1.0.3
+schemes:
+  - https
+host: mychannel-health-gw.uc.gateway.dev
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: health
+      security:
+        - api_key: []
+      responses:
+        '200':
+          description: OK
+      x-google-backend:
+        address: https://health-fkri6ifojq-uc.a.run.app
+        protocol: h2
+        path_translation: APPEND_PATH_TO_ADDRESS
+        jwt_audience: https://health-fkri6ifojq-uc.a.run.app
+securityDefinitions:
+  api_key:
+    type: apiKey
+    name: key
+    in: query

@@ -1,0 +1,30 @@
+# Exclude iOS app and large local assets from Cloud Build context
+.git/
+.gitignore
+.DS_Store
+*.log
+
+# iOS app (built locally, not needed for backend builds)
+MyChannel/
+MyChannel.xcodeproj/
+MyChannel.xcworkspace/
+
+# Local media and snapshots
+media/
+snapshots/
+assets/
+
+# Virtual envs and node modules
+functions/venv/
+**/node_modules/
+
+# Other large or irrelevant files
+**/*.mp4
+**/*.MP4
+**/*.mov
+**/*.MOV
+**/*.zip
+**/*.tgz
+**/*.tar
+
+

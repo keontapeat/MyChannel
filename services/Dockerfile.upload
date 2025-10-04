@@ -1,0 +1,8 @@
+FROM node:20-alpine
+WORKDIR /app
+COPY package.json package-lock.json* .npmrc* ./
+RUN npm ci --silent || npm i --silent
+COPY . .
+RUN npm run build
+CMD ["node", "dist/upload/main.js"]
+

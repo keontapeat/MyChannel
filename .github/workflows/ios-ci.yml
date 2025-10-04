@@ -1,0 +1,46 @@
+name: iOS CI
+
+on:
+  push:
+    branches: [ main, develop, feature/** ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData
+            ~/.swiftpm
+            .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Resolve packages
+        run: xcodebuild -resolvePackageDependencies -project MyChannel.xcodeproj -scheme MyChannel
+
+      - name: Build (Debug, Simulator)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project MyChannel.xcodeproj \
+            -scheme MyChannel \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=latest' \
+            CODE_SIGNING_ALLOWED=NO \
+            build | xcpretty

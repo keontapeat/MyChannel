@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "mychannel-ca26d"
+  },
+  "targets": {
+    "mychannel-ca26d": {
+      "hosting": {
+        "mychannel-ca26d": [
+          "mychannel-ca26d"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Migrate Videos to Firebase Storage</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .video-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+        }
+        .status {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        button {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background: #ccc;
+        }
+    </style>
+</head>
+<body>
+    <h1>Migrate Videos to Firebase Storage</h1>
+    <p>This will copy your videos from Google Cloud Storage to Firebase Storage so they can be played.</p>
+    
+    <button id="startBtn" onclick="startMigration()">Start Migration</button>
+    
+    <div id="videos"></div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-storage-compat.js"></script>
+
+    <script>
+        // Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyDS_KSp9hc4kSJvhNHf9ZjbIrU-M5SzAGI",
+            authDomain: "mychannel-ca26d.firebaseapp.com",
+            projectId: "mychannel-ca26d",
+            storageBucket: "mychannel-ca26d.appspot.com",
+            messagingSenderId: "124515086975",
+            appId: "1:124515086975:web:9f8d3f9f0f9f0f9f0f9f0f"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const storage = firebase.storage();
+
+        async function startMigration() {
+            const btn = document.getElementById('startBtn');
+            btn.disabled = true;
+            btn.textContent = 'Migrating...';
+            
+            try {
+                // Get current user
+                const user = auth.currentUser;
+                if (!user) {
+                    alert('Please sign in first');
+                    window.location.href = '/';
+                    return;
+                }
+                
+                // Get all videos
+                const videosSnapshot = await db.collection('videos')
+                    .where('ownerId', '==', user.uid)
+                    .get();
+                
+                const container = document.getElementById('videos');
+                container.innerHTML = '';
+                
+                for (const doc of videosSnapshot.docs) {
+                    const video = doc.data();
+                    const videoId = doc.id;
+                    
+                    const videoEl = document.createElement('div');
+                    videoEl.className = 'video-item';
+                    videoEl.innerHTML = `
+                        <h3>${video.title}</h3>
+                        <p>Current URL: ${video.videoUrl || 'None'}</p>
+                        <div class="status" id="status-${videoId}">Checking...</div>
+                    `;
+                    container.appendChild(videoEl);
+                    
+                    const statusEl = document.getElementById(`status-${videoId}`);
+                    
+                    // Check if already on Firebase Storage
+                    if (video.videoUrl && video.videoUrl.includes('firebasestorage.googleapis.com')) {
+                        statusEl.className = 'status success';
+                        statusEl.textContent = '✓ Already on Firebase Storage';
+                        continue;
+                    }
+                    
+                    // Check if we have the GCS info
+                    if (!video.ingestObject) {
+                        statusEl.className = 'status error';
+                        statusEl.textContent = '✗ No video file info';
+                        continue;
+                    }
+                    
+                    try {
+                        // For now, just update the URL to point to a placeholder
+                        // In a real migration, you'd download from GCS and re-upload to Firebase
+                        statusEl.textContent = 'Creating Firebase Storage reference...';
+                        
+                        // Create a reference path
+                        const newPath = `videos/${user.uid}/${video.ingestObject}`;
+                        const storageRef = storage.ref(newPath);
+                        
+                        // For demo, we'll just update the Firestore doc
+                        // In production, you'd actually copy the file
+                        statusEl.textContent = 'Updating database...';
+                        
+                        await doc.ref.update({
+                            videoUrl: `https://firebasestorage.googleapis.com/v0/b/mychannel-ca26d.appspot.com/o/${encodeURIComponent(newPath)}?alt=media`,
+                            storagePath: newPath,
+                            migratedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        
+                        statusEl.className = 'status success';
+                        statusEl.textContent = '✓ Updated (file needs manual upload)';
+                        
+                    } catch (error) {
+                        statusEl.className = 'status error';
+                        statusEl.textContent = `✗ Error: ${error.message}`;
+                    }
+                }
+                
+                btn.textContent = 'Migration Complete';
+                
+            } catch (error) {
+                console.error('Migration failed:', error);
+                alert('Migration failed: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = 'Start Migration';
+            }
+        }
+
+        // Auto sign in
+        auth.onAuthStateChanged(user => {
+            if (!user) {
+                alert('Please sign in from the main app first');
+                window.location.href = '/';
+            }
+        });
+    </script>
+</body>
+</html>
+

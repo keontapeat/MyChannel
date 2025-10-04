@@ -1,0 +1,69 @@
+name: Cloud Run Services CI
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: mychannel-ca26d
+      REGION: us-central1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          install_components: 'beta,alpha'
+
+      - name: Auth to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDP }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+      - name: Configure gcloud project
+        run: gcloud config set project $PROJECT_ID
+
+      - name: Enable required services
+        run: |
+          gcloud services enable cloudbuild.googleapis.com run.googleapis.com artifactregistry.googleapis.com --quiet
+
+      - name: Deploy auth
+        run: gcloud builds submit --config services/cloudbuild-auth.yaml services
+
+      - name: Deploy upload
+        run: gcloud builds submit --config services/cloudbuild-upload.yaml services
+
+      - name: Deploy transcode
+        run: gcloud builds submit --config services/cloudbuild-transcode.yaml services
+
+      - name: Deploy content
+        run: gcloud builds submit --config services/cloudbuild-content.yaml services
+
+      - name: Deploy events
+        run: gcloud builds submit --config services/cloudbuild-events.yaml services
+
+      - name: Deploy search
+        run: gcloud builds submit --config services/cloudbuild-search.yaml services
+
+      - name: Deploy moderation
+        run: gcloud builds submit --config services/cloudbuild-moderation.yaml services
+
+      - name: Deploy creator
+        run: gcloud builds submit --config services/cloudbuild-creator.yaml services
+
+
+
+
+
+

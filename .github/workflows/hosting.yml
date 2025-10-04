@@ -1,0 +1,41 @@
+name: Firebase Hosting CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Firebase CLI
+        run: npm i -g firebase-tools@14.13.0
+
+      - name: Deploy to Firebase Hosting (Preview on PR)
+        if: github.event_name == 'pull_request'
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          CHANNEL=pr-${{ github.event.pull_request.number }}
+          firebase hosting:channel:deploy "$CHANNEL" --project mychannel-ca26d --non-interactive
+
+      - name: Deploy to Firebase Hosting (Live on main)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          # Workaround: deploy to preview then clone to live to avoid finalize glitches
+          CHANNEL=ci-${{ github.run_id }}
+          firebase hosting:channel:deploy "$CHANNEL" --project mychannel-ca26d --non-interactive
+          firebase hosting:clone mychannel-ca26d:"$CHANNEL" mychannel-ca26d:live --project mychannel-ca26d
+

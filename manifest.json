@@ -1,0 +1,92 @@
+{
+  "name": "MyChannel - The Future of Video",
+  "short_name": "MyChannel",
+  "description": "Experience the next generation video platform. Watch, share, and discover amazing content from creators worldwide.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#ff4444",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
+  "categories": ["entertainment", "social", "video"],
+  "icons": [
+    {
+      "src": "/favicon-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/mobile-home.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "MyChannel Home Screen"
+    },
+    {
+      "src": "/screenshots/desktop-home.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "MyChannel Desktop Experience"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Stories",
+      "short_name": "Stories",
+      "description": "View and share stories",
+      "url": "/?tab=stories",
+      "icons": [
+        {
+          "src": "/icons/stories-shortcut.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Upload",
+      "short_name": "Upload",
+      "description": "Upload new content",
+      "url": "/?action=upload",
+      "icons": [
+        {
+          "src": "/icons/upload-shortcut.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "itunes",
+      "url": "https://apps.apple.com/app/mychannel",
+      "id": "com.mychannel.ios"
+    }
+  ],
+  "prefer_related_applications": false
+}

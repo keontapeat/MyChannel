@@ -1,0 +1,2340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Primary Meta Tags -->
+    <title>MyChannel - The Future of Video</title>
+    <meta name="title" content="MyChannel - The Future of Video">
+    <meta name="description" content="Experience the next generation video platform. Watch, share, and discover amazing content from creators worldwide. Stories, videos, and live streaming - all in one place.">
+    <meta name="keywords" content="video platform, streaming, content creators, videos, stories, MyChannel, social media, entertainment">
+    <meta name="robots" content="index, follow">
+    <meta name="language" content="English">
+    <meta name="author" content="MyChannel">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://mychannel.live/">
+    <meta property="og:title" content="MyChannel - The Future of Video">
+    <meta property="og:description" content="Experience the next generation video platform. Watch, share, and discover amazing content from creators worldwide.">
+    <meta property="og:image" content="https://mychannel.live/assets/MyChannel-og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:site_name" content="MyChannel">
+    <meta property="og:locale" content="en_US">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://mychannel.live/">
+    <meta property="twitter:title" content="MyChannel - The Future of Video">
+    <meta property="twitter:description" content="Experience the next generation video platform. Watch, share, and discover amazing content from creators worldwide.">
+    <meta property="twitter:image" content="https://mychannel.live/assets/MyChannel-og-image.png">
+    <meta property="twitter:creator" content="@mychannel">
+    <meta property="twitter:site" content="@mychannel">
+    
+    <!-- App Icons -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Mobile App -->
+    <meta name="theme-color" content="#ff4444">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="MyChannel">
+    <meta name="mobile-web-app-capable" content="yes">
+    
+    <!-- Content Security Policy -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; media-src 'self' https: blob:; connect-src 'self' https:; font-src 'self' data:; frame-src 'none'; object-src 'none'; base-uri 'self';">
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://mychannel.live/">
+    
+    <!-- Preconnect to External Domains -->
+    <link rel="preconnect" href="https://images.unsplash.com">
+    <link rel="preconnect" href="https://commondatastorage.googleapis.com">
+    <link rel="preconnect" href="https://www.gstatic.com">
+    
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "MyChannel",
+      "description": "The future of video - watch, share, and discover amazing content from creators worldwide",
+      "url": "https://mychannel.live",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "Web Browser",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.8",
+        "ratingCount": "1250"
+      }
+    }
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f0f;
+            color: #fff;
+            line-height: 1.6;
+        }
+        
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            z-index: 1000;
+            padding-top: env(safe-area-inset-top);
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 600;
+            color: #fff;
+            text-decoration: none;
+        }
+        
+        .logo img {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+        }
+        
+        .main-content {
+            margin-top: 60px;
+            padding: 20px 16px 70px;
+            background: #000;
+        }
+        
+        .stories-section {
+            margin-bottom: 24px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #ff4444;
+        }
+        
+        .stories-container {
+            display: flex;
+            gap: 16px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            scroll-snap-type: x mandatory;
+        }
+        
+        .story-item {
+            flex-shrink: 0;
+            text-align: center;
+            scroll-snap-align: start;
+        }
+        
+        .story-ring {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #ff4444, #ff6b6b);
+            padding: 3px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .story-ring:hover {
+            transform: scale(1.05);
+        }
+        
+        .story-ring img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #0f0f0f;
+        }
+        
+        .add-story {
+            background: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .add-story-plus {
+            color: white;
+            font-size: 28px;
+            font-weight: 300;
+        }
+        
+        .active-story {
+            background: linear-gradient(45deg, #ff4444, #ff6b6b);
+        }
+        
+        .story-item span {
+            font-size: 12px;
+            color: #aaa;
+            display: block;
+            max-width: 64px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .video-grid {
+            display: grid;
+            gap: 16px;
+        }
+        
+        .video-card {
+            background: #1a1a1a;
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .video-card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .video-thumbnail {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #272727;
+        }
+        
+        .video-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .video-duration {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            background: rgba(0,0,0,0.8);
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .play-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255,255,255,0.9);
+            color: #000;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        
+        .video-card:hover .play-overlay {
+            opacity: 1;
+        }
+        
+        .video-info {
+            padding: 12px;
+            display: flex;
+            gap: 12px;
+        }
+        
+        .channel-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        
+        .video-details h3 {
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.3;
+            margin-bottom: 4px;
+            color: #fff;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .channel-name {
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 2px;
+        }
+        
+        .video-stats {
+            font-size: 12px;
+            color: #aaa;
+        }
+        
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 52px;
+            background: #0f0f0f;
+            border-top: 1px solid #272727;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 24px;
+            padding-bottom: env(safe-area-inset-bottom);
+            z-index: 1000;
+        }
+        
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            padding: 4px 8px;
+            color: #aaa;
+            text-decoration: none;
+            transition: color 0.2s ease;
+            cursor: pointer;
+            flex: 1;
+            max-width: 72px;
+        }
+        
+        .nav-item.active {
+            color: #fff;
+        }
+        
+        .nav-icon {
+            font-size: 20px;
+            margin-bottom: 1px;
+        }
+        
+        .nav-item small {
+            font-size: 10px;
+            font-weight: 400;
+            letter-spacing: 0.2px;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 16px 12px 100px;
+            }
+            
+            .header {
+                padding: 0 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Skip to Content Link for Screen Readers -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    
+    <header class="header" role="banner">
+        <a href="#" class="logo" aria-label="MyChannel Home">
+            <img src="assets/MyChannel.imageset/MyChannelLaunch.PNG" alt="MyChannel Logo" onerror="this.style.display='none'">
+            MyChannel
+        </a>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <span style="font-size: 24px;">🔔</span>
+            <div style="width: 32px; height: 32px; border-radius: 50%; background: #ff4444; display: flex; align-items: center; justify-content: center; font-weight: 600;">K</div>
+        </div>
+    </header>
+
+    <!-- Tab Content -->
+    <div id="home-content" class="tab-content active" role="tabpanel" aria-labelledby="home-tab">
+        <main class="main-content" id="main-content" role="main">
+            <section class="stories-section">
+                <h2 class="section-title">Stories</h2>
+                <div class="stories-container">
+                    <!-- Add Story -->
+                    <div class="story-item" onclick="addStory()">
+                        <div class="story-ring add-story">
+                            <div class="add-story-plus">+</div>
+                        </div>
+                        <span>Your Story</span>
+                    </div>
+                    
+                    <!-- Existing Stories -->
+                    <div class="story-item" onclick="viewStory('sarah', 0)">
+                        <div class="story-ring active-story">
+                            <img src="https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop&crop=face" alt="Story">
+                        </div>
+                        <span>Sarah</span>
+                    </div>
+                    <div class="story-item" onclick="viewStory('mike', 1)">
+                        <div class="story-ring active-story">
+                            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face" alt="Story">
+                        </div>
+                        <span>Mike</span>
+                    </div>
+                    <div class="story-item" onclick="viewStory('alex', 2)">
+                        <div class="story-ring active-story">
+                            <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face" alt="Story">
+                        </div>
+                        <span>Alex</span>
+                    </div>
+                    <div class="story-item" onclick="viewStory('emma', 3)">
+                        <div class="story-ring active-story">
+                            <img src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face" alt="Story">
+                        </div>
+                        <span>Emma</span>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <h2 class="section-title">Recommended for you</h2>
+                <div class="video-grid" id="videoGrid">
+                    <!-- Videos will be loaded dynamically -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <nav class="bottom-nav" role="tablist" aria-label="Main navigation">
+        <a href="#" class="nav-item active" onclick="showTab('home')" role="tab" aria-selected="true" aria-controls="home-content" id="home-tab" tabindex="0">
+            <div class="nav-icon" aria-hidden="true">🏠</div>
+            <small>Home</small>
+            <span class="sr-only">Navigate to home page</span>
+        </a>
+        <a href="#" class="nav-item" onclick="showTab('flicks')" role="tab" aria-selected="false" aria-controls="flicks-content" id="flicks-tab" tabindex="-1">
+            <div class="nav-icon" aria-hidden="true">🎬</div>
+            <small>Flicks</small>
+            <span class="sr-only">Navigate to flicks page</span>
+        </a>
+        <a href="#" class="nav-item" onclick="showTab('search')" role="tab" aria-selected="false" aria-controls="search-content" id="search-tab" tabindex="-1">
+            <div class="nav-icon" aria-hidden="true">🔍</div>
+            <small>Search</small>
+            <span class="sr-only">Navigate to search page</span>
+        </a>
+        <a href="#" class="nav-item" onclick="showTab('profile')" role="tab" aria-selected="false" aria-controls="profile-content" id="profile-tab" tabindex="-1">
+            <div class="nav-icon" aria-hidden="true">👤</div>
+            <small>Profile</small>
+            <span class="sr-only">Navigate to profile page</span>
+        </a>
+    </nav>
+
+
+
+    <div id="flicks-content" class="tab-content">
+        <section style="padding: 20px 16px;">
+            <h2 class="section-title">🎬 Flicks</h2>
+            <div class="flicks-grid" style="display: grid; gap: 12px; grid-template-columns: repeat(3, 1fr);">
+                <div class="flick-item" style="aspect-ratio: 9/16; background: #1a1a1a; border-radius: 12px; overflow: hidden; position: relative;">
+                    <img src="https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg" alt="Flick" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">0:30</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; right: 8px;">
+                        <div style="color: white; font-size: 12px; font-weight: 500; line-height: 1.2;">Amazing Short Video</div>
+                        <div style="color: #ccc; font-size: 10px; margin-top: 2px;">1.2M views</div>
+                    </div>
+                </div>
+                <div class="flick-item" style="aspect-ratio: 9/16; background: #1a1a1a; border-radius: 12px; overflow: hidden; position: relative;">
+                    <img src="https://img.youtube.com/vi/jNQXAC9IVRw/maxresdefault.jpg" alt="Flick" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">0:45</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; right: 8px;">
+                        <div style="color: white; font-size: 12px; font-weight: 500; line-height: 1.2;">Epic Quick Tutorial</div>
+                        <div style="color: #ccc; font-size: 10px; margin-top: 2px;">850K views</div>
+                    </div>
+                </div>
+                <div class="flick-item" style="aspect-ratio: 9/16; background: #1a1a1a; border-radius: 12px; overflow: hidden; position: relative;">
+                    <img src="https://img.youtube.com/vi/9bZkp7q19f0/maxresdefault.jpg" alt="Flick" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">1:00</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; right: 8px;">
+                        <div style="color: white; font-size: 12px; font-weight: 500; line-height: 1.2;">Trending Moment</div>
+                        <div style="color: #ccc; font-size: 10px; margin-top: 2px;">2.1M views</div>
+                    </div>
+                </div>
+                <div class="flick-item" style="aspect-ratio: 9/16; background: #1a1a1a; border-radius: 12px; overflow: hidden; position: relative;">
+                    <img src="https://img.youtube.com/vi/L_jWHffIx5E/maxresdefault.jpg" alt="Flick" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">0:15</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; right: 8px;">
+                        <div style="color: white; font-size: 12px; font-weight: 500; line-height: 1.2;">Quick Tips</div>
+                        <div style="color: #ccc; font-size: 10px; margin-top: 2px;">3.5M views</div>
+                    </div>
+                </div>
+                <div class="flick-item" style="aspect-ratio: 9/16; background: #1a1a1a; border-radius: 12px; overflow: hidden; position: relative;">
+                    <img src="https://images.unsplash.com/photo-1611095973362-87fa4ac9b4e1?w=300&h=500&fit=crop" alt="Flick" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">0:20</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; right: 8px;">
+                        <div style="color: white; font-size: 12px; font-weight: 500; line-height: 1.2;">Creative Content</div>
+                        <div style="color: #ccc; font-size: 10px; margin-top: 2px;">950K views</div>
+                    </div>
+                </div>
+                <div class="flick-item" style="aspect-ratio: 9/16; background: #1a1a1a; border-radius: 12px; overflow: hidden; position: relative;">
+                    <img src="https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=300&h=500&fit=crop" alt="Flick" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">0:35</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; right: 8px;">
+                        <div style="color: white; font-size: 12px; font-weight: 500; line-height: 1.2;">Daily Inspiration</div>
+                        <div style="color: #ccc; font-size: 10px; margin-top: 2px;">1.8M views</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div id="search-content" class="tab-content">
+        <section style="padding: 20px 16px;">
+            <div class="search-bar" style="margin-bottom: 24px;">
+                <input type="text" placeholder="Search MyChannel..." style="width: 100%; padding: 12px 16px; background: #1a1a1a; border: 1px solid #333; border-radius: 24px; color: white; font-size: 16px;" oninput="performSearch(this.value)">
+            </div>
+            
+            <div id="search-results">
+                <h3 style="color: #666; text-align: center; margin-top: 60px;">Search for videos, channels, and more</h3>
+                
+                <div class="search-suggestions" style="margin-top: 40px;">
+                    <h4 style="color: #ff4444; margin-bottom: 16px;">Trending Searches</h4>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        <span class="search-tag" style="background: #1a1a1a; color: #ccc; padding: 8px 12px; border-radius: 16px; font-size: 14px; cursor: pointer;" onclick="searchFor('gaming')">gaming</span>
+                        <span class="search-tag" style="background: #1a1a1a; color: #ccc; padding: 8px 12px; border-radius: 16px; font-size: 14px; cursor: pointer;" onclick="searchFor('music')">music</span>
+                        <span class="search-tag" style="background: #1a1a1a; color: #ccc; padding: 8px 12px; border-radius: 16px; font-size: 14px; cursor: pointer;" onclick="searchFor('tutorial')">tutorial</span>
+                        <span class="search-tag" style="background: #1a1a1a; color: #ccc; padding: 8px 12px; border-radius: 16px; font-size: 14px; cursor: pointer;" onclick="searchFor('comedy')">comedy</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div id="profile-content" class="tab-content">
+        <!-- Profile Header with Background -->
+        <div class="profile-header" style="position: relative; height: 300px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); overflow: hidden;">
+            <!-- Background Image Overlay -->
+            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop') center/cover; opacity: 0.3;"></div>
+            
+            <!-- Settings Icon -->
+            <div style="position: absolute; top: 20px; right: 20px; color: white; font-size: 24px; cursor: pointer;" onclick="showSettings()">⚙️</div>
+            
+            <!-- Profile Info -->
+            <div style="position: absolute; bottom: 0; left: 0; right: 0; padding: 20px; background: linear-gradient(transparent, rgba(0,0,0,0.7));">
+                <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                    <div style="width: 64px; height: 64px; border-radius: 50%; background: url('https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face') center/cover; border: 3px solid white; margin-right: 16px;"></div>
+                    <div>
+                        <h2 style="color: white; margin: 0; font-size: 24px; font-weight: 600;">Keonta Peat ✓</h2>
+                        <p style="color: #ccc; margin: 4px 0 0 0; font-size: 14px;">@keontapiit_</p>
+                        <p style="color: #ccc; margin: 2px 0 0 0; font-size: 12px;">Shot by Keonta Piit. MI Videographer</p>
+                    </div>
+                </div>
+                
+                <!-- Stats -->
+                <div style="display: flex; gap: 24px; margin-bottom: 16px;">
+                    <div style="text-align: center;">
+                        <div style="color: white; font-size: 18px; font-weight: 600;">25.4K</div>
+                        <div style="color: #ccc; font-size: 11px;">Subscribers</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="color: white; font-size: 18px; font-weight: 600;">156</div>
+                        <div style="color: #ccc; font-size: 11px;">Videos</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="color: white; font-size: 18px; font-weight: 600;">2.0M</div>
+                        <div style="color: #ccc; font-size: 11px;">Views</div>
+                    </div>
+                </div>
+                
+                <!-- Edit Profile Button -->
+                <button style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 10px 20px; border-radius: 20px; font-size: 14px; font-weight: 500; width: 100%; backdrop-filter: blur(10px);">Edit Profile</button>
+            </div>
+        </div>
+        
+        <!-- Content Tabs -->
+        <div class="profile-tabs" style="display: flex; background: #000; border-bottom: 1px solid #333;">
+            <div class="profile-tab active" onclick="showProfileTab('videos')" style="flex: 1; padding: 12px; text-align: center; color: #ff4444; border-bottom: 2px solid #ff4444; font-size: 14px; font-weight: 500; cursor: pointer;">
+                📹 Videos (156)
+            </div>
+            <div class="profile-tab" onclick="showProfileTab('flicks')" style="flex: 1; padding: 12px; text-align: center; color: #666; border-bottom: 2px solid transparent; font-size: 14px; font-weight: 500; cursor: pointer;">
+                🎬 Flicks (52)
+            </div>
+            <div class="profile-tab" onclick="showProfileTab('playlists')" style="flex: 1; padding: 12px; text-align: center; color: #666; border-bottom: 2px solid transparent; font-size: 14px; font-weight: 500; cursor: pointer;">
+                📋 Playlists (8)
+            </div>
+        </div>
+        
+        <!-- Tab Content Areas -->
+        <div id="profile-videos-tab" class="profile-tab-content active" style="padding: 16px; background: #000;">
+            <!-- Featured Video -->
+            <div style="margin-bottom: 20px;">
+                <div style="position: relative; border-radius: 12px; overflow: hidden; background: #1a1a1a;">
+                    <img src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=300&fit=crop" style="width: 100%; height: 180px; object-fit: cover;">
+                    <div style="position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px;">2:30</div>
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255,255,255,0.9); color: #000; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px;">▶</div>
+                </div>
+                <div style="padding: 12px 0;">
+                    <h3 style="color: white; font-size: 16px; font-weight: 500; margin: 0 0 4px 0; line-height: 1.3;">Travel Vlog</h3>
+                    <p style="color: #666; font-size: 13px; margin: 0;">Explore the world in 4K • 1M views • 2 days ago</p>
+                </div>
+            </div>
+            
+            <!-- Video Grid -->
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                <div style="background: #1a1a1a; border-radius: 8px; overflow: hidden;">
+                    <div style="position: relative;">
+                        <img src="https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg" style="width: 100%; aspect-ratio: 16/9; object-fit: cover;">
+                        <div style="position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.8); color: white; padding: 1px 4px; border-radius: 3px; font-size: 10px;">3:42</div>
+                    </div>
+                    <div style="padding: 8px;">
+                        <h4 style="color: white; font-size: 12px; font-weight: 500; margin: 0; line-height: 1.2;">Amazing Content</h4>
+                        <p style="color: #666; font-size: 10px; margin: 2px 0 0 0;">1.2M views</p>
+                    </div>
+                </div>
+                
+                <div style="background: #1a1a1a; border-radius: 8px; overflow: hidden;">
+                    <div style="position: relative;">
+                        <img src="https://img.youtube.com/vi/jNQXAC9IVRw/maxresdefault.jpg" style="width: 100%; aspect-ratio: 16/9; object-fit: cover;">
+                        <div style="position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.8); color: white; padding: 1px 4px; border-radius: 3px; font-size: 10px;">8:15</div>
+                    </div>
+                    <div style="padding: 8px;">
+                        <h4 style="color: white; font-size: 12px; font-weight: 500; margin: 0; line-height: 1.2;">Epic Tutorial</h4>
+                        <p style="color: #666; font-size: 10px; margin: 2px 0 0 0;">850K views</p>
+                    </div>
+                </div>
+                
+                <div style="background: #1a1a1a; border-radius: 8px; overflow: hidden;">
+                    <div style="position: relative;">
+                        <img src="https://img.youtube.com/vi/9bZkp7q19f0/maxresdefault.jpg" style="width: 100%; aspect-ratio: 16/9; object-fit: cover;">
+                        <div style="position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.8); color: white; padding: 1px 4px; border-radius: 3px; font-size: 10px;">12:33</div>
+                    </div>
+                    <div style="padding: 8px;">
+                        <h4 style="color: white; font-size: 12px; font-weight: 500; margin: 0; line-height: 1.2;">Best Practices</h4>
+                        <p style="color: #666; font-size: 10px; margin: 2px 0 0 0;">2.1M views</p>
+                    </div>
+                </div>
+                
+                <div style="background: #1a1a1a; border-radius: 8px; overflow: hidden;">
+                    <div style="position: relative;">
+                        <img src="https://img.youtube.com/vi/L_jWHffIx5E/maxresdefault.jpg" style="width: 100%; aspect-ratio: 16/9; object-fit: cover;">
+                        <div style="position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.8); color: white; padding: 1px 4px; border-radius: 3px; font-size: 10px;">6:28</div>
+                    </div>
+                    <div style="padding: 8px;">
+                        <h4 style="color: white; font-size: 12px; font-weight: 500; margin: 0; line-height: 1.2;">Latest Updates</h4>
+                        <p style="color: #666; font-size: 10px; margin: 2px 0 0 0;">3.5M views</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="profile-flicks-tab" class="profile-tab-content" style="padding: 16px; background: #000; display: none;">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                <div style="aspect-ratio: 9/16; background: #1a1a1a; border-radius: 8px; overflow: hidden; position: relative;">
+                    <img src="https://images.unsplash.com/photo-1611095973362-87fa4ac9b4e1?w=300&h=500&fit=crop" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">0:30</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; right: 8px;">
+                        <div style="color: white; font-size: 11px; font-weight: 500; line-height: 1.2;">Quick Tip</div>
+                        <div style="color: #ccc; font-size: 9px; margin-top: 2px;">1.2M views</div>
+                    </div>
+                </div>
+                <div style="aspect-ratio: 9/16; background: #1a1a1a; border-radius: 8px; overflow: hidden; position: relative;">
+                    <img src="https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=300&h=500&fit=crop" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">0:45</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; right: 8px;">
+                        <div style="color: white; font-size: 11px; font-weight: 500; line-height: 1.2;">Behind Scenes</div>
+                        <div style="color: #ccc; font-size: 9px; margin-top: 2px;">850K views</div>
+                    </div>
+                </div>
+                <div style="aspect-ratio: 9/16; background: #1a1a1a; border-radius: 8px; overflow: hidden; position: relative;">
+                    <img src="https://images.unsplash.com/photo-1519904981063-b0cf448d479e?w=300&h=500&fit=crop" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">1:00</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; right: 8px;">
+                        <div style="color: white; font-size: 11px; font-weight: 500; line-height: 1.2;">Nature Shot</div>
+                        <div style="color: #ccc; font-size: 9px; margin-top: 2px;">2.1M views</div>
+                    </div>
+                </div>
+                <div style="aspect-ratio: 9/16; background: #1a1a1a; border-radius: 8px; overflow: hidden; position: relative;">
+                    <img src="https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=300&h=500&fit=crop" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">0:25</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; right: 8px;">
+                        <div style="color: white; font-size: 11px; font-weight: 500; line-height: 1.2;">Cinematic</div>
+                        <div style="color: #ccc; font-size: 9px; margin-top: 2px;">750K views</div>
+                    </div>
+                </div>
+                <div style="aspect-ratio: 9/16; background: #1a1a1a; border-radius: 8px; overflow: hidden; position: relative;">
+                    <img src="https://images.unsplash.com/photo-1426604966848-d7adac402bff?w=300&h=500&fit=crop" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">0:40</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; right: 8px;">
+                        <div style="color: white; font-size: 11px; font-weight: 500; line-height: 1.2;">Adventure</div>
+                        <div style="color: #ccc; font-size: 9px; margin-top: 2px;">1.5M views</div>
+                    </div>
+                </div>
+                <div style="aspect-ratio: 9/16; background: #1a1a1a; border-radius: 8px; overflow: hidden; position: relative;">
+                    <img src="https://images.unsplash.com/photo-1464822759844-d150baec93c5?w=300&h=500&fit=crop" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">0:35</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; right: 8px;">
+                        <div style="color: white; font-size: 11px; font-weight: 500; line-height: 1.2;">Mountain View</div>
+                        <div style="color: #ccc; font-size: 9px; margin-top: 2px;">980K views</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="profile-playlists-tab" class="profile-tab-content" style="padding: 16px; background: #000; display: none;">
+            <div style="display: grid; gap: 16px;">
+                <div style="display: flex; background: #1a1a1a; border-radius: 12px; overflow: hidden;">
+                    <div style="position: relative; width: 120px; height: 90px; flex-shrink: 0;">
+                        <img src="https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg" style="width: 100%; height: 100%; object-fit: cover;">
+                        <div style="position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.8); color: white; padding: 1px 4px; border-radius: 3px; font-size: 10px;">8 videos</div>
+                    </div>
+                    <div style="padding: 12px; flex: 1;">
+                        <h4 style="color: white; font-size: 14px; font-weight: 500; margin: 0 0 4px 0;">Travel Adventures</h4>
+                        <p style="color: #666; font-size: 12px; margin: 0 0 4px 0;">My best travel content</p>
+                        <p style="color: #666; font-size: 11px; margin: 0;">8 videos • 2.5M views</p>
+                    </div>
+                </div>
+                
+                <div style="display: flex; background: #1a1a1a; border-radius: 12px; overflow: hidden;">
+                    <div style="position: relative; width: 120px; height: 90px; flex-shrink: 0;">
+                        <img src="https://img.youtube.com/vi/jNQXAC9IVRw/maxresdefault.jpg" style="width: 100%; height: 100%; object-fit: cover;">
+                        <div style="position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.8); color: white; padding: 1px 4px; border-radius: 3px; font-size: 10px;">15 videos</div>
+                    </div>
+                    <div style="padding: 12px; flex: 1;">
+                        <h4 style="color: white; font-size: 14px; font-weight: 500; margin: 0 0 4px 0;">Tutorials & Tips</h4>
+                        <p style="color: #666; font-size: 12px; margin: 0 0 4px 0;">Learn videography with me</p>
+                        <p style="color: #666; font-size: 11px; margin: 0;">15 videos • 4.2M views</p>
+                    </div>
+                </div>
+                
+                <div style="display: flex; background: #1a1a1a; border-radius: 12px; overflow: hidden;">
+                    <div style="position: relative; width: 120px; height: 90px; flex-shrink: 0;">
+                        <img src="https://img.youtube.com/vi/9bZkp7q19f0/maxresdefault.jpg" style="width: 100%; height: 100%; object-fit: cover;">
+                        <div style="position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.8); color: white; padding: 1px 4px; border-radius: 3px; font-size: 10px;">6 videos</div>
+                    </div>
+                    <div style="padding: 12px; flex: 1;">
+                        <h4 style="color: white; font-size: 14px; font-weight: 500; margin: 0 0 4px 0;">Behind the Scenes</h4>
+                        <p style="color: #666; font-size: 12px; margin: 0 0 4px 0;">See how the magic happens</p>
+                        <p style="color: #666; font-size: 11px; margin: 0;">6 videos • 1.8M views</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Story Viewer Modal -->
+    <div id="storyViewer" class="story-viewer" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 10000;">
+        <!-- Story Progress Bars -->
+        <div class="story-progress" style="position: absolute; top: 20px; left: 20px; right: 20px; display: flex; gap: 4px; z-index: 10001;">
+            <div class="progress-bar" style="flex: 1; height: 3px; background: rgba(255,255,255,0.3); border-radius: 2px;">
+                <div class="progress-fill" style="height: 100%; background: white; border-radius: 2px; width: 0%; transition: width 0.1s linear;"></div>
+            </div>
+        </div>
+        
+        <!-- Story Header -->
+        <div class="story-header" style="position: absolute; top: 40px; left: 20px; right: 20px; display: flex; align-items: center; justify-content: space-between; z-index: 10001;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <img id="storyUserAvatar" src="" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
+                <div>
+                    <div id="storyUsername" style="color: white; font-size: 14px; font-weight: 500;"></div>
+                    <div id="storyTime" style="color: #ccc; font-size: 12px;">2h ago</div>
+                </div>
+            </div>
+            <div onclick="closeStoryViewer()" style="color: white; font-size: 24px; cursor: pointer; padding: 8px;">×</div>
+        </div>
+        
+        <!-- Story Content -->
+        <div class="story-content" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+            <img id="storyImage" src="" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+            <video id="storyVideo" style="max-width: 100%; max-height: 100%; object-fit: contain; display: none;" controls></video>
+        </div>
+        
+        <!-- Navigation Areas -->
+        <div class="story-nav-left" onclick="previousStory()" style="position: absolute; left: 0; top: 0; width: 30%; height: 100%; cursor: pointer; z-index: 10001;"></div>
+        <div class="story-nav-right" onclick="nextStory()" style="position: absolute; right: 0; top: 0; width: 30%; height: 100%; cursor: pointer; z-index: 10001;"></div>
+        
+        <!-- Story Actions -->
+        <div class="story-actions" style="position: absolute; bottom: 20px; left: 20px; right: 20px; display: flex; gap: 12px; z-index: 10001;">
+            <input type="text" placeholder="Reply to story..." style="flex: 1; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 10px 16px; color: white; font-size: 14px;">
+            <div style="background: rgba(255,255,255,0.1); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer;">❤️</div>
+            <div style="background: rgba(255,255,255,0.1); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer;">📤</div>
+        </div>
+    </div>
+
+    <!-- Add Story Modal -->
+    <div id="addStoryModal" class="add-story-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; backdrop-filter: blur(10px);">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a1a; border-radius: 16px; padding: 24px; width: 90%; max-width: 400px;">
+            <h3 style="color: white; text-align: center; margin: 0 0 20px 0; font-size: 18px;">Add to Your Story</h3>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                <div onclick="openCamera()" style="background: #333; border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: background 0.2s ease;">
+                    <div style="font-size: 32px; margin-bottom: 8px;">📷</div>
+                    <div style="color: white; font-size: 14px;">Camera</div>
+                </div>
+                <div onclick="openGallery()" style="background: #333; border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: background 0.2s ease;">
+                    <div style="font-size: 32px; margin-bottom: 8px;">🖼️</div>
+                    <div style="color: white; font-size: 14px;">Gallery</div>
+                </div>
+            </div>
+            
+            <button onclick="closeAddStoryModal()" style="width: 100%; background: #ff4444; color: white; border: none; border-radius: 8px; padding: 12px; font-size: 16px; font-weight: 500; cursor: pointer;">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Video Detail View - iOS App Style -->
+    <div id="videoDetailView" class="video-detail-view" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 10000; overflow-y: auto;">
+        <!-- Video Player Container -->
+        <div class="video-player-container" style="position: relative; width: 100%; aspect-ratio: 16/9; background: #000; max-height: 56.25vw;">
+            <!-- Main Video Player -->
+            <video id="detailVideoPlayer" style="width: 100%; height: 100%; object-fit: contain; background: #000;" autoplay playsinline webkit-playsinline x5-playsinline>
+                <source src="" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            
+            <!-- iOS-Style Loading Spinner -->
+            <div id="videoLoadingSpinner" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; z-index: 10002;">
+                <div style="width: 60px; height: 60px; border-radius: 50%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center;">
+                    <div style="width: 30px; height: 30px; border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid white; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                </div>
+            </div>
+            
+            <!-- iOS-Style Video Controls Overlay -->
+            <div id="videoControlsOverlay" class="video-controls-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10001; opacity: 1; transition: opacity 0.3s ease;">
+                
+                <!-- Top Controls Bar -->
+                <div class="top-controls" style="position: absolute; top: 0; left: 0; right: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); padding: 20px; display: flex; align-items: center; justify-content: space-between;">
+                    <!-- Close Button -->
+                    <div onclick="closeVideoDetail()" style="width: 36px; height: 36px; border-radius: 50%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                        <span style="color: white; font-size: 18px; font-weight: 600;">×</span>
+                    </div>
+                    
+                    <!-- Video Title -->
+                    <div style="flex: 1; margin: 0 16px; text-align: center;">
+                        <div id="topBarVideoTitle" style="color: white; font-size: 15px; font-weight: 500; line-height: 1.2; background: rgba(0,0,0,0.4); padding: 6px 16px; border-radius: 8px; max-width: 280px; margin: 0 auto;"></div>
+                    </div>
+                    
+                    <!-- Mini Player Button -->
+                    <div onclick="minimizeToMiniPlayer()" style="width: 36px; height: 36px; border-radius: 50%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                        <span style="color: white; font-size: 14px;">⏷</span>
+                    </div>
+                </div>
+                
+                <!-- Center Play/Pause Button -->
+                <div class="center-controls" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center;">
+                    <div id="centerPlayButton" onclick="togglePlayPause()" style="width: 80px; height: 80px; border-radius: 50%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s ease; backdrop-filter: blur(10px);">
+                        <span id="centerPlayIcon" style="color: white; font-size: 32px; margin-left: 4px;">▶</span>
+                    </div>
+                </div>
+                
+                <!-- Bottom Controls Bar -->
+                <div class="bottom-controls" style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); padding: 20px;">
+                    
+                    <!-- Progress Bar -->
+                    <div style="margin-bottom: 16px;">
+                        <div class="progress-container" style="width: 100%; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; position: relative; cursor: pointer;" onclick="seekToPosition(event)">
+                            <div id="progressBar" style="height: 100%; background: #ff4444; border-radius: 2px; width: 0%; transition: width 0.1s linear;"></div>
+                            <div id="progressHandle" style="position: absolute; top: 50%; right: 0; transform: translate(50%, -50%); width: 12px; height: 12px; background: #ff4444; border-radius: 50%; opacity: 0; transition: opacity 0.2s ease;"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Control Buttons Row -->
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <!-- Left Side - Time Display -->
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span id="currentTimeDisplay" style="color: white; font-size: 13px; font-weight: 500;">0:00</span>
+                            <span style="color: rgba(255,255,255,0.7); font-size: 13px;">/</span>
+                            <span id="durationDisplay" style="color: rgba(255,255,255,0.7); font-size: 13px;">0:00</span>
+                        </div>
+                        
+                        <!-- Center - Playback Controls -->
+                        <div style="display: flex; align-items: center; gap: 24px;">
+                            <div onclick="seekBackward()" style="color: white; font-size: 20px; cursor: pointer; padding: 8px;">⏮</div>
+                            <div id="bottomPlayButton" onclick="togglePlayPause()" style="color: white; font-size: 24px; cursor: pointer; padding: 8px;">
+                                <span id="bottomPlayIcon">▶</span>
+                            </div>
+                            <div onclick="seekForward()" style="color: white; font-size: 20px; cursor: pointer; padding: 8px;">⏭</div>
+                        </div>
+                        
+                        <!-- Right Side - Settings -->
+                        <div style="display: flex; align-items: center; gap: 16px;">
+                            <div onclick="toggleMute()" style="color: white; font-size: 18px; cursor: pointer; padding: 8px;">
+                                <span id="volumeIcon">🔊</span>
+                            </div>
+                            <div onclick="toggleFullscreen()" style="color: white; font-size: 16px; cursor: pointer; padding: 8px;">⛶</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tap Areas for Seek -->
+                <div class="seek-backward-area" onDblClick="seekBackward()" style="position: absolute; left: 0; top: 0; width: 40%; height: 100%; z-index: 9999; cursor: pointer;"></div>
+                <div class="seek-forward-area" onDblClick="seekForward()" style="position: absolute; right: 0; top: 0; width: 40%; height: 100%; z-index: 9999; cursor: pointer;"></div>
+            </div>
+        </div>
+        
+        <!-- Video Info -->
+        <div class="video-detail-info" style="padding: 20px; background: #000;">
+            <h1 id="detailVideoTitle" style="color: white; font-size: 20px; font-weight: 600; margin: 0 0 12px 0; line-height: 1.3;"></h1>
+            
+            <!-- Stats and Actions -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div id="detailVideoStats" style="color: #aaa; font-size: 14px;"></div>
+                <div style="display: flex; gap: 16px;">
+                    <button onclick="likeVideo()" style="background: none; border: none; color: white; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 20px; background: #333; cursor: pointer;">
+                        👍 <span id="likeCount">1.2K</span>
+                    </button>
+                    <button onclick="shareVideo()" style="background: none; border: none; color: white; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 20px; background: #333; cursor: pointer;">
+                        📤 Share
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Channel Info -->
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding: 16px; background: #1a1a1a; border-radius: 12px;">
+                <img id="detailChannelAvatar" src="" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover;">
+                <div style="flex: 1;">
+                    <div id="detailChannelName" style="color: white; font-size: 16px; font-weight: 500; margin-bottom: 4px;"></div>
+                    <div id="detailChannelSubs" style="color: #aaa; font-size: 12px;"></div>
+                </div>
+                <button onclick="subscribeChannel()" style="background: #ff4444; color: white; border: none; padding: 8px 16px; border-radius: 20px; font-weight: 500; cursor: pointer;">Subscribe</button>
+            </div>
+            
+            <!-- Description -->
+            <div style="background: #1a1a1a; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+                <div id="detailVideoDescription" style="color: #ccc; font-size: 14px; line-height: 1.6;"></div>
+            </div>
+            
+            <!-- Comments Section -->
+            <div style="background: #1a1a1a; border-radius: 12px; padding: 16px;">
+                <h3 style="color: white; margin: 0 0 16px 0; font-size: 16px;">Comments</h3>
+                
+                <!-- Add Comment -->
+                <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+                    <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=40&h=40&fit=crop&crop=face" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
+                    <input type="text" placeholder="Add a comment..." style="flex: 1; background: #333; border: none; border-radius: 20px; padding: 8px 16px; color: white;">
+                    <button style="background: #ff4444; color: white; border: none; padding: 8px 16px; border-radius: 20px; font-size: 12px;">Post</button>
+                </div>
+                
+                <!-- Sample Comments -->
+                <div class="comments-list">
+                    <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                        <img src="https://images.unsplash.com/photo-1494790108755-2616b612b786?w=40&h=40&fit=crop&crop=face" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
+                        <div>
+                            <div style="color: white; font-size: 13px; font-weight: 500;">@sarah_creates</div>
+                            <div style="color: #ccc; font-size: 14px; margin: 4px 0;">This is amazing content! Keep it up! 🔥</div>
+                            <div style="color: #666; font-size: 12px;">2 hours ago</div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                        <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&crop=face" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
+                        <div>
+                            <div style="color: white; font-size: 13px; font-weight: 500;">@mike_dev</div>
+                            <div style="color: #ccc; font-size: 14px; margin: 4px 0;">Really helpful tutorial, thanks for sharing!</div>
+                            <div style="color: #666; font-size: 12px;">5 hours ago</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden file inputs -->
+    <input type="file" id="cameraInput" accept="image/*,video/*" capture="environment" style="display: none;" onchange="handleStoryUpload(this)">
+    <input type="file" id="galleryInput" accept="image/*,video/*" style="display: none;" onchange="handleStoryUpload(this)">
+    
+    <!-- Custom Modal -->
+    <div id="customModal" class="custom-modal">
+        <div class="modal-content">
+            <div id="modalIcon" class="modal-icon">ℹ️</div>
+            <div id="modalTitle" class="modal-title">Information</div>
+            <div id="modalMessage" class="modal-message">This is a custom modal message.</div>
+            <button class="modal-button" onclick="closeCustomModal()">Got it!</button>
+        </div>
+    </div>
+    
+    <!-- Firebase SDK v8 -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+
+    <style>
+        .tab-content {
+            display: none;
+            min-height: calc(100vh - 112px);
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .profile-item {
+            padding: 16px;
+            background: #1a1a1a;
+            margin-bottom: 1px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            display: flex;
+            align-items: center;
+        }
+        
+        .profile-item:hover {
+            background: #2a2a2a;
+        }
+        
+        .profile-item:first-child {
+            border-radius: 12px 12px 0 0;
+        }
+        
+        .profile-item:last-child {
+            border-radius: 0 0 12px 12px;
+        }
+        
+        /* Video Player Animations */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .video-controls-overlay:hover .progress-container #progressHandle {
+            opacity: 1 !important;
+        }
+        
+        #centerPlayButton:hover {
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+        
+        #centerPlayButton:active {
+            transform: translate(-50%, -50%) scale(0.95);
+        }
+        
+        /* COMPLETELY HIDE ALL NATIVE VIDEO CONTROLS */
+        video {
+            outline: none !important;
+        }
+        
+        video::-webkit-media-controls {
+            display: none !important;
+            -webkit-appearance: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+        
+        video::-webkit-media-controls-panel {
+            display: none !important;
+            -webkit-appearance: none !important;
+        }
+        
+        video::-webkit-media-controls-play-button {
+            display: none !important;
+            -webkit-appearance: none !important;
+        }
+        
+        video::-webkit-media-controls-start-playback-button {
+            display: none !important;
+            -webkit-appearance: none !important;
+        }
+        
+        video::-webkit-media-controls-timeline {
+            display: none !important;
+            -webkit-appearance: none !important;
+        }
+        
+        video::-webkit-media-controls-current-time-display {
+            display: none !important;
+            -webkit-appearance: none !important;
+        }
+        
+        video::-webkit-media-controls-time-remaining-display {
+            display: none !important;
+            -webkit-appearance: none !important;
+        }
+        
+        video::-webkit-media-controls-mute-button {
+            display: none !important;
+            -webkit-appearance: none !important;
+        }
+        
+        video::-webkit-media-controls-toggle-closed-captions-button {
+            display: none !important;
+            -webkit-appearance: none !important;
+        }
+        
+        video::-webkit-media-controls-volume-slider {
+            display: none !important;
+            -webkit-appearance: none !important;
+        }
+        
+        video::-webkit-media-controls-fullscreen-button {
+            display: none !important;
+            -webkit-appearance: none !important;
+        }
+        
+        video::-webkit-media-controls-enclosure {
+            display: none !important;
+            -webkit-appearance: none !important;
+        }
+        
+        video::-webkit-media-controls-overlay-play-button {
+            display: none !important;
+            -webkit-appearance: none !important;
+        }
+        
+        video::-webkit-media-controls-overlay-enclosure {
+            display: none !important;
+            -webkit-appearance: none !important;
+        }
+        
+        /* Firefox Controls */
+        video::-moz-media-controls {
+            display: none !important;
+        }
+        
+        /* Microsoft Edge */
+        video::-ms-media-controls {
+            display: none !important;
+        }
+        
+        /* Force hide any controls that might appear */
+        #detailVideoPlayer {
+            pointer-events: auto !important;
+        }
+        
+        /* Accessibility Focus Indicators */
+        *:focus {
+            outline: 2px solid #ff4444;
+            outline-offset: 2px;
+        }
+        
+        button:focus,
+        [onclick]:focus,
+        .nav-item:focus,
+        .story-item:focus {
+            outline: 2px solid #ff4444;
+            outline-offset: 2px;
+        }
+        
+        /* Screen Reader Only Text */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        
+        /* Skip to Content Link */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 6px;
+            background: #ff4444;
+            color: white;
+            padding: 8px;
+            text-decoration: none;
+            z-index: 100000;
+            border-radius: 4px;
+        }
+        
+        .skip-link:focus {
+            top: 6px;
+        }
+        
+        /* Custom Modal System */
+        .custom-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 10000;
+            backdrop-filter: blur(4px);
+        }
+        
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+        
+        .modal-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: white;
+        }
+        
+        .modal-message {
+            font-size: 14px;
+            color: #ccc;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+        
+        .modal-button {
+            background: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        
+        .modal-button:hover {
+            background: #ff3333;
+        }
+        
+        #detailVideoPlayer::-webkit-media-controls,
+        #detailVideoPlayer::-webkit-media-controls-panel,
+        #detailVideoPlayer::-webkit-media-controls-play-button,
+        #detailVideoPlayer::-webkit-media-controls-start-playback-button,
+        #detailVideoPlayer::-webkit-media-controls-timeline,
+        #detailVideoPlayer::-webkit-media-controls-current-time-display,
+        #detailVideoPlayer::-webkit-media-controls-time-remaining-display,
+        #detailVideoPlayer::-webkit-media-controls-mute-button,
+        #detailVideoPlayer::-webkit-media-controls-toggle-closed-captions-button,
+        #detailVideoPlayer::-webkit-media-controls-volume-slider,
+        #detailVideoPlayer::-webkit-media-controls-fullscreen-button,
+        #detailVideoPlayer::-webkit-media-controls-enclosure,
+        #detailVideoPlayer::-webkit-media-controls-overlay-play-button,
+        #detailVideoPlayer::-webkit-media-controls-overlay-enclosure {
+            display: none !important;
+            -webkit-appearance: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+    </style>
+
+    <script>
+        // Firebase configuration - LIVE CONFIGURATION
+        const firebaseConfig = {
+            apiKey: "AIzaSyBXy89aYxkfImhy6LYiAP-84DoZHY87ITY",
+            authDomain: "mychannel-ca26d.firebaseapp.com",
+            projectId: "mychannel-ca26d",
+            storageBucket: "mychannel-ca26d.firebasestorage.app",
+            messagingSenderId: "124515086975",
+            appId: "1:124515086975:ios:f3683f5fb93c02d2c3454a"
+        };
+        
+        let auth, db, storage;
+        
+        async function initFirebase() {
+            try {
+                if (window.firebase && window.firebase.apps && window.firebase.apps.length) {
+                    auth = firebase.auth();
+                    db = firebase.firestore();
+                    storage = firebase.storage();
+                    return;
+                }
+                firebase.initializeApp(firebaseConfig);
+                auth = firebase.auth();
+                db = firebase.firestore();
+                storage = firebase.storage();
+                
+                // Wait for Firebase to be ready
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Firebase initialized successfully
+            } catch (e) {
+                console.error('Firebase init failed:', e?.message || e);
+                throw e;
+            }
+        }
+        
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active from all nav items
+            document.querySelectorAll('.nav-item').forEach(nav => {
+                nav.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName + '-content').classList.add('active');
+            
+            // Activate corresponding nav item
+            event.target.closest('.nav-item').classList.add('active');
+        }
+        
+        // Custom Modal System
+        function showCustomModal(title, message, icon = 'ℹ️') {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalMessage').textContent = message;
+            document.getElementById('modalIcon').textContent = icon;
+            document.getElementById('customModal').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeCustomModal() {
+            document.getElementById('customModal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+        
+        // Close modal when clicking outside
+        document.addEventListener('click', function(e) {
+            if (e.target.id === 'customModal') {
+                closeCustomModal();
+            }
+        });
+        
+        function showSignIn() {
+            showCustomModal('Coming Soon!', 'Sign In feature is being developed and will be available soon!', '🚀');
+        }
+        
+        function showSettings() {
+            showCustomModal('Settings', 'Settings page is coming soon with personalization options!', '⚙️');
+        }
+        
+        function showHistory() {
+            showCustomModal('Watch History', 'Your watch history feature will be available soon!', '🕐');
+        }
+        
+        function showLiked() {
+            showCustomModal('Liked Videos', 'Liked Videos collection is coming soon!', '👍');
+        }
+        
+        function showSignOut() {
+            showCustomModal('Sign Out', 'Sign Out functionality is being implemented!', '🚪');
+        }
+        
+        function performSearch(query) {
+            const resultsDiv = document.getElementById('search-results');
+            if (query.trim() === '') {
+                resultsDiv.innerHTML = `
+                    <h3 style="color: #666; text-align: center; margin-top: 60px;">Search for videos, channels, and more</h3>
+                    <div class="search-suggestions" style="margin-top: 40px;">
+                        <h4 style="color: #ff4444; margin-bottom: 16px;">Trending Searches</h4>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            <span class="search-tag" style="background: #1a1a1a; color: #ccc; padding: 8px 12px; border-radius: 16px; font-size: 14px; cursor: pointer;" onclick="searchFor('gaming')">gaming</span>
+                            <span class="search-tag" style="background: #1a1a1a; color: #ccc; padding: 8px 12px; border-radius: 16px; font-size: 14px; cursor: pointer;" onclick="searchFor('music')">music</span>
+                            <span class="search-tag" style="background: #1a1a1a; color: #ccc; padding: 8px 12px; border-radius: 16px; font-size: 14px; cursor: pointer;" onclick="searchFor('tutorial')">tutorial</span>
+                            <span class="search-tag" style="background: #1a1a1a; color: #ccc; padding: 8px 12px; border-radius: 16px; font-size: 14px; cursor: pointer;" onclick="searchFor('comedy')">comedy</span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                resultsDiv.innerHTML = `
+                    <h3 style="color: #ff4444; margin-bottom: 16px;">Search Results for "${query}"</h3>
+                    <p style="color: #666; text-align: center; margin-top: 40px;">No results found. Try a different search term.</p>
+                `;
+            }
+        }
+        
+        function searchFor(term) {
+            document.querySelector('#search-content input').value = term;
+            performSearch(term);
+        }
+        
+        function showProfileTab(tabName) {
+            // Hide all profile tab contents
+            document.querySelectorAll('.profile-tab-content').forEach(tab => {
+                tab.style.display = 'none';
+                tab.classList.remove('active');
+            });
+            
+            // Remove active state from all tabs
+            document.querySelectorAll('.profile-tab').forEach(tab => {
+                tab.style.color = '#666';
+                tab.style.borderBottom = '2px solid transparent';
+            });
+            
+            // Show selected tab content
+            document.getElementById('profile-' + tabName + '-tab').style.display = 'block';
+            document.getElementById('profile-' + tabName + '-tab').classList.add('active');
+            
+            // Activate selected tab
+            event.target.style.color = '#ff4444';
+            event.target.style.borderBottom = '2px solid #ff4444';
+        }
+        
+        // Story Data
+        const stories = [
+            {
+                username: 'sarah',
+                avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop&crop=face',
+                content: [
+                    { type: 'image', url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=800&fit=crop', time: '2h' },
+                    { type: 'image', url: 'https://images.unsplash.com/photo-1519904981063-b0cf448d479e?w=600&h=800&fit=crop', time: '1h' }
+                ]
+            },
+            {
+                username: 'mike',
+                avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face',
+                content: [
+                    { type: 'image', url: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=600&h=800&fit=crop', time: '3h' }
+                ]
+            },
+            {
+                username: 'alex',
+                avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face',
+                content: [
+                    { type: 'image', url: 'https://images.unsplash.com/photo-1426604966848-d7adac402bff?w=600&h=800&fit=crop', time: '4h' },
+                    { type: 'image', url: 'https://images.unsplash.com/photo-1464822759844-d150baec93c5?w=600&h=800&fit=crop', time: '3h' }
+                ]
+            },
+            {
+                username: 'emma',
+                avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face',
+                content: [
+                    { type: 'image', url: 'https://images.unsplash.com/photo-1611095973362-87fa4ac9b4e1?w=600&h=800&fit=crop', time: '5h' }
+                ]
+            }
+        ];
+        
+        let currentStoryIndex = 0;
+        let currentStoryItemIndex = 0;
+        let storyProgressInterval;
+        
+        // Story Functions
+        function addStory() {
+            document.getElementById('addStoryModal').style.display = 'block';
+        }
+        
+        function closeAddStoryModal() {
+            document.getElementById('addStoryModal').style.display = 'none';
+        }
+        
+        function openCamera() {
+            document.getElementById('cameraInput').click();
+            closeAddStoryModal();
+        }
+        
+        function openGallery() {
+            document.getElementById('galleryInput').click();
+            closeAddStoryModal();
+        }
+        
+        async function handleStoryUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            try {
+                // Show loading
+                showStoryUploadProgress();
+                
+                // Initialize Firebase
+                await initFirebase();
+                
+                // For demo purposes, create a local URL and mock save to database
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    try {
+                        updateStoryUploadProgress(50);
+                        
+                        // Create story data with local URL for demo
+                        const storyData = {
+                            userId: 'keonta',
+                            username: 'Keonta Peat',
+                            avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face',
+                            mediaUrl: e.target.result, // Local data URL for demo
+                            mediaType: file.type.startsWith('video/') ? 'video' : 'image',
+                            timestamp: new Date(),
+                            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                            views: 0,
+                            likes: []
+                        };
+                        
+                        updateStoryUploadProgress(75);
+                        
+                        // Add to local stories array for immediate viewing
+                        let userStory = firebaseStories.find(s => s.userId === 'keonta');
+                        if (!userStory) {
+                            userStory = {
+                                userId: 'keonta',
+                                username: 'Keonta Peat',
+                                avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face',
+                                content: []
+                            };
+                            firebaseStories.unshift(userStory);
+                        }
+                        
+                        userStory.content.unshift({
+                            id: 'story_' + Date.now(),
+                            type: storyData.mediaType,
+                            url: storyData.mediaUrl,
+                            time: 'now',
+                            views: 0,
+                            likes: []
+                        });
+                        
+                        console.log('Story added to firebaseStories:', firebaseStories);
+                        
+                        updateStoryUploadProgress(100);
+                        
+                        // Update UI
+                        updateStoriesUI();
+                        
+                        hideStoryUploadProgress();
+                        showSuccessMessage('Story posted! 🔥');
+                        
+                        // Reset input
+                        input.value = '';
+                        
+                    } catch (error) {
+                        console.error('Error processing story:', error);
+                        hideStoryUploadProgress();
+                        showCustomModal('Upload Error', 'Error uploading story. Please try again.', '❌');
+                    }
+                };
+                
+                reader.readAsDataURL(file);
+                
+            } catch (error) {
+                console.error('Error uploading story:', error);
+                hideStoryUploadProgress();
+                showCustomModal('Upload Error', 'Error uploading story. Please try again.', '❌');
+            }
+        }
+        
+        function viewStory(username, storyIndex) {
+            currentStoryIndex = storyIndex;
+            currentStoryItemIndex = 0;
+            
+            const story = stories[storyIndex];
+            if (!story) return;
+            
+            document.getElementById('storyViewer').style.display = 'block';
+            document.getElementById('storyUsername').textContent = story.username;
+            document.getElementById('storyUserAvatar').src = story.avatar;
+            
+            showStoryItem();
+            startStoryProgress();
+        }
+        
+        function showStoryItem() {
+            const story = stories[currentStoryIndex];
+            const item = story.content[currentStoryItemIndex];
+            
+            document.getElementById('storyTime').textContent = item.time + ' ago';
+            
+            const image = document.getElementById('storyImage');
+            const video = document.getElementById('storyVideo');
+            
+            if (item.type === 'image') {
+                image.src = item.url;
+                image.style.display = 'block';
+                video.style.display = 'none';
+            } else if (item.type === 'video') {
+                video.src = item.url;
+                video.style.display = 'block';
+                image.style.display = 'none';
+            }
+        }
+        
+        function startStoryProgress() {
+            clearInterval(storyProgressInterval);
+            const progressBar = document.querySelector('.progress-fill');
+            let progress = 0;
+            
+            storyProgressInterval = setInterval(() => {
+                progress += 0.5;
+                progressBar.style.width = progress + '%';
+                
+                if (progress >= 100) {
+                    nextStory();
+                }
+            }, 30); // 6 seconds total (100 / 0.5 * 30ms)
+        }
+        
+        function nextStory() {
+            const story = stories[currentStoryIndex];
+            
+            if (currentStoryItemIndex < story.content.length - 1) {
+                currentStoryItemIndex++;
+                showStoryItem();
+                startStoryProgress();
+            } else if (currentStoryIndex < stories.length - 1) {
+                currentStoryIndex++;
+                currentStoryItemIndex = 0;
+                viewStory(stories[currentStoryIndex].username, currentStoryIndex);
+            } else {
+                closeStoryViewer();
+            }
+        }
+        
+        function previousStory() {
+            if (currentStoryItemIndex > 0) {
+                currentStoryItemIndex--;
+                showStoryItem();
+                startStoryProgress();
+            } else if (currentStoryIndex > 0) {
+                currentStoryIndex--;
+                const prevStory = stories[currentStoryIndex];
+                currentStoryItemIndex = prevStory.content.length - 1;
+                viewStory(prevStory.username, currentStoryIndex);
+            }
+        }
+        
+        function closeStoryViewer() {
+            document.getElementById('storyViewer').style.display = 'none';
+            clearInterval(storyProgressInterval);
+        }
+        
+        // Firebase Integration Functions
+        let firebaseStories = [];
+        
+        async function loadUserStories() {
+            try {
+                if (!window.firebase || !window.firebase.apps.length) {
+                    await initFirebase();
+                }
+                
+                const db = firebase.firestore();
+                const now = new Date();
+                
+                // Get stories from last 24 hours
+                const storiesSnapshot = await db.collection('stories')
+                    .where('expiresAt', '>', now)
+                    .orderBy('expiresAt')
+                    .orderBy('timestamp', 'desc')
+                    .get();
+                
+                // Group stories by user
+                const userStories = {};
+                storiesSnapshot.forEach(doc => {
+                    const story = { id: doc.id, ...doc.data() };
+                    const userId = story.userId;
+                    
+                    if (!userStories[userId]) {
+                        userStories[userId] = {
+                            username: story.username,
+                            avatar: story.avatar,
+                            content: []
+                        };
+                    }
+                    
+                    userStories[userId].content.push({
+                        id: story.id,
+                        type: story.mediaType,
+                        url: story.mediaUrl,
+                        time: formatTimeAgo(story.timestamp?.toDate() || new Date()),
+                        views: story.views || 0,
+                        likes: story.likes || []
+                    });
+                });
+                
+                // Update global stories array
+                firebaseStories = Object.keys(userStories).map(userId => ({
+                    userId,
+                    ...userStories[userId]
+                }));
+                
+                // Update UI
+                updateStoriesUI();
+                
+            } catch (error) {
+                console.error('Error loading stories:', error);
+                // Fallback to mock data
+                firebaseStories = stories;
+                updateStoriesUI();
+            }
+        }
+        
+        function updateStoriesUI() {
+            const storiesContainer = document.querySelector('.stories-container');
+            if (!storiesContainer) {
+                console.log('Stories container not found');
+                return;
+            }
+            
+            console.log('Updating stories UI with:', firebaseStories);
+            
+            // Clear all stories
+            storiesContainer.innerHTML = '';
+            
+            // Add "Your Story" button - check if user has stories
+            const userHasStories = firebaseStories.find(s => s.userId === 'keonta');
+            console.log('User has stories:', userHasStories);
+            
+            const addStoryElement = document.createElement('div');
+            addStoryElement.className = 'story-item';
+            addStoryElement.onclick = () => {
+                if (userHasStories && userHasStories.content.length > 0) {
+                    // View user's own story
+                    const userIndex = firebaseStories.findIndex(s => s.userId === 'keonta');
+                    console.log('Viewing user story at index:', userIndex);
+                    viewStory('Keonta Peat', userIndex);
+                } else {
+                    // Add new story
+                    addStory();
+                }
+            };
+            
+            if (userHasStories) {
+                addStoryElement.innerHTML = `
+                    <div class="story-ring active-story">
+                        <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face" alt="Your Story">
+                    </div>
+                    <span>Your Story</span>
+                `;
+            } else {
+                addStoryElement.innerHTML = `
+                    <div class="story-ring add-story">
+                        <div class="add-story-plus">+</div>
+                    </div>
+                    <span>Your Story</span>
+                `;
+            }
+            
+            storiesContainer.appendChild(addStoryElement);
+            
+            // Add other users' stories
+            firebaseStories.filter(s => s.userId !== 'keonta').forEach((story, index) => {
+                const storyElement = document.createElement('div');
+                storyElement.className = 'story-item';
+                const actualIndex = firebaseStories.findIndex(s => s.userId === story.userId);
+                storyElement.onclick = () => viewStory(story.username, actualIndex);
+                
+                storyElement.innerHTML = `
+                    <div class="story-ring active-story">
+                        <img src="${story.avatar}" alt="Story">
+                    </div>
+                    <span>${story.username}</span>
+                `;
+                
+                storiesContainer.appendChild(storyElement);
+            });
+        }
+        
+        function formatTimeAgo(date) {
+            const now = new Date();
+            const diffMs = now - date;
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffMins = Math.floor(diffMs / (1000 * 60));
+            
+            if (diffHours > 0) return diffHours + 'h';
+            if (diffMins > 0) return diffMins + 'm';
+            return 'now';
+        }
+        
+        // Updated viewStory to use Firebase stories
+        function viewStory(username, storyIndex) {
+            console.log('viewStory called:', username, storyIndex, firebaseStories);
+            currentStoryIndex = storyIndex;
+            currentStoryItemIndex = 0;
+            
+            const story = firebaseStories[storyIndex] || stories[storyIndex];
+            console.log('Selected story:', story);
+            
+            if (!story || !story.content || story.content.length === 0) {
+                console.log('No story content found');
+                return;
+            }
+            
+            document.getElementById('storyViewer').style.display = 'block';
+            document.getElementById('storyUsername').textContent = story.username;
+            document.getElementById('storyUserAvatar').src = story.avatar;
+            
+            showStoryItem();
+            startStoryProgress();
+        }
+        
+        function showStoryItem() {
+            const story = firebaseStories[currentStoryIndex] || stories[currentStoryIndex];
+            const item = story.content[currentStoryItemIndex];
+            
+            console.log('showStoryItem:', story, item);
+            
+            document.getElementById('storyTime').textContent = item.time + ' ago';
+            
+            const image = document.getElementById('storyImage');
+            const video = document.getElementById('storyVideo');
+            
+            // Reset both elements
+            image.style.display = 'none';
+            video.style.display = 'none';
+            image.src = '';
+            video.src = '';
+            
+            if (item.type === 'image' || item.type.startsWith('image/')) {
+                console.log('Showing image:', item.url);
+                image.src = item.url;
+                image.style.display = 'block';
+                image.onload = () => console.log('Image loaded successfully');
+                image.onerror = (e) => console.error('Image failed to load:', e);
+            } else if (item.type === 'video' || item.type.startsWith('video/')) {
+                console.log('Showing video:', item.url);
+                video.src = item.url;
+                video.style.display = 'block';
+                video.onloadeddata = () => console.log('Video loaded successfully');
+                video.onerror = (e) => console.error('Video failed to load:', e);
+            }
+        }
+        
+        // UI Helper Functions
+        function showStoryUploadProgress() {
+            const modal = document.createElement('div');
+            modal.id = 'uploadProgressModal';
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.8); z-index: 10002; display: flex;
+                align-items: center; justify-content: center;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: #1a1a1a; border-radius: 16px; padding: 24px; text-align: center; color: white;">
+                    <div style="font-size: 24px; margin-bottom: 16px;">📤</div>
+                    <div style="margin-bottom: 16px;">Uploading Story...</div>
+                    <div style="width: 200px; height: 4px; background: #333; border-radius: 2px;">
+                        <div id="uploadProgress" style="height: 100%; background: #ff4444; border-radius: 2px; width: 0%; transition: width 0.3s ease;"></div>
+                    </div>
+                    <div id="uploadPercentage" style="margin-top: 8px; font-size: 12px; color: #ccc;">0%</div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+        
+        function updateStoryUploadProgress(progress) {
+            const progressBar = document.getElementById('uploadProgress');
+            const percentage = document.getElementById('uploadPercentage');
+            if (progressBar) progressBar.style.width = progress + '%';
+            if (percentage) percentage.textContent = Math.round(progress) + '%';
+        }
+        
+        function hideStoryUploadProgress() {
+            const modal = document.getElementById('uploadProgressModal');
+            if (modal) modal.remove();
+        }
+        
+        function showSuccessMessage(message) {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                background: #1a1a1a; color: white; padding: 16px 24px; border-radius: 8px;
+                z-index: 10003; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            `;
+            modal.textContent = message;
+            document.body.appendChild(modal);
+            
+            setTimeout(() => modal.remove(), 3000);
+        }
+        
+        // Video Library - Free videos for new users
+        const videoLibrary = [
+            {
+                id: 'vid1',
+                title: 'Amazing Nature Documentary - Wildlife in 4K',
+                description: 'Experience the beauty of nature with this stunning 4K wildlife documentary. From majestic mountains to serene oceans, discover the incredible diversity of our planet.',
+                thumbnail: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=600&h=400&fit=crop',
+                videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+                duration: '9:56',
+                views: '2.1M',
+                uploadTime: '3 days ago',
+                channel: {
+                    name: 'Nature Explorer',
+                    avatar: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=100&h=100&fit=crop&crop=face',
+                    subscribers: '1.2M'
+                },
+                likes: 45000
+            },
+            {
+                id: 'vid2', 
+                title: 'Epic Travel Vlog - Exploring Hidden Gems',
+                description: 'Join me on an incredible journey to discover hidden gems around the world. From secret beaches to mountain villages, adventure awaits!',
+                thumbnail: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop',
+                videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+                duration: '12:34',
+                views: '1.8M',
+                uploadTime: '1 week ago',
+                channel: {
+                    name: 'Adventure Seeker',
+                    avatar: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=100&h=100&fit=crop&crop=face',
+                    subscribers: '850K'
+                },
+                likes: 38000
+            },
+            {
+                id: 'vid3',
+                title: 'Ultimate Cooking Masterclass - Professional Techniques',
+                description: 'Learn professional cooking techniques from a master chef. Perfect your knife skills, master seasoning, and create restaurant-quality dishes at home.',
+                thumbnail: 'https://images.unsplash.com/photo-1556909114-4f6e8407730d?w=600&h=400&fit=crop',
+                videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+                duration: '15:22',
+                views: '3.2M',
+                uploadTime: '5 days ago',
+                channel: {
+                    name: 'Chef Masters',
+                    avatar: 'https://images.unsplash.com/photo-1556909114-4f6e8407730d?w=100&h=100&fit=crop&crop=face',
+                    subscribers: '2.1M'
+                },
+                likes: 67000
+            },
+            {
+                id: 'vid4',
+                title: 'Tech Review - Latest Gadgets You Need to See',
+                description: 'Comprehensive review of the latest tech gadgets hitting the market. Unboxing, testing, and honest opinions on what\'s worth your money.',
+                thumbnail: 'https://images.unsplash.com/photo-1518717758536-85ae29035b6d?w=600&h=400&fit=crop',
+                videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+                duration: '8:45',
+                views: '950K',
+                uploadTime: '2 days ago',
+                channel: {
+                    name: 'Tech Insider',
+                    avatar: 'https://images.unsplash.com/photo-1518717758536-85ae29035b6d?w=100&h=100&fit=crop&crop=face',
+                    subscribers: '750K'
+                },
+                likes: 25000
+            },
+            {
+                id: 'vid5',
+                title: 'Fitness Transformation - 30 Day Challenge Results',
+                description: 'See incredible transformation results from a 30-day fitness challenge. Workout routines, nutrition tips, and motivation to help you reach your goals.',
+                thumbnail: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&h=400&fit=crop',
+                videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+                duration: '11:18',
+                views: '1.4M',
+                uploadTime: '1 day ago',
+                channel: {
+                    name: 'Fit Life',
+                    avatar: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=100&h=100&fit=crop&crop=face',
+                    subscribers: '920K'
+                },
+                likes: 34000
+            },
+            {
+                id: 'vid6',
+                title: 'Music Production Tutorial - Beat Making Basics',
+                description: 'Learn the fundamentals of music production and beat making. From basic rhythm patterns to advanced mixing techniques.',
+                thumbnail: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&h=400&fit=crop',
+                videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+                duration: '14:07',
+                views: '780K',
+                uploadTime: '4 days ago',
+                channel: {
+                    name: 'Beat Makers',
+                    avatar: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=100&h=100&fit=crop&crop=face',
+                    subscribers: '650K'
+                },
+                likes: 19000
+            }
+        ];
+        
+        // Load videos into the grid
+        function loadVideos() {
+            const videoGrid = document.getElementById('videoGrid');
+            if (!videoGrid) return;
+            
+            videoGrid.innerHTML = '';
+            
+            videoLibrary.forEach(video => {
+                const videoCard = document.createElement('div');
+                videoCard.className = 'video-card';
+                videoCard.onclick = () => openVideoDetail(video);
+                
+                videoCard.innerHTML = `
+                    <div class="video-thumbnail">
+                        <img src="${video.thumbnail}" alt="${video.title}">
+                        <div class="video-duration">${video.duration}</div>
+                        <div class="play-overlay">▶</div>
+                    </div>
+                    <div class="video-info">
+                        <img src="${video.channel.avatar}" alt="${video.channel.name}" class="channel-avatar">
+                        <div class="video-details">
+                            <h3>${video.title}</h3>
+                            <p class="channel-name">${video.channel.name}</p>
+                            <p class="video-stats">${video.views} views • ${video.uploadTime}</p>
+                        </div>
+                    </div>
+                `;
+                
+                videoGrid.appendChild(videoCard);
+            });
+        }
+        
+        // Global video player state
+        let currentVideo = null;
+        let controlsTimeout = null;
+        let isVideoPlaying = false;
+        
+        // Video Detail Functions
+        function openVideoDetail(video) {
+            // Opening video detail view
+            currentVideo = video;
+            
+            // Set video data
+            const videoPlayer = document.getElementById('detailVideoPlayer');
+            document.getElementById('detailVideoTitle').textContent = video.title;
+            document.getElementById('topBarVideoTitle').textContent = video.title;
+            document.getElementById('detailVideoStats').textContent = `${video.views} views • ${video.uploadTime}`;
+            document.getElementById('detailChannelAvatar').src = video.channel.avatar;
+            document.getElementById('detailChannelName').textContent = video.channel.name;
+            document.getElementById('detailChannelSubs').textContent = `${video.channel.subscribers} subscribers`;
+            document.getElementById('detailVideoDescription').textContent = video.description;
+            document.getElementById('likeCount').textContent = formatNumber(video.likes);
+            
+            // Show loading spinner
+            showVideoLoading();
+            
+            // Load video
+            videoPlayer.src = video.videoUrl;
+            videoPlayer.load();
+            
+            // Set up video event listeners
+            setupVideoEventListeners();
+            
+            // Show the detail view
+            document.getElementById('videoDetailView').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            
+            // Show controls initially, then auto-hide
+            showVideoControls();
+            startControlsAutoHide();
+        }
+        
+        function closeVideoDetail() {
+            const videoPlayer = document.getElementById('detailVideoPlayer');
+            videoPlayer.pause();
+            videoPlayer.src = '';
+            
+            // Clear timeouts
+            if (controlsTimeout) {
+                clearTimeout(controlsTimeout);
+                controlsTimeout = null;
+            }
+            
+            document.getElementById('videoDetailView').style.display = 'none';
+            document.body.style.overflow = 'auto';
+            
+            currentVideo = null;
+            isVideoPlaying = false;
+        }
+        
+        function setupVideoEventListeners() {
+            const videoPlayer = document.getElementById('detailVideoPlayer');
+            
+            // AGGRESSIVELY remove all native controls
+            videoPlayer.controls = false;
+            videoPlayer.removeAttribute('controls');
+            videoPlayer.setAttribute('controlsList', 'nodownload nofullscreen noremoteplayback noplaybackrate');
+            videoPlayer.setAttribute('disablePictureInPicture', 'true');
+            videoPlayer.setAttribute('disableRemotePlayback', 'true');
+            videoPlayer.setAttribute('playsinline', 'true');
+            videoPlayer.setAttribute('webkit-playsinline', 'true');
+            videoPlayer.setAttribute('x5-playsinline', 'true');
+            
+            // Force hide controls continuously
+            setInterval(() => {
+                if (videoPlayer.controls) {
+                    videoPlayer.controls = false;
+                    videoPlayer.removeAttribute('controls');
+                }
+            }, 100);
+            
+            videoPlayer.onloadstart = () => {
+                showVideoLoading();
+                // Force remove controls again on load
+                videoPlayer.controls = false;
+                videoPlayer.removeAttribute('controls');
+            };
+            videoPlayer.oncanplay = () => {
+                hideVideoLoading();
+                // Force remove controls when ready
+                videoPlayer.controls = false;
+                videoPlayer.removeAttribute('controls');
+            };
+            videoPlayer.onplay = () => {
+                isVideoPlaying = true;
+                updatePlayButtons('pause');
+                // Force remove controls on play
+                videoPlayer.controls = false;
+                videoPlayer.removeAttribute('controls');
+            };
+            videoPlayer.onpause = () => {
+                isVideoPlaying = false;
+                updatePlayButtons('play');
+            };
+            videoPlayer.ontimeupdate = () => updateProgress();
+            videoPlayer.onloadedmetadata = () => {
+                updateDuration();
+                // Force remove controls when metadata loads
+                videoPlayer.controls = false;
+                videoPlayer.removeAttribute('controls');
+            };
+            videoPlayer.onerror = () => {
+                hideVideoLoading();
+                console.error('Video failed to load');
+            };
+            
+            // Prevent context menu on video
+            videoPlayer.oncontextmenu = (e) => {
+                e.preventDefault();
+                return false;
+            };
+            
+            // Prevent double-click fullscreen
+            videoPlayer.ondblclick = (e) => {
+                e.preventDefault();
+                return false;
+            };
+            
+            // Block any attempt to show controls
+            videoPlayer.addEventListener('controlschange', () => {
+                videoPlayer.controls = false;
+            });
+        }
+        
+        function showVideoLoading() {
+            document.getElementById('videoLoadingSpinner').style.display = 'block';
+        }
+        
+        function hideVideoLoading() {
+            document.getElementById('videoLoadingSpinner').style.display = 'none';
+        }
+        
+        function togglePlayPause() {
+            const videoPlayer = document.getElementById('detailVideoPlayer');
+            
+            if (videoPlayer.paused) {
+                videoPlayer.play();
+            } else {
+                videoPlayer.pause();
+            }
+            
+            // Show controls when interacting
+            showVideoControls();
+            startControlsAutoHide();
+        }
+        
+        function updatePlayButtons(state) {
+            const centerIcon = document.getElementById('centerPlayIcon');
+            const bottomIcon = document.getElementById('bottomPlayIcon');
+            
+            if (state === 'play') {
+                centerIcon.textContent = '▶';
+                bottomIcon.textContent = '▶';
+            } else {
+                centerIcon.textContent = '⏸';
+                bottomIcon.textContent = '⏸';
+            }
+        }
+        
+        function seekBackward() {
+            const videoPlayer = document.getElementById('detailVideoPlayer');
+            videoPlayer.currentTime = Math.max(0, videoPlayer.currentTime - 10);
+            showVideoControls();
+            startControlsAutoHide();
+        }
+        
+        function seekForward() {
+            const videoPlayer = document.getElementById('detailVideoPlayer');
+            videoPlayer.currentTime = Math.min(videoPlayer.duration, videoPlayer.currentTime + 10);
+            showVideoControls();
+            startControlsAutoHide();
+        }
+        
+        function seekToPosition(event) {
+            const videoPlayer = document.getElementById('detailVideoPlayer');
+            const progressContainer = event.currentTarget;
+            const rect = progressContainer.getBoundingClientRect();
+            const clickX = event.clientX - rect.left;
+            const percentage = clickX / rect.width;
+            
+            videoPlayer.currentTime = percentage * videoPlayer.duration;
+            showVideoControls();
+            startControlsAutoHide();
+        }
+        
+        function updateProgress() {
+            const videoPlayer = document.getElementById('detailVideoPlayer');
+            const progressBar = document.getElementById('progressBar');
+            const currentTimeDisplay = document.getElementById('currentTimeDisplay');
+            
+            if (videoPlayer.duration > 0) {
+                const percentage = (videoPlayer.currentTime / videoPlayer.duration) * 100;
+                progressBar.style.width = percentage + '%';
+                currentTimeDisplay.textContent = formatVideoTime(videoPlayer.currentTime);
+            }
+        }
+        
+        function updateDuration() {
+            const videoPlayer = document.getElementById('detailVideoPlayer');
+            const durationDisplay = document.getElementById('durationDisplay');
+            durationDisplay.textContent = formatVideoTime(videoPlayer.duration);
+        }
+        
+        function formatVideoTime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            
+            if (hours > 0) {
+                return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            } else {
+                return `${minutes}:${secs.toString().padStart(2, '0')}`;
+            }
+        }
+        
+        function toggleMute() {
+            const videoPlayer = document.getElementById('detailVideoPlayer');
+            const volumeIcon = document.getElementById('volumeIcon');
+            
+            videoPlayer.muted = !videoPlayer.muted;
+            volumeIcon.textContent = videoPlayer.muted ? '🔇' : '🔊';
+            
+            showVideoControls();
+            startControlsAutoHide();
+        }
+        
+        function toggleFullscreen() {
+            const videoDetailView = document.getElementById('videoDetailView');
+            
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                videoDetailView.requestFullscreen();
+            }
+            
+            showVideoControls();
+            startControlsAutoHide();
+        }
+        
+        function minimizeToMiniPlayer() {
+            // For now, just close the video
+            // In a real app, this would minimize to a corner mini player
+            closeVideoDetail();
+            showCustomModal('Mini Player', 'Mini player feature is coming soon! 📱', '📱');
+        }
+        
+        function showVideoControls() {
+            const overlay = document.getElementById('videoControlsOverlay');
+            overlay.style.opacity = '1';
+        }
+        
+        function hideVideoControls() {
+            const overlay = document.getElementById('videoControlsOverlay');
+            overlay.style.opacity = '0';
+        }
+        
+        function startControlsAutoHide() {
+            if (controlsTimeout) {
+                clearTimeout(controlsTimeout);
+            }
+            
+            controlsTimeout = setTimeout(() => {
+                if (isVideoPlaying) {
+                    hideVideoControls();
+                }
+            }, 4000); // Hide after 4 seconds like iOS
+        }
+        
+        // Add click handler to show/hide controls
+        document.addEventListener('DOMContentLoaded', function() {
+            const videoDetailView = document.getElementById('videoDetailView');
+            if (videoDetailView) {
+                videoDetailView.addEventListener('click', function(e) {
+                    // Only toggle controls if clicking on the video area, not buttons
+                    if (e.target.closest('.video-controls-overlay') && !e.target.closest('[onclick]')) {
+                        const overlay = document.getElementById('videoControlsOverlay');
+                        if (overlay.style.opacity === '0') {
+                            showVideoControls();
+                            startControlsAutoHide();
+                        } else {
+                            hideVideoControls();
+                        }
+                    }
+                });
+            }
+        });
+        
+        function likeVideo() {
+            const likeBtn = document.querySelector('[onclick="likeVideo()"]');
+            const currentLikes = parseInt(document.getElementById('likeCount').textContent.replace('K', '').replace('.', '')) * 1000;
+            const newLikes = currentLikes + 1;
+            document.getElementById('likeCount').textContent = formatNumber(newLikes);
+            
+            likeBtn.style.background = '#ff4444';
+            likeBtn.innerHTML = '❤️ <span id="likeCount">' + formatNumber(newLikes) + '</span>';
+            
+            showSuccessMessage('Liked! ❤️');
+        }
+        
+        function shareVideo() {
+            if (navigator.share) {
+                navigator.share({
+                    title: document.getElementById('detailVideoTitle').textContent,
+                    url: window.location.href
+                });
+            } else {
+                // Fallback
+                navigator.clipboard.writeText(window.location.href);
+                showSuccessMessage('Link copied to clipboard! 📋');
+            }
+        }
+        
+        function subscribeChannel() {
+            const subBtn = document.querySelector('[onclick="subscribeChannel()"]');
+            subBtn.textContent = 'Subscribed ✓';
+            subBtn.style.background = '#333';
+            showSuccessMessage('Subscribed! 🔔');
+        }
+        
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
+        }
+        
+        // Load stories and videos when page loads
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Load videos immediately
+            loadVideos();
+            
+            // Load stories after a short delay to let the page render
+            setTimeout(loadUserStories, 1000);
+        });
+    </script>
+</body>
+</html>

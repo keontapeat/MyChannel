@@ -1,0 +1,59 @@
+name: Firebase Functions CI
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy_functions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Firebase CLI
+        run: npm i -g firebase-tools@14.13.0
+
+      - name: Auth with Firebase CI token
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          if [ -z "${FIREBASE_TOKEN}" ]; then
+            echo "FIREBASE_TOKEN secret missing" && exit 1
+          fi
+          firebase --project mychannel-ca26d apps:list || true
+
+      - name: Prepare Python deps (optional for faster type analysis)
+        run: |
+          cd functions
+          python -m venv venv
+          . venv/bin/activate
+          python -m pip install -U pip
+          pip install -r requirements.txt
+          cd ..
+
+      - name: Deploy Firebase Functions
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          firebase deploy --only functions --project mychannel-ca26d --non-interactive
+
+
+
+
+
+
