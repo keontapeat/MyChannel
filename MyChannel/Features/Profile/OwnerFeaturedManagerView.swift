@@ -52,18 +52,11 @@ struct OwnerFeaturedManagerView: View {
                     }
                 }
                 .onMove { indices, newOffset in
-                    var items = store.featured
-                    items.move(fromOffsets: indices, toOffset: newOffset)
-                    store.featured = items
-                    // internal persist
-                    let mirror = Mirror(reflecting: store)
-                    if let method = mirror.children.first(where: { $0.label == "persist" }) {
-                        _ = method // no-op
-                    }
+                    store.move(fromOffsets: indices, toOffset: newOffset)
                 }
             }
         }
-        .environment(\._editMode, .constant(.active))
+        .environment(\.editMode, .constant(.active))
         .navigationTitle("Manage Featured")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

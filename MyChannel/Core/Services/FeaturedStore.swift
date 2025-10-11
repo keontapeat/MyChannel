@@ -45,6 +45,11 @@ final class FeaturedStore: ObservableObject {
     }
 
     func toVideos() -> [Video] { featured.map { $0.toVideo() } }
+
+    func move(fromOffsets: IndexSet, toOffset: Int) {
+        featured.move(fromOffsets: fromOffsets, toOffset: toOffset)
+        persist()
+    }
 }
 
 struct StoredFeatured: Codable, Identifiable, Hashable {
