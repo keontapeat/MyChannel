@@ -595,23 +595,7 @@ struct MinimalNavigationHeader: View {
             .padding(.horizontal, 20)
             .padding(.top, 44)
             .padding(.bottom, 12)
-            .background(
-                Group {
-                    if showBackground {
-                        Rectangle()
-                            .fill(.ultraThinMaterial)
-                            .transition(.opacity)
-                    } else {
-                        Color.clear
-                    }
-                }
-            )
-            .overlay(
-                Rectangle()
-                    .fill(Color.black.opacity(0.06))
-                    .frame(height: 0.5)
-                , alignment: .bottom
-            )
+            .background(Color.white)
             .animation(.easeInOut(duration: 0.25), value: showBackground)
         }
         .allowsHitTesting(true)

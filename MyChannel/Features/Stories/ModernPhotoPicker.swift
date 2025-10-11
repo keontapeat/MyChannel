@@ -82,9 +82,17 @@ struct ModernPhotoPicker: View {
     private func previewItems(_ items: [PhotosPickerItem]) async {
         var previews: [CreateStoryViewModel.MediaItem] = []
         for item in items.prefix(10) {
-            let mediaType: CreateStoryViewModel.MediaItem.MediaType = item.supportedContentTypes.contains(.movie) ? .video : .image
-            let mockURL = URL(string: "https://picsum.photos/400/800?random=\(Int.random(in: 1...100))")!
-            previews.append(.init(url: mockURL, type: mediaType, duration: mediaType == .video ? Double.random(in: 5...30) : nil))
+            do {
+                if let data = try await item.loadTransferable(type: Data.self) {
+                    // Save to temp for high-fidelity reference
+                    let tmpURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                    try data.write(to: tmpURL)
+                    let isVideo = item.supportedContentTypes.contains(.movie)
+                    previews.append(.init(url: tmpURL, type: isVideo ? .video : .image, duration: nil))
+                }
+            } catch {
+                continue
+            }
         }
         await MainActor.run { selectedPreview = previews }
     }

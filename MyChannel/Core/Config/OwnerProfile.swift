@@ -29,7 +29,7 @@ struct OwnerProfile {
         // Prioritized order; first item appears as #1
         FriendArtist(name: "@ysr.loskibrim", instagram: "@ysr.loskibrim", avatar: "asset://YSRLoskiBrim?fallback=https://unavatar.io/instagram/ysr.loskibrim"),
         FriendArtist(name: "@scatzripky6", instagram: "@scatzripky6", avatar: "asset://ScatzAvatar?fallback=https://unavatar.io/instagram/scatzripky6"),
-        FriendArtist(name: "@kleanupman__", instagram: "@kleanupman__", avatar: "https://unavatar.io/instagram/kleanupman__"),
+        FriendArtist(name: "@kleanupman__", instagram: "@kleanupman__", avatar: "asset://KleanupManAvatar?fallback=https://unavatar.io/instagram/kleanupman__"),
         FriendArtist(name: "@ynjay_", instagram: "@ynjay_", avatar: "https://unavatar.io/instagram/ynjay_"),
         FriendArtist(name: "@luh_monti45", instagram: "@luh_monti45", avatar: "https://unavatar.io/instagram/luh_monti45"),
         FriendArtist(name: "@ysr.loski", instagram: "@ysr.loski", avatar: "https://unavatar.io/instagram/ysr.loski"),
