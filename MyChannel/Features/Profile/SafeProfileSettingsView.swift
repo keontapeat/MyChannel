@@ -71,7 +71,8 @@ struct ProfileSettingsView: View {
         }
         .confirmationDialog("Sign Out", isPresented: $showingSignOutConfirmation) {
             Button("Sign Out", role: .destructive) {
-                // Handle sign out
+                AuthenticationManager.shared.signOut()
+                dismiss()
             }
             Button("Cancel", role: .cancel) { }
         } message: {

@@ -31,12 +31,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
-				"infra/terraform/.terraform/providers/registry.terraform.io/hashicorp/google-beta/6.49.2/darwin_amd64/LICENSE.txt",
-				"infra/terraform/.terraform/providers/registry.terraform.io/hashicorp/google-beta/7.0.0/darwin_amd64/LICENSE.txt",
-				infra/terraform/.terraform/providers/registry.terraform.io/hashicorp/google/6.47.0/darwin_amd64/LICENSE.txt,
-				infra/terraform/.terraform/providers/registry.terraform.io/hashicorp/google/6.49.2/darwin_amd64/LICENSE.txt,
-				infra/terraform/.terraform/providers/registry.terraform.io/hashicorp/google/7.0.0/darwin_amd64/LICENSE.txt,
-				infra/terraform/.terraform/providers/registry.terraform.io/hashicorp/local/2.5.3/darwin_amd64/LICENSE.txt,
 			);
 			target = 055B9AC32E1F0BB6004E6282 /* MyChannel */;
 		};
@@ -338,6 +332,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = MyChannel/MyChannel.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -346,6 +341,12 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MyChannel/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MyChannel;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_NSCameraUsageDescription = "MyChannel uses the camera so you can record videos and create content.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "MyChannel uses the microphone to capture audio while recording videos or going live.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "MyChannel saves exported videos or edited media to your library when you choose to.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "MyChannel needs access to your photo library to let you pick videos and images for upload.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -357,7 +358,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				NEW_SETTING = "";
-				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannel;
+				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannelApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -370,15 +371,22 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = MyChannel/MyChannel.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEBUG_INFORMATION_FORMAT = MyChannel/MyChannel/Config/Secrets.xcconfig;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 8KPXZ859S7;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MyChannel/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MyChannel;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_NSCameraUsageDescription = "MyChannel uses the camera so you can record videos and create content.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "MyChannel uses the microphone to capture audio while recording videos or going live.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "MyChannel saves exported videos or edited media to your library when you choose to.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "MyChannel needs access to your photo library to let you pick videos and images for upload.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -390,11 +398,13 @@
 				);
 				MARKETING_VERSION = 1.0;
 				NEW_SETTING = "";
-				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannel;
+				OTHER_SWIFT_FLAGS = "$(inherited) -DTMDB_KEY_PRESENT";
+				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannelApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				TMDB_API_KEY = cc1d44a1b1c8a4f2a5890cad1660d0be;
 			};
 			name = Release;
 		};

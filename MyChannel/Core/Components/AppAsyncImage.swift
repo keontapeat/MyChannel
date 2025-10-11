@@ -85,6 +85,14 @@ struct AppAsyncImage<Content: View, Placeholder: View>: View {
             return
         }
 
+        // If the URL is asset:// and image wasn't found, try a fallback query parameter
+        if url.scheme == "asset", let fallback = fallbackURL(from: url) {
+            if let fetched = await tryFetch(url: fallback, timeout: 12.0) {
+                await MainActor.run { self.uiImage = fetched }
+                return
+            }
+        }
+
         if inPreviews() {
             // Try fast real fetch; fallback to generated image
             if let fetched = await tryFetch(url: url, timeout: 2.5) {
@@ -131,6 +139,18 @@ struct AppAsyncImage<Content: View, Placeholder: View>: View {
         if let host = url.host, !host.isEmpty { return host }
         let p = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         return p.isEmpty ? nil : p
+    }
+
+    private func fallbackURL(from url: URL) -> URL? {
+        guard url.scheme == "asset" else { return nil }
+        guard let comps = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        if let item = comps.queryItems?.first(where: { $0.name == "fallback" || $0.name == "f" }),
+           let value = item.value,
+           let remote = URL(string: value),
+           ["http","https"].contains(remote.scheme?.lowercased() ?? "") {
+            return remote
+        }
+        return nil
     }
 }
 

@@ -209,106 +209,90 @@ struct MembershipTier: Identifiable, Codable, Equatable {
 }
 
 // MARK: - Sample Data Extensions  
-#if DEBUG
 extension User {
     static let sampleUsers: [User] = [
         User(
-            id: "user1",
-            username: "sbkeonta_",
-            displayName: "Keonta Peat",
-            email: "keontapeat@mychannel.live",
-            profileImageURL: "https://picsum.photos/200/200?random=1",
-            bio: "Shot By Keonta Flint, MI Videographer",
-            subscriberCount: 25400,
+            username: "techcreator",
+            displayName: "Tech Creator",
+            email: "tech@example.com",
+            profileImageURL: "https://example.com/profile1.jpg",
+            bio: "Creating amazing tech content for everyone!",
+            subscriberCount: 125000,
+            videoCount: 89,
+            isVerified: true,
+            isCreator: true,
+            followerCount: 125000,
+            followingCount: 250,
+            totalViews: 2500000
+        ),
+        User(
+            username: "gamer_pro",
+            displayName: "Gaming Pro",
+            email: "gamer@example.com",
+            profileImageURL: "https://example.com/profile2.jpg",
+            bio: "Professional gamer and content creator",
+            subscriberCount: 89000,
             videoCount: 156,
             isVerified: true,
-            socialLinks: [
-                SocialLink(platform: .instagram, url: "https://instagram.com/naturelover_sarah", displayName: "@naturelover_sarah"),
-                SocialLink(platform: .twitter, url: "https://twitter.com/sarah_nature", displayName: "@sarah_nature")
-            ],
-            followingCount: 892,
-            totalViews: 2_000_000
+            isCreator: true,
+            followerCount: 89000,
+            followingCount: 180,
+            totalViews: 1800000
         ),
         User(
-            id: "user2", 
-            username: "chef_marco",
-            displayName: "Marco Rodriguez",
-            email: "marco@example.com",
-            profileImageURL: "https://picsum.photos/200/200?random=2",
-            bio: "Professional chef sharing family recipes 👨‍🍳 Making cooking accessible for everyone!",
-            subscriberCount: 89300,
-            videoCount: 203,
-            isVerified: true,
-            socialLinks: [
-                SocialLink(platform: .instagram, url: "https://instagram.com/chef_marco", displayName: "@chef_marco"),
-                SocialLink(platform: .website, url: "https://marcosrecipes.com", displayName: "Marco's Recipes")
-            ],
-            followingCount: 234
-        ),
-        User(
-            id: "user3",
-            username: "tokyo_artist",
-            displayName: "Yuki Tanaka", 
-            email: "yuki@example.com",
-            profileImageURL: "https://picsum.photos/200/200?random=3",
-            bio: "Street artist from Tokyo 🎨 Bringing color to the concrete jungle",
-            subscriberCount: 15600,
-            videoCount: 89,
+            username: "lifestyle_vlogger",
+            displayName: "Lifestyle Vlogger",
+            email: "lifestyle@example.com",
+            profileImageURL: "https://example.com/profile3.jpg",
+            bio: "Sharing my daily life and adventures",
+            subscriberCount: 67000,
+            videoCount: 234,
             isVerified: false,
-            socialLinks: [
-                SocialLink(platform: .instagram, url: "https://instagram.com/tokyo_artist", displayName: "@tokyo_artist")
-            ],
-            followingCount: 567
+            isCreator: true,
+            followerCount: 67000,
+            followingCount: 320,
+            totalViews: 1200000
         ),
         User(
-            id: "user4",
-            username: "fitlife_emma",
-            displayName: "Emma Wilson",
-            email: "emma@example.com", 
-            profileImageURL: "https://picsum.photos/200/200?random=4",
-            bio: "Certified personal trainer 💪 Helping you achieve your fitness goals from home",
-            subscriberCount: 156700,
-            videoCount: 342,
-            isVerified: true,
-            socialLinks: [
-                SocialLink(platform: .instagram, url: "https://instagram.com/fitlife_emma", displayName: "@fitlife_emma"),
-                SocialLink(platform: .website, url: "https://emmafitness.com", displayName: "Emma Fitness"),
-                SocialLink(platform: .youtube, url: "https://youtube.com/emmawilsonfitness", displayName: "Emma Wilson Fitness")
-            ],
-            followingCount: 445
+            username: "music_artist",
+            displayName: "Music Artist",
+            email: "music@example.com",
+            profileImageURL: "https://example.com/profile4.jpg",
+            bio: "Independent musician sharing original content",
+            subscriberCount: 45000,
+            videoCount: 78,
+            isVerified: false,
+            isCreator: true,
+            followerCount: 45000,
+            followingCount: 150,
+            totalViews: 900000
         ),
         User(
-            id: "user5",
-            username: "swift_dev_alex",
-            displayName: "Alex Chen",
-            email: "alex@example.com",
-            profileImageURL: "https://picsum.photos/200/200?random=5", 
-            bio: "iOS Developer & Swift enthusiast 📱 Teaching programming through simple tutorials",
-            subscriberCount: 45200,
-            videoCount: 178,
-            isVerified: true,
-            socialLinks: [
-                SocialLink(platform: .twitter, url: "https://twitter.com/swift_dev_alex", displayName: "@swift_dev_alex"),
-                SocialLink(platform: .website, url: "https://alexchen.dev", displayName: "Alex Chen Dev")
-            ],
-            followingCount: 234
+            username: "regular_user",
+            displayName: "Regular User",
+            email: "user@example.com",
+            subscriberCount: 0,
+            videoCount: 0,
+            isVerified: false,
+            isCreator: false,
+            followerCount: 25,
+            followingCount: 100
         )
     ]
     
     static let defaultUser = User(
-        username: "default_user",
+        username: "defaultuser",
         displayName: "Default User",
         email: "default@mychannel.com"
     )
 }
-#endif
 
 #Preview("User Model Preview") {
     VStack(spacing: 20) {
         Text("User Models")
             .font(AppTheme.Typography.largeTitle)
         
-        ForEach(User.sampleUsers.prefix(2)) { user in
+        ForEach(Array(User.sampleUsers.prefix(2))) { user in
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(user.displayName)

@@ -14,6 +14,7 @@ final class SeedCatalogService {
 
     // A larger lightweight catalog to keep feeds rich for new users
     var seedVideos: [Video] {
+        guard AppConfig.Features.enableMockData else { return [] }
         var vids: [Video] = []
 
         func yt(_ id: String, title: String, channel: String, views: Int, category: VideoCategory) -> Video {

@@ -35,7 +35,7 @@ struct VideoLiveThumbnailView: View {
 }
 
 #Preview("VideoLiveThumbnailView • YouTube") {
-    let friend = User.sampleUsers.first ?? User.defaultUser
+    let friend = User.sampleUsers[0]
     let v = Video(
         id: "friend_video_yt_71GJrAY54Ew",
         title: "Friend Track • LIVE Preview",
@@ -51,7 +51,7 @@ struct VideoLiveThumbnailView: View {
         externalID: "71GJrAY54Ew",
         isVerified: true
     )
-    return VideoLiveThumbnailView(video: v)
+    VideoLiveThumbnailView(video: v)
         .frame(width: 180, height: 101)
         .background(Color(.systemGray6))
         .preferredColorScheme(.light)

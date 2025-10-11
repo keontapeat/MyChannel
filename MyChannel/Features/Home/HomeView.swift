@@ -157,7 +157,8 @@ struct HomeView: View {
                     scrollOffset: scrollOffset,
                     onSearchTap: { route = .search },
                     onProfileTap: {
-                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToProfileTab"), object: nil)
+                        // Open the sign-in sheet directly instead of jumping to the Profile tab
+                        NotificationCenter.default.post(name: .presentSignInSheet, object: nil)
                     }
                 )
                 .allowsHitTesting(true)
@@ -258,7 +259,8 @@ struct HomeView: View {
 
     // Helper to pin specific YouTube link first
     private var pinnedYouTubeURL: String {
-        "https://www.youtube.com/watch?v=71GJrAY54Ew&list=RD71GJrAY54Ew&start_radio=1"
+        guard AppConfig.Features.enableMockData else { return "" }
+        return "https://www.youtube.com/watch?v=71GJrAY54Ew&list=RD71GJrAY54Ew&start_radio=1"
     }
     private func parseYouTubeID(from urlString: String) -> String? {
         guard let comps = URLComponents(string: urlString) else { return nil }
@@ -271,6 +273,21 @@ struct HomeView: View {
         return nil
     }
     private func pinnedFeaturedVideo() -> Video {
+        guard AppConfig.Features.enableMockData else {
+            // When mock data disabled, return a harmless placeholder not shown
+            return Video(
+                title: "",
+                description: "",
+                thumbnailURL: "",
+                videoURL: "",
+                duration: 0,
+                viewCount: 0,
+                likeCount: 0,
+                creator: User(username: "", displayName: "", email: ""),
+                category: .other,
+                isPublic: false
+            )
+        }
         let ytID = parseYouTubeID(from: pinnedYouTubeURL) ?? "71GJrAY54Ew"
         let friendUser = User(
             username: "scatz",
@@ -309,28 +326,54 @@ struct HomeView: View {
     }
 
     private func setupContent() {
-        // Combine built-in samples with seeded catalog to ensure plenty of items
+        // In production/TestFlight, do not show mock content for authenticated users
         let seeds = SeedCatalogService.shared.seedVideos
-        var base = (Video.sampleVideos + seeds).filter { $0.viewCount > 500_000 }
-        let friend = friendHeroVideos()
+        let samples = Video.sampleVideos
+        var base: [Video] = []
+        if AppConfig.Features.enableMockData {
+            base = (samples + seeds).filter { $0.viewCount > 500_000 }
+        } else {
+            base = []
+        }
+        let friend: [Video] = AppConfig.Features.enableMockData ? friendHeroVideos() : []
 
         // Always pin requested YouTube video first
         let pinned = pinnedFeaturedVideo()
 
-        var seen = Set<String>([pinned.id])
-        var ordered: [Video] = [pinned]
+        var seen = Set<String>()
+        var ordered: [Video] = []
+        if AppConfig.Features.enableMockData {
+            seen.insert(pinned.id)
+            ordered = [pinned]
+        }
         for v in friend + base {
             if seen.insert(v.id).inserted {
                 ordered.append(v)
             }
         }
 
-        if ordered.isEmpty {
-            ordered = [pinned] + Array(Video.sampleVideos.prefix(3))
+        if ordered.isEmpty && AppConfig.Features.enableMockData {
+            ordered = [pinned] + Array(samples.prefix(3))
         }
 
         featuredContent = ordered
         heroVideoIndex = 0
+
+        // Ensure we always have at least two items for the Featured carousel.
+        if featuredContent.count < 2 {
+            var mapped: [Video] = []
+            // Prefer sample movie posters as fallback (stable thumbnails)
+            for m in FreeMovie.sampleMovies.prefix(4) {
+                let v = MoviePlaybackResolver.video(from: m, creator: User.defaultUser)
+                mapped.append(v)
+            }
+            // Merge uniques until we have 2
+            var seen = Set(featuredContent.map { $0.id })
+            for v in mapped where featuredContent.count < 2 {
+                if seen.insert(v.id).inserted { featuredContent.append(v) }
+            }
+            heroVideoIndex = 0
+        }
     }
 
     private func refreshContent() async {
@@ -479,11 +522,7 @@ struct MinimalNavigationHeader: View {
     var body: some View {
         let showBackground = scrollOffset > 50
         VStack(spacing: 0) {
-            // Red brand bar like site
-            ZStack {
-                Color(red: 0.95, green: 0.0, blue: 0.0)
-                    .frame(height: 44)
-                    .ignoresSafeArea(edges: .top)
+            HStack {
                 HStack(spacing: 12) {
                     Image("MyChannel")
                         .resizable()
@@ -491,20 +530,11 @@ struct MinimalNavigationHeader: View {
                         .interpolation(.high)
                         .antialiased(true)
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 22, height: 22)
-                        .cornerRadius(4)
-                    Text("MyChannel")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-            }
-            .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
+                        .frame(width: logoSize, height: logoSize)
 
-            HStack {
-                HStack(spacing: 12) {
-                    // Left side empty to align with red bar
+                    Text("MyChannel")
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .foregroundColor(.primary)
                 }
 
                 Spacer()
@@ -543,40 +573,18 @@ struct MinimalNavigationHeader: View {
                     }
                     .buttonStyle(.plain)
 
-                    if appState.isAuthenticated {
-                        Button(action: {
-                            HapticManager.shared.impact(style: .light)
-                            onProfileTap()
-                        }) {
-                            ProfileAvatarView(urlString: appState.currentUser?.profileImageURL, size: 28)
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color.white, lineWidth: 1)
-                                )
-                                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        Button(action: {
-                            HapticManager.shared.impact(style: .light)
-                            onProfileTap()
-                        }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "person.circle")
-                                    .font(.system(size: 16, weight: .medium))
-                                Text("Sign in")
-                                    .font(.system(size: 14, weight: .medium))
-                            }
-                            .foregroundColor(.blue)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .stroke(.blue, lineWidth: 1)
+                    Button(action: {
+                        HapticManager.shared.impact(style: .light)
+                        onProfileTap()
+                    }) {
+                        ProfileAvatarView(urlString: appState.currentUser?.profileImageURL, size: 28)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white, lineWidth: 1)
                             )
-                        }
-                        .buttonStyle(.plain)
+                            .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
                     }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 20)
@@ -592,6 +600,12 @@ struct MinimalNavigationHeader: View {
                         Color.clear
                     }
                 }
+            )
+            .overlay(
+                Rectangle()
+                    .fill(Color.black.opacity(0.06))
+                    .frame(height: 0.5)
+                , alignment: .bottom
             )
             .animation(.easeInOut(duration: 0.25), value: showBackground)
         }
@@ -720,6 +734,7 @@ struct MinimalHeroSection: View {
                 }
                 .tabViewStyle(.page(indexDisplayMode: .automatic))
                 .frame(height: 250)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
         }
     }
@@ -1659,7 +1674,7 @@ private struct TopArtistsSection: View {
 
     private var rankings: [ArtistRank] {
         let grouped = Dictionary(grouping: sourceVideos) { $0.creator.displayName }
-        let ranks = grouped.map { (name, vids) -> ArtistRank in
+        var ranks = grouped.map { (name, vids) -> ArtistRank in
             let views = vids.reduce(0) { $0 + $1.viewCount }
             return ArtistRank(
                 name: name,
@@ -1667,7 +1682,31 @@ private struct TopArtistsSection: View {
                 avatar: vids.first?.creator.profileImageURL ?? "https://i.pravatar.cc/200?u=\(name)"
             )
         }
-        return ranks.sorted { $0.views > $1.views }.prefix(10).map { $0 }
+        // Promote IG friends if provided (dedup by name) and pin their order at the front
+        let pinnedOrder = OwnerProfile.instagramFriends.map { $0.name }
+        for f in OwnerProfile.instagramFriends {
+            if let idx = ranks.firstIndex(where: { $0.name == f.name }) {
+                // Update avatar if we already have this artist from videos
+                let existing = ranks[idx]
+                ranks[idx] = ArtistRank(name: existing.name, views: existing.views, avatar: f.avatar)
+            } else {
+                ranks.append(ArtistRank(name: f.name, views: 0, avatar: f.avatar))
+            }
+        }
+
+        var sorted = ranks.sorted { $0.views > $1.views }
+
+        // Pin in the specified order so the first friend becomes #1
+        if !pinnedOrder.isEmpty {
+            let pinnedSet = Set(pinnedOrder)
+            let pinnedItems = pinnedOrder.compactMap { name in
+                sorted.first(where: { $0.name == name })
+            }
+            let nonPinned = sorted.filter { !pinnedSet.contains($0.name) }
+            sorted = pinnedItems + nonPinned
+        }
+
+        return Array(sorted.prefix(10))
     }
 
     struct ArtistRank: Identifiable {
@@ -1717,7 +1756,8 @@ private struct TopArtistsSection: View {
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
                                         .background(Capsule().fill(AppTheme.Colors.primary))
-                                        .offset(x: -6, y: -6)
+                                        .padding(.top, 2)
+                                        .padding(.leading, 2)
                                 }
 
                                 VStack(alignment: .center, spacing: 2) {
@@ -1739,6 +1779,7 @@ private struct TopArtistsSection: View {
                     }
                 }
                 .padding(.horizontal, 20)
+                .background(AppTheme.Colors.background)
             }
         }
     }
@@ -1757,7 +1798,7 @@ private struct TopIndieFilmmakersSection: View {
     private var filmmakers: [Filmmaker] {
         let names = [
             "A. Rivers", "N. Carter", "M. Sloan", "J. Patel", "R. Alvarez",
-            "S. Kim", "D. Morgan", "K. O’Neal", "B. Laurent", "T. Ito"
+            "S. Kim", "D. Morgan", "K. O'Neal", "B. Laurent", "T. Ito"
         ]
         let items = names.enumerated().map { idx, n in
             Filmmaker(
@@ -1805,7 +1846,8 @@ private struct TopIndieFilmmakersSection: View {
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
                                         .background(Capsule().fill(AppTheme.Colors.primary))
-                                        .offset(x: -6, y: -6)
+                                        .padding(.top, 2)
+                                        .padding(.leading, 2)
                                 }
 
                                 VStack(alignment: .center, spacing: 2) {
@@ -1827,6 +1869,7 @@ private struct TopIndieFilmmakersSection: View {
                     }
                 }
                 .padding(.horizontal, 20)
+                .background(AppTheme.Colors.background)
             }
         }
     }
@@ -1903,7 +1946,8 @@ private struct TopMyChannelsSection: View {
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
                                         .background(Capsule().fill(AppTheme.Colors.primary))
-                                        .offset(x: -6, y: -6)
+                                        .padding(.top, 2)
+                                        .padding(.leading, 2)
                                 }
 
                                 VStack(alignment: .center, spacing: 2) {
@@ -1925,6 +1969,7 @@ private struct TopMyChannelsSection: View {
                     }
                 }
                 .padding(.horizontal, 20)
+                .background(AppTheme.Colors.background)
             }
         }
     }

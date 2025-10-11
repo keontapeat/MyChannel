@@ -142,19 +142,23 @@ struct UploadView: View {
         }
     }
     
+    private var mainContent: some View {
+        ZStack {
+            backgroundGradient
+                .ignoresSafeArea()
+            
+            content
+        }
+        .navigationTitle("Create")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar { uploadToolbar }
+        .toolbarBackground(.hidden, for: .navigationBar)
+    }
+    
     var body: some View {
         NavigationStack {
-            ZStack {
-                backgroundGradient
-                    .ignoresSafeArea()
-                
-                content
-            }
-            .navigationTitle("Create")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarBackButtonHidden(true)
-            .toolbar { uploadToolbar }
-            .toolbarBackground(.hidden, for: .navigationBar)
+            mainContent
         }
         .confirmationDialog("Leave creator?", isPresented: $showCancelConfirm, titleVisibility: .visible) {
             Button("Save Draft & Close") {

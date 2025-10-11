@@ -156,6 +156,15 @@ class VideoUploadManager: ObservableObject {
             )
             
             uploadedVideo = try await uploadVideoWithProgress(videoData, metadata: metadata)
+            if let uploadedVideo {
+                // Persist to local profile and refresh AppState
+                try? await DatabaseService.shared.saveVideo(uploadedVideo)
+                if let user = AuthenticationManager.shared.currentUser {
+                    // Ensure the user exists in local store too
+                    try? await DatabaseService.shared.saveUser(user)
+                }
+                NotificationCenter.default.post(name: .userProfileUpdated, object: AuthenticationManager.shared.currentUser)
+            }
             cleanupTempFiles()
             resetForm()
         } catch {

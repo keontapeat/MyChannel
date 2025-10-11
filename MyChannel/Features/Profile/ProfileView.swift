@@ -139,24 +139,17 @@ struct ProfileView: View {
         errorMessage = ""
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            do {
-                user = currentUser
-
-                if Video.sampleVideos.isEmpty {
-                    userVideos = createFallbackVideos()
-                    watchHistory = createFallbackVideos().reversed()
+            user = currentUser
+            Task { @MainActor in
+                if let creatorId = user.id as String? {
+                    let vids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: creatorId)
+                    userVideos = vids ?? []
                 } else {
-                    userVideos = Array(Video.sampleVideos.prefix(20))
-                    let pool = Array(Video.sampleVideos.dropFirst(min(4, Video.sampleVideos.count)).prefix(18))
-                    watchHistory = pool.isEmpty ? userVideos : pool
+                    userVideos = []
                 }
-
+                watchHistory = []
                 isLoading = false
                 hasError = false
-
-                print("✅ Profile loaded successfully for user: \(user.displayName)")
-            } catch {
-                handleError("Failed to load profile: \(error.localizedDescription)")
             }
         }
     }
@@ -209,18 +202,15 @@ struct ProfileView: View {
         DispatchQueue.main.async {
             if let newUser {
                 user = newUser
-                if Video.sampleVideos.isEmpty {
-                    userVideos = createFallbackVideos()
-                    watchHistory = createFallbackVideos().reversed()
-                } else {
-                    userVideos = Array(Video.sampleVideos.prefix(20))
-                    let pool = Array(Video.sampleVideos.dropFirst(min(4, Video.sampleVideos.count)).prefix(18))
-                    watchHistory = pool.isEmpty ? userVideos : pool
+                Task { @MainActor in
+                    let vids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: newUser.id)
+                    userVideos = vids ?? []
+                    watchHistory = []
                 }
             } else {
                 user = User.defaultUser
-                userVideos = createFallbackVideos()
-                watchHistory = createFallbackVideos().reversed()
+                userVideos = []
+                watchHistory = []
             }
         }
     }

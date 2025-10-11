@@ -517,7 +517,7 @@ private struct DefaultProfileBanner: Identifiable, Hashable {
         Color.black
 
         ProfileHeaderView(
-            user: OwnerProfile.owner,
+            user: User.sampleUsers.first!,
             scrollOffset: 0,
             isFollowing: .constant(false),
             showingEditProfile: .constant(false),
@@ -525,7 +525,7 @@ private struct DefaultProfileBanner: Identifiable, Hashable {
         )
         .environmentObject({
             let appState = AppState()
-            appState.currentUser = OwnerProfile.owner
+            appState.currentUser = User.sampleUsers.first!
             return appState
         }())
     }

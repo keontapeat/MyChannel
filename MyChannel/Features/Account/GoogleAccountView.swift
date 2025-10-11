@@ -132,9 +132,11 @@ struct GoogleAccountView: View {
 
 #Preview("GoogleAccountView") {
     let auth = AuthenticationManager.shared
-    auth.currentUser = User.sampleUsers.first
-    auth.isAuthenticated = true
-    return GoogleAccountView()
+    let _ = {
+        auth.currentUser = User.sampleUsers.first
+        auth.isAuthenticated = true
+    }()
+    GoogleAccountView()
         .environmentObject(auth)
         .environmentObject(AppState())
         .preferredColorScheme(.light)

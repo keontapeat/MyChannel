@@ -10,6 +10,9 @@ import Combine
 #if canImport(FirebaseAuth)
 import FirebaseAuth
 #endif
+#if canImport(FirebaseCore)
+import FirebaseCore
+#endif
 
 @MainActor
 class AuthenticationManager: ObservableObject {
@@ -50,6 +53,14 @@ class AuthenticationManager: ObservableObject {
     // MARK: - Authentication Status
     func checkAuthenticationStatus() {
         #if canImport(FirebaseAuth)
+        #if canImport(FirebaseCore)
+        // Do not touch FirebaseAuth unless FirebaseApp is configured
+        guard FirebaseApp.app() != nil, FirebaseManager.shared.isConfigured else {
+            authState = .unauthenticated
+            isAuthenticated = false
+            return
+        }
+        #endif
         if let fuser = Auth.auth().currentUser {
             currentUser = User(
                 id: fuser.uid,
@@ -62,10 +73,6 @@ class AuthenticationManager: ObservableObject {
             )
             isAuthenticated = true
             authState = .authenticated
-            if let user = currentUser {
-                AppState.shared.updateUser(user)
-                NotificationCenter.default.post(name: .userDidLogin, object: user)
-            }
             return
         }
         #endif
@@ -94,10 +101,6 @@ class AuthenticationManager: ObservableObject {
             )
             isAuthenticated = true
             authState = .authenticated
-            if let user = currentUser {
-                AppState.shared.updateUser(user)
-                NotificationCenter.default.post(name: .userDidLogin, object: user)
-            }
         } catch {
             authState = .error(error.localizedDescription)
             throw error
@@ -133,10 +136,6 @@ class AuthenticationManager: ObservableObject {
             )
             isAuthenticated = true
             authState = .authenticated
-            if let user = currentUser {
-                AppState.shared.updateUser(user)
-                NotificationCenter.default.post(name: .userDidLogin, object: user)
-            }
         } catch {
             authState = .error(error.localizedDescription)
             throw error
@@ -165,10 +164,6 @@ class AuthenticationManager: ObservableObject {
                 )
                 isAuthenticated = true
                 authState = .authenticated
-                if let user = currentUser {
-                    AppState.shared.updateUser(user)
-                    NotificationCenter.default.post(name: .userDidLogin, object: user)
-                }
             } catch {
                 authState = .error(error.localizedDescription)
             }
@@ -195,10 +190,6 @@ class AuthenticationManager: ObservableObject {
             )
             isAuthenticated = true
             authState = .authenticated
-            if let user = currentUser {
-                AppState.shared.updateUser(user)
-                NotificationCenter.default.post(name: .userDidLogin, object: user)
-            }
         } catch {
             authState = .error(error.localizedDescription)
         }
@@ -215,8 +206,6 @@ class AuthenticationManager: ObservableObject {
             authState = .unauthenticated
         }
         
-        AppState.shared.clearUser()
-        NotificationCenter.default.post(name: .userDidLogout, object: nil)
         print("You've been signed out")
     }
     

@@ -26,6 +26,20 @@ final class FirebaseManager {
             isConfigured = true
             return
         }
+        // Ensure GoogleService-Info.plist exists before configuring to avoid runtime crashes
+        let hasGooglePlist: Bool = {
+            if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
+                return true
+            }
+            // Some projects embed under a nested path; try to locate via info dictionary as well
+            return Bundle.main.object(forInfoDictionaryKey: "GOOGLE_APP_ID") != nil
+        }()
+
+        guard hasGooglePlist else {
+            isConfigured = false
+            return
+        }
+
         FirebaseApp.configure()
         #if canImport(FirebaseAnalytics)
         if UserDefaults.standard.bool(forKey: analyticsEnabledKey) {

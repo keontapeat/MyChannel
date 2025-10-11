@@ -140,11 +140,13 @@ struct AccountSwitcherView: View {
 
 #Preview("AccountSwitcherView") {
     let auth = AuthenticationManager.shared
-    auth.currentUser = User.sampleUsers.first
-    auth.isAuthenticated = true
     let state = AppState()
-    state.currentUser = auth.currentUser
-    return AccountSwitcherView()
+    let _ = {
+        auth.currentUser = User.sampleUsers.first
+        auth.isAuthenticated = true
+        state.currentUser = auth.currentUser
+    }()
+    AccountSwitcherView()
         .environmentObject(auth)
         .environmentObject(state)
         .preferredColorScheme(.light)

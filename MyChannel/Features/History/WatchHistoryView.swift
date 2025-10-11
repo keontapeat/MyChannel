@@ -15,14 +15,14 @@ struct WatchHistoryView: View {
     @State private var query: String = ""
 
     private var videos: [Video] {
-        // Prefer AppState-backed history ordered, else fall back to samples
         let ids = appState.watchHistory
         if ids.isEmpty {
             return Array(Video.sampleVideos.prefix(30))
+        } else {
+            let lookup = Dictionary(uniqueKeysWithValues: Video.sampleVideos.map { ($0.id, $0) })
+            let mapped = ids.compactMap { lookup[$0] }
+            return mapped.isEmpty ? Array(Video.sampleVideos.prefix(30)) : mapped
         }
-        let lookup = Dictionary(uniqueKeysWithValues: Video.sampleVideos.map { ($0.id, $0) })
-        let mapped = ids.compactMap { lookup[$0] }
-        return mapped.isEmpty ? Array(Video.sampleVideos.prefix(30)) : mapped
     }
 
     private var filtered: [Video] {
@@ -30,7 +30,7 @@ struct WatchHistoryView: View {
         return videos.filter {
             $0.title.localizedCaseInsensitiveContains(query) ||
             $0.creator.displayName.localizedCaseInsensitiveContains(query) ||
-            $0.category.displayName.localizedCaseInsensitiveContains(query)
+            $0.tags.contains(where: { $0.localizedCaseInsensitiveContains(query) })
         }
     }
 
@@ -213,9 +213,11 @@ private struct HistoryRow: View {
 
 #Preview("WatchHistoryView") {
     let state = AppState()
-    state.currentUser = User.sampleUsers.first
-    state.watchHistory = Array(Video.sampleVideos.prefix(10)).map { $0.id }
-    return WatchHistoryView()
+    let _ = {
+        state.currentUser = User.sampleUsers.first
+        state.watchHistory = Array(Video.sampleVideos.prefix(10)).map { $0.id }
+    }()
+    WatchHistoryView()
         .environmentObject(state)
         .preferredColorScheme(.light)
 }

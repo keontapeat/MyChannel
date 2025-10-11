@@ -635,7 +635,9 @@ enum VideoCategory: String, Codable, CaseIterable, CustomStringConvertible {
 
 // MARK: - Sample Data Extensions
 extension Video {
-    static let sampleVideos: [Video] = [
+    static var sampleVideos: [Video] {
+        guard AppConfig.Features.enableMockData else { return [] }
+        return [
         Video(
             title: "Amazing Sunset Timelapse",
             description: "Beautiful sunset captured in 4K quality",
@@ -823,7 +825,8 @@ extension Video {
             creator: User.sampleUsers[3],
             category: .movies
         )
-    ]
+        ]
+    }
 }
 
 #Preview("Video Model Preview") {

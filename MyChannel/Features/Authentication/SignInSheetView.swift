@@ -171,6 +171,8 @@ struct SignInSheetView: View {
         isLoadingApple = true
         defer { isLoadingApple = false }
         do {
+            // Small delay to let the sheet finish layout before presenting SIWA controller
+            try await Task.sleep(nanoseconds: 50_000_000)
             try await AuthService.shared.signInWithApple()
         } catch {
             errorMessage = error.localizedDescription

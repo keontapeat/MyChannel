@@ -120,7 +120,14 @@ struct AppConfig {
         static let enablePushNotifications = true
         static let enableDeepLinks = true
         static let enableOfflineDownload = true
-        static let enableMockData = false
+        // Disable mock data in TestFlight/app store; allow in debug
+        static let enableMockData: Bool = {
+            #if DEBUG
+            return true
+            #else
+            return false
+            #endif
+        }()
         static let enableNetworkLogging = isDebug // Enable network logging in debug mode
 
         static let enableFlicksPeek = false
