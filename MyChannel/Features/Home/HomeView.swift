@@ -941,6 +941,7 @@ struct MinimalContentSections: View {
     @State private var loadingBlockbusters: Bool = false
     @State private var friendChannelVideos: [Video] = []
     @State private var liveChannelsAPI: [LiveTVChannel] = []
+    @State private var showLocalArtistsOnly: Bool = false
 
     private var friendVideoId: String { "friend_video_yt_71GJrAY54Ew" }
     private var friendChannelID: String { "UCITAM_FKtyKEq40aHVXFTcQ" }
@@ -1143,6 +1144,13 @@ struct MinimalContentSections: View {
                 }
             }
 
+            // MUSIC – artist carousel, placed above Categories
+            MinimalMusicSection(
+                localOnly: $showLocalArtistsOnly,
+                onOpenArtistDetail: onOpenArtistDetail,
+                appState: _appState
+            )
+
             MinimalCategoriesSection(
                 onPlayVideo: onPlayVideo,
                 codVideos: gamingCOD(),
@@ -1316,6 +1324,103 @@ struct MinimalContentSections: View {
         await MainActor.run {
             self.liveChannelsAPI = fetched
         }
+    }
+}
+
+// MARK: - Music Section (Artists Carousel)
+private struct MinimalMusicSection: View {
+    @Binding var localOnly: Bool
+    var onOpenArtistDetail: (String, String, [Video], Int) -> Void
+    @EnvironmentObject var appState: AppState
+
+    init(localOnly: Binding<Bool>, onOpenArtistDetail: @escaping (String, String, [Video], Int) -> Void, appState: EnvironmentObject<AppState>) {
+        self._localOnly = localOnly
+        self.onOpenArtistDetail = onOpenArtistDetail
+        self._appState = appState
+    }
+
+    private var allArtists: [(name: String, avatar: String, views: Int, city: String?)] {
+        var base: [(String,String,Int,String?)] = [
+            ("@scatzripky6", "https://unavatar.io/instagram/scatzripky6", 346_300, "Flint, MI"),
+            ("@kleanupman__", "https://unavatar.io/instagram/kleanupman__", 200_800, "Detroit, MI"),
+            ("@ynjay_", "https://unavatar.io/instagram/ynjay_", 232_000, "Flint, MI")
+        ]
+        base.insert(contentsOf: OwnerProfile.instagramFriends.map { ($0.name, $0.avatar, Int.random(in: 50_000...350_000), nil) }, at: 0)
+        return base
+    }
+
+    private var userCity: String? {
+        appState.currentUser?.location
+    }
+
+    private var artists: [(name: String, avatar: String, views: Int, city: String?)] {
+        if localOnly, let city = userCity?.lowercased() {
+            return allArtists.filter { ($0.city ?? "").lowercased().contains(city) }
+        }
+        return allArtists
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Music")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.primary)
+                Spacer()
+                Picker("Scope", selection: $localOnly) {
+                    Text("All").tag(false)
+                    Text("Local").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 160)
+            }
+            .padding(.horizontal, 20)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 16) {
+                    ForEach(Array(artists.enumerated()), id: \.offset) { _, a in
+                        Button {
+                            onOpenArtistDetail(a.name, a.avatar, [], a.views)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 8) {
+                                AppAsyncImage(url: URL(string: a.avatar)) { img in
+                                    img
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 120, height: 180)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                } placeholder: {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color(.systemGray6))
+                                        .frame(width: 120, height: 180)
+                                }
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(a.name)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                        .frame(width: 120, alignment: .leading)
+                                    Text("\(format(a.views)) total views")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                        .frame(width: 120, alignment: .leading)
+                                }
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+
+    private func format(_ n: Int) -> String {
+        if n >= 1_000_000 { return String(format: "%.1fM", Double(n)/1_000_000) }
+        if n >= 1_000 { return String(format: "%.1fK", Double(n)/1_000) }
+        return "\(n)"
     }
 }
 
