@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 // Lightweight local store for Featured videos. Owner can add/remove in-app.
 @MainActor
@@ -49,6 +50,78 @@ final class FeaturedStore: ObservableObject {
     func move(fromOffsets: IndexSet, toOffset: Int) {
         featured.move(fromOffsets: fromOffsets, toOffset: toOffset)
         persist()
+    }
+
+    // Ensure owner's intro video is at the top if bundled locally
+    func ensureOwnerIntroFirstIfAvailable() {
+        let introId = "owner_intro_video"
+        if let existingIndex = featured.firstIndex(where: { $0.id == introId }) {
+            if existingIndex != 0 {
+                featured.move(fromOffsets: IndexSet(integer: existingIndex), toOffset: 0)
+                persist()
+            }
+            return
+        }
+        // Build video from bundle if present
+        if let path = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4") {
+            let url = URL(fileURLWithPath: path).absoluteString
+            let me = User(username: "sbkeonta_", displayName: "sbkeonta_", email: "keontapeat@mychannel.live", isVerified: true, isCreator: true)
+            let vid = Video(
+                id: introId,
+                title: "MyChannel Intro",
+                description: "Intro by Keonta",
+                thumbnailURL: "https://i.ytimg.com/vi/71GJrAY54Ew/hqdefault.jpg",
+                videoURL: url,
+                duration: 11,
+                viewCount: 0,
+                likeCount: 0,
+                creator: me,
+                category: .entertainment,
+                tags: ["intro","owner"],
+                isPublic: true
+            )
+            add(vid)
+        }
+    }
+
+    // MARK: - Add From Local (Camera Roll / Files)
+    func addLocalVideo(copiedFrom sourceURL: URL, title: String, creatorName: String = "Owner") throws {
+        let fileManager = FileManager.default
+        let docs = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let dir = docs.appendingPathComponent("FeaturedVideos", isDirectory: true)
+        if !fileManager.fileExists(atPath: dir.path) {
+            try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        let ext = sourceURL.pathExtension.isEmpty ? (UTType.movie.preferredFilenameExtension ?? "mp4") : sourceURL.pathExtension
+        let dest = dir.appendingPathComponent(UUID().uuidString + "." + ext)
+        // If source is a security-scoped resource (e.g., Photos sandbox), try to copy
+        var didStartAccess = sourceURL.startAccessingSecurityScopedResource()
+        defer { if didStartAccess { sourceURL.stopAccessingSecurityScopedResource() } }
+        if fileManager.fileExists(atPath: dest.path) {
+            try? fileManager.removeItem(at: dest)
+        }
+        try fileManager.copyItem(at: sourceURL, to: dest)
+
+        let owner = User(username: creatorName.replacingOccurrences(of: " ", with: "_").lowercased(),
+                         displayName: creatorName,
+                         email: "keontapeat@mychannel.live",
+                         isVerified: true,
+                         isCreator: true)
+        let v = Video(
+            id: "local_" + dest.lastPathComponent,
+            title: title.isEmpty ? "Featured Video" : title,
+            description: "Added from camera roll",
+            thumbnailURL: "",
+            videoURL: dest.absoluteString,
+            duration: 0,
+            viewCount: 0,
+            likeCount: 0,
+            creator: owner,
+            category: .entertainment,
+            tags: ["featured","local"],
+            isPublic: true
+        )
+        add(v)
     }
 }
 

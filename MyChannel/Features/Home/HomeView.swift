@@ -326,6 +326,9 @@ struct HomeView: View {
     }
 
     private func setupContent() {
+        // Pull owner-managed Featured list first (if present)
+        FeaturedStore.shared.ensureOwnerIntroFirstIfAvailable()
+        let ownerFeatured = FeaturedStore.shared.toVideos()
         // In production/TestFlight, do not show mock content for authenticated users
         let seeds = SeedCatalogService.shared.seedVideos
         let samples = Video.sampleVideos
@@ -342,9 +345,11 @@ struct HomeView: View {
 
         var seen = Set<String>()
         var ordered: [Video] = []
+        if !ownerFeatured.isEmpty {
+            for v in ownerFeatured where seen.insert(v.id).inserted { ordered.append(v) }
+        }
         if AppConfig.Features.enableMockData {
-            seen.insert(pinned.id)
-            ordered = [pinned]
+            if seen.insert(pinned.id).inserted { ordered.append(pinned) }
         }
         for v in friend + base {
             if seen.insert(v.id).inserted {
@@ -1788,8 +1793,9 @@ private struct TopArtistsSection: View {
             )
         }
         // Promote IG friends if provided (dedup by name) and pin their order at the front
-        let pinnedOrder = OwnerProfile.instagramFriends.map { $0.name }
-        for f in OwnerProfile.instagramFriends {
+        let dynamicFriends = OwnerFriendsStore.shared.friends
+        let pinnedOrder = (OwnerProfile.instagramFriends + dynamicFriends).map { $0.name }
+        for f in (OwnerProfile.instagramFriends + dynamicFriends) {
             if let idx = ranks.firstIndex(where: { $0.name == f.name }) {
                 // Update avatar if we already have this artist from videos
                 let existing = ranks[idx]

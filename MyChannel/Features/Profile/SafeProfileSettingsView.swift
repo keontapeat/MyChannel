@@ -238,6 +238,15 @@ struct ProfileSettingsView: View {
                         Spacer()
                     }
                 }
+                NavigationLink(destination: OwnerBulkFriendsView()) {
+                    HStack {
+                        SettingsIcon(systemName: "person.3.fill", color: .purple)
+                        Text("Bulk Add Friends (Owner)")
+                            .font(.system(size: 16))
+                            .foregroundStyle(AppTheme.Colors.textPrimary)
+                        Spacer()
+                    }
+                }
             }
         } header: {
             if isOwner { Text("Owner Tools") }

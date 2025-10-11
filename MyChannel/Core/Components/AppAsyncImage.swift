@@ -105,6 +105,14 @@ struct AppAsyncImage<Content: View, Placeholder: View>: View {
             }
         }
 
+        // Support local file URLs
+        if url.isFileURL {
+            if let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
+                await MainActor.run { self.uiImage = image }
+                return
+            }
+        }
+
         if let fetched = await tryFetch(url: url, timeout: 12.0) {
             await MainActor.run { self.uiImage = fetched }
         }

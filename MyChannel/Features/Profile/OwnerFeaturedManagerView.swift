@@ -1,9 +1,13 @@
 import SwiftUI
+import UIKit
+import UniformTypeIdentifiers
 
 struct OwnerFeaturedManagerView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var store = FeaturedStore.shared
     @State private var showingAddSheet = false
+    @State private var showingPicker = false
+    @State private var pickedItemURL: URL?
 
     var body: some View {
         List {
@@ -64,16 +68,28 @@ struct OwnerFeaturedManagerView: View {
                 Button("Done") { dismiss() }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showingAddSheet = true
-                } label: {
-                    Image(systemName: "plus")
-                }
+                Menu {
+                    Button {
+                        showingAddSheet = true
+                    } label: {
+                        Label("Add from library", systemImage: "plus")
+                    }
+                    Button {
+                        showingPicker = true
+                    } label: {
+                        Label("Add from camera roll", systemImage: "photo.on.rectangle")
+                    }
+                } label: { Image(systemName: "plus") }
             }
         }
         .sheet(isPresented: $showingAddSheet) {
             OwnerFeaturedPickerView { video in
                 FeaturedStore.shared.add(video)
+            }
+        }
+        .sheet(isPresented: $showingPicker) {
+            DocumentPicker(types: ["public.movie"]) { url in
+                if let url { try? store.addLocalVideo(copiedFrom: url, title: "Owner Upload") }
             }
         }
     }
@@ -86,9 +102,36 @@ private struct OwnerFeaturedPickerView: View {
     // Simple sources for now – can wire to Firestore later
     private var candidates: [Video] {
         var vids: [Video] = []
+        // 1) Owner intro video at the top if available
+        if let intro = ownerIntroVideo() { vids.append(intro) }
+        // 2) Existing sources
         vids.append(contentsOf: SeedCatalogService.shared.seedVideos)
         vids.append(contentsOf: Video.sampleVideos)
         return Array(Set(vids)).prefix(50).map { $0 }
+    }
+
+    private func ownerIntroVideo() -> Video? {
+        // Points to bundled intro at MyChannel/images/Shot By Keonta Intro 4k.MP4 if present
+        let name = "Shot By Keonta Intro 4k"
+        if let path = Bundle.main.path(forResource: name, ofType: "MP4") {
+            let url = URL(fileURLWithPath: path)
+            let me = User(username: "sbkeonta_", displayName: "sbkeonta_", email: "keontapeat@mychannel.live", isVerified: true, isCreator: true)
+            return Video(
+                id: "owner_intro_video",
+                title: "MyChannel Intro",
+                description: "Intro by Keonta",
+                thumbnailURL: "https://i.ytimg.com/vi/71GJrAY54Ew/hqdefault.jpg",
+                videoURL: url.absoluteString,
+                duration: 11,
+                viewCount: 0,
+                likeCount: 0,
+                creator: me,
+                category: .entertainment,
+                tags: ["intro","owner"],
+                isPublic: true
+            )
+        }
+        return nil
     }
 
     var body: some View {
@@ -127,5 +170,65 @@ private struct OwnerFeaturedPickerView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Bulk Add Friends
+struct OwnerBulkFriendsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var input: String = ""
+    @StateObject private var store = OwnerFriendsStore.shared
+
+    var body: some View {
+        Form {
+            Section("Paste handles / names") {
+                TextEditor(text: $input)
+                    .frame(minHeight: 160)
+                    .font(.system(.body, design: .monospaced))
+            }
+            Section("How it works") {
+                Text("One per line. Formats supported:")
+                Text("@handle")
+                Text("Display Name,@handle")
+                Text("Display Name|@handle|https://avatar.jpg")
+            }
+        }
+        .navigationTitle("Bulk Add Friends")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Import") {
+                    OwnerFriendsStore.shared.importFromString(input)
+                    dismiss()
+                }
+                .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+    }
+}
+
+// Simple UIDocumentPicker wrapper to import videos from Files/Photos
+private struct DocumentPicker: UIViewControllerRepresentable {
+    var types: [String]
+    var onPick: (URL?) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onPick: onPick) }
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: types.compactMap { UTType($0) })
+        picker.delegate = context.coordinator
+        picker.allowsMultipleSelection = false
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        let onPick: (URL?) -> Void
+        init(onPick: @escaping (URL?) -> Void) { self.onPick = onPick }
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            onPick(urls.first)
+        }
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { onPick(nil) }
     }
 }
