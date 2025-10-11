@@ -50,6 +50,9 @@ struct ProfileSettingsView: View {
                 // Privacy Section
                 privacySection
                 
+                // Owner-only Featured Controls
+                ownerFeaturedSection
+
                 // About Section
                 aboutSection
                 
@@ -220,6 +223,29 @@ struct ProfileSettingsView: View {
             }
             .padding(.vertical, 2)
         }
+    }
+
+    // MARK: - Owner Featured Section (visible only for owner)
+    private var ownerFeaturedSection: some View {
+        Section {
+            if isOwner {
+                NavigationLink(destination: OwnerFeaturedManagerView()) {
+                    HStack {
+                        SettingsIcon(systemName: "star.fill", color: .yellow)
+                        Text("Manage Featured (Owner)")
+                            .font(.system(size: 16))
+                            .foregroundStyle(AppTheme.Colors.textPrimary)
+                        Spacer()
+                    }
+                }
+            }
+        } header: {
+            if isOwner { Text("Owner Tools") }
+        }
+    }
+
+    private var isOwner: Bool {
+        (AuthenticationManager.shared.currentUser?.email ?? "").lowercased() == "keontapeat@mychannel.live"
     }
     
     // MARK: - Privacy Section
