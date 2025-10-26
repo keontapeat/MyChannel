@@ -19,6 +19,7 @@ struct ProfileView: View {
     @State private var isFollowing: Bool = false
     @State private var userVideos: [Video] = []
     @State private var watchHistory: [Video] = []
+    @State private var isIncognito: Bool = false
 
     @State private var scrollOffset: CGFloat = 0
     @State private var isLoading: Bool = true
@@ -63,28 +64,182 @@ struct ProfileView: View {
                 handleUserChange(updated)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshProfile"))) { _ in
+            // 🔥 IMMEDIATE REFRESH: Reload profile when video is uploaded
+            loadProfileSafely()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenNotificationsInbox"))) { _ in
+            showingSettings = false
+            NotificationCenter.default.post(name: Notification.Name("PresentNotificationsInbox"), object: nil)
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { false },
+            set: { _ in }
+        )) {
+            EmptyView()
+        }
     }
 
     // MARK: - Main Profile Content
 
     @ViewBuilder
     private var profileContent: some View {
-        ProfileMainSection(
-            user: user,
-            selectedTab: $selectedTab,
-            isFollowing: $isFollowing,
-            showingEditProfile: $showingEditProfile,
-            showingSettings: $showingSettings,
-            userVideos: $userVideos,
-            watchHistory: $watchHistory,
-            scrollOffset: $scrollOffset
-        )
+        ScrollView {
+            VStack(spacing: 0) {
+                // Profile Header
+                ProfileHeaderView(
+                    user: user,
+                    scrollOffset: scrollOffset,
+                    isFollowing: $isFollowing,
+                    showingEditProfile: $showingEditProfile,
+                    showingSettings: $showingSettings
+                )
+                
+                // Profile Tabs
+                ProfileTabNavigation(
+                    selectedTab: $selectedTab,
+                    user: user,
+                    scrollOffset: scrollOffset
+                )
+                
+                // Profile Content
+                SafeProfileContentView(
+                    selectedTab: selectedTab,
+                    user: user,
+                    videos: userVideos
+                )
+                
+                // Quick Actions and Links
+                VStack(spacing: 16) {
+                    Divider()
+                        .padding(.horizontal)
+                    
+                    // Quick Actions Chips
+                    ProfileQuickActionsChips(
+                        isIncognito: isIncognito,
+                        switchAccountAction: {
+                            HapticManager.shared.impact(style: .light)
+                            NotificationCenter.default.post(name: .navigateToAccountSwitcher, object: nil)
+                        },
+                        googleAccountAction: {
+                            HapticManager.shared.impact(style: .light)
+                            NotificationCenter.default.post(name: .openGoogleAccount, object: nil)
+                        },
+                        toggleIncognitoAction: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                isIncognito.toggle()
+                            }
+                            HapticManager.shared.impact(style: .rigid)
+                        }
+                    )
+                    .padding(.horizontal)
+                    
+                    // Creator Studio Link
+                    NavigationLink(destination: ComprehensiveCreatorStudioView()) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "chart.bar.xaxis")
+                                .foregroundColor(AppTheme.Colors.primary)
+                            Text("Open Creator Studio")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(AppTheme.Colors.primary)
+                        }
+                        .padding()
+                        .background(AppTheme.Colors.surface)
+                        .cornerRadius(12)
+                        .padding(.horizontal)
+                    }
+                    
+                    // History Section
+                    if !watchHistory.isEmpty {
+                        ProfileHistorySection(
+                            title: "History",
+                            videos: watchHistory
+                        ) {
+                            NotificationCenter.default.post(name: .openFullHistory, object: nil)
+                        }
+                    }
+                    
+                    // AI Content Factory Link - TEMPORARILY HIDDEN
+                    // NavigationLink(destination: AIContentFactoryView()) {
+                    //     HStack(spacing: 12) {
+                    //         Image(systemName: "brain.head.profile")
+                    //             .foregroundColor(.purple)
+                    //         Text("🤖 AI Content Factory")
+                    //             .font(.system(size: 15, weight: .semibold))
+                    //             .foregroundColor(AppTheme.Colors.textPrimary)
+                    //         Spacer()
+                    //         Text("NEW")
+                    //             .font(.system(size: 9, weight: .bold))
+                    //             .foregroundColor(.white)
+                    //             .padding(.horizontal, 5)
+                    //             .padding(.vertical, 1)
+                    //             .background(.red, in: Capsule())
+                    //     }
+                    //     .padding()
+                    //     .background(AppTheme.Colors.surface)
+                    //     .cornerRadius(12)
+                    //     .padding(.horizontal)
+                    // }
+                    
+                    // Quantum Analytics Link - TEMPORARILY HIDDEN
+                    // NavigationLink(destination: QuantumAnalyticsDashboard()) {
+                    //     HStack(spacing: 12) {
+                    //         Image(systemName: "atom")
+                    //             .foregroundColor(.cyan)
+                    //         Text("🌌 Quantum Analytics")
+                    //             .font(.system(size: 15, weight: .semibold))
+                    //             .foregroundColor(AppTheme.Colors.textPrimary)
+                    //         Spacer()
+                    //         Text("NEW")
+                    //             .font(.system(size: 9, weight: .bold))
+                    //             .foregroundColor(.white)
+                    //             .padding(.horizontal, 5)
+                    //             .padding(.vertical, 1)
+                    //             .background(.green, in: Capsule())
+                    //     }
+                    //     .padding()
+                    //     .background(AppTheme.Colors.surface)
+                    //     .cornerRadius(12)
+                    //     .padding(.horizontal)
+                    // }
+                }
+                .padding(.vertical)
+            }
+        }
         .navigationBarHidden(true)
         .sheet(isPresented: $showingEditProfile) {
             ProfileEditWrapper(user: $user)
         }
         .sheet(isPresented: $showingSettings) {
             ProfileSettingsWrapper()
+        }
+        .overlay(alignment: .top) {
+            if let u = authManager.currentUser, u.isVerified == false {
+                HStack(spacing: 10) {
+                    Image(systemName: "envelope.badge").foregroundColor(.orange)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Verify your email")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("We sent a verification link to \(u.email).")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button("Resend") {
+                        Task { try? await AuthService.shared.requestEmailVerification() }
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(AppTheme.Colors.surface)
+                .cornerRadius(10)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+            }
         }
     }
 
@@ -141,13 +296,79 @@ struct ProfileView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             user = currentUser
             Task { @MainActor in
-                if let creatorId = user.id as String? {
-                    let vids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: creatorId)
-                    userVideos = vids ?? []
-                } else {
-                    userVideos = []
+                let creatorId = user.id
+                var vids = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: creatorId)
+                if vids.isEmpty {
+                    // 🔥 FALLBACK: Check local storage first
+                    if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: creatorId), !localVids.isEmpty {
+                        vids = localVids
+                    } else {
+                        // Fallback to API if available
+                        if let summaries = try? await VideoAPIService.shared.getHomeFeed(page: 1, limit: 24).videos {
+                            // Map summaries to full Video only if they belong to this creator (best-effort)
+                            let mapped: [Video] = summaries.compactMap { s in
+                                if s.creator.id == creatorId {
+                                    return Video(
+                                        id: s.id,
+                                        title: s.title,
+                                        description: s.description ?? "",
+                                        thumbnailURL: s.thumbnailUrl ?? "",
+                                        videoURL: "",
+                                        duration: TimeInterval(s.duration ?? 0),
+                                        viewCount: s.viewCount,
+                                        likeCount: s.likeCount,
+                                        creator: user,
+                                        category: .entertainment
+                                    )
+                                }
+                                return nil
+                            }
+                            vids = mapped
+                        }
+                        }
                 }
-                watchHistory = []
+                userVideos = vids
+                
+                // 🔥 REAL-TIME STATS UPDATE: Update user stats based on actual videos
+                let totalViews = vids.reduce(0) { $0 + $1.viewCount }
+                let updatedUser = User(
+                    id: user.id,
+                    username: user.username,
+                    displayName: user.displayName,
+                    email: user.email,
+                    profileImageURL: user.profileImageURL,
+                    bannerImageURL: user.bannerImageURL,
+                    bio: user.bio,
+                    subscriberCount: user.subscriberCount,
+                    videoCount: vids.count, // 🔥 REAL VIDEO COUNT
+                    isVerified: user.isVerified,
+                    isCreator: user.isCreator,
+                    createdAt: user.createdAt,
+                    location: user.location,
+                    website: user.website,
+                    socialLinks: user.socialLinks,
+                    followerCount: user.followerCount,
+                    followingCount: user.followingCount,
+                    joinDate: user.joinDate,
+                    totalViews: totalViews, // 🔥 REAL TOTAL VIEWS
+                    totalEarnings: user.totalEarnings,
+                    membershipTiers: user.membershipTiers,
+                    bannerVideoURL: user.bannerVideoURL,
+                    bannerVideoMuted: user.bannerVideoMuted,
+                    bannerVideoContentMode: user.bannerVideoContentMode
+                )
+                user = updatedUser
+                
+                // Update AppState with new stats
+                appState.currentUser = updatedUser
+                
+                // Fetch watch history from Firestore
+                if let uid = authManager.currentUser?.id {
+                    let historyVideos = await HistoryService.shared.fetch(userId: uid, limit: 20)
+                    watchHistory = historyVideos
+                } else {
+                    watchHistory = []
+                }
                 isLoading = false
                 hasError = false
             }
@@ -200,13 +421,13 @@ struct ProfileView: View {
 
     private func handleUserChange(_ newUser: User?) {
         DispatchQueue.main.async {
-            if let newUser {
-                user = newUser
-                Task { @MainActor in
-                    let vids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: newUser.id)
-                    userVideos = vids ?? []
-                    watchHistory = []
-                }
+                if let newUser {
+                    user = newUser
+                    Task { @MainActor in
+                        let vids = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: newUser.id)
+                        userVideos = vids
+                        watchHistory = []
+                    }
             } else {
                 user = User.defaultUser
                 userVideos = []
@@ -230,170 +451,113 @@ struct ProfileView: View {
         errorMessage = ""
         loadProfileSafely()
     }
+    
+    // MARK: - Profile Content with Tabs
+    @ViewBuilder
+    private var profileContentWithTabs: some View {
+        ScrollView {
+            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                Section {
+                    // Content under tabs
+                    ProfileContentSection(
+                        selectedTab: selectedTab,
+                        user: user,
+                        videos: userVideos
+                    )
+                    .padding(.top, 8)
+                    .background(AppTheme.Colors.background)
+
+                    VStack(spacing: 14) {
+                        Divider()
+                            .padding(.horizontal)
+
+                        ProfileQuickActionsChips(
+                            isIncognito: isIncognito,
+                            switchAccountAction: {
+                                HapticManager.shared.impact(style: .light)
+                                NotificationCenter.default.post(name: .navigateToAccountSwitcher, object: nil)
+                            },
+                            googleAccountAction: {
+                                HapticManager.shared.impact(style: .light)
+                                NotificationCenter.default.post(name: .openGoogleAccount, object: nil)
+                            },
+                            toggleIncognitoAction: {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                    isIncognito.toggle()
+                                }
+                                HapticManager.shared.impact(style: .rigid)
+                            }
+                        )
+                        .padding(.horizontal)
+                        
+                        NavigationLink(destination: ComprehensiveCreatorStudioView()) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "chart.bar.xaxis")
+                                    .foregroundColor(AppTheme.Colors.primary)
+                                Text("Open Creator Studio")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(AppTheme.Colors.primary)
+                            }
+                            .padding()
+                            .background(
+                                LinearGradient(
+                                    colors: [
+                                        AppTheme.Colors.primary.opacity(0.1),
+                                        AppTheme.Colors.primary.opacity(0.05)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(AppTheme.Colors.primary.opacity(0.3), lineWidth: 1)
+                            )
+                            .cornerRadius(12)
+                            .shadow(color: AppTheme.Colors.primary.opacity(0.2), radius: 4, x: 0, y: 2)
+                        }
+                        .padding(.horizontal)
+                        
+                        // History Section (commented out due to scope issues)
+                        // History content would go here
+                    }
+                    .padding(.bottom, 24)
+                } header: {
+                    // Absolutely flush, pinned tabs
+                    // ProfileTabNavigation(
+                    //     selectedTab: $selectedTab,
+                    //     user: user,
+                    //     scrollOffset: scrollOffset
+                    // )
+                    Text("Tab Navigation")
+                    .background(.ultraThinMaterial)
+                    .overlay(
+                        Rectangle()
+                            .fill(AppTheme.Colors.textSecondary.opacity(0.08))
+                            .frame(height: 0.5),
+                        alignment: .bottom
+                    )
+                }
+            }
+        }
+        .coordinateSpace(name: "profileScroll")
+        .ignoresSafeArea(.container, edges: .top)
+        .onPreferenceChange(ProfileScrollOffsetPreferenceKey.self) { value in
+            withAnimation(.easeOut(duration: 0.12)) {
+                scrollOffset = value
+            }
+        }
+    }
 }
 
 // MARK: - SafeProfileHeaderView (Updated – No selectedTab)
 
-struct SafeProfileHeaderView: View {
-    let user: User
-    let scrollOffset: CGFloat
-    @Binding var isFollowing: Bool
-    @Binding var showingEditProfile: Bool
-    @Binding var showingSettings: Bool
+// Removed SafeProfileHeaderView - replaced with simpler structure
 
-    var body: some View {
-        SafeViewWrapper {
-            ProfileHeaderView(
-                user: user,
-                scrollOffset: scrollOffset,
-                isFollowing: $isFollowing,
-                showingEditProfile: $showingEditProfile,
-                showingSettings: $showingSettings
-            )
-        } fallback: {
-            VStack {
-                Rectangle()
-                    .fill(AppTheme.Colors.primary.opacity(0.3))
-                    .frame(height: 365)
-
-                Text("Header unavailable")
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                    .padding()
-            }
-        }
-    }
-}
-
-// MARK: - Profile Main Section
-
-private struct ProfileMainSection: View {
-    let user: User
-    @Binding var selectedTab: ProfileTab
-    @Binding var isFollowing: Bool
-    @Binding var showingEditProfile: Bool
-    @Binding var showingSettings: Bool
-    @Binding var userVideos: [Video]
-    @Binding var watchHistory: [Video]
-    @Binding var scrollOffset: CGFloat
-
-    @State private var isIncognito: Bool = false
-
-    var body: some View {
-        ZStack(alignment: .top) {
-            AppTheme.Colors.background
-                .ignoresSafeArea(.all)
-
-            ScrollView {
-                LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                    // Track scroll offset for header collapse animations
-                    GeometryReader { proxy in
-                        Color.clear
-                            .preference(key: ProfileScrollOffsetPreferenceKey.self,
-                                        value: proxy.frame(in: .named("profileScroll")).minY)
-                    }
-                    .frame(height: 0)
-
-                    // Header
-                    ProfileHeaderSection(
-                        user: user,
-                        scrollOffset: scrollOffset,
-                        isFollowing: $isFollowing,
-                        showingEditProfile: $showingEditProfile,
-                        showingSettings: $showingSettings
-                    )
-                    .frame(maxWidth: .infinity)
-                    .background(Color.clear)
-
-                    // Pinned Tabs (flush under header)
-                    Section {
-                        // Content under tabs
-                        ProfileContentSection(
-                            selectedTab: selectedTab,
-                            user: user,
-                            videos: userVideos
-                        )
-                        .padding(.top, 8)
-                        .background(AppTheme.Colors.background)
-
-                        VStack(spacing: 14) {
-                            Divider()
-                                .padding(.horizontal)
-
-                            ProfileQuickActionsChips(
-                                isIncognito: isIncognito,
-                                switchAccountAction: {
-                                    HapticManager.shared.impact(style: .light)
-                                    NotificationCenter.default.post(name: .navigateToAccountSwitcher, object: nil)
-                                },
-                                googleAccountAction: {
-                                    HapticManager.shared.impact(style: .light)
-                                    NotificationCenter.default.post(name: .openGoogleAccount, object: nil)
-                                },
-                                toggleIncognitoAction: {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                        isIncognito.toggle()
-                                    }
-                                    HapticManager.shared.impact(style: .rigid)
-                                }
-                            )
-                            .padding(.horizontal)
-
-                            ProfileHistorySection(
-                                title: "History",
-                                videos: watchHistory,
-                                onViewAll: {
-                                    HapticManager.shared.impact(style: .light)
-                                    NotificationCenter.default.post(name: .openFullHistory, object: nil)
-                                }
-                            )
-                        }
-                        .padding(.top, 8)
-                        .padding(.bottom, 24)
-                    } header: {
-                        // Absolutely flush, pinned tabs
-                        ProfileTabNavigation(
-                            selectedTab: $selectedTab,
-                            user: user,
-                            scrollOffset: scrollOffset
-                        )
-                        .background(.ultraThinMaterial)
-                        .overlay(
-                            Rectangle()
-                                .fill(AppTheme.Colors.textSecondary.opacity(0.08))
-                                .frame(height: 0.5),
-                            alignment: .bottom
-                        )
-                    }
-                }
-            }
-            .coordinateSpace(name: "profileScroll")
-            .ignoresSafeArea(.container, edges: .top)
-            .onPreferenceChange(ProfileScrollOffsetPreferenceKey.self) { value in
-                withAnimation(.easeOut(duration: 0.12)) {
-                    scrollOffset = value
-                }
-            }
-        }
-    }
-}
-
-private struct ProfileHeaderSection: View {
-    let user: User
-    let scrollOffset: CGFloat
-    @Binding var isFollowing: Bool
-    @Binding var showingEditProfile: Bool
-    @Binding var showingSettings: Bool
-
-    var body: some View {
-        SafeProfileHeaderView(
-            user: user,
-            scrollOffset: scrollOffset,
-            isFollowing: $isFollowing,
-            showingEditProfile: $showingEditProfile,
-            showingSettings: $showingSettings
-        )
-    }
-}
+// Removed ProfileHeaderSection - using ProfileHeaderView directly
 
 private struct ProfileTabsSection: View {
     @Binding var selectedTab: ProfileTab
@@ -681,19 +845,19 @@ extension Notification.Name {
 // MARK: - Previews
 
 #Preview("Profile Header Section") {
-    ProfileHeaderSection(
+    ProfileHeaderView(
         user: User.sampleUsers.first ?? .defaultUser,
         scrollOffset: 0,
-        isFollowing: .constant(false),
-        showingEditProfile: .constant(false),
-        showingSettings: .constant(false)
+        isFollowing: Binding.constant(false),
+        showingEditProfile: Binding.constant(false),
+        showingSettings: Binding.constant(false)
     )
     .environmentObject(AppState())
 }
 
 #Preview("Profile Tabs Section") {
     ProfileTabsSection(
-        selectedTab: .constant(.videos),
+        selectedTab: Binding.constant(.videos),
         user: User.sampleUsers.first ?? .defaultUser,
         scrollOffset: 0
     )
@@ -730,22 +894,14 @@ extension Notification.Name {
     .environmentObject(AppState())
 }
 
-#Preview("Profile Main Section") {
-    ProfileMainSection(
-        user: User.sampleUsers.first ?? .defaultUser,
-        selectedTab: .constant(.videos),
-        isFollowing: .constant(false),
-        showingEditProfile: .constant(false),
-        showingSettings: .constant(false),
-        userVideos: .constant(Array(Video.sampleVideos.prefix(8))),
-        watchHistory: .constant(Array(Video.sampleVideos.prefix(8))),
-        scrollOffset: .constant(0)
-    )
-    .environmentObject(AppState())
+#Preview("Profile View") {
+    ProfileView()
+        .environmentObject(AuthenticationManager.shared)
+        .environmentObject(AppState())
 }
 
 #Preview("Profile Edit Wrapper") {
-    ProfileEditWrapper(user: .constant(User.defaultUser))
+    ProfileEditWrapper(user: Binding.constant(User.defaultUser))
 }
 
 #Preview("Profile Settings Wrapper") {
