@@ -11,6 +11,9 @@ import PhotosUI
 #if canImport(FirebaseStorage)
 import FirebaseStorage
 #endif
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 @MainActor
 class VideoUploadManager: ObservableObject {
@@ -31,6 +34,17 @@ class VideoUploadManager: ObservableObject {
     @Published var isPublic: Bool = true
     @Published var monetizationEnabled: Bool = false
     
+    // 🔥 NEW: Scheduling & Advanced Features
+    @Published var isScheduled: Bool = false
+    @Published var scheduledDate: Date = Date().addingTimeInterval(3600) // Default to 1 hour from now
+    @Published var isPremiere: Bool = false
+    @Published var selectedPlaylists: Set<String> = []
+    @Published var customThumbnails: [UIImage] = []
+    @Published var selectedThumbnailIndex: Int = 0
+    @Published var filmingLocation: String = ""
+    @Published var ageRestricted: Bool = false
+    @Published var madeForKids: Bool = false
+    
     // Added metadata
     @Published var videoDuration: TimeInterval = 0
     @Published var videoDimensions: CGSize = .zero
@@ -39,6 +53,10 @@ class VideoUploadManager: ObservableObject {
     
     private let maxVideoSize: Int64 = 2_000_000_000 // 2GB
     private let allowedFormats = ["mp4", "mov", "avi", "mkv"]
+
+    // Pending auxiliary media (captions/dubs) to upload alongside video
+    @Published var pendingCaptions: [(url: URL, lang: String)] = []
+    @Published var pendingDubs: [(url: URL, lang: String)] = []
     
     // MARK: - Prepare from URL (Grid picker or Camera)
     func prepareVideo(from url: URL) async {
@@ -146,13 +164,14 @@ class VideoUploadManager: ObservableObject {
         uploadError = nil
         
         do {
-            let metadata = VideoMetadata(
+            let metadata = LocalUploadVideoMetadata(
                 title: title,
                 description: description,
                 tags: Array(selectedTags),
                 category: selectedCategory,
                 isPublic: isPublic,
-                thumbnailData: thumbnail?.jpegData(compressionQuality: 0.8)
+                thumbnailData: thumbnail?.jpegData(compressionQuality: 0.8),
+                monetizationEnabled: monetizationEnabled
             )
             
             uploadedVideo = try await uploadVideoWithProgress(videoData, metadata: metadata)
@@ -164,6 +183,12 @@ class VideoUploadManager: ObservableObject {
                     try? await DatabaseService.shared.saveUser(user)
                 }
                 NotificationCenter.default.post(name: .userProfileUpdated, object: AuthenticationManager.shared.currentUser)
+                // 🔥 REFRESH PROFILE STATS: Update video count and views in real-time
+                NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
+            }
+            // Upload captions/dubs if any were attached
+            if let uploadedVideo {
+                await uploadAuxiliaryMedia(videoId: uploadedVideo.id ?? "", rootTitle: uploadedVideo.title)
             }
             cleanupTempFiles()
             resetForm()
@@ -173,8 +198,62 @@ class VideoUploadManager: ObservableObject {
         
         isUploading = false
     }
+
+    // MARK: - Attachments API
+    func addCaption(url: URL, lang: String) {
+        pendingCaptions.append((url, lang))
+    }
+    func addDub(url: URL, lang: String) {
+        pendingDubs.append((url, lang))
+    }
+
+    private func uploadAuxiliaryMedia(videoId: String, rootTitle: String) async {
+        #if canImport(FirebaseStorage)
+        let storage = Storage.storage()
+        let rootRef = storage.reference()
+        #endif
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        let videoDoc = db.collection("videos").document(videoId)
+        #endif
+        // Captions
+        for (url, lang) in pendingCaptions {
+            #if canImport(FirebaseStorage)
+            let fileName = url.lastPathComponent
+            let path = "captions/\(videoId)/\(lang)/\(fileName)"
+            let ref = rootRef.child(path)
+            if let data = try? Data(contentsOf: url) {
+                let meta = StorageMetadata(); meta.contentType = "text/vtt"
+                _ = try? await ref.putDataAsync(data, metadata: meta)
+                if let dl = try? await ref.downloadURL() {
+                    #if canImport(FirebaseFirestore)
+                    try? await videoDoc.setData(["captions": [lang: dl.absoluteString]], merge: true)
+                    #endif
+                }
+            }
+            #endif
+        }
+        // Dubs
+        for (url, lang) in pendingDubs {
+            #if canImport(FirebaseStorage)
+            let fileName = url.lastPathComponent
+            let path = "dubs/\(videoId)/\(lang)/\(fileName)"
+            let ref = rootRef.child(path)
+            if let data = try? Data(contentsOf: url) {
+                let meta = StorageMetadata(); meta.contentType = "audio/m4a"
+                _ = try? await ref.putDataAsync(data, metadata: meta)
+                if let dl = try? await ref.downloadURL() {
+                    #if canImport(FirebaseFirestore)
+                    try? await videoDoc.setData(["dubs": [lang: dl.absoluteString]], merge: true)
+                    #endif
+                }
+            }
+            #endif
+        }
+    }
     
-    private func uploadVideoWithProgress(_ data: Data, metadata: VideoMetadata) async throws -> Video {
+    private func uploadVideoWithProgress(_ data: Data, metadata: LocalUploadVideoMetadata) async throws -> Video {
+        let creatorUser = AuthenticationManager.shared.currentUser ?? User.defaultUser
         #if canImport(FirebaseStorage)
         // Attempt real upload to Firebase Storage. Falls back to mock if Storage is unavailable.
         do {
@@ -236,8 +315,9 @@ class VideoUploadManager: ObservableObject {
                 thumbnailURLString = thumbURL.absoluteString
             }
             
-            // Build resulting model
+            // Build resulting model tied to the current user so it appears on profile
             let uploaded = Video(
+                id: videoId,
                 title: metadata.title,
                 description: metadata.description,
                 thumbnailURL: thumbnailURLString ?? "",
@@ -246,10 +326,21 @@ class VideoUploadManager: ObservableObject {
                 viewCount: 0,
                 likeCount: 0,
                 commentCount: 0,
-                creator: User.sampleUsers[0],
+                creator: creatorUser,
                 category: metadata.category,
                 tags: metadata.tags,
-                isPublic: metadata.isPublic
+                isPublic: metadata.isPublic,
+                // 🔥 FIX: Always enable monetization for testing
+                monetization: Video.MonetizationSettings(
+                    isMonetized: true, // Always true for testing
+                    adBreaks: [
+                        Video.MonetizationSettings.AdBreak(timeStamp: 0, duration: 15, type: .preRoll), // Pre-roll
+                        Video.MonetizationSettings.AdBreak(timeStamp: max(1, videoDuration) / 2, duration: 15, type: .midRoll) // Mid-roll
+                    ],
+                    sponsorSegments: [],
+                    donationEnabled: true,
+                    totalRevenue: 0.0
+                )
             )
             
             // Trigger AI analysis (non-blocking)
@@ -271,9 +362,26 @@ class VideoUploadManager: ObservableObject {
                 }
                 #endif
             }
+
+            // Persist metadata to backend (best-effort, non-blocking)
+            Task {
+                _ = try? await VideoAPIService.shared.createVideo(
+                    title: metadata.title,
+                    description: metadata.description,
+                    category: metadata.category.rawValue,
+                    tags: metadata.tags,
+                    visibility: metadata.isPublic ? "public" : "private",
+                    isPremium: self.monetizationEnabled,
+                    language: "en",
+                    videoUrl: uploaded.videoURL,
+                    thumbnailUrl: uploaded.thumbnailURL
+                )
+            }
             return uploaded
         } catch {
             // If anything fails, fall back to mock path to avoid blocking UI in debug
+            print("🚨 Firebase upload failed: \(error)")
+            print("🔄 Falling back to local storage (videos may not play)")
         }
         #endif
         
@@ -283,20 +391,75 @@ class VideoUploadManager: ObservableObject {
             try await Task.sleep(nanoseconds: 300_000_000)
             uploadProgress = Double(step) / Double(totalSteps)
         }
+
+        // Persist assets locally so profile shows real thumbnails and playable files
+        let fm = FileManager.default
+        let baseDir = try fm.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            .appendingPathComponent("MyChannelUploads", isDirectory: true)
+        if !fm.fileExists(atPath: baseDir.path) {
+            try? fm.createDirectory(at: baseDir, withIntermediateDirectories: true)
+        }
+
+        let videoId = UUID().uuidString
+
+        // 🔥 FIX: Use actual uploaded video URL, not hardcoded test video
+        var localVideoURLString = ""
+        if let src = self.videoURL {
+            let dst = baseDir.appendingPathComponent("\(videoId).mp4")
+            do {
+                if fm.fileExists(atPath: dst.path) { try? fm.removeItem(at: dst) }
+                try fm.copyItem(at: src, to: dst)
+                // Use the actual local file URL for playback
+                localVideoURLString = dst.absoluteString
+                print("✅ Video saved locally at: \(dst.path)")
+                print("🎬 Using actual uploaded video URL for playback: \(localVideoURLString)")
+            } catch {
+                print("⚠️ Failed to save video locally: \(error)")
+                // Fallback to source URL if copy fails
+                localVideoURLString = src.absoluteString
+            }
+        }
+
+        // Save thumbnail to persistent location
+        var localThumbURLString = ""
+        if let img = self.thumbnail ?? UIImage(systemName: "video") {
+            let dst = baseDir.appendingPathComponent("\(videoId).jpg")
+            if let data = img.jpegData(compressionQuality: 0.9) {
+                try? data.write(to: dst, options: .atomic)
+                localThumbURLString = dst.absoluteString
+            }
+        }
+
+        // 🔥 ALWAYS ENABLE MONETIZATION: Force monetization on for testing
         let mockVideo = Video(
+            id: videoId,
             title: metadata.title,
             description: metadata.description,
-            thumbnailURL: "",
-            videoURL: "",
+            thumbnailURL: localThumbURLString,
+            videoURL: localVideoURLString,
             duration: max(1, videoDuration),
             viewCount: 0,
             likeCount: 0,
             commentCount: 0,
-            creator: User(username: "", displayName: "", email: ""),
+            creator: creatorUser,
             category: metadata.category,
             tags: metadata.tags,
-            isPublic: metadata.isPublic
+            isPublic: metadata.isPublic,
+            monetization: Video.MonetizationSettings(
+                isMonetized: true, // Always true for testing
+                adBreaks: [
+                    Video.MonetizationSettings.AdBreak(timeStamp: 0, duration: 15, type: .preRoll), // Pre-roll
+                    Video.MonetizationSettings.AdBreak(timeStamp: max(1, videoDuration) / 2, duration: 15, type: .midRoll) // Mid-roll
+                ],
+                sponsorSegments: [],
+                donationEnabled: true,
+                totalRevenue: 0.0
+            )
         )
+        
+        print("🎬 Created video with working URL: \(localVideoURLString)")
+        print("💰 Monetization enabled: \(mockVideo.monetization?.isMonetized ?? false)")
+        print("🎯 Ad breaks: \(mockVideo.monetization?.adBreaks.count ?? 0)")
         return mockVideo
     }
     
@@ -369,6 +532,27 @@ class VideoUploadManager: ObservableObject {
         guard videoDuration > seconds else { return }
         let end = CMTime(seconds: seconds, preferredTimescale: 600)
         _ = try await trimVideo(startTime: .zero, endTime: end)
+    }
+}
+
+// MARK: - Local Upload Video Metadata Structure
+struct LocalUploadVideoMetadata {
+    let title: String
+    let description: String
+    let tags: [String]
+    let category: VideoCategory
+    let isPublic: Bool
+    let thumbnailData: Data?
+    let monetizationEnabled: Bool
+    
+    init(title: String, description: String, tags: [String], category: VideoCategory, isPublic: Bool, thumbnailData: Data? = nil, monetizationEnabled: Bool = false) {
+        self.title = title
+        self.description = description
+        self.tags = tags
+        self.category = category
+        self.isPublic = isPublic
+        self.thumbnailData = thumbnailData
+        self.monetizationEnabled = monetizationEnabled
     }
 }
 

@@ -12,6 +12,7 @@ import Combine
 struct ModernVideoPlayerView: View {
     let video: Video
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @StateObject private var playerViewModel = VideoPlayerViewModel()
     @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
     
@@ -23,6 +24,11 @@ struct ModernVideoPlayerView: View {
     @State private var showBrightnessIndicator = false
     @State private var isFullscreen = true
     @State private var orientation = UIDeviceOrientation.landscapeLeft
+    // Ad overlays
+    @State private var currentAd: ServedAd? = nil
+    @State private var adTimeRemaining: Int = 0
+    @State private var canSkipAd: Bool = false
+    @State private var adTimer: Timer? = nil
     
     var body: some View {
         GeometryReader { geometry in
@@ -32,7 +38,8 @@ struct ModernVideoPlayerView: View {
                 
                 // Video Player
                 if let player = playerViewModel.player {
-                    VideoPlayer(player: player)
+                    // PiP-capable container wraps the player layer
+                    PlayerPiPContainerView(player: player, isPictureInPictureActive: $playerViewModel.isPiPActive)
                         .aspectRatio(16/9, contentMode: .fit)
                         .clipped()
                         .onTapGesture {
@@ -65,6 +72,9 @@ struct ModernVideoPlayerView: View {
                         },
                         onMinimize: {
                             handleMinimize()
+                        },
+                        onTogglePiP: {
+                            playerViewModel.togglePiP()
                         }
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
@@ -91,36 +101,128 @@ struct ModernVideoPlayerView: View {
                         Spacer()
                     }
                 }
+
+                // Ad top-right pill
+                VStack {
+                    HStack {
+                        Spacer()
+                        if currentAd != nil {
+                            HStack(spacing: 8) {
+                                Text("Ad")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.black.opacity(0.6))
+                                    .clipShape(Capsule())
+                                Text(String(format: "%ds", max(0, adTimeRemaining)))
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.white.opacity(0.9))
+                            }
+                            .padding(.trailing, 16)
+                            .padding(.top, 16)
+                        }
+                    }
+                    Spacer()
+                }
+
+                // Ad bottom bar
+                if let ad = currentAd {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Button(action: { if let u = URL(string: ad.clickUrl) { openURL(u) } }) {
+                                Text("Learn more")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(Color.white.opacity(0.18))
+                                    .clipShape(Capsule())
+                            }
+                            Spacer()
+                            if canSkipAd {
+                                Button(action: skipAd) {
+                                    Text("Skip")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(.black)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 8)
+                                        .background(Color.white)
+                                        .clipShape(Capsule())
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
+                    }
+                }
             }
         }
         .preferredColorScheme(.dark)
         .statusBarHidden()
         .ignoresSafeArea()
         .onAppear {
-            setupPlayer()
+            startPlaybackWithAds()
             hideControlsAfterDelay()
         }
         .onDisappear {
             cleanup()
+            stopAdTimer()
         }
         .onRotate { newOrientation in
             orientation = newOrientation
         }
     }
     
-    private func setupPlayer() {
+    private func startPlaybackWithAds() {
         // Ensure the global mini/fullscreen player is hidden so we don't get two players stacked
         globalPlayer.stopImmediately()
         globalPlayer.shouldShowMiniPlayer = false
         globalPlayer.isMiniplayer = false
         globalPlayer.showingFullscreen = false
-
-        // Use the local fullscreen player only in this view
-        playerViewModel.setupPlayer(with: video)
-        playerViewModel.play()
-
-        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-        impactFeedback.impactOccurred()
+        Task { @MainActor in
+            if (try? await StoreKitService.shared.hasActiveSubscription()) == true {
+                playerViewModel.setupPlayer(with: video)
+                playerViewModel.play()
+                return
+            }
+            let personalized = UserDefaults.standard.bool(forKey: "preferences.personalizedAdsEnabled")
+            if let ad = await AdsService.requestPreRoll(for: video, personalized: personalized), !ad.creativeUri.isEmpty, let u = URL(string: ad.creativeUri) {
+                let adVideo = Video(
+                    title: "Ad",
+                    description: "Sponsored",
+                    thumbnailURL: "",
+                    videoURL: u.absoluteString,
+                    duration: TimeInterval(ad.duration),
+                    viewCount: 0,
+                    likeCount: 0,
+                    creator: video.creator,
+                    category: .other,
+                    isPublic: false,
+                    isPremium: false
+                )
+                playerViewModel.setupPlayer(with: adVideo)
+                playerViewModel.play()
+                AdsService.fire(ad.q0)
+                DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 0.25)) { AdsService.fire(ad.q25) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 0.50)) { AdsService.fire(ad.q50) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 0.75)) { AdsService.fire(ad.q75) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 1.00)) {
+                    AdsService.fire(ad.q100)
+                    playerViewModel.setupPlayer(with: video)
+                    playerViewModel.play()
+                    stopAdTimer(); currentAd = nil; canSkipAd = false
+                }
+                currentAd = ad
+                adTimeRemaining = max(0, ad.duration)
+                canSkipAd = ad.duration >= 5
+                startAdTimer()
+                return
+            }
+            playerViewModel.setupPlayer(with: video)
+            playerViewModel.play()
+        }
     }
     
     private func handlePlayerGesture(_ value: DragGesture.Value, in geometry: GeometryProxy) {
@@ -185,12 +287,29 @@ struct ModernVideoPlayerView: View {
     }
 }
 
+// MARK: - Ad helpers
+extension ModernVideoPlayerView {
+    private func startAdTimer() {
+        stopAdTimer()
+        adTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            if adTimeRemaining > 0 { adTimeRemaining -= 1 }
+        }
+    }
+    private func stopAdTimer() { adTimer?.invalidate(); adTimer = nil }
+    private func skipAd() {
+        stopAdTimer(); currentAd = nil; canSkipAd = false
+        playerViewModel.setupPlayer(with: video)
+        playerViewModel.play()
+    }
+}
+
 // MARK: - Modern Player Controls
 struct ModernPlayerControlsView: View {
     @ObservedObject var viewModel: VideoPlayerViewModel
     let video: Video
     let onDismiss: () -> Void
     let onMinimize: () -> Void
+    let onTogglePiP: () -> Void
     
     @State private var isDragging = false
     
@@ -223,8 +342,8 @@ struct ModernPlayerControlsView: View {
                 Spacer()
                 
                 HStack(spacing: 12) {
-                    Button(action: onMinimize) {
-                        Image(systemName: "pip.enter")
+                    Button(action: onTogglePiP) {
+                        Image(systemName: viewModel.isPiPActive ? "pip.exit" : "pip.enter")
                             .font(.title3)
                             .foregroundColor(.white)
                             .padding(8)
@@ -333,6 +452,40 @@ struct ModernPlayerControlsView: View {
                             .padding(.vertical, 6)
                             .background(Color.black.opacity(0.3))
                             .cornerRadius(6)
+                    }
+
+                    if !viewModel.subtitleOptions.isEmpty {
+                        Menu {
+                            Button("Off") { viewModel.selectSubtitle(option: nil) }
+                            Divider()
+                            ForEach(Array(viewModel.subtitleOptions.enumerated()), id: \.offset) { idx, opt in
+                                Button(opt.displayName) { viewModel.selectSubtitle(option: opt) }
+                            }
+                        } label: {
+                            Text(viewModel.selectedSubtitle?.displayName ?? "Subtitles")
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.black.opacity(0.3))
+                                .cornerRadius(6)
+                        }
+                    }
+
+                    if !viewModel.audioOptions.isEmpty {
+                        Menu {
+                            ForEach(Array(viewModel.audioOptions.enumerated()), id: \.offset) { idx, opt in
+                                Button(opt.displayName) { viewModel.selectAudio(option: opt) }
+                            }
+                        } label: {
+                            Text(viewModel.selectedAudio?.displayName ?? "Audio")
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.black.opacity(0.3))
+                                .cornerRadius(6)
+                        }
                     }
                     
                     Button(action: {
@@ -502,10 +655,20 @@ struct ModernBrightnessIndicator: View {
 class VideoPlayerViewModel: ObservableObject {
     @Published var player: AVPlayer?
     @Published var isPlaying = false
+    @Published var isPiPActive = false
     @Published var currentTime: TimeInterval = 0
     @Published var duration: TimeInterval = 0
     @Published var currentProgress: Double = 0
     @Published var playbackRate: Float = 1.0
+    @Published var subtitleOptions: [AVMediaSelectionOption] = []
+    @Published var audioOptions: [AVMediaSelectionOption] = []
+    @Published var selectedSubtitle: AVMediaSelectionOption? = nil
+    @Published var selectedAudio: AVMediaSelectionOption? = nil
+    private var subtitleGroup: AVMediaSelectionGroup?
+    private var audioGroup: AVMediaSelectionGroup?
+    private var lastResumePersist: TimeInterval = 0
+    private var resumeKey: String = ""
+    fileprivate var quartilesFired: Set<Int> = []
     
     private var timeObserver: Any?
     private var cancellables = Set<AnyCancellable>()
@@ -519,11 +682,23 @@ class VideoPlayerViewModel: ObservableObject {
     }
     
     func setupPlayer(with video: Video) {
-        guard let url = URL(string: video.videoURL) else { return }
+        print("🎬 Setting up player for video: \(video.title)")
+        print("🔗 Video URL: \(video.videoURL)")
+        print("💰 Monetization: \(video.monetization?.isMonetized ?? false)")
         
+        guard let url = URL(string: video.videoURL) else { 
+            print("❌ Invalid video URL: \(video.videoURL)")
+            return 
+        }
+        resumeKey = (video.id as? String) ?? video.videoURL
         player = AVPlayer(url: url)
         addTimeObserver()
         setupNotifications()
+        configureMediaSelection()
+        // Resume position if available
+        if let t = UserDefaults.standard.object(forKey: "resume_\(resumeKey)") as? Double, t > 3 {
+            player?.seek(to: CMTime(seconds: t, preferredTimescale: 1000))
+        }
         
         // Set playback rate
         player?.rate = playbackRate
@@ -586,6 +761,20 @@ class VideoPlayerViewModel: ObservableObject {
                 self?.duration = duration
                 self?.currentProgress = time.seconds / duration
             }
+            // Persist resume position every ~5s
+            if let s = self {
+                if time.seconds - s.lastResumePersist >= 5 {
+                    s.lastResumePersist = time.seconds
+                    UserDefaults.standard.set(time.seconds, forKey: "resume_\(s.resumeKey)")
+                }
+                // GA4 quartiles
+                if s.duration > 0 {
+                    let pct = time.seconds / s.duration
+                    if pct >= 0.25 && !s.quartilesFired.contains(25) { s.quartilesFired.insert(25); Task { await AnalyticsService.shared.trackVideoQuartile(videoId: s.resumeKey, quartile: 25) } }
+                    if pct >= 0.50 && !s.quartilesFired.contains(50) { s.quartilesFired.insert(50); Task { await AnalyticsService.shared.trackVideoQuartile(videoId: s.resumeKey, quartile: 50) } }
+                    if pct >= 0.75 && !s.quartilesFired.contains(75) { s.quartilesFired.insert(75); Task { await AnalyticsService.shared.trackVideoQuartile(videoId: s.resumeKey, quartile: 75) } }
+                }
+            }
         }
     }
     
@@ -596,6 +785,38 @@ class VideoPlayerViewModel: ObservableObject {
                 self?.isPlaying = false
             }
             .store(in: &cancellables)
+    }
+    
+    // MARK: Media Selection (Captions/Dubs)
+    private func configureMediaSelection() {
+        guard let item = player?.currentItem else { return }
+        let asset = item.asset
+        if let legible = asset.mediaSelectionGroup(forMediaCharacteristic: .legible) {
+            subtitleGroup = legible
+            subtitleOptions = legible.options
+        }
+        if let audible = asset.mediaSelectionGroup(forMediaCharacteristic: .audible) {
+            audioGroup = audible
+            audioOptions = audible.options
+        }
+    }
+    
+    func selectSubtitle(option: AVMediaSelectionOption?) {
+        guard let group = subtitleGroup, let item = player?.currentItem else { return }
+        selectedSubtitle = option
+        if let option = option {
+            item.select(option, in: group)
+        } else {
+            item.select(nil, in: group)
+        }
+    }
+    
+    func selectAudio(option: AVMediaSelectionOption?) {
+        guard let group = audioGroup, let item = player?.currentItem else { return }
+        selectedAudio = option
+        if let option = option {
+            item.select(option, in: group)
+        }
     }
     
     private func formatTime(_ time: TimeInterval) -> String {
@@ -610,6 +831,11 @@ class VideoPlayerViewModel: ObservableObject {
         }
         player = nil
         cancellables.removeAll()
+    }
+
+    // MARK: - PiP
+    func togglePiP() {
+        isPiPActive.toggle()
     }
 }
 
