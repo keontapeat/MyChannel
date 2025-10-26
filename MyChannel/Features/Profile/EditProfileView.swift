@@ -188,44 +188,16 @@ struct EditProfileView: View {
     // MARK: - Header Section
     private var headerSection: some View {
         VStack(spacing: 0) {
-            ZStack {
-                // Dynamic gradient background
-                LinearGradient(
-                    colors: [
-                        AppTheme.Colors.primary.opacity(0.15),
-                        AppTheme.Colors.secondary.opacity(0.1),
-                        AppTheme.Colors.background
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .frame(height: 120)
-                
-                // Floating elements for depth
-                VStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .frame(width: 60, height: 60)
-                            .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 15, x: 0, y: 5)
-                        
-                        Image(systemName: "person.crop.circle.badge.plus")
-                            .font(.system(size: 28, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.primary)
-                    }
-                    
-                    VStack(spacing: 4) {
-                        Text("Customize Your Profile")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                        
-                        Text("Make your profile shine ✨")
-                            .font(.system(size: 15))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                }
-                .padding(.top, 25)
+            VStack(spacing: 8) {
+                Text("Customize Your Profile")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                Text("Make your profile shine")
+                    .font(.system(size: 15))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
         }
     }
     
@@ -287,7 +259,7 @@ struct EditProfileView: View {
                             showingDefaultBannerPicker = true
                             HapticManager.shared.impact(style: .light)
                         } label: {
-                            Label("Choose from Defaults", systemImage: "sparkles")
+                            Text("Choose from Defaults")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(AppTheme.Colors.primary)
                                 .padding(.horizontal, 12)
@@ -307,17 +279,11 @@ struct EditProfileView: View {
                                 VideoBannerPreview(url: url)
                             } else {
                                 Rectangle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [AppTheme.Colors.primary.opacity(0.3), AppTheme.Colors.secondary.opacity(0.3)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
+                                    .fill(AppTheme.Colors.surface)
                                     .overlay(
                                         Image(systemName: "video.fill")
                                             .font(.system(size: 36))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
                                     )
                             }
                         }
@@ -350,7 +316,7 @@ struct EditProfileView: View {
                             showingDefaultBannerPicker = true
                             HapticManager.shared.impact(style: .light)
                         } label: {
-                            Label("Choose from Defaults", systemImage: "sparkles")
+                            Text("Choose from Defaults")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(AppTheme.Colors.primary)
                                 .padding(.horizontal, 12)
@@ -376,13 +342,7 @@ struct EditProfileView: View {
                                 }
                             } else {
                                 Rectangle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [AppTheme.Colors.primary.opacity(0.3), AppTheme.Colors.secondary.opacity(0.3)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
+                                    .fill(AppTheme.Colors.surface)
                             }
                         }
                         .frame(height: 140)
@@ -449,6 +409,71 @@ struct EditProfileView: View {
                         .shadow(color: AppTheme.Colors.textPrimary.opacity(0.1), radius: 8, x: 0, y: 4)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .onChange(of: selectedProfileImage) { item in
+                        guard let item else { 
+                            print("❌ No profile image item selected")
+                            return 
+                        }
+                        print("📸 Profile image selected, starting upload...")
+                        Task {
+                            do {
+                                guard let data = try await item.loadTransferable(type: Data.self) else {
+                                    print("❌ Failed to load image data")
+                                    return
+                                }
+                                guard let img = UIImage(data: data) else {
+                                    print("❌ Failed to create UIImage from data")
+                                    return
+                                }
+                                print("✅ Image loaded successfully, size: \(img.size)")
+                                
+                                let uid = authManager.currentUser?.id ?? user.id
+                                print("🔄 Uploading avatar for user: \(uid)")
+                                
+                                let url = try await UserMediaStorageService.shared.uploadAvatar(uid: uid, image: img)
+                                print("✅ Avatar uploaded successfully: \(url)")
+                                
+                                let ts = Int(Date().timeIntervalSince1970)
+                                let busted = url.contains("?") ? (url + "&t=\(ts)") : (url + "?t=\(ts)")
+                                let updated = User(
+                                        id: user.id,
+                                        username: user.username,
+                                        displayName: user.displayName,
+                                        email: user.email,
+                                        profileImageURL: busted,
+                                        bannerImageURL: user.bannerImageURL,
+                                        bio: user.bio,
+                                        subscriberCount: user.subscriberCount,
+                                        videoCount: user.videoCount,
+                                        isVerified: user.isVerified,
+                                        isCreator: user.isCreator,
+                                        createdAt: user.createdAt,
+                                        location: user.location,
+                                        website: user.website,
+                                        socialLinks: user.socialLinks,
+                                        followerCount: user.followerCount,
+                                        followingCount: user.followingCount,
+                                        joinDate: user.joinDate,
+                                        totalViews: user.totalViews,
+                                        totalEarnings: user.totalEarnings,
+                                        membershipTiers: user.membershipTiers,
+                                        bannerVideoURL: user.bannerVideoURL,
+                                        bannerVideoMuted: user.bannerVideoMuted,
+                                        bannerVideoContentMode: user.bannerVideoContentMode
+                                    )
+                                    user = updated
+                                    appState.currentUser = updated
+                                    authManager.currentUser = updated
+                                    hasUnsavedChanges = true
+                                    print("✅ Profile image updated successfully")
+                                } catch {
+                                    print("❌ Profile image upload failed: \(error)")
+                                }
+                            } catch {
+                                print("❌ Error in profile image upload task: \(error)")
+                            }
+                        }
+                    }
                     
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Choose a profile photo")
@@ -621,6 +646,21 @@ struct EditProfileView: View {
         HapticManager.shared.impact(style: .medium)
         
         Task {
+            // 🔥 PROFILE PICTURE UPLOAD: Handle profile image upload
+            var profileImageURL: String? = user.profileImageURL
+            if let selectedProfileImage = selectedProfileImage {
+                do {
+                    if let data = try await selectedProfileImage.loadTransferable(type: Data.self),
+                       let image = UIImage(data: data) {
+                        let uid = authManager.currentUser?.id ?? user.id
+                        let uploadedURL = try await UserMediaStorageService.shared.uploadAvatar(uid: uid, image: image)
+                        profileImageURL = uploadedURL
+                    }
+                } catch {
+                    print("Profile image upload failed: \(error)")
+                }
+            }
+            
             var remoteBannerURL: String? = user.bannerVideoURL
 
             if isVideoCover {
@@ -644,13 +684,20 @@ struct EditProfileView: View {
             }
 
             var updatedUser = user
+            // Append a cache-busting query to ensure the UI reloads the new asset immediately
+            func cacheBust(_ s: String?) -> String? {
+                guard let s, !s.isEmpty else { return s }
+                let ts = Int(Date().timeIntervalSince1970)
+                return s.contains("?") ? (s + "&t=\(ts)") : (s + "?t=\(ts)")
+            }
+
             updatedUser = User(
                 id: user.id,
                 username: username.isEmpty ? user.username : username,
                 displayName: displayName.isEmpty ? user.displayName : displayName,
                 email: user.email,
-                profileImageURL: user.profileImageURL,
-                bannerImageURL: isVideoCover ? nil : imageBannerURL,
+                profileImageURL: cacheBust(profileImageURL), // 🔥 UPDATE PROFILE IMAGE
+                bannerImageURL: isVideoCover ? nil : cacheBust(imageBannerURL),
                 bio: bio.isEmpty ? nil : bio,
                 subscriberCount: user.subscriberCount,
                 videoCount: user.videoCount,
@@ -663,7 +710,7 @@ struct EditProfileView: View {
                 totalViews: user.totalViews,
                 totalEarnings: user.totalEarnings,
                 membershipTiers: user.membershipTiers,
-                bannerVideoURL: isVideoCover ? remoteBannerURL : nil,
+                bannerVideoURL: isVideoCover ? cacheBust(remoteBannerURL) : nil,
                 bannerVideoMuted: isVideoCover ? bannerVideoMuted : nil,
                 bannerVideoContentMode: isVideoCover ? bannerContentMode : nil
             )
