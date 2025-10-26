@@ -176,6 +176,9 @@ class VideoUploadManager: ObservableObject {
             
             uploadedVideo = try await uploadVideoWithProgress(videoData, metadata: metadata)
             if let uploadedVideo {
+                // 🔥 SAVE TO FIRESTORE: Ensure video is saved to Firestore for profile display
+                try? await VideoFirestoreService.shared.saveVideo(uploadedVideo)
+                
                 // Persist to local profile and refresh AppState
                 try? await DatabaseService.shared.saveVideo(uploadedVideo)
                 if let user = AuthenticationManager.shared.currentUser {

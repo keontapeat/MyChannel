@@ -32,15 +32,30 @@ final class ProfileViewModel: ObservableObject {
         let current = appState?.currentUser ?? authManager?.currentUser ?? .defaultUser
         user = current
 
-        // Placeholder: use sample videos or fallback until backend is wired
-        if Video.sampleVideos.isEmpty {
-            let vids = createFallbackVideos(for: current)
-            userVideos = vids
-            watchHistory = Array(vids.reversed())
-        } else {
-            userVideos = Array(Video.sampleVideos.prefix(20))
-            let pool = Array(Video.sampleVideos.dropFirst(min(4, Video.sampleVideos.count)).prefix(18))
-            watchHistory = pool.isEmpty ? userVideos : pool
+        // 🔥 LOAD REAL UPLOADED VIDEOS: Get actual user videos from Firestore
+        do {
+            let uploadedVideos = try await VideoFirestoreService.shared.getUserVideos(userId: current.id)
+            if !uploadedVideos.isEmpty {
+                userVideos = uploadedVideos
+                watchHistory = Array(uploadedVideos.reversed())
+            } else {
+                // Only use fallback if no uploaded videos exist
+                let vids = createFallbackVideos(for: current)
+                userVideos = vids
+                watchHistory = Array(vids.reversed())
+            }
+        } catch {
+            print("❌ Error loading user videos: \(error)")
+            // Fallback to sample videos on error
+            if Video.sampleVideos.isEmpty {
+                let vids = createFallbackVideos(for: current)
+                userVideos = vids
+                watchHistory = Array(vids.reversed())
+            } else {
+                userVideos = Array(Video.sampleVideos.prefix(20))
+                let pool = Array(Video.sampleVideos.dropFirst(min(4, Video.sampleVideos.count)).prefix(18))
+                watchHistory = pool.isEmpty ? userVideos : pool
+            }
         }
 
         isLoading = false
@@ -53,14 +68,28 @@ final class ProfileViewModel: ObservableObject {
     func handleUserChange(_ newUser: User?) {
         if let newUser {
             user = newUser
-            if Video.sampleVideos.isEmpty {
-                let vids = createFallbackVideos(for: newUser)
-                userVideos = vids
-                watchHistory = Array(vids.reversed())
-            } else {
-                userVideos = Array(Video.sampleVideos.prefix(20))
-                let pool = Array(Video.sampleVideos.dropFirst(min(4, Video.sampleVideos.count)).prefix(18))
-                watchHistory = pool.isEmpty ? userVideos : pool
+            // 🔥 RELOAD REAL VIDEOS: Load actual uploaded videos when user changes
+            Task {
+                do {
+                    let uploadedVideos = try await VideoFirestoreService.shared.getUserVideos(userId: newUser.id)
+                    await MainActor.run {
+                        if !uploadedVideos.isEmpty {
+                            userVideos = uploadedVideos
+                            watchHistory = Array(uploadedVideos.reversed())
+                        } else {
+                            let vids = createFallbackVideos(for: newUser)
+                            userVideos = vids
+                            watchHistory = Array(vids.reversed())
+                        }
+                    }
+                } catch {
+                    print("❌ Error loading user videos: \(error)")
+                    await MainActor.run {
+                        let vids = createFallbackVideos(for: newUser)
+                        userVideos = vids
+                        watchHistory = Array(vids.reversed())
+                    }
+                }
             }
         } else {
             user = .defaultUser

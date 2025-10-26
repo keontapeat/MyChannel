@@ -22,6 +22,7 @@ struct VideoDetailMetaView: View {
     let onMore: () -> Void
     let onComment: () -> Void
     var onChapters: (() -> Void)? = nil
+    var onProfileTap: (() -> Void)? = nil
     
     // MARK: - Animation States
     @State private var likeAnimationScale: CGFloat = 1.0
@@ -188,10 +189,22 @@ struct VideoDetailMetaView: View {
                 ) {
                     performShareAction()
                 }
+
+                // Tip Button (test mode)
+                VideoMetaActionButton(
+                    icon: "hands.sparkles",
+                    title: "Tip"
+                ) {
+                    Task {
+                        await PayAPIService.shared.tip(to: video.creatorId, amountCents: 199)
+                    }
+                }
                 
                 // Chapters Button (if available)
                 if let onChapters {
-                    if let chapters = video.chapters, !chapters.isEmpty {
+                    let hasModelChapters = (video.chapters?.isEmpty == false)
+                    let hasParsedChapters = !video.parsedChaptersFromDescription.isEmpty
+                    if hasModelChapters || hasParsedChapters {
                         VideoMetaActionButton(
                             icon: "list.bullet.rectangle",
                             title: "Chapters"
@@ -218,6 +231,24 @@ struct VideoDetailMetaView: View {
                     isPremium: true
                 ) {
                     performDownloadAction()
+                }
+                
+                // Transcript Button
+                VideoMetaActionButton(
+                    icon: "text.bubble",
+                    title: "Transcript"
+                ) {
+                    // Handle transcript action
+                    NotificationCenter.default.post(name: NSNotification.Name("ShowTranscript"), object: nil)
+                }
+                
+                // Video Info Button
+                VideoMetaActionButton(
+                    icon: "info.circle",
+                    title: "Info"
+                ) {
+                    // Handle video info action
+                    NotificationCenter.default.post(name: NSNotification.Name("ShowVideoInfo"), object: nil)
                 }
                 
                 // More Options
@@ -262,28 +293,34 @@ struct VideoDetailMetaView: View {
     // MARK: - Creator Profile Section
     private var creatorProfileSection: some View {
         HStack(spacing: 16) {
-            // Creator Avatar with Glow Effect
-            AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [AppTheme.Colors.surface, AppTheme.Colors.surface.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+            // Creator Avatar with Glow Effect - Clickable
+            Button(action: {
+                HapticManager.shared.impact(style: .light)
+                onProfileTap?()
+            }) {
+                AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [AppTheme.Colors.surface, AppTheme.Colors.surface.opacity(0.7)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .overlay(
-                        Image(systemName: "person.fill")
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    )
+                        .overlay(
+                            Image(systemName: "person.fill")
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        )
+                }
+                .frame(width: 48, height: 48)
+                .clipShape(Circle())
+                .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 4, x: 0, y: 2)
             }
-            .frame(width: 48, height: 48)
-            .clipShape(Circle())
-            .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 4, x: 0, y: 2)
+            .buttonStyle(.plain)
             
             // Creator Info
             VStack(alignment: .leading, spacing: 4) {

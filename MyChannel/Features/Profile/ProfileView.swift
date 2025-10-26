@@ -86,7 +86,7 @@ struct ProfileView: View {
     private var profileContent: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // Profile Header
+                // Profile Header - flush to top
                 ProfileHeaderView(
                     user: user,
                     scrollOffset: scrollOffset,
@@ -94,6 +94,7 @@ struct ProfileView: View {
                     showingEditProfile: $showingEditProfile,
                     showingSettings: $showingSettings
                 )
+                .ignoresSafeArea(edges: .top)
                 
                 // Profile Tabs
                 ProfileTabNavigation(
