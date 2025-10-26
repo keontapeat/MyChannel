@@ -40,10 +40,16 @@ struct Video: Identifiable, Codable, Hashable {
     var subtitles: [SubtitleTrack]?
     var isVerified: Bool
     var monetization: MonetizationSettings?
+    var isPremium: Bool
     
     // Additional properties for compatibility
     var isSponsored: Bool?
-        var chapters: [Chapter]? // YouTube-style chapters
+    var chapters: [Chapter]? // YouTube-style chapters
+    var videoCards: [VideoCard]? // YouTube-style video cards
+    var endScreens: [EndScreen]? // YouTube-style end screens
+    var ageRestricted: Bool?
+    var madeForKids: Bool?
+    var transcript: VideoTranscript?
     
     // MARK: - Custom Coding Keys
     private enum CodingKeys: String, CodingKey {
@@ -52,7 +58,7 @@ struct Video: Identifiable, Codable, Hashable {
         case createdAt, updatedAt, creatorId, creator, category
         case tags, isPublic, quality, aspectRatio, isLiveStream
         case scheduledAt, contentSource, externalID, contentRating
-        case language, subtitles, isVerified, monetization, isSponsored, chapters
+        case language, subtitles, isVerified, monetization, isPremium, isSponsored, chapters
     }
     
     // MARK: - Custom Decoding
@@ -91,6 +97,7 @@ struct Video: Identifiable, Codable, Hashable {
         subtitles = try container.decodeIfPresent([SubtitleTrack].self, forKey: .subtitles)
         isVerified = try container.decodeIfPresent(Bool.self, forKey: .isVerified) ?? false
         monetization = try container.decodeIfPresent(MonetizationSettings.self, forKey: .monetization)
+        isPremium = try container.decodeIfPresent(Bool.self, forKey: .isPremium) ?? false
         isSponsored = try container.decodeIfPresent(Bool.self, forKey: .isSponsored)
         chapters = try container.decodeIfPresent([Chapter].self, forKey: .chapters)
     }
@@ -127,6 +134,7 @@ struct Video: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(subtitles, forKey: .subtitles)
         try container.encode(isVerified, forKey: .isVerified)
         try container.encodeIfPresent(monetization, forKey: .monetization)
+        try container.encode(isPremium, forKey: .isPremium)
         try container.encodeIfPresent(isSponsored, forKey: .isSponsored)
         try container.encodeIfPresent(chapters, forKey: .chapters)
     }
@@ -164,6 +172,7 @@ struct Video: Identifiable, Codable, Hashable {
         subtitles: [SubtitleTrack]? = nil,
         isVerified: Bool = false,
         monetization: MonetizationSettings? = nil,
+        isPremium: Bool = false,
         isSponsored: Bool? = nil,
         chapters: [Chapter]? = nil
     ) {
@@ -195,6 +204,7 @@ struct Video: Identifiable, Codable, Hashable {
         self.subtitles = subtitles
         self.isVerified = isVerified
         self.monetization = monetization
+        self.isPremium = isPremium
         self.isSponsored = isSponsored
         self.chapters = chapters
     }
@@ -260,6 +270,33 @@ struct Video: Identifiable, Codable, Hashable {
     
     var isNew: Bool {
         Date().timeIntervalSince(createdAt) < 24 * 60 * 60 // Less than 24 hours
+    }
+
+    // MARK: - Chapters parsing fallback from description
+    var parsedChaptersFromDescription: [Chapter] {
+        // Parse common timestamp formats like "0:00 Intro" or "1:23 - Topic"
+        // Keep it lightweight: scan lines in description
+        let lines = description.components(separatedBy: .newlines)
+        var chapters: [Chapter] = []
+        let regex = try? NSRegularExpression(pattern: "^\\s*(\\d{1,2}):(\\d{2})(?::(\\d{2}))?\\s*[-–—]?\\s*(.+)$", options: [.caseInsensitive])
+        for line in lines {
+            guard let regex = regex else { continue }
+            let ns = line as NSString
+            let full = NSRange(location: 0, length: ns.length)
+            if let m = regex.firstMatch(in: line, options: [], range: full) {
+                let hRange = m.range(at: 3)
+                let hasHours = hRange.location != NSNotFound
+                let mm = Int(ns.substring(with: m.range(at: 1))) ?? 0
+                let ss = Int(ns.substring(with: m.range(at: 2))) ?? 0
+                let hh = hasHours ? (Int(ns.substring(with: hRange)) ?? 0) : 0
+                let title = ns.substring(with: m.range(at: 4)).trimmingCharacters(in: .whitespacesAndNewlines)
+                let total = hasHours ? (hh * 3600 + mm * 60 + ss) : (mm * 60 + ss)
+                if total >= 0, !title.isEmpty {
+                    chapters.append(Chapter(title: title, start: TimeInterval(total)))
+                }
+            }
+        }
+        return chapters
     }
     
     var isTrending: Bool {
@@ -770,6 +807,54 @@ extension Video {
             category: .music
         ),
         Video(
+            title: "Drone Over the City",
+            description: "4K cinematic drone footage",
+            thumbnailURL: "https://picsum.photos/seed/drone/400/600",
+            videoURL: "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+            duration: 210,
+            viewCount: 210000,
+            likeCount: 9700,
+            commentCount: 300,
+            creator: User.sampleUsers[1],
+            category: .travel
+        ),
+        Video(
+            title: "Cooking Street Tacos",
+            description: "Fast and tasty street tacos",
+            thumbnailURL: "https://picsum.photos/seed/tacos/400/600",
+            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+            duration: 360,
+            viewCount: 88000,
+            likeCount: 5600,
+            commentCount: 145,
+            creator: User.sampleUsers[2],
+            category: .cooking
+        ),
+        Video(
+            title: "Workout HIIT Session",
+            description: "15-minute HIIT routine",
+            thumbnailURL: "https://picsum.photos/seed/hiit/400/600",
+            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+            duration: 900,
+            viewCount: 99000,
+            likeCount: 7100,
+            commentCount: 210,
+            creator: User.sampleUsers[0],
+            category: .fitness
+        ),
+        Video(
+            title: "Coding SwiftUI Tips",
+            description: "10 pro tips for SwiftUI",
+            thumbnailURL: "https://picsum.photos/seed/swiftui/400/600",
+            videoURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
+            duration: 480,
+            viewCount: 44000,
+            likeCount: 3400,
+            commentCount: 90,
+            creator: User.sampleUsers[3],
+            category: .technology
+        ),
+        Video(
             title: "Warzone Highlights",
             description: "Best clutch moments this week",
             thumbnailURL: "https://i.ytimg.com/vi/x9v2Q8l2dY4/hqdefault.jpg",
@@ -883,4 +968,75 @@ extension Video {
     }
     .padding()
     .background(AppTheme.Colors.background)
+}
+
+// MARK: - Video Card Model
+struct VideoCard: Identifiable, Codable {
+    let id: String
+    let type: CardType
+    let title: String
+    let subtitle: String?
+    let thumbnailURL: String?
+    let timestamp: TimeInterval // When to show the card
+    let metadata: [String: Any]?
+    
+    enum CardType: String, Codable, CaseIterable {
+        case video = "video"
+        case playlist = "playlist"
+        case channel = "channel"
+        case link = "link"
+        case poll = "poll"
+    }
+    
+    // Custom coding for metadata
+    private enum CodingKeys: String, CodingKey {
+        case id, type, title, subtitle, thumbnailURL, timestamp
+    }
+    
+    init(id: String, type: CardType, title: String, subtitle: String? = nil, thumbnailURL: String? = nil, timestamp: TimeInterval, metadata: [String: Any]? = nil) {
+        self.id = id
+        self.type = type
+        self.title = title
+        self.subtitle = subtitle
+        self.thumbnailURL = thumbnailURL
+        self.timestamp = timestamp
+        self.metadata = metadata
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        type = try container.decode(CardType.self, forKey: .type)
+        title = try container.decode(String.self, forKey: .title)
+        subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
+        thumbnailURL = try container.decodeIfPresent(String.self, forKey: .thumbnailURL)
+        timestamp = try container.decode(TimeInterval.self, forKey: .timestamp)
+        metadata = nil // For now, we'll handle this separately if needed
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(type, forKey: .type)
+        try container.encode(title, forKey: .title)
+        try container.encodeIfPresent(subtitle, forKey: .subtitle)
+        try container.encodeIfPresent(thumbnailURL, forKey: .thumbnailURL)
+        try container.encode(timestamp, forKey: .timestamp)
+    }
+}
+
+// MARK: - Video Transcript Model
+struct VideoTranscript: Codable {
+    let language: String
+    let segments: [TranscriptSegment]
+    let isAutoGenerated: Bool
+    let confidence: Double?
+    
+    struct TranscriptSegment: Identifiable, Codable {
+        let id: String
+        let startTime: TimeInterval
+        let endTime: TimeInterval
+        let text: String
+        let confidence: Double?
+    }
 }
