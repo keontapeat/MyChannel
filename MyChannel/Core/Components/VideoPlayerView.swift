@@ -160,6 +160,17 @@ struct VideoPlayerView: View {
                         return
                     }
                 }
+                
+                // 🔥 DOUBLE CHECK: No fallback ads on your own videos either
+                if let currentUser = AuthenticationManager.shared.currentUser,
+                   video.creator.id == currentUser.id {
+                    print("🎬 Skipping fallback VAST ads - your video!")
+                    playerManager.setupPlayer(with: video)
+                    playerManager.play()
+                    globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: true)
+                    return
+                }
+                
                 // Fallback VAST if no direct fill
                 if (video.monetization?.isMonetized == true) || AppConfig.Features.enableAds,
                    let vast = AdsService.fallbackVAST(for: video), let resolved = await AdsService.resolveVASTMedia(from: vast) {
@@ -268,6 +279,14 @@ extension VideoPlayerView {
             globalPlayer.adoptExternalPlayerManager(playerManager, video: adVideo, showFullscreen: true)
             return
         }
+        
+        // 🔥 NO MIDROLL ADS ON YOUR OWN VIDEOS
+        if let currentUser = AuthenticationManager.shared.currentUser,
+           video.creator.id == currentUser.id {
+            print("🎬 Skipping midroll VAST ads - your video!")
+            return
+        }
+        
         if let vast = AdsService.fallbackVAST(for: video), let resolved = await AdsService.resolveVASTMedia(from: vast) {
             let adVideo = Video(title: "Ad", description: "Sponsored", thumbnailURL: "", videoURL: resolved.mediaURL, duration: TimeInterval(resolved.duration), viewCount: 0, likeCount: 0, creator: video.creator, category: .other, isPublic: false)
             playerManager.setupPlayer(with: adVideo)
