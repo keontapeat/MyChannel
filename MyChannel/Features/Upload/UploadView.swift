@@ -997,45 +997,61 @@ struct UploadView: View {
     
     // MARK: - Uploading View
     private var uploadingView: some View {
-        VStack(spacing: 40) {
+        VStack(spacing: 32) {
             Spacer()
             
-            VStack(spacing: 24) {
+            VStack(spacing: 20) {
                 ZStack {
-                    Circle().stroke(AppTheme.Colors.surface, lineWidth: 12).frame(width: 160, height: 160)
+                    // Background circle
+                    Circle()
+                        .stroke(Color(.systemGray6), lineWidth: 10)
+                        .frame(width: 180, height: 180)
+                    
+                    // Gradient progress circle
                     Circle()
                         .trim(from: 0, to: uploadManager.uploadProgress)
                         .stroke(
-                            LinearGradient(colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary], startPoint: .topLeading, endPoint: .bottomTrailing),
-                            style: StrokeStyle(lineWidth: 12, lineCap: .round)
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.3, green: 0.85, blue: 0.8),
+                                    Color(red: 0.7, green: 0.5, blue: 0.4)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            style: StrokeStyle(lineWidth: 10, lineCap: .round)
                         )
-                        .frame(width: 160, height: 160)
+                        .frame(width: 180, height: 180)
                         .rotationEffect(.degrees(-90))
-                        .animation(.easeInOut(duration: 0.5), value: uploadManager.uploadProgress)
+                        .animation(.easeOut(duration: 0.4), value: uploadManager.uploadProgress)
                     
-                    VStack(spacing: 4) {
-                        Text("\(Int(uploadManager.uploadProgress * 100))%").font(.system(size: 32, weight: .bold)).foregroundColor(AppTheme.Colors.textPrimary)
-                        Text("Uploading").font(.system(size: 14, weight: .medium)).foregroundColor(AppTheme.Colors.textSecondary)
+                    VStack(spacing: 6) {
+                        Text("\(Int(uploadManager.uploadProgress * 100))%")
+                            .font(.system(size: 42, weight: .bold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                        Text("Uploading")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
                     }
                 }
                 
-                VStack(spacing: 8) {
-                    Text("Processing Your Video").font(.system(size: 24, weight: .bold)).foregroundColor(AppTheme.Colors.textPrimary)
-                    Text("We're optimizing your video for the best viewing experience")
-                        .font(.system(size: 16))
+                VStack(spacing: 6) {
+                    Text("Processing Your Video")
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    Text("Optimizing for best quality")
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
                 }
             }
             
-            VStack(spacing: 12) {
+            VStack(spacing: 14) {
                 uploadStageRow(title: "Analyzing video", isCompleted: uploadManager.uploadProgress > 0.2, isActive: uploadManager.uploadProgress <= 0.2)
                 uploadStageRow(title: "Optimizing quality", isCompleted: uploadManager.uploadProgress > 0.5, isActive: uploadManager.uploadProgress > 0.2 && uploadManager.uploadProgress <= 0.5)
                 uploadStageRow(title: "Generating thumbnail", isCompleted: uploadManager.uploadProgress > 0.8, isActive: uploadManager.uploadProgress > 0.5 && uploadManager.uploadProgress <= 0.8)
                 uploadStageRow(title: "Publishing video", isCompleted: uploadManager.uploadProgress >= 1.0, isActive: uploadManager.uploadProgress > 0.8)
             }
-            .padding(.horizontal, 40)
+            .padding(.horizontal, 32)
             
             if let error = uploadManager.uploadError {
                 VStack(spacing: 16) {
@@ -1071,26 +1087,26 @@ struct UploadView: View {
         VStack(spacing: 32) {
             Spacer()
             
-            VStack(spacing: 20) {
+            VStack(spacing: 24) {
                 ZStack {
                     Circle()
-                        .fill(LinearGradient(colors: [.green.opacity(0.2), .green.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 120, height: 120)
-                        .shadow(color: .green.opacity(0.3), radius: 20, x: 0, y: 10)
+                        .fill(Color.green.opacity(0.12))
+                        .frame(width: 130, height: 130)
+                    
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 64, weight: .medium))
+                        .font(.system(size: 70, weight: .semibold))
                         .foregroundColor(.green)
-                        .scaleEffect(showingSuccessAnimation ? 1.2 : 1.0)
-                        .animation(.spring(response: 0.6, dampingFraction: 0.6), value: showingSuccessAnimation)
+                        .scaleEffect(showingSuccessAnimation ? 1.15 : 1.0)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.65), value: showingSuccessAnimation)
                 }
                 
                 VStack(spacing: 8) {
-                    Text("Video Published!").font(.system(size: 28, weight: .bold)).foregroundColor(AppTheme.Colors.textPrimary)
-                    Text("Your video is now live and ready to inspire viewers around the world!")
-                        .font(.system(size: 16))
+                    Text("Video Published!")
+                        .font(.system(size: 30, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    Text("Your video is now live")
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
                 }
             }
             
@@ -1143,25 +1159,33 @@ struct UploadView: View {
     }
     
     private func uploadStageRow(title: String, isCompleted: Bool, isActive: Bool) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             ZStack {
                 Circle()
-                    .fill(isCompleted ? .green : (isActive ? AppTheme.Colors.primary : AppTheme.Colors.surface))
-                    .frame(width: 20, height: 20)
+                    .fill(isCompleted ? Color.green : (isActive ? AppTheme.Colors.primary : Color(.systemGray5)))
+                    .frame(width: 24, height: 24)
                 
                 if isCompleted {
-                    Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundColor(.white)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
                 } else if isActive {
-                    ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white)).scaleEffect(0.5)
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.55)
                 }
             }
+            
             Text(title)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(isCompleted ? .green : (isActive ? AppTheme.Colors.textPrimary : AppTheme.Colors.textSecondary))
+                .font(.system(size: 16, weight: isActive ? .semibold : .medium))
+                .foregroundColor(
+                    isCompleted ? Color.green : (isActive ? AppTheme.Colors.textPrimary : AppTheme.Colors.textSecondary)
+                )
+            
             Spacer()
         }
-        .animation(.easeInOut(duration: 0.3), value: isCompleted)
-        .animation(.easeInOut(duration: 0.3), value: isActive)
+        .animation(.easeOut(duration: 0.25), value: isCompleted)
+        .animation(.easeOut(duration: 0.25), value: isActive)
     }
     
     private var navigationTrailingButton: some View {
