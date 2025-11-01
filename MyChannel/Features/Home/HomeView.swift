@@ -1609,16 +1609,21 @@ private struct MinimalMusicSection: View {
             ("Boosie BadAzz", "boosie-badazz", 8_500_000, "Baton Rouge, LA")
         ]
         
-        let curated: [(String,String,Int,String?)] = OwnerProfile.instagramFriends.map { ($0.name, $0.avatar, Int.random(in: 50_000...350_000), nil) }
-        let extras: [(String,String,Int,String?)] = [
-            ("@scatzripky6", "https://unavatar.io/instagram/scatzripky6", 346_300, "Flint, MI"),
-            ("@kleanupman__", "https://unavatar.io/instagram/kleanupman__", 200_800, "Detroit, MI"),
-            ("@ynjay_", "https://unavatar.io/instagram/ynjay_", 232_000, "Flint, MI")
+        // 🎵 LOCAL ARTISTS WITH ASSETS - Using local images for fast loading!
+        let localArtists: [(String,String,Int,String?)] = [
+            ("HTG Nook", "HTGNookAvatar", 215_600, "Flint, MI"),
+            ("Kleanup Man", "KleanupManAvatar", 200_800, "Detroit, MI"),
+            ("Scatz Ripky", "ScatzAvatar", 346_300, "Flint, MI"),
+            ("YN Jay", "WaypAvatar", 232_000, "Flint, MI"),
+            ("YSR Loski Brim", "YSRLoskiBrim", 189_400, "Flint, MI")
         ]
+        
+        let curated: [(String,String,Int,String?)] = OwnerProfile.instagramFriends.map { ($0.name, $0.avatar, Int.random(in: 50_000...350_000), nil) }
+        
         var seen = Set<String>()
         var ordered: [(String,String,Int,String?)] = []
-        // Boosie goes first!
-        for item in (boosie + curated + extras) {
+        // Boosie first, then local artists with real pics, then the rest!
+        for item in (boosie + localArtists + curated) {
             let key = item.0.lowercased()
             if seen.insert(key).inserted {
                 ordered.append(item)
