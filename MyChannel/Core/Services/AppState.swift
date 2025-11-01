@@ -226,7 +226,7 @@ class AppState: ObservableObject {
         return subscriptions.contains(creatorId)
     }
     
-    // MARK: - Data Persistence
+    // MARK: - Data Persistence (BULLETPROOF with DataPersistenceService)
     private func saveUserData() {
         guard let userId = currentUser?.id else { return }
         
@@ -236,9 +236,23 @@ class AppState: ObservableObject {
             "savedPlaylists": Array(savedPlaylists),
             "subscriptions": Array(subscriptions),
             "watchHistory": watchHistory
-        ]
+        ] as [String : Any]
         
-        UserDefaults.standard.set(userData, forKey: "userData_\(userId)")
+        // 🛡️ BULLETPROOF: Use DataPersistenceService with auto-retry and cloud backup
+        Task {
+            do {
+                try await DataPersistenceService.shared.saveDualLayer(
+                    userData,
+                    key: "userData_\(userId)",
+                    collectionPath: "userCollections",
+                    docId: userId
+                )
+                print("✅ User data saved (bulletproof): \(userData.keys)")
+            } catch {
+                print("🚨 Failed to save user data: \(error)")
+                // Data is still in UserDefaults from saveDualLayer's local-first approach
+            }
+        }
     }
     
     private func loadUserData() {

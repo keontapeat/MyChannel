@@ -392,10 +392,21 @@ class AIRealtimeRankingService: ObservableObject {
         return scored
     }
     
-    // MARK: - AI API Calls
+    // MARK: - AI API Calls (BULLETPROOF with AIOptimizationService)
     private func getClaudeScore(prompt: String) async -> Double? {
+        guard let userId = AuthenticationManager.shared.currentUser?.id else { return nil }
+        
         do {
-            let response = try await AnthropicService.shared.sendMessage(prompt)
+            // 🛡️ OPTIMIZED: Rate limiting, caching, cost tracking
+            let cacheKey = "claude_score_\(prompt.prefix(50).hash)"
+            let response = try await AIOptimizationService.shared.makeOptimizedRequest(
+                service: .claude,
+                userId: userId,
+                prompt: prompt,
+                cacheKey: cacheKey,
+                cacheTTL: 3600 // Cache for 1 hour
+            )
+            
             if let score = Double(response.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)) {
                 return min(max(score, 0), 100)
             }
@@ -406,11 +417,21 @@ class AIRealtimeRankingService: ObservableObject {
     }
     
     private func getGPTScore(prompt: String) async -> Double? {
+        guard let userId = AuthenticationManager.shared.currentUser?.id else { return nil }
+        
         do {
-            let response = try await OpenAIService.shared.chat(messages: [
-                .init(role: "system", content: "You are an expert content analyst. Respond with ONLY a number 0-100."),
-                .init(role: "user", content: prompt)
-            ])
+            // 🛡️ OPTIMIZED: Rate limiting, caching, cost tracking
+            let cacheKey = "gpt_score_\(prompt.prefix(50).hash)"
+            let fullPrompt = "You are an expert content analyst. Respond with ONLY a number 0-100.\n\n\(prompt)"
+            
+            let response = try await AIOptimizationService.shared.makeOptimizedRequest(
+                service: .gpt4,
+                userId: userId,
+                prompt: fullPrompt,
+                cacheKey: cacheKey,
+                cacheTTL: 3600 // Cache for 1 hour
+            )
+            
             if let score = Double(response.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)) {
                 return min(max(score, 0), 100)
             }
