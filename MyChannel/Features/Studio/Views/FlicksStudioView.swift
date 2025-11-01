@@ -462,7 +462,7 @@ struct FlickEditorSheet: View {
     }
 }
 
-#Preview {
+#Preview("Studio View") {
     NavigationStack {
         FlicksStudioView()
     }

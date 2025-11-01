@@ -552,7 +552,7 @@ struct VideoEditorSheet: View {
     }
 }
 
-#Preview {
+#Preview("Studio View") {
     NavigationStack {
         ContentManagementView()
             .environmentObject(AppState())

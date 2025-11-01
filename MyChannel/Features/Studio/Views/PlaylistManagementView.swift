@@ -114,14 +114,7 @@ struct PlaylistManagementView: View {
     }
 }
 
-struct Playlist: Identifiable {
-    let id = UUID().uuidString
-    var title: String
-    var description: String
-    var videoCount: Int = 0
-    var views: Int = 0
-    var isPublic: Bool = true
-}
+// Using existing Playlist model from Core/Models/Playlist.swift
 
 struct PlaylistRow: View {
     let playlist: Playlist
@@ -139,7 +132,7 @@ struct PlaylistRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(playlist.title)
                         .font(.system(size: 16, weight: .semibold))
-                    Text("\(playlist.videoCount) videos · \(playlist.views) views")
+                    Text("\(playlist.videoCount) videos")
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
@@ -177,7 +170,12 @@ struct CreatePlaylistSheet: View {
                 }
                 Section {
                     Button("Create Playlist") {
-                        let playlist = Playlist(title: title, description: description, isPublic: isPublic)
+                        let playlist = Playlist(
+                            title: title,
+                            description: description,
+                            creatorId: "current_user", // TODO: Get from AuthenticationManager
+                            isPublic: isPublic
+                        )
                         onCreate(playlist)
                         dismiss()
                     }
@@ -221,11 +219,6 @@ struct EditPlaylistSheet: View {
                         Spacer()
                         Text("\(playlist.videoCount)")
                     }
-                    HStack {
-                        Text("Views")
-                        Spacer()
-                        Text("\(playlist.views)")
-                    }
                 }
                 Section {
                     Button("Save Changes") { dismiss() }
@@ -243,7 +236,7 @@ struct EditPlaylistSheet: View {
     }
 }
 
-#Preview {
+#Preview("Playlist Management") {
     NavigationStack {
         PlaylistManagementView()
     }

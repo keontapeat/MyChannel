@@ -146,7 +146,7 @@ struct ModerationCard: View {
     }
 }
 
-#Preview {
+#Preview("Studio View") {
     NavigationStack {
         CommunityManagementView()
     }

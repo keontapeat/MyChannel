@@ -125,7 +125,7 @@ struct ChannelCustomizationView: View {
     }
 }
 
-#Preview {
+#Preview("Studio View") {
     NavigationStack {
         ChannelCustomizationView()
     }

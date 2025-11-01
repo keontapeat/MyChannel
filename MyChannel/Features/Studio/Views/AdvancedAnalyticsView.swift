@@ -628,7 +628,7 @@ struct TrafficSourceRow: View {
     }
 }
 
-#Preview {
+#Preview("Advanced Analytics") {
     NavigationStack {
         AdvancedAnalyticsView()
     }
