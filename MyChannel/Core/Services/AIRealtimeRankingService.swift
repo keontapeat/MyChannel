@@ -316,34 +316,41 @@ class AIRealtimeRankingService: ObservableObject {
         // Fetch latest videos with real-time metrics
         var allVideos: [RankedVideo] = []
         
-        // Get from VideoFirestoreService - fetch real videos
+        // Get from VideoFirestoreService - fetch real videos from all creators
         #if canImport(FirebaseFirestore)
-        let recentVideos = await VideoFirestoreService.shared.fetchRecentVideos(limit: 50)
-        
-        // Convert to RankedVideo
-        for video in recentVideos {
-            let rankedVideo = RankedVideo(
-                id: video.id,
-                title: video.title,
-                thumbnail: video.thumbnailURL,
-                creatorName: video.creator.displayName,
-                creatorAvatar: video.creator.profileImageURL,
-                views: video.viewCount,
-                likes: video.likeCount,
-                comments: video.commentCount ?? 0,
-                shares: 0, // TODO: Track shares
-                viralityScore: 0,
-                engagementVelocity: 0,
-                overallRank: 0,
-                rankChange: 0,
-                isGoingViral: false,
-                lastUpdated: Date()
-            )
-            allVideos.append(rankedVideo)
+        // Fetch videos from all seeded users
+        let mixedUsers = await SmartUserSeederService.shared.getMixedUsersForRankings(limit: 20)
+        for user in mixedUsers {
+            let userVideos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: user.id, limit: 3)
+            for video in userVideos {
+                let rankedVideo = RankedVideo(
+                    id: video.id,
+                    title: video.title,
+                    thumbnail: video.thumbnailURL,
+                    creatorName: video.creator.displayName,
+                    creatorAvatar: video.creator.profileImageURL,
+                    views: video.viewCount,
+                    likes: video.likeCount,
+                    comments: video.commentCount ?? 0,
+                    shares: 0, // TODO: Track shares
+                    viralityScore: 0,
+                    engagementVelocity: 0,
+                    overallRank: 0,
+                    rankChange: 0,
+                    isGoingViral: false,
+                    lastUpdated: Date()
+                )
+                allVideos.append(rankedVideo)
+            }
         }
+        #else
+        // If no Firestore, skip
+        topVideos = []
+        viralNow = []
+        return
         #endif
         
-        // If no videos from Firestore, skip (empty is fine)
+        // If no videos found, skip (empty is fine)
         if allVideos.isEmpty {
             topVideos = []
             viralNow = []
@@ -388,7 +395,7 @@ class AIRealtimeRankingService: ObservableObject {
     // MARK: - AI API Calls
     private func getClaudeScore(prompt: String) async -> Double? {
         do {
-            let response = try await AnthropicService.shared.sendMessage(message: prompt)
+            let response = try await AnthropicService.shared.sendMessage(prompt)
             if let score = Double(response.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)) {
                 return min(max(score, 0), 100)
             }

@@ -253,7 +253,7 @@ class SmartUserSeederService: ObservableObject {
         """
         
         // Try Claude first
-        if let name = try? await AnthropicService.shared.sendMessage(message: prompt) {
+        if let name = try? await AnthropicService.shared.sendMessage(prompt) {
             return name.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
         }
         
