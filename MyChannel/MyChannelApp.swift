@@ -49,6 +49,11 @@ struct MyChannelApp: App {
                     }
                     #endif
                     
+                    // 🔥 INITIALIZE SMART USER SEEDER: Populate app with AI-generated users
+                    Task {
+                        await SmartUserSeederService.shared.initialize()
+                    }
+                    
                     // Ensure auth state is checked at launch and sync to AppState
                     authManager.checkAuthenticationStatus()
                     if let current = authManager.currentUser {

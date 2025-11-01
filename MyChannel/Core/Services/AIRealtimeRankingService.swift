@@ -130,15 +130,14 @@ class AIRealtimeRankingService: ObservableObject {
         // Fetch all users with their latest stats
         var allCreators: [RankedCreator] = []
         
-        // Get from Firestore/local storage
-        // For now, use current authenticated user and sample data
-        if let currentUser = AuthenticationManager.shared.currentUser {
-            let creator = await buildRankedCreator(from: currentUser)
+        // 🔥 GET MIXED USERS: Real users + Smart seeded users
+        let mixedUsers = await SmartUserSeederService.shared.getMixedUsersForRankings(limit: 50)
+        
+        // Convert all to RankedCreator
+        for user in mixedUsers {
+            let creator = await buildRankedCreator(from: user)
             allCreators.append(creator)
         }
-        
-        // Add sample creators for demo (replace with real Firestore fetch)
-        allCreators += await generateSampleCreators()
         
         // 🔥 AI RANKING: Use triple AI to score each creator
         for i in 0..<allCreators.count {
@@ -382,29 +381,6 @@ class AIRealtimeRankingService: ObservableObject {
         return nil
     }
     
-    // MARK: - Sample Data (Replace with real Firestore fetches)
-    private func generateSampleCreators() async -> [RankedCreator] {
-        return [
-            RankedCreator(id: "creator1", name: "HTG Nook", username: "htgnook", avatar: "HTGNookAvatar", isVerified: true, views: 215_600, subscribers: 50_000, videos: 45, likes: 12_500, engagement: 8.5, viralityScore: 0, contentQualityScore: 0, trendingVelocity: 0, predictedGrowth: 0, overallRank: 0, lastUpdated: Date(), rankChange: 0, trendingBadge: nil),
-            RankedCreator(id: "creator2", name: "Kleanup Man", username: "kleanupman", avatar: "KleanupManAvatar", isVerified: true, views: 200_800, subscribers: 45_000, videos: 38, likes: 11_000, engagement: 7.8, viralityScore: 0, contentQualityScore: 0, trendingVelocity: 0, predictedGrowth: 0, overallRank: 0, lastUpdated: Date(), rankChange: 0, trendingBadge: nil),
-            RankedCreator(id: "creator3", name: "Scatz Ripky", username: "scatzripky", avatar: "ScatzAvatar", isVerified: false, views: 346_300, subscribers: 62_000, videos: 52, likes: 18_400, engagement: 9.2, viralityScore: 0, contentQualityScore: 0, trendingVelocity: 0, predictedGrowth: 0, overallRank: 0, lastUpdated: Date(), rankChange: 0, trendingBadge: nil),
-            RankedCreator(id: "creator4", name: "YN Jay", username: "ynjay", avatar: "WaypAvatar", isVerified: true, views: 232_000, subscribers: 48_000, videos: 41, likes: 13_200, engagement: 8.1, viralityScore: 0, contentQualityScore: 0, trendingVelocity: 0, predictedGrowth: 0, overallRank: 0, lastUpdated: Date(), rankChange: 0, trendingBadge: nil),
-            RankedCreator(id: "creator5", name: "Boosie BadAzz", username: "boosiebadazz", avatar: "boosie-badazz", isVerified: true, views: 8_500_000, subscribers: 1_200_000, videos: 350, likes: 450_000, engagement: 12.5, viralityScore: 0, contentQualityScore: 0, trendingVelocity: 0, predictedGrowth: 0, overallRank: 0, lastUpdated: Date(), rankChange: 0, trendingBadge: nil),
-        ]
-    }
-    
-    private func generateSampleChannels() async -> [RankedChannel] {
-        return [
-            RankedChannel(id: "channel1", name: "HTG Nook", avatar: "HTGNookAvatar", subscribers: 50_000, totalViews: 215_600, videoCount: 45, overallRank: 0, rankChange: 0, lastUpdated: Date()),
-            RankedChannel(id: "channel2", name: "Boosie BadAzz", avatar: "boosie-badazz", subscribers: 1_200_000, totalViews: 8_500_000, videoCount: 350, overallRank: 0, rankChange: 0, lastUpdated: Date()),
-        ]
-    }
-    
-    private func generateSampleVideos() async -> [RankedVideo] {
-        return [
-            RankedVideo(id: "video1", title: "Gun Video - Shot By Keonta", thumbnail: "", creatorName: "Keonta", creatorAvatar: nil, views: 5_420, likes: 342, comments: 89, shares: 23, viralityScore: 0, engagementVelocity: 0, overallRank: 0, rankChange: 0, isGoingViral: false, lastUpdated: Date()),
-            RankedVideo(id: "video2", title: "Flint City Cypher", thumbnail: "", creatorName: "HTG Nook", creatorAvatar: "HTGNookAvatar", views: 12_850, likes: 892, comments: 156, shares: 67, viralityScore: 0, engagementVelocity: 0, overallRank: 0, rankChange: 0, isGoingViral: false, lastUpdated: Date()),
-        ]
-    }
+    // Sample data removed - now using SmartUserSeederService!
 }
 

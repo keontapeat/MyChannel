@@ -213,6 +213,13 @@ class AuthenticationManager: ObservableObject {
             isAuthenticated = true
             authState = .authenticated
             NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
+            
+            // 🔥 REGISTER REAL USER: Replace mock users with this real user
+            if let user = currentUser {
+                Task {
+                    await SmartUserSeederService.shared.registerRealUser(user)
+                }
+            }
         } catch {
             authState = .error(error.localizedDescription)
             throw error
@@ -241,6 +248,13 @@ class AuthenticationManager: ObservableObject {
                 )
                 isAuthenticated = true
                 authState = .authenticated
+                
+                // 🔥 REGISTER REAL USER
+                if let user = currentUser {
+                    Task {
+                        await SmartUserSeederService.shared.registerRealUser(user)
+                    }
+                }
             } catch {
                 authState = .error(error.localizedDescription)
             }
@@ -267,6 +281,13 @@ class AuthenticationManager: ObservableObject {
             )
             isAuthenticated = true
             authState = .authenticated
+            
+            // 🔥 REGISTER REAL USER
+            if let user = currentUser {
+                Task {
+                    await SmartUserSeederService.shared.registerRealUser(user)
+                }
+            }
         } catch {
             authState = .error(error.localizedDescription)
         }
