@@ -3,6 +3,7 @@ import SwiftUI
 struct ProfessionalCommentsSheet: View {
     let video: Video
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appState: AppState
     @State private var newComment = ""
     @State private var comments: [VideoComment] = []
     @FocusState private var isTextFieldFocused: Bool
@@ -47,7 +48,7 @@ struct ProfessionalCommentsSheet: View {
                             ProfessionalCommentRow(comment: comment)
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 16)
-                                .background(.ultraThinMaterial.opacity(0.3))
+                                .background(Color.black.opacity(0.1))
                         }
                     }
                 }
@@ -112,6 +113,7 @@ struct ProfessionalCommentsSheet: View {
     
     private func postComment() {
         guard !newComment.isEmpty else { return }
+        guard appState.requireAuthentication(hint: "Sign in to comment.") else { return }
         
         let comment = VideoComment(
             author: User.sampleUsers[0],

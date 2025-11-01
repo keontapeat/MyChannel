@@ -1,0 +1,50 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() { return request.auth != null; }
+    function uid() { return isSignedIn() ? request.auth.uid : null; }
+
+    // User avatars/banners
+    match /user-avatars/{userId}.jpg {
+      allow read: if true;
+      allow write: if isSignedIn() && uid() == userId;
+    }
+    match /user-banners/{userId}/{file} {
+      allow read: if true;
+      allow write: if isSignedIn() && uid() == userId;
+    }
+
+    // Video assets
+    match /videos/{channelId}/{videoId}/{rest=**} {
+      // HLS segments should be served via CDN signed URLs; allow read for now (can be tightened with token-based rules + CDN)
+      allow read: if true;
+      allow write: if isSignedIn() && uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+    }
+
+    // Thumbnails
+    match /thumbnails/{channelId}/{videoId}/{file} {
+      allow read: if true;
+      allow write: if isSignedIn() && uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+    }
+
+    // Captions
+    match /captions/{videoId}/{lang}.vtt {
+      allow read: if true;
+      allow write: if isSignedIn() && uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+    }
+
+    // Dubs
+    match /dubs/{videoId}/{lang}.m4a {
+      allow read: if true;
+      allow write: if isSignedIn() && uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+    }
+
+    // Playlist thumbnails
+    match /playlist-thumbs/{playlistId}.jpg {
+      allow read: if true;
+      allow write: if isSignedIn() && uid() == get(/databases/(default)/documents/playlists/$(playlistId)).data.ownerUid;
+    }
+  }
+}
+
+

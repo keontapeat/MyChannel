@@ -6,6 +6,10 @@
 //
 
 import SwiftUI
+import PhotosUI
+#if canImport(FirebaseStorage)
+import FirebaseStorage
+#endif
 
 struct PlaylistDetailView: View {
     let playlist: Playlist
@@ -16,6 +20,11 @@ struct PlaylistDetailView: View {
     @State private var showingDeleteAlert = false
     @State private var playlistVideos: [Video] = []
     @State private var isLoading = false
+    @State private var pickingThumb = false
+    @State private var selectedImage: UIImage? = nil
+    #if canImport(FirebaseStorage)
+    @State private var uploadTask: StorageUploadTask? = nil
+    #endif
     
     var body: some View {
         ScrollView {
@@ -36,6 +45,7 @@ struct PlaylistDetailView: View {
                     Button("Edit Playlist") {
                         showingEditSheet = true
                     }
+                    Button("Change Thumbnail") { pickingThumb = true }
                     
                     Button("Share Playlist") {
                         // TODO: Share functionality
@@ -54,6 +64,8 @@ struct PlaylistDetailView: View {
         .sheet(isPresented: $showingEditSheet) {
             EditPlaylistView(playlist: playlist, playlistService: playlistService)
         }
+        .photosPicker(isPresented: $pickingThumb, selection: .constant(nil), matching: .images, photoLibrary: .shared())
+        .onChange(of: pickingThumb) { _ in }
         .alert("Delete Playlist", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
@@ -215,6 +227,22 @@ struct PlaylistDetailView: View {
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
     }
+
+    // MARK: - Thumbnail Upload
+    private func uploadThumbnail(_ image: UIImage) async {
+        guard let data = image.jpegData(compressionQuality: 0.9) else { return }
+        let path = "playlist-thumbs/\(playlist.id).jpg"
+        #if canImport(FirebaseStorage)
+        let ref = Storage.storage().reference().child(path)
+        do {
+            let _ = try await ref.putDataAsync(data, metadata: { let md = StorageMetadata(); md.contentType = "image/jpeg"; return md }())
+            let url = try await ref.downloadURL()
+            try await PlaylistFirestoreService.shared.setThumbnailURL(playlistId: playlist.id, url: url.absoluteString)
+        } catch {
+            print("thumbnail upload error: \(error)")
+        }
+        #endif
+    }
     
     private var videosListSection: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -225,9 +253,7 @@ struct PlaylistDetailView: View {
                 
                 Spacer()
                 
-                Button("Add Videos") {
-                    // TODO: Add videos to playlist
-                }
+                Button("Add Videos") { }
                 .font(.subheadline)
                 .foregroundColor(.blue)
             }
@@ -283,23 +309,10 @@ struct PlaylistDetailView: View {
     
     // MARK: - Actions
     private func loadPlaylistVideos() async {
-        isLoading = true
-        defer { isLoading = false }
-        
-        // Simulate loading delay
-        try? await Task.sleep(nanoseconds: 500_000_000)
-        
-        // Get videos by IDs (in a real app, this would be a service call)
-        playlistVideos = Video.sampleVideos.filter { video in
-            playlist.videoIds.contains(video.id)
-        }
-        
-        // Sort by playlist order
-        playlistVideos.sort { video1, video2 in
-            let index1 = playlist.videoIds.firstIndex(of: video1.id) ?? 0
-            let index2 = playlist.videoIds.firstIndex(of: video2.id) ?? 0
-            return index1 < index2
-        }
+        isLoading = true; defer { isLoading = false }
+        let ids = (try? await PlaylistFirestoreService.shared.getPlaylistVideoIds(playlistId: playlist.id)) ?? []
+        // Map to videos. Replace this with a real fetch by IDs when your API is ready.
+        playlistVideos = Video.sampleVideos.filter { ids.contains($0.id) }
     }
     
     private func playAll() {
@@ -319,27 +332,11 @@ struct PlaylistDetailView: View {
     }
     
     private func removeVideo(_ video: Video) {
-        Task {
-            do {
-                try await playlistService.removeVideoFromPlaylist(videoId: video.id, playlistId: playlist.id)
-                await loadPlaylistVideos()
-            } catch {
-                print("Error removing video: \(error)")
-            }
-        }
+        Task { try? await PlaylistFirestoreService.shared.removeVideo(playlistId: playlist.id, videoId: video.id); await loadPlaylistVideos() }
     }
     
     private func deletePlaylist() {
-        Task {
-            do {
-                try await playlistService.deletePlaylist(id: playlist.id)
-                await MainActor.run {
-                    dismiss()
-                }
-            } catch {
-                print("Error deleting playlist: \(error)")
-            }
-        }
+        Task { try? await PlaylistFirestoreService.shared.deletePlaylist(id: playlist.id); await MainActor.run { dismiss() } }
     }
     
     private func downloadPlaylist() {
@@ -446,7 +443,7 @@ struct PlaylistVideoRow: View {
 // MARK: - Edit Playlist View
 struct EditPlaylistView: View {
     let playlist: Playlist
-    @ObservedObject var playlistService: MockPlaylistService
+    let playlistService: MockPlaylistService
     @Environment(\.dismiss) private var dismiss
     
     @State private var title: String
@@ -502,42 +499,16 @@ struct EditPlaylistView: View {
                     }
                 }
                 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        saveChanges()
-                    }
-                    .disabled(title.isEmpty)
-                }
+                ToolbarItem(placement: .navigationBarTrailing) { Button("Save") { saveChanges() }.disabled(title.isEmpty) }
             }
         }
     }
     
     private func saveChanges() {
         let tagArray = tags.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        
-        let updatedPlaylist = Playlist(
-            id: playlist.id,
-            title: title,
-            description: description,
-            thumbnailURL: playlist.thumbnailURL,
-            creatorId: playlist.creatorId,
-            videoIds: playlist.videoIds,
-            isPublic: isPublic,
-            createdAt: playlist.createdAt,
-            updatedAt: Date(),
-            tags: tagArray,
-            category: selectedCategory
-        )
-        
         Task {
-            do {
-                _ = try await playlistService.updatePlaylist(updatedPlaylist)
-                await MainActor.run {
-                    dismiss()
-                }
-            } catch {
-                print("Error updating playlist: \(error)")
-            }
+            try? await PlaylistFirestoreService.shared.updatePlaylist(id: playlist.id, title: title, description: description, category: selectedCategory, visibility: isPublic ? "public" : "private", tags: tagArray)
+            await MainActor.run { dismiss() }
         }
     }
 }

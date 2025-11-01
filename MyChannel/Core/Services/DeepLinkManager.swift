@@ -6,6 +6,7 @@ enum DeepLinkRoute: Equatable {
     case user(id: String)
     case playlist(id: String)
     case live(streamId: String)
+    case studio(tab: String)
     case unknown
 }
 
@@ -43,6 +44,9 @@ final class DeepLinkManager {
             if pathComponents.count >= 2 { return .playlist(id: pathComponents[1]) }
         case "live":
             if pathComponents.count >= 2 { return .live(streamId: pathComponents[1]) }
+        case "studio":
+            let tab = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "tab" })?.value ?? "overview"
+            return .studio(tab: tab)
         default:
             break
         }

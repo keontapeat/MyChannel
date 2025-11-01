@@ -12,6 +12,7 @@ import UserNotifications
 #if canImport(GoogleSignIn)
 import GoogleSignIn
 #endif
+import Foundation
 
 final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
     // Optional: Firebase App Check
@@ -50,7 +51,11 @@ final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
             GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientId)
         }
         #endif
-
+        // ChannelBoost install log (non-blocking)
+        Task { @MainActor in
+            let locale = Locale.current.identifier
+            await ChannelBoostService.shared.logInstall(platform: "ios", locale: locale, source: "app", campaign: nil, referral: nil)
+        }
         // Set notification center delegate early (only if push notifications are available)
         // Note: Push notifications require a paid Apple Developer Program membership
         #if canImport(FirebaseMessaging)

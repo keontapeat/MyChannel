@@ -10,7 +10,7 @@ import SwiftUI
 struct LiveChatView: View {
     let streamId: String
     let isStreamer: Bool
-    @StateObject private var chatService = MockLiveChatService()
+    @StateObject private var chatService = RealTimeChatService.shared
     @State private var messageText = ""
     @State private var showingUserList = false
     @State private var showingChatSettings = false
@@ -38,12 +38,8 @@ struct LiveChatView: View {
                 try? await chatService.disconnectFromChat()
             }
         }
-        .sheet(isPresented: $showingUserList) {
-            ChatUserListView(chatService: chatService)
-        }
-        .sheet(isPresented: $showingChatSettings) {
-            ChatSettingsView(chatService: chatService, streamId: streamId)
-        }
+        .sheet(isPresented: $showingUserList) { ChatUserListView(chatService: chatService) }
+        .sheet(isPresented: $showingChatSettings) { ChatSettingsView(chatService: chatService, streamId: streamId) }
         .sheet(isPresented: $showingSuperChatSheet) {
             SuperChatView(streamId: streamId, chatService: chatService)
         }

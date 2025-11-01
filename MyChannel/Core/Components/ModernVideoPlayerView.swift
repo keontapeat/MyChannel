@@ -199,8 +199,7 @@ struct ModernVideoPlayerView: View {
                     likeCount: 0,
                     creator: video.creator,
                     category: .other,
-                    isPublic: false,
-                    isPremium: false
+                    isPublic: false
                 )
                 playerViewModel.setupPlayer(with: adVideo)
                 playerViewModel.play()

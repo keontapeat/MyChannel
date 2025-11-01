@@ -59,6 +59,15 @@ struct ChannelDetailView: View {
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
                         isSubscribed.toggle()
+                        let payload: [String: Any] = [
+                            "ownerUid": videos.first?.creator.id ?? "",
+                            "name": name
+                        ]
+                        if isSubscribed {
+                            NotificationCenter.default.post(name: NSNotification.Name("SubscribeToCreatorNotifications"), object: payload)
+                        } else {
+                            NotificationCenter.default.post(name: NSNotification.Name("UnsubscribeFromCreatorNotifications"), object: payload)
+                        }
                     }
                 } label: {
                     HStack(spacing: 8) {

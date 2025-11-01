@@ -335,6 +335,14 @@ struct ChatSettings: Codable, Equatable {
 
 // MARK: - Live Chat Service Protocol
 protocol LiveChatServiceProtocol {
+    // Observed state properties for UI binding
+    var messages: [ChatMessage] { get }
+    var chatUsers: [ChatUser] { get }
+    var statistics: ChatStatistics { get }
+    var settings: ChatSettings { get }
+    var isConnected: Bool { get }
+    var isLoading: Bool { get }
+
     func connectToChat(streamId: String) async throws
     func disconnectFromChat() async throws
     func sendMessage(_ message: ChatMessage) async throws
@@ -342,14 +350,14 @@ protocol LiveChatServiceProtocol {
     func getMessages(for streamId: String, limit: Int) async throws -> [ChatMessage]
     func getChatUsers(for streamId: String) async throws -> [ChatUser]
     func getChatStatistics(for streamId: String) async throws -> ChatStatistics
-    func moderateMessage(messageId: String, action: ModerationAction) async throws
+    func moderateMessage(messageId: String, action: ChatModerationAction) async throws
     func updateChatSettings(streamId: String, settings: ChatSettings) async throws
     func pinMessage(messageId: String) async throws
     func unpinMessage(messageId: String) async throws
 }
 
-// MARK: - Moderation Actions
-enum ModerationAction: String, CaseIterable {
+// MARK: - Chat Moderation Actions
+enum ChatModerationAction: String, CaseIterable {
     case delete = "delete"
     case timeout = "timeout"
     case ban = "ban"
@@ -476,7 +484,7 @@ class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
         return statistics
     }
     
-    func moderateMessage(messageId: String, action: ModerationAction) async throws {
+    func moderateMessage(messageId: String, action: ChatModerationAction) async throws {
         guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
         
         switch action {

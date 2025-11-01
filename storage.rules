@@ -1,39 +1,48 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Users can upload their own profile images and videos
-    match /users/{userId}/{allPaths=**} {
+    function isSignedIn() { return request.auth != null; }
+    function uid() { return isSignedIn() ? request.auth.uid : null; }
+
+    // User avatars/banners (store per-user folder)
+    match /user-avatars/{userId}/{file} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if isSignedIn() && uid() == userId;
     }
-    
-    // Video uploads - require auth and same UID
-    match /videos/{userId}/{allPaths=**} {
+    match /user-banners/{userId}/{file} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // Thumbnails - require auth and same UID
-    match /thumbnails/{userId}/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // Public assets can be read by anyone
-    match /public/{allPaths=**} {
-      allow read: if true;
-      allow write: if false;
-    }
-    
-    match /stories/{userId}/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if isSignedIn() && uid() == userId;
     }
 
-    // Profile images and banners
-    match /profiles/{userId}/{allPaths=**} {
+    // Video assets
+    match /videos/{channelId}/{videoId}/{rest=**} {
+      // HLS segments should be served via CDN signed URLs; allow read for now (can be tightened with token-based rules + CDN)
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if isSignedIn() && uid() == firestore.get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+    }
+
+    // Thumbnails
+    match /thumbnails/{channelId}/{videoId}/{file} {
+      allow read: if true;
+      allow write: if isSignedIn() && uid() == firestore.get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+    }
+
+    // Captions (store as /captions/{videoId}/{lang}/{filename})
+    match /captions/{videoId}/{lang}/{file} {
+      allow read: if true;
+      allow write: if isSignedIn() && uid() == firestore.get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+    }
+
+    // Dubs (store as /dubs/{videoId}/{lang}/{filename})
+    match /dubs/{videoId}/{lang}/{file} {
+      allow read: if true;
+      allow write: if isSignedIn() && uid() == firestore.get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+    }
+
+    // Playlist thumbnails (store per-playlist folder)
+    match /playlist-thumbs/{playlistId}/{file} {
+      allow read: if true;
+      allow write: if isSignedIn() && uid() == firestore.get(/databases/(default)/documents/playlists/$(playlistId)).data.ownerUid;
     }
   }
 }

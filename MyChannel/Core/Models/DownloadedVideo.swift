@@ -65,35 +65,7 @@ struct DownloadedVideo: Identifiable, Codable {
     }
 }
 
-// MARK: - Download Quality Enum
-enum DownloadQuality: String, CaseIterable, Codable {
-    case low = "360p"
-    case medium = "720p"
-    case high = "1080p"
-    case ultra = "4K"
-    
-    var displayName: String {
-        return rawValue
-    }
-    
-    var description: String {
-        switch self {
-        case .low: return "Good for data saving"
-        case .medium: return "Balanced quality and size"
-        case .high: return "High quality, larger file"
-        case .ultra: return "Ultra HD, very large file"
-        }
-    }
-    
-    var color: Color {
-        switch self {
-        case .low: return .orange
-        case .medium: return .blue
-        case .high: return .purple
-        case .ultra: return .pink
-        }
-    }
-}
+// MARK: - Download Quality Enum (using the one from OfflineDownloadService)
 
 // MARK: - Sample Data
 extension DownloadedVideo {
@@ -127,7 +99,7 @@ extension DownloadedVideo {
                 channelName: "Code Masters",
                 thumbnailURL: "https://images.unsplash.com/photo-1517077304055-6e89abbf09b0?w=500&h=281&fit=crop",
                 duration: 1800,
-                quality: .ultra,
+                quality: .highest,
                 fileSize: 450 * 1024 * 1024, // 450 MB
                 downloadDate: Calendar.current.date(byAdding: .day, value: -2, to: Date()) ?? Date(),
                 isWatched: false

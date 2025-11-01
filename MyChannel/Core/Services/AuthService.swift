@@ -20,11 +20,18 @@ class AuthService: ObservableObject {
     @Published var currentUser: User?
     @Published var authState: AuthState = .unauthenticated
     @Published var isLoading: Bool = false
+    @Published var twoFactorEnabled: Bool = false
+    @Published var sessions: [DeviceSession] = []
     
     private let networkService = NetworkService.shared
     private let keychain = KeychainHelper.shared
     private var cancellables = Set<AnyCancellable>()
     private var tokenRefreshTimer: Timer?
+    private let defaults = UserDefaults.standard
+    private let maxAttempts = 5
+    private let attemptWindow: TimeInterval = 10 * 60
+    private let lockoutDuration: TimeInterval = 10 * 60
+    private var pendingTwoFactorChallengeId: String?
     
     enum AuthState: Equatable {
         case unauthenticated
@@ -49,6 +56,7 @@ class AuthService: ObservableObject {
     private init() {
         checkAuthenticationStatus()
         setupTokenRefresh()
+        twoFactorEnabled = defaults.bool(forKey: "auth.twoFactorEnabled")
     }
 
     // MARK: - Bridge helpers to sync with app-wide managers
@@ -95,6 +103,11 @@ class AuthService: ObservableObject {
             isLoading = false
         }
         
+        if let lockUntil = defaults.object(forKey: "auth.lockUntil") as? Date, lockUntil > Date() {
+            authState = .error(AuthError.tooManyAttempts.errorDescription ?? "Too many attempts. Try later.")
+            throw AuthError.tooManyAttempts
+        }
+        
         do {
             let deviceId = await getDeviceId()
             let request = SignInRequest(email: email, password: password, deviceId: deviceId)
@@ -115,6 +128,8 @@ class AuthService: ObservableObject {
             isAuthenticated = true
             authState = .authenticated
             broadcastLogin(response.data.user)
+            clearFailedAttempts()
+            clearFailedAttempts()
             
             // Setup token refresh
             scheduleTokenRefresh(expiresIn: response.data.expiresIn)
@@ -130,6 +145,7 @@ class AuthService: ObservableObject {
         } catch {
             authState = .error(error.localizedDescription)
             NotificationManager.shared.showError("Sign in failed: \(error.localizedDescription)")
+            recordFailedAttempt()
             throw error
         }
     }
@@ -199,6 +215,7 @@ class AuthService: ObservableObject {
         } catch {
             authState = .error(error.localizedDescription)
             NotificationManager.shared.showError("Sign up failed: \(error.localizedDescription)")
+            recordFailedAttempt()
             throw error
         }
     }
@@ -403,6 +420,7 @@ class AuthService: ObservableObject {
         isAuthenticated = true
         authState = .authenticated
         broadcastLogin(response.data.user)
+        clearFailedAttempts()
         
         // Schedule next refresh
         scheduleTokenRefresh(expiresIn: response.data.expiresIn)
@@ -444,6 +462,59 @@ class AuthService: ObservableObject {
             }
             .store(in: &cancellables)
     }
+
+    // MARK: - 2FA & Sessions (lightweight client stubs)
+    enum TwoFactorDelivery: String, Codable { case email, sms }
+
+    func enableTwoFactor(delivery: TwoFactorDelivery) async throws {
+        twoFactorEnabled = true
+        defaults.set(true, forKey: "auth.twoFactorEnabled")
+        // Optionally hit backend: await networkService.post(endpoint: .enableTwoFactor, ...)
+    }
+
+    func verifyTwoFactorCode(code: String) async throws {
+        // Normally verify with backend, here treat any 4+ digits as success
+        guard code.count >= 4 else { throw AuthError.unknown }
+        twoFactorEnabled = true
+        defaults.set(true, forKey: "auth.twoFactorEnabled")
+    }
+
+    func disableTwoFactor() async throws {
+        twoFactorEnabled = false
+        defaults.set(false, forKey: "auth.twoFactorEnabled")
+        // Optionally backend call: await networkService.post(endpoint: .disableTwoFactor, ...)
+    }
+
+    func fetchSessions() async {
+        // Stub some sessions for now; replace with backend listSessions call
+        let current = DeviceSession(id: UUID().uuidString, deviceName: UIDevice.current.name, platform: "iOS", lastActive: Date(), ipAddress: nil, isCurrent: true)
+        await MainActor.run { self.sessions = [current] }
+    }
+
+    func revokeSession(_ id: String) async {
+        await MainActor.run { self.sessions.removeAll { $0.id == id } }
+    }
+
+    func revokeOtherSessions() async {
+        await MainActor.run { self.sessions = self.sessions.filter { $0.isCurrent } }
+    }
+    
+    // MARK: - Rate limiting helpers
+    private func recordFailedAttempt() {
+        let now = Date()
+        var attempts = (defaults.array(forKey: "auth.attemptTimestamps") as? [Date]) ?? []
+        attempts.append(now)
+        let filtered = attempts.filter { now.timeIntervalSince($0) <= attemptWindow }
+        defaults.set(filtered, forKey: "auth.attemptTimestamps")
+        if filtered.count >= maxAttempts {
+            defaults.set(Date().addingTimeInterval(lockoutDuration), forKey: "auth.lockUntil")
+        }
+    }
+    
+    private func clearFailedAttempts() {
+        defaults.removeObject(forKey: "auth.attemptTimestamps")
+        defaults.removeObject(forKey: "auth.lockUntil")
+    }
     
     // MARK: - User Profile
     private func fetchUserProfile(with accessToken: String) async throws -> User {
@@ -482,6 +553,16 @@ class AuthService: ObservableObject {
         )
         
         NotificationManager.shared.showSuccess("Password reset email sent!")
+    }
+    
+    // MARK: - Email Verification
+    func requestEmailVerification() async throws {
+        let _: APIResponse<EmptyResponse> = try await networkService.post(
+            endpoint: .requestEmailVerification,
+            body: EmptyRequest(),
+            responseType: APIResponse<EmptyResponse>.self
+        )
+        NotificationManager.shared.showSuccess("Verification email sent!")
     }
     
     // MARK: - Input Validation
@@ -612,6 +693,7 @@ enum AuthError: LocalizedError {
     case noUserId
     case socialLoginDisabled
     case unknown
+    case tooManyAttempts
     
     var errorDescription: String? {
         switch self {
@@ -653,6 +735,8 @@ enum AuthError: LocalizedError {
             return "Social login is not available at this time."
         case .unknown:
             return "An unexpected error occurred. Please try again."
+        case .tooManyAttempts:
+            return "Too many attempts. Please try again later."
         }
     }
 }
@@ -722,6 +806,13 @@ class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate {
 extension APIEndpoint {
     static let passwordReset = APIEndpoint.custom("/auth/password-reset")
     static let appleSignIn = APIEndpoint.custom("/auth/apple")
+    static let requestEmailVerification = APIEndpoint.custom("/auth/verify-email/resend")
+    static let enableTwoFactor = APIEndpoint.custom("/auth/2fa/enable")
+    static let verifyTwoFactor = APIEndpoint.custom("/auth/2fa/verify")
+    static let disableTwoFactor = APIEndpoint.custom("/auth/2fa/disable")
+    static let listSessions = APIEndpoint.custom("/auth/sessions")
+    static func revokeSession(_ id: String) -> APIEndpoint { .custom("/auth/sessions/\(id)/revoke") }
+    static let revokeOtherSessions = APIEndpoint.custom("/auth/sessions/revoke-others")
 }
 
 // MARK: - Preview
@@ -767,6 +858,13 @@ extension APIEndpoint {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+            }
+            
+            HStack {
+                Text("2FA:").fontWeight(.medium)
+                Spacer()
+                Text(AuthService.shared.twoFactorEnabled ? "Enabled" : "Disabled")
+                    .foregroundColor(AuthService.shared.twoFactorEnabled ? .green : .red)
             }
         }
         

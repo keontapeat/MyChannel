@@ -9,6 +9,7 @@ import SwiftUI
 
 struct PlaylistsView: View {
     @StateObject private var playlistService = MockPlaylistService()
+    @StateObject private var fsService = PlaylistFirestoreService.shared
     @State private var showingCreatePlaylist = false
     @State private var searchText = ""
     @State private var selectedCategory: PlaylistCategory?
@@ -56,7 +57,7 @@ struct PlaylistsView: View {
                 }
             }
             .sheet(isPresented: $showingCreatePlaylist) {
-                CreatePlaylistView(playlistService: playlistService)
+                CreatePlaylistViewFirestore()
             }
         }
     }
@@ -371,6 +372,44 @@ struct CreatePlaylistView: View {
             } catch {
                 print("Error creating playlist: \(error)")
             }
+        }
+    }
+}
+
+// MARK: - Create Playlist View (Firestore)
+struct CreatePlaylistViewFirestore: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var description = ""
+    @State private var selectedCategory: PlaylistCategory = .general
+    @State private var isPublic = true
+    @State private var tags = ""
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Playlist Details") {
+                    TextField("Playlist Title", text: $title)
+                    TextField("Description", text: $description, axis: .vertical).lineLimit(3...6)
+                }
+                Section("Settings") {
+                    Picker("Category", selection: $selectedCategory) {
+                        ForEach(PlaylistCategory.allCases, id: \.self) { c in HStack { Image(systemName: c.iconName); Text(c.displayName) }.tag(c) }
+                    }
+                    Toggle("Public Playlist", isOn: $isPublic)
+                }
+                Section("Tags") { TextField("Add tags (comma separated)", text: $tags) }
+                Section { Button("Create", action: create).disabled(title.isEmpty).buttonStyle(.borderedProminent).frame(maxWidth: .infinity) }
+            }
+            .navigationTitle("New Playlist")
+            .toolbar { ToolbarItem(placement: .navigationBarLeading) { Button("Cancel") { dismiss() } } }
+        }
+    }
+    private func create() {
+        guard let uid = AppState.shared.currentUser?.id else { return }
+        Task {
+            let _ = try? await PlaylistFirestoreService.shared.createPlaylist(userId: uid, title: title, description: description, category: selectedCategory, visibility: isPublic ? "public" : "private")
+            await MainActor.run { dismiss() }
         }
     }
 }

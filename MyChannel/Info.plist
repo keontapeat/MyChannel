@@ -4,6 +4,14 @@
 <dict>
 	<key>AI_API_KEY</key>
 	<string>$(AI_API_KEY)</string>
+	<key>ANTHROPIC_API_KEY</key>
+	<string>$(ANTHROPIC_API_KEY)</string>
+	<key>GOOGLE_CLOUD_API_KEY</key>
+	<string>$(GOOGLE_CLOUD_API_KEY)</string>
+	<key>GOOGLE_CLOUD_PROJECT_ID</key>
+	<string>$(GOOGLE_CLOUD_PROJECT_ID)</string>
+	<key>OPENAI_API_KEY</key>
+	<string>$(OPENAI_API_KEY)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -28,6 +36,26 @@
 	<array>
 		<string>fetch</string>
 		<string>remote-notification</string>
+		<string>audio</string>
 	</array>
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>4pfyvq9l8r.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>v9wttpbfk9.skadnetwork</string>
+		</dict>
+	</array>
+	<key>CHANNELBOOST_BASE_URL</key>
+	<string>$(CHANNELBOOST_BASE_URL)</string>
+	<key>CHANNELBOOST_TOKEN</key>
+	<string>$(CHANNELBOOST_TOKEN)</string>
 </dict>
 </plist>

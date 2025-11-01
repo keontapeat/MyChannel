@@ -1,0 +1,44 @@
+name: channelboost
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: mychannel
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+
+  api:
+    build:
+      context: ../../../
+      dockerfile: services/channelboost-api/infra/Dockerfile.api
+    environment:
+      PORT: 8787
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/mychannel
+      CB_API_TOKEN: ${CB_API_TOKEN:-supersecrettoken}
+      REFERRAL_BASE: https://mychannel.live/r/
+    ports:
+      - "8877:8787"
+    depends_on:
+      - postgres
+      - redis
+
+  worker:
+    build:
+      context: ../../../
+      dockerfile: services/channelboost-api/infra/Dockerfile.worker
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/mychannel
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  pg_data:
+
+

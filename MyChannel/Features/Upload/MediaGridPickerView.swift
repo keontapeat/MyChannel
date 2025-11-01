@@ -184,6 +184,7 @@ private struct GridCell: View {
     let onTap: () -> Void
     
     @State private var image: UIImage? = nil
+    @State private var durationText: String = "0:00"
     
     var body: some View {
         ZStack {
@@ -191,6 +192,14 @@ private struct GridCell: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
+                    .overlay(
+                        // Subtle gradient to improve timestamp readability
+                        LinearGradient(
+                            colors: [.clear, .black.opacity(0.28)],
+                            startPoint: .center,
+                            endPoint: .bottom
+                        )
+                    )
             } else {
                 Color.white.opacity(0.08)
             }
@@ -199,12 +208,15 @@ private struct GridCell: View {
                 Spacer()
                 HStack {
                     Spacer()
-                    Text(formatDuration(asset.duration))
-                        .font(.system(size: 12, weight: .semibold))
+                    Text(durationText)
+                        .font(.caption.monospacedDigit().weight(.semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .background(Color.black.opacity(0.55), in: Capsule())
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.black.opacity(0.85))
+                        )
                         .padding(6)
                 }
             }
@@ -221,6 +233,22 @@ private struct GridCell: View {
             options.isSynchronous = false
             manager.requestImage(for: asset, targetSize: size, contentMode: .aspectFill, options: options) { img, _ in
                 if let img { self.image = img }
+            }
+            // Ensure duration is present and formatted, fetch from AVAsset if needed
+            let seconds = asset.duration
+            if seconds > 0 {
+                durationText = formatDuration(seconds)
+            } else {
+                let vopts = PHVideoRequestOptions()
+                vopts.deliveryMode = .fastFormat
+                vopts.isNetworkAccessAllowed = true
+                PHImageManager.default().requestAVAsset(forVideo: asset, options: vopts) { avAsset, _, _ in
+                    if let avAsset = avAsset {
+                        let totalSeconds = CMTimeGetSeconds(avAsset.duration)
+                        let formatted = formatDuration(totalSeconds)
+                        DispatchQueue.main.async { durationText = formatted }
+                    }
+                }
             }
         }
     }

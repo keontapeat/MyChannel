@@ -28,7 +28,7 @@ class APIService: ObservableObject {
     }
     
     // MARK: - Video API
-    func uploadVideo(_ videoData: Data, metadata: VideoMetadata) async throws -> Video {
+    func uploadVideo(_ videoData: Data, metadata: APIVideoMetadata) async throws -> Video {
         // Simulate upload with progress
         try await Task.sleep(nanoseconds: 2_000_000_000)
         
@@ -108,7 +108,7 @@ class APIService: ObservableObject {
 }
 
 // MARK: - Supporting Models
-struct VideoMetadata: Codable {
+struct APIVideoMetadata: Codable {
     let title: String
     let description: String
     let tags: [String]

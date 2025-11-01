@@ -22,12 +22,14 @@ class VideoPlayerManager: ObservableObject {
     @Published var duration: TimeInterval = 0
     @Published var hasError = false
     @Published var errorMessage: String?
+    @Published var selectedQuality: VideoQuality = .auto
     
     private var timeObserver: Any?
     private var cancellables = Set<AnyCancellable>()
     private var currentVideo: Video?
     private var isCleanedUp = false
     private var lastSavedSecond: Int = -1
+    private var midrollServed: Bool = false
     private var imageGenerator: AVAssetImageGenerator?
 
     // MARK: - Lightweight LRU Cache for AVPlayerItem and Session Resume
@@ -126,58 +128,90 @@ class VideoPlayerManager: ObservableObject {
     
     // MARK: - Safe Setup
     func setupPlayer(with video: Video) {
-        // Avoid AVFoundation in Xcode previews to prevent crashes
-        if AppConfig.isPreview {
+        Task {
+            await setupPlayerWithDRM(video: video)
+        }
+    }
+    
+    private func setupPlayerWithDRM(video: Video) async {
+        await MainActor.run {
+            // Clean up any existing player first
+            cleanup()
+            isCleanedUp = false // Reset cleanup flag
+            
             currentVideo = video
-            isLoading = false
+            isLoading = true
             hasError = false
-            player = nil
-            duration = max(0, video.duration)
-            return
         }
-
-        // Clean up any existing player first
-        cleanup()
-        isCleanedUp = false // Reset cleanup flag
         
-        currentVideo = video
-        isLoading = true
-        hasError = false
+        print("🎬 VideoPlayerManager setting up player for: \(video.title)")
+        print("🔗 Video URL: \(video.videoURL)")
         
+        // 🔥 FIX: Use simple AVPlayer for non-DRM content (uploaded videos)
         guard let url = URL(string: video.videoURL) else {
-            handleError("Invalid video URL")
+            await MainActor.run { handleError("Invalid video URL: \(video.videoURL)") }
             return
         }
         
-        // Use cached item if available for instant start
-        let playerItem: AVPlayerItem
-        let asset: AVAsset
-        if let cached = Self.cachedItem(for: video.videoURL) {
-            playerItem = cached
-            asset = cached.asset
-        } else {
-            let newAsset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
-            // Prime duration upfront
-            Task.detached { _ = try? await newAsset.load(.duration) }
-            let item = AVPlayerItem(asset: newAsset)
-            item.preferredForwardBufferDuration = 1
-            playerItem = item
-            asset = newAsset
-            Self.prewarm(urlString: video.videoURL)
-        }
-        // Create player early to allow immediate rendering
-        let player = AVPlayer(playerItem: playerItem)
-        player.automaticallyWaitsToMinimizeStalling = true
-        self.player = player
-        imageGenerator = AVAssetImageGenerator(asset: asset)
-        imageGenerator?.appliesPreferredTrackTransform = true
+        // Check if this needs DRM (only for YouTube/external content)
+        let needsDRM = video.contentSource == .youtube
         
-        setupObservers(for: playerItem)
-        // Avoid configuring audio session in previews/tests
+        if needsDRM {
+            // Get DRM asset configuration for protected content
+            guard let drmAsset = await DRMService.shared.createDRMAsset(for: video) else {
+                await MainActor.run { handleError("Failed to create DRM asset") }
+                return
+            }
+            
+            // Create player with DRM support
+            let player = AVPlayer()
+            await MainActor.run { self.player = player }
+            
+            let success = await DRMService.shared.configurePlayerForDRM(
+                player: player,
+                asset: drmAsset,
+                userId: AppState.shared.currentUser?.id
+            )
+            
+            await MainActor.run {
+                if !success {
+                    handleError("DRM configuration failed")
+                    return
+                }
+                setupPlayerCommon(player: player)
+            }
+        } else {
+            // 🔥 SIMPLE PLAYER: For uploaded videos, use simple AVPlayer
+            print("✅ Using simple AVPlayer for uploaded video")
+            let player = AVPlayer(url: url)
+            await MainActor.run {
+                self.player = player
+                setupPlayerCommon(player: player)
+            }
+        }
+    }
+    
+    private func setupPlayerCommon(player: AVPlayer) {
+        // Configure player settings
+        player.automaticallyWaitsToMinimizeStalling = true
+        player.currentItem?.preferredForwardBufferDuration = 1
+        player.currentItem?.canUseNetworkResourcesForLiveStreamingWhilePaused = true
+        
+        if let playerItem = player.currentItem {
+            setupObservers(for: playerItem)
+            if let asset = playerItem.asset as? AVURLAsset {
+                imageGenerator = AVAssetImageGenerator(asset: asset)
+                imageGenerator?.appliesPreferredTrackTransform = true
+            }
+        }
+        
+        // Configure audio session
         configureAudioSession()
         
         Task {
-            await loadAssetProperties(for: playerItem.asset)
+            if let playerItem = player.currentItem {
+                await loadAssetProperties(for: playerItem.asset)
+            }
         }
     }
     
@@ -200,6 +234,11 @@ class VideoPlayerManager: ObservableObject {
                 self.lastSavedSecond = currentSecond
                 self.persistResumePosition()
                 self.updateNowPlayingInfo()
+                // Mid-roll rule: insert once after 90 seconds and at least 8 minutes content
+                if !midrollServed, self.currentTime > 90, self.duration > 480 {
+                    midrollServed = true
+                    NotificationCenter.default.post(name: NSNotification.Name("RequestMidrollAd"), object: nil)
+                }
             }
         }
         
@@ -360,6 +399,93 @@ class VideoPlayerManager: ObservableObject {
         guard !isCleanedUp else { return }
         player?.rate = rate
         updateNowPlayingInfo()
+    }
+
+    // MARK: - Shorts Startup Tuning
+    func applyShortsStartupTuning() {
+        guard !isCleanedUp, let item = player?.currentItem else { return }
+        // Start immediately with a very small startup buffer
+        player?.automaticallyWaitsToMinimizeStalling = false
+        item.preferredForwardBufferDuration = 0.2
+        // Cap initial bitrate to speed up first frame for portrait/shorts
+        if selectedQuality == .auto {
+            item.preferredPeakBitRate = 1_800_000 // ~1.8 Mbps
+        }
+        // Relax constraints after a few seconds to allow quality ramp-up
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self = self, !self.isCleanedUp, let current = self.player?.currentItem else { return }
+            self.player?.automaticallyWaitsToMinimizeStalling = true
+            if self.selectedQuality == .auto {
+                current.preferredPeakBitRate = 0 // back to adaptive
+            }
+        }
+    }
+
+    // General fast-start tuning for standard videos (featured/trending)
+    func applyFastStartTuning(initialBitrate: Double = 4_000_000, initialBufferSeconds: Double = 0.5, relaxAfterSeconds: Double = 4.0) {
+        guard !isCleanedUp, let item = player?.currentItem else { return }
+        player?.automaticallyWaitsToMinimizeStalling = false
+        item.preferredForwardBufferDuration = initialBufferSeconds
+        if selectedQuality == .auto {
+            item.preferredPeakBitRate = initialBitrate
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + relaxAfterSeconds) { [weak self] in
+            guard let self = self, !self.isCleanedUp, let current = self.player?.currentItem else { return }
+            self.player?.automaticallyWaitsToMinimizeStalling = true
+            if self.selectedQuality == .auto {
+                current.preferredPeakBitRate = 0
+            }
+        }
+    }
+
+    // MARK: - Quality Selection (HLS-aware)
+    func setPreferredQuality(_ quality: VideoQuality) {
+        selectedQuality = quality
+        guard let item = player?.currentItem else { return }
+        if quality == .auto {
+            // 0 resets to automatic adaptive bitrate
+            item.preferredPeakBitRate = 0
+            #if os(iOS)
+            item.preferredMaximumResolution = .zero
+            #endif
+        } else {
+            item.preferredPeakBitRate = Double(quality.bitrate)
+            #if os(iOS)
+            item.preferredMaximumResolution = quality.resolution
+            #endif
+        }
+    }
+
+    // MARK: - Playback Stats
+    struct PlaybackStats {
+        let width: Int
+        let height: Int
+        let bitrateKbps: Int
+        let droppedFrames: Int
+        let fps: Double
+        let currentTime: Double
+        let duration: Double
+    }
+
+    func currentPlaybackStats() -> PlaybackStats? {
+        guard let item = player?.currentItem else { return nil }
+        let size = item.presentationSize
+        let w = Int(max(0, size.width))
+        let h = Int(max(0, size.height))
+        let event = item.accessLog()?.events.last
+        let bitrateKbps = Int(((event?.observedBitrate ?? 0) / 1000.0).rounded())
+        let dropped = Int(event?.numberOfDroppedVideoFrames ?? 0)
+        let fpsFloat: Float = item.asset.tracks(withMediaType: .video).first?.nominalFrameRate ?? 0
+        let fps = Double(fpsFloat)
+        return PlaybackStats(
+            width: w,
+            height: h,
+            bitrateKbps: bitrateKbps,
+            droppedFrames: dropped,
+            fps: fps,
+            currentTime: currentTime,
+            duration: duration
+        )
     }
     
     func setLooping(_ shouldLoop: Bool) {

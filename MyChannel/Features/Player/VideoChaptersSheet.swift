@@ -33,8 +33,9 @@ struct VideoChaptersSheet: View {
     }
     
     private var chaptersWithEnd: [(chapter: Video.Chapter, end: TimeInterval?)] {
-        guard let chapters = video.chapters else { return [] }
-        let sorted = chapters.sorted { $0.start < $1.start }
+        let base = (video.chapters?.isEmpty == false) ? (video.chapters ?? []) : video.parsedChaptersFromDescription
+        guard !base.isEmpty else { return [] }
+        let sorted = base.sorted { $0.start < $1.start }
         var result: [(Video.Chapter, TimeInterval?)] = []
         for (i, ch) in sorted.enumerated() {
             let end = i < sorted.count - 1 ? sorted[i+1].start : nil

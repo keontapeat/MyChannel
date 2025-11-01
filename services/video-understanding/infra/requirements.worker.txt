@@ -1,0 +1,13 @@
+celery==5.4.0
+redis==5.0.8
+psycopg[binary]==3.2.1
+google-cloud-storage==2.18.2
+numpy==1.26.4
+ffmpeg-python==0.2.0
+moviepy==1.0.3
+faster-whisper==1.0.3
+sentence-transformers==3.0.1
+open-clip-torch==2.26.1
+faiss-cpu==1.8.0.post1
+scikit-learn==1.5.2
+

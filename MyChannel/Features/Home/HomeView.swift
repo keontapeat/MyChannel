@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import Combine
 
 // MARK: - Preview-safe onReceive helper
 struct ConditionalOnReceiveModifier<P: Publisher>: ViewModifier where P.Failure == Never {
@@ -43,6 +44,8 @@ enum FullScreenRoute: Identifiable {
     case artistDetail(name: String, avatar: String, videos: [Video], totalViews: Int)
     case filmmakerDetail(name: String, films: [FreeMovie])
     case channelDetail(name: String, avatar: String, subscribers: Int, totalViews: Int, videos: [Video])
+    case publicProfile(User)
+    case custom(String)
 
     var id: String {
         switch self {
@@ -56,6 +59,8 @@ enum FullScreenRoute: Identifiable {
         case .artistDetail(let name, _, _, _): return "artist-\(name)"
         case .filmmakerDetail(let name, _): return "filmmaker-\(name)"
         case .channelDetail(let name, _, _, _, _): return "channel-\(name)"
+        case .publicProfile(let user): return "profile-\(user.id)"
+        case .custom(let id): return id
         }
     }
 }
@@ -63,13 +68,18 @@ enum FullScreenRoute: Identifiable {
 // MARK: - HomeView
 struct HomeView: View {
     @EnvironmentObject private var appState: AppState
-    @ObservedObject private var globalPlayer = GlobalVideoPlayerManager.shared
+    private let globalPlayer = GlobalVideoPlayerManager.shared
+    @State private var miniActive = false
 
     @State private var scrollOffset: CGFloat = 0
     @State private var isRefreshing: Bool = false
 
     // Route-driven presentation (fixes white screen when dismissing covers)
     @State private var route: FullScreenRoute? = nil
+    
+    // Quick profile menu
+    @State private var showingQuickProfile = false
+    @State private var showingSettings = false
 
     @State private var featuredContent: [Video] = []
     @State private var heroVideoIndex: Int = 0
@@ -134,6 +144,8 @@ struct HomeView: View {
                             onSeeAllFreeMovies: { route = .allMovies },
                             onSeeAllLiveTV: { route = .allLiveTV },
                             onSeeAllTrending: { route = .trending },
+                            onSeeAllMusic: { route = .custom("musicHub") },
+                            onSeeAllExplore: { route = .custom("exploreHub") },
                             onOpenArtistDetail: { name, avatar, vids, total in
                                 route = .artistDetail(name: name, avatar: avatar, videos: vids.isEmpty ? Array(Video.sampleVideos.prefix(8)) : vids, totalViews: total)
                             },
@@ -157,8 +169,13 @@ struct HomeView: View {
                     scrollOffset: scrollOffset,
                     onSearchTap: { route = .search },
                     onProfileTap: {
-                        // Open the sign-in sheet directly instead of jumping to the Profile tab
-                        NotificationCenter.default.post(name: .presentSignInSheet, object: nil)
+                        if appState.isAuthenticated {
+                            // User is logged in → show quick profile menu
+                            showingQuickProfile = true
+                        } else {
+                            // User is NOT logged in → show sign-in sheet
+                            NotificationCenter.default.post(name: .presentSignInSheet, object: nil)
+                        }
                     }
                 )
                 .allowsHitTesting(true)
@@ -174,13 +191,26 @@ struct HomeView: View {
             loadUserStories()
         }
         .sheet(isPresented: $presentStoryCreator) {
-            CreateStoryView { newStory in
-                let media: AssetMedia = (newStory.mediaType == .video) ? .video(newStory.mediaURL) : .image(newStory.mediaURL)
-                let placeholder = AssetStory(media: media, username: appState.currentUser?.username ?? "you", authorImageName: "")
-                assetStories.insert(placeholder, at: 0)
+            CreateStoryView { _ in
+                // Dismiss and refresh from authoritative source to avoid duplicates
                 presentStoryCreator = false
+                Task { await loadUserStories() }
             }
             .preferredColorScheme(.dark)
+        }
+        .sheet(isPresented: $showingQuickProfile) {
+            if let user = appState.currentUser {
+                ProfileQuickMenu(user: user, isPresented: $showingQuickProfile)
+                    .environmentObject(appState)
+                    .environmentObject(AuthenticationManager.shared)
+                    .presentationDetents([.height(500)])
+                    .presentationDragIndicator(.visible)
+            }
+        }
+        .sheet(isPresented: $showingSettings) {
+            SafeProfileSettingsView()
+                .environmentObject(appState)
+                .environmentObject(AuthenticationManager.shared)
         }
         .modifier(
             ConditionalOnReceiveModifier(
@@ -192,6 +222,17 @@ struct HomeView: View {
                 }
             )
         )
+        .onReceive(NotificationCenter.default.publisher(for: .storiesDidChange)) { _ in
+            loadUserStories()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenFullProfile"))) { notification in
+            if let user = notification.object as? User {
+                route = .publicProfile(user)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenSettings"))) { _ in
+            showingSettings = true
+        }
         .fullScreenCover(item: $route) { route in
             switch route {
             case .video(let video):
@@ -216,7 +257,7 @@ struct HomeView: View {
                 .onDisappear { self.route = nil }
 
             case .allMovies:
-                MoviesView()
+                ImprovedMoviesView()
                     .environmentObject(appState)
                     .background(Color(.systemBackground).ignoresSafeArea())
                     .onDisappear { self.route = nil }
@@ -243,6 +284,23 @@ struct HomeView: View {
             case .channelDetail(let name, let avatar, let subs, let total, let videos):
                 ChannelDetailView(name: name, avatarURL: avatar, subscribers: subs, totalViews: total, videos: videos)
                     .onDisappear { self.route = nil }
+            
+            case .publicProfile(let user):
+                PublicProfileView(user: user)
+                    .onDisappear { self.route = nil }
+            
+            case .custom(let id):
+                if id == "musicHub" {
+                    MusicHubView()
+                        .environmentObject(appState)
+                        .onDisappear { self.route = nil }
+                        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("DismissMusicHub"))) { _ in
+                            self.route = nil
+                        }
+                } else if id == "exploreHub" {
+                    ExploreHubView()
+                        .onDisappear { self.route = nil }
+                }
             }
         }
         .onChange(of: route?.id) { newValue in
@@ -325,8 +383,53 @@ struct HomeView: View {
         )
     }
 
+    // Always-First Featured: Shot By Keonta intro (uses local bundle if present)
+    private func introFeaturedVideo() -> Video {
+        let keontaUser = User(
+            username: "sbkeonta_",
+            displayName: "Shot By Keonta",
+            email: "keontapeat@mychannel.live",
+            profileImageURL: "https://i.pravatar.cc/200?u=sbkeonta_intro",
+            isVerified: true,
+            isCreator: true
+        )
+
+        // Resolve local video in app bundle; fallback to a demo MP4
+        let localPath = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4")
+        let videoURL = localPath.map { URL(fileURLWithPath: $0).absoluteString } ?? "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+
+        // Simple poster
+        let poster = "https://picsum.photos/seed/sbkeonta/1280/720"
+
+        // Monetization flag so ad preview and pre-roll show
+        let preRoll = Video.MonetizationSettings.AdBreak(timeStamp: 0, duration: 15, type: .preRoll)
+        let monetization = Video.MonetizationSettings(isMonetized: true, adBreaks: [preRoll], sponsorSegments: [], merchandise: nil, donationEnabled: false, subscriptionTier: nil, totalRevenue: 0)
+
+        return Video(
+            title: "MyChannel Intro",
+            description: "Shot By Keonta intro (demo)",
+            thumbnailURL: poster,
+            videoURL: videoURL,
+            duration: 35,
+            viewCount: 0,
+            likeCount: 0,
+            creator: keontaUser,
+            category: .entertainment,
+            tags: ["intro", "keonta", "mychannel"],
+            isPublic: true,
+            quality: [.quality720p, .quality1080p, .quality2160p],
+            aspectRatio: .landscape,
+            isLiveStream: false,
+            contentSource: .userUploaded,
+            externalID: nil,
+            isVerified: true,
+            monetization: monetization,
+            isSponsored: false
+        )
+    }
+
     private func setupContent() {
-        // Pull owner-managed Featured list first (if present)
+        // Pull owner-managed Featured list (for possible 3rd slot)
         FeaturedStore.shared.ensureOwnerIntroFirstIfAvailable()
         let ownerFeatured = FeaturedStore.shared.toVideos()
         // In production/TestFlight, do not show mock content for authenticated users
@@ -340,28 +443,35 @@ struct HomeView: View {
         }
         let friend: [Video] = AppConfig.Features.enableMockData ? friendHeroVideos() : []
 
-        // Always pin requested YouTube video first
+        // Always pin Shot By Keonta intro first, then requested YouTube video
+        let keonta = introFeaturedVideo()
         let pinned = pinnedFeaturedVideo()
 
         var seen = Set<String>()
         var ordered: [Video] = []
-        if !ownerFeatured.isEmpty {
-            for v in ownerFeatured where seen.insert(v.id).inserted { ordered.append(v) }
-        }
+        // 1) ALWAYS put Keonta intro first (even in Release builds for App Store screenshots)
+        if seen.insert(keonta.id).inserted { ordered.append(keonta) }
+        // 2) Then the pinned YouTube request (only in debug/mock mode)
         if AppConfig.Features.enableMockData {
             if seen.insert(pinned.id).inserted { ordered.append(pinned) }
         }
-        for v in friend + base {
-            if seen.insert(v.id).inserted {
-                ordered.append(v)
+        // 3) Fill remaining slots preferring friend hero, then owner featured, then base
+        let candidates: [Video] = (friend + ownerFeatured + base)
+        for v in candidates {
+            if ordered.count >= 3 { break }
+            if seen.insert(v.id).inserted { ordered.append(v) }
+        }
+
+        // Ensure we have at least the Keonta intro, even in Release builds
+        if ordered.isEmpty {
+            ordered = [keonta]
+            if AppConfig.Features.enableMockData {
+                ordered.append(contentsOf: [pinned] + Array(samples.prefix(2)))
             }
         }
 
-        if ordered.isEmpty && AppConfig.Features.enableMockData {
-            ordered = [pinned] + Array(samples.prefix(3))
-        }
-
-        featuredContent = ordered
+        // Cap to exactly 3 items to show only three page dots in the hero
+        featuredContent = Array(ordered.prefix(3))
         heroVideoIndex = 0
 
         // Ensure we always have at least two items for the Featured carousel.
@@ -398,16 +508,51 @@ struct HomeView: View {
             return
         }
         
-        // In a real app, this would fetch stories from followed users via API
-        // For now, we'll only show stories if the user has subscriptions
-        if !appState.subscriptions.isEmpty {
-            // Load stories from subscribed creators
-            // This would typically be an API call to get recent stories from followed users
-            loadStoriesFromFollowedUsers()
+        Task { @MainActor in
+            // Prefer backend stories if available
+            if let backendStories = try? await StoryAPIService.shared.fetchFollowingStories(limit: 24), !backendStories.isEmpty {
+                let mapped = backendStories.map { s -> AssetStory in
+                    let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
+                    let name = s.creator?.username ?? s.creatorId
+                    return AssetStory(media: media, username: name, authorImageName: s.creator?.profileImageURL ?? "")
+                }
+                self.assetStories = normalizeStories(mapped, excludingSelfUsername: currentUser.username)
+            } else {
+                // Fallback to local cache
+                if let mine = try? await DatabaseService.shared.fetchStoriesByCreator(creatorId: currentUser.id), !mine.isEmpty {
+                    let mapped = mine.map { s -> AssetStory in
+                        let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
+                        return AssetStory(media: media, username: currentUser.username, authorImageName: currentUser.profileImageURL ?? "")
+                    }
+                    self.assetStories.insert(contentsOf: normalizeStories(mapped, excludingSelfUsername: currentUser.username), at: 0)
+                }
+                if !appState.subscriptions.isEmpty {
+                    let followed = Array(appState.subscriptions)
+                    if let stories = try? await DatabaseService.shared.fetchActiveStoriesForCreators(followed), !stories.isEmpty {
+                        var mapped: [AssetStory] = []
+                        for s in stories {
+                            let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
+                            let user = try? await DatabaseService.shared.fetchUser(id: s.creatorId)
+                            let name = user?.username ?? s.creatorId
+                            mapped.append(AssetStory(media: media, username: name, authorImageName: user?.profileImageURL ?? ""))
+                        }
+                        self.assetStories.append(contentsOf: normalizeStories(mapped, excludingSelfUsername: currentUser.username))
+                    }
+                }
+                self.assetStories = normalizeStories(self.assetStories, excludingSelfUsername: currentUser.username)
+            }
         }
-        
-        // If no stories from followed users, keep the array empty
-        // This creates the authentic experience where new users see no stories
+    }
+
+    private func normalizeStories(_ input: [AssetStory], excludingSelfUsername: String?) -> [AssetStory] {
+        var seen = Set<String>()
+        var out: [AssetStory] = []
+        for s in input {
+            let key = s.username.lowercased()
+            if let me = excludingSelfUsername, key == me.lowercased() { continue }
+            if seen.insert(key).inserted { out.append(s) }
+        }
+        return out
     }
     
     private func loadStoriesFromFollowedUsers() {
@@ -902,9 +1047,22 @@ extension Video {
         // 2) Prefer YouTube covers when applicable
         if contentSource == .youtube {
             let yid = externalID.flatMap { $0.isEmpty ? nil : $0 } ?? id
+            // Common JPG candidates
             add("https://i.ytimg.com/vi/\(yid)/maxresdefault.jpg")
+            add("https://i.ytimg.com/vi/\(yid)/sddefault.jpg")
             add("https://i.ytimg.com/vi/\(yid)/hqdefault.jpg")
+            add("https://img.youtube.com/vi/\(yid)/maxresdefault.jpg")
+            add("https://img.youtube.com/vi/\(yid)/sddefault.jpg")
             add("https://img.youtube.com/vi/\(yid)/hqdefault.jpg")
+            // Frame indices
+            add("https://img.youtube.com/vi/\(yid)/0.jpg")
+            add("https://img.youtube.com/vi/\(yid)/1.jpg")
+            add("https://img.youtube.com/vi/\(yid)/2.jpg")
+            add("https://img.youtube.com/vi/\(yid)/3.jpg")
+            // WEBP variants
+            add("https://i.ytimg.com/vi_webp/\(yid)/maxresdefault.webp")
+            add("https://i.ytimg.com/vi_webp/\(yid)/sddefault.webp")
+            add("https://i.ytimg.com/vi_webp/\(yid)/hqdefault.webp")
         }
 
         // 3) Seeded fallback to guarantee an image
@@ -921,6 +1079,8 @@ struct MinimalContentSections: View {
     let onSeeAllFreeMovies: () -> Void
     let onSeeAllLiveTV: () -> Void
     let onSeeAllTrending: () -> Void
+    let onSeeAllMusic: () -> Void
+    let onSeeAllExplore: () -> Void
     let onOpenArtistDetail: (String, String, [Video], Int) -> Void
     let onOpenFilmmakerDetail: (String, [FreeMovie]) -> Void
     let onOpenChannelDetail: (String, String, Int, Int, [Video]) -> Void
@@ -972,6 +1132,51 @@ struct MinimalContentSections: View {
         )
     }
 
+    // Custom: Shot By Keonta intro video (local bundle) so you can test full controls
+    private func keontaIntroVideo() -> Video {
+        let keontaUser = User(
+            username: "sbkeonta_",
+            displayName: "Shot By Keonta",
+            email: "keontapeat@mychannel.live",
+            profileImageURL: "https://i.pravatar.cc/200?u=sbkeonta_intro",
+            isVerified: true,
+            isCreator: true
+        )
+
+        // Resolve local video in app bundle; fallback to a demo MP4
+        let localPath = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4")
+        let videoURL = localPath.map { URL(fileURLWithPath: $0).absoluteString } ?? "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+
+        // Simple poster
+        let poster = "https://picsum.photos/seed/sbkeonta/1280/720"
+
+        // Monetization flag so ad preview and pre-roll show
+        let preRoll = Video.MonetizationSettings.AdBreak(timeStamp: 0, duration: 15, type: .preRoll)
+        let monetization = Video.MonetizationSettings(isMonetized: true, adBreaks: [preRoll], sponsorSegments: [], merchandise: nil, donationEnabled: false, subscriptionTier: nil, totalRevenue: 0)
+
+        return Video(
+            title: "MyChannel Intro",
+            description: "Shot By Keonta intro (demo)",
+            thumbnailURL: poster,
+            videoURL: videoURL,
+            duration: 35,
+            viewCount: 0,
+            likeCount: 0,
+            creator: keontaUser,
+            category: .entertainment,
+            tags: ["intro", "keonta", "mychannel"],
+            isPublic: true,
+            quality: [.quality720p, .quality1080p, .quality2160p],
+            aspectRatio: .landscape,
+            isLiveStream: false,
+            contentSource: .userUploaded,
+            externalID: nil,
+            isVerified: true,
+            monetization: monetization,
+            isSponsored: false
+        )
+    }
+
     private func extraTrendingVideos() -> [Video] {
         let friendUser = User(
             username: "scatz",
@@ -986,8 +1191,9 @@ struct MinimalContentSections: View {
             isCreator: true
         )
         let entries: [(id: String, title: String)] = [
-            ("71GJrAY54Ew", "Scatz - Rebound (Official Music Video)"),
-            ("F98vGhQDrB8", "YouTube Video F98vGhQDrB8")
+            ("96Zeze6gdEI", "YouTube Video 96Zeze6gdEI"),
+            ("l1gQVUGdMyw", "YouTube Video l1gQVUGdMyw"),
+            ("71GJrAY54Ew", "Scatz - Rebound (Official Music Video)")
         ]
         return entries.map { e in
             Video(
@@ -1010,6 +1216,52 @@ struct MinimalContentSections: View {
                 isLiveStream: false,
                 contentSource: .youtube,
                 externalID: e.id,
+                isVerified: true
+            )
+        }
+    }
+
+    // Curated Flint artists showcase to seed All/Trending so the app looks full and professional
+    private func flintShowcaseVideos() -> [Video] {
+        struct Entry { let artist: String; let slug: String; let title: String }
+        let items: [Entry] = [
+            .init(artist: "Rio Da Yung OG", slug: "rio_dyog", title: "Rio Da Yung OG – Official Video"),
+            .init(artist: "YN Jay", slug: "yn_jay", title: "YN Jay – Official Video"),
+            .init(artist: "RMC Mike", slug: "rmc_mike", title: "RMC Mike – Official Video"),
+            .init(artist: "Louie Ray", slug: "louie_ray", title: "Louie Ray – Official Video"),
+            .init(artist: "Babyface E", slug: "babyface_e", title: "Babyface E – Official Video"),
+            .init(artist: "YSR Gramz", slug: "ysr_gramz", title: "YSR Gramz – Official Video"),
+            .init(artist: "Scatz", slug: "scatz_flint", title: "Scatz – Official Music Video"),
+            .init(artist: "Baby Ghost", slug: "baby_ghost", title: "Baby Ghost – Official Video")
+        ]
+        return items.map { e in
+            let creator = User(
+                username: e.artist.replacingOccurrences(of: " ", with: "_").lowercased(),
+                displayName: e.artist,
+                email: "artist@music.com",
+                profileImageURL: "https://i.pravatar.cc/200?u=\(e.slug)",
+                isVerified: true,
+                isCreator: true
+            )
+            return Video(
+                title: e.title,
+                description: "\(e.artist) • Official Video",
+                thumbnailURL: "https://picsum.photos/seed/\(e.slug)/1280/720",
+                videoURL: "https://example.com/video/\(e.slug)",
+                duration: Double.random(in: 120.0...240.0),
+                viewCount: Int.random(in: 100_000...5_000_000),
+                likeCount: Int.random(in: 2_000...120_000),
+                commentCount: Int.random(in: 200...20_000),
+                createdAt: Date(),
+                creator: creator,
+                category: .music,
+                tags: ["flint","music","rap"],
+                isPublic: true,
+                quality: [.quality720p],
+                aspectRatio: .landscape,
+                isLiveStream: false,
+                contentSource: .userUploaded,
+                externalID: nil,
                 isVerified: true
             )
         }
@@ -1090,8 +1342,12 @@ struct MinimalContentSections: View {
         ]
     }
 
+    @ObservedObject private var globalPlayer = GlobalVideoPlayerManager.shared
+
     var body: some View {
         VStack(spacing: 40) {
+            ForYouSection(onPlayVideo: onPlayVideo, onSeeAllExplore: onSeeAllExplore)
+
             if !appState.watchHistory.isEmpty {
                 MinimalSection(
                     title: "Continue Watching",
@@ -1112,40 +1368,43 @@ struct MinimalContentSections: View {
                 title: "Trending Now",
                 seeAllAction: { onSeeAllTrending() }
             ) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 16) {
+                TopTenCarousel(
+                    videos: {
                         let base = friendChannelVideos.isEmpty ? [] : friendChannelVideos
-                        let merged = [makeFriendTrendingVideo()] + base + extraTrendingVideos()
+                        // Known-good thumbnails first
+                        let pinnedIDs = ["96Zeze6gdEI", "l1gQVUGdMyw", "71GJrAY54Ew"]
+                        let pinnedVideos: [Video] = pinnedIDs.compactMap { id in
+                            extraTrendingVideos().first(where: { $0.externalID == id }) ??
+                            detroitFlintArtistsTrending().first(where: { $0.externalID == id })
+                        }
+                        let merged = pinnedVideos + [makeFriendTrendingVideo()] + extraTrendingVideos() + flintShowcaseVideos() + base
                         var seen = Set<String>()
                         let dedup = merged.filter { v in
                             if seen.contains(v.id) { return false }
                             seen.insert(v.id)
                             return true
                         }
-                        ForEach(dedup.prefix(20)) { video in
-                            MinimalVideoCard(
-                                video: video,
-                                action: { onPlayVideo(video) }
-                            )
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
+                        return dedup
+                    }(),
+                    preserveOrder: true,
+                    onPlay: { v in onPlayVideo(v) }
+                )
+                .padding(.top, 4)
             }
 
             // MUSIC – artist carousel, placed above Categories
-            MinimalMusicSection(
-                localOnly: $showLocalArtistsOnly,
-                onOpenArtistDetail: onOpenArtistDetail,
-                appState: _appState
-            )
+                        MinimalMusicSection(
+                            onOpenArtistDetail: onOpenArtistDetail,
+                            appState: _appState,
+                            onSeeAll: { onSeeAllMusic() }
+                        )
 
             MinimalCategoriesSection(
                 onPlayVideo: onPlayVideo,
                 codVideos: gamingCOD(),
                 musicVideos: detroitFlintArtistsTrending(),
                 allVideos: {
-                    var vids = detroitFlintArtistsTrending() + gamingCOD() + Video.sampleVideos + SeedCatalogService.shared.seedVideos
+                    var vids = flintShowcaseVideos() + detroitFlintArtistsTrending() + gamingCOD() + Video.sampleVideos + SeedCatalogService.shared.seedVideos
                     vids.insert(makeFriendTrendingVideo(), at: 0)
                     return vids
                 }()
@@ -1218,7 +1477,13 @@ struct MinimalContentSections: View {
                     LazyHStack(alignment: .top, spacing: 16) {
                         let movies = blockbusterMovies.isEmpty ? Array(FreeMovie.sampleMovies.prefix(6)) : Array(blockbusterMovies.prefix(12))
                         ForEach(movies) { movie in
-                            MinimalMovieCard(movie: movie, action: { onSelectMovie(movie) })
+                            MinimalMovieCard(movie: movie, action: { 
+                                onSelectMovie(movie)
+                                // Track movie view for enhanced service
+                                Task {
+                                    await EnhancedMoviesService.shared.addToRecentlyWatched(movie)
+                                }
+                            })
                         }
                     }
                     .padding(.horizontal, 20)
@@ -1246,6 +1511,13 @@ struct MinimalContentSections: View {
                 }
             )
             .padding(.horizontal, 20)
+        }
+        // When mini player is showing, disable heavy animations in the feed to avoid jank
+        .transaction { tx in
+            if globalPlayer.shouldShowMiniPlayer { tx.disablesAnimations = true }
+        }
+        .onReceive(globalPlayer.$shouldShowMiniPlayer.removeDuplicates()) { isMini in
+            NotificationCenter.default.post(name: NSNotification.Name(isMini ? "LivePreviewsShouldPause" : "LivePreviewsShouldResume"), object: nil)
         }
         .task { await loadBlockbusters() }
         .task { await loadFriendChannelVideos() }
@@ -1318,36 +1590,29 @@ struct MinimalContentSections: View {
 
 // MARK: - Music Section (Artists Carousel)
 private struct MinimalMusicSection: View {
-    @Binding var localOnly: Bool
     var onOpenArtistDetail: (String, String, [Video], Int) -> Void
     @EnvironmentObject var appState: AppState
-
-    init(localOnly: Binding<Bool>, onOpenArtistDetail: @escaping (String, String, [Video], Int) -> Void, appState: EnvironmentObject<AppState>) {
-        self._localOnly = localOnly
-        self.onOpenArtistDetail = onOpenArtistDetail
-        self._appState = appState
-    }
+    var onSeeAll: (() -> Void)? = nil
 
     private var allArtists: [(name: String, avatar: String, views: Int, city: String?)] {
-        var base: [(String,String,Int,String?)] = [
+        let curated: [(String,String,Int,String?)] = OwnerProfile.instagramFriends.map { ($0.name, $0.avatar, Int.random(in: 50_000...350_000), nil) }
+        let extras: [(String,String,Int,String?)] = [
             ("@scatzripky6", "https://unavatar.io/instagram/scatzripky6", 346_300, "Flint, MI"),
             ("@kleanupman__", "https://unavatar.io/instagram/kleanupman__", 200_800, "Detroit, MI"),
             ("@ynjay_", "https://unavatar.io/instagram/ynjay_", 232_000, "Flint, MI")
         ]
-        base.insert(contentsOf: OwnerProfile.instagramFriends.map { ($0.name, $0.avatar, Int.random(in: 50_000...350_000), nil) }, at: 0)
-        return base
-    }
-
-    private var userCity: String? {
-        appState.currentUser?.location
-    }
-
-    private var artists: [(name: String, avatar: String, views: Int, city: String?)] {
-        if localOnly, let city = userCity?.lowercased() {
-            return allArtists.filter { ($0.city ?? "").lowercased().contains(city) }
+        var seen = Set<String>()
+        var ordered: [(String,String,Int,String?)] = []
+        for item in (curated + extras) {
+            let key = item.0.lowercased()
+            if seen.insert(key).inserted {
+                ordered.append(item)
+            }
         }
-        return allArtists
+        return ordered
     }
+
+    private var artists: [(name: String, avatar: String, views: Int, city: String?)] { allArtists }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -1356,12 +1621,11 @@ private struct MinimalMusicSection: View {
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(AppTheme.Colors.primary)
                 Spacer()
-                Picker("Scope", selection: $localOnly) {
-                    Text("All").tag(false)
-                    Text("Local").tag(true)
+                if let onSeeAll {
+                    Button("See all", action: onSeeAll)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.blue)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 160)
             }
             .padding(.horizontal, 20)
 
@@ -2071,6 +2335,57 @@ private struct TopMyChannelsSection: View {
 }
 
 // MARK: - Preview
+// MARK: - For You Section
+struct ForYouSection: View {
+    let onPlayVideo: (Video) -> Void
+    let onSeeAllExplore: () -> Void
+    
+    @EnvironmentObject private var appState: AppState
+    @StateObject private var personalizedService = PersonalizedFeedService.shared
+    @State private var forYouVideos: [Video] = []
+    @State private var isLoading = false
+    
+    var body: some View {
+        if !forYouVideos.isEmpty || appState.isAuthenticated {
+            MinimalSection(
+                title: "For You",
+                seeAllAction: onSeeAllExplore
+            ) {
+                if isLoading {
+                    ProgressView("Loading personalized feed...")
+                        .frame(height: 101)
+                        .padding(.horizontal, 20)
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(spacing: 16) {
+                            ForEach(forYouVideos.prefix(8)) { video in
+                                MinimalVideoCard(video: video, action: { onPlayVideo(video) })
+                                    .optimizeUIPerformance()
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                }
+            }
+            .onAppear {
+                if let uid = appState.currentUser?.id {
+                    Task { await loadForYou(userId: uid) }
+                }
+            }
+        }
+    }
+    
+    private func loadForYou(userId: String) async {
+        isLoading = true
+        // 🔥 Use home feed that includes uploaded videos
+        let feed = await personalizedService.generateHomeFeed(limit: 12)
+        await MainActor.run {
+            forYouVideos = feed
+            isLoading = false
+        }
+    }
+}
+
 #Preview("HomeView") {
     HomeView()
         .environmentObject(AppState())

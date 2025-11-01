@@ -40,7 +40,6 @@ struct Video: Identifiable, Codable, Hashable {
     var subtitles: [SubtitleTrack]?
     var isVerified: Bool
     var monetization: MonetizationSettings?
-    var isPremium: Bool
     
     // Additional properties for compatibility
     var isSponsored: Bool?
@@ -58,7 +57,7 @@ struct Video: Identifiable, Codable, Hashable {
         case createdAt, updatedAt, creatorId, creator, category
         case tags, isPublic, quality, aspectRatio, isLiveStream
         case scheduledAt, contentSource, externalID, contentRating
-        case language, subtitles, isVerified, monetization, isPremium, isSponsored, chapters
+        case language, subtitles, isVerified, monetization, isSponsored, chapters
     }
     
     // MARK: - Custom Decoding
@@ -97,7 +96,6 @@ struct Video: Identifiable, Codable, Hashable {
         subtitles = try container.decodeIfPresent([SubtitleTrack].self, forKey: .subtitles)
         isVerified = try container.decodeIfPresent(Bool.self, forKey: .isVerified) ?? false
         monetization = try container.decodeIfPresent(MonetizationSettings.self, forKey: .monetization)
-        isPremium = try container.decodeIfPresent(Bool.self, forKey: .isPremium) ?? false
         isSponsored = try container.decodeIfPresent(Bool.self, forKey: .isSponsored)
         chapters = try container.decodeIfPresent([Chapter].self, forKey: .chapters)
     }
@@ -134,7 +132,6 @@ struct Video: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(subtitles, forKey: .subtitles)
         try container.encode(isVerified, forKey: .isVerified)
         try container.encodeIfPresent(monetization, forKey: .monetization)
-        try container.encode(isPremium, forKey: .isPremium)
         try container.encodeIfPresent(isSponsored, forKey: .isSponsored)
         try container.encodeIfPresent(chapters, forKey: .chapters)
     }
@@ -172,7 +169,6 @@ struct Video: Identifiable, Codable, Hashable {
         subtitles: [SubtitleTrack]? = nil,
         isVerified: Bool = false,
         monetization: MonetizationSettings? = nil,
-        isPremium: Bool = false,
         isSponsored: Bool? = nil,
         chapters: [Chapter]? = nil
     ) {
@@ -204,7 +200,6 @@ struct Video: Identifiable, Codable, Hashable {
         self.subtitles = subtitles
         self.isVerified = isVerified
         self.monetization = monetization
-        self.isPremium = isPremium
         self.isSponsored = isSponsored
         self.chapters = chapters
     }

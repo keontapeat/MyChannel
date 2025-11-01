@@ -1,6 +1,8 @@
 import SwiftUI
 import UIKit
 
+fileprivate let appAsyncImageCache = NSCache<NSString, UIImage>()
+
 struct AppAsyncImage<Content: View, Placeholder: View>: View {
     let url: URL?
     let content: (Image) -> Content
@@ -113,7 +115,15 @@ struct AppAsyncImage<Content: View, Placeholder: View>: View {
             }
         }
 
+        // Memory cache first
+        let cacheKey = NSString(string: url.absoluteString)
+        if let cached = appAsyncImageCache.object(forKey: cacheKey) {
+            await MainActor.run { self.uiImage = cached }
+            return
+        }
+
         if let fetched = await tryFetch(url: url, timeout: 12.0) {
+            appAsyncImageCache.setObject(fetched, forKey: cacheKey)
             await MainActor.run { self.uiImage = fetched }
         }
     }

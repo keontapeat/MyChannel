@@ -1,0 +1,131 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function uid() {
+      return isSignedIn() ? request.auth.uid : null;
+    }
+    function hasRole(role) {
+      return isSignedIn() && (
+        request.auth.token.role == role ||
+        (request.auth.token.roles != null && role in request.auth.token.roles)
+      );
+    }
+    function isAdmin() { return hasRole('admin'); }
+    function isOwner(ownerId) { return isSignedIn() && ownerId == uid(); }
+
+    // Users
+    match /users/{userId} {
+      allow read: if true; // public profiles
+      allow create: if isSignedIn() && userId == uid();
+      allow update, delete: if isOwner(userId) || isAdmin();
+
+      // Subscriptions owned by the user
+      match /subscriptions/{channelId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && request.resource.data.ownerUid == uid();
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      // Subscribers (fan set); only the fan can add/remove their own doc
+      match /subscribers/{fanUid} {
+        allow read: if true;
+        allow create: if isSignedIn() && fanUid == uid();
+        allow delete: if isSignedIn() && (fanUid == uid() || isAdmin());
+      }
+    }
+
+    // Channels
+    match /channels/{channelId} {
+      allow read: if resource.data.visibility == 'public' || isOwner(resource.data.ownerUid) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.ownerUid == uid();
+      allow update, delete: if isOwner(resource.data.ownerUid) || isAdmin();
+    }
+
+    // Videos
+    match /videos/{videoId} {
+      allow read: if resource.data.visibility == 'public' || isOwner(resource.data.ownerUid) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.ownerUid == uid();
+      // Protect adSettings from non-admin writers
+      allow update: if (
+        isAdmin() || (
+          isOwner(resource.data.ownerUid) &&
+          (request.resource.data.adSettings == resource.data.adSettings)
+        )
+      );
+      allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
+
+      // Comments
+      match /comments/{commentId} {
+        function parentIsPublic() {
+          return get(/databases/$(database)/documents/videos/$(videoId)).data.visibility == 'public';
+        }
+        allow read: if parentIsPublic() || isAdmin() || isOwner(get(/databases/$(database)/documents/videos/$(videoId)).data.ownerUid);
+        allow create: if isSignedIn() && parentIsPublic() && request.resource.data.authorUid == uid();
+        allow update, delete: if isSignedIn() && (
+          request.resource.data.authorUid == uid() ||
+          resource.data.authorUid == uid() ||
+          isAdmin()
+        );
+      }
+
+      // Likes
+      match /likes/{likeUid} {
+        allow read: if true;
+        allow create: if isSignedIn() && likeUid == uid();
+        allow delete: if isSignedIn() && (likeUid == uid() || isAdmin());
+      }
+
+      // View shards (write-only from server or via callable; deny client writes by default)
+      match /view_shards/{shardId} {
+        allow read: if false;
+        allow write: if false; // Only Cloud Functions should update
+      }
+    }
+
+    // Shorts
+    match /shorts/{shortId} {
+      allow read: if resource.data.visibility == 'public' || isOwner(resource.data.ownerUid) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.ownerUid == uid();
+      allow update, delete: if isOwner(resource.data.ownerUid) || isAdmin();
+    }
+
+    // Playlists
+    match /playlists/{playlistId} {
+      allow read: if resource.data.visibility == 'public' || isOwner(resource.data.ownerUid) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.ownerUid == uid();
+      allow update, delete: if isOwner(resource.data.ownerUid) || isAdmin();
+
+      match /videos/{videoId} {
+        allow read: if get(/databases/$(database)/documents/playlists/$(playlistId)).data.visibility == 'public' || isOwner(get(/databases/$(database)/documents/playlists/$(playlistId)).data.ownerUid) || isAdmin();
+        allow write: if isOwner(get(/databases/$(database)/documents/playlists/$(playlistId)).data.ownerUid) || isAdmin();
+      }
+    }
+
+    // Reports (abuse/DMCA/copyright): write by any signed-in user; read admin only
+    match /reports/{reportId} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Earnings: creator can read their channel earnings; admin full
+    match /earnings/{channelId} {
+      allow read: if isAdmin() || (isSignedIn() && uid() == get(/databases/$(database)/documents/channels/$(channelId)).data.ownerUid);
+      allow write: if isAdmin();
+    }
+
+    // Growth configs (admin only)
+    match /growth/{docPath=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // Ads configs (admin only)
+    match /ads/{docPath=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
+
+

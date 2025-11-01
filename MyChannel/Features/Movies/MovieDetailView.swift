@@ -507,7 +507,7 @@ struct MovieDetailView: View {
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(.white)
             
-            FlowLayout(movie.genre.map { $0.displayName }, spacing: 8) { genre in
+            MovieFlowLayout(movie.genre.map { $0.displayName }, spacing: 8) { genre in
                 genreChip(genre: genre)
             }
         }
@@ -623,8 +623,8 @@ struct MovieDetailView: View {
     }
 }
 
-// MARK: - Flow Layout Component
-struct FlowLayout<Data: RandomAccessCollection, Content: View>: View where Data.Element: Hashable {
+// MARK: - Movie Flow Layout Component
+struct MovieFlowLayout<Data: RandomAccessCollection, Content: View>: View where Data.Element: Hashable {
     let data: Data
     let spacing: CGFloat
     let content: (Data.Element) -> Content

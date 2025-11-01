@@ -118,8 +118,7 @@ struct VideoPlayerView: View {
                             likeCount: 0,
                             creator: video.creator,
                             category: .other,
-                            isPublic: false,
-                            isPremium: false
+                            isPublic: false
                         )
                         playerManager.setupPlayer(with: adVideo)
                         playerManager.play()
@@ -164,8 +163,7 @@ struct VideoPlayerView: View {
                         likeCount: 0,
                         creator: video.creator,
                         category: .other,
-                        isPublic: false,
-                        isPremium: false
+                        isPublic: false
                     )
                     playerManager.setupPlayer(with: adVideo)
                     playerManager.play()
@@ -261,7 +259,7 @@ extension VideoPlayerView {
             return
         }
         if let vast = AdsService.fallbackVAST(for: video), let resolved = await AdsService.resolveVASTMedia(from: vast) {
-            let adVideo = Video(title: "Ad", description: "Sponsored", thumbnailURL: "", videoURL: resolved.mediaURL, duration: TimeInterval(resolved.duration), viewCount: 0, likeCount: 0, creator: video.creator, category: .other, isPublic: false, isPremium: false)
+            let adVideo = Video(title: "Ad", description: "Sponsored", thumbnailURL: "", videoURL: resolved.mediaURL, duration: TimeInterval(resolved.duration), viewCount: 0, likeCount: 0, creator: video.creator, category: .other, isPublic: false)
             playerManager.setupPlayer(with: adVideo)
             playerManager.play()
             currentAd = ServedAd(impressionId: nil, creativeUri: resolved.mediaURL, clickUrl: resolved.click ?? "", duration: resolved.duration, q0: "", q25: "", q50: "", q75: "", q100: "")

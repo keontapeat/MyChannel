@@ -34,25 +34,205 @@ class FlicksRecommendationEngine: ObservableObject {
         // Simulate AI processing time
         try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
         
-        // Analyze user behavior patterns
+        // Enhanced multi-layer recommendation system
         let behaviorAnalysis = analyzeBehaviorPatterns(history)
-        
-        // Get content-based recommendations
         let contentRecommendations = getContentBasedRecommendations(preferences)
-        
-        // Get collaborative filtering recommendations
         let collaborativeRecommendations = getCollaborativeRecommendations(behaviorAnalysis)
+        let trendingRecommendations = getTrendingRecommendations()
+        let viralPotentialRecommendations = getViralPotentialRecommendations(history)
         
-        // Combine and rank recommendations
-        let finalRecommendations = combineRecommendations(
+        // Advanced recommendation combining with ML weights
+        let finalRecommendations = combineAdvancedRecommendations(
             contentBased: contentRecommendations,
             collaborative: collaborativeRecommendations,
-            userHistory: history
+            trending: trendingRecommendations,
+            viralPotential: viralPotentialRecommendations,
+            userHistory: history,
+            preferences: preferences
         )
         
         isLearning = false
         
         return finalRecommendations
+    }
+    
+    // MARK: - Enhanced Recommendation Methods
+    
+    private func getTrendingRecommendations() -> [Video] {
+        // Get currently trending Flicks content
+        return Video.sampleVideos.filter { $0.category == .entertainment }.prefix(10).map { $0 }
+    }
+    
+    private func getViralPotentialRecommendations(_ history: [FlicksViewEvent]) -> [Video] {
+        // Predict videos with viral potential based on early engagement patterns
+        return Video.sampleVideos.filter { video in
+            // Mock viral potential calculation
+            let engagementRate = Double(video.likeCount) / Double(max(video.viewCount, 1))
+            return engagementRate > 0.1 && video.duration < 60 // Short videos with high engagement
+        }.prefix(5).map { $0 }
+    }
+    
+    private func combineAdvancedRecommendations(
+        contentBased: [Video],
+        collaborative: [Video],
+        trending: [Video],
+        viralPotential: [Video],
+        userHistory: [FlicksViewEvent],
+        preferences: FlicksUserPreferences
+    ) -> [Video] {
+        
+        var scoredVideos: [ScoredVideo] = []
+        
+        // Score content-based recommendations (40% weight)
+        for video in contentBased {
+            let score = calculateContentScore(video, preferences: preferences) * 0.4
+            scoredVideos.append(ScoredVideo(video: video, score: score))
+        }
+        
+        // Score collaborative recommendations (30% weight)
+        for video in collaborative {
+            let score = calculateCollaborativeScore(video, history: userHistory) * 0.3
+            if let existingIndex = scoredVideos.firstIndex(where: { $0.video.id == video.id }) {
+                scoredVideos[existingIndex].score += score
+            } else {
+                scoredVideos.append(ScoredVideo(video: video, score: score))
+            }
+        }
+        
+        // Score trending recommendations (20% weight)
+        for video in trending {
+            let score = calculateTrendingScore(video) * 0.2
+            if let existingIndex = scoredVideos.firstIndex(where: { $0.video.id == video.id }) {
+                scoredVideos[existingIndex].score += score
+            } else {
+                scoredVideos.append(ScoredVideo(video: video, score: score))
+            }
+        }
+        
+        // Score viral potential recommendations (10% weight)
+        for video in viralPotential {
+            let score = calculateViralScore(video) * 0.1
+            if let existingIndex = scoredVideos.firstIndex(where: { $0.video.id == video.id }) {
+                scoredVideos[existingIndex].score += score
+            } else {
+                scoredVideos.append(ScoredVideo(video: video, score: score))
+            }
+        }
+        
+        // Apply diversity and freshness factors
+        scoredVideos = applyDiversityFactors(scoredVideos, userHistory: userHistory)
+        
+        // Sort by final score and return top recommendations
+        return scoredVideos
+            .sorted { $0.score > $1.score }
+            .prefix(20)
+            .map { $0.video }
+    }
+    
+    private func calculateContentScore(_ video: Video, preferences: FlicksUserPreferences) -> Double {
+        var score = 0.0
+        
+        // Category preference matching
+        if preferences.preferredCategories.contains(video.category.rawValue) {
+            score += 0.3
+        }
+        
+        // Duration preference (assume 60 seconds as preferred for Flicks)
+        let preferredDuration = 60.0
+        let durationScore = 1.0 - abs(video.duration - preferredDuration) / preferredDuration
+        score += durationScore * 0.2
+        
+        // Creator preference
+        if preferences.followedCreators.contains(video.creator.id) {
+            score += 0.5
+        }
+        
+        return min(1.0, score)
+    }
+    
+    private func calculateCollaborativeScore(_ video: Video, history: [FlicksViewEvent]) -> Double {
+        // Calculate similarity with users who have similar viewing patterns
+        let similarityScore = calculateUserSimilarity(video, history: history)
+        return similarityScore
+    }
+    
+    private func calculateTrendingScore(_ video: Video) -> Double {
+        // Calculate trending score based on recent engagement
+        let recentEngagement = Double(video.likeCount + video.commentCount) / Double(max(video.viewCount, 1))
+        let timeDecay = calculateTimeDecay(video.createdAt)
+        return recentEngagement * timeDecay
+    }
+    
+    private func calculateViralScore(_ video: Video) -> Double {
+        // Calculate viral potential based on engagement velocity
+        let engagementVelocity = Double(video.likeCount) / max(1.0, Date().timeIntervalSince(video.createdAt) / 3600) // likes per hour
+        return min(1.0, engagementVelocity / 100.0) // Normalize
+    }
+    
+    private func applyDiversityFactors(_ scoredVideos: [ScoredVideo], userHistory: [FlicksViewEvent]) -> [ScoredVideo] {
+        var adjustedVideos = scoredVideos
+        
+        // Reduce scores for videos too similar to recently watched content
+        for (index, scoredVideo) in adjustedVideos.enumerated() {
+            let similarityPenalty = calculateSimilarityPenalty(scoredVideo.video, history: userHistory)
+            adjustedVideos[index].score *= (1.0 - similarityPenalty)
+        }
+        
+        // Boost scores for diverse content
+        adjustedVideos = boostDiverseContent(adjustedVideos)
+        
+        return adjustedVideos
+    }
+    
+    private func calculateUserSimilarity(_ video: Video, history: [FlicksViewEvent]) -> Double {
+        // Mock implementation - in production would use collaborative filtering algorithms
+        return 0.5
+    }
+    
+    private func calculateTimeDecay(_ createdAt: Date) -> Double {
+        let hoursAgo = Date().timeIntervalSince(createdAt) / 3600
+        return exp(-hoursAgo / 24.0) // Exponential decay over 24 hours
+    }
+    
+    private func calculateSimilarityPenalty(_ video: Video, history: [FlicksViewEvent]) -> Double {
+        // Penalize videos too similar to recently watched content
+        let recentVideos = history.suffix(10)
+        var similarityCount = 0
+        
+        for event in recentVideos {
+            if event.videoId == video.id {
+                similarityCount += 1
+            }
+        }
+        
+        return Double(similarityCount) / Double(recentVideos.count) * 0.3 // Max 30% penalty
+    }
+    
+    private func boostDiverseContent(_ scoredVideos: [ScoredVideo]) -> [ScoredVideo] {
+        var adjustedVideos = scoredVideos
+        var categoryCount: [VideoCategory: Int] = [:]
+        
+        // Count categories in top recommendations
+        for scoredVideo in scoredVideos.prefix(10) {
+            categoryCount[scoredVideo.video.category, default: 0] += 1
+        }
+        
+        // Boost underrepresented categories
+        for (index, scoredVideo) in adjustedVideos.enumerated() {
+            let categoryFrequency = categoryCount[scoredVideo.video.category] ?? 0
+            if categoryFrequency < 2 { // Boost if category appears less than 2 times
+                adjustedVideos[index].score *= 1.2
+            }
+        }
+        
+        return adjustedVideos
+    }
+    
+    // MARK: - Supporting Types
+    
+    private struct ScoredVideo {
+        let video: Video
+        var score: Double
     }
     
     private func analyzeVideoEngagement(_ video: Video) {

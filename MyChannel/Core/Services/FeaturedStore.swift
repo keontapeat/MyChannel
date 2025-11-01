@@ -164,4 +164,34 @@ struct StoredFeatured: Codable, Identifiable, Hashable {
     }
 }
 
+final class PinnedVideosStore {
+    static let shared = PinnedVideosStore()
+    private let defaults = UserDefaults.standard
+    private init() {}
+    
+    func key(for userId: String) -> String { "pinned_videos_\(userId)" }
+    
+    func getPinned(for userId: String) -> [String] {
+        return defaults.stringArray(forKey: key(for: userId)) ?? []
+    }
+    
+    func isPinned(_ videoId: String, for userId: String) -> Bool {
+        return getPinned(for: userId).contains(videoId)
+    }
+    
+    func pin(_ videoId: String, for userId: String) {
+        var arr = getPinned(for: userId)
+        if !arr.contains(videoId) { arr.insert(videoId, at: 0) }
+        defaults.set(arr, forKey: key(for: userId))
+        NotificationCenter.default.post(name: .userProfileUpdated, object: nil)
+    }
+    
+    func unpin(_ videoId: String, for userId: String) {
+        var arr = getPinned(for: userId)
+        arr.removeAll { $0 == videoId }
+        defaults.set(arr, forKey: key(for: userId))
+        NotificationCenter.default.post(name: .userProfileUpdated, object: nil)
+    }
+}
+
 

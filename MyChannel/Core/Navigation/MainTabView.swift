@@ -13,12 +13,15 @@ struct MainTabView: View {
     @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var appState: AppState
     @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
+    @StateObject private var inbox = NotificationsInboxService.shared
     
     @State private var selectedTab: TabItem = .home
     @State private var previousTab: TabItem = .home
     @State private var showingUpload: Bool = false
     @State private var isInitialized: Bool = false
     @State private var presentMiniPlayerDetail: Bool = false
+    @State private var presentGlobalNowPlaying: Bool = false
+    @State private var presentNotificationsInbox: Bool = false
     
     @State private var notificationBadges: [TabItem: Int] = [:]
     private let tabBarReservedBottomInset: CGFloat = 72
@@ -45,12 +48,17 @@ struct MainTabView: View {
         }
         .onAppear {
             setupInitialState()
+            if let uid = authManager.currentUser?.id { inbox.listen(userId: uid) }
         }
         .onChange(of: authManager.currentUser) { newValue in
             safeUserStateSync(newValue)
         }
         .onDisappear {
             cleanup()
+        }
+        .onChange(of: inbox.items) { items in
+            let unread = items.filter { !$0.read }.count
+            notificationBadges[.profile] = unread
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToHomeTab"))) { _ in
             selectedTab = .home
@@ -93,12 +101,27 @@ struct MainTabView: View {
             presentSignInSheet = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .openFullHistory)) { _ in
-            presentFullHistory = true
+            if appState.requireAuthentication(hint: "Sign in to view your watch history.") {
+                presentFullHistory = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenVideoEditor"))) { note in
+            if let video = note.object as? Video {
+                // Reuse UploadView in edit mode by preloading the video URL and jumping to the details step
+                // We signal via AppState and a dedicated notification to keep coupling low
+                NotificationCenter.default.post(name: Notification.Name("PresentUploadEditorForVideo"), object: video)
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openVideoFromHistory)) { note in
             if let video = note.object as? Video {
                 historyVideoToOpen = video
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PresentGlobalNowPlayingSheet"))) { _ in
+            presentGlobalNowPlaying = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PresentNotificationsInbox"))) { _ in
+            presentNotificationsInbox = true
         }
         // Remove global auth flow listener to prevent unintended popups
         .sheet(isPresented: $presentAccountSwitcher) {
@@ -108,6 +131,12 @@ struct MainTabView: View {
         .sheet(isPresented: $presentSignInSheet) { SignInSheetView() }
         .fullScreenCover(isPresented: $presentFullHistory) {
             WatchHistoryView()
+        }
+        .sheet(isPresented: $presentGlobalNowPlaying) {
+            NowPlayingSheet()
+        }
+        .fullScreenCover(isPresented: $presentNotificationsInbox) {
+            NotificationsInboxView()
         }
         .fullScreenCover(item: $historyVideoToOpen) { video in
             VideoDetailView(video: video)
@@ -151,7 +180,14 @@ struct MainTabView: View {
                 .allowsHitTesting(true)
                 .safeAreaInset(edge: .bottom) {
                     // Reserve space so scrollable content does not sit beneath the flush tab bar
-                    Color.clear.frame(height: tabBarReservedBottomInset)
+                    VStack(spacing: 8) {
+                        // Hide weak mini player and audio bar when using the advanced inline player or video mini-player
+                        if !globalPlayer.shouldShowMiniPlayer && !globalPlayer.showingFullscreen {
+                            GlobalNowPlayingBar()
+                        }
+                        // Always keep tab bar reserve; add mini-player reserve to prevent jumps
+                        Color.clear.frame(height: tabBarReservedBottomInset + (globalPlayer.shouldShowMiniPlayer ? 96 : 0))
+                    }
                 }
 
             // Keep global mini player hidden on Flicks
@@ -166,7 +202,11 @@ struct MainTabView: View {
                 selectedTab: $selectedTab,
                 notificationBadges: notificationBadges,
                 isHidden: false,
-                onUploadTap: { showingUpload = true },
+                onUploadTap: {
+                    if appState.requireAuthentication(hint: "Sign in to upload videos.") {
+                        showingUpload = true
+                    }
+                },
                 onTabSelected: handleTabSelection
             )
             .zIndex(999)
@@ -177,6 +217,14 @@ struct MainTabView: View {
         .ignoresSafeArea(.keyboard)
         .fullScreenCover(isPresented: $showingUpload) {
             SafeUploadView()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("PresentUploadEditorForVideo"))) { note in
+            if let video = note.object as? Video {
+                showingUpload = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    NotificationCenter.default.post(name: Notification.Name("StartUploadEditorWithExistingVideo"), object: video)
+                }
+            }
         }
     }
     
@@ -275,6 +323,8 @@ struct MainTabView: View {
             NotificationCenter.default.post(name: NSNotification.Name("FlicksResetToFirst"), object: nil)
         case .search:
             NotificationCenter.default.post(name: NSNotification.Name("SearchClearAndReset"), object: nil)
+        case .subscriptions:
+            break
         case .profile:
             break
         case .upload:
@@ -307,6 +357,8 @@ struct SafeContentView: View {
             switch selectedTab {
             case .home:
                 SafeHomeView()
+            case .subscriptions:
+                NavigationStack { SubscriptionsView() }
             case .flicks:
                 // Embed Flicks inside the tab with embedded flag on
                 ErrorBoundary {
@@ -335,7 +387,9 @@ struct SafeContentView: View {
             case .search:
                 SafeSearchView()
             case .profile:
-                SafeProfileView()
+                NavigationView {
+                    ProfileView()
+                }
             case .upload:
                 EmptyView()
             }
@@ -605,11 +659,12 @@ struct AppNotification: Identifiable {
 
 // MARK: - Tab Bar
 enum TabItem: String, CaseIterable, Hashable {
-    case home, flicks, upload, search, profile
+    case home, subscriptions, flicks, upload, search, profile
 
     var title: String {
         switch self {
         case .home: return "Home"
+        case .subscriptions: return "Subscriptions"
         case .flicks: return "Flicks"
         case .upload: return "Create"
         case .search: return "Search"
@@ -620,6 +675,7 @@ enum TabItem: String, CaseIterable, Hashable {
     func iconName(isSelected: Bool) -> String {
         switch self {
         case .home: return isSelected ? "house.fill" : "house"
+        case .subscriptions: return isSelected ? "bell.fill" : "bell"
         case .flicks: return isSelected ? "play.rectangle.on.rectangle.fill" : "play.rectangle.on.rectangle"
         case .upload: return "plus"
         case .search: return "magnifyingglass"
@@ -630,6 +686,7 @@ enum TabItem: String, CaseIterable, Hashable {
     var accessibilityLabel: String {
         switch self {
         case .home: return "Home tab"
+        case .subscriptions: return "Subscriptions tab"
         case .flicks: return "Flicks tab"
         case .upload: return "Create content"
         case .search: return "Search tab"
@@ -649,9 +706,9 @@ struct CustomTabBar: View {
     // Separate tabs into main group and profile. When Home is selected, show it as a separated button on the left.
     private var mainTabs: [TabItem] {
         if selectedTab == .home {
-            return [.flicks, .search]
+            return [.subscriptions, .flicks, .search]
         } else {
-            return [.home, .flicks, .search]
+            return [.home, .subscriptions, .flicks, .search]
         }
     }
     
@@ -1040,6 +1097,14 @@ struct SimpleMainTabPreview: View {
                             .font(.system(size: 60))
                             .foregroundColor(AppTheme.Colors.primary)
                         Text("Search")
+                            .font(AppTheme.Typography.title2)
+                    }
+                case .subscriptions:
+                    VStack {
+                        Image(systemName: "bell.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(AppTheme.Colors.primary)
+                        Text("Subscriptions")
                             .font(AppTheme.Typography.title2)
                     }
                 case .profile:

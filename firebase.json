@@ -85,7 +85,11 @@
         "firebase-debug.*.log",
         "*.local"
       ],
-      "runtime": "python312"
+      "runtime": "python312",
+      "maxInstances": 1,
+      "concurrency": 80,
+      "cpu": 0.25,
+      "invoker": "private"
     }
   ]
 }

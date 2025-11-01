@@ -6,7 +6,11 @@
 //
 
 import SwiftUI
+import UIKit
 import UserNotifications
+#if canImport(FirebaseMessaging)
+import FirebaseMessaging
+#endif
 import Combine
 
 // MARK: - Development Team Compatibility
@@ -111,6 +115,14 @@ class PushNotificationService: NSObject, ObservableObject, UNUserNotificationCen
             options: []
         ),
         
+        // Creator generic notifications
+        UNNotificationCategory(
+            identifier: "CREATOR_NOTIFICATION",
+            actions: [],
+            intentIdentifiers: [],
+            options: []
+        ),
+        
         // Live Stream Category
         UNNotificationCategory(
             identifier: "LIVE_STREAM",
@@ -153,6 +165,8 @@ class PushNotificationService: NSObject, ObservableObject, UNUserNotificationCen
     override init() {
         super.init()
         setupNotificationService()
+        NotificationCenter.default.addObserver(self, selector: #selector(subscribeToCreator(_:)), name: NSNotification.Name("SubscribeToCreatorNotifications"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(unsubscribeFromCreator(_:)), name: NSNotification.Name("UnsubscribeFromCreatorNotifications"), object: nil)
     }
     
     // MARK: - Public Interface
@@ -288,6 +302,8 @@ class PushNotificationService: NSObject, ObservableObject, UNUserNotificationCen
     
     private func setupNotificationService() {
         notificationCenter.delegate = self
+        // Register categories on launch so actions are available
+        setupNotificationCategories()
         Task {
             await getAuthorizationStatus()
         }
@@ -475,6 +491,52 @@ class PushNotificationService: NSObject, ObservableObject, UNUserNotificationCen
             category: "LIVE_STREAM",
             userInfo: ["streamId": streamId, "type": "invite"]
         )
+    }
+
+    // MARK: - Subscription topics (client-side stub)
+    @objc private func subscribeToCreator(_ note: Notification) {
+        let (ownerUid, creatorName) = parseCreatorInfo(note.object)
+        let topic = topicName(ownerUid: ownerUid, name: creatorName)
+        print("[Push] Subscribe to creator notifications: name=\(creatorName) uid=\(ownerUid ?? "nil") -> topic \(topic)")
+        #if canImport(FirebaseMessaging)
+        Messaging.messaging().subscribe(toTopic: topic) { error in
+            if let error = error { print("[Push] subscribe error: \(error)") }
+        }
+        #endif
+    }
+
+    @objc private func unsubscribeFromCreator(_ note: Notification) {
+        let (ownerUid, creatorName) = parseCreatorInfo(note.object)
+        let topic = topicName(ownerUid: ownerUid, name: creatorName)
+        print("[Push] Unsubscribe from creator notifications: name=\(creatorName) uid=\(ownerUid ?? "nil") -> topic \(topic)")
+        #if canImport(FirebaseMessaging)
+        Messaging.messaging().unsubscribe(fromTopic: topic) { error in
+            if let error = error { print("[Push] unsubscribe error: \(error)") }
+        }
+        #endif
+    }
+
+    // Parse object from notification: either String (name) or [String:Any] with ownerUid/name
+    private func parseCreatorInfo(_ obj: Any?) -> (String?, String) {
+        if let dict = obj as? [String: Any] {
+            let uid = dict["ownerUid"] as? String
+            let name = (dict["name"] as? String) ?? (uid ?? "creator")
+            return (uid, name)
+        }
+        let name = (obj as? String) ?? "creator"
+        return (nil, name)
+    }
+
+    // Map to safe FCM topic preferring ownerUid when present
+    private func topicName(ownerUid: String?, name: String) -> String {
+        if let uid = ownerUid, !uid.isEmpty {
+            return "creator_\(safeToken(uid))"
+        }
+        return "creator_\(safeToken(name.lowercased()))"
+    }
+
+    private func safeToken(_ s: String) -> String {
+        return s.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) ? String($0) : "_" }.joined()
     }
 }
 

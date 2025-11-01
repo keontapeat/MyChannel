@@ -16,6 +16,7 @@ struct RealTimeCommentsView: View {
     @State private var selectedComment: RealTimeComment?
     @State private var sortOption: RealTimeCommentSortOption = .newest
     
+    
     enum RealTimeCommentSortOption: String, CaseIterable {
         case newest = "Newest"
         case popular = "Popular"
@@ -50,7 +51,11 @@ struct RealTimeCommentsView: View {
                             },
                             onReport: { commentId in
                                 commentsManager.reportComment(commentId: commentId)
-                            }
+                            },
+                            canPin: AppState.shared.currentUser?.id == video.creatorId,
+                            isPinned: commentsManager.pinnedCommentId == comment.id,
+                            onPin: { commentsManager.pin(commentId: comment.id) },
+                            onUnpin: { commentsManager.unpin() }
                         )
                         .padding(.horizontal)
                     }
@@ -193,6 +198,10 @@ struct RealTimeCommentRow: View {
     let onLike: (String) -> Void
     let onReply: (RealTimeComment) -> Void
     let onReport: (String) -> Void
+    var canPin: Bool = false
+    var isPinned: Bool = false
+    var onPin: (() -> Void)? = nil
+    var onUnpin: (() -> Void)? = nil
     
     @State private var isLiked = false
     @State private var showingReplies = false
@@ -243,6 +252,14 @@ struct RealTimeCommentRow: View {
                         }
                         
                         Spacer()
+                        if isPinned {
+                            Label("Pinned", systemImage: "pin.fill")
+                                .font(.system(size: 11, weight: .semibold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(AppTheme.Colors.surface)
+                                .clipShape(Capsule())
+                        }
                         
                         Button(action: { showingMoreOptions = true }) {
                             Image(systemName: "ellipsis")
@@ -333,14 +350,15 @@ struct RealTimeCommentRow: View {
             }
         }
         .confirmationDialog("Comment Options", isPresented: $showingMoreOptions) {
-            Button("Report") {
-                onReport(comment.id)
+            if canPin {
+                if isPinned {
+                    Button("Unpin") { onUnpin?() }
+                } else {
+                    Button("Pin") { onPin?() }
+                }
             }
-            
-            Button("Copy") {
-                UIPasteboard.general.string = comment.text
-            }
-            
+            Button("Report") { onReport(comment.id) }
+            Button("Copy") { UIPasteboard.general.string = comment.text }
             Button("Cancel", role: .cancel) {}
         }
     }
@@ -562,23 +580,15 @@ struct CommentComposerSheet: View {
     
     private func postComment() {
         guard !commentText.isEmpty else { return }
-        
         isPosting = true
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            let newComment = RealTimeComment(
-                author: User.sampleUsers[0],
-                text: commentText,
-                likeCount: 0,
-                replyCount: 0,
-                createdAt: Date(),
-                parentId: replyingTo?.id,
-                isLive: true
-            )
-            
-            onSubmit(newComment)
-            isPosting = false
-            dismiss()
+        if let uid = AppState.shared.currentUser?.id {
+            Task {
+                try? await CommentsFirestoreService.shared.post(videoId: video.id, userId: uid, text: commentText, parentId: replyingTo?.id)
+                await MainActor.run {
+                    isPosting = false
+                    dismiss()
+                }
+            }
         }
     }
 }
@@ -589,35 +599,30 @@ class RealTimeCommentsManager: ObservableObject {
     @Published var comments: [RealTimeComment] = []
     @Published var isLoading = false
     @Published var error: String?
+    @Published var pinnedCommentId: String?
     
     private var cancellables = Set<AnyCancellable>()
     private var videoId: String?
+    private var listenerHandle: Any?
     
     func startListening(to videoId: String) {
         self.videoId = videoId
-        loadComments()
-        
-        // Simulate real-time updates
-        Timer.publish(every: 5.0, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.simulateNewComment()
+        isLoading = true
+        listenerHandle = CommentsFirestoreService.shared.listen(videoId: videoId) { [weak self] items in
+            Task { @MainActor in
+                self?.comments = items
+                self?.isLoading = false
             }
-            .store(in: &cancellables)
+        }
     }
     
     func stopListening() {
         cancellables.removeAll()
+        CommentsFirestoreService.shared.stop(listener: listenerHandle)
+        listenerHandle = nil
     }
     
-    func loadComments() {
-        isLoading = true
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            self.comments = RealTimeComment.sampleComments
-            self.isLoading = false
-        }
-    }
+    func loadComments() { }
     
     func refreshComments(for videoId: String) async {
         self.videoId = videoId
@@ -631,14 +636,27 @@ class RealTimeCommentsManager: ObservableObject {
     }
     
     func toggleLike(commentId: String) {
-        if let index = comments.firstIndex(where: { $0.id == commentId }) {
-            comments[index].likeCount += 1
-        }
+        guard let vId = videoId, let uid = AppState.shared.currentUser?.id else { return }
+        let add = true // optimistic toggle; backend will enforce uniqueness
+        Task { await CommentsFirestoreService.shared.toggleLike(videoId: vId, commentId: commentId, userId: uid, add: add) }
     }
     
     func reportComment(commentId: String) {
         // Handle comment reporting
         print("Reported comment: \(commentId)")
+    }
+    
+    func pin(commentId: String) {
+        pinnedCommentId = commentId
+        // Bring pinned to top visually
+        if let idx = comments.firstIndex(where: { $0.id == commentId }) {
+            let pinned = comments.remove(at: idx)
+            comments.insert(pinned, at: 0)
+        }
+    }
+    
+    func unpin() {
+        pinnedCommentId = nil
     }
     
     private func simulateNewComment() {

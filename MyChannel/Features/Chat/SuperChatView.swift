@@ -7,9 +7,9 @@
 
 import SwiftUI
 
-struct SuperChatView: View {
+struct SuperChatView<Service: LiveChatServiceProtocol & ObservableObject>: View {
     let streamId: String
-    @ObservedObject var chatService: MockLiveChatService
+    @ObservedObject var chatService: Service
     @Environment(\.dismiss) private var dismiss
     @State private var message = ""
     @State private var selectedAmount: Double = 5.0

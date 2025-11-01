@@ -33,6 +33,11 @@ struct VerticalShortsView: View {
                 }
                 .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
                 .ignoresSafeArea()
+                .onChange(of: currentIndex) { idx in
+                    if idx >= max(0, viewModel.shorts.count - 3) {
+                        Task { await viewModel.loadMoreIfNeeded() }
+                    }
+                }
                 
                 // Actions panel overlay
                 if showActions {
@@ -62,12 +67,22 @@ struct VerticalShortsView: View {
                 }
             }
         }
-        .onAppear {
-            viewModel.loadShorts()
-        }
+        .onAppear { viewModel.loadShorts() }
         .onChange(of: currentIndex) { newValue in
             if !viewModel.shorts.isEmpty {
                 viewModel.trackView(for: viewModel.shorts[newValue].id)
+                        // Prefetch next item for zero-lag playback
+                        let nextIdx = newValue + 1
+                        if nextIdx < viewModel.shorts.count {
+                            let next = viewModel.shorts[nextIdx]
+                            VideoPlayerManager.prewarm(urlString: next.videoURL)
+                        }
+                // Prefetch one more ahead for smoother scroll
+                let nextNextIdx = newValue + 2
+                if nextNextIdx < viewModel.shorts.count {
+                    let nn = viewModel.shorts[nextNextIdx]
+                    VideoPlayerManager.prewarm(urlString: nn.videoURL)
+                }
             }
         }
         .gesture(
@@ -101,6 +116,7 @@ struct ShortVideoView: View {
     
     @StateObject private var playerManager = VideoPlayerManager()
     @State private var showVideoInfo = true
+    @State private var showDebugHUD = false
     
     var body: some View {
         ZStack {
@@ -115,6 +131,9 @@ struct ShortVideoView: View {
                             showVideoInfo.toggle()
                             showActions.toggle()
                         }
+                    }
+                    .onLongPressGesture(minimumDuration: 0.4) {
+                        withAnimation(.spring()) { showDebugHUD.toggle() }
                     }
             } else {
                 // Thumbnail when not active
@@ -214,6 +233,24 @@ struct ShortVideoView: View {
                     .padding(.bottom, 140) // Space for actions and tab bar
                 }
             }
+
+            // Debug HUD overlay
+            if showDebugHUD, let stats = playerManager.currentPlaybackStats() {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("⚙️ Debug HUD").font(.caption2).bold()
+                    Text("Res: \(stats.width)x\(stats.height)").font(.caption2)
+                    Text("Bitrate: \(stats.bitrateKbps) kbps").font(.caption2)
+                    Text(String(format: "FPS: %.1f", stats.fps)).font(.caption2)
+                    Text(String(format: "Time: %.1f/%.1f", stats.currentTime, stats.duration)).font(.caption2)
+                }
+                .padding(8)
+                .background(Color.black.opacity(0.6))
+                .cornerRadius(8)
+                .foregroundColor(.white)
+                .padding(12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .transition(.opacity)
+            }
         }
         .onAppear {
             if isActive {
@@ -233,6 +270,7 @@ struct ShortVideoView: View {
     private func setupPlayer() {
         playerManager.setupPlayer(with: video)
         playerManager.setLooping(true) // Auto-loop shorts
+        playerManager.applyShortsStartupTuning()
     }
 }
 
@@ -372,20 +410,32 @@ struct ShortsActionsPanel: View {
 class ShortsViewModel: ObservableObject {
     @Published var shorts: [Video] = []
     @Published var isLoading = false
+    private var isPaging = false
+    private let shortsService = ShortsFirestoreService.shared
     
     func loadShorts() {
         isLoading = true
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            // Load shorts videos
-            self.shorts = Video.sampleVideos.filter { $0.isShort || $0.duration < 60 }
-            
-            // If no shorts, make some regular videos into shorts
-            if self.shorts.isEmpty {
-                self.shorts = Array(Video.sampleVideos.prefix(10))
+        Task { @MainActor in
+            let fetched = await shortsService.fetchNextPage(limit: 10)
+            if fetched.isEmpty {
+                // Fallback to mock data
+                var seeds = Video.sampleVideos.filter { $0.isShort || $0.duration < 60 }
+                if seeds.isEmpty { seeds = Array(Video.sampleVideos.prefix(10)) }
+                self.shorts = seeds
+            } else {
+                self.shorts = fetched
             }
-            
-            self.isLoading = false
+            isLoading = false
+        }
+    }
+
+    func loadMoreIfNeeded() async {
+        guard !isPaging else { return }
+        isPaging = true
+        let next = await shortsService.fetchNextPage(limit: 8)
+        await MainActor.run {
+            if !next.isEmpty { self.shorts.append(contentsOf: next) }
+            self.isPaging = false
         }
     }
     

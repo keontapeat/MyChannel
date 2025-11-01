@@ -12,7 +12,9 @@ struct SafariView: UIViewControllerRepresentable {
         config.entersReaderIfAvailable = entersReaderIfAvailable
         let vc = SFSafariViewController(url: url, configuration: config)
         if let barTintColor { vc.preferredBarTintColor = barTintColor }
-        if let controlTintColor { vc.preferredControlTintColor = controlTintColor }
+        // Default to brand control tint if none provided
+        let resolvedControlTint = controlTintColor ?? UIColor(AppTheme.Colors.primary)
+        vc.preferredControlTintColor = resolvedControlTint
         vc.dismissButtonStyle = .close
         return vc
     }

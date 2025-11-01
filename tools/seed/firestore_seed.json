@@ -1,0 +1,40 @@
+{
+  "users": [
+    {
+      "id": "demo-user-1",
+      "handle": "demouser",
+      "displayName": "Demo User",
+      "photoURL": null,
+      "locale": "en-US",
+      "country": "US",
+      "createdAt": 0
+    }
+  ],
+  "channels": [
+    {
+      "id": "demo-channel-1",
+      "ownerUid": "demo-user-1",
+      "name": "Demo Channel",
+      "slug": "demo",
+      "description": "Welcome to MyChannel",
+      "tags": ["music","tech"],
+      "verified": false,
+      "stats": { "subs": 0, "views": 0 }
+    }
+  ],
+  "videos": [
+    {
+      "id": "demo-video-1",
+      "channelId": "demo-channel-1",
+      "ownerUid": "demo-user-1",
+      "title": "Hello World",
+      "description": "First video",
+      "tags": ["intro"],
+      "language": "en",
+      "duration": 30,
+      "source": { "storagePath": "ingest/demo/demo-video-1/source.mp4" },
+      "visibility": "public",
+      "status": "processing"
+    }
+  ]
+}

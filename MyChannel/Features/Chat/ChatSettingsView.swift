@@ -7,13 +7,13 @@
 
 import SwiftUI
 
-struct ChatSettingsView: View {
-    @ObservedObject var chatService: MockLiveChatService
+struct ChatSettingsView<Service: LiveChatServiceProtocol & ObservableObject>: View {
+    @ObservedObject var chatService: Service
     let streamId: String
     @Environment(\.dismiss) private var dismiss
     @State private var tempSettings: ChatSettings
     
-    init(chatService: MockLiveChatService, streamId: String) {
+    init(chatService: Service, streamId: String) {
         self.chatService = chatService
         self.streamId = streamId
         self._tempSettings = State(initialValue: chatService.settings)
@@ -142,8 +142,10 @@ struct ChatSettingsView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
-                        chatService.updateSettings(tempSettings)
-                        dismiss()
+                        Task {
+                            try? await chatService.updateChatSettings(streamId: streamId, settings: tempSettings)
+                            dismiss()
+                        }
                     }
                     .fontWeight(.semibold)
                 }

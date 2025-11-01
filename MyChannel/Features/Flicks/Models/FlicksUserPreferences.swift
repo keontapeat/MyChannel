@@ -11,6 +11,7 @@ import Foundation
 struct FlicksUserPreferences: Codable {
     var preferredCategories: [String] = []
     var preferredCreators: [String] = []
+    var followedCreators: [String] = []
     var avgWatchTime: TimeInterval = 0
     var interactionPatterns: [String: Double] = [:]
 }

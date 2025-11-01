@@ -61,7 +61,9 @@ class NotificationManager: ObservableObject {
             type: .success,
             title: "Success",
             message: message,
-            duration: 2.0
+            duration: 2.0,
+            actionTitle: nil,
+            onAction: nil
         ))
     }
     
@@ -70,7 +72,9 @@ class NotificationManager: ObservableObject {
             type: .error,
             title: "Error",
             message: message,
-            duration: 3.0
+            duration: 3.0,
+            actionTitle: nil,
+            onAction: nil
         ))
     }
     
@@ -79,7 +83,20 @@ class NotificationManager: ObservableObject {
             type: .info,
             title: "Info",
             message: message,
-            duration: 2.5
+            duration: 2.5,
+            actionTitle: nil,
+            onAction: nil
+        ))
+    }
+    
+    func showAction(title: String, message: String, actionTitle: String, action: @escaping () -> Void) {
+        showInAppNotification(InAppNotification(
+            type: .warning,
+            title: title,
+            message: message,
+            duration: 6.0,
+            actionTitle: actionTitle,
+            onAction: action
         ))
     }
     
@@ -108,6 +125,8 @@ struct InAppNotification: Identifiable, Equatable {
     let title: String
     let message: String
     let duration: TimeInterval
+    let actionTitle: String?
+    let onAction: (() -> Void)?
     
     enum NotificationType {
         case success, error, warning, info
@@ -165,6 +184,15 @@ struct InAppNotificationView: View {
             }
             
             Spacer()
+            
+            if let label = notification.actionTitle, let action = notification.onAction {
+                Button(label) { action(); onDismiss() }
+                    .font(.system(size: 12, weight: .semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(AppTheme.Colors.primary.opacity(0.12))
+                    .clipShape(Capsule())
+            }
             
             // Dismiss button
             Button(action: onDismiss) {
@@ -383,7 +411,9 @@ struct NotificationExamplesView: View {
             type: .success,
             title: "Success",
             message: "Your video has been uploaded successfully!",
-            duration: 3.0
+            duration: 3.0,
+            actionTitle: nil,
+            onAction: nil
         )
     ) {
         // Dismiss action
@@ -397,7 +427,9 @@ struct NotificationExamplesView: View {
             type: .info,
             title: "New Feature",
             message: "Dark mode is now available in settings!",
-            duration: 3.0
+            duration: 3.0,
+            actionTitle: nil,
+            onAction: nil
         )
     ) {
         // Dismiss action

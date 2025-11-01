@@ -9,7 +9,7 @@ import SwiftUI
 
 struct CommentsView: View {
     let video: Video
-    @State private var comments: [Comment] = Comment.sampleComments
+    @State private var comments: [VideoComment] = VideoComment.sampleComments
     @State private var newComment: String = ""
     
     var body: some View {
@@ -94,7 +94,7 @@ struct CommentsView: View {
 }
 
 struct CommentCard: View {
-    let comment: Comment
+    let comment: VideoComment
     
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -129,7 +129,7 @@ struct CommentCard: View {
                     Spacer()
                 }
                 
-                Text(comment.content)
+                        Text(comment.text)
                     .font(AppTheme.Typography.body)
                     .foregroundColor(AppTheme.Colors.textPrimary)
                 
@@ -158,38 +158,7 @@ struct CommentCard: View {
     }
 }
 
-struct Comment: Identifiable {
-    let id: String = UUID().uuidString
-    let content: String
-    let author: User
-    let createdAt: Date
-    let likeCount: Int
-    let replies: [Comment]
-    
-    static let sampleComments: [Comment] = [
-        Comment(
-            content: "This is an amazing tutorial! Really helped me understand SwiftUI better.",
-            author: User.sampleUsers[1],
-            createdAt: Calendar.current.date(byAdding: .hour, value: -2, to: Date()) ?? Date(),
-            likeCount: 24,
-            replies: []
-        ),
-        Comment(
-            content: "Thanks for sharing this! Could you do a follow-up on advanced techniques?",
-            author: User.sampleUsers[2],
-            createdAt: Calendar.current.date(byAdding: .hour, value: -1, to: Date()) ?? Date(),
-            likeCount: 12,
-            replies: []
-        ),
-        Comment(
-            content: "Great explanation of the concepts. Looking forward to more content like this!",
-            author: User.sampleUsers[3],
-            createdAt: Calendar.current.date(byAdding: .minute, value: -30, to: Date()) ?? Date(),
-            likeCount: 8,
-            replies: []
-        )
-    ]
-}
+// VideoComment model is now in Core/Models/VideoComment.swift
 
 #Preview {
     CommentsView(video: Video.sampleVideos[0])

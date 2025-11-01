@@ -1,0 +1,79 @@
+{
+  "info": {
+    "name": "MyChannel API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Functions: report_content",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{FIREBASE_ID_TOKEN}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "https://us-central1-{{GCP_PROJECT}}.cloudfunctions.net/report_content"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"video\",\n  \"id\": \"VIDEO_ID\",\n  \"reason\": \"Inappropriate\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Ads: serve",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{ADS_BASE_URL}}/ads/serve"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"key\": \"{{SERVE_KEY}}\",\n  \"placement\": \"preroll\",\n  \"locale\": \"en-US\",\n  \"device\": \"ios\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Growth: reviews eligibility",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "https://us-central1-{{GCP_PROJECT}}.cloudfunctions.net/reviews_eligibility"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": \"USER_ID\"\n}"
+        }
+      }
+    },
+    {
+      "name": "CDN: Signed URL example",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{CDN_BASE}}{{CDN_PATH}}?Expires={{CDN_EXPIRES}}&KeyName={{CDN_KEY_NAME}}&Signature={{CDN_SIGNATURE}}"
+        }
+      }
+    }
+  ]
+}

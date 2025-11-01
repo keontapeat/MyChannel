@@ -64,11 +64,9 @@ app.post('/v1/uploads/finalize', async (req, res) => {
     if (contentType) {
       try { await file.setMetadata({ contentType: String(contentType) }); } catch {}
     }
-    // For MVP, make object publicly readable so Safari can stream without signed tokens
-    try { await file.makePublic(); } catch {}
+    // Return signed read URL; do not make public
     const [getUrl] = await file.getSignedUrl({ action: 'read', version: 'v4', expires: Date.now() + 24 * 60 * 60 * 1000 }); // 24 hours
-    const publicUrl = `https://storage.googleapis.com/${bkt}/${encodeURIComponent(obj)}`;
-    return res.set({ 'Access-Control-Allow-Origin': '*' }).json({ url: getUrl, publicUrl, bucket: bkt, object: obj, contentType: contentType || null });
+    return res.set({ 'Access-Control-Allow-Origin': '*' }).json({ url: getUrl, bucket: bkt, object: obj, contentType: contentType || null });
   } catch (e:any) {
     return res.status(500).json({ error: e?.message || 'internal' });
   }

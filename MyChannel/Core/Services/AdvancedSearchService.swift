@@ -2,6 +2,9 @@ import SwiftUI
 import Combine
 import Foundation
 import NaturalLanguage
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 /// Enterprise-grade search service with ML-powered ranking and recommendations
 /// Handles complex queries with filters, faceting, and personalized results
@@ -17,6 +20,10 @@ class AdvancedSearchService: ObservableObject {
     private let queryProcessor = QueryProcessor()
     private let rankingEngine = SearchRankingEngine()
     private let autoCompleteService = AutoCompleteService()
+    #if canImport(FirebaseFirestore)
+    private var db: Firestore { Firestore.firestore() }
+    private var lastVideoSnap: DocumentSnapshot?
+    #endif
     
     // Search configuration
     private let maxResults = 50
@@ -179,6 +186,31 @@ class AdvancedSearchService: ObservableObject {
     ) async -> [VideoSearchResult] {
         
         var videos = Video.sampleVideos
+        #if canImport(FirebaseFirestore)
+        do {
+            var queryRef: Query = db.collection("videos").whereField("visibility", isEqualTo: "public")
+            if let category = filters.category { queryRef = queryRef.whereField("category", isEqualTo: category.rawValue) }
+            queryRef = queryRef.order(by: "createdAt", descending: true).limit(to: 50)
+            let snap = try await queryRef.getDocuments()
+            let defaultCreator = await MainActor.run { AppState.shared.currentUser } ?? User.defaultUser
+            let fetched: [Video] = snap.documents.compactMap { doc in
+                let d = doc.data()
+                return Video(
+                    id: doc.documentID,
+                    title: d["title"] as? String ?? "",
+                    description: d["description"] as? String ?? "",
+                    thumbnailURL: d["thumbnailUrl"] as? String ?? "",
+                    videoURL: d["videoUrl"] as? String ?? "",
+                    duration: (d["duration"] as? Double) ?? 0,
+                    viewCount: (d["viewCount"] as? Int) ?? 0,
+                    likeCount: (d["likeCount"] as? Int) ?? 0,
+                    creator: defaultCreator,
+                    category: filters.category ?? .entertainment
+                )
+            }
+            if !fetched.isEmpty { videos = fetched }
+        } catch { }
+        #endif
         
         // Apply filters
         if let category = filters.category {

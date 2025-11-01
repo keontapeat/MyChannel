@@ -26,6 +26,9 @@ struct MultiSourceAsyncImage<Content: View, Placeholder: View>: View {
             } else {
                 placeholder()
                     .onAppear { loadIfNeeded() }
+                    .onChange(of: urlsSignature) { _ in
+                        resetAndLoad()
+                    }
             }
         }
     }
@@ -48,8 +51,12 @@ struct MultiSourceAsyncImage<Content: View, Placeholder: View>: View {
         Task {
             defer { isLoading = false }
             do {
-                let (data, response) = try await URLSession.shared.data(from: url)
-                if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
+                var config = URLSessionConfiguration.ephemeral
+                config.requestCachePolicy = .returnCacheDataElseLoad
+                config.urlCache = .shared
+                let session = URLSession(configuration: config)
+                let (data, response) = try await session.data(from: url)
+                if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) || data.isEmpty {
                     await tryNext()
                     return
                 }
@@ -72,6 +79,18 @@ struct MultiSourceAsyncImage<Content: View, Placeholder: View>: View {
         if index < urls.count {
             loadCurrentOrNext()
         }
+    }
+
+    // MARK: - Helpers
+    private var urlsSignature: String {
+        urls.map { $0.absoluteString }.joined(separator: "|")
+    }
+
+    private func resetAndLoad() {
+        image = nil
+        index = 0
+        isLoading = false
+        loadIfNeeded()
     }
 }
 

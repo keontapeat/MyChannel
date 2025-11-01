@@ -48,7 +48,7 @@ struct ProfileHeaderView: View {
                         ProfileVideoBackground(
                             url: url,
                             isMuted: user.bannerVideoMuted ?? true,
-                            contentMode: user.bannerVideoContentMode ?? .fill
+                            contentMode: convertBannerContentMode(user.bannerVideoContentMode ?? .fill)
                         )
                     } else if let bannerURL = user.bannerImageURL {
                         CachedAsyncImage(url: URL(string: bannerURL)) { image in
@@ -74,26 +74,28 @@ struct ProfileHeaderView: View {
             .clipped()
             .ignoresSafeArea(.all, edges: .top)
 
-            // Top controls
-            HStack {
-                Spacer()
+            // Top controls (Settings button only for your own profile)
+            if isCurrentUserProfile {
+                HStack {
+                    Spacer()
 
-                Button {
-                    showingSettings = true
-                    HapticManager.shared.impact(style: .light)
-                } label: {
-                    Image(systemName: "gearshape.fill")
-                        .font(.title2)
-                        .foregroundColor(.white)
-                        .padding(14)
-                        .background(.black.opacity(0.55))
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
-                        .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 4)
+                    Button {
+                        showingSettings = true
+                        HapticManager.shared.impact(style: .light)
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                            .padding(14)
+                            .background(.black.opacity(0.55))
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
+                            .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 4)
+                    }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 50)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 50)
 
             // Main profile info
             VStack(spacing: 16) {
@@ -192,7 +194,7 @@ struct ProfileHeaderView: View {
         }()
 
         if selected.kind == .video, let url = URL(string: selected.assetURL) {
-            ProfileVideoBackground(url: url, isMuted: true, contentMode: .fill)
+            ProfileVideoBackground(url: url, isMuted: true, contentMode: ProfileVideoBannerContentMode.fill)
         } else {
             CachedAsyncImage(url: URL(string: selected.assetURL)) { image in
                 image.resizable().aspectRatio(contentMode: .fill)
@@ -334,7 +336,7 @@ private struct CollapsedProfileBar: View {
 private struct ProfileVideoBackground: View {
     let url: URL
     var isMuted: Bool = true
-    var contentMode: BannerContentMode = .fill
+    var contentMode: ProfileVideoBannerContentMode = .fill
     @State private var player: AVPlayer = AVPlayer()
     @State private var isReady = false
     @Environment(\.scenePhase) private var scenePhase
@@ -510,6 +512,21 @@ private struct DefaultProfileBanner: Identifiable, Hashable {
             previewURL: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=1600&q=80"
         )
     ]
+}
+
+// MARK: - Profile Video Content Mode
+private enum ProfileVideoBannerContentMode {
+    case fill
+    case fit
+}
+
+private func convertBannerContentMode(_ userMode: UserBannerContentMode) -> ProfileVideoBannerContentMode {
+    switch userMode {
+    case .fill:
+        return .fill
+    case .fit:
+        return .fit
+    }
 }
 
 #Preview("Profile Header") {

@@ -11,6 +11,7 @@ import Photos
 import AVFoundation
 import AVKit
 import UIKit
+import UniformTypeIdentifiers
 
 struct UploadView: View {
     @StateObject private var uploadManager = VideoUploadManager()
@@ -40,6 +41,13 @@ struct UploadView: View {
     @State private var keyboardHeight: CGFloat = 0
     @State private var showQualitySettings = false
     @State private var uploadQuality: VideoQuality = .high
+    // Captions/Dubs import UI state
+    @State private var showCaptionLangDialog = false
+    @State private var showDubLangDialog = false
+    @State private var selectedLang: String = "en"
+    @State private var showCaptionImporter = false
+    @State private var showDubImporter = false
+    private let supportedLangs = ["en","es","fr","de","pt","hi","ja","zh","ar","ru"]
     
     enum UploadStep {
         case selectMedia
@@ -209,6 +217,43 @@ struct UploadView: View {
         } message: { draft in
             Text("Draft from \(draft.createdAt.formatted(date: .abbreviated, time: .shortened)).")
         }
+        // Caption/Dub pickers
+        .confirmationDialog("Select caption language", isPresented: $showCaptionLangDialog, titleVisibility: .visible) {
+            ForEach(supportedLangs, id: \.self) { lang in
+                Button(lang.uppercased()) {
+                    selectedLang = lang
+                    showCaptionImporter = true
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog("Select dub language", isPresented: $showDubLangDialog, titleVisibility: .visible) {
+            ForEach(supportedLangs, id: \.self) { lang in
+                Button(lang.uppercased()) {
+                    selectedLang = lang
+                    showDubImporter = true
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .fileImporter(isPresented: $showCaptionImporter, allowedContentTypes: [UTType(filenameExtension: "vtt") ?? .text]) { res in
+            switch res {
+            case .success(let url):
+                if url.startAccessingSecurityScopedResource() { defer { url.stopAccessingSecurityScopedResource() } }
+                uploadManager.addCaption(url: url, lang: selectedLang)
+            case .failure:
+                break
+            }
+        }
+        .fileImporter(isPresented: $showDubImporter, allowedContentTypes: [UTType(filenameExtension: "m4a") ?? .audio]) { res in
+            switch res {
+            case .success(let url):
+                if url.startAccessingSecurityScopedResource() { defer { url.stopAccessingSecurityScopedResource() } }
+                uploadManager.addDub(url: url, lang: selectedLang)
+            case .failure:
+                break
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             UploadCreationModeBar(
                 selected: $creationMode,
@@ -279,6 +324,17 @@ struct UploadView: View {
                         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                             uploadStep = .addDetails
                         }
+                    }
+                }
+            }
+        }
+        // Enter edit flow when launched from options sheet
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("StartUploadEditorWithExistingVideo"))) { note in
+            if let v = note.object as? Video, let url = URL(string: v.videoURL) {
+                Task {
+                    await uploadManager.prepareVideo(from: url)
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        uploadStep = .editVideo
                     }
                 }
             }
@@ -529,6 +585,51 @@ struct UploadView: View {
                 }
                 .padding(.horizontal, 20)
                 
+                // Captions & Dubs
+                VStack(spacing: 14) {
+                    Text("Captions & Dubs")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    HStack(spacing: 12) {
+                        Button {
+                            selectedLang = "en"
+                            showCaptionLangDialog = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "captions.bubble")
+                                Text("Add Caption (VTT)")
+                            }
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.primary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(AppTheme.Colors.surface)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1))
+                        }
+
+                        Button {
+                            selectedLang = "en"
+                            showDubLangDialog = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "waveform")
+                                Text("Add Dub (M4A)")
+                            }
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.primary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(AppTheme.Colors.surface)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1))
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+
                 if creationMode == .flicks, uploadManager.videoDuration > 60 {
                     HStack {
                         Image(systemName: "scissors")
@@ -783,10 +884,51 @@ struct UploadView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         
                         VStack(spacing: 12) {
+                            // 🔥 NEW: Full Visibility Options
                             ProfessionalToggleRow(title: "Public Video", subtitle: "Anyone can search for and view", icon: "globe", isOn: $uploadManager.isPublic)
+                            
+                            // 🔥 NEW: Scheduling
+                            ProfessionalToggleRow(title: "Schedule for later", subtitle: "Publish at a specific time", icon: "calendar", isOn: $uploadManager.isScheduled)
+                            
+                            if uploadManager.isScheduled {
+                                ProfessionalDatePicker(title: "Publish date", date: $uploadManager.scheduledDate, icon: "clock")
+                                
+                                ProfessionalToggleRow(title: "Set as Premiere", subtitle: "Create a live countdown", icon: "play.circle", isOn: $uploadManager.isPremiere)
+                            }
+                            
                             ProfessionalToggleRow(title: "Enable Comments", subtitle: "Allow viewers to comment", icon: "bubble.left.and.bubble.right", isOn: .constant(true))
                             ProfessionalToggleRow(title: "Monetization", subtitle: "Earn revenue from this video", icon: "dollarsign.circle", isOn: $uploadManager.monetizationEnabled, isPremium: true)
                         }
+                    }
+                    
+                    // 🔥 NEW: Advanced Settings
+                    VStack(spacing: 16) {
+                        Text("Advanced Settings")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        VStack(spacing: 12) {
+                            ProfessionalInputField(title: "Filming Location", text: $uploadManager.filmingLocation, placeholder: "Where was this filmed?", icon: "location", maxLength: 100)
+                            
+                            ProfessionalToggleRow(title: "Age-restricted", subtitle: "Only viewers 18+ can watch", icon: "18.circle", isOn: $uploadManager.ageRestricted)
+                            
+                            ProfessionalToggleRow(title: "Made for kids", subtitle: "Content designed for children", icon: "figure.and.child.holdinghands", isOn: $uploadManager.madeForKids)
+                        }
+                    }
+                    
+                    // 🔥 NEW: Thumbnail Selection
+                    VStack(spacing: 16) {
+                        Text("Thumbnail")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        ThumbnailSelectionView(
+                            autoThumbnail: uploadManager.thumbnail,
+                            customThumbnails: $uploadManager.customThumbnails,
+                            selectedIndex: $uploadManager.selectedThumbnailIndex
+                        )
                     }
                 }
                 .padding(.horizontal, 20)
@@ -845,7 +987,12 @@ struct UploadView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 20)
+                .padding(.bottom, 100) // Add extra bottom padding to prevent tab bar overlap
             }
+        }
+        .safeAreaInset(edge: .bottom) {
+            // Ensure upload button is always visible above tab bar
+            Color.clear.frame(height: 0)
         }
     }
     
@@ -1556,6 +1703,257 @@ struct ProfessionalButtonStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+// MARK: - New YouTube Parity Components
+
+// MARK: - Visibility Picker (Disabled - using simple toggle instead)
+/*
+struct ProfessionalVisibilityPicker: View {
+    let title: String
+    @Binding var selection: VideoUploadManager.VideoVisibility
+    let icon: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .foregroundColor(AppTheme.Colors.primary)
+                    .font(.system(size: 16, weight: .medium))
+                
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+            }
+            
+            VStack(spacing: 8) {
+                ForEach(VideoUploadManager.VideoVisibility.allCases) { visibility in
+                    Button {
+                        selection = visibility
+                        HapticManager.shared.impact(style: .light)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: visibility.icon)
+                                .foregroundColor(selection == visibility ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                                .font(.system(size: 16))
+                                .frame(width: 20)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(visibility.rawValue)
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                
+                                Text(visibility.description)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            }
+                            
+                            Spacer()
+                            
+                            if selection == visibility {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(AppTheme.Colors.primary)
+                                    .font(.system(size: 18))
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(selection == visibility ? AppTheme.Colors.primary.opacity(0.1) : AppTheme.Colors.cardBackground)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(selection == visibility ? AppTheme.Colors.primary : AppTheme.Colors.divider, lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
+*/
+
+struct ProfessionalDatePicker: View {
+    let title: String
+    @Binding var date: Date
+    let icon: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .foregroundColor(AppTheme.Colors.primary)
+                    .font(.system(size: 16, weight: .medium))
+                
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+            }
+            
+            DatePicker("", selection: $date, in: Date()...)
+                .datePickerStyle(.compact)
+                .labelsHidden()
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(AppTheme.Colors.cardBackground)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(AppTheme.Colors.divider, lineWidth: 1)
+                )
+        }
+    }
+}
+
+struct ThumbnailSelectionView: View {
+    let autoThumbnail: UIImage?
+    @Binding var customThumbnails: [UIImage]
+    @Binding var selectedIndex: Int
+    @State private var showingImagePicker = false
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                // Auto-generated thumbnail
+                if let autoThumbnail = autoThumbnail {
+                    ThumbnailOption(
+                        image: autoThumbnail,
+                        isSelected: selectedIndex == 0,
+                        label: "Auto"
+                    ) {
+                        selectedIndex = 0
+                    }
+                }
+                
+                // Custom thumbnails
+                ForEach(customThumbnails.indices, id: \.self) { index in
+                    ThumbnailOption(
+                        image: customThumbnails[index],
+                        isSelected: selectedIndex == index + 1,
+                        label: nil
+                    ) {
+                        selectedIndex = index + 1
+                    }
+                }
+                
+                // Add custom thumbnail button
+                Button {
+                    showingImagePicker = true
+                } label: {
+                    VStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(AppTheme.Colors.cardBackground)
+                            .frame(width: 120, height: 68)
+                            .overlay(
+                                Image(systemName: "plus")
+                                    .font(.system(size: 24, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(AppTheme.Colors.divider, style: StrokeStyle(lineWidth: 1, dash: [5]))
+                            )
+                        
+                        Text("Custom")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 20)
+        }
+        .sheet(isPresented: $showingImagePicker) {
+            ImagePicker { image in
+                customThumbnails.append(image)
+                selectedIndex = customThumbnails.count // Select the newly added thumbnail
+            }
+        }
+    }
+}
+
+struct ThumbnailOption: View {
+    let image: UIImage
+    let isSelected: Bool
+    let label: String?
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(16/9, contentMode: .fill)
+                    .frame(width: 120, height: 68)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.divider, lineWidth: isSelected ? 3 : 1)
+                    )
+                    .overlay(
+                        Group {
+                            if isSelected {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(AppTheme.Colors.primary)
+                                    .background(Color.white)
+                                    .clipShape(Circle())
+                                    .font(.system(size: 20))
+                            }
+                        },
+                        alignment: .topTrailing
+                    )
+                
+                if let label = label {
+                    Text(label)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct ImagePicker: UIViewControllerRepresentable {
+    let onImageSelected: (UIImage) -> Void
+    @Environment(\.dismiss) private var dismiss
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        picker.sourceType = .photoLibrary
+        picker.allowsEditing = true
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: ImagePicker
+        
+        init(_ parent: ImagePicker) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let image = info[.editedImage] as? UIImage ?? info[.originalImage] as? UIImage {
+                parent.onImageSelected(image)
+            }
+            parent.dismiss()
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
+        }
     }
 }
 

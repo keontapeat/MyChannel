@@ -7,8 +7,8 @@
 
 import SwiftUI
 
-struct ChatUserListView: View {
-    @ObservedObject var chatService: MockLiveChatService
+struct ChatUserListView<Service: LiveChatServiceProtocol & ObservableObject>: View {
+    @ObservedObject var chatService: Service
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
     @State private var selectedFilter: UserFilter = .all

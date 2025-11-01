@@ -10,9 +10,12 @@ import fs from 'fs/promises';
 const app = express();
 const storage = new Storage();
 const pubsub = new PubSub();
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY');
+}
 const supabase = createClient(
-  process.env.SUPABASE_URL || 'your-supabase-url',
-  process.env.SUPABASE_SERVICE_KEY || 'your-supabase-service-key'
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_KEY!
 );
 
 const INGEST_BUCKET = process.env.INGEST_BUCKET || 'mychannel-ingest';
@@ -286,10 +289,9 @@ async function uploadVideo(videoId: string, localPath: string, quality: string):
     }
   });
 
-  // Make file publicly readable
-  await file.makePublic();
-  
-  return `https://storage.googleapis.com/${OUTPUT_BUCKET}/${fileName}`;
+  // Return signed URL instead of public
+  const [readUrl] = await file.getSignedUrl({ action: 'read', version: 'v4', expires: Date.now() + 7 * 24 * 60 * 60 * 1000 });
+  return readUrl;
 }
 
 // Upload thumbnail to storage
@@ -304,10 +306,9 @@ async function uploadThumbnail(videoId: string, localPath: string): Promise<stri
     }
   });
 
-  // Make file publicly readable
-  await file.makePublic();
-  
-  return `https://storage.googleapis.com/${THUMBNAIL_BUCKET}/${fileName}`;
+  // Return signed URL instead of public
+  const [readUrl] = await file.getSignedUrl({ action: 'read', version: 'v4', expires: Date.now() + 7 * 24 * 60 * 60 * 1000 });
+  return readUrl;
 }
 
 // Get video metadata using ffprobe

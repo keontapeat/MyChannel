@@ -13,7 +13,7 @@ final class ProfileViewModel: ObservableObject {
     private var appState: AppState?
 
     // Published state
-    @Published var user: User = .defaultUser
+    @Published var user: User = User.defaultUser
     @Published var isFollowing: Bool = false
     @Published var userVideos: [Video] = []
     @Published var watchHistory: [Video] = []
@@ -29,7 +29,7 @@ final class ProfileViewModel: ObservableObject {
         isLoading = true
         errorMessage = ""
 
-        let current = appState?.currentUser ?? authManager?.currentUser ?? .defaultUser
+        let current = appState?.currentUser ?? authManager?.currentUser ?? User.defaultUser
         user = current
 
         // 🔥 LOAD REAL UPLOADED VIDEOS: Get actual user videos from Firestore
@@ -92,8 +92,8 @@ final class ProfileViewModel: ObservableObject {
                 }
             }
         } else {
-            user = .defaultUser
-            let vids = createFallbackVideos(for: .defaultUser)
+            user = User.defaultUser
+            let vids = createFallbackVideos(for: User.defaultUser)
             userVideos = vids
             watchHistory = Array(vids.reversed())
         }

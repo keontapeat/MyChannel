@@ -91,6 +91,19 @@ class GlobalVideoPlayerManager: ObservableObject {
         
         setupObservers()
     }
+
+    // Ensure player exists for current video (used by mini player resilience)
+    func ensurePlayerAttached() {
+        guard !isCleanedUp else { return }
+        if playerManager == nil { setupPlayerManager() }
+        if let cv = currentVideo, playerManager?.player == nil {
+            playerManager?.setupPlayer(with: cv)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.playerManager?.play()
+                self?.isPlaying = true
+            }
+        }
+    }
     
     private func setupObservers() {
         guard let playerManager = playerManager, !isCleanedUp else { return }
@@ -162,6 +175,7 @@ class GlobalVideoPlayerManager: ObservableObject {
         currentVideo = video
         isPlaying = externalManager.isPlaying
 
+        // Re-enable mini player – show mini when not fullscreen
         withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
             showingFullscreen = showFullscreen
             isMiniplayer = !showFullscreen
@@ -185,15 +199,10 @@ class GlobalVideoPlayerManager: ObservableObject {
         currentVideo = video
         playerManager?.setupPlayer(with: video)
         
-        if showFullscreen {
-            showingFullscreen = true
-            isMiniplayer = false
-            shouldShowMiniPlayer = false
-        } else {
-            isMiniplayer = true
-            showingFullscreen = false
-            shouldShowMiniPlayer = true
-        }
+        // Default behavior – show mini when not fullscreen
+        showingFullscreen = showFullscreen
+        isMiniplayer = !showFullscreen
+        shouldShowMiniPlayer = !showFullscreen
         
         // Start playing with delay to avoid timing issues
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -208,15 +217,12 @@ class GlobalVideoPlayerManager: ObservableObject {
     
     func minimizePlayer() {
         guard currentVideo != nil, !isCleanedUp else { return }
-        
         isTransitioning = true
-        
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+        withAnimation(.easeOut(duration: 0.2)) {
             showingFullscreen = false
             isMiniplayer = true
             shouldShowMiniPlayer = true
         }
-        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self = self, !self.isCleanedUp else { return }
             self.isTransitioning = false

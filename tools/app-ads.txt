@@ -1,0 +1,6 @@
+# app-ads.txt for mychannel.live
+# Add your seller accounts below
+# Example lines (replace with your IDs):
+# google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
+# spotxchange.com, 12345, DIRECT
+# rubiconproject.com, 67890, DIRECT

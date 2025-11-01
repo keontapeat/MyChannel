@@ -46,8 +46,25 @@ class AuthenticationManager: ObservableObject {
     }
     
     private init() {
-        // Simple initialization without complex dependencies
-        checkAuthenticationStatus()
+        // 🎯 YOUTUBE-STYLE LOGIN FLOW:
+        // - First install → Show sign-in
+        // - Already logged in → Stay logged in (persistence)
+        // - Only sign out when user manually taps "Sign Out"
+        
+        let hasLaunchedBefore = UserDefaults.standard.bool(forKey: "hasLaunchedBefore")
+        
+        if !hasLaunchedBefore {
+            // ✨ FIRST TIME USER - Show sign-in flow
+            authState = .unauthenticated
+            isAuthenticated = false
+            currentUser = nil
+            UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
+            print("🆕 First app launch - showing sign-in flow")
+        } else {
+            // 🔄 RETURNING USER - Check if they were logged in
+            checkAuthenticationStatus()
+            print("🔄 App reopened - checking auth status")
+        }
     }
     
     // MARK: - Authentication Status
@@ -101,6 +118,7 @@ class AuthenticationManager: ObservableObject {
             )
             isAuthenticated = true
             authState = .authenticated
+            NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
         } catch {
             authState = .error(error.localizedDescription)
             throw error
@@ -136,6 +154,7 @@ class AuthenticationManager: ObservableObject {
             )
             isAuthenticated = true
             authState = .authenticated
+            NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
         } catch {
             authState = .error(error.localizedDescription)
             throw error
@@ -207,6 +226,7 @@ class AuthenticationManager: ObservableObject {
         }
         
         print("You've been signed out")
+        NotificationCenter.default.post(name: .userDidLogout, object: nil)
     }
     
     // MARK: - User Management
@@ -268,5 +288,25 @@ class AuthenticationManager: ObservableObject {
             totalEarnings: user.totalEarnings,
             membershipTiers: user.membershipTiers
         )
+    }
+}
+
+// MARK: - Firebase ID token helper
+extension AuthenticationManager {
+    static func sharedToken() async throws -> String? {
+        #if canImport(FirebaseAuth)
+        guard let user = Auth.auth().currentUser else { return nil }
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String?, Error>) in
+            user.getIDTokenForcingRefresh(false) { token, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: token)
+                }
+            }
+        }
+        #else
+        return nil
+        #endif
     }
 }

@@ -345,18 +345,87 @@ class CreateStoryViewModel: ObservableObject {
         isProcessing = true
         uploadProgress = 0.0
         
-        // Simulate upload progress
-        for i in 1...10 {
-            uploadProgress = Double(i) / 10.0
-            try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
-        }
-        
         let storyContent = createStoryContent()
         let storyStickers = createStoryStickers()
         let storyMusic = createStoryMusic()
+        let creatorId = AuthenticationManager.shared.currentUser?.id ?? User.sampleUsers.first?.id ?? "user1"
+        var created: Story? = nil
         
-        let story = Story(
-            creatorId: User.sampleUsers.first?.id ?? "user1",
+        // Attempt backend upload flow when we have a real media URL (http/https); otherwise skip to local
+        if let media = selectedMedia, let scheme = media.url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+            do {
+                // 1) Get signed URL
+                let filename = "story_\(UUID().uuidString).\(media.type == .video ? "mp4" : "jpg")"
+                let contentType = media.type == .video ? "video/mp4" : "image/jpeg"
+                let signed = try await StoryAPIService.shared.getSignedUploadUrl(filename: filename, contentType: contentType)
+                
+                // 2) Download the selected media data (if remote)
+                let (data, _) = try await URLSession.shared.data(from: media.url)
+                
+                // 3) Upload to signed URL
+                try await StoryAPIService.shared.uploadMedia(data: data, to: signed.url, contentType: contentType)
+                uploadProgress = 0.85
+                
+                // 4) Finalize
+                let finalized = try await StoryAPIService.shared.finalize(object: signed.object, bucket: signed.bucket, contentType: contentType)
+                uploadProgress = 0.92
+                
+                // 5) Create story metadata
+                let s = try await StoryAPIService.shared.createStory(
+                    mediaUrl: finalized.publicUrl,
+                    mediaType: getStoryMediaType(),
+                    duration: getStoryDuration(),
+                    caption: caption.isEmpty ? nil : caption,
+                    text: textOverlay?.text,
+                    backgroundColor: storyType == .text ? colorToHex(backgroundGradient.first ?? .blue) : nil,
+                    textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
+                    music: storyMusic,
+                    stickers: storyStickers,
+                    audience: audience.rawValue
+                )
+                created = s
+                uploadProgress = 1.0
+                try? await DatabaseService.shared.saveStory(s)
+            } catch {
+                // Fallback to local-only on any failure
+                created = Story(
+                    creatorId: creatorId,
+                    mediaURL: media.url.absoluteString,
+                    mediaType: getStoryMediaType(),
+                    duration: getStoryDuration(),
+                    caption: caption.isEmpty ? nil : caption,
+                    text: textOverlay?.text,
+                    content: [storyContent],
+                    backgroundColor: storyType == .text ? colorToHex(backgroundGradient.first ?? .blue) : nil,
+                    textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
+                    music: storyMusic,
+                    stickers: storyStickers
+                )
+                if let c = created { try? await DatabaseService.shared.saveStory(c) }
+            }
+        } else {
+            // Local-only path (camera/text or file references)
+            created = Story(
+                creatorId: creatorId,
+                mediaURL: selectedMedia?.url.absoluteString ?? "",
+                mediaType: getStoryMediaType(),
+                duration: getStoryDuration(),
+                caption: caption.isEmpty ? nil : caption,
+                text: textOverlay?.text,
+                content: [storyContent],
+                backgroundColor: storyType == .text ? colorToHex(backgroundGradient.first ?? .blue) : nil,
+                textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
+                music: storyMusic,
+                stickers: storyStickers
+            )
+            if let c = created { try? await DatabaseService.shared.saveStory(c) }
+            uploadProgress = 1.0
+        }
+        
+        isProcessing = false
+        uploadProgress = 0.0
+        return created ?? Story(
+            creatorId: creatorId,
             mediaURL: selectedMedia?.url.absoluteString ?? "",
             mediaType: getStoryMediaType(),
             duration: getStoryDuration(),
@@ -368,10 +437,6 @@ class CreateStoryViewModel: ObservableObject {
             music: storyMusic,
             stickers: storyStickers
         )
-        
-        isProcessing = false
-        uploadProgress = 0.0
-        return story
     }
     
     private func createStoryContent() -> StoryContent {

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyChannel - Video Platform</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/responsive.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-container">
+                <div class="nav-brand">
+                    <img src="assets/logo.png" alt="MyChannel" class="logo">
+                    <span class="brand-text">MyChannel</span>
+                </div>
+                
+                <div class="nav-search">
+                    <div class="search-container">
+                        <input type="text" id="searchInput" placeholder="Search videos, creators, and more..." class="search-input">
+                        <button class="search-btn" onclick="performSearch()">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="nav-actions">
+                    <button class="nav-btn" onclick="toggleTheme()">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10 2L13.09 8.26L20 9L14 14.74L15.18 21.02L10 18L4.82 21.02L6 14.74L0 9L6.91 8.26L10 2Z"/>
+                        </svg>
+                    </button>
+                    <button class="nav-btn" onclick="showNotifications()">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10 2a6 6 0 00-6 6c0 1.887-.454 3.665-1.257 5.234a.75.75 0 00.515 1.076 32.91 32.91 0 003.256.508 3.5 3.5 0 006.972 0 32.91 32.91 0 003.256-.508.75.75 0 00.515-1.076A11.448 11.448 0 0116 8a6 6 0 00-6-6zM8.05 14.943a33.54 33.54 0 003.9 0 2 2 0 01-3.9 0z"/>
+                        </svg>
+                        <span class="notification-badge" id="notificationBadge">3</span>
+                    </button>
+                    <div class="user-menu">
+                        <button class="user-avatar" onclick="toggleUserMenu()">
+                            <img src="https://i.pravatar.cc/40" alt="User" class="avatar-img">
+                        </button>
+                        <div class="user-dropdown" id="userDropdown">
+                            <a href="#profile" class="dropdown-item">Your Channel</a>
+                            <a href="#studio" class="dropdown-item">Creator Studio</a>
+                            <a href="#settings" class="dropdown-item">Settings</a>
+                            <div class="dropdown-divider"></div>
+                            <a href="#signout" class="dropdown-item">Sign Out</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Hero Section -->
+            <section class="hero-section">
+                <div class="hero-container">
+                    <div class="hero-video" id="heroVideo">
+                        <video autoplay muted loop class="hero-video-element">
+                            <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
+                        </video>
+                        <div class="hero-overlay">
+                            <div class="hero-content">
+                                <h1 class="hero-title">MyChannel Intro</h1>
+                                <p class="hero-description">Discover amazing content from creators around the world</p>
+                                <div class="hero-actions">
+                                    <button class="btn-primary" onclick="playHeroVideo()">
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                            <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+                                        </svg>
+                                        Play
+                                    </button>
+                                    <button class="btn-secondary" onclick="addToWatchLater()">
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                            <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
+                                        </svg>
+                                        Watch Later
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Content Sections -->
+            <div class="content-container">
+                <!-- For You Section -->
+                <section class="content-section" id="forYouSection">
+                    <div class="section-header">
+                        <h2 class="section-title">For You</h2>
+                        <button class="see-all-btn" onclick="showExplore()">See all</button>
+                    </div>
+                    <div class="video-grid" id="forYouGrid">
+                        <!-- Videos populated by JS -->
+                    </div>
+                </section>
+
+                <!-- Trending Section -->
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2 class="section-title">Trending</h2>
+                        <button class="see-all-btn" onclick="showTrending()">See all</button>
+                    </div>
+                    <div class="video-grid" id="trendingGrid">
+                        <!-- Videos populated by JS -->
+                    </div>
+                </section>
+
+                <!-- Categories -->
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2 class="section-title">Categories</h2>
+                    </div>
+                    <div class="category-tabs">
+                        <button class="category-tab active" data-category="all">All</button>
+                        <button class="category-tab" data-category="music">Music</button>
+                        <button class="category-tab" data-category="gaming">Gaming</button>
+                        <button class="category-tab" data-category="tech">Tech</button>
+                        <button class="category-tab" data-category="cooking">Cooking</button>
+                        <button class="category-tab" data-category="sports">Sports</button>
+                    </div>
+                    <div class="video-grid" id="categoryGrid">
+                        <!-- Videos populated by JS -->
+                    </div>
+                </section>
+
+                <!-- Live TV -->
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2 class="section-title">Live TV</h2>
+                        <button class="see-all-btn" onclick="showAllLive()">See all</button>
+                    </div>
+                    <div class="channel-grid" id="liveChannelsGrid">
+                        <!-- Channels populated by JS -->
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- Video Player Modal -->
+        <div class="video-modal" id="videoModal" style="display: none;">
+            <div class="modal-backdrop" onclick="closeVideoModal()"></div>
+            <div class="modal-content">
+                <div class="video-container">
+                    <video id="modalVideo" controls>
+                        <source src="" type="video/mp4">
+                    </video>
+                    <button class="close-btn" onclick="closeVideoModal()">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="video-info">
+                    <h3 id="modalVideoTitle"></h3>
+                    <p id="modalVideoDescription"></p>
+                    <div class="video-actions">
+                        <button class="action-btn" onclick="likeVideo()">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8.864.046C7.908-.193 7.02.53 6.956 1.466c-.072 1.051-.23 2.016-.428 2.59-.125.36-.479 1.013-1.04 1.639-.557.623-1.282 1.178-2.131 1.41C2.685 7.288 2 7.87 2 8.72v4.001c0 .845.682 1.464 1.448 1.545 1.07.114 1.564.415 2.068.723l.048.03c.272.165.578.348.97.484.397.136.861.217 1.466.217h3.5c.937 0 1.599-.477 1.934-1.064a1.86 1.86 0 0 0 .254-.912c0-.152-.023-.312-.077-.464.201-.263.38-.578.488-.901.11-.33.172-.762.004-1.149.069-.13.12-.269.159-.403.077-.27.113-.568.113-.857 0-.288-.036-.585-.113-.856a2.144 2.144 0 0 0-.138-.362 1.9 1.9 0 0 0 .234-1.734c-.206-.592-.682-1.1-1.2-1.272-.847-.282-1.803-.276-2.516-.211a9.84 9.84 0 0 0-.443.05 9.365 9.365 0 0 0-.062-4.509A1.38 1.38 0 0 0 9.125.111L8.864.046zM11.5 14.721H8c-.51 0-.863-.069-1.14-.164-.281-.097-.506-.228-.776-.393l-.04-.024c-.555-.339-1.198-.731-2.49-.868-.333-.036-.554-.29-.554-.55V8.72c0-.254.226-.543.62-.65 1.095-.3 1.977-.996 2.614-1.708.635-.71 1.064-1.475 1.238-1.978.243-.7.407-1.768.482-2.85.025-.362.36-.594.667-.518l.262.066c.16.04.258.143.288.255a8.34 8.34 0 0 1-.145 4.725.5.5 0 0 0 .595.644l.003-.001.014-.003.058-.014a8.908 8.908 0 0 1 1.036-.157c.663-.06 1.457-.054 2.11.164.175.058.45.3.57.65.107.308.087.67-.266 1.022l-.353.353.353.354c.043.043.105.141.154.315.048.167.075.37.075.581 0 .212-.027.414-.075.582-.05.174-.111.272-.154.315l-.353.353.353.354c.047.047.109.177.005.488a2.224 2.224 0 0 1-.505.805l-.353.353.353.354c.006.005.041.05.041.17a.866.866 0 0 1-.121.416c-.165.288-.503.56-1.066.56z"/>
+                        </svg>
+                        Like
+                    </button>
+                    <button class="action-btn" onclick="shareVideo()">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M13.5 1a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM11 2.5a2.5 2.5 0 1 1 .603 1.628l-6.718 3.12a2.499 2.499 0 0 1 0 1.504l6.718 3.12a2.5 2.5 0 1 1-.488.876l-6.718-3.12a2.5 2.5 0 1 1 0-3.256l6.718-3.12A2.5 2.5 0 0 1 11 2.5z"/>
+                        </svg>
+                        Share
+                    </button>
+                    <button class="action-btn" onclick="saveToPlaylist()">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M2.5 3.5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1h-11zm5-2a.5.5 0 0 1 0-1h1a.5.5 0 0 1 0 1h-1zm-5 4a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1h-11zm0 2a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1h-11zm0 2a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1h-11z"/>
+                        </svg>
+                        Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar (Mobile) -->
+    <div class="mobile-sidebar" id="mobileSidebar" style="display: none;">
+        <div class="sidebar-header">
+            <img src="assets/logo.png" alt="MyChannel" class="sidebar-logo">
+            <button class="close-sidebar" onclick="closeMobileSidebar()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2"/>
+                </svg>
+            </button>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="#home" class="sidebar-link active">Home</a>
+            <a href="#trending" class="sidebar-link">Trending</a>
+            <a href="#subscriptions" class="sidebar-link">Subscriptions</a>
+            <a href="#library" class="sidebar-link">Library</a>
+            <a href="#live" class="sidebar-link">Live</a>
+            <div class="sidebar-divider"></div>
+            <a href="#music" class="sidebar-link">Music</a>
+            <a href="#gaming" class="sidebar-link">Gaming</a>
+            <a href="#sports" class="sidebar-link">Sports</a>
+            <a href="#news" class="sidebar-link">News</a>
+        </nav>
+    </div>
+
+    <!-- Scripts -->
+    <script src="scripts/app.js"></script>
+    <script src="scripts/video-player.js"></script>
+    <script src="scripts/responsive.js"></script>
+</body>
+</html>
+
+

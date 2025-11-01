@@ -187,6 +187,9 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
                 }
             }
             
+            // Mirror to Firestore (best-effort)
+            Task { await LiveChatFirestoreService.shared.mirrorMessage(streamId: message.streamId, message: message) }
+            
         } catch {
             // Add to queue for retry
             messageQueue.append(message)
@@ -220,7 +223,7 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
         return statistics
     }
     
-    func moderateMessage(messageId: String, action: ModerationAction) async throws {
+    func moderateMessage(messageId: String, action: ChatModerationAction) async throws {
         guard let webSocketTask = webSocketTask else {
             throw ChatError.connectionFailed("Not connected to chat")
         }
@@ -281,21 +284,26 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
     }
     
     func pinMessage(messageId: String) async throws {
-        try await moderateMessage(messageId: messageId, action: .pin)
+        try await moderateMessage(messageId: messageId, action: ChatModerationAction.pin)
     }
     
     func unpinMessage(messageId: String) async throws {
-        try await moderateMessage(messageId: messageId, action: .unpin)
+        try await moderateMessage(messageId: messageId, action: ChatModerationAction.unpin)
     }
     
     // MARK: - Private Implementation
     
     private func establishWebSocketConnection(streamId: String) async throws {
-        // In production, this would be your WebSocket server URL
-        let websocketURL = URL(string: "wss://api.mychannel.app/chat/\(streamId)")!
+        // WebSocket server URL from config
+        let websocketURL = URL(string: "\(AppConfig.API.chatWebSocketBaseURL)/\(streamId)")!
         
         // For demo purposes, we'll simulate a WebSocket connection
-        webSocketTask = urlSession.webSocketTask(with: websocketURL)
+        var request = URLRequest(url: websocketURL)
+        // Attach auth header if available
+        if let token = KeychainHelper.shared.getString(for: "auth_token") {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        webSocketTask = urlSession.webSocketTask(with: request)
         webSocketTask?.resume()
         
         // Simulate connection establishment
@@ -361,6 +369,8 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
                     self.messages.removeFirst(self.messages.count - 200)
                 }
             }
+            // Mirror inbound to Firestore
+            Task { await LiveChatFirestoreService.shared.mirrorMessage(streamId: message.streamId, message: message) }
             
         case .userJoined(let user):
             await MainActor.run {
@@ -605,7 +615,7 @@ enum WebSocketMessage: Codable {
     case userLeft(String)
     case statisticsUpdate(ChatStatistics)
     case settingsUpdate(ChatSettings)
-    case moderationAction(String, ModerationAction)
+    case moderationAction(String, ChatModerationAction)
     case heartbeat
     
     enum CodingKeys: String, CodingKey {
@@ -646,7 +656,7 @@ enum WebSocketMessage: Codable {
             let data = try container.decode([String: String].self, forKey: .data)
             let messageId = data["messageId"] ?? ""
             let actionString = data["action"] ?? ""
-            let action = ModerationAction(rawValue: actionString) ?? .delete
+            let action = ChatModerationAction(rawValue: actionString) ?? .delete
             self = .moderationAction(messageId, action)
         case .heartbeat:
             self = .heartbeat

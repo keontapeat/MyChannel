@@ -1,0 +1,8 @@
+packages:
+  - services/channelboost-api
+  - services/gateway
+  - services/pay-api
+  - packages/*
+
+
+

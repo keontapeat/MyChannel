@@ -40,7 +40,7 @@ class FlicksPerformanceMonitor: ObservableObject {
             case .excellent: return .green
             case .good: return .blue
             case .fair: return .orange
-            case .poor: return .red
+            case .poor: return Color.red
             }
         }
         
@@ -322,28 +322,28 @@ class FlicksPerformanceMonitor: ObservableObject {
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 16) {
-                MetricCard(
+                FlicksMetricCard(
                     title: "Memory",
                     value: String(format: "%.1f%%", performanceMonitor.memoryUsage * 100),
                     icon: "memorychip",
-                    color: performanceMonitor.memoryUsage > 0.8 ? .red : .blue
+                    color: performanceMonitor.memoryUsage > 0.8 ? Color.red : Color.blue
                 )
                 
-                MetricCard(
+                FlicksMetricCard(
                     title: "CPU",
                     value: String(format: "%.1f%%", performanceMonitor.cpuUsage * 100),
                     icon: "cpu",
-                    color: performanceMonitor.cpuUsage > 0.7 ? .red : .green
+                    color: performanceMonitor.cpuUsage > 0.7 ? Color.red : Color.green
                 )
                 
-                MetricCard(
+                FlicksMetricCard(
                     title: "Battery",
                     value: String(format: "%.0f%%", performanceMonitor.batteryLevel * 100),
                     icon: "battery.100",
-                    color: performanceMonitor.batteryLevel < 0.2 ? .red : .green
+                    color: performanceMonitor.batteryLevel < 0.2 ? Color.red : Color.green
                 )
                 
-                MetricCard(
+                FlicksMetricCard(
                     title: "Thermal",
                     value: performanceMonitor.thermalState.displayName,
                     icon: "thermometer",
@@ -375,7 +375,7 @@ class FlicksPerformanceMonitor: ObservableObject {
     .environmentObject(performanceMonitor)
 }
 
-struct MetricCard: View {
+struct FlicksMetricCard: View {
     let title: String
     let value: String
     let icon: String

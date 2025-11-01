@@ -1,13 +1,13 @@
 import express from 'express';
 import cors from 'cors';
-import { createClient } from '@supabase/supabase-js';
 import rateLimit from 'express-rate-limit';
+import admin from 'firebase-admin';
 
-const app = express();
-const supabase = createClient(
-  process.env.SUPABASE_URL || 'your-supabase-url',
-  process.env.SUPABASE_SERVICE_KEY || 'your-supabase-service-key'
-);
+// Initialize Firebase Admin (Application Default Credentials or service account)
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+const db = admin.firestore();
 
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
@@ -36,47 +36,50 @@ app.get('/v1/feed/home', async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
     const offset = (page - 1) * limit;
 
-    // Get trending/popular videos for anonymous users
-    const { data: videos, error } = await supabase
-      .from('videos')
-      .select(`
-        id, title, description, thumbnail_url, duration, view_count, 
-        like_count, comment_count, created_at, published_at,
-        users!inner(
-          id, username, display_name, avatar_url, verified, subscriber_count
-        )
-      `)
-      .eq('status', 'ready')
-      .eq('visibility', 'public')
-      .order('view_count', { ascending: false })
-      .order('published_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+    // Firestore: status == 'published', (optional) visibility == 'public'
+    let query = db.collection('videos')
+      .where('status', '==', 'published')
+      .orderBy('views', 'desc')
+      .orderBy('createdAt', 'desc');
 
-    if (error) {
-      console.error('Database error:', error);
-      return res.status(500).json({ error: 'Failed to fetch videos' });
+    // Firestore supports offset; acceptable for small pages
+    const snap = await query.offset(offset).limit(limit).get();
+    const videoDocs = snap.docs;
+
+    // Batch load creators
+    const ownerIds = Array.from(new Set(videoDocs.map(d => d.get('ownerId')).filter(Boolean)));
+    const ownersMap: Record<string, FirebaseFirestore.DocumentData | null> = {};
+    if (ownerIds.length) {
+      const ownerSnaps = await Promise.all(ownerIds.map(id => db.collection('users').doc(String(id)).get()));
+      for (const ds of ownerSnaps) {
+        ownersMap[ds.id] = ds.exists ? ds.data()! : null;
+      }
     }
 
-    const formattedVideos = videos?.map(video => ({
-      id: video.id,
-      title: video.title,
-      description: video.description,
-      thumbnailUrl: video.thumbnail_url,
-      duration: video.duration,
-      viewCount: video.view_count,
-      likeCount: video.like_count,
-      commentCount: video.comment_count,
-      publishedAt: video.published_at,
-      createdAt: video.created_at,
-      creator: {
-        id: video.users.id,
-        username: video.users.username,
-        displayName: video.users.display_name,
-        avatarUrl: video.users.avatar_url,
-        verified: video.users.verified,
-        subscriberCount: video.users.subscriber_count
-      }
-    })) || [];
+    const formattedVideos = videoDocs.map(d => {
+      const v = d.data();
+      const u = ownersMap[String(v.ownerId)] || {};
+      return {
+        id: d.id,
+        title: v.title || '',
+        description: v.description || null,
+        thumbnailUrl: v.thumbnailUrl || null,
+        duration: v.duration || null,
+        viewCount: v.views || 0,
+        likeCount: v.likes || 0,
+        commentCount: v.comments || 0,
+        publishedAt: v.publishedAt || null,
+        createdAt: v.createdAt || null,
+        creator: {
+          id: String(v.ownerId || ''),
+          username: u.username || '',
+          displayName: u.displayName || u.name || '',
+          avatarUrl: u.avatarUrl || null,
+          verified: !!u.verified,
+          subscriberCount: u.subscriberCount || 0
+        }
+      };
+    });
 
     res.json({
       videos: formattedVideos,
@@ -97,94 +100,64 @@ app.get('/v1/videos/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { data: video, error } = await supabase
-      .from('videos')
-      .select(`
-        id, title, description, thumbnail_url, video_url, duration, 
-        file_size, status, quality_variants, captions, chapters,
-        visibility, is_live, is_premium, view_count, like_count,
-        dislike_count, comment_count, share_count, category, tags,
-        language, age_restriction, published_at, created_at, updated_at,
-        users!inner(
-          id, username, display_name, avatar_url, bio, verified, 
-          subscriber_count, video_count, total_views
-        )
-      `)
-      .eq('id', id)
-      .single();
-
-    if (error || !video) {
+    const doc = await db.collection('videos').doc(id).get();
+    if (!doc.exists) {
       return res.status(404).json({ error: 'Video not found' });
     }
-
-    // Check if video is accessible
-    if (video.status !== 'ready') {
+    const v = doc.data()!;
+    if (v.status && v.status !== 'published') {
       return res.status(404).json({ error: 'Video not available' });
     }
-
-    if (video.visibility === 'private') {
+    if (v.visibility && v.visibility === 'private') {
       return res.status(403).json({ error: 'Video is private' });
     }
 
-    // Increment view count (fire and forget)
-    supabase
-      .from('videos')
-      .update({ view_count: video.view_count + 1 })
-      .eq('id', id)
-      .then(() => {
-        // Also log analytics event
-        return supabase
-          .from('video_analytics')
-          .insert({
-            video_id: id,
-            event_type: 'view',
-            value: 1,
-            timestamp: new Date().toISOString(),
-            user_agent: req.headers['user-agent'],
-            ip_address: req.ip,
-            referrer: req.headers['referer']
-          });
-      })
-      .catch(err => console.error('View tracking error:', err));
+    // Fetch creator
+    let creator: any = { id: String(v.ownerId || '') };
+    if (v.ownerId) {
+      const uSnap = await db.collection('users').doc(String(v.ownerId)).get();
+      const u = uSnap.exists ? uSnap.data()! : {};
+      creator = {
+        id: String(v.ownerId),
+        username: u.username || '',
+        displayName: u.displayName || u.name || '',
+        avatarUrl: u.avatarUrl || null,
+        bio: u.bio || null,
+        verified: !!u.verified,
+        subscriberCount: u.subscriberCount || 0,
+        videoCount: u.videoCount || 0,
+        totalViews: u.totalViews || 0
+      };
+    }
 
     const formattedVideo = {
-      id: video.id,
-      title: video.title,
-      description: video.description,
-      thumbnailUrl: video.thumbnail_url,
-      videoUrl: video.video_url,
-      duration: video.duration,
-      fileSize: video.file_size,
-      status: video.status,
-      qualityVariants: video.quality_variants,
-      captions: video.captions,
-      chapters: video.chapters,
-      visibility: video.visibility,
-      isLive: video.is_live,
-      isPremium: video.is_premium,
-      viewCount: video.view_count + 1, // Include the incremented view
-      likeCount: video.like_count,
-      dislikeCount: video.dislike_count,
-      commentCount: video.comment_count,
-      shareCount: video.share_count,
-      category: video.category,
-      tags: video.tags,
-      language: video.language,
-      ageRestriction: video.age_restriction,
-      publishedAt: video.published_at,
-      createdAt: video.created_at,
-      updatedAt: video.updated_at,
-      creator: {
-        id: video.users.id,
-        username: video.users.username,
-        displayName: video.users.display_name,
-        avatarUrl: video.users.avatar_url,
-        bio: video.users.bio,
-        verified: video.users.verified,
-        subscriberCount: video.users.subscriber_count,
-        videoCount: video.users.video_count,
-        totalViews: video.users.total_views
-      }
+      id: doc.id,
+      title: v.title || '',
+      description: v.description || null,
+      thumbnailUrl: v.thumbnailUrl || null,
+      videoUrl: v.videoUrl || null,
+      duration: v.duration || null,
+      fileSize: v.fileSize || null,
+      status: v.status || 'ready',
+      qualityVariants: v.qualityVariants || [],
+      captions: v.captions || [],
+      chapters: v.chapters || [],
+      visibility: v.visibility || 'public',
+      isLive: !!v.isLive,
+      isPremium: !!v.isPremium,
+      viewCount: v.views || 0,
+      likeCount: v.likes || 0,
+      dislikeCount: v.dislikes || 0,
+      commentCount: v.comments || 0,
+      shareCount: v.shares || 0,
+      category: v.category || null,
+      tags: v.tags || [],
+      language: v.language || 'en',
+      ageRestriction: v.ageRestriction || 0,
+      publishedAt: v.publishedAt || null,
+      createdAt: v.createdAt || null,
+      updatedAt: v.updatedAt || null,
+      creator
     };
 
     res.json({ video: formattedVideo });
@@ -206,47 +179,49 @@ app.get('/v1/search', async (req, res) => {
       return res.status(400).json({ error: 'Search query is required' });
     }
 
-    // Use full-text search with PostgreSQL
-    const { data: videos, error } = await supabase
-      .from('videos')
-      .select(`
-        id, title, description, thumbnail_url, duration, view_count, 
-        like_count, comment_count, created_at, published_at,
-        users!inner(
-          id, username, display_name, avatar_url, verified, subscriber_count
-        )
-      `)
-      .eq('status', 'ready')
-      .eq('visibility', 'public')
-      .textSearch('search_vector', query)
-      .order('view_count', { ascending: false })
-      .range(offset, offset + limit - 1);
+    // Firestore naive search: match tags or title prefix if maintained
+    const qLower = query.toLowerCase();
+    const byTagsSnap = await db.collection('videos')
+      .where('status', '==', 'published')
+      .where('tags', 'array-contains', qLower)
+      .orderBy('views', 'desc')
+      .offset(offset)
+      .limit(limit)
+      .get();
+    const docs = byTagsSnap.docs;
 
-    if (error) {
-      console.error('Search error:', error);
-      return res.status(500).json({ error: 'Search failed' });
-    }
-
-    const formattedVideos = videos?.map(video => ({
-      id: video.id,
-      title: video.title,
-      description: video.description,
-      thumbnailUrl: video.thumbnail_url,
-      duration: video.duration,
-      viewCount: video.view_count,
-      likeCount: video.like_count,
-      commentCount: video.comment_count,
-      publishedAt: video.published_at,
-      createdAt: video.created_at,
-      creator: {
-        id: video.users.id,
-        username: video.users.username,
-        displayName: video.users.display_name,
-        avatarUrl: video.users.avatar_url,
-        verified: video.users.verified,
-        subscriberCount: video.users.subscriber_count
+    const ownerIds = Array.from(new Set(docs.map(d => d.get('ownerId')).filter(Boolean)));
+    const ownersMap: Record<string, FirebaseFirestore.DocumentData | null> = {};
+    if (ownerIds.length) {
+      const ownerSnaps = await Promise.all(ownerIds.map(id => db.collection('users').doc(String(id)).get()));
+      for (const ds of ownerSnaps) {
+        ownersMap[ds.id] = ds.exists ? ds.data()! : null;
       }
-    })) || [];
+    }
+    const formattedVideos = docs.map(d => {
+      const v = d.data();
+      const u = ownersMap[String(v.ownerId)] || {};
+      return {
+        id: d.id,
+        title: v.title || '',
+        description: v.description || null,
+        thumbnailUrl: v.thumbnailUrl || null,
+        duration: v.duration || null,
+        viewCount: v.views || 0,
+        likeCount: v.likes || 0,
+        commentCount: v.comments || 0,
+        publishedAt: v.publishedAt || null,
+        createdAt: v.createdAt || null,
+        creator: {
+          id: String(v.ownerId || ''),
+          username: u.username || '',
+          displayName: u.displayName || u.name || '',
+          avatarUrl: u.avatarUrl || null,
+          verified: !!u.verified,
+          subscriberCount: u.subscriberCount || 0
+        }
+      };
+    });
 
     res.json({
       query,
@@ -271,69 +246,65 @@ app.get('/v1/feed/trending', async (req, res) => {
     const offset = (page - 1) * limit;
     const timeframe = req.query.timeframe as string || 'week'; // day, week, month, all
 
-    let timeFilter = '';
-    const now = new Date();
-    
+    const now = admin.firestore.Timestamp.now();
+    let afterTs: FirebaseFirestore.Timestamp | null = null;
     switch (timeframe) {
       case 'day':
-        timeFilter = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+        afterTs = admin.firestore.Timestamp.fromMillis(now.toMillis() - 24 * 60 * 60 * 1000);
         break;
       case 'week':
-        timeFilter = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        afterTs = admin.firestore.Timestamp.fromMillis(now.toMillis() - 7 * 24 * 60 * 60 * 1000);
         break;
       case 'month':
-        timeFilter = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        afterTs = admin.firestore.Timestamp.fromMillis(now.toMillis() - 30 * 24 * 60 * 60 * 1000);
         break;
       default:
-        timeFilter = '';
+        afterTs = null;
     }
 
-    let query = supabase
-      .from('videos')
-      .select(`
-        id, title, description, thumbnail_url, duration, view_count, 
-        like_count, comment_count, created_at, published_at,
-        users!inner(
-          id, username, display_name, avatar_url, verified, subscriber_count
-        )
-      `)
-      .eq('status', 'ready')
-      .eq('visibility', 'public');
-
-    if (timeFilter) {
-      query = query.gte('published_at', timeFilter);
+    let q = db.collection('videos')
+      .where('status', '==', 'published')
+      .orderBy('views', 'desc')
+      .orderBy('createdAt', 'desc');
+    if (afterTs) {
+      q = q.where('createdAt', '>=', afterTs);
     }
+    const snap = await q.offset(offset).limit(limit).get();
+    const docs = snap.docs;
 
-    const { data: videos, error } = await query
-      .order('view_count', { ascending: false })
-      .order('like_count', { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    if (error) {
-      console.error('Trending fetch error:', error);
-      return res.status(500).json({ error: 'Failed to fetch trending videos' });
-    }
-
-    const formattedVideos = videos?.map(video => ({
-      id: video.id,
-      title: video.title,
-      description: video.description,
-      thumbnailUrl: video.thumbnail_url,
-      duration: video.duration,
-      viewCount: video.view_count,
-      likeCount: video.like_count,
-      commentCount: video.comment_count,
-      publishedAt: video.published_at,
-      createdAt: video.created_at,
-      creator: {
-        id: video.users.id,
-        username: video.users.username,
-        displayName: video.users.display_name,
-        avatarUrl: video.users.avatar_url,
-        verified: video.users.verified,
-        subscriberCount: video.users.subscriber_count
+    const ownerIds = Array.from(new Set(docs.map(d => d.get('ownerId')).filter(Boolean)));
+    const ownersMap: Record<string, FirebaseFirestore.DocumentData | null> = {};
+    if (ownerIds.length) {
+      const ownerSnaps = await Promise.all(ownerIds.map(id => db.collection('users').doc(String(id)).get()));
+      for (const ds of ownerSnaps) {
+        ownersMap[ds.id] = ds.exists ? ds.data()! : null;
       }
-    })) || [];
+    }
+
+    const formattedVideos = docs.map(d => {
+      const v = d.data();
+      const u = ownersMap[String(v.ownerId)] || {};
+      return {
+        id: d.id,
+        title: v.title || '',
+        description: v.description || null,
+        thumbnailUrl: v.thumbnailUrl || null,
+        duration: v.duration || null,
+        viewCount: v.views || 0,
+        likeCount: v.likes || 0,
+        commentCount: v.comments || 0,
+        publishedAt: v.publishedAt || null,
+        createdAt: v.createdAt || null,
+        creator: {
+          id: String(v.ownerId || ''),
+          username: u.username || '',
+          displayName: u.displayName || u.name || '',
+          avatarUrl: u.avatarUrl || null,
+          verified: !!u.verified,
+          subscriberCount: u.subscriberCount || 0
+        }
+      };
+    });
 
     res.json({
       timeframe,
@@ -358,46 +329,46 @@ app.get('/v1/feed/category/:category', async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
     const offset = (page - 1) * limit;
 
-    const { data: videos, error } = await supabase
-      .from('videos')
-      .select(`
-        id, title, description, thumbnail_url, duration, view_count, 
-        like_count, comment_count, created_at, published_at,
-        users!inner(
-          id, username, display_name, avatar_url, verified, subscriber_count
-        )
-      `)
-      .eq('status', 'ready')
-      .eq('visibility', 'public')
-      .eq('category', category)
-      .order('published_at', { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    if (error) {
-      console.error('Category fetch error:', error);
-      return res.status(500).json({ error: 'Failed to fetch category videos' });
-    }
-
-    const formattedVideos = videos?.map(video => ({
-      id: video.id,
-      title: video.title,
-      description: video.description,
-      thumbnailUrl: video.thumbnail_url,
-      duration: video.duration,
-      viewCount: video.view_count,
-      likeCount: video.like_count,
-      commentCount: video.comment_count,
-      publishedAt: video.published_at,
-      createdAt: video.created_at,
-      creator: {
-        id: video.users.id,
-        username: video.users.username,
-        displayName: video.users.display_name,
-        avatarUrl: video.users.avatar_url,
-        verified: video.users.verified,
-        subscriberCount: video.users.subscriber_count
+    const snap = await db.collection('videos')
+      .where('status', '==', 'published')
+      .where('category', '==', category)
+      .orderBy('createdAt', 'desc')
+      .offset(offset)
+      .limit(limit)
+      .get();
+    const docs = snap.docs;
+    const ownerIds = Array.from(new Set(docs.map(d => d.get('ownerId')).filter(Boolean)));
+    const ownersMap: Record<string, FirebaseFirestore.DocumentData | null> = {};
+    if (ownerIds.length) {
+      const ownerSnaps = await Promise.all(ownerIds.map(id => db.collection('users').doc(String(id)).get()));
+      for (const ds of ownerSnaps) {
+        ownersMap[ds.id] = ds.exists ? ds.data()! : null;
       }
-    })) || [];
+    }
+    const formattedVideos = docs.map(d => {
+      const v = d.data();
+      const u = ownersMap[String(v.ownerId)] || {};
+      return {
+        id: d.id,
+        title: v.title || '',
+        description: v.description || null,
+        thumbnailUrl: v.thumbnailUrl || null,
+        duration: v.duration || null,
+        viewCount: v.views || 0,
+        likeCount: v.likes || 0,
+        commentCount: v.comments || 0,
+        publishedAt: v.publishedAt || null,
+        createdAt: v.createdAt || null,
+        creator: {
+          id: String(v.ownerId || ''),
+          username: u.username || '',
+          displayName: u.displayName || u.name || '',
+          avatarUrl: u.avatarUrl || null,
+          verified: !!u.verified,
+          subscriberCount: u.subscriberCount || 0
+        }
+      };
+    });
 
     res.json({
       category,
@@ -421,58 +392,53 @@ app.get('/v1/videos/:id/related', async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit as string) || 12, 24);
 
     // Get the current video to find related content
-    const { data: currentVideo } = await supabase
-      .from('videos')
-      .select('category, tags, users!inner(id)')
-      .eq('id', id)
-      .single();
-
-    if (!currentVideo) {
+    const current = await db.collection('videos').doc(id).get();
+    if (!current.exists) {
       return res.status(404).json({ error: 'Video not found' });
     }
+    const cv = current.data()!;
 
-    // Find related videos by category and tags
-    const { data: videos, error } = await supabase
-      .from('videos')
-      .select(`
-        id, title, description, thumbnail_url, duration, view_count, 
-        like_count, comment_count, created_at, published_at,
-        users!inner(
-          id, username, display_name, avatar_url, verified, subscriber_count
-        )
-      `)
-      .eq('status', 'ready')
-      .eq('visibility', 'public')
-      .neq('id', id) // Exclude current video
-      .or(`category.eq.${currentVideo.category},user_id.eq.${currentVideo.users.id}`)
-      .order('view_count', { ascending: false })
-      .limit(limit);
+    // Related by category or same owner
+    const relSnap = await db.collection('videos')
+      .where('status', '==', 'published')
+      .where('category', '==', cv.category || '')
+      .orderBy('views', 'desc')
+      .limit(limit)
+      .get();
 
-    if (error) {
-      console.error('Related videos error:', error);
-      return res.status(500).json({ error: 'Failed to fetch related videos' });
-    }
-
-    const formattedVideos = videos?.map(video => ({
-      id: video.id,
-      title: video.title,
-      description: video.description,
-      thumbnailUrl: video.thumbnail_url,
-      duration: video.duration,
-      viewCount: video.view_count,
-      likeCount: video.like_count,
-      commentCount: video.comment_count,
-      publishedAt: video.published_at,
-      createdAt: video.created_at,
-      creator: {
-        id: video.users.id,
-        username: video.users.username,
-        displayName: video.users.display_name,
-        avatarUrl: video.users.avatar_url,
-        verified: video.users.verified,
-        subscriberCount: video.users.subscriber_count
+    const docs = relSnap.docs.filter(d => d.id !== id);
+    const ownerIds = Array.from(new Set(docs.map(d => d.get('ownerId')).filter(Boolean)));
+    const ownersMap: Record<string, FirebaseFirestore.DocumentData | null> = {};
+    if (ownerIds.length) {
+      const ownerSnaps = await Promise.all(ownerIds.map(oid => db.collection('users').doc(String(oid)).get()));
+      for (const ds of ownerSnaps) {
+        ownersMap[ds.id] = ds.exists ? ds.data()! : null;
       }
-    })) || [];
+    }
+    const formattedVideos = docs.map(d => {
+      const v = d.data();
+      const u = ownersMap[String(v.ownerId)] || {};
+      return {
+        id: d.id,
+        title: v.title || '',
+        description: v.description || null,
+        thumbnailUrl: v.thumbnailUrl || null,
+        duration: v.duration || null,
+        viewCount: v.views || 0,
+        likeCount: v.likes || 0,
+        commentCount: v.comments || 0,
+        publishedAt: v.publishedAt || null,
+        createdAt: v.createdAt || null,
+        creator: {
+          id: String(v.ownerId || ''),
+          username: u.username || '',
+          displayName: u.displayName || u.name || '',
+          avatarUrl: u.avatarUrl || null,
+          verified: !!u.verified,
+          subscriberCount: u.subscriberCount || 0
+        }
+      };
+    });
 
     res.json({ videos: formattedVideos });
   } catch (error) {

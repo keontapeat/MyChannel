@@ -83,9 +83,26 @@ struct AppConfig {
         static let baseURL = environment.apiBaseURL
         static let cloudRunBaseURL = "https://mychannel-ai-124515086975.us-central1.run.app"
         static let gatewayBaseURL = "https://mychannel-gw-1l792fzz.uc.gateway.dev"
+        static let adsBaseURL: String = gatewayBaseURL
         static let version = "v1"
         static let timeout: TimeInterval = 30.0
         static let supabaseAnonKey = "your-supabase-anon-key-here" // Replace with actual key
+        
+        // Google Cloud Partner Benefits
+        static var googleCloudAPIKey: String? {
+            return AppSecrets.googleCloudAPIKey.isEmpty ? nil : AppSecrets.googleCloudAPIKey
+        }
+        
+        static var googleCloudProjectID: String? {
+            return AppSecrets.googleCloudProjectID.isEmpty ? nil : AppSecrets.googleCloudProjectID
+        }
+        static let chatWebSocketBaseURL: String = {
+            switch environment {
+            case .development: return "wss://dev-api.mychannel.app/chat"
+            case .staging: return "wss://staging-api.mychannel.app/chat"
+            case .production: return "wss://api.mychannel.app/chat"
+            }
+        }()
         
         // API Endpoints
         struct Endpoints {
@@ -96,6 +113,8 @@ struct AppConfig {
             static let upload = "/upload"
             static let flicks = "/flicks"
             static let recommendations = "/recommendations"
+            // Ads (served via API Gateway → ads service)
+            static let adsVMAP = "/ads/vmap"
         }
     }
     
@@ -131,6 +150,8 @@ struct AppConfig {
         static let enableNetworkLogging = isDebug // Enable network logging in debug mode
 
         static let enableFlicksPeek = false
+        // Ads
+        static let enableAds = true
     }
     
     // MARK: - Performance Settings

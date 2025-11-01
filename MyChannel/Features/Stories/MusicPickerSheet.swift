@@ -36,40 +36,7 @@ struct MusicPickerSheet: View {
         }
     }
     
-    private var sampleMusic: [CreateStoryViewModel.MusicItem] {
-        [
-            CreateStoryViewModel.MusicItem(
-                title: "Upbeat Vibes",
-                artist: "Artist One",
-                previewURL: "https://example.com/music1.mp3",
-                artworkURL: "https://picsum.photos/200/200?random=1"
-            ),
-            CreateStoryViewModel.MusicItem(
-                title: "Chill Beats",
-                artist: "Artist Two",
-                previewURL: "https://example.com/music2.mp3",
-                artworkURL: "https://picsum.photos/200/200?random=2"
-            ),
-            CreateStoryViewModel.MusicItem(
-                title: "Summer Anthem",
-                artist: "Artist Three",
-                previewURL: "https://example.com/music3.mp3",
-                artworkURL: "https://picsum.photos/200/200?random=3"
-            ),
-            CreateStoryViewModel.MusicItem(
-                title: "Electronic Flow",
-                artist: "Artist Four",
-                previewURL: "https://example.com/music4.mp3",
-                artworkURL: "https://picsum.photos/200/200?random=4"
-            ),
-            CreateStoryViewModel.MusicItem(
-                title: "Acoustic Dreams",
-                artist: "Artist Five",
-                previewURL: "https://example.com/music5.mp3",
-                artworkURL: "https://picsum.photos/200/200?random=5"
-            )
-        ]
-    }
+    @State private var results: [CatalogSong] = []
     
     var body: some View {
         NavigationStack {
@@ -87,16 +54,21 @@ struct MusicPickerSheet: View {
                     }
                 }
             }
+            .task { await loadInitial() }
         }
     }
     
     private func togglePlayback(for music: CreateStoryViewModel.MusicItem) {
-        if currentlyPlaying == music.id.uuidString {
-            currentlyPlaying = nil // Stop
-        } else {
-            currentlyPlaying = music.id.uuidString // Play
-        }
         HapticManager.shared.selection()
+        let trackId = music.id.uuidString
+        if currentlyPlaying == trackId {
+            AudioPreviewPlayer.shared.pause()
+            currentlyPlaying = nil
+            return
+        }
+        guard let url = URL(string: music.previewURL) else { return }
+        AudioPreviewPlayer.shared.play(url: url, trackId: trackId)
+        currentlyPlaying = trackId
     }
     
     // MARK: - View Components
@@ -127,7 +99,10 @@ struct MusicPickerSheet: View {
     }
     
     private func categoryButton(for category: MusicCategory) -> some View {
-        Button(action: { selectedCategory = category }) {
+        Button(action: {
+            selectedCategory = category
+            Task { await loadCategory(category) }
+        }) {
             Text(category.title)
                 .font(.subheadline)
                 .fontWeight(.medium)
@@ -145,22 +120,52 @@ struct MusicPickerSheet: View {
     private var musicList: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
-                ForEach(sampleMusic, id: \.id) { music in
+                ForEach(results, id: \.id) { s in
+                    let item = CreateStoryViewModel.MusicItem(
+                        title: s.title,
+                        artist: s.artist,
+                        previewURL: s.previewUrl ?? "",
+                        artworkURL: s.artworkUrl
+                    )
                     MusicRowView(
-                        music: music,
-                        isSelected: selectedMusic?.id == music.id,
-                        isPlaying: currentlyPlaying == music.id.uuidString,
-                        onPlayPause: { 
-                            togglePlayback(for: music)
-                        },
+                        music: item,
+                        isSelected: selectedMusic?.id == item.id,
+                        isPlaying: currentlyPlaying == item.id.uuidString,
+                        onPlayPause: { togglePlayback(for: item) },
                         onSelect: {
-                            onMusicSelected(music)
+                            onMusicSelected(item)
                             dismiss()
                         }
                     )
                 }
             }
             .padding()
+        }
+    }
+}
+
+// MARK: - Data loading
+extension MusicPickerSheet {
+    private func loadInitial() async {
+        if results.isEmpty {
+            if let items = try? await MusicCatalogService.shared.topSongs(limit: 40) {
+                results = items
+            }
+        }
+    }
+    
+    private func loadCategory(_ category: MusicCategory) async {
+        let term: String
+        switch category {
+        case .trending: term = "top songs"
+        case .pop: term = "pop"
+        case .hiphop: term = "hip hop"
+        case .rock: term = "rock"
+        case .electronic: term = "electronic"
+        case .chill: term = "chill"
+        }
+        if let items = try? await MusicCatalogService.shared.genreSongs(term, limit: 40) {
+            results = items
         }
     }
 }
@@ -172,6 +177,7 @@ struct MusicRowView: View {
     let isPlaying: Bool
     let onPlayPause: () -> Void
     let onSelect: () -> Void
+    @ObservedObject private var preview = AudioPreviewPlayer.shared
     
     var body: some View {
         Button(action: onSelect) {
@@ -245,6 +251,13 @@ struct MusicRowView: View {
             .padding()
             .background(Color(.systemGray6))
             .cornerRadius(12)
+            // Progress bar below
+            if isPlaying {
+                ProgressView(value: preview.progress)
+                    .progressViewStyle(.linear)
+                    .tint(AppTheme.Colors.primary)
+                    .padding(.horizontal)
+            }
         }
         .buttonStyle(PlainButtonStyle())
     }

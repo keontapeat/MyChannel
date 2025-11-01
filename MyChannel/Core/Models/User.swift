@@ -9,6 +9,18 @@ import SwiftUI
 
 // MARK: - User Model
 struct User: Identifiable, Codable, Equatable, Hashable {
+    
+    // MARK: - Coding Keys
+    private enum CodingKeys: String, CodingKey {
+        case id, username, displayName, email
+        case profileImageURL, bannerImageURL, bannerVideoURL
+        case bannerVideoMuted, bannerVideoContentMode
+        case bio, subscriberCount, videoCount
+        case isVerified, isCreator, createdAt
+        case location, website, socialLinks
+        case followerCount, followingCount, joinDate
+        case totalViews, totalEarnings, membershipTiers
+    }
     let id: String
     let username: String
     let displayName: String
@@ -18,7 +30,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
     // Optional video banner. If present, header shows a looping video background instead of an image banner
     let bannerVideoURL: String?
     let bannerVideoMuted: Bool?
-    let bannerVideoContentMode: BannerContentMode?
+    let bannerVideoContentMode: UserBannerContentMode?
     let bio: String?
     let subscriberCount: Int
     let videoCount: Int
@@ -63,7 +75,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         membershipTiers: [MembershipTier]? = nil,
         bannerVideoURL: String? = nil,
         bannerVideoMuted: Bool? = nil,
-        bannerVideoContentMode: BannerContentMode? = nil
+        bannerVideoContentMode: UserBannerContentMode? = nil
     ) {
         self.id = id
         self.username = username
@@ -100,10 +112,84 @@ struct User: Identifiable, Codable, Equatable, Hashable {
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
+    
+    // MARK: - Custom Decoding
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        id = try container.decode(String.self, forKey: .id)
+        username = try container.decode(String.self, forKey: .username)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        email = try container.decode(String.self, forKey: .email)
+        profileImageURL = try container.decodeIfPresent(String.self, forKey: .profileImageURL)
+        bannerImageURL = try container.decodeIfPresent(String.self, forKey: .bannerImageURL)
+        bannerVideoURL = try container.decodeIfPresent(String.self, forKey: .bannerVideoURL)
+        bannerVideoMuted = try container.decodeIfPresent(Bool.self, forKey: .bannerVideoMuted)
+        bannerVideoContentMode = try container.decodeIfPresent(UserBannerContentMode.self, forKey: .bannerVideoContentMode)
+        bio = try container.decodeIfPresent(String.self, forKey: .bio)
+        subscriberCount = try container.decodeIfPresent(Int.self, forKey: .subscriberCount) ?? 0
+        videoCount = try container.decodeIfPresent(Int.self, forKey: .videoCount) ?? 0
+        isVerified = try container.decodeIfPresent(Bool.self, forKey: .isVerified) ?? false
+        isCreator = try container.decodeIfPresent(Bool.self, forKey: .isCreator) ?? false
+        
+        // Handle Date decoding
+        if let timestamp = try? container.decode(Double.self, forKey: .createdAt) {
+            createdAt = Date(timeIntervalSince1970: timestamp)
+        } else {
+            createdAt = Date()
+        }
+        
+        location = try container.decodeIfPresent(String.self, forKey: .location)
+        website = try container.decodeIfPresent(String.self, forKey: .website)
+        socialLinks = try container.decodeIfPresent([SocialLink].self, forKey: .socialLinks) ?? []
+        followerCount = try container.decodeIfPresent(Int.self, forKey: .followerCount) ?? subscriberCount
+        followingCount = try container.decodeIfPresent(Int.self, forKey: .followingCount) ?? 0
+        
+        // Handle joinDate
+        if let joinTimestamp = try? container.decode(Double.self, forKey: .joinDate) {
+            joinDate = Date(timeIntervalSince1970: joinTimestamp)
+        } else {
+            joinDate = createdAt
+        }
+        
+        totalViews = try container.decodeIfPresent(Int.self, forKey: .totalViews)
+        totalEarnings = try container.decodeIfPresent(Double.self, forKey: .totalEarnings)
+        membershipTiers = try container.decodeIfPresent([MembershipTier].self, forKey: .membershipTiers)
+    }
+    
+    // MARK: - Custom Encoding
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        
+        try container.encode(id, forKey: .id)
+        try container.encode(username, forKey: .username)
+        try container.encode(displayName, forKey: .displayName)
+        try container.encode(email, forKey: .email)
+        try container.encodeIfPresent(profileImageURL, forKey: .profileImageURL)
+        try container.encodeIfPresent(bannerImageURL, forKey: .bannerImageURL)
+        try container.encodeIfPresent(bannerVideoURL, forKey: .bannerVideoURL)
+        try container.encodeIfPresent(bannerVideoMuted, forKey: .bannerVideoMuted)
+        try container.encodeIfPresent(bannerVideoContentMode, forKey: .bannerVideoContentMode)
+        try container.encodeIfPresent(bio, forKey: .bio)
+        try container.encode(subscriberCount, forKey: .subscriberCount)
+        try container.encode(videoCount, forKey: .videoCount)
+        try container.encode(isVerified, forKey: .isVerified)
+        try container.encode(isCreator, forKey: .isCreator)
+        try container.encode(createdAt.timeIntervalSince1970, forKey: .createdAt)
+        try container.encodeIfPresent(location, forKey: .location)
+        try container.encodeIfPresent(website, forKey: .website)
+        try container.encode(socialLinks, forKey: .socialLinks)
+        try container.encode(followerCount, forKey: .followerCount)
+        try container.encode(followingCount, forKey: .followingCount)
+        try container.encode(joinDate.timeIntervalSince1970, forKey: .joinDate)
+        try container.encodeIfPresent(totalViews, forKey: .totalViews)
+        try container.encodeIfPresent(totalEarnings, forKey: .totalEarnings)
+        try container.encodeIfPresent(membershipTiers, forKey: .membershipTiers)
+    }
 }
 
 // MARK: - Banner Content Mode
-enum BannerContentMode: String, Codable {
+enum UserBannerContentMode: String, Codable {
     case fill // resizeAspectFill
     case fit  // resizeAspect
 }

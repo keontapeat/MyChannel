@@ -1,0 +1,97 @@
+// Prisma schema - Ingest & Rights models (initial stub)
+// Note: Hook up to your existing datasource and generator in your monorepo
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model sources {
+  id       String @id @default(cuid())
+  code     String @unique
+  name     String
+  base_url String
+  status   String
+}
+
+model source_assets {
+  id                      String   @id @default(cuid())
+  source_id               String
+  external_id             String
+  title                   String
+  author                  String?
+  source_url              String
+  license_code            String
+  license_url             String?
+  license_requires_attrib Boolean  @default(false)
+  license_allows_commercial Boolean @default(false)
+  downloaded_at           DateTime?
+  proof_html_uri          String?
+  proof_screenshot_uri    String?
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
+
+  @@unique([source_id, external_id])
+}
+
+model videos {
+  id              String   @id
+  source_asset_id String?  @unique
+  monetizable     Boolean  @default(false)
+  attribution_text String? 
+  attribution_html String?
+}
+
+model video_transform_jobs {
+  id               String   @id @default(cuid())
+  video_id         String?
+  source_asset_id  String?
+  status           String
+  step             String
+  error_text       String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+}
+
+model rights_audit {
+  id         String   @id @default(cuid())
+  video_id   String
+  action     String
+  details_json String
+  actor      String
+  created_at DateTime @default(now())
+}
+
+model attribution_profiles {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  template_text String
+  template_html String
+}
+
+model ads_policy {
+  id              String  @id @default(cuid())
+  video_id        String  @unique
+  allow_pre_roll  Boolean @default(true)
+  allow_mid_roll  Boolean @default(false)
+  allow_promoted  Boolean @default(true)
+  created_at      DateTime @default(now())
+}
+
+model ingest_metrics_daily {
+  id            String   @id @default(cuid())
+  date          DateTime
+  source_code   String
+  pulled        Int      @default(0)
+  downloaded    Int      @default(0)
+  monetizable   Int      @default(0)
+  rejected_noncommercial Int @default(0)
+  errors        Int      @default(0)
+}
+
+
+

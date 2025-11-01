@@ -1,0 +1,14 @@
+FROM node:20-slim
+
+WORKDIR /app
+
+COPY services/channelboost-api/package.json /app/package.json
+RUN npm i --omit=dev
+
+COPY services/channelboost-api/src /app/src
+
+ENV PORT=8787
+EXPOSE 8787
+
+CMD ["node", "./src/index.js"]
+

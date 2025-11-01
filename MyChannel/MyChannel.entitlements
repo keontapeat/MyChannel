@@ -3,8 +3,6 @@
 <plist version="1.0">
 <dict>
 	<!-- Associated Domains and Push Notifications enabled for paid Apple Developer Program membership -->
-	<key>aps-environment</key>
-	<string>development</string>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:mychannel.live</string>

@@ -30,6 +30,7 @@ struct ProfileSettingsView: View {
     @AppStorage("preferences.notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("preferences.autoPlayEnabled") private var autoPlayEnabled = true
     @AppStorage("appearance.darkModeEnabled") private var darkModeEnabled = false
+    @AppStorage("preferences.personalizedAdsEnabled") private var personalizedAdsEnabled = true
     @State private var qualityPreference = "Auto"
     @State private var showingAccountDeletion = false
     @State private var showingSignOutConfirmation = false
@@ -43,6 +44,8 @@ struct ProfileSettingsView: View {
             List {
                 // Account Section
                 accountSection
+                twoFactorSection
+                sessionsSection
                 
                 // Preferences Section
                 preferencesSection
@@ -131,6 +134,15 @@ struct ProfileSettingsView: View {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
+            }
+
+            // Easier Sign Out (YouTube-style placement near account controls)
+            SettingsRow(
+                icon: "rectangle.portrait.and.arrow.right",
+                title: "Sign Out",
+                iconColor: .orange
+            ) {
+                showingSignOutConfirmation = true
             }
         }
     }
@@ -222,6 +234,78 @@ struct ProfileSettingsView: View {
                 .foregroundStyle(AppTheme.Colors.primary)
             }
             .padding(.vertical, 2)
+
+            HStack {
+                SettingsIcon(systemName: "hand.raised", color: .blue)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Personalized Ads")
+                        .font(.system(size: 16))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                    Text("Improve relevance using topics/tags")
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+                Spacer()
+                Toggle("", isOn: $personalizedAdsEnabled)
+                    .tint(AppTheme.Colors.primary)
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    // MARK: - Two-Factor Authentication
+    @State private var showing2FASetup = false
+    @State private var twoFACode: String = ""
+    private var twoFactorSection: some View {
+        Section("Security") {
+            HStack {
+                SettingsIcon(systemName: "lock.shield", color: .blue)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Two‑Factor Authentication")
+                        .font(.system(size: 16))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                    Text(AuthService.shared.twoFactorEnabled ? "Enabled" : "Disabled")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(AuthService.shared.twoFactorEnabled ? "Disable" : "Enable") {
+                    Task { @MainActor in
+                        if AuthService.shared.twoFactorEnabled {
+                            try? await AuthService.shared.disableTwoFactor()
+                        } else {
+                            showing2FASetup = true
+                        }
+                    }
+                }
+                .font(.system(size: 13, weight: .semibold))
+            }
+        }
+        .sheet(isPresented: $showing2FASetup) {
+            TwoFASetupSheet()
+                .presentationDetents([.height(260)])
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var sessionsSection: some View {
+        Section("Devices") {
+            SettingsRow(
+                icon: "iphone.and.arrow.forward",
+                title: "Sign out of other devices",
+                iconColor: .red
+            ) {
+                Task { await AuthService.shared.revokeOtherSessions() }
+            }
+            NavigationLink(destination: SessionsListView()) {
+                HStack {
+                    SettingsIcon(systemName: "lanyardcard", color: .gray)
+                    Text("Manage devices")
+                        .font(.system(size: 16))
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                    Spacer()
+                }
+            }
         }
     }
 
@@ -233,15 +317,6 @@ struct ProfileSettingsView: View {
                     HStack {
                         SettingsIcon(systemName: "star.fill", color: .yellow)
                         Text("Manage Featured (Owner)")
-                            .font(.system(size: 16))
-                            .foregroundStyle(AppTheme.Colors.textPrimary)
-                        Spacer()
-                    }
-                }
-                NavigationLink(destination: OwnerBulkFriendsView()) {
-                    HStack {
-                        SettingsIcon(systemName: "person.3.fill", color: .purple)
-                        Text("Bulk Add Friends (Owner)")
                             .font(.system(size: 16))
                             .foregroundStyle(AppTheme.Colors.textPrimary)
                         Spacer()
@@ -423,22 +498,6 @@ struct ProfileSettingsView: View {
     private var dangerZoneSection: some View {
         Section {
             Button(action: {
-                showingSignOutConfirmation = true
-            }) {
-                HStack {
-                    SettingsIcon(systemName: "rectangle.portrait.and.arrow.right", color: .orange)
-                    
-                    Text("Sign Out")
-                        .font(.system(size: 16))
-                        .foregroundStyle(.orange)
-                    
-                    Spacer()
-                }
-                .padding(.vertical, 2)
-            }
-            .buttonStyle(.plain)
-            
-            Button(action: {
                 showingAccountDeletion = true
             }) {
                 HStack {
@@ -457,6 +516,88 @@ struct ProfileSettingsView: View {
     }
 }
 
+// MARK: - 2FA Setup Sheet
+private struct TwoFASetupSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var code: String = ""
+    @State private var isLoading: Bool = false
+    @State private var error: String = ""
+    @State private var delivery: AuthService.TwoFactorDelivery = .email
+    var body: some View {
+        VStack(spacing: 14) {
+            Text("Enable Two‑Factor Authentication")
+                .font(.headline)
+            Picker("Delivery", selection: $delivery) {
+                Text("Email").tag(AuthService.TwoFactorDelivery.email)
+                Text("SMS").tag(AuthService.TwoFactorDelivery.sms)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            HStack {
+                TextField("Enter 6‑digit code", text: $code)
+                    .keyboardType(.numberPad)
+                    .textFieldStyle(.roundedBorder)
+                Button(isLoading ? "..." : "Verify") {
+                    Task { await verify() }
+                }
+                .disabled(code.count < 4 || isLoading)
+            }
+            .padding(.horizontal)
+            if !error.isEmpty { Text(error).foregroundColor(.red).font(.footnote) }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 16)
+        .onAppear { Task { try? await AuthService.shared.enableTwoFactor(delivery: delivery) } }
+    }
+    private func verify() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await AuthService.shared.verifyTwoFactorCode(code: code)
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - Sessions List
+private struct SessionsListView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var isLoading: Bool = true
+    @State private var sessions: [DeviceSession] = []
+    var body: some View {
+        List {
+            ForEach(sessions) { s in
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(s.deviceName).font(.system(size: 16, weight: .semibold))
+                        Text("Last active: \(DateFormatter.localizedString(from: s.lastActive, dateStyle: .short, timeStyle: .short))")
+                            .font(.system(size: 12)).foregroundColor(.secondary)
+                        if let ip = s.ipAddress {
+                            Text(ip).font(.system(size: 12)).foregroundColor(.secondary)
+                        }
+                    }
+                    Spacer()
+                    if s.isCurrent {
+                        Text("This device").font(.system(size: 11, weight: .semibold)).foregroundColor(.green)
+                    } else {
+                        Button("Sign out") { Task { await AuthService.shared.revokeSession(s.id); await load() } }
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                }
+            }
+        }
+        .navigationTitle("Your devices")
+        .task { await load() }
+        .refreshable { await load() }
+    }
+    private func load() async {
+        await AuthService.shared.fetchSessions()
+        sessions = AuthService.shared.sessions
+        isLoading = false
+    }
+}
 // MARK: - Settings Row
 struct SettingsRow: View {
     let icon: String

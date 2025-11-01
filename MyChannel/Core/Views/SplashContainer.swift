@@ -43,6 +43,7 @@ struct SplashContainer: View {
                          .transition(.opacity)
                          .zIndex(1)
                     } else {
+                        // Always start unauthenticated unless user signs in (fresh TestFlight behavior)
                         MainTabView()
                             .transition(.opacity)
                     }

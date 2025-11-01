@@ -1,0 +1,17 @@
+{
+  "name": "channelboost-web",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev -p 3010",
+    "build": "next build",
+    "start": "next start -p 3010"
+  },
+  "dependencies": {
+    "next": "14.2.10",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}
+
+

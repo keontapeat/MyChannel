@@ -1,7 +1,8 @@
 # Simple Firebase Functions for MyChannel
 from firebase_functions import firestore_fn, https_fn
-from firebase_admin import initialize_app, firestore
+from firebase_admin import initialize_app, firestore, auth as admin_auth, messaging
 import logging
+from datetime import datetime, timezone
 import os
 import requests
 import json
@@ -27,6 +28,45 @@ try:
     from google.cloud import aiplatform
 except Exception:
     aiplatform = None
+# --- HTTPS: Report content (callable-like via POST) ---
+@https_fn.on_request()
+def report_content(req: https_fn.Request) -> https_fn.Response:
+    """Report a video or user. Body: {type: 'video'|'user', id: string, reason: string}."""
+    try:
+        if req.method == 'OPTIONS':
+            return https_fn.Response('', status=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization"})
+        # Verify Firebase Auth ID token from Authorization: Bearer <token>
+        auth_header = req.headers.get('Authorization') or req.headers.get('authorization') or ''
+        if not auth_header.lower().startswith('bearer '):
+            return https_fn.Response({'error': 'unauthorized'}, status=401, headers=cache_headers_no_store())
+        id_token = auth_header.split(' ', 1)[1].strip()
+        try:
+            decoded = admin_auth.verify_id_token(id_token)
+            reporter_uid = decoded.get('uid')
+            if not reporter_uid:
+                return https_fn.Response({'error': 'unauthorized'}, status=401, headers=cache_headers_no_store())
+        except Exception:
+            return https_fn.Response({'error': 'unauthorized'}, status=401, headers=cache_headers_no_store())
+        data = req.get_json(silent=True) or {}
+        item_type = (data.get('type') or '').strip()
+        item_id = (data.get('id') or '').strip()
+        reason = (data.get('reason') or '').strip()
+        if not item_type or not item_id or not reason:
+            return https_fn.Response({'error': 'missing_fields'}, status=400, headers=cache_headers_no_store())
+        # Write to Firestore collection for moderation triage
+        doc = firestore.client().collection('reports').document()
+        doc.set({
+            'type': item_type,
+            'itemId': item_id,
+            'reason': reason,
+            'reporterUid': reporter_uid,
+            'createdAt': firestore.SERVER_TIMESTAMP,
+        })
+        return https_fn.Response({'ok': True}, status=200, headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as e:
+        logging.exception('report_content error')
+        return https_fn.Response({'error': str(e)}, status=500, headers=cache_headers_no_store())
+
 # --- HTTPS Proxies ---
 @https_fn.on_request()
 def ai_rank(req: https_fn.Request) -> https_fn.Response:
@@ -76,6 +116,59 @@ def ai_rank(req: https_fn.Request) -> https_fn.Response:
 # Initialize Firebase Admin
 initialize_app()
 db = firestore.client()
+# --- Firestore Triggers: counters ---
+@firestore_fn.on_document_created(document="videos/{videoId}/comments/{commentId}")
+def on_comment_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
+    try:
+        params = event.params
+        video_id = params["videoId"]
+        vid_ref = db.collection('videos').document(video_id)
+        vid_ref.update({ 'commentCount': firestore.Increment(1) })
+    except Exception:
+        logging.exception('on_comment_created')
+
+@firestore_fn.on_document_deleted(document="videos/{videoId}/comments/{commentId}")
+def on_comment_deleted(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
+    try:
+        params = event.params
+        video_id = params["videoId"]
+        vid_ref = db.collection('videos').document(video_id)
+        vid_ref.update({ 'commentCount': firestore.Increment(-1) })
+    except Exception:
+        logging.exception('on_comment_deleted')
+
+@firestore_fn.on_document_created(document="videos/{videoId}/likes/{uid}")
+def on_like_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
+    try:
+        video_id = event.params["videoId"]
+        db.collection('videos').document(video_id).update({ 'likeCount': firestore.Increment(1) })
+    except Exception:
+        logging.exception('on_like_created')
+
+@firestore_fn.on_document_deleted(document="videos/{videoId}/likes/{uid}")
+def on_like_deleted(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
+    try:
+        video_id = event.params["videoId"]
+        db.collection('videos').document(video_id).update({ 'likeCount': firestore.Increment(-1) })
+    except Exception:
+        logging.exception('on_like_deleted')
+
+@firestore_fn.on_document_created(document="users/{creatorId}/subscribers/{uid}")
+def on_subscribe_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
+    try:
+        creator = event.params['creatorId']
+        db.collection('users').document(creator).update({ 'subscribersCount': firestore.Increment(1) })
+    except Exception:
+        logging.exception('on_subscribe_created')
+
+@firestore_fn.on_document_deleted(document="users/{creatorId}/subscribers/{uid}")
+def on_subscribe_deleted(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
+    try:
+        creator = event.params['creatorId']
+        db.collection('users').document(creator).update({ 'subscribersCount': firestore.Increment(-1) })
+    except Exception:
+        logging.exception('on_subscribe_deleted')
+
 
 # Toggle triggers to avoid first‑time Eventarc/Run propagation delays
 ENABLE_EMAIL_TRIGGERS = False
@@ -437,3 +530,229 @@ def events_view(req: https_fn.Request) -> https_fn.Response:
     except Exception as e:
         logging.exception("events_view error")
         return https_fn.Response({"error": str(e)}, status=500, headers=cache_headers_no_store())
+
+
+# =============================
+# New Stubs for Parity Features
+# =============================
+
+@firestore_fn.on_document_created(document="uploads/{uploadId}")
+def on_upload_created_trigger(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
+    """Start a transcode job when an upload record is created.
+    Expects uploads/{uploadId}: { videoId, ownerUid, sourcePath }
+    """
+    try:
+        snap = event.data
+        data = snap.to_dict() or {}
+        video_id = data.get("videoId")
+        owner_uid = data.get("ownerUid")
+        source_path = data.get("sourcePath")
+        if not (video_id and owner_uid and source_path):
+            logging.warning("on_upload_created missing required fields")
+            return
+        # Mark video processing status
+        firestore.client().collection('videos').document(video_id).set({
+            'status': 'processing',
+            'updatedAt': firestore.SERVER_TIMESTAMP
+        }, merge=True)
+        # TODO: Integrate Transcoder API job creation here
+        logging.info(f"[transcode] queued for {video_id} from {source_path}")
+    except Exception:
+        logging.exception('on_upload_created')
+
+
+@firestore_fn.on_document_updated(document="videos/{videoId}")
+def on_video_ready(event: firestore_fn.Event[firestore_fn.Change[firestore_fn.DocumentSnapshot]]) -> None:
+    """When a video's status transitions to ready, notify subscribers and enqueue follow-ups."""
+    try:
+        before = (event.data.before.to_dict() or {}).get('status')
+        after = (event.data.after.to_dict() or {}).get('status')
+        if before == 'ready' or after != 'ready':
+            return
+        vid = event.params['videoId']
+        video_after = event.data.after.to_dict() or {}
+        owner_uid = video_after.get('ownerUid')
+        if not owner_uid:
+            return
+        # Minimal: insert a notification stub
+        firestore.client().collection('notifications').add({
+            'type': 'video_ready',
+            'videoId': vid,
+            'ownerUid': owner_uid,
+            'createdAt': firestore.SERVER_TIMESTAMP,
+        })
+        # Fanout to FCM topic for the creator (clients subscribe to topic: creator_{owner_uid})
+        try:
+            topic = f"creator_{owner_uid}"
+            title = video_after.get('title') or 'New upload'
+            message = messaging.Message(
+                notification=messaging.Notification(
+                    title=f"{title}",
+                    body="Tap to watch now"
+                ),
+                topic=topic,
+                data={
+                    'type': 'video_ready',
+                    'videoId': vid,
+                    'ownerUid': owner_uid
+                }
+            )
+            messaging.send(message)
+        except Exception:
+            logging.exception('[video_ready] fcm fanout')
+        # Fanout to subscribers' feeds collection: feeds/{uid}/items
+        try:
+            subs_ref = db.collection('users').document(owner_uid).collection('subscribers')
+            subs = subs_ref.limit(500).stream()
+            batch = db.batch()
+            count = 0
+            for sub in subs:
+                sub_uid = sub.id
+                feed_item = {
+                    'videoId': vid,
+                    'ownerUid': owner_uid,
+                    'title': video_after.get('title') or '',
+                    'thumb': (video_after.get('thumbnails', {}) or {}).get('default') or video_after.get('thumbnailURL', ''),
+                    'createdAt': firestore.SERVER_TIMESTAMP
+                }
+                feed_doc = db.collection('feeds').document(sub_uid).collection('items').document(vid)
+                batch.set(feed_doc, feed_item, merge=True)
+                count += 1
+                if count % 400 == 0:
+                    batch.commit(); batch = db.batch()
+            batch.commit()
+            logging.info(f"[video_ready] feed fanout items: {count}")
+        except Exception:
+            logging.exception('[video_ready] feed fanout')
+        # TODO: enqueue captions AI, update explore
+        logging.info(f"[video_ready] fanout queued for {vid}")
+    except Exception:
+        logging.exception('on_video_ready')
+
+
+@firestore_fn.on_document_created(document="tips/{tipId}")
+def on_tip_received(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
+    """Accrue tip into earnings for the creator's channel."""
+    try:
+        tip = event.data.to_dict() or {}
+        channel_id = tip.get('channelId')
+        amount_cents = int(tip.get('amountCents') or 0)
+        if not channel_id or amount_cents <= 0:
+            return
+        now = datetime.now(timezone.utc)
+        ym = now.strftime('%Y%m')
+        doc = firestore.client().collection('earnings').document(channel_id).collection('months').document(ym)
+        doc.set({
+            'totals': firestore.ArrayUnion([]),  # ensures doc exists
+            'updatedAt': firestore.SERVER_TIMESTAMP
+        }, merge=True)
+        doc.update({
+            'totals.ads': firestore.Increment(0),
+            'totals.tips': firestore.Increment(amount_cents / 100.0),
+            'totals.subs': firestore.Increment(0),
+            'totals.ppv': firestore.Increment(0)
+        })
+        logging.info(f"[tips] accrued {amount_cents}c to {channel_id}:{ym}")
+    except Exception:
+        logging.exception('on_tip_received')
+
+
+@firestore_fn.on_document_created(document="memberships/{membershipId}/payments/{paymentId}")
+def on_membership_renew(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
+    """Update entitlements on membership renewal."""
+    try:
+        pay = event.data.to_dict() or {}
+        user_id = pay.get('userId')
+        channel_id = pay.get('channelId')
+        if not (user_id and channel_id):
+            return
+        firestore.client().collection('users').document(user_id).set({
+            'entitlements': { f"channel:{channel_id}": True },
+            'entitlementsUpdatedAt': firestore.SERVER_TIMESTAMP
+        }, merge=True)
+        logging.info(f"[membership] renewed {user_id} -> {channel_id}")
+    except Exception:
+        logging.exception('on_membership_renew')
+
+
+@https_fn.on_request()
+def referral_create(req: https_fn.Request) -> https_fn.Response:
+    """Create a referral code for the authenticated user."""
+    try:
+        # Optional auth
+        auth_header = req.headers.get('Authorization') or ''
+        uid_decoded = None
+        if auth_header.lower().startswith('bearer '):
+            try:
+                decoded = admin_auth.verify_id_token(auth_header.split(' ',1)[1].strip())
+                uid_decoded = decoded.get('uid')
+            except Exception:
+                pass
+        data = req.get_json(silent=True) or {}
+        owner_uid = data.get('ownerUid') or uid_decoded
+        if not owner_uid:
+            return https_fn.Response({'error': 'unauthorized'}, status=401, headers=cache_headers_no_store())
+        import random, string
+        code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+        firestore.client().collection('referrals').document(code).set({
+            'ownerUid': owner_uid,
+            'createdAt': firestore.SERVER_TIMESTAMP,
+            'clicks': 0,
+            'installs': 0,
+            'activations': 0
+        })
+        return https_fn.Response({'code': code}, status=200, headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as e:
+        logging.exception('referral_create')
+        return https_fn.Response({'error': str(e)}, status=500, headers=cache_headers_no_store())
+
+
+@https_fn.on_request()
+def reviews_eligibility(req: https_fn.Request) -> https_fn.Response:
+    """Return whether the user is eligible for in-app review prompt.
+    Placeholder: wire to analytics thresholds (watch time + sessions).
+    """
+    try:
+        body = req.get_json(silent=True) or {}
+        user_id = body.get('userId')
+        if not user_id:
+            return https_fn.Response({'eligible': False, 'reason': 'missing_user'}, status=200, headers={"Access-Control-Allow-Origin": "*"})
+        # TODO: compute from GA4/BigQuery exports
+        return https_fn.Response({'eligible': False, 'reason': 'not_implemented'}, status=200, headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as e:
+        return https_fn.Response({'eligible': False, 'error': str(e)}, status=200, headers={"Access-Control-Allow-Origin": "*"})
+
+
+@https_fn.on_request()
+def growth_aso_sync(req: https_fn.Request) -> https_fn.Response:
+    try:
+        # TODO: pull keywords from store APIs and update growth/keyword_bank
+        return https_fn.Response({'ok': True}, status=200, headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as e:
+        return https_fn.Response({'error': str(e)}, status=500, headers=cache_headers_no_store())
+
+
+@https_fn.on_request()
+def growth_aso_publish(req: https_fn.Request) -> https_fn.Response:
+    try:
+        # TODO: publish winning ASO variants
+        return https_fn.Response({'ok': True}, status=200, headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as e:
+        return https_fn.Response({'error': str(e)}, status=500, headers=cache_headers_no_store())
+
+
+@https_fn.on_request()
+def ads_serve(req: https_fn.Request) -> https_fn.Response:
+    """Proxy to Ads service /ads/serve if configured by ADS_BASE_URL env.
+    Body passthrough.
+    """
+    try:
+        base = os.environ.get('ADS_BASE_URL')
+        if not base:
+            return https_fn.Response({'error': 'ADS_BASE_URL not configured'}, status=500, headers=cache_headers_no_store())
+        body = req.get_json(silent=True) or {}
+        r = requests.post(f"{base.rstrip('/')}/ads/serve", json=body, timeout=5)
+        return https_fn.Response(r.json(), status=r.status_code, headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as e:
+        logging.exception('ads_serve proxy')
+        return https_fn.Response({'error': str(e)}, status=500, headers=cache_headers_no_store())

@@ -35,6 +35,34 @@ struct AppSecrets {
         return ProcessInfo.processInfo.environment["PIXABAY_API_KEY"] ?? ""
     }
 
+    static var anthropicAPIKey: String {
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "ANTHROPIC_API_KEY") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        return ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? ""
+    }
+    
+    static var googleCloudAPIKey: String {
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "GOOGLE_CLOUD_API_KEY") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        return ProcessInfo.processInfo.environment["GOOGLE_CLOUD_API_KEY"] ?? ""
+    }
+    
+    static var googleCloudProjectID: String {
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "GOOGLE_CLOUD_PROJECT_ID") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        return ProcessInfo.processInfo.environment["GOOGLE_CLOUD_PROJECT_ID"] ?? ""
+    }
+    
+    static var openAIAPIKey: String {
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "OPENAI_API_KEY") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        return ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? ""
+    }
+
     static var youtubeAPIKey: String {
         let plist = (Bundle.main.object(forInfoDictionaryKey: "YOUTUBE_API_KEY") as? String ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -49,3 +77,4 @@ private extension String {
         contains("$(") || contains("${")
     }
 }
+

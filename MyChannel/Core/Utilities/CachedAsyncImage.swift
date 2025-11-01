@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Image Cache for Performance
 class ImageCache {
     static let shared = ImageCache()
-    private let cache = NSCache<NSURL, UIImage>()
+    let cache = NSCache<NSURL, UIImage>()
     
     private init() {
         cache.countLimit = 100 // Max 100 images

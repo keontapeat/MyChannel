@@ -7,9 +7,9 @@
 
 import SwiftUI
 
-struct MessageOptionsView: View {
+struct MessageOptionsView<Service: LiveChatServiceProtocol & ObservableObject>: View {
     let message: ChatMessage
-    @ObservedObject var chatService: MockLiveChatService
+    @ObservedObject var chatService: Service
     @Environment(\.dismiss) private var dismiss
     @State private var showingReportOptions = false
     @State private var showingUserProfile = false
@@ -265,9 +265,9 @@ struct MessageOptionsView: View {
     private func toggleHighlightMessage() {
         Task {
             if message.isHighlighted {
-                try? await chatService.moderateMessage(messageId: message.id, action: .highlight)
+                try? await chatService.moderateMessage(messageId: message.id, action: ChatModerationAction.highlight)
             } else {
-                try? await chatService.moderateMessage(messageId: message.id, action: .highlight)
+                try? await chatService.moderateMessage(messageId: message.id, action: ChatModerationAction.highlight)
             }
             dismiss()
         }
@@ -275,21 +275,21 @@ struct MessageOptionsView: View {
     
     private func timeoutUser() {
         Task {
-            try? await chatService.moderateMessage(messageId: message.id, action: .timeout)
+            try? await chatService.moderateMessage(messageId: message.id, action: ChatModerationAction.timeout)
             dismiss()
         }
     }
     
     private func banUser() {
         Task {
-            try? await chatService.moderateMessage(messageId: message.id, action: .ban)
+            try? await chatService.moderateMessage(messageId: message.id, action: ChatModerationAction.ban)
             dismiss()
         }
     }
     
     private func deleteMessage() {
         Task {
-            try? await chatService.moderateMessage(messageId: message.id, action: .delete)
+            try? await chatService.moderateMessage(messageId: message.id, action: ChatModerationAction.delete)
             dismiss()
         }
     }

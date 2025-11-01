@@ -94,7 +94,6 @@ struct ProfileView: View {
                     showingEditProfile: $showingEditProfile,
                     showingSettings: $showingSettings
                 )
-                .ignoresSafeArea(edges: .top)
                 
                 // Profile Tabs
                 ProfileTabNavigation(
@@ -135,23 +134,58 @@ struct ProfileView: View {
                     )
                     .padding(.horizontal)
                     
-                    // Creator Studio Link
+                    // 🎬 Creator Studio Link - BOLD & VISIBLE WITH PROPER SPACING
+                    Spacer()
+                        .frame(height: 16)
+                    
                     NavigationLink(destination: ComprehensiveCreatorStudioView()) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "chart.bar.xaxis")
-                                .foregroundColor(AppTheme.Colors.primary)
-                            Text("Open Creator Studio")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(AppTheme.Colors.textPrimary)
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(AppTheme.Colors.primary)
+                                    .frame(width: 44, height: 44)
+                                
+                                Image(systemName: "chart.bar.xaxis")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Creator Studio")
+                                    .font(.system(size: 17, weight: .bold))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                
+                                Text("Manage your content")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
+                            }
+                            
                             Spacer()
+                            
                             Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(AppTheme.Colors.primary)
                         }
-                        .padding()
-                        .background(AppTheme.Colors.surface)
-                        .cornerRadius(12)
-                        .padding(.horizontal)
+                        .padding(16)
+                        .background(
+                            LinearGradient(
+                                colors: [
+                                    AppTheme.Colors.primary.opacity(0.15),
+                                    AppTheme.Colors.primary.opacity(0.08)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(AppTheme.Colors.primary.opacity(0.4), lineWidth: 2)
+                        )
+                        .cornerRadius(16)
+                        .shadow(color: AppTheme.Colors.primary.opacity(0.25), radius: 8, x: 0, y: 4)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
                     
                     // History Section
                     if !watchHistory.isEmpty {
@@ -210,6 +244,7 @@ struct ProfileView: View {
                 .padding(.vertical)
             }
         }
+        .ignoresSafeArea(edges: .top)
         .navigationBarHidden(true)
         .sheet(isPresented: $showingEditProfile) {
             ProfileEditWrapper(user: $user)

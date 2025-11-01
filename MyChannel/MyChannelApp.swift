@@ -20,6 +20,7 @@ struct MyChannelApp: App {
     
     init() {
         print("🚀 MyChannelApp init started...")
+        
         // Configure Firebase as early as possible to avoid startup warnings
         FirebaseManager.shared.configureIfPossible()
         setupAppearance()
@@ -37,6 +38,17 @@ struct MyChannelApp: App {
                 .environmentObject(appState)
                 .onAppear {
                     print("📱 App appeared with MC logo splash!")
+                    
+                    // Start performance optimization after UI is ready
+                    PerformanceOptimizer.shared.optimizeAppLaunch()
+                    
+                    // Start performance monitoring in debug builds
+                    #if DEBUG
+                    Task {
+                        await PerformanceMonitor.shared.startMonitoring()
+                    }
+                    #endif
+                    
                     // Ensure auth state is checked at launch and sync to AppState
                     authManager.checkAuthenticationStatus()
                     if let current = authManager.currentUser {

@@ -69,11 +69,13 @@ struct AnalyticsDashboardView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Export") {
-                        // TODO: Export analytics data
+                    Menu {
+                        Button(action: { exportAnalytics(as: .csv) }) { Label("Export CSV", systemImage: "square.and.arrow.up") }
+                        Button(action: { exportAnalytics(as: .json) }) { Label("Export JSON", systemImage: "curlybraces.square") }
+                        Button(action: { exportAnalytics(as: .pdf) }) { Label("Export PDF", systemImage: "doc.richtext") }
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
                     }
-                    .font(.subheadline)
-                    .fontWeight(.medium)
                 }
             }
             .refreshable {
@@ -394,6 +396,63 @@ struct AnalyticsDashboardView: View {
         } catch {
             print("Error loading analytics: \(error)")
         }
+    }
+
+    // MARK: - Export
+    private enum ExportFormat { case csv, json, pdf }
+    private func exportAnalytics(as format: ExportFormat) {
+        guard let analytics = channelAnalytics else { return }
+        switch format {
+        case .csv:
+            let headers = ["date","views","subs","revenue","watchTimeHrs"]
+            let rows: [String] = ([headers.joined(separator: ",")] + chartData.map { d in
+                let watchHrs = String(format: "%.2f", d.watchTimeHours)
+                return "\(d.date.formatted(.dateTime.year().month().day())),\(d.views),\(d.subscribers),\(String(format: "%.2f", d.revenue)),\(watchHrs)"
+            })
+            shareText(rows.joined(separator: "\n"))
+        case .json:
+            let payload: [String: Any] = [
+                "overview": [
+                    "totalViews": analytics.totalViews,
+                    "totalSubscribers": analytics.totalSubscribers,
+                    "totalRevenue": analytics.totalRevenue
+                ],
+                "series": chartData.map { [
+                    "date": $0.date.timeIntervalSince1970,
+                    "views": $0.views,
+                    "subs": $0.subscribers,
+                    "revenue": $0.revenue,
+                    "watchTimeHrs": $0.watchTimeHours
+                ]}
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]),
+               let json = String(data: data, encoding: .utf8) {
+                shareText(json)
+            }
+        case .pdf:
+            Task {
+                struct PDFResp: Codable { let url: String }
+                if let uid = AppState.shared.currentUser?.id ?? User.sampleUsers.first?.id,
+                   let pdf: PDFResp = try? await NetworkService.shared.post(
+                        endpoint: .custom("/analytics/export/pdf"),
+                        body: payloadForPDF(creatorId: uid),
+                        responseType: PDFResp.self
+                   ) {
+                    shareItems([pdf.url])
+                }
+            }
+        }
+    }
+    private func shareText(_ text: String) {
+        let av = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+        UIApplication.shared.topMostController()?.present(av, animated: true)
+    }
+    private func shareItems(_ items: [Any]) {
+        let av = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        UIApplication.shared.topMostController()?.present(av, animated: true)
+    }
+    private func payloadForPDF(creatorId: String) -> [String: String] {
+        ["creatorId": creatorId, "period": selectedPeriod.rawValue]
     }
 }
 

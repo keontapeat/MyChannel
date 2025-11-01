@@ -14,29 +14,52 @@ struct FloatingMiniPlayer: View {
     @State private var isDragging = false
     @State private var lastDragTranslation: CGFloat = 0
     
+    // 🔥 YOUTUBE PARITY: Advanced mini player controls
+    @State private var showingControls = false
+    @State private var showingVolumeSlider = false
+    @State private var showingSpeedMenu = false
+    @State private var showingQualityMenu = false
+    @State private var playerSize: CGSize = CGSize(width: 140, height: 78)
+    @State private var isResizing = false
+    @State private var lastTapTime: Date = Date()
+    @State private var tapCount = 0
+    
     var body: some View {
-        if globalPlayer.shouldShowMiniPlayer && !globalPlayer.showingFullscreen, 
+        if globalPlayer.shouldShowMiniPlayer && !globalPlayer.showingFullscreen,
            let video = globalPlayer.currentVideo {
             
             GeometryReader { geometry in
-                VStack {
+                VStack { // isolate from parent layout to reduce layout thrash
                     Spacer()
                     
                     miniPlayerView(video: video, geometry: geometry)
                         .offset(y: calculateOffset())
                         .opacity(calculateOpacity())
                         .scaleEffect(calculateScale())
-                        .gesture(miniPlayerDragGesture)
-                        .animation(.interactiveSpring(response: 0.4, dampingFraction: 0.8), 
-                                  value: globalPlayer.shouldShowMiniPlayer)
-                        .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.9), 
-                                  value: dragOffset)
+                        .gesture(
+                            SimultaneousGesture(
+                                miniPlayerDragGesture,
+                                SimultaneousGesture(
+                                    horizontalSwipeGesture,
+                                    pinchToResizeGesture
+                                )
+                            )
+                        )
+                        .transaction { tx in tx.disablesAnimations = true }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .allowsHitTesting(true)
             .zIndex(998) // Below tab bar but above content
         }
+    }
+
+    // MARK: - Utils
+    private func formatTime(_ t: TimeInterval) -> String {
+        let s = Int(t.rounded())
+        let m = s / 60
+        let r = s % 60
+        return String(format: "%d:%02d", m, r)
     }
     
     // MARK: - Calculation Methods
@@ -64,55 +87,198 @@ struct FloatingMiniPlayer: View {
     }
     
     private func miniPlayerView(video: Video, geometry: GeometryProxy) -> some View {
-        HStack(spacing: 0) {
-            // Video thumbnail/player section
-            ZStack {
-                // Video player or thumbnail
+        HStack(spacing: 10) {
+            // 🔥 YOUTUBE PARITY: Enhanced video player with gestures
+            ZStack(alignment: .center) {
                 if let player = globalPlayer.player {
                     VideoPlayer(player: player)
                         .aspectRatio(16/9, contentMode: .fill)
-                        .disabled(true)
                         .allowsHitTesting(false)
                         .clipped()
-                } else {
-                    AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Rectangle()
-                            .fill(AppTheme.Colors.surface)
-                            .overlay(
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
-                                    .scaleEffect(0.6)
-                            )
-                    }
-                    .clipped()
+                } else if let u = URL(string: video.thumbnailURL) {
+                    AppAsyncImage(url: u) { $0.resizable().aspectRatio(contentMode: .fill) } placeholder: { Rectangle().fill(AppTheme.Colors.surface) }
+                        .clipped()
                 }
                 
-                // Progress bar overlay at the bottom
-                VStack {
-                    Spacer()
+                // 🔥 DOUBLE TAP ZONES: Left (rewind) and Right (forward)
+                HStack(spacing: 0) {
+                    // Left side - Rewind 10s
+                    Rectangle()
+                        .fill(Color.clear)
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) {
+                            globalPlayer.seekBackward()
+                            showSeekFeedback(isForward: false)
+                            HapticManager.shared.impact(style: .medium)
+                        }
+                        .onTapGesture(count: 1) {
+                            handleSingleTap()
+                        }
                     
-                    progressBar
+                    // Center - Play/Pause (smaller area)
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: 40)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            globalPlayer.togglePlayPause()
+                            HapticManager.shared.impact(style: .light)
+                        }
+                    
+                    // Right side - Forward 10s
+                    Rectangle()
+                        .fill(Color.clear)
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) {
+                            globalPlayer.seekForward()
+                            showSeekFeedback(isForward: true)
+                            HapticManager.shared.impact(style: .medium)
+                        }
+                        .onTapGesture(count: 1) {
+                            handleSingleTap()
+                        }
+                }
+                
+                // 🔥 SEEK FEEDBACK ANIMATION
+                if showingControls {
+                    seekFeedbackOverlay
+                }
+                
+                // Play/Pause button (only when not playing or controls visible)
+                if !globalPlayer.isPlaying || showingControls {
+                    Button(action: { globalPlayer.togglePlayPause(); HapticManager.shared.impact(style: .light) }) {
+                        Image(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill")
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(.black.opacity(0.55))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .opacity(showingControls ? 1.0 : 0.8)
+                }
+
+                // 🔥 ADVANCED CONTROLS OVERLAY
+                if showingControls {
+                    advancedControlsOverlay
+                }
+                
+                // Close button (always visible)
+                VStack { 
+                    HStack { 
+                        Spacer()
+                        Button(action: closePlayer) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(6)
+                                .background(.black.opacity(0.5))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(6)
+                    Spacer() 
                 }
             }
-            .frame(width: 120, height: 68)
-            .cornerRadius(8)
-            .clipped()
-            .onTapGesture {
-                expandPlayer()
+            .frame(width: playerSize.width, height: playerSize.height)
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.08), lineWidth: 0.5))
+            .cornerRadius(10)
+            .shadow(color: .black.opacity(0.25), radius: 10, x: 0, y: 6)
+
+            // Text + controls
+            VStack(alignment: .leading, spacing: 6) {
+                Text(video.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                Text(video.creator.displayName)
+                    .font(.system(size: 11))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .lineLimit(1)
+                // 🔥 YOUTUBE PARITY: Enhanced progress bar with scrubbing + time display
+                VStack(spacing: 2) {
+                    scrubbableProgressBar
+                    
+                    // Time display
+                    HStack {
+                        Text(formatTime(globalPlayer.currentTime))
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        Spacer()
+                        Text(formatTime(globalPlayer.duration))
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                }
             }
-            
-            // Video info and controls section
-            videoInfoAndControls(video: video)
+            .frame(maxWidth: .infinity)
+
+            // 🔥 YOUTUBE PARITY: Enhanced controls cluster
+            VStack(spacing: 6) {
+                HStack(spacing: 6) {
+                    // Volume control
+                    Button(action: { 
+                        showingVolumeSlider.toggle()
+                        HapticManager.shared.impact(style: .light) 
+                    }) {
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .padding(6)
+                            .background(AppTheme.Colors.textSecondary.opacity(0.08))
+                            .clipShape(Circle())
+                    }
+                    
+                    // Speed control
+                    Button(action: { 
+                        showingSpeedMenu.toggle()
+                        HapticManager.shared.impact(style: .light) 
+                    }) {
+                        Text("1x")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .padding(6)
+                            .background(AppTheme.Colors.textSecondary.opacity(0.08))
+                            .clipShape(Circle())
+                    }
+                }
+                
+                HStack(spacing: 6) {
+                    // Expand to fullscreen
+                    Button(action: { expandPlayer(); HapticManager.shared.impact(style: .light) }) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .padding(6)
+                            .background(AppTheme.Colors.textSecondary.opacity(0.08))
+                            .clipShape(Circle())
+                    }
+                    
+                    // Close player
+                    Button(action: closePlayer) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .padding(6)
+                            .background(AppTheme.Colors.textSecondary.opacity(0.08))
+                            .clipShape(Circle())
+                    }
+                }
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(miniPlayerBackground)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+                .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.Colors.cardBackground.opacity(0.95)))
+                .shadow(color: .black.opacity(0.25), radius: 20, x: 0, y: 10)
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.08), lineWidth: 0.5))
+        )
         .padding(.horizontal, 16)
         .padding(.bottom, calculateBottomPadding(geometry: geometry))
+        .compositingGroup()
+        .drawingGroup(opaque: false, colorMode: .linear)
     }
     
     private var progressBar: some View {
@@ -154,37 +320,52 @@ struct FloatingMiniPlayer: View {
             Spacer(minLength: 8)
             
             // Control buttons
-            HStack(spacing: 16) {
-                // Play/Pause button
-                Button(action: {
-                    globalPlayer.togglePlayPause()
-                    HapticManager.shared.impact(style: .light)
-                }) {
-                    ZStack {
-                        Circle()
-                            .fill(AppTheme.Colors.primary.opacity(0.1))
-                            .frame(width: 32, height: 32)
-                        
+            VStack(alignment: .trailing, spacing: 8) {
+                // Title + channel
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(video.title).font(.system(size: 14, weight: .medium)).foregroundColor(AppTheme.Colors.textPrimary).lineLimit(1)
+                        Text(video.creator.displayName).font(.system(size: 12)).foregroundColor(AppTheme.Colors.textSecondary).lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                    // Play/Pause control
+                    Button(action: { globalPlayer.togglePlayPause(); HapticManager.shared.impact(style: .light) }) {
                         Image(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.primary)
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(AppTheme.Colors.primary)
+                            .clipShape(Circle())
                     }
-                }
-                .buttonStyle(ScaleButtonStyle())
-                
-                // Close button with improved styling
-                Button(action: closePlayer) {
-                    ZStack {
-                        Circle()
-                            .fill(AppTheme.Colors.textSecondary.opacity(0.1))
-                            .frame(width: 28, height: 28)
-                        
+                    .buttonStyle(ScaleButtonStyle())
+
+                    // Close control
+                    Button(action: closePlayer) {
                         Image(systemName: "xmark")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(AppTheme.Colors.textSecondary)
+                            .padding(8)
+                            .background(AppTheme.Colors.textSecondary.opacity(0.1))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(ScaleButtonStyle())
+                }
+
+                // Scrubbable slider + time
+                VStack(spacing: 4) {
+                    Slider(
+                        value: Binding(
+                            get: { Double(globalPlayer.currentProgress) },
+                            set: { globalPlayer.seek(to: max(0, min(1, $0))) }
+                        )
+                    )
+                    .tint(AppTheme.Colors.primary)
+                    HStack {
+                        Text(formatTime(globalPlayer.currentTime)).font(.caption2.monospacedDigit()).foregroundColor(AppTheme.Colors.textSecondary)
+                        Spacer()
+                        Text(formatTime(globalPlayer.duration)).font(.caption2.monospacedDigit()).foregroundColor(AppTheme.Colors.textSecondary)
                     }
                 }
-                .buttonStyle(ScaleButtonStyle())
             }
         }
         .padding(.horizontal, 12)
@@ -212,7 +393,8 @@ struct FloatingMiniPlayer: View {
     private func calculateBottomPadding(geometry: GeometryProxy) -> CGFloat {
         let safeAreaBottom = geometry.safeAreaInsets.bottom
         let tabBarHeight: CGFloat = 80
-        return safeAreaBottom + tabBarHeight + 12
+        // Additional fixed reserve to avoid feed reflow
+        return safeAreaBottom + tabBarHeight + 24
     }
     
     // MARK: - Gesture Handling
@@ -288,6 +470,254 @@ struct FloatingMiniPlayer: View {
             globalPlayer.closePlayer()
         }
         HapticManager.shared.impact(style: .light)
+    }
+    
+    // MARK: - 🔥 YOUTUBE PARITY: Additional Gestures
+    
+    private var horizontalSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 30, coordinateSpace: .local)
+            .onEnded { value in
+                let horizontalDistance = value.translation.width
+                let verticalDistance = abs(value.translation.height)
+                
+                // Only process horizontal swipes (not vertical drags)
+                if abs(horizontalDistance) > verticalDistance {
+                    if horizontalDistance > 50 {
+                        // Swipe right - Previous video
+                        navigateToPreviousVideo()
+                    } else if horizontalDistance < -50 {
+                        // Swipe left - Next video
+                        navigateToNextVideo()
+                    }
+                }
+            }
+    }
+    
+    private var pinchToResizeGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                if !isResizing {
+                    isResizing = true
+                    HapticManager.shared.impact(style: .light)
+                }
+                
+                let baseWidth: CGFloat = 140
+                let baseHeight: CGFloat = 78
+                let scale = min(max(0.7, value), 1.5) // Limit scaling between 70% and 150%
+                
+                playerSize = CGSize(
+                    width: baseWidth * scale,
+                    height: baseHeight * scale
+                )
+            }
+            .onEnded { _ in
+                isResizing = false
+                // Snap to nearest size
+                let baseWidth: CGFloat = 140
+                let baseHeight: CGFloat = 78
+                let currentScale = playerSize.width / baseWidth
+                
+                let targetScale: CGFloat
+                if currentScale < 0.85 {
+                    targetScale = 0.7 // Small
+                } else if currentScale > 1.15 {
+                    targetScale = 1.5 // Large
+                } else {
+                    targetScale = 1.0 // Normal
+                }
+                
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    playerSize = CGSize(
+                        width: baseWidth * targetScale,
+                        height: baseHeight * targetScale
+                    )
+                }
+                HapticManager.shared.impact(style: .medium)
+            }
+    }
+    
+    // MARK: - 🔥 YOUTUBE PARITY: Enhanced Components
+    
+    private var scrubbableProgressBar: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                // Background track
+                Rectangle()
+                    .fill(Color.black.opacity(0.3))
+                    .frame(height: 3)
+                
+                // Progress track
+                Rectangle()
+                    .fill(AppTheme.Colors.primary)
+                    .frame(
+                        width: geometry.size.width * CGFloat(globalPlayer.currentProgress),
+                        height: 3
+                    )
+                    .animation(.linear(duration: 0.1), value: globalPlayer.currentProgress)
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let progress = min(max(0, value.location.x / geometry.size.width), 1)
+                        globalPlayer.seek(to: progress)
+                    }
+                    .onEnded { value in
+                        let progress = min(max(0, value.location.x / geometry.size.width), 1)
+                        globalPlayer.seek(to: progress)
+                        HapticManager.shared.impact(style: .light)
+                    }
+            )
+        }
+        .frame(height: 3)
+    }
+    
+    private var seekFeedbackOverlay: some View {
+        HStack {
+            // Left side rewind feedback
+            VStack {
+                Image(systemName: "gobackward.10")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.white)
+                Text("-10s")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            .padding(8)
+            .background(.black.opacity(0.6))
+            .cornerRadius(8)
+            .opacity(0.8)
+            
+            Spacer()
+            
+            // Right side forward feedback
+            VStack {
+                Image(systemName: "goforward.10")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.white)
+                Text("+10s")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            .padding(8)
+            .background(.black.opacity(0.6))
+            .cornerRadius(8)
+            .opacity(0.8)
+        }
+        .padding(.horizontal, 8)
+    }
+    
+    private var advancedControlsOverlay: some View {
+        VStack {
+            HStack {
+                Spacer()
+                
+                // Settings menu
+                Menu {
+                    Button("Quality") { showingQualityMenu = true }
+                    Button("Speed") { showingSpeedMenu = true }
+                    Button("Captions") { /* Toggle captions */ }
+                    Button("Picture in Picture") { /* Enable PiP */ }
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(8)
+                        .background(.black.opacity(0.6))
+                        .clipShape(Circle())
+                }
+            }
+            .padding(8)
+            
+            Spacer()
+            
+            // Bottom controls
+            HStack {
+                // Previous video
+                Button(action: {
+                    // Navigate to previous video in queue
+                    HapticManager.shared.impact(style: .medium)
+                }) {
+                    Image(systemName: "backward.end.fill")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(8)
+                        .background(.black.opacity(0.6))
+                        .clipShape(Circle())
+                }
+                
+                Spacer()
+                
+                // Next video
+                Button(action: {
+                    // Navigate to next video in queue
+                    HapticManager.shared.impact(style: .medium)
+                }) {
+                    Image(systemName: "forward.end.fill")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(8)
+                        .background(.black.opacity(0.6))
+                        .clipShape(Circle())
+                }
+            }
+            .padding(8)
+        }
+    }
+    
+    // MARK: - 🔥 YOUTUBE PARITY: Gesture Handlers
+    
+    private func handleSingleTap() {
+        let now = Date()
+        if now.timeIntervalSince(lastTapTime) < 0.3 {
+            tapCount += 1
+        } else {
+            tapCount = 1
+        }
+        lastTapTime = now
+        
+        if tapCount == 1 {
+            // Single tap - toggle controls
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                if self.tapCount == 1 {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        self.showingControls.toggle()
+                    }
+                    // Auto-hide controls after 3 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            self.showingControls = false
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func showSeekFeedback(isForward: Bool) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showingControls = true
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showingControls = false
+            }
+        }
+    }
+    
+    // MARK: - 🔥 YOUTUBE PARITY: Navigation Functions
+    
+    private func navigateToPreviousVideo() {
+        // TODO: Implement queue-based previous video navigation
+        HapticManager.shared.impact(style: .medium)
+        print("Navigate to previous video")
+    }
+    
+    private func navigateToNextVideo() {
+        // TODO: Implement queue-based next video navigation
+        HapticManager.shared.impact(style: .medium)
+        print("Navigate to next video")
     }
 }
 

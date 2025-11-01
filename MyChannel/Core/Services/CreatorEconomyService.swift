@@ -26,6 +26,24 @@ class CreatorEconomyService: ObservableObject {
     private let analyticsService = AnalyticsService.shared
     
     private init() {}
+    // MARK: - Payouts & History
+    func fetchPaymentHistory(creatorId: String) async throws -> [Payment] {
+        // Replace with real API call
+        let items: [Payment] = [
+            .init(id: UUID().uuidString, amount: 820.12, currency: "USD", type: .withdrawal, status: .completed, date: Date().addingTimeInterval(-86400*4)),
+            .init(id: UUID().uuidString, amount: 540.40, currency: "USD", type: .withdrawal, status: .completed, date: Date().addingTimeInterval(-86400*33))
+        ]
+        await MainActor.run { self.paymentHistory = items }
+        return items
+    }
+
+    func requestWithdrawal(creatorId: String, amount: Double) async throws -> Payment {
+        // Validate and simulate payout
+        let payout = Payment(id: UUID().uuidString, amount: amount, currency: "USD", type: .withdrawal, status: .pending, date: Date())
+        await MainActor.run { self.paymentHistory.insert(payout, at: 0) }
+        return payout
+    }
+
     
     // MARK: - Creator Revenue Management
     
@@ -55,7 +73,7 @@ class CreatorEconomyService: ObservableObject {
             totalRevenue: totalRevenue,
             creatorShare: creatorShare,
             platformFee: platformFee,
-            revenueBreakdown: RevenueBreakdown(
+            revenueBreakdown: CreatorRevenueBreakdown(
                 adRevenue: adRevenue,
                 tipRevenue: tipRevenue,
                 membershipRevenue: membershipRevenue,
@@ -65,7 +83,7 @@ class CreatorEconomyService: ObservableObject {
                 nftRevenue: nftRevenue,
                 liveStreamRevenue: liveStreamRevenue
             ),
-            period: .thisMonth,
+            period: EarningsPeriod.thisMonth,
             lastUpdated: Date()
         )
         
@@ -242,7 +260,12 @@ class CreatorEconomyService: ObservableObject {
     }
     
     private func updateCreatorBalance(creatorId: String, amount: Double) async throws {
-        // Update creator's available balance
+        struct WithdrawalRequest: Codable { let creatorId: String; let amount: Double }
+        let _: MessageResponse = try await networkService.post(
+            endpoint: .custom("/pay/withdraw"),
+            body: WithdrawalRequest(creatorId: creatorId, amount: amount),
+            responseType: MessageResponse.self
+        )
     }
     
     private func sendTipNotification(tip: TipTransaction, creatorShare: Double) async {
@@ -304,7 +327,7 @@ struct CreatorEarnings {
     let totalRevenue: Double
     let creatorShare: Double
     let platformFee: Double
-    let revenueBreakdown: RevenueBreakdown
+    let revenueBreakdown: CreatorRevenueBreakdown
     let period: EarningsPeriod
     let lastUpdated: Date
     
@@ -314,7 +337,7 @@ struct CreatorEarnings {
     }
 }
 
-struct RevenueBreakdown {
+struct CreatorRevenueBreakdown: Codable {
     let adRevenue: Double
     let tipRevenue: Double
     let membershipRevenue: Double

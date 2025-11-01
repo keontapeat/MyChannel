@@ -472,6 +472,14 @@ struct UploadVideoMetadata {
     let tags: [String]
     let isPublic: Bool
     let scheduledDate: Date?
+    let isPremiere: Bool
+    let selectedPlaylists: [String]
+    let filmingLocation: String?
+    let ageRestricted: Bool
+    let madeForKids: Bool
+    let monetizationEnabled: Bool
+    
+    // Legacy support - already using isPublic directly
 }
 
 struct VideoStreamResponse: Codable {

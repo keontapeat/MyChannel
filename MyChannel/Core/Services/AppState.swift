@@ -45,6 +45,7 @@ class AppState: ObservableObject {
     @Published var notificationsEnabled = true
     
     private var cancellables = Set<AnyCancellable>()
+    private var firestoreListeners: Any?
     
     // MARK: - Singleton
     static let shared = AppState()
@@ -55,6 +56,7 @@ class AppState: ObservableObject {
         if let authUser = AuthenticationManager.shared.currentUser {
             currentUser = authUser
             isAuthenticated = AuthenticationManager.shared.isAuthenticated
+            Task { await hydrateCloudCollectionsIfNeeded() }
         }
         loadUserData()
     }
@@ -67,7 +69,9 @@ class AppState: ObservableObject {
                 if let user = notification.object as? User {
                     self?.currentUser = user
                     self?.isAuthenticated = true
+                    Task { await self?.hydrateCloudCollectionsIfNeeded() }
                     self?.loadUserData()
+                    self?.attachCloudListeners()
                 }
             }
             .store(in: &cancellables)
@@ -77,6 +81,7 @@ class AppState: ObservableObject {
                 self?.currentUser = nil
                 self?.isAuthenticated = false
                 self?.resetState()
+                self?.firestoreListeners = nil
             }
             .store(in: &cancellables)
         
@@ -95,6 +100,29 @@ class AppState: ObservableObject {
             }
             .store(in: &cancellables)
     }
+
+    private func hydrateCloudCollectionsIfNeeded() async {
+        guard let uid = currentUser?.id else { return }
+        let wl = await UserCollectionsFirestoreService.shared.fetchWatchLater(userId: uid)
+        let subs = await UserCollectionsFirestoreService.shared.fetchSubscriptions(userId: uid)
+        await MainActor.run {
+            self.watchLaterVideos = wl
+            self.subscriptions = subs
+        }
+    }
+
+    private func attachCloudListeners() {
+        guard let uid = currentUser?.id else { return }
+        firestoreListeners = UserCollectionsFirestoreService.shared.listen(
+            userId: uid,
+            onWatchLaterChanged: { [weak self] set in
+                Task { @MainActor in self?.watchLaterVideos = set }
+            },
+            onSubscriptionsChanged: { [weak self] set in
+                Task { @MainActor in self?.subscriptions = set }
+            }
+        )
+    }
     
     // MARK: - State Management
     func updateUser(_ user: User) {
@@ -107,6 +135,15 @@ class AppState: ObservableObject {
         currentUser = nil
         isAuthenticated = false
         resetState()
+    }
+    
+    // MARK: - Auth Gate Helper (YouTube-style prompt)
+    func requireAuthentication(hint: String? = nil) -> Bool {
+        if isAuthenticated { return true }
+        HapticManager.shared.impact(style: .light)
+        NotificationCenter.default.post(name: .presentSignInSheet, object: nil)
+        if let hint { setError(hint) }
+        return false
     }
     
     func resetState() {
@@ -151,26 +188,29 @@ class AppState: ObservableObject {
     
     // MARK: - User Content Actions
     func toggleWatchLater(for videoId: String) {
-        if watchLaterVideos.contains(videoId) {
-            watchLaterVideos.remove(videoId)
-        } else {
-            watchLaterVideos.insert(videoId)
+        guard requireAuthentication(hint: "Sign in to save videos to Watch Later.") else { return }
+        let willAdd = !watchLaterVideos.contains(videoId)
+        if willAdd { watchLaterVideos.insert(videoId) } else { watchLaterVideos.remove(videoId) }
+        if let uid = currentUser?.id {
+            Task { await UserCollectionsFirestoreService.shared.toggleWatchLater(userId: uid, videoId: videoId, add: willAdd) }
         }
     }
     
     func toggleLike(for videoId: String) {
-        if likedVideos.contains(videoId) {
-            likedVideos.remove(videoId)
-        } else {
-            likedVideos.insert(videoId)
+        guard requireAuthentication(hint: "Sign in to like videos and see them across devices.") else { return }
+        let willAdd = !likedVideos.contains(videoId)
+        if willAdd { likedVideos.insert(videoId) } else { likedVideos.remove(videoId) }
+        if let uid = currentUser?.id {
+            Task { await VideoFirestoreService.shared.toggleLike(videoId: videoId, userId: uid, add: willAdd) }
         }
     }
     
     func toggleSubscription(for creatorId: String) {
-        if subscriptions.contains(creatorId) {
-            subscriptions.remove(creatorId)
-        } else {
-            subscriptions.insert(creatorId)
+        guard requireAuthentication(hint: "Sign in to subscribe and see new uploads in your feed.") else { return }
+        let willAdd = !subscriptions.contains(creatorId)
+        if willAdd { subscriptions.insert(creatorId) } else { subscriptions.remove(creatorId) }
+        if let uid = currentUser?.id {
+            Task { await UserCollectionsFirestoreService.shared.toggleSubscription(userId: uid, creatorId: creatorId, add: willAdd) }
         }
     }
     
@@ -250,4 +290,5 @@ extension Notification.Name {
     static let userDidLogout = Notification.Name("userDidLogout")
     static let videoDidStart = Notification.Name("videoDidStart")
     static let videoDidEnd = Notification.Name("videoDidEnd")
+    static let storiesDidChange = Notification.Name("storiesDidChange")
 }

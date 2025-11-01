@@ -329,6 +329,21 @@ private struct MinimalListChannelCard: View {
                         image.resizable().scaledToFill()
                     } placeholder: { Color(.systemGray6) }
                     .opacity(showPreview ? 0 : 1)
+
+                    // LIVE badge overlay (always visible when live)
+                    if channel.isLive {
+                        HStack(spacing: 4) {
+                            Circle().fill(.white).frame(width: 4, height: 4)
+                            Text("LIVE")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color.red.opacity(0.9)))
+                        .padding(6)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    }
                 }
                 .frame(width: thumbSize.width, height: thumbSize.height)
                 .background(Color(.systemGray6))

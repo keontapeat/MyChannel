@@ -115,9 +115,9 @@ struct CreatorProfileSheet: View {
                     
                     // Stats Section
                     HStack(spacing: 32) {
-                        StatItem(title: "Videos", value: formatCount(creator.videoCount))
-                        StatItem(title: "Subscribers", value: formatCount(creator.subscriberCount))
-                        StatItem(title: "Views", value: formatCount(creator.totalViews ?? 0))
+                        CreatorStatItem(title: "Videos", value: formatCount(creator.videoCount))
+                        CreatorStatItem(title: "Subscribers", value: formatCount(creator.subscriberCount))
+                        CreatorStatItem(title: "Views", value: formatCount(creator.totalViews ?? 0))
                     }
                     .padding(.horizontal, 20)
                     
@@ -195,7 +195,7 @@ struct CreatorProfileSheet: View {
 
 // MARK: - Supporting Views
 
-struct StatItem: View {
+struct CreatorStatItem: View {
     let title: String
     let value: String
     

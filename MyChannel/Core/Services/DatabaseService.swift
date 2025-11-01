@@ -85,6 +85,10 @@ class DatabaseService: ObservableObject {
         return video
     }
     
+    func deleteVideo(id: String) async throws {
+        userDefaults.removeObject(forKey: "video_\(id)")
+    }
+    
     func fetchVideos(limit: Int = 50, offset: Int = 0) async throws -> [Video] {
         var videos: [Video] = []
         
@@ -137,6 +141,46 @@ class DatabaseService: ObservableObject {
         }
         
         return videos.sorted { $0.viewCount > $1.viewCount }
+    }
+
+    // MARK: - Story Management
+    func saveStory(_ story: Story) async throws {
+        if let encoded = try? encoder.encode(story) {
+            userDefaults.set(encoded, forKey: "story_\(story.id)")
+        }
+    }
+    
+    func fetchStoriesByCreator(creatorId: String, includeExpired: Bool = false) async throws -> [Story] {
+        var stories: [Story] = []
+        
+        for key in userDefaults.dictionaryRepresentation().keys {
+            if key.hasPrefix("story_"),
+               let data = userDefaults.data(forKey: key),
+               let story = try? decoder.decode(Story.self, from: data),
+               story.creatorId == creatorId {
+                if includeExpired || !story.isExpired {
+                    stories.append(story)
+                }
+            }
+        }
+        
+        return stories.sorted { $0.createdAt > $1.createdAt }
+    }
+    
+    func fetchActiveStoriesForCreators(_ creatorIds: [String]) async throws -> [Story] {
+        var stories: [Story] = []
+        let set = Set(creatorIds)
+        
+        for key in userDefaults.dictionaryRepresentation().keys {
+            if key.hasPrefix("story_"),
+               let data = userDefaults.data(forKey: key),
+               let story = try? decoder.decode(Story.self, from: data),
+               set.contains(story.creatorId), !story.isExpired {
+                stories.append(story)
+            }
+        }
+        
+        return stories.sorted { $0.createdAt > $1.createdAt }
     }
     
     // MARK: - Watch History

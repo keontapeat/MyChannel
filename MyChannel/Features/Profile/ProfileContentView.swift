@@ -56,7 +56,9 @@ struct ProfileVideosView: View {
     let videos: [Video]
     let user: User
     
-    @State private var layoutMode: VideoLayoutMode = .grid2
+    @State private var layoutMode: VideoLayoutMode = .list1
+    @State private var sortMode: SortMode = .newest
+    @State private var pinnedIds: [String] = []
     private let columns = [
         GridItem(.flexible(), spacing: 8),
         GridItem(.flexible(), spacing: 8)
@@ -64,9 +66,51 @@ struct ProfileVideosView: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            StockVideoBannersCarousel(banners: StockVideoBanner.defaults)
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
+            if !pinnedVideos.isEmpty {
+                PinnedVideosCarousel(videos: pinnedVideos)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+            } else if videos.isEmpty && AuthenticationManager.shared.currentUser?.id == user.id {
+                // Clean empty state - single placeholder
+                VStack(spacing: 20) {
+                    // Single empty placeholder banner
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(AppTheme.Colors.surface.opacity(0.5))
+                        .frame(height: 180)
+                        .overlay(
+                            VStack(spacing: 12) {
+                                Image(systemName: "video.slash")
+                                    .font(.system(size: 48, weight: .light))
+                                    .foregroundColor(.secondary.opacity(0.5))
+                                
+                                Text("No featured videos yet")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                    
+                    // Upload button
+                    Button {
+                        HapticManager.shared.impact(style: .medium)
+                        NotificationCenter.default.post(name: NSNotification.Name("ShowUpload"), object: nil)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus")
+                            Text("Upload your first video")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(AppTheme.Colors.primary)
+                        .cornerRadius(12)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.bottom, 8)
+            }
             
             HStack {
                 Text("Videos")
@@ -95,6 +139,17 @@ struct ProfileVideosView: View {
                         .buttonStyle(.plain)
                         .contentShape(Rectangle())
                     }
+                    Menu {
+                        Button("Newest") { sortMode = .newest }
+                        Button("Popular") { sortMode = .popular }
+                        Button("Oldest") { sortMode = .oldest }
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(AppTheme.Colors.primary))
+                    }
                 }
                 
                 // If you prefer a segmented control instead, uncomment:
@@ -115,24 +170,47 @@ struct ProfileVideosView: View {
             Color.clear.frame(height: 8)
         }
         .padding(.bottom, 12)
+        .task { pinnedIds = PinnedVideosStore.shared.getPinned(for: user.id) }
+    }
+    
+    private var pinnedVideos: [Video] {
+        let set = Set(pinnedIds)
+        return videos.filter { set.contains($0.id) }
+    }
+    
+    private var displayVideos: [Video] {
+        switch sortMode {
+        case .newest:
+            return videos.sorted { $0.createdAt > $1.createdAt }
+        case .popular:
+            return videos.sorted { $0.viewCount > $1.viewCount }
+        case .oldest:
+            return videos.sorted { $0.createdAt < $1.createdAt }
+        }
     }
     
     @ViewBuilder
     private var videosBody: some View {
         if layoutMode == .grid2 {
             LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(videos) { video in
-                    ProfileVideoCard(video: video)
-                        .onTapGesture { HapticManager.shared.impact(style: .light) }
+                ForEach(displayVideos) { video in
+                    ProfileVideoCard(video: video, ownerId: user.id)
+                        .onTapGesture {
+                            HapticManager.shared.impact(style: .light)
+                            NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
+                        }
                 }
             }
             .padding(.horizontal, 16)
         } else {
             // Single video view: one full-width 16:9 card per row
             LazyVStack(spacing: 12) {
-                ForEach(videos) { video in
-                    FullWidthVideoCard(video: video)
-                        .onTapGesture { HapticManager.shared.impact(style: .light) }
+                ForEach(displayVideos) { video in
+                    FullWidthVideoCard(video: video, ownerId: user.id)
+                        .onTapGesture {
+                            HapticManager.shared.impact(style: .light)
+                            NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
+                        }
                         .padding(.horizontal, 16)
                 }
             }
@@ -140,9 +218,20 @@ struct ProfileVideosView: View {
     }
 }
 
+private enum SortMode: String, CaseIterable {
+    case newest
+    case popular
+    case oldest
+}
+
 // MARK: - Profile Video Card
 struct ProfileVideoCard: View {
     let video: Video
+    var ownerId: String? = nil
+    @EnvironmentObject private var appState: AppState
+    @State private var showOptions = false
+    @State private var isSubscribedLocal = false
+    @State private var isWatchLaterLocal = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -151,27 +240,7 @@ struct ProfileVideoCard: View {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(AppTheme.Colors.textTertiary.opacity(0.12))
                     .overlay(
-                        AsyncImage(url: URL(string: video.thumbnailURL)) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .transition(.opacity.combined(with: .scale))
-                            case .failure(_):
-                                Image(systemName: "photo.on.rectangle.angled")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .foregroundStyle(AppTheme.Colors.textSecondary)
-                                    .padding(24)
-                            case .empty:
-                                ProgressView()
-                                    .tint(AppTheme.Colors.primary)
-                            @unknown default:
-                                Color.clear
-                            }
-                        }
-                        .clipped()
+                        thumbnailView()
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
@@ -186,6 +255,24 @@ struct ProfileVideoCard: View {
                     .cornerRadius(4)
                     .padding(6),
                 alignment: .bottomTrailing
+            )
+            .overlay(
+                Button {
+                    HapticManager.shared.impact(style: .light)
+                    isSubscribedLocal = appState.isSubscribedTo(video.creator.id)
+                    isWatchLaterLocal = appState.isVideoInWatchLater(video.id)
+                    showOptions = true
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(8)
+                        .background(Color.black.opacity(0.55))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(6),
+                alignment: .topTrailing
             )
             
             VStack(alignment: .leading, spacing: 4) {
@@ -208,6 +295,48 @@ struct ProfileVideoCard: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(video.title)
+        .contextMenu {
+            if let ownerId, ownerId == video.creator.id {
+                if PinnedVideosStore.shared.isPinned(video.id, for: ownerId) {
+                    Button(role: .destructive) { PinnedVideosStore.shared.unpin(video.id, for: ownerId) } label: { Label("Unpin from top", systemImage: "pin.slash") }
+                } else {
+                    Button { PinnedVideosStore.shared.pin(video.id, for: ownerId) } label: { Label("Pin to top", systemImage: "pin") }
+                }
+            }
+        }
+        .sheet(isPresented: $showOptions) {
+            VideoMoreOptionsSheet(
+                video: video,
+                isSubscribed: $isSubscribedLocal,
+                isWatchLater: $isWatchLaterLocal
+            )
+            .onChange(of: isWatchLaterLocal) { _ in
+                appState.toggleWatchLater(for: video.id)
+            }
+            .onChange(of: isSubscribedLocal) { _ in
+                appState.toggleSubscription(for: video.creator.id)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func thumbnailView() -> some View {
+        MultiSourceAsyncImage(
+            urls: video.posterCandidates,
+            content: { image in
+                image.resizable().scaledToFill().transition(.opacity.combined(with: .scale))
+            },
+            placeholder: { placeholder }
+        )
+        .clipped()
+    }
+    
+    private var placeholder: some View {
+        Image(systemName: "photo.on.rectangle.angled")
+            .resizable()
+            .scaledToFit()
+            .foregroundStyle(AppTheme.Colors.textSecondary)
+            .padding(24)
     }
 }
 
@@ -240,22 +369,19 @@ struct ProfileShortCard: View {
     
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                image
-                    .resizable()
-                    .aspectRatio(9/16, contentMode: .fill)
-                    .clipped()
-            } placeholder: {
-                Rectangle()
-                    .fill(AppTheme.Colors.textTertiary.opacity(0.3))
-                    .aspectRatio(9/16, contentMode: .fit)
-                    .overlay(
-                        Image(systemName: "play.rectangle.on.rectangle")
-                            .font(.title3)
-                            .foregroundStyle(AppTheme.Colors.textSecondary)
-                    )
+            Group {
+                if let url = URL(string: video.thumbnailURL), !video.thumbnailURL.isEmpty {
+                    AppAsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(9/16, contentMode: .fill)
+                            .clipped()
+                    } placeholder: { shortPlaceholder }
+                } else {
+                    shortPlaceholder
+                }
             }
-            .cornerRadius(8)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
             
             VStack(alignment: .leading, spacing: 2) {
                 Spacer()
@@ -290,6 +416,17 @@ struct ProfileShortCard: View {
             }
         }
         .accessibilityLabel("\(video.title) short")
+    }
+    
+    private var shortPlaceholder: some View {
+        Rectangle()
+            .fill(AppTheme.Colors.textTertiary.opacity(0.3))
+            .aspectRatio(9/16, contentMode: .fit)
+            .overlay(
+                Image(systemName: "play.rectangle.on.rectangle")
+                    .font(.title3)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+            )
     }
 }
 
@@ -674,14 +811,14 @@ struct ProfileAdditionalInfoSection: View {
             
             VStack(spacing: 12) {
                 if let location = user.location {
-                    InfoRow(icon: "location.fill", title: "Location", value: location)
+                    ProfileInfoRow(icon: "location.fill", title: "Location", value: location)
                 }
                 
                 if let website = user.website {
-                    InfoRow(icon: "globe", title: "Website", value: website)
+                    ProfileInfoRow(icon: "globe", title: "Website", value: website)
                 }
                 
-                InfoRow(
+                ProfileInfoRow(
                     icon: "calendar.badge.plus",
                     title: "Joined",
                     value: user.createdAt.formatted(.dateTime.day().month().year())
@@ -695,8 +832,8 @@ struct ProfileAdditionalInfoSection: View {
     }
 }
 
-// MARK: - Info Row
-struct InfoRow: View {
+// MARK: - Profile Info Row
+struct ProfileInfoRow: View {
     let icon: String
     let title: String
     let value: String
@@ -876,60 +1013,48 @@ private struct StockVideoBanner: Identifiable {
     ]
 }
 
-// MARK: - Full-width single video card (16:9)
+// MARK: - Full-width single video card (YouTube-like sleek design)
 private struct FullWidthVideoCard: View {
     let video: Video
+    var ownerId: String? = nil
+    @EnvironmentObject private var appState: AppState
+    @State private var showOptions = false
+    @State private var isSubscribedLocal = false
+    @State private var isWatchLaterLocal = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 12) {
+            // Thumbnail - smaller, YouTube-like
             ZStack(alignment: .bottomTrailing) {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(AppTheme.Colors.textTertiary.opacity(0.12))
                     .overlay(
-                        AsyncImage(url: URL(string: video.thumbnailURL)) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .transition(.opacity)
-                            case .failure(_):
-                                Image(systemName: "photo.on.rectangle.angled")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .foregroundStyle(AppTheme.Colors.textSecondary)
-                                    .padding(28)
-                            case .empty:
-                                ProgressView().tint(AppTheme.Colors.primary)
-                            @unknown default:
-                                Color.clear
-                            }
-                        }
-                        .clipped()
+                        FullWidthThumb(urls: video.posterCandidates)
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-            .aspectRatio(16/9, contentMode: .fit)
+            .frame(width: 120, height: 68) // 16:9 ratio, compact size
             .overlay(
                 Text(video.formattedDuration)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, 4)
                     .padding(.vertical, 2)
                     .background(.black.opacity(0.8))
-                    .cornerRadius(4)
-                    .padding(8),
+                    .cornerRadius(3)
+                    .padding(4),
                 alignment: .bottomTrailing
             )
             
-            VStack(alignment: .leading, spacing: 6) {
+            // Video info - takes remaining space
+            VStack(alignment: .leading, spacing: 4) {
                 Text(video.title)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                     .lineLimit(2)
-                    .frame(height: 40, alignment: .topLeading)
+                    .multilineTextAlignment(.leading)
                 
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     Text(video.creator.displayName)
                     Text("•")
                     Text("\(video.formattedViewCount) views")
@@ -938,10 +1063,80 @@ private struct FullWidthVideoCard: View {
                 }
                 .font(.system(size: 12))
                 .foregroundStyle(AppTheme.Colors.textSecondary)
+                .lineLimit(1)
             }
+            
+            Spacer()
+            
+            // Three-dot menu
+            Button {
+                HapticManager.shared.impact(style: .light)
+                isSubscribedLocal = appState.isSubscribedTo(video.creator.id)
+                isWatchLaterLocal = appState.isVideoInWatchLater(video.id)
+                showOptions = true
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .padding(8)
+            }
+            .buttonStyle(.plain)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(video.title)
+        .onTapGesture {
+            HapticManager.shared.impact(style: .light)
+            NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
+        }
+        .sheet(isPresented: $showOptions) {
+            VideoMoreOptionsSheet(
+                video: video,
+                isSubscribed: $isSubscribedLocal,
+                isWatchLater: $isWatchLaterLocal
+            )
+            .onChange(of: isWatchLaterLocal) { _ in
+                appState.toggleWatchLater(for: video.id)
+            }
+            .onChange(of: isSubscribedLocal) { _ in
+                appState.toggleSubscription(for: video.creator.id)
+            }
+        }
+    }
+}
+
+private struct FullWidthThumb: View {
+    let urls: [URL]
+    var body: some View {
+        MultiSourceAsyncImage(
+            urls: urls,
+            content: { image in
+                image.resizable().scaledToFill().transition(.opacity)
+            },
+            placeholder: { placeholder }
+        )
+        .clipped()
+    }
+    private var placeholder: some View {
+        Image(systemName: "photo.on.rectangle.angled")
+            .resizable()
+            .scaledToFit()
+            .foregroundStyle(AppTheme.Colors.textSecondary)
+            .padding(28)
+    }
+}
+
+struct PinnedVideosCarousel: View {
+    let videos: [Video]
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(videos) { video in
+                    FullWidthVideoCard(video: video)
+                        .frame(width: 260)
+                }
+            }
+            .padding(.vertical, 6)
+        }
     }
 }
 

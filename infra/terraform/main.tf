@@ -59,9 +59,12 @@ resource "google_project_service" "services" {
     "bigquery.googleapis.com",
     "secretmanager.googleapis.com",
     "cloudbuild.googleapis.com",
+    "cloudscheduler.googleapis.com",
     "logging.googleapis.com",
     "monitoring.googleapis.com",
-    "apigateway.googleapis.com"
+    "apigateway.googleapis.com",
+    "compute.googleapis.com",
+    "transcoder.googleapis.com"
   ])
   service = each.value
 }

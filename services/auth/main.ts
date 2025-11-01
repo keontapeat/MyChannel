@@ -6,12 +6,15 @@ import { createClient } from '@supabase/supabase-js';
 import rateLimit from 'express-rate-limit';
 
 const app = express();
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY || !process.env.JWT_SECRET) {
+  throw new Error('Missing SUPABASE_URL, SUPABASE_SERVICE_KEY or JWT_SECRET');
+}
 const supabase = createClient(
-  process.env.SUPABASE_URL || 'your-supabase-url',
-  process.env.SUPABASE_SERVICE_KEY || 'your-supabase-service-key'
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_KEY!
 );
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-change-this';
+const JWT_SECRET = process.env.JWT_SECRET!;
 const SALT_ROUNDS = 12;
 
 app.use(cors({

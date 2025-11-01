@@ -527,7 +527,9 @@ struct VideoDetailView: View {
                         Button {
                             playNext(next)
                         } label: {
-                            Image(systemName: "play.fill").foregroundColor(.white).padding(8).background(AppTheme.Colors.primary).clipShape(Circle())
+                            Image(systemName: "play.fill")
+                                .foregroundColor(AppTheme.Colors.primary)
+                                .font(.title2)
                         }
                     }
                     .padding(.horizontal, 16)

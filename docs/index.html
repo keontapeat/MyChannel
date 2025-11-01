@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MyChannel Parity Blueprint</title>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+      async function load() {
+        const resp = await fetch('./parity-blueprint.json');
+        const data = await resp.json();
+        const mm = renderMindmap(data);
+        const el = document.querySelector('#mindmap');
+        el.textContent = mm;
+        mermaid.run({ nodes: [el] });
+        document.querySelector('#download').addEventListener('click', () => {
+          const a = document.createElement('a');
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          a.href = URL.createObjectURL(blob);
+          a.download = 'parity-blueprint.json';
+          a.click();
+        });
+      }
+      function esc(s){return (s||'').replace(/[()]/g,'');}
+      function renderMindmap(json){
+        const lines = ['mindmap','  root((Parity: '+esc(json.scope)+'))'];
+        for(const area of json.areas){
+          lines.push('    '+esc(area.name));
+          for(const item of area.items||[]){
+            lines.push('      '+esc(item.group));
+            for(const c of item.children||[]){
+              lines.push('        '+esc(c.name)+'('+(c.status||'')+')');
+            }
+          }
+        }
+        return lines.join('\n');
+      }
+      load();
+    </script>
+    <style>
+      body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+      header{padding:16px 20px;background:#0b0b0c;color:#fff;position:sticky;top:0}
+      main{padding:16px}
+      .actions{display:flex;gap:12px;align-items:center}
+      button{padding:8px 12px;border-radius:8px;border:1px solid #333;background:#111;color:#fff;cursor:pointer}
+      pre{background:#0b0b0c;color:#fff;border-radius:12px;padding:16px;overflow:auto}
+      .legend{font-size:14px;color:#bbb}
+      .container{max-width:1200px;margin:0 auto}
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="container">
+        <h1 style="margin:0;font-size:20px">MyChannel Parity Blueprint</h1>
+        <div class="legend">PASS = ready, PARTIAL = in progress, MISS = not started, TODO = planned</div>
+        <div class="actions" style="margin-top:10px">
+          <button id="download">Download JSON</button>
+          <a href="./parity-blueprint.md" style="color:#7dd3fc">Open Markdown</a>
+          <a href="./parity-report.md" style="color:#7dd3fc">Gap Report</a>
+        </div>
+      </div>
+    </header>
+    <main>
+      <div class="container">
+        <pre class="mermaid" id="mindmap">mindmap
+root((Loading...))
+</pre>
+      </div>
+    </main>
+  </body>
+</html>
+
+
+
+

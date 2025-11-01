@@ -1,0 +1,51 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mychannel
+    ports:
+      - "5432:5432"
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/mychannel
+      REDIS_URL: redis://redis:6379/0
+      API_AUTH_TOKEN: supersecrettoken
+      INDEX_PATH: /app/data/indexes/main.faiss
+      GCP_PROJECT: ${GCP_PROJECT}
+      GCS_BUCKET: ${GCS_BUCKET}
+      GOOGLE_APPLICATION_CREDENTIALS: /app/sa.json
+    volumes:
+      - ../data:/app/data
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+      - redis
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.worker
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/mychannel
+      REDIS_URL: redis://redis:6379/0
+      INDEX_PATH: /app/data/indexes/main.faiss
+      GCP_PROJECT: ${GCP_PROJECT}
+      GCS_BUCKET: ${GCS_BUCKET}
+      GOOGLE_APPLICATION_CREDENTIALS: /app/sa.json
+    volumes:
+      - ../data:/app/data
+    depends_on:
+      - db
+      - redis
+
+
+

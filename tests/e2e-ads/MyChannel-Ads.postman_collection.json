@@ -1,0 +1,20 @@
+{
+  "info": {
+    "name": "MyChannel Ads APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {"name":"Health","request":{"method":"GET","url":"{{ADS_BASE_URL}}/health"}},
+    {"name":"Create Campaign","request":{"method":"POST","header":[{"key":"content-type","value":"application/json"}],"url":"{{ADS_BASE_URL}}/ads/campaign","body":{"mode":"raw","raw":"{\n  \"email\": \"brand@example.com\",\n  \"advertiserName\": \"Brand\",\n  \"name\": \"Launch\",\n  \"status\": \"active\",\n  \"topics\": [\"gaming\"],\n  \"line_items\": [{\n    \"placement\": \"preroll\",\n    \"bid_cpm_cents\": 500,\n    \"targeting_json\": {\"topics\":[\"gaming\"]},\n    \"status\": \"active\"\n  }]\n}"}}},
+    {"name":"Add Creative","request":{"method":"POST","header":[{"key":"content-type","value":"application/json"}],"url":"{{ADS_BASE_URL}}/ads/creative","body":{"mode":"raw","raw":"{\n  \"line_item_id\": 1,\n  \"type\": \"video\",\n  \"uri\": \"https://storage.googleapis.com/mock/creative.mp4\",\n  \"click_url\": \"https://brand.example\",\n  \"duration_sec\": 15\n}"}}},
+    {"name":"Serve","request":{"method":"POST","header":[{"key":"content-type","value":"application/json"}],"url":"{{ADS_BASE_URL}}/ads/serve","body":{"mode":"raw","raw":"{\n  \"key\": \"test_key\",\n  \"placement\": \"preroll\",\n  \"locale\": \"en-US\",\n  \"device\": \"ios\",\n  \"videoContext\": { \"tags\": [\"gaming\"], \"topic\": \"gaming\" }\n}"}}},
+    {"name":"Fund","request":{"method":"POST","header":[{"key":"content-type","value":"application/json"}],"url":"{{ADS_BASE_URL}}/ads/fund","body":{"mode":"raw","raw":"{\n  \"email\": \"brand@example.com\",\n  \"amount_cents\": 5000\n}"}}},
+    {"name":"Balance","request":{"method":"GET","url":"{{ADS_BASE_URL}}/ads/balance?email=brand@example.com"}}
+  ],
+  "variable": [
+    {"key": "ADS_BASE_URL", "value": "http://localhost:9093"}
+  ]
+}
+
+
+

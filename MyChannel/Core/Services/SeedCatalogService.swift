@@ -100,6 +100,14 @@ final class SeedCatalogService {
         ]
         vids += generic
 
+        // Jim Rohn Motivation Channel – seeded catalog (YouTube public IDs as examples)
+        let jim: [(String,String,Int)] = [
+            ("wP1xG8DjYwk", "Jim Rohn – How to Set Goals", 820_000),
+            ("vu3Rfx0bO0E", "Jim Rohn – The Art of Exceptional Living", 1_200_000),
+            ("9FBs8m2iS_4", "Jim Rohn – Personal Development Seminar", 650_000)
+        ]
+        vids += jim.map { yt($0.0, title: $0.1, channel: "Jim Rohn Motivation", views: $0.2, category: VideoCategory.education) }
+
         // Deduplicate by id
         var seen = Set<String>()
         let dedup = vids.filter { v in

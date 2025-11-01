@@ -1,0 +1,20 @@
+{
+  "name": "mychannel-monorepo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:ingest": "tsx services/ingest/api/server.ts",
+    "dev:rights": "tsx services/rights/api/index.ts"
+  },
+  "dependencies": {
+    "fastify": "^4.25.2",
+    "tsx": "^4.7.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "@types/node": "^20.11.0"
+  }
+}
+
+
+

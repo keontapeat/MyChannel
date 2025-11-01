@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y ffmpeg git && rm -rf /var/lib/apt/lists/*
+
+COPY services/video-understanding/infra/requirements.worker.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+COPY services/video-understanding/. /app
+ENV PYTHONPATH=/app/services/video-understanding
+
+CMD ["celery", "-A", "workers.celery_app:app", "worker", "--loglevel=INFO"]
+
+

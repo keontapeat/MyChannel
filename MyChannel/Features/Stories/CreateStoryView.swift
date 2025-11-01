@@ -195,6 +195,7 @@ struct CreateStoryView: View {
         let story = await viewModel.createStory()
         await MainActor.run {
             onStoryCreated(story)
+            NotificationCenter.default.post(name: .storiesDidChange, object: nil)
             dismiss()
         }
     }
