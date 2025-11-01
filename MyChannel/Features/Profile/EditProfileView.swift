@@ -672,6 +672,21 @@ struct EditProfileView: View {
             authManager.currentUser = updatedUser
             appState.currentUser = updatedUser
             
+            // 🔥 PERSIST TO STORAGE: Save to both UserDefaults AND Firestore for full persistence
+            do {
+                // Save to local UserDefaults (instant persistence)
+                try await DatabaseService.shared.saveUser(updatedUser)
+                
+                // Save to Firestore (cloud sync across devices)
+                #if canImport(FirebaseFirestore)
+                try? await UserFirestoreService.shared.updateUser(updatedUser)
+                #endif
+                
+                print("✅ User profile saved: bannerVideoURL=\(updatedUser.bannerVideoURL ?? "nil"), muted=\(updatedUser.bannerVideoMuted ?? false), contentMode=\(updatedUser.bannerVideoContentMode?.rawValue ?? "nil")")
+            } catch {
+                print("🚨 Failed to save user profile: \(error)")
+            }
+            
             isSaving = false
             hasUnsavedChanges = false
             

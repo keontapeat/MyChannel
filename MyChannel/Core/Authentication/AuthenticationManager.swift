@@ -79,17 +79,75 @@ class AuthenticationManager: ObservableObject {
         }
         #endif
         if let fuser = Auth.auth().currentUser {
-            currentUser = User(
-                id: fuser.uid,
-                username: fuser.email?.components(separatedBy: "@").first ?? "user",
-                displayName: fuser.displayName ?? (fuser.email ?? "User"),
-                email: fuser.email ?? "",
-                profileImageURL: fuser.photoURL?.absoluteString,
-                isVerified: fuser.isEmailVerified,
-                isCreator: true
-            )
-            isAuthenticated = true
-            authState = .authenticated
+            // 🔥 LOAD SAVED USER DATA: Restore complete user profile including banner video
+            Task {
+                do {
+                    // Try to load from local storage first (instant)
+                    if let savedUser = try await DatabaseService.shared.fetchUser(id: fuser.uid) {
+                        await MainActor.run {
+                            self.currentUser = savedUser
+                            self.isAuthenticated = true
+                            self.authState = .authenticated
+                        }
+                        print("✅ Restored user from local storage: \(savedUser.displayName), bannerVideo: \(savedUser.bannerVideoURL ?? "nil")")
+                        
+                        // Refresh from Firestore in background (keep data fresh)
+                        if let firestoreUser = try? await UserFirestoreService.shared.fetchUser(id: fuser.uid) {
+                            await MainActor.run {
+                                self.currentUser = firestoreUser
+                            }
+                            // Save updated data locally
+                            try? await DatabaseService.shared.saveUser(firestoreUser)
+                            print("✅ Refreshed user from Firestore: \(firestoreUser.displayName), bannerVideo: \(firestoreUser.bannerVideoURL ?? "nil")")
+                        }
+                    } else {
+                        // No saved data, fetch from Firestore
+                        if let firestoreUser = try? await UserFirestoreService.shared.fetchUser(id: fuser.uid) {
+                            await MainActor.run {
+                                self.currentUser = firestoreUser
+                                self.isAuthenticated = true
+                                self.authState = .authenticated
+                            }
+                            // Save locally for next time
+                            try? await DatabaseService.shared.saveUser(firestoreUser)
+                            print("✅ Loaded user from Firestore: \(firestoreUser.displayName), bannerVideo: \(firestoreUser.bannerVideoURL ?? "nil")")
+                        } else {
+                            // Fallback to basic Firebase Auth data
+                            let basicUser = User(
+                                id: fuser.uid,
+                                username: fuser.email?.components(separatedBy: "@").first ?? "user",
+                                displayName: fuser.displayName ?? (fuser.email ?? "User"),
+                                email: fuser.email ?? "",
+                                profileImageURL: fuser.photoURL?.absoluteString,
+                                isVerified: fuser.isEmailVerified,
+                                isCreator: true
+                            )
+                            await MainActor.run {
+                                self.currentUser = basicUser
+                                self.isAuthenticated = true
+                                self.authState = .authenticated
+                            }
+                        }
+                    }
+                } catch {
+                    print("🚨 Error loading user data: \(error)")
+                    // Fallback to basic Firebase Auth data
+                    let basicUser = User(
+                        id: fuser.uid,
+                        username: fuser.email?.components(separatedBy: "@").first ?? "user",
+                        displayName: fuser.displayName ?? (fuser.email ?? "User"),
+                        email: fuser.email ?? "",
+                        profileImageURL: fuser.photoURL?.absoluteString,
+                        isVerified: fuser.isEmailVerified,
+                        isCreator: true
+                    )
+                    await MainActor.run {
+                        self.currentUser = basicUser
+                        self.isAuthenticated = true
+                        self.authState = .authenticated
+                    }
+                }
+            }
             return
         }
         #endif
