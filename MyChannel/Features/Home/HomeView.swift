@@ -1606,7 +1606,7 @@ private struct MinimalMusicSection: View {
     private var allArtists: [(name: String, avatar: String, views: Int, city: String?)] {
         // 🔥 BOOSIE FIRST - Top priority for promotion!
         let boosie: [(String,String,Int,String?)] = [
-            ("Boosie BadAzz", "https://avatars.githubusercontent.com/u/1?v=4", 8_500_000, "Baton Rouge, LA")
+            ("Boosie BadAzz", "boosie-badazz", 8_500_000, "Baton Rouge, LA")
         ]
         
         let curated: [(String,String,Int,String?)] = OwnerProfile.instagramFriends.map { ($0.name, $0.avatar, Int.random(in: 50_000...350_000), nil) }
@@ -1651,16 +1651,26 @@ private struct MinimalMusicSection: View {
                             onOpenArtistDetail(a.name, a.avatar, [], a.views)
                         } label: {
                             VStack(alignment: .leading, spacing: 8) {
-                                AppAsyncImage(url: URL(string: a.avatar)) { img in
-                                    img
+                                // Check if it's a local asset or URL
+                                if a.avatar.hasPrefix("http") {
+                                    AppAsyncImage(url: URL(string: a.avatar)) { img in
+                                        img
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 120, height: 180)
+                                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    } placeholder: {
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .fill(Color(.systemGray6))
+                                            .frame(width: 120, height: 180)
+                                    }
+                                } else {
+                                    // Local asset image
+                                    Image(a.avatar)
                                         .resizable()
                                         .scaledToFill()
                                         .frame(width: 120, height: 180)
                                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                } placeholder: {
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(Color(.systemGray6))
-                                        .frame(width: 120, height: 180)
                                 }
 
                                 VStack(alignment: .leading, spacing: 2) {
