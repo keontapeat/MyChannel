@@ -188,6 +188,36 @@ class VideoUploadManager: ObservableObject {
                 NotificationCenter.default.post(name: .userProfileUpdated, object: AuthenticationManager.shared.currentUser)
                 // 🔥 REFRESH PROFILE STATS: Update video count and views in real-time
                 NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
+                
+                // 🔥 AUTO-UPDATE CREATOR STUDIO ANALYTICS: Connect upload to analytics tracking
+                Task {
+                    if let user = AuthenticationManager.shared.currentUser {
+                        await AdvancedAnalyticsService.shared.updateCreatorStats(
+                            creatorId: user.id,
+                            newVideoId: uploadedVideo.id,
+                            category: uploadedVideo.category
+                        )
+                        
+                        // Create initial analytics record
+                        let initialAnalytics = VideoAnalytics(
+                            videoId: uploadedVideo.id,
+                            views: 0,
+                            uniqueViews: 0,
+                            likes: 0,
+                            dislikes: 0,
+                            comments: 0,
+                            shares: 0,
+                            watchTime: 0,
+                            averageWatchTime: 0,
+                            clickThroughRate: 0,
+                            engagementRate: 0,
+                            revenue: 0
+                        )
+                        await AdvancedAnalyticsService.shared.addVideoAnalytics(initialAnalytics)
+                        
+                        print("✅ Creator Studio analytics auto-updated for video: \(uploadedVideo.title)")
+                    }
+                }
             }
             // Upload captions/dubs if any were attached
             if let uploadedVideo {

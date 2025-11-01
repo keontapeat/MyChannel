@@ -9,6 +9,9 @@ import Foundation
 import Combine
 import SwiftUI
 import Charts
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 // MARK: - Advanced Analytics Service (YouTube Studio Killer)
 @MainActor
@@ -42,16 +45,24 @@ class AdvancedAnalyticsService: ObservableObject {
     private let networkService = NetworkService.shared
     private var cancellables = Set<AnyCancellable>()
     
+    #if canImport(FirebaseFirestore)
+    private var db: Firestore { Firestore.firestore() }
+    private var analyticsListener: ListenerRegistration?
+    private var videoStatsListener: ListenerRegistration?
+    #endif
+    
     private init() {
         setupRealtimeUpdates()
     }
     
     // MARK: - Real-time Analytics (YouTube can't do this)
     
-    /// Get real-time metrics updated every 30 seconds
+    /// Get real-time metrics updated every 30 seconds + Firestore listeners for instant updates
     func startRealtimeMonitoring(for creatorId: String) async {
+        // 🔥 INSTANT UPDATES: Firestore real-time listeners
+        setupFirestoreListeners(for: creatorId)
         
-        // Start real-time data stream
+        // Backup polling (fallback if Firestore listener fails)
         Timer.publish(every: 30, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
@@ -63,6 +74,104 @@ class AdvancedAnalyticsService: ObservableObject {
         
         // Initial load
         await updateRealtimeMetrics(creatorId: creatorId)
+    }
+    
+    /// Setup Firestore real-time listeners for INSTANT analytics updates (no polling delay)
+    private func setupFirestoreListeners(for creatorId: String) {
+        #if canImport(FirebaseFirestore)
+        // 🔥 Listen to video analytics collection for instant updates
+        analyticsListener = db.collection("video_analytics")
+            .whereField("creatorId", isEqualTo: creatorId)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self = self, let snapshot = snapshot else {
+                    if let error = error {
+                        print("🚨 Analytics listener error: \(error)")
+                    }
+                    return
+                }
+                
+                Task { @MainActor in
+                    // Process new/updated analytics documents
+                    for change in snapshot.documentChanges {
+                        if change.type == .added || change.type == .modified {
+                            let data = change.document.data()
+                            if let videoId = data["videoId"] as? String,
+                               let views = data["views"] as? Int,
+                               let likes = data["likes"] as? Int {
+                                
+                                // Update or add video analytics
+                                let analytics = VideoAnalytics(
+                                    videoId: videoId,
+                                    views: views,
+                                    uniqueViews: data["uniqueViews"] as? Int ?? Int(Double(views) * 0.8),
+                                    likes: likes,
+                                    dislikes: data["dislikes"] as? Int ?? 0,
+                                    comments: data["comments"] as? Int ?? 0,
+                                    shares: data["shares"] as? Int ?? 0,
+                                    watchTime: data["watchTime"] as? TimeInterval ?? 0,
+                                    averageWatchTime: data["averageWatchTime"] as? TimeInterval ?? 0,
+                                    clickThroughRate: data["clickThroughRate"] as? Double ?? 0,
+                                    engagementRate: data["engagementRate"] as? Double ?? 0,
+                                    revenue: data["revenue"] as? Double ?? 0
+                                )
+                                
+                                // Update in-memory cache
+                                if let index = self.videoPerformance.firstIndex(where: { $0.videoId == videoId }) {
+                                    self.videoPerformance[index] = analytics
+                                } else {
+                                    self.videoPerformance.append(analytics)
+                                }
+                                
+                                print("✅ Real-time analytics update: \(videoId) - \(views) views")
+                            }
+                        }
+                    }
+                }
+            }
+        
+        // 🔥 Listen to channel-level stats for instant dashboard updates
+        videoStatsListener = db.collection("users").document(creatorId)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self = self, let snapshot = snapshot, snapshot.exists else {
+                    return
+                }
+                
+                Task { @MainActor in
+                    let data = snapshot.data() ?? [:]
+                    
+                    // Update realtime metrics from Firestore
+                    let updatedMetrics = RealtimeMetrics(
+                        currentViewers: data["currentViewers"] as? Int ?? self.realtimeMetrics.currentViewers,
+                        engagementRate: data["engagementRate"] as? Double ?? self.realtimeMetrics.engagementRate,
+                        trendingScore: data["trendingScore"] as? Double ?? self.realtimeMetrics.trendingScore,
+                        newSubscribers: data["newSubscribers"] as? Int ?? self.realtimeMetrics.newSubscribers,
+                        revenueToday: data["revenueToday"] as? Double ?? self.realtimeMetrics.revenueToday,
+                        topPerformingVideo: data["topPerformingVideo"] as? String,
+                        totalVideos: data["totalVideos"] as? Int ?? self.realtimeMetrics.totalVideos,
+                        lastUploadDate: (data["lastUploadDate"] as? Timestamp)?.dateValue(),
+                        lastUpdated: Date()
+                    )
+                    
+                    self.realtimeMetrics = updatedMetrics
+                    self.liveViewerCount = updatedMetrics.currentViewers
+                    self.liveEngagementRate = updatedMetrics.engagementRate
+                    self.currentTrendingScore = updatedMetrics.trendingScore
+                    
+                    print("✅ Real-time channel stats update: \(updatedMetrics.totalVideos) videos, $\(String(format: "%.2f", updatedMetrics.revenueToday)) revenue")
+                }
+            }
+        #endif
+    }
+    
+    /// Stop real-time monitoring and cleanup listeners
+    func stopRealtimeMonitoring() {
+        #if canImport(FirebaseFirestore)
+        analyticsListener?.remove()
+        videoStatsListener?.remove()
+        analyticsListener = nil
+        videoStatsListener = nil
+        #endif
+        cancellables.removeAll()
     }
     
     /// Add new video analytics record
@@ -93,9 +202,27 @@ class AdvancedAnalyticsService: ObservableObject {
     }
     
     private func saveVideoAnalytics(_ analytics: VideoAnalytics) async throws {
-        // Save to Firestore or local storage
         #if canImport(FirebaseFirestore)
-        // Implementation would save to Firestore
+        // 🔥 SAVE TO FIRESTORE: Persist analytics for real-time sync
+        let ref = db.collection("video_analytics").document(analytics.videoId)
+        try await ref.setData([
+            "videoId": analytics.videoId,
+            "creatorId": AuthenticationManager.shared.currentUser?.id ?? "",
+            "views": analytics.views,
+            "uniqueViews": analytics.uniqueViews,
+            "likes": analytics.likes,
+            "dislikes": analytics.dislikes,
+            "comments": analytics.comments,
+            "shares": analytics.shares,
+            "watchTime": analytics.watchTime,
+            "averageWatchTime": analytics.averageWatchTime,
+            "clickThroughRate": analytics.clickThroughRate,
+            "engagementRate": analytics.engagementRate,
+            "revenue": analytics.revenue,
+            "updatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
+        
+        print("💾 Analytics saved to Firestore: \(analytics.videoId)")
         #endif
     }
     
@@ -124,13 +251,22 @@ class AdvancedAnalyticsService: ObservableObject {
     ) async throws -> ChannelAnalytics {
         do {
             let endpoint = "/analytics/channel/\(creatorId)?period=\(timeframe.rawValue)"
-            // Try cache first
-            if let cached: ChannelAnalytics = CacheStore.shared.get("channelAnalytics_\(creatorId)_\(timeframe.rawValue)") {
+            // 🚀 OPTIMIZED CACHING: Check cache first for instant load
+            let cacheKey = "channelAnalytics_\(creatorId)_\(timeframe.rawValue)"
+            if let cached: ChannelAnalytics = CacheStore.shared.get(cacheKey) {
                 await MainActor.run { self.channelAnalytics = cached }
+                // Return cached data immediately, refresh in background
+                Task {
+                    do {
+                        let fresh = try await networkService.get(endpoint: .custom(endpoint), responseType: ChannelAnalytics.self)
+                        CacheStore.shared.set(cacheKey, value: fresh, ttlSeconds: 180) // 3-minute cache
+                        await MainActor.run { self.channelAnalytics = fresh }
+                    } catch {}
+                }
                 return cached
             }
             let analytics = try await networkService.get(endpoint: .custom(endpoint), responseType: ChannelAnalytics.self)
-            CacheStore.shared.set("channelAnalytics_\(creatorId)_\(timeframe.rawValue)", value: analytics, ttlSeconds: 300)
+            CacheStore.shared.set(cacheKey, value: analytics, ttlSeconds: 180)
             await MainActor.run { self.channelAnalytics = analytics }
             return analytics
         } catch {
@@ -163,12 +299,23 @@ class AdvancedAnalyticsService: ObservableObject {
         do {
             let idsQuery = (videoIds ?? []).joined(separator: ",")
             let endpoint = idsQuery.isEmpty ? "/analytics/videos/\(creatorId)" : "/analytics/videos/\(creatorId)?ids=\(idsQuery)"
-            if idsQuery.isEmpty, let cached: [VideoAnalytics] = CacheStore.shared.get("videoAnalytics_\(creatorId)") {
+            // 🚀 OPTIMIZED CACHING: Instant cached data, refresh in background
+            let cacheKey = "videoAnalytics_\(creatorId)"
+            if idsQuery.isEmpty, let cached: [VideoAnalytics] = CacheStore.shared.get(cacheKey) {
                 await MainActor.run { self.videoPerformance = cached }
+                // Background refresh
+                Task {
+                    do {
+                        let fresh = try await networkService.get(endpoint: .custom(endpoint), responseType: [VideoAnalytics].self)
+                        let enhanced = await addAIInsights(to: fresh)
+                        CacheStore.shared.set(cacheKey, value: enhanced, ttlSeconds: 120) // 2-minute cache
+                        await MainActor.run { self.videoPerformance = enhanced }
+                    } catch {}
+                }
                 return cached
             }
             let analytics = try await networkService.get(endpoint: .custom(endpoint), responseType: [VideoAnalytics].self)
-            if idsQuery.isEmpty { CacheStore.shared.set("videoAnalytics_\(creatorId)", value: analytics, ttlSeconds: 300) }
+            if idsQuery.isEmpty { CacheStore.shared.set(cacheKey, value: analytics, ttlSeconds: 120) }
             let enhanced = await addAIInsights(to: analytics)
             await MainActor.run { self.videoPerformance = enhanced }
             return enhanced

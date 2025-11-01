@@ -136,7 +136,7 @@ struct ProfileView: View {
                     
                     // 🎬 Creator Studio Link - BOLD & VISIBLE WITH PROPER SPACING
                     Spacer()
-                        .frame(height: 16)
+                        .frame(height: 32)
                     
                     NavigationLink(destination: ComprehensiveCreatorStudioView()) {
                         HStack(spacing: 12) {
@@ -185,7 +185,7 @@ struct ProfileView: View {
                         .shadow(color: AppTheme.Colors.primary.opacity(0.25), radius: 8, x: 0, y: 4)
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 120)
                     
                     // History Section
                     if !watchHistory.isEmpty {
