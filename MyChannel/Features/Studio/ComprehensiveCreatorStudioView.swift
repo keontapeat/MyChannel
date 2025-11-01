@@ -27,7 +27,7 @@ struct ComprehensiveCreatorStudioView: View {
         case community = "Community"
         case premieres = "Premieres"
         case live = "Live"
-        case shorts = "Shorts"
+        case flicks = "Flicks"
         case playlists = "Playlists"
         case copyright = "Copyright"
         case monetization = "Monetization"
@@ -213,9 +213,9 @@ struct ComprehensiveCreatorStudioView: View {
         case .live:
             LiveStreamingStudioView()
                 .navigationTitle("Live")
-        case .shorts:
-            ShortsStudioView()
-                .navigationTitle("Shorts")
+        case .flicks:
+            FlicksStudioView()
+                .navigationTitle("Flicks")
         case .playlists:
             PlaylistManagementView()
                 .navigationTitle("Playlists")
@@ -252,8 +252,8 @@ struct ComprehensiveCreatorStudioView: View {
             PremieresManagementView()
         case .live:
             LiveStreamingStudioView()
-        case .shorts:
-            ShortsStudioView()
+        case .flicks:
+            FlicksStudioView()
         case .playlists:
             PlaylistManagementView()
         case .copyright:
@@ -720,11 +720,11 @@ struct LiveStreamingStudioView: View {
     }
 }
 
-struct ShortsStudioView: View {
+struct FlicksStudioView: View {
     var body: some View {
-        Text("Shorts Studio")
+        Text("Flicks Studio")
             .font(.title)
-            .navigationTitle("Shorts")
+            .navigationTitle("Flicks")
     }
 }
 
@@ -1314,7 +1314,7 @@ extension ComprehensiveCreatorStudioView {
             
             // More (Menu)
             Menu {
-                ForEach([StudioTab.customization, .community, .premieres, .live, .shorts, .playlists, .copyright, .monetization, .settings], id: \.self) { tab in
+                ForEach([StudioTab.customization, .community, .premieres, .live, .flicks, .playlists, .copyright, .monetization, .settings], id: \.self) { tab in
                     Button(action: { 
                         selectedTab = tab
                         HapticManager.shared.impact(style: .light)
