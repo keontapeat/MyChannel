@@ -57,12 +57,11 @@ struct UploadView: View {
         case completed
     }
     
-    // Extracted to help the type checker
+    // Clean, minimal background - no gradients
     private var backgroundGradient: LinearGradient {
         LinearGradient(
             colors: [
-                AppTheme.Colors.primary.opacity(0.05),
-                AppTheme.Colors.secondary.opacity(0.03),
+                AppTheme.Colors.background,
                 AppTheme.Colors.background
             ],
             startPoint: .topLeading,
@@ -438,20 +437,20 @@ struct UploadView: View {
     private var stepTitle: String {
         switch uploadStep {
         case .selectMedia: return "Choose Your Content"
-        case .editVideo:   return "Perfect Your Video"
-        case .addDetails:  return "Add the Finishing Touches"
-        case .uploading:   return "Publishing Your Creation"
-        case .completed:   return "🎉 Success!"
+        case .editVideo:   return "Edit Your Video"
+        case .addDetails:  return "Add Details"
+        case .uploading:   return "Publishing"
+        case .completed:   return "Success!"
         }
     }
     
     private var stepDescription: String {
         switch uploadStep {
         case .selectMedia: return "Select the perfect way to create your content"
-        case .editVideo:   return "Fine-tune your video with professional editing tools"
-        case .addDetails:  return "Help viewers discover your amazing content"
+        case .editVideo:   return "Professional editing tools to enhance your video"
+        case .addDetails:  return "Help viewers discover your content"
         case .uploading:   return "Your video is being processed and uploaded"
-        case .completed:   return "Your video is live and ready to inspire!"
+        case .completed:   return "Your video is live and ready to watch"
         }
     }
     
@@ -652,13 +651,13 @@ struct UploadView: View {
                     }
                 }
                 
-                VStack(spacing: 20) {
+                VStack(spacing: 16) {
                     Text("Editing Tools")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 16) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
                         ForEach(EditingTool.allCases) { tool in
                             EditingToolCard(
                                 title: tool.title,
@@ -666,7 +665,7 @@ struct UploadView: View {
                                 icon: tool.icon,
                                 color: tool.color
                             ) {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                                     selectedEditingTool = tool
                                 }
                                 HapticManager.shared.impact(style: .medium)
