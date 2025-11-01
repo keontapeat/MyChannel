@@ -34,7 +34,7 @@ struct UnauthenticatedPromptView: View {
         var subtitle: String {
             switch self {
             case .subscriptions:
-                return "Sign in to see updates from your favorite YouTube channels"
+                return "Sign in to see updates from your favorite creators"
             case .history:
                 return "Sign in to access videos that you've liked or saved"
             case .watchLater:
@@ -62,48 +62,50 @@ struct UnauthenticatedPromptView: View {
         VStack(spacing: 0) {
             Spacer()
             
-            VStack(spacing: 24) {
-                // Icon
+            VStack(spacing: 20) {
+                // Clean icon circle - minimal and professional
                 ZStack {
                     Circle()
-                        .fill(Color(.systemGray6))
-                        .frame(width: 120, height: 120)
+                        .fill(Color(.systemGray5).opacity(0.3))
+                        .frame(width: 140, height: 140)
                     
                     Image(systemName: promptType.iconName)
-                        .font(.system(size: 40, weight: .light))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 50, weight: .regular))
+                        .foregroundColor(Color(.systemGray))
                 }
                 
-                // Text content
-                VStack(spacing: 12) {
+                // Text content - clean and minimal
+                VStack(spacing: 8) {
                     Text(promptType.title)
-                        .font(.system(size: 20, weight: .medium))
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.primary)
                         .multilineTextAlignment(.center)
                     
                     Text(promptType.subtitle)
-                        .font(.system(size: 16))
+                        .font(.system(size: 15, weight: .regular))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
+                        .padding(.horizontal, 40)
                 }
+                .padding(.top, 4)
                 
-                // Sign in button
+                // Clean sign in button - matches iOS design language
                 Button(action: {
                     HapticManager.shared.impact(style: .light)
                     onSignIn()
                 }) {
                     Text("Sign in")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white)
-                        .frame(height: 40)
-                        .frame(maxWidth: 120)
+                        .frame(height: 44)
+                        .frame(width: 180)
                         .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(.blue)
+                            RoundedRectangle(cornerRadius: 22)
+                                .fill(Color(red: 0.2, green: 0.5, blue: 1.0))
                         )
                 }
-                .buttonStyle(PressableScaleButtonStyle(scale: 0.96))
+                .buttonStyle(PressableScaleButtonStyle(scale: 0.97))
+                .padding(.top, 8)
             }
             
             Spacer()
