@@ -188,44 +188,9 @@ struct EditProfileView: View {
     // MARK: - Header Section
     private var headerSection: some View {
         VStack(spacing: 0) {
-            ZStack {
-                // Dynamic gradient background
-                LinearGradient(
-                    colors: [
-                        AppTheme.Colors.primary.opacity(0.15),
-                        AppTheme.Colors.secondary.opacity(0.1),
-                        AppTheme.Colors.background
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .frame(height: 120)
-                
-                // Floating elements for depth
-                VStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .frame(width: 60, height: 60)
-                            .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 15, x: 0, y: 5)
-                        
-                        Image(systemName: "person.crop.circle.badge.plus")
-                            .font(.system(size: 28, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.primary)
-                    }
-                    
-                    VStack(spacing: 4) {
-                        Text("Customize Your Profile")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                        
-                        Text("Make your profile shine ✨")
-                            .font(.system(size: 15))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                }
-                .padding(.top, 25)
-            }
+            // Clean, minimal header - professional for creators
+            Color(.systemGray6)
+                .frame(height: 1)
         }
     }
     
@@ -287,7 +252,7 @@ struct EditProfileView: View {
                             showingDefaultBannerPicker = true
                             HapticManager.shared.impact(style: .light)
                         } label: {
-                            Label("Choose from Defaults", systemImage: "sparkles")
+                            Label("Choose from Defaults", systemImage: "photo.on.rectangle")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(AppTheme.Colors.primary)
                                 .padding(.horizontal, 12)
@@ -350,7 +315,7 @@ struct EditProfileView: View {
                             showingDefaultBannerPicker = true
                             HapticManager.shared.impact(style: .light)
                         } label: {
-                            Label("Choose from Defaults", systemImage: "sparkles")
+                            Label("Choose from Defaults", systemImage: "photo.on.rectangle")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(AppTheme.Colors.primary)
                                 .padding(.horizontal, 12)
