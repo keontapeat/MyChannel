@@ -100,6 +100,21 @@ struct ProfileQuickMenu: View {
                     .padding(.leading, 56)
                 
                 MenuButton(
+                    icon: "person.2.fill",
+                    title: "Switch Profile",
+                    action: {
+                        isPresented = false
+                        NotificationCenter.default.post(
+                            name: Notification.Name("ShowSwitchProfile"),
+                            object: nil
+                        )
+                    }
+                )
+                
+                Divider()
+                    .padding(.leading, 56)
+                
+                MenuButton(
                     icon: "arrow.right.square.fill",
                     title: "Sign Out",
                     isDestructive: true,

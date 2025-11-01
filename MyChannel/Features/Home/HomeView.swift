@@ -80,6 +80,7 @@ struct HomeView: View {
     // Quick profile menu
     @State private var showingQuickProfile = false
     @State private var showingSettings = false
+    @State private var showingSwitchProfile = false
 
     @State private var featuredContent: [Video] = []
     @State private var heroVideoIndex: Int = 0
@@ -203,12 +204,17 @@ struct HomeView: View {
                 ProfileQuickMenu(user: user, isPresented: $showingQuickProfile)
                     .environmentObject(appState)
                     .environmentObject(AuthenticationManager.shared)
-                    .presentationDetents([.height(500)])
+                    .presentationDetents([.height(560)])
                     .presentationDragIndicator(.visible)
             }
         }
         .sheet(isPresented: $showingSettings) {
             SafeProfileSettingsView()
+                .environmentObject(appState)
+                .environmentObject(AuthenticationManager.shared)
+        }
+        .sheet(isPresented: $showingSwitchProfile) {
+            ProfileSwitcherView()
                 .environmentObject(appState)
                 .environmentObject(AuthenticationManager.shared)
         }
@@ -232,6 +238,9 @@ struct HomeView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenSettings"))) { _ in
             showingSettings = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowSwitchProfile"))) { _ in
+            showingSwitchProfile = true
         }
         .fullScreenCover(item: $route) { route in
             switch route {
