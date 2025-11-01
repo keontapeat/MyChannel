@@ -187,6 +187,15 @@ struct ModernVideoPlayerView: View {
                 playerViewModel.play()
                 return
             }
+            
+            // 🔥 NO ADS ON YOUR OWN VIDEOS - Skip ads if watching your own content
+            if let currentUser = AuthenticationManager.shared.currentUser,
+               video.creator.id == currentUser.id {
+                print("🎬 Your own video - skipping ads, playing instantly!")
+                playerViewModel.setupPlayer(with: video)
+                playerViewModel.play()
+                return
+            }
             let personalized = UserDefaults.standard.bool(forKey: "preferences.personalizedAdsEnabled")
             if let ad = await AdsService.requestPreRoll(for: video, personalized: personalized), !ad.creativeUri.isEmpty, let u = URL(string: ad.creativeUri) {
                 let adVideo = Video(

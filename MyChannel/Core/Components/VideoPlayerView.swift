@@ -100,6 +100,16 @@ struct VideoPlayerView: View {
                     return
                 }
                 
+                // 🔥 NO ADS ON YOUR OWN VIDEOS - Skip ads if watching your own content
+                if let currentUser = AuthenticationManager.shared.currentUser,
+                   video.creator.id == currentUser.id {
+                    print("🎬 Your own video - skipping ads, playing instantly!")
+                    playerManager.setupPlayer(with: video)
+                    playerManager.play()
+                    globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: true)
+                    return
+                }
+                
                 print("🎯 Checking ads for video: \(video.title)")
                 print("💰 Video monetized: \(video.monetization?.isMonetized ?? false)")
                 print("⚙️ App ads enabled: \(AppConfig.Features.enableAds)")
