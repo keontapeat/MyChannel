@@ -223,8 +223,12 @@ struct ProfileQuickMenu: View {
                     realtimeStats.videos = channelAnalytics.totalVideos
                     realtimeStats.views = channelAnalytics.totalViews
                     realtimeStats.watchTime = Int(channelAnalytics.totalWatchTime / 60) // Convert to minutes
-                    realtimeStats.engagement = channelAnalytics.engagementRate * 100
-                    realtimeStats.revenue = channelAnalytics.estimatedRevenue ?? 0
+                    // Calculate engagement rate: (watch time / total views) * 100
+                    let engagementRate = channelAnalytics.totalViews > 0 
+                        ? (channelAnalytics.totalWatchTime / Double(channelAnalytics.totalViews)) * 100 
+                        : 0
+                    realtimeStats.engagement = min(engagementRate, 100) // Cap at 100%
+                    realtimeStats.revenue = channelAnalytics.totalRevenue
                 }
             } else {
                 // Fallback to user model data
