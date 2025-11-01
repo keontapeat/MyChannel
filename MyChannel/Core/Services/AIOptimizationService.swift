@@ -176,14 +176,14 @@ final class AIOptimizationService: ObservableObject {
         case .claude:
             response = try await AnthropicService.shared.sendMessage(prompt)
         case .gemini:
-            response = try await VertexAIService.shared.generateContent(prompt: prompt)
+            response = try await VertexAIService.shared.generateWithGemini(prompt)
         case .gpt4:
             response = try await OpenAIService.shared.chat(messages: [
                 .init(role: "user", content: prompt)
             ])
         case .dalle:
             // DALL-E returns image URL, not text
-            response = try await OpenAIService.shared.generateThumbnail(prompt: prompt, style: "vivid")
+            response = try await OpenAIService.shared.generateImage(prompt: prompt, size: .large, quality: .hd)
         }
         
         // 5. Cache response
