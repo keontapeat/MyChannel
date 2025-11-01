@@ -236,9 +236,4 @@ struct EditPlaylistSheet: View {
     }
 }
 
-#Preview("Playlist Management") {
-    SwiftUI.NavigationStack {
-        PlaylistManagementView()
-    }
-}
 

@@ -628,9 +628,4 @@ struct TrafficSourceRow: View {
     }
 }
 
-#Preview("Advanced Analytics") {
-    SwiftUI.NavigationStack {
-        AdvancedAnalyticsView()
-    }
-}
 

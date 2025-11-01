@@ -191,9 +191,4 @@ struct EducationCard: View {
     }
 }
 
-#Preview("Copyright Management") {
-    SwiftUI.NavigationStack {
-        CopyrightManagementView()
-    }
-}
 

@@ -141,9 +141,4 @@ struct ModerationCard: View {
     }
 }
 
-#Preview("Community Management") {
-    SwiftUI.NavigationStack {
-        CommunityManagementView()
-    }
-}
 

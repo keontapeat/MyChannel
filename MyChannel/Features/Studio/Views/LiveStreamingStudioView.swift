@@ -175,9 +175,4 @@ struct PastStreamRow: View {
     }
 }
 
-#Preview("Live Streaming") {
-    SwiftUI.NavigationStack {
-        LiveStreamingStudioView()
-    }
-}
 

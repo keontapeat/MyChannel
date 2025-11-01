@@ -131,9 +131,4 @@ struct StudioSettingsView: View {
     }
 }
 
-#Preview("Studio Settings") {
-    SwiftUI.NavigationStack {
-        StudioSettingsView()
-    }
-}
 
