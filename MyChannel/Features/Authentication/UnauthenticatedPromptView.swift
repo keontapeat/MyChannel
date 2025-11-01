@@ -47,7 +47,7 @@ struct UnauthenticatedPromptView: View {
         var iconName: String {
             switch self {
             case .subscriptions:
-                return "play.rectangle.stack"
+                return "bell.badge"
             case .history:
                 return "clock.arrow.circlepath"
             case .watchLater:
@@ -66,12 +66,12 @@ struct UnauthenticatedPromptView: View {
                 // Clean icon circle - minimal and professional
                 ZStack {
                     Circle()
-                        .fill(Color(.systemGray5).opacity(0.3))
+                        .fill(Color(.systemGray5))
                         .frame(width: 140, height: 140)
                     
                     Image(systemName: promptType.iconName)
-                        .font(.system(size: 50, weight: .regular))
-                        .foregroundColor(Color(.systemGray))
+                        .font(.system(size: 56, weight: .medium))
+                        .foregroundColor(Color(.systemGray2))
                 }
                 
                 // Text content - clean and minimal
