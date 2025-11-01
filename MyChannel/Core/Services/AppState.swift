@@ -227,16 +227,27 @@ class AppState: ObservableObject {
     }
     
     // MARK: - Data Persistence (BULLETPROOF with DataPersistenceService)
+    
+    // Codable struct for user collections
+    private struct UserCollectionsData: Codable {
+        let watchLaterVideos: [String]
+        let likedVideos: [String]
+        let savedPlaylists: [String]
+        let subscriptions: [String]
+        let watchHistory: [String]
+    }
+    
     private func saveUserData() {
         guard let userId = currentUser?.id else { return }
         
-        let userData = [
-            "watchLaterVideos": Array(watchLaterVideos),
-            "likedVideos": Array(likedVideos),
-            "savedPlaylists": Array(savedPlaylists),
-            "subscriptions": Array(subscriptions),
-            "watchHistory": watchHistory
-        ] as [String : Any]
+        // Create Codable struct
+        let userData = UserCollectionsData(
+            watchLaterVideos: Array(watchLaterVideos),
+            likedVideos: Array(likedVideos),
+            savedPlaylists: Array(savedPlaylists),
+            subscriptions: Array(subscriptions),
+            watchHistory: watchHistory
+        )
         
         // 🛡️ BULLETPROOF: Use DataPersistenceService with auto-retry and cloud backup
         Task {
@@ -247,10 +258,18 @@ class AppState: ObservableObject {
                     collectionPath: "userCollections",
                     docId: userId
                 )
-                print("✅ User data saved (bulletproof): \(userData.keys)")
+                print("✅ User data saved (bulletproof): watchLater=\(userData.watchLaterVideos.count), liked=\(userData.likedVideos.count), subs=\(userData.subscriptions.count)")
             } catch {
                 print("🚨 Failed to save user data: \(error)")
-                // Data is still in UserDefaults from saveDualLayer's local-first approach
+                // Fallback: save to UserDefaults directly
+                let fallbackData = [
+                    "watchLaterVideos": Array(watchLaterVideos),
+                    "likedVideos": Array(likedVideos),
+                    "savedPlaylists": Array(savedPlaylists),
+                    "subscriptions": Array(subscriptions),
+                    "watchHistory": watchHistory
+                ] as [String : Any]
+                UserDefaults.standard.set(fallbackData, forKey: "userData_\(userId)")
             }
         }
     }
