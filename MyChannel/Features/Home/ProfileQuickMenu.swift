@@ -14,6 +14,19 @@ struct ProfileQuickMenu: View {
     @EnvironmentObject private var authManager: AuthenticationManager
     @Environment(\.dismiss) private var dismiss
     
+    // 🔥 REAL-TIME STATS: Fetch fresh data from analytics
+    @State private var realtimeStats: ChannelStats = ChannelStats()
+    @State private var isLoadingStats = true
+    
+    struct ChannelStats {
+        var subscribers: Int = 0
+        var videos: Int = 0
+        var views: Int = 0
+        var watchTime: Int = 0 // in minutes
+        var engagement: Double = 0 // percentage
+        var revenue: Double = 0
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // Header with Avatar & Name
@@ -43,26 +56,85 @@ struct ProfileQuickMenu: View {
             .padding(.top, 24)
             .padding(.bottom, 20)
             
-            // Stats Row
-            HStack(spacing: 0) {
-                StatColumn(value: formatCount(user.subscriberCount), label: "Subscribers")
-                
-                Divider()
-                    .frame(height: 40)
-                
-                StatColumn(value: formatCount(user.videoCount), label: "Videos")
-                
-                Divider()
-                    .frame(height: 40)
-                
-                StatColumn(value: formatCount(user.totalViews ?? 0), label: "Views")
+            // Stats Row - REAL DATA
+            if isLoadingStats {
+                ProgressView()
+                    .padding(.vertical, 30)
+            } else {
+                VStack(spacing: 12) {
+                    // Top Row - Main Stats
+                    HStack(spacing: 0) {
+                        StatColumn(
+                            value: formatCount(realtimeStats.subscribers),
+                            label: "Subscribers",
+                            isLive: true
+                        )
+                        
+                        Divider()
+                            .frame(height: 50)
+                        
+                        StatColumn(
+                            value: formatCount(realtimeStats.videos),
+                            label: "Videos",
+                            isLive: true
+                        )
+                        
+                        Divider()
+                            .frame(height: 50)
+                        
+                        StatColumn(
+                            value: formatCount(realtimeStats.views),
+                            label: "Views",
+                            isLive: true
+                        )
+                    }
+                    
+                    Divider()
+                    
+                    // Bottom Row - Performance Metrics
+                    HStack(spacing: 0) {
+                        StatColumn(
+                            value: formatWatchTime(realtimeStats.watchTime),
+                            label: "Watch Time",
+                            isLive: false
+                        )
+                        
+                        Divider()
+                            .frame(height: 40)
+                        
+                        StatColumn(
+                            value: String(format: "%.1f%%", realtimeStats.engagement),
+                            label: "Engagement",
+                            isLive: false
+                        )
+                        
+                        Divider()
+                            .frame(height: 40)
+                        
+                        StatColumn(
+                            value: formatRevenue(realtimeStats.revenue),
+                            label: "Revenue",
+                            isLive: false
+                        )
+                    }
+                }
+                .padding(16)
+                .background(
+                    LinearGradient(
+                        colors: [Color(.systemGray6), Color(.systemGray5)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .cornerRadius(16)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color(.systemGray4), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
             
             Divider()
             
@@ -131,6 +203,48 @@ struct ProfileQuickMenu: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemBackground))
+        .task {
+            // 🔥 LOAD REAL ANALYTICS DATA
+            await loadRealtimeStats()
+        }
+    }
+    
+    private func loadRealtimeStats() async {
+        isLoadingStats = true
+        
+        // Fetch from AdvancedAnalyticsService
+        let analytics = AdvancedAnalyticsService.shared
+        
+        // Load creator stats
+        await analytics.updateCreatorStats(
+            creatorId: user.id,
+            newVideoId: nil,
+            category: nil
+        )
+        
+        // Get current metrics
+        if let creatorStats = await analytics.getCreatorDashboard(for: user.id) {
+            await MainActor.run {
+                realtimeStats.subscribers = creatorStats.totalSubscribers
+                realtimeStats.videos = creatorStats.totalVideos
+                realtimeStats.views = creatorStats.totalViews
+                realtimeStats.watchTime = creatorStats.totalWatchTime / 60 // Convert to minutes
+                realtimeStats.engagement = creatorStats.engagementRate * 100
+                realtimeStats.revenue = creatorStats.estimatedRevenue
+            }
+        } else {
+            // Fallback to user model data
+            await MainActor.run {
+                realtimeStats.subscribers = user.subscriberCount
+                realtimeStats.videos = user.videoCount
+                realtimeStats.views = user.totalViews ?? 0
+                realtimeStats.watchTime = 0
+                realtimeStats.engagement = 0
+                realtimeStats.revenue = 0
+            }
+        }
+        
+        isLoadingStats = false
     }
     
     private func formatCount(_ count: Int) -> String {
@@ -142,18 +256,39 @@ struct ProfileQuickMenu: View {
             return "\(count)"
         }
     }
+    
+    private func formatWatchTime(_ minutes: Int) -> String {
+        if minutes >= 60 {
+            return "\(minutes / 60)h"
+        }
+        return "\(minutes)m"
+    }
+    
+    private func formatRevenue(_ amount: Double) -> String {
+        return String(format: "$%.2f", amount)
+    }
 }
 
 // MARK: - Stat Column
 private struct StatColumn: View {
     let value: String
     let label: String
+    var isLive: Bool = false
     
     var body: some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.title2.weight(.bold))
-                .foregroundColor(.primary)
+        VStack(spacing: 6) {
+            HStack(spacing: 4) {
+                if isLive {
+                    Circle()
+                        .fill(.red)
+                        .frame(width: 6, height: 6)
+                        .shadow(color: .red, radius: 3)
+                }
+                
+                Text(value)
+                    .font(.title2.weight(.bold))
+                    .foregroundColor(.primary)
+            }
             
             Text(label)
                 .font(.caption)

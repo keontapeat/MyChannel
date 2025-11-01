@@ -666,6 +666,20 @@ struct VideoDetailView: View {
                 if !isYouTube {
                     // 🔥 ADD ADS LOGIC: Check for ads before playing video
                     Task { @MainActor in
+                        // 🔥 NO ADS ON YOUR OWN VIDEOS - Skip ads if watching your own content
+                        if let currentUser = AuthenticationManager.shared.currentUser,
+                           video.creator.id == currentUser.id {
+                            print("🎬 Your own video - skipping ALL ads, playing instantly!")
+                            playerManager.setupPlayer(with: video)
+                            playerManager.applyFastStartTuning()
+                            if AppState.shared.preferredVideoQuality != .auto {
+                                playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
+                                videoQuality = AppState.shared.preferredVideoQuality
+                            }
+                            playerManager.play()
+                            return
+                        }
+                        
                         // Premium gating: no ads for subscribers
                         if (try? await StoreKitService.shared.hasActiveSubscription()) == true {
                             print("👑 Premium user - no ads")
@@ -730,6 +744,13 @@ struct VideoDetailView: View {
                     }
                     // Fetch simple VMAP for preroll and pause content while ad plays
                     Task {
+                        // 🔥 NO VMAP ADS ON YOUR OWN VIDEOS
+                        if let currentUser = AuthenticationManager.shared.currentUser,
+                           video.creator.id == currentUser.id {
+                            print("🎬 Skipping VMAP ads - your video!")
+                            return
+                        }
+                        
                         if let vmap = await AdsService.shared.fetchVMAP(videoId: video.id) {
                             if let preroll = vmap.prerollUrl, !preroll.isEmpty, AdsFrequencyCapService.shared.canShowPreroll() {
                                 prerollURL = preroll
