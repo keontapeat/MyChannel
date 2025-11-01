@@ -1606,7 +1606,7 @@ private struct MinimalMusicSection: View {
     private var allArtists: [(name: String, avatar: String, views: Int, city: String?)] {
         // 🔥 BOOSIE FIRST - Top priority for promotion!
         let boosie: [(String,String,Int,String?)] = [
-            ("Boosie BadAzz", "https://unavatar.io/instagram/officialboosieig", 8_500_000, "Baton Rouge, LA")
+            ("Boosie BadAzz", "https://avatars.githubusercontent.com/u/1?v=4", 8_500_000, "Baton Rouge, LA")
         ]
         
         let curated: [(String,String,Int,String?)] = OwnerProfile.instagramFriends.map { ($0.name, $0.avatar, Int.random(in: 50_000...350_000), nil) }
