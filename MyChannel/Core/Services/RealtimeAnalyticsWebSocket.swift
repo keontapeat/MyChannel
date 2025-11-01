@@ -8,6 +8,7 @@
 
 import Foundation
 import Combine
+import SwiftUI
 
 /// WebSocket client for INSTANT analytics updates (no polling delay)
 @MainActor
