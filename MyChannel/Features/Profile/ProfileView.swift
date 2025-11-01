@@ -252,31 +252,6 @@ struct ProfileView: View {
         .sheet(isPresented: $showingSettings) {
             ProfileSettingsWrapper()
         }
-        .overlay(alignment: .top) {
-            if let u = authManager.currentUser, u.isVerified == false {
-                HStack(spacing: 10) {
-                    Image(systemName: "envelope.badge").foregroundColor(.orange)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Verify your email")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("We sent a verification link to \(u.email).")
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    Button("Resend") {
-                        Task { try? await AuthService.shared.requestEmailVerification() }
-                    }
-                    .font(.system(size: 12, weight: .semibold))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(AppTheme.Colors.surface)
-                .cornerRadius(10)
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-            }
-        }
     }
 
     // MARK: - Loading View
