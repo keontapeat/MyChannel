@@ -107,7 +107,7 @@ class SmartUserSeederService: ObservableObject {
         loadSeededUsers()
         
         // Count real vs mock users
-        await updateUserCounts()
+        await balanceUserMix()
         
         // If we don't have enough users, seed more
         if seededUsers.count < 50 {
@@ -253,8 +253,8 @@ class SmartUserSeederService: ObservableObject {
         """
         
         // Try Claude first
-        if let name = try? await AnthropicService.shared.sendMessage(prompt: prompt) {
-            return name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let name = try? await AnthropicService.shared.sendMessage(message: prompt) {
+            return name.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
         }
         
         // Fallback: Generate from template

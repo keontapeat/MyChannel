@@ -163,7 +163,6 @@ class AIRealtimeRankingService: ObservableObject {
     private func buildRankedCreator(from user: User) async -> RankedCreator {
         // Get real analytics
         let analytics = AdvancedAnalyticsService.shared
-        let dashboard = await analytics.getCreatorDashboard(for: user.id)
         
         return RankedCreator(
             id: user.id,
@@ -171,11 +170,11 @@ class AIRealtimeRankingService: ObservableObject {
             username: user.username,
             avatar: user.profileImageURL,
             isVerified: user.isVerified,
-            views: dashboard?.totalViews ?? user.totalViews ?? 0,
+            views: user.totalViews ?? 0,
             subscribers: user.subscriberCount,
-            videos: dashboard?.totalVideos ?? user.videoCount,
+            videos: user.videoCount,
             likes: 0, // TODO: Fetch from analytics
-            engagement: dashboard?.engagementRate ?? 0,
+            engagement: 0, // TODO: Calculate from analytics
             viralityScore: 0, // Will be computed by AI
             contentQualityScore: 0,
             trendingVelocity: 0,
@@ -296,17 +295,20 @@ class AIRealtimeRankingService: ObservableObject {
     
     // MARK: - Channel Rankings
     private func updateChannelRankings() async {
-        // Similar to creator rankings but focused on channel metrics
-        var allChannels: [RankedChannel] = []
-        
-        // Fetch from Firestore
-        // For now, use sample data
-        allChannels = await generateSampleChannels()
-        
-        // Sort by subscribers and views
-        allChannels.sort { $0.subscribers > $1.subscribers }
-        
-        topChannels = Array(allChannels.prefix(20))
+        // Convert creators to channels (same data, different view)
+        topChannels = topCreators.map { creator in
+            RankedChannel(
+                id: creator.id,
+                name: creator.name,
+                avatar: creator.avatar,
+                subscribers: creator.subscribers,
+                totalViews: creator.views,
+                videoCount: creator.videos,
+                overallRank: creator.overallRank,
+                rankChange: creator.rankChange,
+                lastUpdated: creator.lastUpdated
+            )
+        }
     }
     
     // MARK: - Video Rankings (Viral Detection)
@@ -314,9 +316,39 @@ class AIRealtimeRankingService: ObservableObject {
         // Fetch latest videos with real-time metrics
         var allVideos: [RankedVideo] = []
         
-        // Get from VideoFirestoreService
-        // For now, use sample data
-        allVideos = await generateSampleVideos()
+        // Get from VideoFirestoreService - fetch real videos
+        #if canImport(FirebaseFirestore)
+        let recentVideos = await VideoFirestoreService.shared.fetchRecentVideos(limit: 50)
+        
+        // Convert to RankedVideo
+        for video in recentVideos {
+            let rankedVideo = RankedVideo(
+                id: video.id,
+                title: video.title,
+                thumbnail: video.thumbnailURL,
+                creatorName: video.creator.displayName,
+                creatorAvatar: video.creator.profileImageURL,
+                views: video.viewCount,
+                likes: video.likeCount,
+                comments: video.commentCount ?? 0,
+                shares: 0, // TODO: Track shares
+                viralityScore: 0,
+                engagementVelocity: 0,
+                overallRank: 0,
+                rankChange: 0,
+                isGoingViral: false,
+                lastUpdated: Date()
+            )
+            allVideos.append(rankedVideo)
+        }
+        #endif
+        
+        // If no videos from Firestore, skip (empty is fine)
+        if allVideos.isEmpty {
+            topVideos = []
+            viralNow = []
+            return
+        }
         
         // 🔥 AI SCORING: Score each video for virality
         for i in 0..<allVideos.count {
@@ -356,8 +388,8 @@ class AIRealtimeRankingService: ObservableObject {
     // MARK: - AI API Calls
     private func getClaudeScore(prompt: String) async -> Double? {
         do {
-            let response = try await AnthropicService.shared.sendMessage(prompt: prompt)
-            if let score = Double(response.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            let response = try await AnthropicService.shared.sendMessage(message: prompt)
+            if let score = Double(response.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)) {
                 return min(max(score, 0), 100)
             }
         } catch {
@@ -372,7 +404,7 @@ class AIRealtimeRankingService: ObservableObject {
                 .init(role: "system", content: "You are an expert content analyst. Respond with ONLY a number 0-100."),
                 .init(role: "user", content: prompt)
             ])
-            if let score = Double(response.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            if let score = Double(response.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)) {
                 return min(max(score, 0), 100)
             }
         } catch {
@@ -380,7 +412,5 @@ class AIRealtimeRankingService: ObservableObject {
         }
         return nil
     }
-    
-    // Sample data removed - now using SmartUserSeederService!
 }
 
