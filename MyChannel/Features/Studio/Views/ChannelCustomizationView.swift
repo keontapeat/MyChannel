@@ -126,7 +126,7 @@ struct ChannelCustomizationView: View {
 }
 
 #Preview("Channel Customization") {
-    NavigationStack {
+    SwiftUI.NavigationStack {
         ChannelCustomizationView()
     }
 }

@@ -683,7 +683,7 @@ struct PaymentHistorySheet: View {
 }
 
 #Preview("Earnings Management") {
-    NavigationStack {
+    SwiftUI.NavigationStack {
         EarningsManagementView()
     }
 }

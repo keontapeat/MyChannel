@@ -142,7 +142,7 @@ struct ModerationCard: View {
 }
 
 #Preview("Community Management") {
-    NavigationStack {
+    SwiftUI.NavigationStack {
         CommunityManagementView()
     }
 }

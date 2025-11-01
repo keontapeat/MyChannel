@@ -553,7 +553,7 @@ struct VideoEditorSheet: View {
 }
 
 #Preview("Content Management") {
-    NavigationStack {
+    SwiftUI.NavigationStack {
         ContentManagementView()
             .environmentObject(AppState())
     }

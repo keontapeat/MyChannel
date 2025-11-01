@@ -463,7 +463,7 @@ struct FlickEditorSheet: View {
 }
 
 #Preview("Flicks Studio") {
-    NavigationStack {
+    SwiftUI.NavigationStack {
         FlicksStudioView()
     }
 }

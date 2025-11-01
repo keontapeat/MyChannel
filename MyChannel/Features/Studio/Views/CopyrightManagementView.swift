@@ -192,7 +192,7 @@ struct EducationCard: View {
 }
 
 #Preview("Copyright Management") {
-    NavigationStack {
+    SwiftUI.NavigationStack {
         CopyrightManagementView()
     }
 }
