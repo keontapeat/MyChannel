@@ -1604,6 +1604,11 @@ private struct MinimalMusicSection: View {
     var onSeeAll: (() -> Void)? = nil
 
     private var allArtists: [(name: String, avatar: String, views: Int, city: String?)] {
+        // 🔥 BOOSIE FIRST - Top priority for promotion!
+        let boosie: [(String,String,Int,String?)] = [
+            ("Boosie BadAzz", "https://unavatar.io/instagram/officialboosieig", 8_500_000, "Baton Rouge, LA")
+        ]
+        
         let curated: [(String,String,Int,String?)] = OwnerProfile.instagramFriends.map { ($0.name, $0.avatar, Int.random(in: 50_000...350_000), nil) }
         let extras: [(String,String,Int,String?)] = [
             ("@scatzripky6", "https://unavatar.io/instagram/scatzripky6", 346_300, "Flint, MI"),
@@ -1612,7 +1617,8 @@ private struct MinimalMusicSection: View {
         ]
         var seen = Set<String>()
         var ordered: [(String,String,Int,String?)] = []
-        for item in (curated + extras) {
+        // Boosie goes first!
+        for item in (boosie + curated + extras) {
             let key = item.0.lowercased()
             if seen.insert(key).inserted {
                 ordered.append(item)
