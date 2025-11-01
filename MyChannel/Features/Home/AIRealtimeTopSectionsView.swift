@@ -9,7 +9,7 @@
 import SwiftUI
 
 // MARK: - AI Real-Time Top Creators Section
-struct AIRealtimeTopCreators Section: View {
+struct AIRealtimeTopCreatorsSection: View {
     @StateObject private var rankingService = AIRealtimeRankingService.shared
     var onSelect: (AIRealtimeRankingService.RankedCreator) -> Void = { _ in }
     
