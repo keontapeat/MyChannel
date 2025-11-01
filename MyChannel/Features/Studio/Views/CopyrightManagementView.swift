@@ -191,7 +191,7 @@ struct EducationCard: View {
     }
 }
 
-#Preview("Studio View") {
+#Preview("Copyright Management") {
     NavigationStack {
         CopyrightManagementView()
     }

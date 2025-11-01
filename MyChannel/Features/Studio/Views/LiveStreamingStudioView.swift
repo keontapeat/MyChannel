@@ -175,7 +175,7 @@ struct PastStreamRow: View {
     }
 }
 
-#Preview("Studio View") {
+#Preview("Live Streaming") {
     NavigationStack {
         LiveStreamingStudioView()
     }

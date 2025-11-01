@@ -131,7 +131,7 @@ struct StudioSettingsView: View {
     }
 }
 
-#Preview("Studio View") {
+#Preview("Studio Settings") {
     NavigationStack {
         StudioSettingsView()
     }

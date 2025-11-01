@@ -682,7 +682,7 @@ struct PaymentHistorySheet: View {
     }
 }
 
-#Preview("Studio View") {
+#Preview("Earnings Management") {
     NavigationStack {
         EarningsManagementView()
     }

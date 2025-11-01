@@ -85,12 +85,7 @@ struct CommunityManagementView: View {
     }
 }
 
-struct Comment: Identifiable {
-    let id = UUID()
-    let username: String
-    let text: String
-    let timestamp: Date
-}
+// Using existing Comment model from Core
 
 struct CommentRow: View {
     var body: some View {
@@ -146,7 +141,7 @@ struct ModerationCard: View {
     }
 }
 
-#Preview("Studio View") {
+#Preview("Community Management") {
     NavigationStack {
         CommunityManagementView()
     }
