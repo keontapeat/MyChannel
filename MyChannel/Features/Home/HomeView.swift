@@ -242,6 +242,13 @@ struct HomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowSwitchProfile"))) { _ in
             showingSwitchProfile = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenVideoAnalytics"))) { notification in
+            // 🔥 OPEN CREATOR STUDIO: Navigate to analytics for specific video
+            if let video = notification.object as? Video {
+                // Navigate to Creator Studio with analytics tab selected
+                route = .custom("creatorStudioAnalytics_\(video.id)")
+            }
+        }
         .fullScreenCover(item: $route) { route in
             switch route {
             case .video(let video):
@@ -299,7 +306,12 @@ struct HomeView: View {
                     .onDisappear { self.route = nil }
             
             case .custom(let id):
-                if id == "musicHub" {
+                // Handle Creator Studio navigation
+                if id.starts(with: "creatorStudioAnalytics_") {
+                    ComprehensiveCreatorStudioView()
+                        .environmentObject(appState)
+                        .onDisappear { self.route = nil }
+                } else if id == "musicHub" {
                     MusicHubView()
                         .environmentObject(appState)
                         .onDisappear { self.route = nil }
