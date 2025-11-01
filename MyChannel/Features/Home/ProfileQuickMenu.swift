@@ -212,28 +212,33 @@ struct ProfileQuickMenu: View {
     private func loadRealtimeStats() async {
         isLoadingStats = true
         
-        // Fetch from AdvancedAnalyticsService
+        // Try to fetch analytics from AdvancedAnalyticsService
         let analytics = AdvancedAnalyticsService.shared
         
-        // Load creator stats
-        await analytics.updateCreatorStats(
-            creatorId: user.id,
-            newVideoId: nil,
-            category: nil
-        )
-        
-        // Get current metrics
-        if let creatorStats = await analytics.getCreatorDashboard(for: user.id) {
-            await MainActor.run {
-                realtimeStats.subscribers = creatorStats.totalSubscribers
-                realtimeStats.videos = creatorStats.totalVideos
-                realtimeStats.views = creatorStats.totalViews
-                realtimeStats.watchTime = creatorStats.totalWatchTime / 60 // Convert to minutes
-                realtimeStats.engagement = creatorStats.engagementRate * 100
-                realtimeStats.revenue = creatorStats.estimatedRevenue
+        do {
+            // Try to get channel analytics
+            if let channelAnalytics = try? await analytics.getChannelAnalytics(for: user.id) {
+                await MainActor.run {
+                    realtimeStats.subscribers = channelAnalytics.totalSubscribers
+                    realtimeStats.videos = channelAnalytics.totalVideos
+                    realtimeStats.views = channelAnalytics.totalViews
+                    realtimeStats.watchTime = Int(channelAnalytics.totalWatchTime / 60) // Convert to minutes
+                    realtimeStats.engagement = channelAnalytics.engagementRate * 100
+                    realtimeStats.revenue = channelAnalytics.estimatedRevenue ?? 0
+                }
+            } else {
+                // Fallback to user model data
+                await MainActor.run {
+                    realtimeStats.subscribers = user.subscriberCount
+                    realtimeStats.videos = user.videoCount
+                    realtimeStats.views = user.totalViews ?? 0
+                    realtimeStats.watchTime = 0
+                    realtimeStats.engagement = 0
+                    realtimeStats.revenue = 0
+                }
             }
-        } else {
-            // Fallback to user model data
+        } catch {
+            // Error fetching analytics, use user model data
             await MainActor.run {
                 realtimeStats.subscribers = user.subscriberCount
                 realtimeStats.videos = user.videoCount
