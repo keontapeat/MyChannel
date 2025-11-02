@@ -28,6 +28,10 @@ class GlobalVideoPlayerManager: ObservableObject {
     @Published var pausedByFlicks = false
     @Published var isPiPActive = false
     
+    // 🔥 YOUTUBE PARITY: Video Queue for Up Next
+    @Published var videoQueue: [Video] = []
+    @Published var queueIndex: Int = 0
+    
     private var playerManager: VideoPlayerManager?
     private var cancellables = Set<AnyCancellable>()
     private var isCleanedUp = false
@@ -35,6 +39,19 @@ class GlobalVideoPlayerManager: ObservableObject {
     
     // 🔥 YOUTUBE PARITY: Picture-in-Picture support
     private var pipController: AVPictureInPictureController?
+    
+    var upNextVideo: Video? {
+        guard queueIndex + 1 < videoQueue.count else { return nil }
+        return videoQueue[queueIndex + 1]
+    }
+    
+    var hasPreviousVideo: Bool {
+        queueIndex > 0
+    }
+    
+    var hasNextVideo: Bool {
+        queueIndex + 1 < videoQueue.count
+    }
 
     var player: AVPlayer? {
         playerManager?.player
@@ -234,7 +251,7 @@ class GlobalVideoPlayerManager: ObservableObject {
     }
 
     // MARK: - Video Management
-    func playVideo(_ video: Video, showFullscreen: Bool = true) {
+    func playVideo(_ video: Video, showFullscreen: Bool = true, queue: [Video] = []) {
         guard !isCleanedUp else { return }
         
         // Stop any current playback immediately to avoid overlap when switching fast
@@ -246,6 +263,16 @@ class GlobalVideoPlayerManager: ObservableObject {
         }
         
         currentVideo = video
+        
+        // 🔥 YOUTUBE PARITY: Setup video queue
+        if !queue.isEmpty {
+            videoQueue = queue
+            queueIndex = queue.firstIndex(where: { $0.id == video.id }) ?? 0
+        } else {
+            videoQueue = [video]
+            queueIndex = 0
+        }
+        
         playerManager?.setupPlayer(with: video)
         
         // Default behavior – show mini when not fullscreen
@@ -262,6 +289,52 @@ class GlobalVideoPlayerManager: ObservableObject {
         // Add haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
         impactFeedback.impactOccurred()
+    }
+    
+    // 🔥 YOUTUBE PARITY: Navigate to next video in queue
+    func playNextVideo() {
+        guard hasNextVideo else {
+            print("⚠️ [GlobalVideoPlayerManager] No next video in queue")
+            return
+        }
+        
+        queueIndex += 1
+        let nextVideo = videoQueue[queueIndex]
+        currentVideo = nextVideo
+        
+        stopImmediately()
+        playerManager?.setupPlayer(with: nextVideo)
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self = self, !self.isCleanedUp else { return }
+            self.playerManager?.play()
+        }
+        
+        HapticManager.shared.impact(style: .medium)
+        print("▶️ [GlobalVideoPlayerManager] Playing next video: \(nextVideo.title)")
+    }
+    
+    // 🔥 YOUTUBE PARITY: Navigate to previous video in queue
+    func playPreviousVideo() {
+        guard hasPreviousVideo else {
+            print("⚠️ [GlobalVideoPlayerManager] No previous video in queue")
+            return
+        }
+        
+        queueIndex -= 1
+        let previousVideo = videoQueue[queueIndex]
+        currentVideo = previousVideo
+        
+        stopImmediately()
+        playerManager?.setupPlayer(with: previousVideo)
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self = self, !self.isCleanedUp else { return }
+            self.playerManager?.play()
+        }
+        
+        HapticManager.shared.impact(style: .medium)
+        print("◀️ [GlobalVideoPlayerManager] Playing previous video: \(previousVideo.title)")
     }
     
     func minimizePlayer() {

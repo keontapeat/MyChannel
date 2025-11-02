@@ -218,6 +218,22 @@ struct FloatingMiniPlayer: View {
                     .font(.system(size: 11))
                     .foregroundStyle(AppTheme.Colors.textSecondary)
                     .lineLimit(1)
+                
+                // 🔥 YOUTUBE PARITY: "Up Next" preview
+                if let upNext = globalPlayer.upNextVideo {
+                    HStack(spacing: 6) {
+                        Text("Up Next:")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        
+                        Text(upNext.title)
+                            .font(.system(size: 9, weight: .regular))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .lineLimit(1)
+                    }
+                    .padding(.vertical, 2)
+                }
+                
                 // 🔥 YOUTUBE PARITY: Enhanced progress bar with scrubbing + time display
                 VStack(spacing: 2) {
                     scrubbableProgressBar
@@ -810,31 +826,31 @@ struct FloatingMiniPlayer: View {
             HStack {
                 // Previous video
                 Button(action: {
-                    // Navigate to previous video in queue
-                    HapticManager.shared.impact(style: .medium)
+                    globalPlayer.playPreviousVideo()
                 }) {
                     Image(systemName: "backward.end.fill")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white)
+                        .foregroundColor(globalPlayer.hasPreviousVideo ? .white : .white.opacity(0.3))
                         .padding(8)
                         .background(.black.opacity(0.6))
                         .clipShape(Circle())
                 }
+                .disabled(!globalPlayer.hasPreviousVideo)
                 
                 Spacer()
                 
                 // Next video
                 Button(action: {
-                    // Navigate to next video in queue
-                    HapticManager.shared.impact(style: .medium)
+                    globalPlayer.playNextVideo()
                 }) {
                     Image(systemName: "forward.end.fill")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white)
+                        .foregroundColor(globalPlayer.hasNextVideo ? .white : .white.opacity(0.3))
                         .padding(8)
                         .background(.black.opacity(0.6))
                         .clipShape(Circle())
                 }
+                .disabled(!globalPlayer.hasNextVideo)
             }
             .padding(8)
         }
@@ -884,15 +900,11 @@ struct FloatingMiniPlayer: View {
     // MARK: - 🔥 YOUTUBE PARITY: Navigation Functions
     
     private func navigateToPreviousVideo() {
-        // TODO: Implement queue-based previous video navigation
-        HapticManager.shared.impact(style: .medium)
-        print("Navigate to previous video")
+        globalPlayer.playPreviousVideo()
     }
     
     private func navigateToNextVideo() {
-        // TODO: Implement queue-based next video navigation
-        HapticManager.shared.impact(style: .medium)
-        print("Navigate to next video")
+        globalPlayer.playNextVideo()
     }
 }
 
