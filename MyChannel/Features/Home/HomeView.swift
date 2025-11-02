@@ -218,16 +218,7 @@ struct HomeView: View {
                 .environmentObject(appState)
                 .environmentObject(AuthenticationManager.shared)
         }
-        .modifier(
-            ConditionalOnReceiveModifier(
-                publisher: isRunningInPreview ? nil : Timer.publish(every: 10.0, on: .main, in: .common).autoconnect(),
-                action: { _ in
-                    withAnimation(.easeInOut(duration: 1.0)) {
-                        heroVideoIndex = (heroVideoIndex + 1) % max(1, featuredContent.count)
-                    }
-                }
-            )
-        )
+        // Auto-scroll removed: hero section only changes on manual swipe
         .onReceive(NotificationCenter.default.publisher(for: .storiesDidChange)) { _ in
             loadUserStories()
         }
@@ -1199,6 +1190,84 @@ struct MinimalContentSections: View {
     }
 
     private func extraTrendingVideos() -> [Video] {
+        var videos: [Video] = []
+        
+        // Baby Ju - Free Ty (Featured as #1 trending)
+        let babyJuCreator = User(
+            username: "babyju",
+            displayName: "Baby Ju",
+            email: "noreply@yt.com",
+            profileImageURL: "https://i.ytimg.com/vi/JSXmfgZzHqQ/hqdefault.jpg",
+            bannerImageURL: nil,
+            bio: "Artist",
+            subscriberCount: 2040,
+            videoCount: 0,
+            isVerified: true,
+            isCreator: true,
+            location: "CALIFORNIA"
+        )
+        let babyJuVideo = Video(
+            id: "yt_JSXmfgZzHqQ",
+            title: "Baby Ju - Free Ty (Official Video) #ShotByBigHornet",
+            description: "Official Music Video to \"Free Ty\" by Baby Ju off the \"Rock Em Baba\" tape. Shot by @BigHornet. Stream \"Free Ty\" on the \"Rock Em Baba\" EP",
+            thumbnailURL: "https://i.ytimg.com/vi/JSXmfgZzHqQ/hqdefault.jpg",
+            videoURL: "https://www.youtube.com/watch?v=JSXmfgZzHqQ",
+            duration: 184,
+            viewCount: 10_000_000,
+            likeCount: 572,
+            commentCount: 39,
+            createdAt: Date(),
+            creator: babyJuCreator,
+            category: .music,
+            tags: ["music", "baby ju", "free ty", "rock em baba", "shotbybighornet"],
+            isPublic: true,
+            quality: [.quality720p],
+            aspectRatio: .landscape,
+            isLiveStream: false,
+            contentSource: .youtube,
+            externalID: "JSXmfgZzHqQ",
+            isVerified: true
+        )
+        videos.append(babyJuVideo)
+        
+        // KTrip - Whatever (Featured as #2 trending)
+        let kTripCreator = User(
+            username: "ktrip",
+            displayName: "KTrip",
+            email: "noreply@yt.com",
+            profileImageURL: "https://i.ytimg.com/vi/xfdydb_3Ra0/hqdefault.jpg",
+            bannerImageURL: nil,
+            bio: "Artist",
+            subscriberCount: 5000,
+            videoCount: 0,
+            isVerified: true,
+            isCreator: true
+        )
+        let kTripVideo = Video(
+            id: "yt_xfdydb_3Ra0",
+            title: "KTrip - \"Whatever\" (Block Logic Exclusive - Official Music Video)",
+            description: "Official Music Video by KTrip",
+            thumbnailURL: "https://i.ytimg.com/vi/xfdydb_3Ra0/hqdefault.jpg",
+            videoURL: "https://www.youtube.com/watch?v=xfdydb_3Ra0",
+            duration: Double.random(in: 90...300),
+            viewCount: 8_000_000,
+            likeCount: Int.random(in: 100...50_000),
+            commentCount: Int.random(in: 10...10_000),
+            createdAt: Date(),
+            creator: kTripCreator,
+            category: .music,
+            tags: ["music", "ktrip", "whatever", "block logic"],
+            isPublic: true,
+            quality: [.quality720p],
+            aspectRatio: .landscape,
+            isLiveStream: false,
+            contentSource: .youtube,
+            externalID: "xfdydb_3Ra0",
+            isVerified: true
+        )
+        videos.append(kTripVideo)
+        
+        // Other videos
         let friendUser = User(
             username: "scatz",
             displayName: "Scatz",
@@ -1216,7 +1285,7 @@ struct MinimalContentSections: View {
             ("l1gQVUGdMyw", "YouTube Video l1gQVUGdMyw"),
             ("71GJrAY54Ew", "Scatz - Rebound (Official Music Video)")
         ]
-        return entries.map { e in
+        let otherVideos = entries.map { e in
             Video(
                 id: "yt_\(e.id)",
                 title: e.title,
@@ -1240,13 +1309,15 @@ struct MinimalContentSections: View {
                 isVerified: true
             )
         }
+        videos.append(contentsOf: otherVideos)
+        
+        return videos
     }
 
     // Curated Flint artists showcase to seed All/Trending so the app looks full and professional
     private func flintShowcaseVideos() -> [Video] {
         struct Entry { let artist: String; let slug: String; let title: String }
         let items: [Entry] = [
-            .init(artist: "Rio Da Yung OG", slug: "rio_dyog", title: "Rio Da Yung OG – Official Video"),
             .init(artist: "YN Jay", slug: "yn_jay", title: "YN Jay – Official Video"),
             .init(artist: "RMC Mike", slug: "rmc_mike", title: "RMC Mike – Official Video"),
             .init(artist: "Louie Ray", slug: "louie_ray", title: "Louie Ray – Official Video"),
@@ -1392,8 +1463,8 @@ struct MinimalContentSections: View {
                 TopTenCarousel(
                     videos: {
                         let base = friendChannelVideos.isEmpty ? [] : friendChannelVideos
-                        // Known-good thumbnails first
-                        let pinnedIDs = ["96Zeze6gdEI", "l1gQVUGdMyw", "71GJrAY54Ew"]
+                        // Featured videos first: Baby Ju #1, KTrip #2
+                        let pinnedIDs = ["JSXmfgZzHqQ", "xfdydb_3Ra0", "96Zeze6gdEI", "l1gQVUGdMyw", "71GJrAY54Ew"]
                         let pinnedVideos: [Video] = pinnedIDs.compactMap { id in
                             extraTrendingVideos().first(where: { $0.externalID == id }) ??
                             detroitFlintArtistsTrending().first(where: { $0.externalID == id })
@@ -1616,35 +1687,99 @@ private struct MinimalMusicSection: View {
     var onSeeAll: (() -> Void)? = nil
 
     private var allArtists: [(name: String, avatar: String, views: Int, city: String?)] {
-        // 🔥 BOOSIE FIRST - Top priority for promotion!
-        let boosie: [(String,String,Int,String?)] = [
-            ("Boosie BadAzz", "boosie-badazz", 8_500_000, "Baton Rouge, LA")
-        ]
-        
         // 🎵 LOCAL ARTISTS WITH ASSETS - Using local images for fast loading!
         let localArtists: [(String,String,Int,String?)] = [
+            ("Bae Shanicee", "BaeShaniceeAvatar", 200_000, nil),
+            ("Báby Ju", "BabyJuAvatar", 210_000, nil),
             ("HTG Nook", "HTGNookAvatar", 215_600, "Flint, MI"),
             ("Kleanup Man", "KleanupManAvatar", 200_800, "Detroit, MI"),
             ("Scatz Ripky", "ScatzAvatar", 346_300, "Flint, MI"),
-            ("YN Jay", "WaypAvatar", 232_000, "Flint, MI"),
-            ("YSR Loski Brim", "YSRLoskiBrim", 189_400, "Flint, MI")
+            ("Faneto Rich", "FanetoRichAvatar", 250_000, "Buc Town"),
+            ("Cashpaid Jay", "CashpaidJayAvatar", 225_000, nil),
+            ("Benji Gram", "BenjiGramAvatar", 220_000, nil),
+            ("Mbk Cari", "MbkCariAvatar", 195_000, nil),
+            ("Luh Monti", "LuhMontiAvatar", 230_000, nil),
+            ("Mac Quall", "MacQuallAvatar", 205_000, nil),
+            ("Jeff Skigh", "JeffSkighAvatar", 200_000, nil),
+            ("Six Ward Von", "SixWardVonAvatar", 210_000, nil),
+            ("Barth Baby", "BarthBabyAvatar", 215_000, nil),
+            ("Baby Ghost", "BabyGhostAvatar", 220_000, nil)
         ]
         
         let curated: [(String,String,Int,String?)] = OwnerProfile.instagramFriends.map { ($0.name, $0.avatar, Int.random(in: 50_000...350_000), nil) }
         
+        // Improved deduplication: normalize names (remove @, spaces, punctuation) and check avatar assets
         var seen = Set<String>()
+        var seenAvatars = Set<String>()
         var ordered: [(String,String,Int,String?)] = []
-        // Boosie first, then local artists with real pics, then the rest!
-        for item in (boosie + localArtists + curated) {
-            let key = item.0.lowercased()
-            if seen.insert(key).inserted {
+        
+        // Helper to normalize artist name for comparison
+        func normalize(_ name: String) -> String {
+            return name.lowercased()
+                .replacingOccurrences(of: "@", with: "")
+                .replacingOccurrences(of: ".", with: "")
+                .replacingOccurrences(of: "_", with: "")
+                .replacingOccurrences(of: " ", with: "")
+        }
+        
+        // Helper to extract asset name from avatar string
+        func extractAssetName(_ avatar: String) -> String? {
+            if avatar.hasPrefix("asset://") {
+                let components = avatar.components(separatedBy: "?")
+                if components.count > 0 {
+                    return components[0].replacingOccurrences(of: "asset://", with: "")
+                }
+            } else if !avatar.hasPrefix("http") {
+                // Local asset name (not a URL)
+                return avatar
+            }
+            return nil
+        }
+        
+        // Process local artists first (priority)
+        for item in localArtists {
+            let normalizedName = normalize(item.0)
+            let assetName = extractAssetName(item.1)
+            
+            // Skip if we've already seen this normalized name or the same asset
+            let shouldSkip = seen.contains(normalizedName) || (assetName != nil && seenAvatars.contains(assetName!))
+            if !shouldSkip {
+                seen.insert(normalizedName)
+                if let asset = assetName {
+                    seenAvatars.insert(asset)
+                }
                 ordered.append(item)
             }
         }
+        
+        // Then add curated artists (skip if duplicate)
+        for item in curated {
+            let normalizedName = normalize(item.0)
+            let assetName = extractAssetName(item.1)
+            
+            // Skip if duplicate name or asset
+            let shouldSkip = seen.contains(normalizedName) || (assetName != nil && seenAvatars.contains(assetName!))
+            if !shouldSkip {
+                seen.insert(normalizedName)
+                if let asset = assetName {
+                    seenAvatars.insert(asset)
+                }
+                ordered.append(item)
+            }
+        }
+        
         return ordered
     }
 
-    private var artists: [(name: String, avatar: String, views: Int, city: String?)] { allArtists }
+    private var artists: [(name: String, avatar: String, views: Int, city: String?)] {
+        // Filter out artists whose avatar assets don't exist (no empty cards)
+        allArtists.filter { artist in
+            // If it's a URL, keep it
+            if artist.avatar.hasPrefix("http") { return true }
+            // If it's a local asset, check if it exists
+            return UIImage(named: artist.avatar) != nil
+        }
+    }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -1682,12 +1817,33 @@ private struct MinimalMusicSection: View {
                                             .frame(width: 120, height: 180)
                                     }
                                 } else {
-                                    // Local asset image
-                                    Image(a.avatar)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 120, height: 180)
-                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    // Local asset image with fallback
+                                    Group {
+                                        if let uiImage = UIImage(named: a.avatar) {
+                                            Image(uiImage: uiImage)
+                                                .resizable()
+                                                .scaledToFill()
+                                                .frame(width: 120, height: 180)
+                                                .offset(y: a.avatar == "MbkCariAvatar" ? 15 : 0) // Shift Mbk Cari image down to show face
+                                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                        } else {
+                                            // Fallback placeholder if asset not found
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .fill(
+                                                    LinearGradient(
+                                                        colors: [Color(.systemGray5), Color(.systemGray6)],
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    )
+                                                )
+                                                .frame(width: 120, height: 180)
+                                                .overlay(
+                                                    Image(systemName: "person.circle.fill")
+                                                        .font(.system(size: 40))
+                                                        .foregroundColor(.secondary)
+                                                )
+                                        }
+                                    }
                                 }
 
                                 VStack(alignment: .leading, spacing: 2) {
@@ -2197,6 +2353,26 @@ private struct TopIndieFilmmakersSection: View {
     }
 
     private var filmmakers: [Filmmaker] {
+        // Merch HD as top filmmaker
+        // Use local asset if available, otherwise use placeholder
+        let assetName = "MerchHDAvatar"
+        let merchHDAvatar: String
+        if UIImage(named: assetName) != nil {
+            // Revert to legacy string; actual rendering will hard-wire the asset
+            merchHDAvatar = "asset://\(assetName)"
+            print("✅ Found Merch HD asset: \(assetName)")
+        } else {
+            merchHDAvatar = "https://i.pravatar.cc/200?u=merch_hd"
+            print("⚠️ Merch HD asset '\(assetName)' not found - using placeholder")
+        }
+        
+        let merchHD = Filmmaker(
+            name: "Merch HD",
+            films: 15,
+            score: 100, // Highest score to ensure #1 position
+            avatar: merchHDAvatar
+        )
+        
         let names = [
             "A. Rivers", "N. Carter", "M. Sloan", "J. Patel", "R. Alvarez",
             "S. Kim", "D. Morgan", "K. O'Neal", "B. Laurent", "T. Ito"
@@ -2209,7 +2385,9 @@ private struct TopIndieFilmmakersSection: View {
                 avatar: "https://i.pravatar.cc/200?u=indie_\(idx)"
             )
         }
-        return items.sorted { $0.score > $1.score }
+        
+        var all = [merchHD] + items
+        return all.sorted { $0.score > $1.score }
     }
 
     var onSelect: (String, [FreeMovie]) -> Void = { _,_ in }
@@ -2234,11 +2412,24 @@ private struct TopIndieFilmmakersSection: View {
                                             .stroke(AppTheme.Colors.primary, lineWidth: 3)
                                             .frame(width: 64, height: 64)
 
-                                        AppAsyncImage(url: URL(string: f.avatar)) { img in
-                                            img.resizable().scaledToFill()
-                                        } placeholder: { Color.white }
-                                        .frame(width: 58, height: 58)
-                                        .clipShape(Circle())
+                                        if idx == 0, let merchImage = UIImage(named: "MerchHDAvatar") {
+                                            // Force Merch HD to show the local asset as #1
+                                            Image(uiImage: merchImage)
+                                                .resizable()
+                                                .scaledToFill()
+                                                .frame(width: 58, height: 58)
+                                                .clipShape(Circle())
+                                        } else if let url = URL(string: f.avatar) {
+                                            AppAsyncImage(url: url) { img in
+                                                img.resizable().scaledToFill()
+                                            } placeholder: { Color.white }
+                                            .frame(width: 58, height: 58)
+                                            .clipShape(Circle())
+                                        } else {
+                                            Color.white
+                                                .frame(width: 58, height: 58)
+                                                .clipShape(Circle())
+                                        }
                                     }
 
                                     Text("#\(idx + 1)")
@@ -2420,7 +2611,53 @@ struct ForYouSection: View {
     private func loadForYou(userId: String) async {
         isLoading = true
         // 🔥 Use home feed that includes uploaded videos
-        let feed = await personalizedService.generateHomeFeed(limit: 12)
+        var feed = await personalizedService.generateHomeFeed(limit: 12)
+        
+        // Add featured video "Juicy Booty Banger" at the beginning (fake video - thumbnail only)
+        // IMPORTANT: Make sure the image in Assets.xcassets is named exactly "JuicyBootyBangerThumbnail" (case-sensitive)
+        let assetName = "JuicyBootyBangerThumbnail"
+        let thumbnailURL: String
+        if UIImage(named: assetName) != nil {
+            thumbnailURL = "asset://\(assetName)"
+            print("✅ Found asset: \(assetName)")
+        } else {
+            // Fallback to placeholder if asset not found
+            thumbnailURL = "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"
+            print("⚠️ Asset '\(assetName)' not found in Assets.xcassets - using placeholder")
+        }
+        
+        let featuredVideo = Video(
+            id: "featured_juicy_booty_banger",
+            title: "Juicy Booty Banger",
+            description: "Content that gets people's attention",
+            thumbnailURL: thumbnailURL,
+            videoURL: "", // No actual video - just showing thumbnail
+            duration: 180,
+            viewCount: 5_000_000, // High view count to ensure it's at the top
+            likeCount: 250_000,
+            creator: User(
+                username: "featured",
+                displayName: "Featured",
+                email: "noreply@mychannel.com",
+                profileImageURL: nil,
+                subscriberCount: 1_000_000,
+                isVerified: true,
+                isCreator: true
+            ),
+            category: .entertainment,
+            tags: ["featured", "viral", "trending"],
+            isPublic: true,
+            quality: [.quality720p],
+            aspectRatio: .landscape,
+            isLiveStream: false,
+            contentSource: .userUploaded,
+            externalID: nil,
+            isVerified: true
+        )
+        
+        // Prepend featured video to the feed
+        feed.insert(featuredVideo, at: 0)
+        
         await MainActor.run {
             forYouVideos = feed
             isLoading = false

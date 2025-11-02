@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct MultiSourceAsyncImage<Content: View, Placeholder: View>: View {
     let urls: [URL]
@@ -41,6 +42,22 @@ struct MultiSourceAsyncImage<Content: View, Placeholder: View>: View {
     private func loadCurrentOrNext() {
         guard index < urls.count else { return }
         let url = urls[index]
+        
+        // Check for asset:// URLs first - load from local assets
+        if url.scheme == "asset" {
+            let assetName = url.host ?? url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            if !assetName.isEmpty, let ui = UIImage(named: assetName) {
+                ImageCache.shared.setImage(ui, for: url)
+                self.image = ui
+                return
+            } else {
+                // Asset not found, try next URL
+                Task {
+                    await tryNext()
+                }
+                return
+            }
+        }
         
         if let cached = ImageCache.shared.image(for: url) {
             self.image = cached

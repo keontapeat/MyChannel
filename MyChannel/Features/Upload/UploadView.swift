@@ -1007,14 +1007,14 @@ struct UploadView: View {
                         .stroke(Color(.systemGray6), lineWidth: 10)
                         .frame(width: 180, height: 180)
                     
-                    // Gradient progress circle
+                    // Gradient progress circle - Beautiful green!
                     Circle()
                         .trim(from: 0, to: uploadManager.uploadProgress)
                         .stroke(
                             LinearGradient(
                                 colors: [
-                                    Color(red: 0.3, green: 0.85, blue: 0.8),
-                                    Color(red: 0.7, green: 0.5, blue: 0.4)
+                                    Color(red: 0.2, green: 0.9, blue: 0.6),  // Bright mint green
+                                    Color(red: 0.1, green: 0.7, blue: 0.4)   // Rich emerald green
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -1111,21 +1111,54 @@ struct UploadView: View {
             }
             
             VStack(spacing: 16) {
-                Button {
-                    HapticManager.shared.impact(style: .medium)
-                    dismiss()
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "play.circle.fill").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
-                        Text("Watch Your Video").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
+                if let uploadedVideo = uploadManager.uploadedVideo {
+                    Button {
+                        HapticManager.shared.impact(style: .medium)
+                        // Navigate to video detail to play it
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("NavigateToVideo"),
+                            object: uploadedVideo
+                        )
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                            Text("Watch Your Video")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(LinearGradient(colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary], startPoint: .leading, endPoint: .trailing))
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 15, x: 0, y: 8)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(LinearGradient(colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary], startPoint: .leading, endPoint: .trailing))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 15, x: 0, y: 8)
+                    .buttonStyle(.plain)
+                } else {
+                    Button {
+                        HapticManager.shared.impact(style: .medium)
+                        // Fallback: Go to your channel
+                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToProfileTab"), object: nil)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                            Text("Watch Your Video")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(LinearGradient(colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary], startPoint: .leading, endPoint: .trailing))
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 15, x: 0, y: 8)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
                 
                 Button {
                     HapticManager.shared.impact(style: .light)

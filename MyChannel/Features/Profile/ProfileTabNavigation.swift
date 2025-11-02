@@ -18,26 +18,33 @@ struct ProfileTabNavigation: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    ForEach(ProfileTab.allCases) { tab in
-                        ProfileTabButton(
-                            tab: tab,
-                            isSelected: selectedTab == tab,
-                            user: user,
-                            action: {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                    selectedTab = tab
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(ProfileTab.allCases) { tab in
+                            ProfileTabButton(
+                                tab: tab,
+                                isSelected: selectedTab == tab,
+                                user: user,
+                                action: {
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                        selectedTab = tab
+                                        // Scroll to selected tab to ensure it's visible
+                                        withAnimation(.easeInOut(duration: 0.3)) {
+                                            proxy.scrollTo(tab.id, anchor: .center)
+                                        }
+                                    }
+                                    HapticManager.shared.impact(style: .light)
                                 }
-                                HapticManager.shared.impact(style: .light)
-                            }
-                        )
+                            )
+                            .id(tab.id)
+                        }
                     }
+                    .padding(.horizontal, 16) // Add horizontal padding so tabs aren't cut off
+                    .padding(.vertical, 4)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 0) // Flush to screen edges
+                .frame(height: 52)
             }
-            .frame(height: 52)
         }
         .background {
             if isPinned {

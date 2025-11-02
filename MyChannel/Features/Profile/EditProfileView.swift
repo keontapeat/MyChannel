@@ -24,6 +24,8 @@ struct EditProfileView: View {
     @State private var selectedProfileImage: PhotosPickerItem?
     @State private var selectedBannerImage: PhotosPickerItem?
     @State private var selectedBannerVideo: PhotosPickerItem?
+    @State private var selectedProfileUIImage: UIImage?
+    @State private var selectedBannerUIImage: UIImage?
     @State private var isSaving = false
     @State private var showingImagePicker = false
     @State private var imagePickerType: ImagePickerType = .profile
@@ -179,10 +181,20 @@ struct EditProfileView: View {
         } message: {
             Text("You have unsaved changes. Are you sure you want to discard them?")
         }
-            .onChange(of: selectedBannerVideo) { item in
-                guard let item else { return }
-                Task { await processSelectedBannerVideo(item) }
-            }
+        .onChange(of: selectedProfileImage) { item in
+            guard let item else { return }
+            Task { await processSelectedProfileImage(item) }
+        }
+        .onChange(of: selectedBannerImage) { item in
+            guard let item else { return }
+            Task { await processSelectedBannerImage(item) }
+        }
+        .onChange(of: selectedBannerVideo) { item in
+            guard let item else { return }
+            Task { await processSelectedBannerVideo(item) }
+        }
+        .onChange(of: selectedProfileUIImage) { _ in hasUnsavedChanges = true }
+        .onChange(of: selectedBannerUIImage) { _ in hasUnsavedChanges = true }
     }
     
     // MARK: - Header Section
@@ -327,7 +339,11 @@ struct EditProfileView: View {
 
                     Button(action: {}) {
                         ZStack {
-                            if let urlStr = selectedDefaultBannerImageURL, let url = URL(string: urlStr) {
+                            if let selectedImage = selectedBannerUIImage {
+                                Image(uiImage: selectedImage)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } else if let urlStr = selectedDefaultBannerImageURL, let url = URL(string: urlStr) {
                                 CachedAsyncImage(url: url) { image in
                                     image.resizable().aspectRatio(contentMode: .fill)
                                 } placeholder: {
@@ -340,13 +356,13 @@ struct EditProfileView: View {
                                     Rectangle().fill(AppTheme.Colors.surface)
                                 }
                             } else {
+                                // Clean, professional placeholder - no gradient
                                 Rectangle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [AppTheme.Colors.primary.opacity(0.3), AppTheme.Colors.secondary.opacity(0.3)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
+                                    .fill(AppTheme.Colors.surface)
+                                    .overlay(
+                                        Image(systemName: "photo")
+                                            .font(.system(size: 36))
+                                            .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.5))
                                     )
                             }
                         }
@@ -374,7 +390,11 @@ struct EditProfileView: View {
                         HapticManager.shared.impact(style: .light)
                     }) {
                         ZStack {
-                            if let profileURL = user.profileImageURL {
+                            if let selectedImage = selectedProfileUIImage {
+                                Image(uiImage: selectedImage)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } else if let profileURL = user.profileImageURL {
                                 CachedAsyncImage(url: URL(string: profileURL)) { image in
                                     image
                                         .resizable()
@@ -559,7 +579,12 @@ struct EditProfileView: View {
                            username != user.username ||
                            bio != (user.bio ?? "") ||
                            location != (user.location ?? "") ||
-                           website != (user.website ?? "")
+                           website != (user.website ?? "") ||
+                           selectedProfileUIImage != nil ||
+                           selectedBannerUIImage != nil ||
+                           selectedDefaultBannerImageURL != nil ||
+                           selectedDefaultBannerVideoURL != nil ||
+                           bannerVideoLocalURL != nil
     }
     
     private func getFieldProgress() -> Int {
@@ -582,6 +607,10 @@ struct EditProfileView: View {
     }
     
     private func saveProfile() {
+        print("💾 [EditProfile] ========== SAVE PROFILE STARTED ==========")
+        print("💾 [EditProfile] hasUnsavedChanges: \(hasUnsavedChanges)")
+        print("💾 [EditProfile] selectedProfileUIImage: \(selectedProfileUIImage != nil ? "YES" : "NO")")
+        print("💾 [EditProfile] selectedBannerUIImage: \(selectedBannerUIImage != nil ? "YES" : "NO")")
         isSaving = true
         HapticManager.shared.impact(style: .medium)
         
@@ -603,18 +632,57 @@ struct EditProfileView: View {
                 }
             }
 
+            // Upload profile image if selected
+            var profileImageURL: String? = user.profileImageURL
+            if let profileImage = selectedProfileUIImage {
+                print("📤 Starting profile image upload for user: \(user.id)")
+                do {
+                    // UserMediaStorageService is @MainActor, so this will run on main actor
+                    let uploadedURL = try await UserMediaStorageService.shared.uploadAvatar(uid: user.id, image: profileImage)
+                    profileImageURL = uploadedURL
+                    print("✅ Profile image uploaded successfully: \(uploadedURL)")
+                    
+                    // Verify the URL is valid
+                    if URL(string: uploadedURL) == nil {
+                        print("⚠️ Uploaded URL is invalid: \(uploadedURL)")
+                    } else {
+                        print("✅ Uploaded URL is valid: \(uploadedURL)")
+                    }
+                } catch {
+                    print("🚨 Profile image upload failed: \(error.localizedDescription)")
+                    print("🚨 Full error: \(error)")
+                    // If upload fails, keep existing image but log the error
+                    // The user can try again
+                    profileImageURL = user.profileImageURL // Keep existing URL
+                    print("⚠️ Keeping existing profile image URL: \(profileImageURL ?? "nil")")
+                }
+            } else {
+                print("ℹ️ No profile image selected - keeping existing URL: \(profileImageURL ?? "nil")")
+            }
+            
+            // Upload banner image if selected
             var imageBannerURL: String? = user.bannerImageURL
-            if !isVideoCover, let defaultImageURL = selectedDefaultBannerImageURL {
-                imageBannerURL = defaultImageURL
+            if !isVideoCover {
+                if let bannerImage = selectedBannerUIImage {
+                    do {
+                        let uploadedURL = try await UserMediaStorageService.shared.uploadBanner(uid: user.id, image: bannerImage)
+                        imageBannerURL = uploadedURL
+                    } catch {
+                        print("Banner image upload failed: \(error)")
+                    }
+                } else if let defaultImageURL = selectedDefaultBannerImageURL {
+                    imageBannerURL = defaultImageURL
+                }
             }
 
             var updatedUser = user
+            print("🔨 Creating updated user object with profileImageURL: \(profileImageURL ?? "nil")")
             updatedUser = User(
                 id: user.id,
                 username: username.isEmpty ? user.username : username,
                 displayName: displayName.isEmpty ? user.displayName : displayName,
                 email: user.email,
-                profileImageURL: user.profileImageURL,
+                profileImageURL: profileImageURL,
                 bannerImageURL: isVideoCover ? nil : imageBannerURL,
                 bio: bio.isEmpty ? nil : bio,
                 subscriberCount: user.subscriberCount,
@@ -633,38 +701,142 @@ struct EditProfileView: View {
                 bannerVideoContentMode: isVideoCover ? bannerContentMode : nil
             )
             
-            user = updatedUser
-            authManager.currentUser = updatedUser
-            appState.currentUser = updatedUser
+            print("✅ Updated user object created with profileImageURL: \(updatedUser.profileImageURL ?? "nil")")
+            
+            // Update all user references on main thread
+            await MainActor.run {
+                print("🔄 Updating user references on main thread...")
+                user = updatedUser
+                authManager.currentUser = updatedUser
+                appState.currentUser = updatedUser
+                print("✅ User references updated - authManager.currentUser.profileImageURL: \(authManager.currentUser?.profileImageURL ?? "nil")")
+                print("✅ User references updated - appState.currentUser.profileImageURL: \(appState.currentUser?.profileImageURL ?? "nil")")
+                
+                // Keep selected images visible until user refreshes
+                // This ensures the new image shows immediately after save
+                // The images will be cleared when user object updates with new URLs
+            }
             
             // 🔥 PERSIST TO STORAGE: Save to both UserDefaults AND Firestore for full persistence
+            print("💾 Starting persistence to storage...")
             do {
                 // Save to local UserDefaults (instant persistence)
+                print("💾 Saving to UserDefaults...")
                 try await DatabaseService.shared.saveUser(updatedUser)
+                print("✅ User saved to local storage (UserDefaults) with profileImageURL: \(updatedUser.profileImageURL ?? "nil")")
                 
                 // Save to Firestore (cloud sync across devices)
                 #if canImport(FirebaseFirestore)
-                try? await UserFirestoreService.shared.updateUser(updatedUser)
+                do {
+                    print("💾 Saving to Firestore...")
+                    try await UserFirestoreService.shared.updateUser(updatedUser)
+                    print("✅ User saved to Firestore with profileImageURL: \(updatedUser.profileImageURL ?? "nil")")
+                } catch {
+                    print("⚠️ Firestore save failed (will retry on next launch): \(error.localizedDescription)")
+                    print("⚠️ Full Firestore error: \(error)")
+                }
                 #endif
                 
-                print("✅ User profile saved: bannerVideoURL=\(updatedUser.bannerVideoURL ?? "nil"), muted=\(updatedUser.bannerVideoMuted ?? false), contentMode=\(updatedUser.bannerVideoContentMode?.rawValue ?? "nil")")
+                // Force sync with auth manager and app state to ensure all references are updated
+                await MainActor.run {
+                    // Clear old profile image from cache if URL changed
+                    if let oldURL = user.profileImageURL,
+                       let newURL = updatedUser.profileImageURL,
+                       oldURL != newURL,
+                       let oldURLObject = URL(string: oldURL) {
+                        ImageCache.shared.cache.removeObject(forKey: oldURLObject as NSURL)
+                        print("🗑️ Cleared old profile image from cache")
+                    }
+                    
+                    // Update all references again to ensure consistency
+                    authManager.currentUser = updatedUser
+                    appState.currentUser = updatedUser
+                    user = updatedUser
+                    
+                    print("✅ All user references updated with profileImageURL: \(updatedUser.profileImageURL ?? "nil")")
+                }
             } catch {
-                print("🚨 Failed to save user profile: \(error)")
+                print("🚨 Failed to save user profile: \(error.localizedDescription)")
             }
             
-            isSaving = false
-            hasUnsavedChanges = false
+            // Capture values for closure
+            let finalProfileImageURL = updatedUser.profileImageURL
+            let previousProfileImageURL = user.profileImageURL
+            
+            await MainActor.run {
+                isSaving = false
+                hasUnsavedChanges = false
+                
+                // Clear selected images after save to trigger UI refresh from URL
+                // Add delay to ensure user object is fully updated, persistence is complete, and view refreshes
+                // Only clear if we successfully got a new URL
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    if selectedProfileUIImage != nil {
+                        if let newURL = finalProfileImageURL, let oldURL = previousProfileImageURL, newURL != oldURL {
+                            print("✅ Clearing selectedProfileUIImage - triggering refresh from new URL: \(newURL)")
+                            selectedProfileUIImage = nil
+                        } else {
+                            print("⚠️ Not clearing selectedProfileUIImage - URL didn't change or is nil")
+                            print("   Old URL: \(previousProfileImageURL ?? "nil")")
+                            print("   New URL: \(finalProfileImageURL ?? "nil")")
+                        }
+                    }
+                }
+                if selectedBannerUIImage != nil && imageBannerURL != nil {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        selectedBannerUIImage = nil
+                    }
+                }
+            }
             
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showingSaveConfirmation = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showingSaveConfirmation = false }
             }
+            // Post notification to refresh all profile views
+            print("📢 Posting userProfileUpdated notification with profileImageURL: \(updatedUser.profileImageURL ?? "nil")")
             NotificationCenter.default.post(name: .userProfileUpdated, object: updatedUser)
+            NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
+            
             HapticManager.shared.impact(style: .light)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { dismiss() }
         }
     }
 
+    // MARK: - Image processing
+    private func processSelectedProfileImage(_ item: PhotosPickerItem) async {
+        print("🖼️ [EditProfile] processSelectedProfileImage called")
+        do {
+            if let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
+                print("🖼️ [EditProfile] Successfully loaded image data: \(data.count) bytes")
+                await MainActor.run {
+                    selectedProfileUIImage = image
+                    print("🖼️ [EditProfile] Set selectedProfileUIImage, calling checkForChanges()")
+                    checkForChanges() // Mark as unsaved so Save button becomes enabled
+                    print("🖼️ [EditProfile] hasUnsavedChanges = \(hasUnsavedChanges)")
+                }
+            } else {
+                print("⚠️ [EditProfile] Failed to load data or create UIImage")
+            }
+        } catch {
+            print("🚨 [EditProfile] Failed to load profile image: \(error)")
+        }
+    }
+    
+    private func processSelectedBannerImage(_ item: PhotosPickerItem) async {
+        do {
+            if let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
+                await MainActor.run {
+                    selectedBannerUIImage = image
+                    isVideoCover = false
+                    checkForChanges() // Mark as unsaved so Save button becomes enabled
+                }
+            }
+        } catch {
+            print("Failed to load banner image: \(error)")
+        }
+    }
+    
     // MARK: - Video processing
     private func processSelectedBannerVideo(_ item: PhotosPickerItem) async {
         do {

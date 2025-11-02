@@ -866,8 +866,12 @@ struct VideoDetailView: View {
                 }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { _ in
-            beginEndscreen()
+        .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { notification in
+            // CRITICAL FIX: Only trigger endscreen if this is OUR player item, not other players (banners, previews, etc)
+            if let item = notification.object as? AVPlayerItem,
+               item == playerManager.player?.currentItem {
+                beginEndscreen()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowTranscript"))) { _ in
             showingTranscript = true

@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 
 // Aggregates live channels from openly documented HLS sources and EPGs
 final class LiveTVService {
@@ -9,6 +10,72 @@ final class LiveTVService {
         // For now, return curated, legal HLS channels (sample list present in model)
         // Later we can plug in Samsung TV Plus/Pluto public guide JSONs if allowed
         return LiveTVChannel.sampleChannels
+    }
+    
+    /// Preload next channel for smooth switching
+    func preloadChannel(_ channel: LiveTVChannel) async {
+        guard let url = URL(string: channel.streamURL) else { return }
+        
+        // Create asset and preload metadata without playing
+        let asset = AVURLAsset(url: url, options: [
+            AVURLAssetPreferPreciseDurationAndTimingKey: false,
+            AVURLAssetAllowsCellularAccessKey: true
+        ])
+        
+        // Load playable status in background
+        do {
+            try await asset.loadValues(forKeys: ["playable"])
+        } catch {
+            // Silently fail - fallback will handle
+        }
+    }
+    
+    /// Get best quality stream URL with fallback
+    func getOptimalStreamURL(for channel: LiveTVChannel, networkQuality: ConnectionQuality) -> String {
+        // If channel has fallback URL, use it for poor connections
+        if networkQuality == .poor, let fallback = channel.previewFallbackURL {
+            return fallback
+        }
+        
+        // For excellent connections, prefer main stream
+        return channel.streamURL
+    }
+    
+    /// Check if stream is accessible and healthy
+    func checkStreamHealth(_ urlString: String) async -> Bool {
+        guard let url = URL(string: urlString) else { return false }
+        
+        // Quick HEAD request to check accessibility
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        request.timeoutInterval = 2.0
+        
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse {
+                return (200...299).contains(httpResponse.statusCode)
+            }
+        } catch {
+            // Try asset-based check as fallback
+            return await checkAssetPlayability(url)
+        }
+        
+        return false
+    }
+    
+    private func checkAssetPlayability(_ url: URL) async -> Bool {
+        let asset = AVURLAsset(url: url)
+        return await withCheckedContinuation { continuation in
+            asset.loadValuesAsynchronously(forKeys: ["playable"]) {
+                var playable = false
+                var error: NSError?
+                let status = asset.statusOfValue(forKey: "playable", error: &error)
+                if status == .loaded {
+                    playable = asset.isPlayable
+                }
+                continuation.resume(returning: playable)
+            }
+        }
     }
 }
 

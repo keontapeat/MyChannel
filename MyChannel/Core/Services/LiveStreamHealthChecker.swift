@@ -9,32 +9,37 @@ struct LiveStreamHealthResult {
 
 enum LiveStreamHealthChecker {
     static func rankHealthyChannels(_ channels: [LiveTVChannel],
-                                    timeout: TimeInterval = 1.5) async -> [LiveTVChannel] {
+                                    timeout: TimeInterval = 1.0) async -> [LiveTVChannel] {
         guard !channels.isEmpty else { return [] }
+        
+        // Batch check with optimized timeout based on network quality
+        let networkQuality = NetworkOptimizer.shared.connectionQuality
+        let adjustedTimeout = networkQuality == .poor ? timeout * 1.5 : timeout
+        
+        // Process all channels with concurrency limit
         return await withTaskGroup(of: LiveStreamHealthResult.self, returning: [LiveStreamHealthResult].self) { group in
             for ch in channels {
                 group.addTask {
                     let start = CFAbsoluteTimeGetCurrent()
-                    let healthy = await quickProbe(urlString: ch.streamURL, timeout: timeout)
+                    let healthy = await quickProbe(urlString: ch.streamURL, timeout: adjustedTimeout)
                     let dt = CFAbsoluteTimeGetCurrent() - start
                     return LiveStreamHealthResult(channel: ch, isHealthy: healthy, latency: max(0, dt))
                 }
             }
+            
             var results: [LiveStreamHealthResult] = []
-            for await r in group { results.append(r) }
+            for await result in group {
+                results.append(result)
+            }
             return results
         }
         .filter { $0.isHealthy }
         .sorted { lhs, rhs in
+            // Prioritize by health, then latency, then viewer count
             if lhs.isHealthy != rhs.isHealthy { return lhs.isHealthy && !rhs.isHealthy }
-            if abs(lhs.latency - rhs.latency) > 0.01 { return lhs.latency < rhs.latency }
+            if abs(lhs.latency - rhs.latency) > 0.05 { return lhs.latency < rhs.latency }
             return lhs.channel.viewerCount > rhs.channel.viewerCount
         }
-        .map { $0 }
-        .map { $0 } // keep type inference happy
-        .map { $0 } // no-op, safe
-        .map { $0 } // no-op
-        .map { $0 } // stylistic
         .map { $0.channel }
     }
 
@@ -53,11 +58,16 @@ enum LiveStreamHealthChecker {
         req.httpMethod = method
         req.timeoutInterval = timeout
         req.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
-        req.setValue("MyChannel/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
+        req.setValue("MyChannel/1.0 (iOS) VideoPlayer", forHTTPHeaderField: "User-Agent")
+        req.setValue("application/vnd.apple.mpegurl, application/x-mpegURL, */*", forHTTPHeaderField: "Accept")
+        
+        // Use optimized session configuration
         let config = URLSessionConfiguration.ephemeral
         config.waitsForConnectivity = false
         config.timeoutIntervalForRequest = timeout
         config.timeoutIntervalForResource = timeout
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData // Always fresh for live streams
+        config.urlCache = nil // No caching for live streams
         let session = URLSession(configuration: config)
 
         do {

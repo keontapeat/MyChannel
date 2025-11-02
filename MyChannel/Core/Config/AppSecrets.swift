@@ -18,7 +18,8 @@ struct AppSecrets {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !env.isEmpty { return env }
 
-        return ""
+        // Fallback to default TMDB API key for movies
+        return "cc1d44a1b1c8a4f2a5890cad1660d0be"
     }
 
     static var pexelsAPIKey: String {

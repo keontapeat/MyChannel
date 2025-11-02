@@ -12,6 +12,7 @@ struct VideoMoreOptionsSheet: View {
     @State private var showCopyToast = false
     @State private var showShareSheet = false
     @State private var showAddToPlaylist = false
+    @State private var showRequestFeature = false
     
     private var isOwner: Bool {
         authManager.currentUser?.id == video.creator.id
@@ -61,6 +62,20 @@ struct VideoMoreOptionsSheet: View {
                                 systemImage: isSubscribed ? "bell.slash.fill" : "bell.fill"
                             )
                             Spacer()
+                        }
+                    }
+                    
+                    // Feature Video Option (for all users)
+                    Button(action: {
+                        showRequestFeature = true
+                        feedback()
+                    }) {
+                        HStack {
+                            Label("Feature Video", systemImage: "star.fill")
+                            Spacer()
+                            Text("$$")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                     }
                 }
@@ -163,6 +178,9 @@ struct VideoMoreOptionsSheet: View {
         }
         .sheet(isPresented: $showAddToPlaylist) {
             AddToPlaylistSheet(videoId: video.id)
+        }
+        .fullScreenCover(isPresented: $showRequestFeature) {
+            RequestFeaturedVideoView(video: video)
         }
     }
     

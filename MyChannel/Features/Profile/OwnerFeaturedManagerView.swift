@@ -8,6 +8,7 @@ struct OwnerFeaturedManagerView: View {
     @State private var showingAddSheet = false
     @State private var showingPicker = false
     @State private var pickedItemURL: URL?
+    @State private var showingAdminView = false
 
     var body: some View {
         List {
@@ -70,6 +71,14 @@ struct OwnerFeaturedManagerView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     Button {
+                        showingAdminView = true
+                    } label: {
+                        Label("Manage Paid Features", systemImage: "star.circle.fill")
+                    }
+                    
+                    Divider()
+                    
+                    Button {
                         showingAddSheet = true
                     } label: {
                         Label("Add from library", systemImage: "plus")
@@ -91,6 +100,9 @@ struct OwnerFeaturedManagerView: View {
             DocumentPicker(types: ["public.movie"]) { url in
                 if let url { try? store.addLocalVideo(copiedFrom: url, title: "Owner Upload") }
             }
+        }
+        .fullScreenCover(isPresented: $showingAdminView) {
+            FeaturedVideoAdminView()
         }
     }
 }

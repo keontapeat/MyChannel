@@ -36,6 +36,10 @@ struct MainTabView: View {
     @State private var presentFullHistory: Bool = false
     @State private var historyVideoToOpen: Video? = nil
     @State private var showAuthGate: Bool = false
+    
+    // Creator Studio (for video analytics)
+    @State private var showingCreatorStudio: Bool = false
+    @State private var videoIdForStudio: String?
 
     var body: some View {
         ZStack {
@@ -51,6 +55,7 @@ struct MainTabView: View {
             if let uid = authManager.currentUser?.id { inbox.listen(userId: uid) }
         }
         .onChange(of: authManager.currentUser) { newValue in
+            print("🔄 MainTabView: authManager.currentUser changed to profileImageURL: \(newValue?.profileImageURL ?? "nil")")
             safeUserStateSync(newValue)
         }
         .onDisappear {
@@ -117,11 +122,29 @@ struct MainTabView: View {
                 historyVideoToOpen = video
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToVideo"))) { notification in
+            if let video = notification.object as? Video {
+                // Open video directly to play it
+                historyVideoToOpen = video
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PresentGlobalNowPlayingSheet"))) { _ in
             presentGlobalNowPlaying = true
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PresentNotificationsInbox"))) { _ in
             presentNotificationsInbox = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenVideoAnalytics"))) { notification in
+            if let video = notification.object as? Video {
+                // Open Creator Studio focused on this video's analytics
+                videoIdForStudio = video.id
+                showingCreatorStudio = true
+            }
+        }
+        .fullScreenCover(isPresented: $showingCreatorStudio) {
+            ComprehensiveCreatorStudioView(videoId: videoIdForStudio)
+                .environmentObject(authManager)
+                .environmentObject(appState)
         }
         // Remove global auth flow listener to prevent unintended popups
         .sheet(isPresented: $presentAccountSwitcher) {
@@ -259,6 +282,7 @@ struct MainTabView: View {
     
     private func safeUserStateSync(_ newUser: User?) {
         DispatchQueue.main.async {
+            print("🔄 MainTabView: Setting appState.currentUser to profileImageURL: \(newUser?.profileImageURL ?? "nil")")
             appState.currentUser = newUser
         }
     }

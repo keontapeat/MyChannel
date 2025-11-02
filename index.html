@@ -2675,7 +2675,9 @@
                                     try {
                                         const snap = await db.collection('users').doc(user.uid).get();
                                         const d = snap.exists ? snap.data() : {};
-                                        const url = d && d.avatarUrl ? (d.avatarUrl + (d.avatarUrl.includes('?') ? '&' : '?') + 't=' + Date.now()) : (user.photoURL || '');
+                                        // Read profileImageURL first (iOS primary), fallback to avatarUrl (web legacy)
+                                        const avatarField = d.profileImageURL || d.avatarUrl;
+                                        const url = avatarField ? (avatarField + (avatarField.includes('?') ? '&' : '?') + 't=' + Date.now()) : (user.photoURL || '');
                                         try { applyAvatarToUI(url); } catch {}
                                     } catch { try { applyAvatarToUI(user.photoURL); } catch {} }
                                     try { refreshStoriesForAvatar(); } catch {}
@@ -2871,7 +2873,7 @@
                     }
                     const userDoc = await db.collection('users').doc(user.uid).get();
                     const userData = userDoc.exists ? userDoc.data() : {};
-                    const fsUrl = userData.avatarUrl;
+                    const fsUrl = userData.profileImageURL || userData.avatarUrl;
                     const finalUrl = fsUrl ? fsUrl : (user.photoURL || '');
                     if (finalUrl) {
                         btn.style.backgroundImage = `url('${finalUrl}')`;
@@ -3055,8 +3057,9 @@
                     if (d.bannerUrl) {
                         document.getElementById('profileBannerVideoEl').src = d.bannerUrl;
                     }
-                    if (d.avatarUrl) {
-                        const fresh = d.avatarUrl + (d.avatarUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+                    const avatarField = d.profileImageURL || d.avatarUrl;
+                    if (avatarField) {
+                        const fresh = avatarField + (avatarField.includes('?') ? '&' : '?') + 't=' + Date.now();
                         document.getElementById('profileAvatarEl').style.background = `url('${fresh}') center/cover`;
                         try { applyAvatarToUI(fresh); refreshStoriesForAvatar(); } catch {}
                     } else {
@@ -3213,6 +3216,8 @@
                 if (avatarUrl) {
                     const fresh = `${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
                     updatePayload.avatarUrl = fresh;
+                    // Write modern key for iOS clients
+                    updatePayload.profileImageURL = fresh;
                 }
                 if (links.length) updatePayload.links = links;
                 await db.collection('users').doc(user.uid).set(updatePayload, { merge: true });
@@ -6591,7 +6596,7 @@
                     if (ownerId) {
                         const snap = await db.collection('users').doc(ownerId).get();
                         const d = snap.exists ? snap.data() : {};
-                        const avatar = (d && d.avatarUrl) || (video.channel && video.channel.avatar) || 'https://i.pravatar.cc/200?u='+encodeURIComponent(channelNameVal);
+                        const avatar = (d && (d.profileImageURL || d.avatarUrl)) || (video.channel && video.channel.avatar) || 'https://i.pravatar.cc/200?u='+encodeURIComponent(channelNameVal);
                         channelAvatarEl.src = avatar;
                         channelRow.onclick = () => { try { openChannelDetail({ id: ownerId, name: channelNameVal, avatar }); } catch {} };
                     } else {

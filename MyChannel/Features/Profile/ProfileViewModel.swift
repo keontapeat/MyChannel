@@ -32,30 +32,47 @@ final class ProfileViewModel: ObservableObject {
         let current = appState?.currentUser ?? authManager?.currentUser ?? User.defaultUser
         user = current
 
-        // 🔥 LOAD REAL UPLOADED VIDEOS: Get actual user videos from Firestore
+        // 🔥 LOAD ONLY REAL UPLOADED VIDEOS: No mock/fallback data
         do {
             let uploadedVideos = try await VideoFirestoreService.shared.getUserVideos(userId: current.id)
-            if !uploadedVideos.isEmpty {
-                userVideos = uploadedVideos
-                watchHistory = Array(uploadedVideos.reversed())
-            } else {
-                // Only use fallback if no uploaded videos exist
-                let vids = createFallbackVideos(for: current)
-                userVideos = vids
-                watchHistory = Array(vids.reversed())
-            }
+            // Only show real videos - NO mock data
+            userVideos = uploadedVideos
+            watchHistory = Array(uploadedVideos.reversed())
+            
+            // Update user video count to match actual count
+            var updatedUser = current
+            updatedUser = User(
+                id: current.id,
+                username: current.username,
+                displayName: current.displayName,
+                email: current.email,
+                profileImageURL: current.profileImageURL,
+                bannerImageURL: current.bannerImageURL,
+                bio: current.bio,
+                subscriberCount: current.subscriberCount,
+                videoCount: uploadedVideos.count, // 🔥 EXACT COUNT from real videos
+                isVerified: current.isVerified,
+                isCreator: current.isCreator,
+                createdAt: current.createdAt,
+                location: current.location,
+                website: current.website,
+                socialLinks: current.socialLinks,
+                followerCount: current.followerCount,
+                followingCount: current.followingCount,
+                joinDate: current.joinDate,
+                totalViews: uploadedVideos.reduce(0) { $0 + $1.viewCount }, // 🔥 REAL TOTAL VIEWS
+                totalEarnings: current.totalEarnings,
+                membershipTiers: current.membershipTiers,
+                bannerVideoURL: current.bannerVideoURL,
+                bannerVideoMuted: current.bannerVideoMuted,
+                bannerVideoContentMode: current.bannerVideoContentMode
+            )
+            user = updatedUser
         } catch {
             print("❌ Error loading user videos: \(error)")
-            // Fallback to sample videos on error
-            if Video.sampleVideos.isEmpty {
-                let vids = createFallbackVideos(for: current)
-                userVideos = vids
-                watchHistory = Array(vids.reversed())
-            } else {
-                userVideos = Array(Video.sampleVideos.prefix(20))
-                let pool = Array(Video.sampleVideos.dropFirst(min(4, Video.sampleVideos.count)).prefix(18))
-                watchHistory = pool.isEmpty ? userVideos : pool
-            }
+            // NO FALLBACK - Show empty if no videos exist
+            userVideos = []
+            watchHistory = []
         }
 
         isLoading = false
@@ -68,79 +85,60 @@ final class ProfileViewModel: ObservableObject {
     func handleUserChange(_ newUser: User?) {
         if let newUser {
             user = newUser
-            // 🔥 RELOAD REAL VIDEOS: Load actual uploaded videos when user changes
+            // 🔥 RELOAD ONLY REAL VIDEOS: No mock/fallback data
             Task {
                 do {
                     let uploadedVideos = try await VideoFirestoreService.shared.getUserVideos(userId: newUser.id)
                     await MainActor.run {
-                        if !uploadedVideos.isEmpty {
-                            userVideos = uploadedVideos
-                            watchHistory = Array(uploadedVideos.reversed())
-                        } else {
-                            let vids = createFallbackVideos(for: newUser)
-                            userVideos = vids
-                            watchHistory = Array(vids.reversed())
-                        }
+                        // Only show real videos - NO mock data
+                        userVideos = uploadedVideos
+                        watchHistory = Array(uploadedVideos.reversed())
+                        
+                        // Update user stats to match actual video count
+                        var updatedUser = newUser
+                        updatedUser = User(
+                            id: newUser.id,
+                            username: newUser.username,
+                            displayName: newUser.displayName,
+                            email: newUser.email,
+                            profileImageURL: newUser.profileImageURL,
+                            bannerImageURL: newUser.bannerImageURL,
+                            bio: newUser.bio,
+                            subscriberCount: newUser.subscriberCount,
+                            videoCount: uploadedVideos.count, // 🔥 EXACT COUNT
+                            isVerified: newUser.isVerified,
+                            isCreator: newUser.isCreator,
+                            createdAt: newUser.createdAt,
+                            location: newUser.location,
+                            website: newUser.website,
+                            socialLinks: newUser.socialLinks,
+                            followerCount: newUser.followerCount,
+                            followingCount: newUser.followingCount,
+                            joinDate: newUser.joinDate,
+                            totalViews: uploadedVideos.reduce(0) { $0 + $1.viewCount }, // 🔥 REAL TOTAL VIEWS
+                            totalEarnings: newUser.totalEarnings,
+                            membershipTiers: newUser.membershipTiers,
+                            bannerVideoURL: newUser.bannerVideoURL,
+                            bannerVideoMuted: newUser.bannerVideoMuted,
+                            bannerVideoContentMode: newUser.bannerVideoContentMode
+                        )
+                        user = updatedUser
                     }
                 } catch {
                     print("❌ Error loading user videos: \(error)")
                     await MainActor.run {
-                        let vids = createFallbackVideos(for: newUser)
-                        userVideos = vids
-                        watchHistory = Array(vids.reversed())
+                        // NO FALLBACK - Show empty if no videos exist
+                        userVideos = []
+                        watchHistory = []
+                        user = newUser
                     }
                 }
             }
         } else {
             user = User.defaultUser
-            let vids = createFallbackVideos(for: User.defaultUser)
-            userVideos = vids
-            watchHistory = Array(vids.reversed())
+            userVideos = []
+            watchHistory = []
         }
-    }
-
-    private func createFallbackVideos(for user: User) -> [Video] {
-        [
-            Video(
-                title: "Welcome to MyChannel!",
-                description: "Getting started with content creation",
-                thumbnailURL: "https://picsum.photos/1280/720?random=1",
-                videoURL: "https://example.com/video1.mp4",
-                duration: 180,
-                viewCount: 1234,
-                likeCount: 89,
-                commentCount: 23,
-                creator: user,
-                category: .entertainment,
-                tags: ["Welcome", "Getting Started"]
-            ),
-            Video(
-                title: "Behind the Scenes",
-                description: "A look at how content is made",
-                thumbnailURL: "https://picsum.photos/1280/720?random=2",
-                videoURL: "https://example.com/video2.mp4",
-                duration: 300,
-                viewCount: 856,
-                likeCount: 45,
-                commentCount: 12,
-                creator: user,
-                category: .entertainment,
-                tags: ["Behind the Scenes"]
-            ),
-            Video(
-                title: "Creator Tips: Grow Faster",
-                description: "Top tips for creators",
-                thumbnailURL: "https://picsum.photos/1280/720?random=3",
-                videoURL: "https://example.com/video3.mp4",
-                duration: 255,
-                viewCount: 2310,
-                likeCount: 153,
-                commentCount: 34,
-                creator: user,
-                category: .education,
-                tags: ["Tips", "Growth"]
-            )
-        ]
     }
 }
 

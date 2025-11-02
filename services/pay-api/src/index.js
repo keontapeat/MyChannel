@@ -35,14 +35,96 @@ app.post('/pay/connect/link', async (req, reply) => {
   return { url: link.url }
 })
 
-app.post('/pay/tip', async (req, reply) => {
+// Create Payment Intent for tip
+app.post('/pay/tip/intent', async (req, reply) => {
   const { toUserId, amount, currency = 'usd' } = req.body || {}
-  // Stub: record ledger entries, in real flow use PaymentIntent client-side
-  // Ensure a ledger account exists per creator
-  const { rows: acct } = await pool.query('insert into ledger_accounts(user_id, type) values($1,$2) on conflict do nothing returning id', [toUserId, 'creator'])
-  const accountId = acct[0]?.id || (await pool.query('select id from ledger_accounts where user_id=$1 limit 1', [toUserId])).rows[0].id
-  await pool.query('insert into ledger_entries(account_id, amount, currency, direction, reference_type) values($1,$2,$3,$4,$5)', [accountId, amount, currency, 'credit', 'tip'])
-  return { ok: true }
+  
+  if (!process.env.STRIPE_SECRET || process.env.STRIPE_SECRET === 'sk_test_123') {
+    // Development mode - return mock client secret
+    return {
+      clientSecret: `pi_mock_${Date.now()}_secret_mock`,
+      paymentIntentId: `pi_mock_${Date.now()}`
+    }
+  }
+  
+  try {
+    // Create PaymentIntent with Stripe
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount, // Amount is already in cents
+      currency: currency,
+      automatic_payment_methods: {
+        enabled: true,
+      },
+      metadata: {
+        type: 'tip',
+        toUserId: toUserId
+      }
+    })
+    
+    return {
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id
+    }
+  } catch (error) {
+    reply.code(500)
+    return { error: error.message }
+  }
+})
+
+app.post('/pay/tip', async (req, reply) => {
+  const { toUserId, amount, currency = 'usd', message, paymentIntentId } = req.body || {}
+  
+  if (!process.env.STRIPE_SECRET || process.env.STRIPE_SECRET === 'sk_test_123') {
+    // Development mode - just record ledger entry
+    const { rows: acct } = await pool.query('insert into ledger_accounts(user_id, type) values($1,$2) on conflict do nothing returning id', [toUserId, 'creator'])
+    const accountId = acct[0]?.id || (await pool.query('select id from ledger_accounts where user_id=$1 limit 1', [toUserId])).rows[0].id
+    await pool.query('insert into ledger_entries(account_id, amount, currency, direction, reference_type, metadata) values($1,$2,$3,$4,$5,$6)', [
+      accountId, 
+      amount, 
+      currency, 
+      'credit', 
+      'tip',
+      JSON.stringify({ message: message || null, paymentIntentId: paymentIntentId || null })
+    ])
+    return { ok: true, tipId: `tip_${Date.now()}`, transactionId: paymentIntentId || 'mock' }
+  }
+  
+  try {
+    // Verify payment intent was successful
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+    
+    if (paymentIntent.status !== 'succeeded') {
+      reply.code(400)
+      return { error: 'Payment not completed' }
+    }
+    
+    // Record ledger entry
+    const { rows: acct } = await pool.query('insert into ledger_accounts(user_id, type) values($1,$2) on conflict do nothing returning id', [toUserId, 'creator'])
+    const accountId = acct[0]?.id || (await pool.query('select id from ledger_accounts where user_id=$1 limit 1', [toUserId])).rows[0].id
+    
+    const tipId = `tip_${Date.now()}`
+    await pool.query('insert into ledger_entries(account_id, amount, currency, direction, reference_type, metadata) values($1,$2,$3,$4,$5,$6)', [
+      accountId, 
+      amount, 
+      currency, 
+      'credit', 
+      'tip',
+      JSON.stringify({ 
+        message: message || null, 
+        paymentIntentId: paymentIntentId,
+        stripeChargeId: paymentIntent.latest_charge || null
+      })
+    ])
+    
+    return { 
+      ok: true, 
+      tipId: tipId, 
+      transactionId: paymentIntentId 
+    }
+  } catch (error) {
+    reply.code(500)
+    return { error: error.message }
+  }
 })
 
 // Accept settlements from Ads service and credit creator ledger (stub)

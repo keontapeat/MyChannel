@@ -107,57 +107,7 @@ struct PremiereRow: View {
     }
 }
 
-struct SchedulePremiereView: View {
-    let creatorId: String
-    @Environment(\.dismiss) private var dismiss
-    @StateObject private var premieresService = ScheduledPremieresService.shared
-    
-    @State private var title = ""
-    @State private var scheduledDate = Date().addingTimeInterval(3600) // 1 hour from now
-    @State private var chatEnabled = true
-    @State private var isScheduling = false
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Premiere Details") {
-                    TextField("Title", text: $title)
-                    
-                    DatePicker("Scheduled Time", selection: $scheduledDate, in: Date()...)
-                    
-                    Toggle("Enable Chat", isOn: $chatEnabled)
-                }
-                
-                Section {
-                    Button("Schedule Premiere") {
-                        Task { await schedulePremiereAction() }
-                    }
-                    .disabled(title.isEmpty || isScheduling)
-                }
-            }
-            .navigationTitle("Schedule Premiere")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
-        }
-    }
-    
-    private func schedulePremiereAction() async {
-        isScheduling = true
-        let _ = await premieresService.schedulePremiereForVideo(
-            videoId: "temp_video_id", // Would be actual video ID
-            title: title,
-            thumbnailURL: "https://picsum.photos/400/225?random=\(Int.random(in: 1...1000))",
-            scheduledAt: scheduledDate,
-            creatorId: creatorId,
-            chatEnabled: chatEnabled
-        )
-        isScheduling = false
-        dismiss()
-    }
-}
+// SchedulePremiereView is now in its own file:
+// MyChannel/Features/Premieres/SchedulePremiereView.swift
 
 

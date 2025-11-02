@@ -9,10 +9,16 @@
 import SwiftUI
 import FirebaseFirestore
 
+// Make String Identifiable for fullScreenCover
+extension String: Identifiable {
+    public var id: String { self }
+}
+
 struct ContentManagementView: View {
     @EnvironmentObject private var appState: AppState
     @StateObject private var videoService = VideoFirestoreService.shared
     @StateObject private var analyticsService = AdvancedAnalyticsService.shared
+    let selectedVideoId: String? // Video ID to focus on when opened
     @State private var videos: [Video] = []
     @State private var selectedVideos: Set<String> = []
     @State private var searchText = ""
@@ -20,7 +26,13 @@ struct ContentManagementView: View {
     @State private var sortOption: SortOption = .uploadDate
     @State private var showingBulkActions = false
     @State private var showingVideoEditor: Video?
+    @State private var showingVideoAnalytics: String? = nil
+    @State private var showingFeaturedAdmin = false
     @State private var isLoading = true
+    
+    init(selectedVideoId: String? = nil) {
+        self.selectedVideoId = selectedVideoId
+    }
     
     enum FilterOption: String, CaseIterable {
         case all = "All"
@@ -72,11 +84,45 @@ struct ContentManagementView: View {
         }
         .navigationTitle("Content")
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showingFeaturedAdmin = true
+                } label: {
+                    Image(systemName: "star.circle.fill")
+                        .foregroundColor(.yellow)
+                }
+            }
+        }
         .sheet(item: $showingVideoEditor) { video in
             VideoEditorSheet(video: video)
         }
+        .fullScreenCover(isPresented: $showingFeaturedAdmin) {
+            FeaturedVideoAdminView()
+        }
         .onAppear {
             loadVideos()
+            
+            // If selectedVideoId provided, open analytics for that video
+            if let videoId = selectedVideoId {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    showingVideoAnalytics = videoId
+                }
+            }
+        }
+        .fullScreenCover(item: $showingVideoAnalytics) { videoId in
+            NavigationStack {
+                VideoAnalyticsView(videoId: videoId)
+                    .navigationTitle("Video Analytics")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("Done") {
+                                showingVideoAnalytics = nil
+                            }
+                        }
+                    }
+            }
         }
     }
     
@@ -323,11 +369,8 @@ struct ContentManagementView: View {
     }
     
     private func viewAnalytics(for video: Video) {
-        // Navigate to analytics for specific video
-        NotificationCenter.default.post(
-            name: NSNotification.Name("OpenVideoAnalytics"),
-            object: video
-        )
+        // Open analytics directly in this view
+        showingVideoAnalytics = video.id
     }
     
     private func bulkEdit() {

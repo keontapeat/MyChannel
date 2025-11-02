@@ -9,22 +9,24 @@ struct OwnerProfile {
     )
 
     // Optional friend list to surface in Top Artists (e.g., IG handles)
+    // All friends added back to Top Artists section, including those without profile images
+    // Friends without avatars will use default placeholder
     static let instagramFriends: [FriendArtist] = [
-        // Prioritized order; first item appears as #1
-        // HTG Nook pinned to the top with a local asset-backed avatar
-        FriendArtist(name: "@htg.nook", instagram: "@htg.nook", avatar: "asset://HTGNookAvatar?fallback=https://picsum.photos/seed/htg.nook/600/900"),
-        FriendArtist(name: "@ysr.loskibrim", instagram: "@ysr.loskibrim", avatar: "asset://YSRLoskiBrim?fallback=https://unavatar.io/instagram/ysr.loskibrim"),
-        FriendArtist(name: "@scatzripky6", instagram: "@scatzripky6", avatar: "asset://ScatzAvatar?fallback=https://unavatar.io/instagram/scatzripky6"),
-        FriendArtist(name: "@kleanupman__", instagram: "@kleanupman__", avatar: "asset://KleanupManAvatar?fallback=https://unavatar.io/instagram/kleanupman__"),
-        FriendArtist(name: "@ynjay_", instagram: "@ynjay_", avatar: "https://unavatar.io/instagram/ynjay_"),
-        FriendArtist(name: "@luh_monti45", instagram: "@luh_monti45", avatar: "https://unavatar.io/instagram/luh_monti45"),
-        FriendArtist(name: "@ysr.loski", instagram: "@ysr.loski", avatar: "https://unavatar.io/instagram/ysr.loski"),
-        FriendArtist(name: "@babyfxce.e", instagram: "@babyfxce.e", avatar: "https://unavatar.io/instagram/babyfxce.e"),
-        FriendArtist(name: "@sixwardvon_", instagram: "@sixwardvon_", avatar: "https://unavatar.io/instagram/sixwardvon_"),
-        FriendArtist(name: "@riodayung0g", instagram: "@riodayung0g", avatar: "https://unavatar.io/instagram/riodayung0g"),
-        FriendArtist(name: "@rmc__mike", instagram: "@rmc__mike", avatar: "https://unavatar.io/instagram/rmc__mike"),
-        FriendArtist(name: "@barthfrmda6ix", instagram: "@barthfrmda6ix", avatar: "https://unavatar.io/instagram/barthfrmda6ix"),
-        FriendArtist(name: "@official.wayp", instagram: "@official.wayp", avatar: "asset://WaypAvatar?fallback=https://unavatar.io/instagram/official.wayp")
+        // Friends with local assets (will use asset avatars)
+        FriendArtist(name: "HTG Nook", instagram: "@htg.nook", avatar: "asset://HTGNookAvatar"),
+        FriendArtist(name: "Scatz Ripky", instagram: "@scatzripky6", avatar: "asset://ScatzAvatar"),
+        FriendArtist(name: "Kleanup Man", instagram: "@kleanupman__", avatar: "asset://KleanupManAvatar"),
+        FriendArtist(name: "Luh Monti", instagram: "@luh_monti45", avatar: "asset://LuhMontiAvatar"),
+        FriendArtist(name: "Six Ward Von", instagram: "@sixwardvon_", avatar: "asset://SixWardVonAvatar"),
+        FriendArtist(name: "Barth Baby", instagram: "@barthfrmda6ix", avatar: "asset://BarthBabyAvatar"),
+        
+        // Friends without profile images (will use default avatar placeholder)
+        FriendArtist(name: "YSR Loski Brim", instagram: "@ysr.loskibrim", avatar: "https://i.pravatar.cc/200?u=ysr.loskibrim"),
+        FriendArtist(name: "Way P", instagram: "@official.wayp", avatar: "https://i.pravatar.cc/200?u=official.wayp"),
+        FriendArtist(name: "YN Jay", instagram: "@ynjay_", avatar: "https://i.pravatar.cc/200?u=ynjay"),
+        FriendArtist(name: "RMC Mike", instagram: "@rmc__mike", avatar: "https://i.pravatar.cc/200?u=rmc.mike"),
+        FriendArtist(name: "Babyface Rio", instagram: "@babyfxce.e", avatar: "https://i.pravatar.cc/200?u=babyfxce"),
+        FriendArtist(name: "Rio Da Yung OG", instagram: "@riodayung0g", avatar: "https://i.pravatar.cc/200?u=riodayung")
     ]
 }
 

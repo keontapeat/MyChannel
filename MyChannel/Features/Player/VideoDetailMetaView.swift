@@ -29,6 +29,7 @@ struct VideoDetailMetaView: View {
     @State private var subscribeButtonScale: CGFloat = 1.0
     @State private var scrollOffset: CGFloat = 0
     @State private var actionButtonsOpacity: Double = 1.0
+    @State private var showingTipSheet: Bool = false
     
     // MARK: - Performance Optimization
     private let impactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -95,6 +96,26 @@ struct VideoDetailMetaView: View {
         .background(AppTheme.Colors.background)
         .onAppear {
             impactFeedback.prepare()
+        }
+        .sheet(isPresented: $showingTipSheet) {
+            TipSheet(video: video)
+        }
+        .sheet(isPresented: $showingDownloadQualitySheet) {
+            DownloadQualitySheet(video: video)
+        }
+        .confirmationDialog("Downloaded Video", isPresented: $showingDownloadOptions, titleVisibility: .visible) {
+            Button("Play Offline") {
+                // Navigate to offline player
+            }
+            Button("Delete Download", role: .destructive) {
+                Task {
+                    let offlineService = OfflineDownloadService.shared
+                    if let download = offlineService.downloads.first(where: { $0.videoId == video.id }) {
+                        try? await offlineService.deleteDownload(download.id)
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) { }
         }
     }
     
@@ -190,13 +211,14 @@ struct VideoDetailMetaView: View {
                     performShareAction()
                 }
 
-                // Tip Button (test mode)
-                VideoMetaActionButton(
-                    icon: "hands.sparkles",
-                    title: "Tip"
-                ) {
-                    Task {
-                        await PayAPIService.shared.tip(to: video.creatorId, amountCents: 199)
+                // Tip Button - Real Payment Processing
+                if video.monetization?.donationEnabled == true {
+                    VideoMetaActionButton(
+                        icon: "heart.fill",
+                        title: "Tip",
+                        hasSpecialEffect: true
+                    ) {
+                        showingTipSheet = true
                     }
                 }
                 
@@ -224,14 +246,11 @@ struct VideoDetailMetaView: View {
                     performSaveAction()
                 }
                 
-                // Download Button (Premium Feature)
-                VideoMetaActionButton(
-                    icon: "arrow.down.circle",
-                    title: "Download",
-                    isPremium: true
-                ) {
+                // Download Button (Premium Feature) - YouTube-style
+                DownloadButtonView(video: video) {
                     performDownloadAction()
                 }
+                .buttonStyle(.plain)
                 
                 // Transcript Button
                 VideoMetaActionButton(
@@ -541,11 +560,38 @@ struct VideoDetailMetaView: View {
         impactFeedback.impactOccurred(intensity: 0.7)
     }
     
+    @State private var showingDownloadQualitySheet: Bool = false
+    
     private func performDownloadAction() {
-        // Handle premium download feature
+        // Check if premium user
+        let premiumService = PremiumService.shared
+        guard premiumService.isPremium else {
+            // Show premium alert
+            NotificationCenter.default.post(name: .navigateToPremium, object: nil)
+            return
+        }
+        
+        // Check if already downloaded
+        let offlineService = OfflineDownloadService.shared
+        if offlineService.isVideoAvailableOffline(video.id) {
+            // Show options: Delete or Play Offline
+            showingDownloadOptions = true
+            return
+        }
+        
+        // Check if downloading
+        if let download = offlineService.downloads.first(where: { $0.videoId == video.id && $0.status == .downloading }) {
+            // Already downloading - could show progress or cancel option
+            return
+        }
+        
+        // Show quality selection sheet
+        showingDownloadQualitySheet = true
         let selectionFeedback = UISelectionFeedbackGenerator()
         selectionFeedback.selectionChanged()
     }
+    
+    @State private var showingDownloadOptions: Bool = false
     
     private func performMoreAction() {
         onMore()

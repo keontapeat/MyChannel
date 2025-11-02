@@ -11,7 +11,7 @@
 import Foundation
 import Combine
 
-/// Service for interacting with OpenAI's GPT-4 and DALL-E APIs
+/// Service for interacting with OpenAI's GPT-5 (and GPT-4) and DALL-E APIs
 class OpenAIService: ObservableObject {
     static let shared = OpenAIService()
     
@@ -83,12 +83,12 @@ class OpenAIService: ObservableObject {
         }
     }
     
-    // MARK: - GPT-4 Chat Completion
+    // MARK: - GPT-5 Chat Completion
     
-    /// Generate text using GPT-4
+    /// Generate text using GPT-5 (or GPT-4)
     func chat(
         messages: [ChatRequest.Message],
-        model: GPTModel = .gpt4Turbo,
+        model: GPTModel = .gpt5Turbo,
         temperature: Double = 0.7,
         maxTokens: Int = 1000
     ) async throws -> String {
@@ -150,7 +150,7 @@ class OpenAIService: ObservableObject {
     /// Simple text generation
     func generate(
         _ prompt: String,
-        model: GPTModel = .gpt4Turbo,
+        model: GPTModel = .gpt5Turbo,
         temperature: Double = 0.7,
         maxTokens: Int = 1000
     ) async throws -> String {
@@ -212,10 +212,17 @@ class OpenAIService: ObservableObject {
 // MARK: - Supporting Types
 
 enum GPTModel: String {
+    case gpt5 = "gpt-5"
+    case gpt5Turbo = "gpt-5-turbo"
     case gpt4 = "gpt-4"
     case gpt4Turbo = "gpt-4-turbo-preview"
     case gpt4o = "gpt-4o"
     case gpt35Turbo = "gpt-3.5-turbo"
+    
+    // Default to GPT-5 for best performance
+    static var `default`: GPTModel {
+        return .gpt5Turbo  // Falls back to gpt-5 if turbo not available
+    }
 }
 
 enum ImageModel: String {

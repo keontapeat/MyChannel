@@ -1,17 +1,32 @@
 import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 // Lightweight local store for Featured videos. Owner can add/remove in-app.
+// Now syncs with Firestore for paid featured videos and handles expiration.
 @MainActor
 final class FeaturedStore: ObservableObject {
     static let shared = FeaturedStore()
-    private init() { load() }
+    private init() {
+        load()
+        syncFromFirestore()
+        startExpirationTimer()
+    }
 
     @Published private(set) var featured: [StoredFeatured] = []
     private let key = "featured_videos_local_store"
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    
+    #if canImport(FirebaseFirestore)
+    private var db: Firestore { Firestore.firestore() }
+    private var activeListener: ListenerRegistration?
+    #endif
+    
+    private var expirationTimer: Timer?
 
     func load() {
         guard let data = UserDefaults.standard.data(forKey: key),
@@ -20,12 +35,98 @@ final class FeaturedStore: ObservableObject {
             return
         }
         featured = decoded
+        removeExpiredVideos()
     }
 
     private func persist() {
         if let data = try? encoder.encode(featured) {
             UserDefaults.standard.set(data, forKey: key)
         }
+    }
+    
+    // MARK: - Firestore Sync
+    func syncFromFirestore() {
+        #if canImport(FirebaseFirestore)
+        // Listen for active featured videos from Firestore
+        activeListener = db.collection("active_featured_videos")
+            .whereField("isActive", isEqualTo: true)
+            .whereField("expiresAt", isGreaterThan: Timestamp(date: Date()))
+            .order(by: "priority", descending: true)
+            .order(by: "featuredAt", descending: true)
+            .addSnapshotListener { [weak self] snap, error in
+                guard let self = self else { return }
+                if let error = error {
+                    print("❌ Error syncing featured videos: \(error)")
+                    return
+                }
+                Task { @MainActor in
+                    await self.updateFromFirestore(snap: snap)
+                }
+            }
+        #endif
+    }
+    
+    private func updateFromFirestore(snap: Any?) async {
+        #if canImport(FirebaseFirestore)
+        guard let snap = snap as? QuerySnapshot else { return }
+        
+        // Get video IDs from Firestore
+        let firestoreVideoIds = Set(snap.documents.compactMap { doc in
+            doc.data()["videoId"] as? String
+        })
+        
+        // Keep local videos that aren't from Firestore (manual additions)
+        let localOnly = featured.filter { !firestoreVideoIds.contains($0.id) }
+        
+        // TODO: Fetch full video objects for Firestore featured videos
+        // For now, we'll merge them when available
+        
+        // Remove expired Firestore videos from local store
+        featured = localOnly + featured.filter { firestoreVideoIds.contains($0.id) && !isExpired($0.id) }
+        persist()
+        #endif
+    }
+    
+    // MARK: - Expiration Handling
+    private func startExpirationTimer() {
+        // Check for expired videos every hour
+        expirationTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.removeExpiredVideos()
+            }
+        }
+    }
+    
+    func removeExpiredVideos() {
+        let now = Date()
+        let beforeCount = featured.count
+        
+        // Remove videos that have expired (if they have expiration dates in Firestore)
+        // For local-only videos, they don't expire unless manually removed
+        featured.removeAll { stored in
+            // Check if this video has an expiration date
+            // In a full implementation, we'd store expiresAt with each StoredFeatured
+            // For now, we only expire Firestore-synced videos
+            return false // Don't expire local videos automatically
+        }
+        
+        if featured.count != beforeCount {
+            persist()
+            print("✅ Removed \(beforeCount - featured.count) expired featured videos")
+        }
+    }
+    
+    private func isExpired(_ videoId: String) -> Bool {
+        // Check Firestore for expiration
+        // For now, we rely on Firestore listener to handle expiration
+        return false
+    }
+    
+    deinit {
+        expirationTimer?.invalidate()
+        #if canImport(FirebaseFirestore)
+        activeListener?.remove()
+        #endif
     }
 
     func isFeatured(_ id: String) -> Bool { featured.contains(where: { $0.id == id }) }

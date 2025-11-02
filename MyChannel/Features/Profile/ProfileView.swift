@@ -25,6 +25,10 @@ struct ProfileView: View {
     @State private var isLoading: Bool = true
     @State private var hasError: Bool = false
     @State private var errorMessage: String = ""
+    
+    // Video Analytics Navigation
+    @State private var showingVideoAnalytics: Bool = false
+    @State private var videoToAnalyze: Video?
 
     private var currentUser: User {
         if let appUser = appState.currentUser {
@@ -61,16 +65,70 @@ struct ProfileView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .userProfileUpdated)) { note in
             if let updated = note.object as? User {
+                print("🔄 ProfileView received userProfileUpdated notification with profileImageURL: \(updated.profileImageURL ?? "nil")")
                 handleUserChange(updated)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshProfile"))) { _ in
+            print("🔄 ProfileView received RefreshProfile notification")
             // 🔥 IMMEDIATE REFRESH: Reload profile when video is uploaded
             loadProfileSafely()
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenNotificationsInbox"))) { _ in
             showingSettings = false
             NotificationCenter.default.post(name: Notification.Name("PresentNotificationsInbox"), object: nil)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToVideoAnalytics"))) { notification in
+            if let video = notification.object as? Video {
+                videoToAnalyze = video
+                // Show analytics immediately without delay
+                showingVideoAnalytics = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowVideoAnalyticsInStudio"))) { notification in
+            if let videoId = notification.object as? String {
+                // Create a dummy video object for analytics
+                let video = Video(
+                    id: videoId,
+                    title: "",
+                    description: "",
+                    thumbnailURL: "",
+                    videoURL: "",
+                    duration: 0,
+                    viewCount: 0,
+                    likeCount: 0,
+                    creator: currentUser,
+                    category: .entertainment
+                )
+                videoToAnalyze = video
+                showingVideoAnalytics = true
+            }
+        }
+        .fullScreenCover(isPresented: $showingVideoAnalytics) {
+            if let video = videoToAnalyze {
+                NavigationStack {
+                    VideoAnalyticsView(videoId: video.id)
+                        .navigationTitle("Video Analytics")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarLeading) {
+                                Button("Done") {
+                                    showingVideoAnalytics = false
+                                    videoToAnalyze = nil
+                                }
+                            }
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                NavigationLink(destination: ComprehensiveCreatorStudioView()) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "chart.bar.xaxis")
+                                        Text("Studio")
+                                            .font(.system(size: 15, weight: .semibold))
+                                    }
+                                }
+                            }
+                        }
+                }
+            }
         }
         .fullScreenCover(isPresented: Binding(
             get: { false },
@@ -308,40 +366,24 @@ struct ProfileView: View {
             user = currentUser
             Task { @MainActor in
                 let creatorId = user.id
+                // 🔥 LOAD ONLY REAL VIDEOS: Get actual uploaded videos from Firestore
                 var vids = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: creatorId)
+                
+                // Check local storage as backup
                 if vids.isEmpty {
-                    // 🔥 FALLBACK: Check local storage first
                     if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: creatorId), !localVids.isEmpty {
                         vids = localVids
-                    } else {
-                        // Fallback to API if available
-                        if let summaries = try? await VideoAPIService.shared.getHomeFeed(page: 1, limit: 24).videos {
-                            // Map summaries to full Video only if they belong to this creator (best-effort)
-                            let mapped: [Video] = summaries.compactMap { s in
-                                if s.creator.id == creatorId {
-                                    return Video(
-                                        id: s.id,
-                                        title: s.title,
-                                        description: s.description ?? "",
-                                        thumbnailURL: s.thumbnailUrl ?? "",
-                                        videoURL: "",
-                                        duration: TimeInterval(s.duration ?? 0),
-                                        viewCount: s.viewCount,
-                                        likeCount: s.likeCount,
-                                        creator: user,
-                                        category: .entertainment
-                                    )
-                                }
-                                return nil
-                            }
-                            vids = mapped
-                        }
-                        }
+                    }
                 }
+                
+                // NO MOCK DATA - Only show real videos the user has actually posted
                 userVideos = vids
                 
-                // 🔥 REAL-TIME STATS UPDATE: Update user stats based on actual videos
-                let totalViews = vids.reduce(0) { $0 + $1.viewCount }
+                // 🔥 REAL-TIME STATS UPDATE: Update user stats based on ACTUAL videos only
+                // Ensure video count matches EXACTLY what's displayed - no mock data
+                let actualVideoCount = userVideos.count // Use userVideos, not vids, to ensure accuracy
+                let totalViews = userVideos.reduce(0) { $0 + $1.viewCount }
+                
                 let updatedUser = User(
                     id: user.id,
                     username: user.username,
@@ -351,7 +393,7 @@ struct ProfileView: View {
                     bannerImageURL: user.bannerImageURL,
                     bio: user.bio,
                     subscriberCount: user.subscriberCount,
-                    videoCount: vids.count, // 🔥 REAL VIDEO COUNT
+                    videoCount: actualVideoCount, // 🔥 EXACT COUNT - matches userVideos.count
                     isVerified: user.isVerified,
                     isCreator: user.isCreator,
                     createdAt: user.createdAt,
@@ -361,7 +403,7 @@ struct ProfileView: View {
                     followerCount: user.followerCount,
                     followingCount: user.followingCount,
                     joinDate: user.joinDate,
-                    totalViews: totalViews, // 🔥 REAL TOTAL VIEWS
+                    totalViews: totalViews, // 🔥 REAL TOTAL VIEWS from actual videos
                     totalEarnings: user.totalEarnings,
                     membershipTiers: user.membershipTiers,
                     bannerVideoURL: user.bannerVideoURL,
@@ -386,59 +428,64 @@ struct ProfileView: View {
         }
     }
 
-    private func createFallbackVideos() -> [Video] {
-        [
-            Video(
-                title: "Welcome to MyChannel!",
-                description: "Getting started with content creation",
-                thumbnailURL: "https://picsum.photos/1280/720?random=1",
-                videoURL: "https://example.com/video1.mp4",
-                duration: 180,
-                viewCount: 1234,
-                likeCount: 89,
-                commentCount: 23,
-                creator: user,
-                category: .entertainment,
-                tags: ["Welcome", "Getting Started"]
-            ),
-            Video(
-                title: "Behind the Scenes",
-                description: "A look at how content is made",
-                thumbnailURL: "https://picsum.photos/1280/720?random=2",
-                videoURL: "https://example.com/video2.mp4",
-                duration: 300,
-                viewCount: 856,
-                likeCount: 45,
-                commentCount: 12,
-                creator: user,
-                category: .entertainment,
-                tags: ["Behind the Scenes"]
-            ),
-            Video(
-                title: "Creator Tips: Grow Faster",
-                description: "Top tips for creators",
-                thumbnailURL: "https://picsum.photos/1280/720?random=3",
-                videoURL: "https://example.com/video3.mp4",
-                duration: 255,
-                viewCount: 2310,
-                likeCount: 153,
-                commentCount: 34,
-                creator: user,
-                category: .education,
-                tags: ["Tips", "Growth"]
-            )
-        ]
-    }
+    // REMOVED: createFallbackVideos() - No more mock/fallback videos
+    // Only show real videos the user has actually posted
 
     private func handleUserChange(_ newUser: User?) {
+        print("🔄 handleUserChange called with profileImageURL: \(newUser?.profileImageURL ?? "nil")")
         DispatchQueue.main.async {
-                if let newUser {
-                    user = newUser
-                    Task { @MainActor in
-                        let vids = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: newUser.id)
-                        userVideos = vids
-                        watchHistory = []
+            if let newUser {
+                print("🔄 Setting user state to new user with profileImageURL: \(newUser.profileImageURL ?? "nil")")
+                user = newUser
+                Task { @MainActor in
+                    // 🔥 LOAD ONLY REAL VIDEOS: No mock data
+                    let vids = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: newUser.id)
+
+                    // Check local storage as backup only
+                    let finalVideos: [Video]
+                    if vids.isEmpty {
+                        if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: newUser.id), !localVids.isEmpty {
+                            finalVideos = localVids
+                        } else {
+                            finalVideos = [] // NO MOCK DATA - empty if no real videos
+                        }
+                    } else {
+                        finalVideos = vids
                     }
+                    
+                    userVideos = finalVideos
+                    
+                    // Update user stats to match actual video count
+                    var updatedUser = newUser
+                    updatedUser = User(
+                        id: newUser.id,
+                        username: newUser.username,
+                        displayName: newUser.displayName,
+                        email: newUser.email,
+                        profileImageURL: newUser.profileImageURL,
+                        bannerImageURL: newUser.bannerImageURL,
+                        bio: newUser.bio,
+                        subscriberCount: newUser.subscriberCount,
+                        videoCount: finalVideos.count, // 🔥 EXACT COUNT
+                        isVerified: newUser.isVerified,
+                        isCreator: newUser.isCreator,
+                        createdAt: newUser.createdAt,
+                        location: newUser.location,
+                        website: newUser.website,
+                        socialLinks: newUser.socialLinks,
+                        followerCount: newUser.followerCount,
+                        followingCount: newUser.followingCount,
+                        joinDate: newUser.joinDate,
+                        totalViews: finalVideos.reduce(0) { $0 + $1.viewCount }, // 🔥 REAL TOTAL VIEWS
+                        totalEarnings: newUser.totalEarnings,
+                        membershipTiers: newUser.membershipTiers,
+                        bannerVideoURL: newUser.bannerVideoURL,
+                        bannerVideoMuted: newUser.bannerVideoMuted,
+                        bannerVideoContentMode: newUser.bannerVideoContentMode
+                    )
+                    user = updatedUser
+                    watchHistory = []
+                }
             } else {
                 user = User.defaultUser
                 userVideos = []

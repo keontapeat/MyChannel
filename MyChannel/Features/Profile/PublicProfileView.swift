@@ -108,28 +108,34 @@ struct PublicProfileView: View {
         await MainActor.run {
             if !prefetchedVideos.isEmpty {
                 self.userVideos = prefetchedVideos
+                updateUserVideoCount(prefetchedVideos)
                 self.isLoading = false
                 return
             }
         }
-        // Try Firestore first, then local cache, then API summaries
+        
+        // 🔥 LOAD ONLY REAL VIDEOS: Get actual videos from Firestore
         let firestoreVids = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: user.id)
         if !firestoreVids.isEmpty {
             await MainActor.run {
                 self.userVideos = firestoreVids
+                updateUserVideoCount(firestoreVids)
                 self.isLoading = false
             }
             return
         }
         
-        // Fallback to local cached videos
+        // Fallback to local cached videos only (real videos that were cached)
         if let vids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: user.id), !vids.isEmpty {
             await MainActor.run {
                 self.userVideos = vids
+                updateUserVideoCount(vids)
                 self.isLoading = false
             }
             return
         }
+        
+        // Only use API as last resort if videos actually belong to this creator
         do {
             let resp = try await VideoAPIService.shared.getHomeFeed(page: 1, limit: 48)
             let mapped: [Video] = resp.videos.compactMap { s in
@@ -149,11 +155,49 @@ struct PublicProfileView: View {
             }
             await MainActor.run {
                 self.userVideos = mapped
+                updateUserVideoCount(mapped)
                 self.isLoading = false
             }
         } catch {
-            await MainActor.run { self.isLoading = false }
+            await MainActor.run {
+                self.userVideos = [] // NO MOCK DATA - empty if no videos
+                updateUserVideoCount([])
+                self.isLoading = false
+            }
         }
+    }
+    
+    // 🔥 Update user video count to match ACTUAL videos displayed
+    private func updateUserVideoCount(_ videos: [Video]) {
+        let actualVideoCount = videos.count
+        let totalViews = videos.reduce(0) { $0 + $1.viewCount }
+        
+        editableUser = User(
+            id: user.id,
+            username: user.username,
+            displayName: user.displayName,
+            email: user.email,
+            profileImageURL: user.profileImageURL,
+            bannerImageURL: user.bannerImageURL,
+            bio: user.bio,
+            subscriberCount: user.subscriberCount,
+            videoCount: actualVideoCount, // 🔥 EXACT COUNT - matches videos.count
+            isVerified: user.isVerified,
+            isCreator: user.isCreator,
+            createdAt: user.createdAt,
+            location: user.location,
+            website: user.website,
+            socialLinks: user.socialLinks,
+            followerCount: user.followerCount,
+            followingCount: user.followingCount,
+            joinDate: user.joinDate,
+            totalViews: totalViews, // 🔥 REAL TOTAL VIEWS from actual videos
+            totalEarnings: user.totalEarnings,
+            membershipTiers: user.membershipTiers,
+            bannerVideoURL: user.bannerVideoURL,
+            bannerVideoMuted: user.bannerVideoMuted,
+            bannerVideoContentMode: user.bannerVideoContentMode
+        )
     }
 }
 

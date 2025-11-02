@@ -78,23 +78,23 @@ extension LiveTVChannel {
             language: "English",
             country: "International",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://live-hls-web-aje.getaj.net/AJE/01_alt.m3u8"
         ),
 
         LiveTVChannel(
             id: "dw-english",
             name: "DW English",
             logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Deutsche_Welle_logo.svg/512px-Deutsche_Welle_logo.svg.png",
-            streamURL: "https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8",
+            streamURL: "https://dwamdstream102.akamaized.net/hls/live/2015530/dwstream102/index.m3u8",
             category: .international,
-            description: "Deutsche Welle’s international news channel",
+            description: "Deutsche Welle's international news channel",
             isLive: true,
             viewerCount: 22100,
             quality: "HD",
             language: "English",
             country: "International",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8"
         ),
 
         LiveTVChannel(
@@ -126,7 +126,7 @@ extension LiveTVChannel {
             language: "English",
             country: "International",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://static.france24.com/live/F24_EN_HI_HLS/live_web.m3u8"
         ),
         LiveTVChannel(
             id: "pluto-cbs-news",
@@ -252,7 +252,7 @@ extension LiveTVChannel {
             id: "nasa-public",
             name: "NASA TV Public",
             logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/NASA_logo.svg/512px-NASA_logo.svg.png",
-            streamURL: "https://ntv1-aka.akamaized.net/hls/live/2014075/NASA-NTV1-HLS/master.m3u8",
+            streamURL: "https://ntv1.akamaized.net/hls/live/2014075/NASA-NTV1-Public/master.m3u8",
             category: .documentary,
             description: "Live NASA events, launches, and educational programming",
             isLive: true,
@@ -261,7 +261,7 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://ntv1-aka.akamaized.net/hls/live/2014075/NASA-NTV1-HLS/master.m3u8"
         )
     ]
 }

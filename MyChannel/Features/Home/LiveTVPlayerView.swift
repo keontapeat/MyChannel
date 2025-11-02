@@ -8,6 +8,8 @@
 import SwiftUI
 import AVKit
 import MediaPlayer
+import Network
+import Combine
 
 struct LiveTVPlayerView: View {
     let channel: LiveTVChannel
@@ -28,6 +30,8 @@ struct LiveTVPlayerView: View {
     @State private var isDVRAvailable: Bool = false
     @State private var showMiniGuide: Bool = false
     @State private var channels: [LiveTVChannel] = LiveTVChannel.sampleChannels
+    @StateObject private var networkOptimizer = NetworkOptimizer.shared
+    @State private var preloadedChannels: Set<String> = []
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -280,6 +284,7 @@ struct LiveTVPlayerView: View {
         }
         .onAppear {
             setupPlayer()
+            preloadAdjacentChannels()
         }
         .onDisappear {
             teardown()
@@ -295,18 +300,195 @@ struct LiveTVPlayerView: View {
     }
 
     private func setupPlayer() {
-        guard let url = URL(string: channel.streamURL) else { return }
-        let player = AVPlayer(url: url)
-        player.automaticallyWaitsToMinimizeStalling = false // favor low latency for live
-        player.currentItem?.preferredForwardBufferDuration = 0
+        // Try primary stream URL first, then fallback if available
+        let streamURLs = [channel.streamURL] + (channel.previewFallbackURL != nil ? [channel.previewFallbackURL!] : [])
+        setupPlayerWithURLs(streamURLs)
+    }
+    
+    @State private var retryCount = 0
+    private let maxRetries = 2
+    
+    private func setupPlayerWithURLs(_ urls: [String], currentIndex: Int = 0) {
+        guard currentIndex < urls.count, let url = URL(string: urls[currentIndex]) else {
+            // All URLs failed
+            return
+        }
+        
+        setupPlayerWithURL(url, urls: urls, currentIndex: currentIndex)
+    }
+    
+    private func setupPlayerWithURL(_ url: URL, urls: [String] = [], currentIndex: Int = 0) {
+        // Create optimized asset with HLS-specific settings for butter-smooth playback
+        let asset = AVURLAsset(url: url, options: [
+            AVURLAssetPreferPreciseDurationAndTimingKey: false, // Live streams don't need precise timing
+            AVURLAssetAllowsCellularAccessKey: true
+        ])
+        
+        let playerItem = AVPlayerItem(asset: asset)
+        
+        // Optimize for live streaming - balanced buffering for smooth playback
+        playerItem.preferredForwardBufferDuration = 3.0 // 3 seconds for smoothness
+        playerItem.canUseNetworkResourcesForLiveStreamingWhilePaused = true
+        
+        // Adaptive bitrate - start high, let HLS adapt dynamically
+        playerItem.preferredPeakBitRate = 8_000_000 // 8 Mbps max - HLS will choose best
+        #if os(iOS)
+        playerItem.preferredMaximumResolution = CGSize.zero // Auto-select best resolution
+        #endif
+        
+        let player = AVPlayer(playerItem: playerItem)
+        
+        // Live streaming optimizations for butter-smooth playback
+        player.automaticallyWaitsToMinimizeStalling = true // Smooth playback over pure low latency
+        player.allowsExternalPlayback = true // Allow AirPlay
+        player.preventsDisplaySleepDuringVideoPlayback = true
+        
+        // Error handling - retry with fallback URL if this one fails
+        if !urls.isEmpty {
+            observePlayerItemStatus(playerItem: playerItem, urls: urls, currentIndex: currentIndex)
+        }
+        
+        // Network monitoring for adaptive quality
+        setupNetworkMonitoring(for: playerItem)
+        
+        // Buffer health monitoring for smooth playback
+        setupBufferMonitoring(for: playerItem)
+        
+        // Stall detection and recovery
+        if !urls.isEmpty {
+            setupStallRecovery(for: playerItem, urls: urls, currentIndex: currentIndex)
+        }
+        
         player.play()
         self.player = player
         isPlaying = true
+        retryCount = 0
 
         configureAudioSession()
         setupTimeObserver()
         updateSubtitleAvailability()
         updateDVRAvailability()
+    }
+    
+    @State private var statusObserver: NSKeyValueObservation?
+    @State private var stallObserver: NSObjectProtocol?
+    @State private var errorObserver: NSObjectProtocol?
+    
+    private func observePlayerItemStatus(playerItem: AVPlayerItem, urls: [String], currentIndex: Int) {
+        statusObserver = playerItem.observe(\.status, options: [.new]) { item, _ in
+            if item.status == .failed {
+                // Try next URL if available
+                if currentIndex + 1 < urls.count {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        setupPlayerWithURLs(urls, currentIndex: currentIndex + 1)
+                    }
+                }
+            }
+        }
+    }
+    
+    @State private var networkMonitor: NWPathMonitor?
+    
+    private func setupNetworkMonitoring(for item: AVPlayerItem) {
+        // Monitor network path and adjust bitrate dynamically for smooth streaming
+        let monitor = NWPathMonitor()
+        let playerRef = player
+        monitor.pathUpdateHandler = { path in
+            guard let currentItem = playerRef?.currentItem else { return }
+            
+            DispatchQueue.main.async {
+                if path.status == .satisfied {
+                    if path.usesInterfaceType(.wifi) {
+                        // WiFi - use high bitrate for best quality
+                        currentItem.preferredPeakBitRate = 8_000_000
+                    } else if path.usesInterfaceType(.cellular) {
+                        // Cellular - moderate bitrate, save data
+                        currentItem.preferredPeakBitRate = path.isExpensive ? 2_000_000 : 4_000_000
+                    } else {
+                        currentItem.preferredPeakBitRate = 4_000_000
+                    }
+                } else {
+                    // Poor connection - lower bitrate to prevent stalling
+                    currentItem.preferredPeakBitRate = 1_500_000
+                }
+            }
+        }
+        monitor.start(queue: DispatchQueue.global(qos: .utility))
+        networkMonitor = monitor
+    }
+    
+    @State private var bufferObserver: NSKeyValueObservation?
+    
+    private func setupBufferMonitoring(for item: AVPlayerItem) {
+        // Monitor buffer health to prevent stuttering - key to smooth playback
+        bufferObserver = item.observe(\.loadedTimeRanges, options: [.new]) { item, _ in
+            if let timeRange = item.loadedTimeRanges.first?.timeRangeValue {
+                let bufferedSeconds = CMTimeGetSeconds(timeRange.duration)
+                
+                // Dynamic buffer management for butter-smooth playback
+                if bufferedSeconds < 2.0 && !isScrubbing {
+                    // Buffer running low - increase aggressively to prevent stalling
+                    item.preferredForwardBufferDuration = 6.0
+                } else if bufferedSeconds > 10.0 {
+                    // Buffer very healthy - reduce slightly for lower latency
+                    item.preferredForwardBufferDuration = 4.0
+                } else {
+                    // Optimal range - maintain good buffer
+                    item.preferredForwardBufferDuration = 3.0
+                }
+            }
+        }
+    }
+    
+    private func setupStallRecovery(for item: AVPlayerItem, urls: [String], currentIndex: Int) {
+        // Listen for playback stalls and recover smoothly
+        let playerRef = player
+        let stallObs = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemPlaybackStalled,
+            object: item,
+            queue: .main
+        ) { _ in
+            guard let player = playerRef else { return }
+            
+            // Increase buffer to recover from stall
+            item.preferredForwardBufferDuration = 6.0
+            
+            // Try to resume playback smoothly
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                player.play()
+            }
+            
+            // If still stalling after 3 seconds, try fallback URL
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                if player.timeControlStatus != .playing && currentIndex + 1 < urls.count {
+                    // Try fallback URL
+                    if let nextURL = URL(string: urls[currentIndex + 1]) {
+                        let nextItem = AVPlayerItem(url: nextURL)
+                        player.replaceCurrentItem(with: nextItem)
+                        player.play()
+                    }
+                }
+            }
+        }
+        
+        // Listen for playback errors and recover
+        let errorObs = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { _ in
+            guard let player = playerRef else { return }
+            
+            // Try fallback URL if available
+            if currentIndex + 1 < urls.count, let nextURL = URL(string: urls[currentIndex + 1]) {
+                let nextItem = AVPlayerItem(url: nextURL)
+                player.replaceCurrentItem(with: nextItem)
+                player.play()
+            }
+        }
+        
+        stallObserver = stallObs
+        errorObserver = errorObs
     }
 
     private func togglePlayPause() {
@@ -320,6 +502,23 @@ struct LiveTVPlayerView: View {
     }
 
     private func teardown() {
+        // Clean up all observers properly
+        networkMonitor?.cancel()
+        networkMonitor = nil
+        bufferObserver?.invalidate()
+        bufferObserver = nil
+        statusObserver?.invalidate()
+        statusObserver = nil
+        
+        if let stallObs = stallObserver {
+            NotificationCenter.default.removeObserver(stallObs)
+        }
+        if let errorObs = errorObserver {
+            NotificationCenter.default.removeObserver(errorObs)
+        }
+        stallObserver = nil
+        errorObserver = nil
+        
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         player = nil
@@ -420,14 +619,87 @@ struct LiveTVPlayerView: View {
     }
 
     private func switchToChannel(_ newChannel: LiveTVChannel) {
-        // Replace current item with new channel stream
-        if let url = URL(string: newChannel.streamURL) {
-            let item = AVPlayerItem(url: url)
-            if player == nil { player = AVPlayer(playerItem: item) } else { player?.replaceCurrentItem(with: item) }
+        // Get optimal stream URL based on network quality
+        let optimalURL = LiveTVService.shared.getOptimalStreamURL(
+            for: newChannel,
+            networkQuality: networkOptimizer.connectionQuality
+        )
+        
+        guard let url = URL(string: optimalURL) else {
+            // Fallback to original URL
+            guard let fallbackURL = URL(string: newChannel.streamURL) else { return }
+            switchToChannelWithURL(newChannel, url: fallbackURL)
+            return
+        }
+        
+        switchToChannelWithURL(newChannel, url: url)
+    }
+    
+    private func switchToChannelWithURL(_ newChannel: LiveTVChannel, url: URL) {
+        
+        // Create optimized asset
+        let asset = AVURLAsset(url: url, options: [
+            AVURLAssetPreferPreciseDurationAndTimingKey: false,
+            AVURLAssetAllowsCellularAccessKey: true
+        ])
+        
+        let item = AVPlayerItem(asset: asset)
+        
+        // Apply same optimizations as setupPlayer
+        item.preferredForwardBufferDuration = 2.0
+        item.canUseNetworkResourcesForLiveStreamingWhilePaused = true
+        
+        let networkQuality = NetworkOptimizer.shared.connectionQuality
+        switch networkQuality {
+        case .poor:
+            item.preferredPeakBitRate = 1_000_000
+        case .good:
+            item.preferredPeakBitRate = 3_000_000
+        case .excellent:
+            item.preferredPeakBitRate = 6_000_000
+        }
+        
+        #if os(iOS)
+        item.preferredMaximumResolution = CGSize.zero
+        #endif
+        
+        // Setup new observers
+        setupNetworkMonitoring(for: item)
+        setupBufferMonitoring(for: item)
+        
+        if player == nil {
+            player = AVPlayer(playerItem: item)
             player?.automaticallyWaitsToMinimizeStalling = false
-            player?.play()
-            withAnimation { showMiniGuide = false }
-            updateDVRAvailability()
+            player?.allowsExternalPlayback = true
+        } else {
+            // Smooth transition - preload before switching
+            item.preferredForwardBufferDuration = 3.0 // Slightly more buffer for channel switch
+            player?.replaceCurrentItem(with: item)
+        }
+        
+        player?.play()
+        isPlaying = true
+        withAnimation { showMiniGuide = false }
+        
+        updateSubtitleAvailability()
+        updateDVRAvailability()
+    }
+    
+    private func preloadAdjacentChannels() {
+        // Preload next 2 channels for smooth switching
+        guard let currentIndex = channels.firstIndex(where: { $0.id == channel.id }) else { return }
+        
+        let nextChannels = channels.suffix(from: min(currentIndex + 1, channels.count - 1)).prefix(2)
+        
+        Task {
+            for nextChannel in nextChannels {
+                if !preloadedChannels.contains(nextChannel.id) {
+                    await LiveTVService.shared.preloadChannel(nextChannel)
+                    await MainActor.run {
+                        preloadedChannels.insert(nextChannel.id)
+                    }
+                }
+            }
         }
     }
 }

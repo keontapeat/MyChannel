@@ -41,6 +41,8 @@ final class UserFirestoreService: ObservableObject {
         // Optional fields
         if let profileImageURL = user.profileImageURL {
             userData["profileImageURL"] = profileImageURL
+            // Write legacy key for compatibility with web and older clients
+            userData["avatarUrl"] = profileImageURL
         }
         if let bannerImageURL = user.bannerImageURL {
             userData["bannerImageURL"] = bannerImageURL
@@ -104,7 +106,8 @@ final class UserFirestoreService: ObservableObject {
             username: data["username"] as? String ?? "",
             displayName: data["displayName"] as? String ?? "",
             email: data["email"] as? String ?? "",
-            profileImageURL: data["profileImageURL"] as? String,
+            // Read primary key, fall back to legacy key used by web
+            profileImageURL: (data["profileImageURL"] as? String) ?? (data["avatarUrl"] as? String),
             bannerImageURL: data["bannerImageURL"] as? String,
             bio: data["bio"] as? String,
             subscriberCount: data["subscriberCount"] as? Int ?? 0,

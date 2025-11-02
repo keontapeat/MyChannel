@@ -105,9 +105,9 @@ struct PlaylistManagementView: View {
                 Text("Playlist Tips")
                     .font(.system(size: 18, weight: .semibold))
             }
-            TipRow(icon: "list.number", title: "Organize by theme", subtitle: "Group similar content together")
-            TipRow(icon: "clock", title: "Order matters", subtitle: "Put best videos first")
-            TipRow(icon: "eye", title: "Use good titles", subtitle: "Make playlists easy to find")
+            PlaylistTipRow(icon: "list.number", title: "Organize by theme", subtitle: "Group similar content together")
+            PlaylistTipRow(icon: "clock", title: "Order matters", subtitle: "Put best videos first")
+            PlaylistTipRow(icon: "eye", title: "Use good titles", subtitle: "Make playlists easy to find")
         }
         .padding(16)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -260,5 +260,33 @@ struct PlaylistStatsCard: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Playlist Tip Row
+struct PlaylistTipRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 18))
+                .foregroundColor(.blue)
+                .frame(width: 32, height: 32)
+                .background(Color.blue.opacity(0.1), in: Circle())
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+        }
+        .padding(.vertical, 6)
     }
 }

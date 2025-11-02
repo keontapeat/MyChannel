@@ -7,43 +7,135 @@ struct VideoAnalyticsView: View {
     @StateObject private var analyticsService = StudioAnalyticsService.shared
     @State private var analytics: StudioVideoAnalytics?
     @State private var isLoading = true
+    @State private var hasError = false
+    @State private var errorMessage = ""
     @State private var selectedDateRange: DateRange = .last28Days
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                if isLoading {
-                    ProgressView("Loading analytics...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(.top, 100)
-                } else if let analytics = analytics {
-                    LazyVStack(spacing: 24) {
-                        // Overview metrics
-                        OverviewMetricsSection(analytics: analytics)
-                        
-                        // Retention curve
-                        RetentionCurveSection(analytics: analytics)
-                        
-                        // Traffic sources
-                        TrafficSourcesSection(analytics: analytics)
-                        
-                        // Demographics
-                        DemographicsSection(analytics: analytics)
+            ZStack {
+                // Background - Always visible
+                Color(.systemBackground)
+                    .ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 24) {
+                        if isLoading {
+                            VStack(spacing: 20) {
+                                ProgressView()
+                                    .scaleEffect(1.5)
+                                    .tint(AppTheme.Colors.primary)
+                                Text("Loading analytics...")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 100)
+                        } else if hasError {
+                            // Error state
+                            VStack(spacing: 20) {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.orange)
+                                
+                                Text("Unable to Load Analytics")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                
+                                Text(errorMessage.isEmpty ? "Please try again later" : errorMessage)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 40)
+                                
+                                Button("Retry") {
+                                    Task {
+                                        await loadAnalytics()
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .padding(.top, 8)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 100)
+                        } else if let analytics = analytics {
+                        LazyVStack(spacing: 24) {
+                            // Overview metrics
+                            OverviewMetricsSection(analytics: analytics)
+                            
+                            // Retention curve
+                            RetentionCurveSection(analytics: analytics)
+                            
+                            // Traffic sources
+                            TrafficSourcesSection(analytics: analytics)
+                            
+                            // Demographics
+                            DemographicsSection(analytics: analytics)
+                            }
+                            .padding()
+                        } else {
+                            // Empty state if no analytics - Show immediately so user sees something
+                            VStack(spacing: 20) {
+                                Image(systemName: "chart.bar.xaxis")
+                                    .font(.system(size: 60))
+                                    .foregroundColor(.secondary.opacity(0.5))
+                                
+                                Text("No Analytics Available")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                
+                                Text("Analytics will appear once your video starts getting views")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 40)
+                                
+                                // Quick stats placeholder
+                                VStack(spacing: 16) {
+                                    HStack(spacing: 12) {
+                                        AnalyticsStatBox(title: "Views", value: "0", icon: "eye.fill", color: .blue)
+                                        AnalyticsStatBox(title: "Likes", value: "0", icon: "hand.thumbsup.fill", color: .red)
+                                        AnalyticsStatBox(title: "Comments", value: "0", icon: "bubble.left.fill", color: .green)
+                                    }
+                                    
+                                    Text("Video ID: \(videoId)")
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundColor(.secondary.opacity(0.7))
+                                }
+                                .padding(.top, 20)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 50)
+                            .padding(.horizontal)
+                        }
                     }
-                    .padding()
                 }
             }
-            .navigationTitle("Analytics")
+            .navigationTitle("Video Analytics")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .font(.system(size: 16, weight: .semibold))
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Picker("Range", selection: $selectedDateRange) {
-                        ForEach(DateRange.allCases, id: \.self) { range in
-                            Text(range.displayName).tag(range)
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    HStack(spacing: 12) {
+                        NavigationLink(destination: ComprehensiveCreatorStudioView()) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chart.bar.xaxis")
+                                Text("Studio")
+                                    .font(.system(size: 15, weight: .semibold))
+                            }
                         }
+                        
+                        Picker("Range", selection: $selectedDateRange) {
+                            ForEach(DateRange.allCases, id: \.self) { range in
+                                Text(range.displayName).tag(range)
+                            }
+                        }
+                        .labelsHidden()
                     }
                 }
             }
@@ -54,12 +146,57 @@ struct VideoAnalyticsView: View {
         .onChange(of: selectedDateRange) { _ in
             Task { await loadAnalytics() }
         }
+        .onAppear {
+            // Ensure analytics load if not already loaded
+            if analytics == nil && !isLoading {
+                Task {
+                    await loadAnalytics()
+                }
+            }
+        }
     }
     
     private func loadAnalytics() async {
-        isLoading = true
-        analytics = await analyticsService.fetchVideoAnalytics(videoId: videoId, dateRange: selectedDateRange)
-        isLoading = false
+        await MainActor.run {
+            isLoading = true
+            hasError = false
+            errorMessage = ""
+        }
+        
+        // Fetch analytics with timeout protection
+        let fetchedAnalytics = await withTimeout(seconds: 10) {
+            await analyticsService.fetchVideoAnalytics(videoId: videoId, dateRange: selectedDateRange)
+        }
+        
+        await MainActor.run {
+            if let analytics = fetchedAnalytics {
+                self.analytics = analytics
+                hasError = false
+            } else {
+                // No analytics available - show empty state
+                self.analytics = nil
+                hasError = false
+            }
+            isLoading = false
+        }
+    }
+}
+
+// Helper function for timeout protection
+private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async -> T?) async -> T? {
+    await withTaskGroup(of: T?.self) { group in
+        group.addTask {
+            await operation()
+        }
+        
+        group.addTask {
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            return nil
+        }
+        
+        let result = await group.next()
+        group.cancelAll()
+        return result ?? nil
     }
 }
 
@@ -204,6 +341,31 @@ struct DemographicsSection: View {
         .padding()
         .background(Color(.systemGray6))
         .cornerRadius(12)
+    }
+}
+
+struct AnalyticsStatBox: View {
+    let title: String
+    let value: String
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundColor(color)
+            Text(value)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.primary)
+            Text(title)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(Color(.systemGray6))
+        .cornerRadius(10)
     }
 }
 

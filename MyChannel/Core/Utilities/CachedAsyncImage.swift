@@ -52,6 +52,12 @@ struct CachedAsyncImage<Content: View, Placeholder: View>: View {
             } else {
                 placeholder()
                     .onAppear(perform: loadImage)
+                    .onChange(of: url?.absoluteString) { _ in
+                        // Reload when URL changes
+                        image = nil
+                        isLoading = false
+                        loadImage()
+                    }
             }
         }
     }

@@ -102,6 +102,9 @@ struct ProfileHeaderView: View {
                 Spacer()
 
                 ProfileAvatarView(urlString: user.profileImageURL, size: currentAvatarSize)
+                    .onChange(of: user.profileImageURL) { newURL in
+                        print("🔄 ProfileHeaderView: profileImageURL changed to: \(newURL ?? "nil")")
+                    }
                     .overlay(Circle().stroke(.white, lineWidth: 4))
                     .shadow(color: .black.opacity(0.5), radius: 14, x: 0, y: 6)
                     .transition(.scale.combined(with: .opacity))

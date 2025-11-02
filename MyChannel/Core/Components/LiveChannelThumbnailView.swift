@@ -130,9 +130,22 @@ private final class PlayerContainerView: UIView {
 
         let player = AVPlayer(playerItem: item)
         player.isMuted = true
-        player.automaticallyWaitsToMinimizeStalling = true
+        player.automaticallyWaitsToMinimizeStalling = false // Low latency for previews
         player.preventsDisplaySleepDuringVideoPlayback = false
-        player.currentItem?.preferredPeakBitRate = 1_800_000
+        
+        // Optimize bitrate for thumbnails - much lower than main player
+        let networkQuality = NetworkOptimizer.shared.connectionQuality
+        switch networkQuality {
+        case .poor:
+            item.preferredPeakBitRate = 300_000 // 300 kbps for poor connections
+        case .good:
+            item.preferredPeakBitRate = 600_000 // 600 kbps for good connections
+        case .excellent:
+            item.preferredPeakBitRate = 1_000_000 // 1 Mbps for excellent connections
+        }
+        
+        // Minimal buffer for previews to save resources
+        item.preferredForwardBufferDuration = 0.5 // Only 0.5 seconds for thumbnails
 
         let layer = AVPlayerLayer(player: player)
         layer.videoGravity = .resizeAspectFill

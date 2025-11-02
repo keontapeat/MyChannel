@@ -4,14 +4,16 @@ service firebase.storage {
     function isSignedIn() { return request.auth != null; }
     function uid() { return isSignedIn() ? request.auth.uid : null; }
 
-    // User avatars/banners (store per-user folder)
-    match /user-avatars/{userId}/{file} {
+    // User avatars/banners (direct file storage)
+    match /user-avatars/{file} {
       allow read: if true;
-      allow write: if isSignedIn() && uid() == userId;
+      // Allow write if user is authenticated and filename matches their UID
+      allow write: if isSignedIn() && file.matches('.*' + uid() + '.*');
     }
-    match /user-banners/{userId}/{file} {
+    match /user-banners/{file} {
       allow read: if true;
-      allow write: if isSignedIn() && uid() == userId;
+      // Allow write if user is authenticated and filename matches their UID
+      allow write: if isSignedIn() && file.matches('.*' + uid() + '.*');
     }
 
     // Video assets

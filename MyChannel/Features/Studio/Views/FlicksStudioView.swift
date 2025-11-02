@@ -161,10 +161,10 @@ struct FlicksStudioView: View {
             }
             
             VStack(spacing: 12) {
-                TipRow(icon: "clock", title: "Keep it under 60 seconds", subtitle: "Shorter Flicks get 3x more views")
-                TipRow(icon: "text.bubble", title: "Add captions", subtitle: "80% watch without sound")
-                TipRow(icon: "music.note", title: "Use trending music", subtitle: "Increases discoverability by 5x")
-                TipRow(icon: "hand.thumbsup", title: "Engage in first 3 seconds", subtitle: "Hook viewers immediately")
+                FlicksTipRow(icon: "clock", title: "Keep it under 60 seconds", subtitle: "Shorter Flicks get 3x more views")
+                FlicksTipRow(icon: "text.bubble", title: "Add captions", subtitle: "80% watch without sound")
+                FlicksTipRow(icon: "music.note", title: "Use trending music", subtitle: "Increases discoverability by 5x")
+                FlicksTipRow(icon: "hand.thumbsup", title: "Engage in first 3 seconds", subtitle: "Hook viewers immediately")
             }
         }
         .padding(16)
@@ -283,9 +283,9 @@ struct FlickGridCard: View {
     }
 }
 
-// MARK: - Tip Row
+// MARK: - Flicks Tip Row
 
-struct TipRow: View {
+struct FlicksTipRow: View {
     let icon: String
     let title: String
     let subtitle: String
