@@ -383,7 +383,7 @@ struct VideoManagementRow: View {
             }
             
             // Thumbnail
-            if let thumbnailURL = video.thumbnailURL, let url = URL(string: thumbnailURL) {
+            if let url = URL(string: video.thumbnailURL) {
                 AsyncImage(url: url) { image in
                     image.resizable().aspectRatio(contentMode: .fill)
                 } placeholder: {
