@@ -115,7 +115,7 @@ struct AdvancedAnalyticsView: View {
     private var keyMetricsSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
-                MetricCard(
+                AnalyticsMetricCard(
                     title: "Views",
                     value: formatNumber(analyticsService.channelAnalytics?.totalViews ?? 0),
                     change: "+12.5%",
@@ -125,7 +125,7 @@ struct AdvancedAnalyticsView: View {
                 )
                 .frame(width: 160)
                 
-                MetricCard(
+                AnalyticsMetricCard(
                     title: "Watch Time",
                     value: formatHours(Double(analyticsService.channelAnalytics?.totalViews ?? 0) * 0.3 / 60),
                     change: "+8.3%",
@@ -135,7 +135,7 @@ struct AdvancedAnalyticsView: View {
                 )
                 .frame(width: 160)
                 
-                MetricCard(
+                AnalyticsMetricCard(
                     title: "Subscribers",
                     value: formatNumber(analyticsService.channelAnalytics?.totalSubscribers ?? 0),
                     change: "+5.2%",
@@ -145,7 +145,7 @@ struct AdvancedAnalyticsView: View {
                 )
                 .frame(width: 160)
                 
-                MetricCard(
+                AnalyticsMetricCard(
                     title: "Revenue",
                     value: "$\(String(format: "%.0f", analyticsService.channelAnalytics?.totalRevenue ?? 0))",
                     change: "+18.7%",
@@ -155,7 +155,7 @@ struct AdvancedAnalyticsView: View {
                 )
                 .frame(width: 160)
                 
-                MetricCard(
+                AnalyticsMetricCard(
                     title: "Engagement",
                     value: "\(String(format: "%.1f", calculateEngagementRate()))%",
                     change: "+2.1%",
@@ -323,7 +323,7 @@ struct AdvancedAnalyticsView: View {
             // Placeholder for top videos
             VStack(spacing: 12) {
                 ForEach(0..<3, id: \.self) { index in
-                    TopVideoRow(rank: index + 1, title: "Amazing Content #\(index + 1)", views: "125K", change: "+\(15 - index * 2)%")
+                    AnalyticsTopVideoRow(rank: index + 1, title: "Amazing Content #\(index + 1)", views: "125K", change: "+\(15 - index * 2)%")
                 }
             }
         }
@@ -429,7 +429,7 @@ struct AdvancedAnalyticsView: View {
 
 // MARK: - Supporting Views
 
-struct MetricCard: View {
+struct AnalyticsMetricCard: View {
     let title: String
     let value: String
     let change: String
@@ -527,7 +527,7 @@ struct InsightRow: View {
     }
 }
 
-struct TopVideoRow: View {
+struct AnalyticsTopVideoRow: View {
     let rank: Int
     let title: String
     let views: String

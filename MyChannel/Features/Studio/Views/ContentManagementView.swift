@@ -85,9 +85,9 @@ struct ContentManagementView: View {
     private var contentStatsHeader: some View {
         VStack(spacing: 16) {
             HStack(spacing: 12) {
-                StatCard(title: "Total Videos", value: "\(videos.count)", icon: "play.rectangle.fill", color: .blue)
-                StatCard(title: "Total Views", value: formatNumber(videos.reduce(0) { $0 + $1.viewCount }), icon: "eye.fill", color: .green)
-                StatCard(title: "Total Likes", value: formatNumber(videos.reduce(0) { $0 + $1.likeCount }), icon: "hand.thumbsup.fill", color: .pink)
+                ContentStatCard(title: "Total Videos", value: "\(videos.count)", icon: "play.rectangle.fill", color: .blue)
+                ContentStatCard(title: "Total Views", value: formatNumber(videos.reduce(0) { $0 + $1.viewCount }), icon: "eye.fill", color: .green)
+                ContentStatCard(title: "Total Likes", value: formatNumber(videos.reduce(0) { $0 + $1.likeCount }), icon: "hand.thumbsup.fill", color: .pink)
             }
         }
     }
@@ -454,7 +454,7 @@ struct VideoManagementRow: View {
 
 // MARK: - Stat Card
 
-struct StatCard: View {
+struct ContentStatCard: View {
     let title: String
     let value: String
     let icon: String

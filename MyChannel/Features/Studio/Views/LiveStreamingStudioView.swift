@@ -81,9 +81,9 @@ struct LiveStreamingStudioView: View {
                 .overlay(Text("Stream Preview").foregroundColor(.secondary))
             
             HStack(spacing: 12) {
-                StatCard(title: "Views", value: "125", color: .blue)
-                StatCard(title: "Likes", value: "42", color: .pink)
-                StatCard(title: "Comments", value: "18", color: .green)
+                LiveStatCard(title: "Views", value: "125", color: .blue)
+                LiveStatCard(title: "Likes", value: "42", color: .pink)
+                LiveStatCard(title: "Comments", value: "18", color: .green)
             }
             
             Button(action: { isLive = false }) {
@@ -133,7 +133,7 @@ struct LiveStreamingStudioView: View {
     }
 }
 
-struct StatCard: View {
+struct LiveStatCard: View {
     let title: String
     let value: String
     let color: Color

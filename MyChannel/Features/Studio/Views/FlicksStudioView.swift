@@ -61,9 +61,9 @@ struct FlicksStudioView: View {
     
     private var flicksStatsHeader: some View {
         HStack(spacing: 12) {
-            StatsCard(title: "Total Flicks", value: "\(flicks.count)", icon: "rectangle.portrait.fill", color: .purple)
-            StatsCard(title: "Total Views", value: formatNumber(flicks.reduce(0) { $0 + $1.viewCount }), icon: "eye.fill", color: .blue)
-            StatsCard(title: "Avg Watch", value: "92%", icon: "chart.line.uptrend.xyaxis", color: .green)
+            FlicksStatsCard(title: "Total Flicks", value: "\(flicks.count)", icon: "rectangle.portrait.fill", color: .purple)
+            FlicksStatsCard(title: "Total Views", value: formatNumber(flicks.reduce(0) { $0 + $1.viewCount }), icon: "eye.fill", color: .blue)
+            FlicksStatsCard(title: "Avg Watch", value: "92%", icon: "chart.line.uptrend.xyaxis", color: .green)
         }
     }
     
@@ -195,7 +195,7 @@ struct FlicksStudioView: View {
 
 // MARK: - Stats Card
 
-struct StatsCard: View {
+struct FlicksStatsCard: View {
     let title: String
     let value: String
     let icon: String
@@ -231,7 +231,7 @@ struct FlickGridCard: View {
         Button(action: onTap) {
             VStack(spacing: 0) {
                 // Thumbnail
-                if let thumbnailURL = flick.thumbnailURL, let url = URL(string: thumbnailURL) {
+                if let url = URL(string: flick.thumbnailURL) {
                     AsyncImage(url: url) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
                     } placeholder: {

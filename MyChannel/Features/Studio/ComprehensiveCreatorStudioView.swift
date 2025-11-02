@@ -662,85 +662,25 @@ struct ActivityRow: View {
     }
 }
 
-// MARK: - Placeholder Views for Other Tabs
+// MARK: - Complete Views Now in Separate Files
+// All views have been moved to MyChannel/Features/Studio/Views/
+// - ContentManagementView.swift
+// - AdvancedAnalyticsView.swift  
+// - EarningsManagementView.swift
+// - ChannelCustomizationView.swift
+// - CommunityManagementView.swift
+// - LiveStreamingStudioView.swift
+// - FlicksStudioView.swift
+// - PlaylistManagementView.swift
+// - CopyrightManagementView.swift
+// - StudioSettingsView.swift
 
-struct ContentManagementView: View {
-    var body: some View {
-        Text("Content Management")
-            .font(.title)
-            .navigationTitle("Content")
-    }
-}
-
-struct AdvancedAnalyticsView: View {
-    var body: some View {
-        Text("Advanced Analytics")
-            .font(.title)
-            .navigationTitle("Analytics")
-    }
-}
-
-struct EarningsManagementView: View {
-    var body: some View {
-        Text("Earnings Management")
-            .font(.title)
-            .navigationTitle("Earnings")
-    }
-}
-
-struct ChannelCustomizationView: View {
-    var body: some View {
-        Text("Channel Customization")
-            .font(.title)
-            .navigationTitle("Customization")
-    }
-}
-
-struct CommunityManagementView: View {
-    var body: some View {
-        Text("Community Management")
-            .font(.title)
-            .navigationTitle("Community")
-    }
-}
-
+// Placeholder for Premieres (not yet built)
 struct PremieresManagementView: View {
     var body: some View {
         Text("Premieres Management")
             .font(.title)
             .navigationTitle("Premieres")
-    }
-}
-
-struct LiveStreamingStudioView: View {
-    var body: some View {
-        Text("Live Streaming Studio")
-            .font(.title)
-            .navigationTitle("Live")
-    }
-}
-
-struct FlicksStudioView: View {
-    var body: some View {
-        Text("Flicks Studio")
-            .font(.title)
-            .navigationTitle("Flicks")
-    }
-}
-
-struct PlaylistManagementView: View {
-    var body: some View {
-        Text("Playlist Management")
-            .font(.title)
-            .navigationTitle("Playlists")
-    }
-}
-
-struct CopyrightManagementView: View {
-    var body: some View {
-        Text("Copyright Management")
-            .font(.title)
-            .navigationTitle("Copyright")
     }
 }
 
@@ -1232,13 +1172,7 @@ struct AdPreviewView: View {
     }
 }
 
-struct StudioSettingsView: View {
-    var body: some View {
-        Text("Studio Settings")
-            .font(.title)
-            .navigationTitle("Settings")
-    }
-}
+// StudioSettingsView now in separate file: MyChannel/Features/Studio/Views/StudioSettingsView.swift
 
 struct AIToolsStudioView: View {
     var body: some View {

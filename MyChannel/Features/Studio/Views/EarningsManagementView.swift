@@ -183,7 +183,7 @@ struct EarningsManagementView: View {
                 .font(.system(size: 20, weight: .semibold))
             
             VStack(spacing: 12) {
-                RevenueSourceRow(
+                EarningsRevenueSourceRow(
                     title: "Ad Revenue",
                     amount: (analyticsService.channelAnalytics?.totalRevenue ?? 0) * 0.70,
                     percentage: 70,
@@ -191,7 +191,7 @@ struct EarningsManagementView: View {
                     color: .red
                 )
                 
-                RevenueSourceRow(
+                EarningsRevenueSourceRow(
                     title: "Memberships",
                     amount: (analyticsService.channelAnalytics?.totalRevenue ?? 0) * 0.15,
                     percentage: 15,
@@ -199,7 +199,7 @@ struct EarningsManagementView: View {
                     color: .purple
                 )
                 
-                RevenueSourceRow(
+                EarningsRevenueSourceRow(
                     title: "Super Chat",
                     amount: (analyticsService.channelAnalytics?.totalRevenue ?? 0) * 0.10,
                     percentage: 10,
@@ -207,7 +207,7 @@ struct EarningsManagementView: View {
                     color: .pink
                 )
                 
-                RevenueSourceRow(
+                EarningsRevenueSourceRow(
                     title: "Merchandise",
                     amount: (analyticsService.channelAnalytics?.totalRevenue ?? 0) * 0.05,
                     percentage: 5,
@@ -398,7 +398,7 @@ struct ActionButton: View {
     }
 }
 
-struct RevenueSourceRow: View {
+struct EarningsRevenueSourceRow: View {
     let title: String
     let amount: Double
     let percentage: Int
