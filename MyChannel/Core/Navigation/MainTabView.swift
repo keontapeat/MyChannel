@@ -92,7 +92,6 @@ struct MainTabView: View {
         .fullScreenCover(isPresented: $presentMiniPlayerDetail) {
             if let video = globalPlayer.currentVideo {
                 VideoDetailView(video: video)
-                    .id(video.id) // Prevent view recreation on state changes
             }
         }
         .ignoresSafeArea(.keyboard)
@@ -164,7 +163,6 @@ struct MainTabView: View {
         }
         .fullScreenCover(item: $historyVideoToOpen) { video in
             VideoDetailView(video: video)
-                .id(video.id) // Prevent view recreation on state changes
         }
         // Auth gate: if user selects profile while unauthenticated
         .fullScreenCover(isPresented: $showAuthGate, onDismiss: {

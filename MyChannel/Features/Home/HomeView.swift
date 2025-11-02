@@ -244,7 +244,6 @@ struct HomeView: View {
             switch route {
             case .video(let video):
                 VideoDetailView(video: video)
-                    .id(video.id) // Prevent view recreation on state changes
                     .onDisappear { self.route = nil }
 
             case .movie(let movie):
