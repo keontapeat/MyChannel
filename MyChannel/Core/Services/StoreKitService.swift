@@ -60,12 +60,17 @@ final class StoreKitService: ObservableObject {
     
     func hasActiveSubscription() async -> Bool {
         if #available(iOS 15.0, *) {
-            for await result in Transaction.currentEntitlements {
-                if case .verified(let tx) = result, subscriptionIDs.contains(tx.productID) {
-                    if tx.revocationDate == nil && tx.expirationDate ?? .distantFuture > Date() {
-                        return true
+            // Note: Transaction.currentEntitlements requires iOS 15+
+            do {
+                for await result in StoreKit.Transaction.currentEntitlements {
+                    if case .verified(let tx) = result, subscriptionIDs.contains(tx.productID) {
+                        if tx.revocationDate == nil && tx.expirationDate ?? .distantFuture > Date() {
+                            return true
+                        }
                     }
                 }
+            } catch {
+                print("⚠️ [StoreKit] Error checking entitlements: \(error)")
             }
             return false
         } else {
@@ -78,10 +83,14 @@ final class StoreKitService: ObservableObject {
     private func updatePurchased() async {
         if #available(iOS 15.0, *) {
             var ids = Set<String>()
-            for await result in Transaction.currentEntitlements {
-                if case .verified(let tx) = result {
-                    ids.insert(tx.productID)
+            do {
+                for await result in StoreKit.Transaction.currentEntitlements {
+                    if case .verified(let tx) = result {
+                        ids.insert(tx.productID)
+                    }
                 }
+            } catch {
+                print("⚠️ [StoreKit] Error updating purchased: \(error)")
             }
             purchasedProductIDs = ids
         }

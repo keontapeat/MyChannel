@@ -12,7 +12,7 @@ import Security
 /// **SECURE API KEY STORAGE** 🔐
 /// Stores sensitive API keys in iOS Keychain instead of Info.plist
 /// App Store Requirement: API keys must not be extractable from binary
-@MainActor
+/// Note: Not @MainActor because Keychain operations are synchronous and thread-safe
 final class KeychainManager {
     static let shared = KeychainManager()
     
