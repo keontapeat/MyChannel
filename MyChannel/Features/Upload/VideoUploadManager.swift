@@ -181,10 +181,49 @@ class VideoUploadManager: ObservableObject {
                 
                 // Persist to local profile and refresh AppState
                 try? await DatabaseService.shared.saveVideo(uploadedVideo)
-                if let user = AuthenticationManager.shared.currentUser {
-                    // Ensure the user exists in local store too
+                
+                // 🔥 INCREMENT VIDEO COUNT: Update user's videoCount after successful upload
+                if var user = AuthenticationManager.shared.currentUser {
+                    user = User(
+                        id: user.id,
+                        username: user.username,
+                        displayName: user.displayName,
+                        email: user.email,
+                        profileImageURL: user.profileImageURL,
+                        bannerImageURL: user.bannerImageURL,
+                        bio: user.bio,
+                        subscriberCount: user.subscriberCount,
+                        videoCount: user.videoCount + 1, // Increment video count
+                        isVerified: user.isVerified,
+                        isCreator: user.isCreator,
+                        createdAt: user.createdAt,
+                        location: user.location,
+                        website: user.website,
+                        socialLinks: user.socialLinks,
+                        followerCount: user.followerCount,
+                        followingCount: user.followingCount,
+                        joinDate: user.joinDate,
+                        totalViews: user.totalViews,
+                        totalEarnings: user.totalEarnings,
+                        membershipTiers: user.membershipTiers,
+                        bannerVideoURL: user.bannerVideoURL,
+                        bannerVideoMuted: user.bannerVideoMuted,
+                        bannerVideoContentMode: user.bannerVideoContentMode
+                    )
+                    
+                    // Save updated user to local storage
                     try? await DatabaseService.shared.saveUser(user)
+                    
+                    // Update in AuthManager and AppState
+                    await MainActor.run {
+                        AuthenticationManager.shared.currentUser = user
+                        AppState.shared.currentUser = user
+                    }
+                    
+                    // Save to Firestore
+                    try? await UserFirestoreService.shared.updateUser(user)
                 }
+                
                 NotificationCenter.default.post(name: .userProfileUpdated, object: AuthenticationManager.shared.currentUser)
                 // 🔥 REFRESH PROFILE STATS: Update video count and views in real-time
                 NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)

@@ -609,6 +609,7 @@ struct VideoDetailView: View {
         }
         .fullScreenCover(item: $videoToPresent) { next in
             VideoDetailView(video: next)
+                .id(next.id) // Prevent view recreation on state changes
         }
         .sheet(isPresented: $showingQualitySelector) {
             VideoQualitySelector(selectedQuality: $videoQuality) { quality in

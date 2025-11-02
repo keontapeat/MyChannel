@@ -30,8 +30,15 @@ final class VideoFirestoreService: ObservableObject {
 
     func saveVideo(_ video: Video) async throws {
         #if canImport(FirebaseFirestore)
+        print("💾 [VideoFirestoreService] Saving video to Firestore:")
+        print("  - ID: \(video.id)")
+        print("  - Title: \(video.title)")
+        print("  - Creator ID: \(video.creator.id)")
+        print("  - Video URL: \(video.videoURL)")
+        print("  - Thumbnail URL: \(video.thumbnailURL)")
+        
         let ref = db.collection("videos").document(video.id)
-        try await ref.setData([
+        let data: [String: Any] = [
             "userId": video.creator.id,
             "title": video.title,
             "description": video.description,
@@ -46,7 +53,10 @@ final class VideoFirestoreService: ObservableObject {
             "isPublic": video.isPublic,
             "createdAt": FieldValue.serverTimestamp(),
             "updatedAt": FieldValue.serverTimestamp()
-        ])
+        ]
+        
+        try await ref.setData(data)
+        print("✅ [VideoFirestoreService] Video saved successfully to Firestore")
         #endif
     }
     
@@ -60,13 +70,17 @@ final class VideoFirestoreService: ObservableObject {
     func fetchVideosByCreator(creatorId: String, limit: Int = 24) async -> [Video] {
         #if canImport(FirebaseFirestore)
         do {
+            print("📺 [VideoFirestoreService] Fetching videos for creator: \(creatorId)")
             let snap = try await db.collection("videos")
                 .whereField("userId", isEqualTo: creatorId)
                 .order(by: "createdAt", descending: true)
                 .limit(to: limit)
                 .getDocuments()
-            return snap.documents.compactMap { doc in
+            print("📺 [VideoFirestoreService] Found \(snap.documents.count) videos in Firestore")
+            
+            let videos = snap.documents.compactMap { doc in
                 let d = doc.data()
+                print("  - Video: \(d["title"] as? String ?? "untitled") (id: \(doc.documentID))")
                 return Video(
                     id: doc.documentID,
                     title: d["title"] as? String ?? "",
@@ -80,7 +94,12 @@ final class VideoFirestoreService: ObservableObject {
                     category: .entertainment
                 )
             }
-        } catch { return [] }
+            print("✅ [VideoFirestoreService] Returning \(videos.count) videos")
+            return videos
+        } catch {
+            print("🚨 [VideoFirestoreService] Error fetching videos: \(error)")
+            return []
+        }
         #else
         return []
         #endif
