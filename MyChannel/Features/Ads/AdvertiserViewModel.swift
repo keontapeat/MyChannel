@@ -367,12 +367,12 @@ enum CreativeStatus: String, Codable {
 struct PaymentMethod: Identifiable {
     let id: String
     let name: String
-    let type: PaymentType
+    let type: AdvertiserPaymentType
     let last4: String
     let isDefault: Bool
 }
 
-enum PaymentType {
+enum AdvertiserPaymentType {
     case card
     case bank
 }
