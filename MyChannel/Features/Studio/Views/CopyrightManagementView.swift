@@ -104,12 +104,7 @@ struct CopyrightManagementView: View {
     }
 }
 
-struct CopyrightClaim: Identifiable {
-    let id = UUID()
-    let videoTitle: String
-    let claimant: String
-    let status: String
-}
+// Using existing CopyrightClaim model from Core/Services/ContentModerationService.swift
 
 struct StatusCard: View {
     let title: String
