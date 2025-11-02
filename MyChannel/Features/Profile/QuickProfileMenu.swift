@@ -127,7 +127,7 @@ struct QuickProfileMenu: View {
         }
         .confirmationDialog("Sign Out", isPresented: $showingSignOutConfirm) {
             Button("Sign Out", role: .destructive) {
-                authManager.signOut()
+                try? authManager.signOut()
                 dismiss()
             }
             Button("Cancel", role: .cancel) { }

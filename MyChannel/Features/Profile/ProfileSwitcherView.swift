@@ -32,7 +32,7 @@ struct ProfileSwitcherView: View {
                         // Add Another Profile
                         Button {
                             HapticManager.shared.impact(style: .medium)
-                            authManager.signOut()
+                            try? authManager.signOut()
                             dismiss()
                         } label: {
                             HStack(spacing: 12) {

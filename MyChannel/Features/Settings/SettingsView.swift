@@ -175,11 +175,11 @@ struct SettingsView: View {
                 let videos = try await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: userId)
                 for video in videos {
                     // Delete video file from Storage
-                    if let videoURL = video.videoURL {
+                    if let videoURL = video.videoURL, !videoURL.isEmpty {
                         try? await VideoStorageService.shared.deleteVideo(from: videoURL)
                     }
                     // Delete thumbnail from Storage
-                    if let thumbnailURL = video.thumbnailURL {
+                    if let thumbnailURL = video.thumbnailURL, !thumbnailURL.isEmpty {
                         try? await VideoStorageService.shared.deleteVideo(from: thumbnailURL)
                     }
                     // Delete video document from Firestore
