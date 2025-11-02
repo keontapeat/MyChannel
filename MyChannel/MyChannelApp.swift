@@ -25,6 +25,13 @@ struct MyChannelApp: App {
         FirebaseManager.shared.configureIfPossible()
         setupAppearance()
         
+        // 🔐 SECURITY: Migrate API keys from Info.plist to Keychain (App Store requirement)
+        Task { @MainActor in
+            if !UserDefaults.standard.bool(forKey: "keychain_migration_complete") {
+                KeychainManager.shared.migrateFromInfoPlist()
+            }
+        }
+        
         // Force onboarding to be completed - we don't want onboarding flow anymore
         UserDefaults.standard.set(true, forKey: "didCompleteOnboarding")
         

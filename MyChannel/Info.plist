@@ -57,5 +57,21 @@
 	<string>$(CHANNELBOOST_BASE_URL)</string>
 	<key>CHANNELBOOST_TOKEN</key>
 	<string>$(CHANNELBOOST_TOKEN)</string>
+	
+	<!-- 📱 USAGE DESCRIPTIONS - Required by App Store -->
+	<key>NSCameraUsageDescription</key>
+	<string>MyChannel needs camera access to record videos for your channel and create amazing content</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>MyChannel needs microphone access to record audio for your videos and enable live streaming</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MyChannel needs access to your photo library to upload videos, photos, and thumbnails</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>MyChannel needs permission to save videos and photos to your photo library</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>MyChannel uses your location to suggest nearby events and content (optional)</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>MyChannel uses Face ID to securely access your account</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>MyChannel respects your privacy. This helps us show you relevant content and improve your experience</string>
 </dict>
 </plist>

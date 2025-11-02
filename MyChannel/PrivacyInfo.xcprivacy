@@ -11,7 +11,24 @@
         "retention": "noLongerThanNecessary"
       }
     ],
-    "requiredReasonAPIs": [],
+    "requiredReasonAPIs": [
+      {
+        "api": "NSPrivacyAccessedAPICategoryUserDefaults",
+        "reasons": ["CA92.1"]
+      },
+      {
+        "api": "NSPrivacyAccessedAPICategoryFileTimestamp",
+        "reasons": ["C617.1", "0A2A.1"]
+      },
+      {
+        "api": "NSPrivacyAccessedAPICategorySystemBootTime",
+        "reasons": ["35F9.1"]
+      },
+      {
+        "api": "NSPrivacyAccessedAPICategoryDiskSpace",
+        "reasons": ["E174.1"]
+      }
+    ],
     "tracking": {
       "usedForTracking": false
     }

@@ -1,15 +1,94 @@
 import Foundation
 
-// Centralized, secure secrets access.
-// Order: Info.plist resolved value (not placeholders) -> Environment variable -> empty.
+// 🔐 SECURE API KEY ACCESS - App Store Compliant
+// Order: Keychain (secure) -> Environment variable (build time) -> Info.plist (fallback, will be removed)
 struct AppSecrets {
+    
+    // MARK: - 🔥 SECURE KEYCHAIN ACCESS (New Standard)
+    
+    static var anthropicAPIKey: String {
+        // Priority 1: Keychain (secure, can't be extracted)
+        if let keychainValue = KeychainManager.shared.get(KeychainManager.APIKey.anthropic.rawValue),
+           !keychainValue.isEmpty {
+            return keychainValue
+        }
+        
+        // Priority 2: Environment variable (build time only)
+        let env = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? ""
+        if !env.isEmpty { return env }
+        
+        // Priority 3: Info.plist fallback (DEPRECATED - will be removed)
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "ANTHROPIC_API_KEY") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        
+        return ""
+    }
+    
+    static var openAIAPIKey: String {
+        if let keychainValue = KeychainManager.shared.get(KeychainManager.APIKey.openai.rawValue),
+           !keychainValue.isEmpty {
+            return keychainValue
+        }
+        
+        let env = ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? ""
+        if !env.isEmpty { return env }
+        
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "OPENAI_API_KEY") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        
+        return ""
+    }
+    
+    static var googleCloudAPIKey: String {
+        if let keychainValue = KeychainManager.shared.get(KeychainManager.APIKey.googleCloud.rawValue),
+           !keychainValue.isEmpty {
+            return keychainValue
+        }
+        
+        let env = ProcessInfo.processInfo.environment["GOOGLE_CLOUD_API_KEY"] ?? ""
+        if !env.isEmpty { return env }
+        
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "GOOGLE_CLOUD_API_KEY") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        
+        return ""
+    }
+    
+    static var googleCloudProjectID: String {
+        if let keychainValue = KeychainManager.shared.get(KeychainManager.APIKey.googleCloudProject.rawValue),
+           !keychainValue.isEmpty {
+            return keychainValue
+        }
+        
+        let env = ProcessInfo.processInfo.environment["GOOGLE_CLOUD_PROJECT_ID"] ?? ""
+        if !env.isEmpty { return env }
+        
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "GOOGLE_CLOUD_PROJECT_ID") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        
+        return ""
+    }
+    
+    // MARK: - Non-Sensitive Keys (Can stay in plist)
+    
     static var aiAPIKey: String {
         let plist = (Bundle.main.object(forInfoDictionaryKey: "AI_API_KEY") as? String ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
         return (ProcessInfo.processInfo.environment["AI_API_KEY"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
+    
     static var tmdbAPIKey: String {
+        // TMDB key is public, can stay in plist
+        if let keychainValue = KeychainManager.shared.get(KeychainManager.APIKey.tmdb.rawValue),
+           !keychainValue.isEmpty {
+            return keychainValue
+        }
+        
         let plist = (Bundle.main.object(forInfoDictionaryKey: "TMDB_API_KEY") as? String ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
@@ -18,7 +97,7 @@ struct AppSecrets {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !env.isEmpty { return env }
 
-        // Fallback to default TMDB API key for movies
+        // Fallback to default TMDB API key for movies (public API)
         return "cc1d44a1b1c8a4f2a5890cad1660d0be"
     }
 
@@ -34,34 +113,6 @@ struct AppSecrets {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
         return ProcessInfo.processInfo.environment["PIXABAY_API_KEY"] ?? ""
-    }
-
-    static var anthropicAPIKey: String {
-        let plist = (Bundle.main.object(forInfoDictionaryKey: "ANTHROPIC_API_KEY") as? String ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
-        return ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? ""
-    }
-    
-    static var googleCloudAPIKey: String {
-        let plist = (Bundle.main.object(forInfoDictionaryKey: "GOOGLE_CLOUD_API_KEY") as? String ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
-        return ProcessInfo.processInfo.environment["GOOGLE_CLOUD_API_KEY"] ?? ""
-    }
-    
-    static var googleCloudProjectID: String {
-        let plist = (Bundle.main.object(forInfoDictionaryKey: "GOOGLE_CLOUD_PROJECT_ID") as? String ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
-        return ProcessInfo.processInfo.environment["GOOGLE_CLOUD_PROJECT_ID"] ?? ""
-    }
-    
-    static var openAIAPIKey: String {
-        let plist = (Bundle.main.object(forInfoDictionaryKey: "OPENAI_API_KEY") as? String ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
-        return ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? ""
     }
 
     static var youtubeAPIKey: String {
