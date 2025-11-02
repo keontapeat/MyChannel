@@ -43,7 +43,7 @@ struct ComprehensiveCreatorStudioView: View {
             case .community: return "person.3"
             case .premieres: return "calendar.badge.clock"
             case .live: return "dot.radiowaves.left.and.right"
-            case .shorts: return "rectangle.portrait"
+            case .flicks: return "rectangle.portrait"
             case .playlists: return "list.bullet.rectangle"
             case .copyright: return "shield.checkered"
             case .monetization: return "banknote"
