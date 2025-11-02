@@ -113,7 +113,7 @@ struct AdvertiserDashboardView: View {
             
             AdvertiserStatCard(
                 title: "CTR",
-                value: "\(viewModel.ctr, specifier: "%.1f")%",
+                value: String(format: "%.1f%%", viewModel.ctr),
                 change: viewModel.ctrChange,
                 icon: "chart.line.uptrend.xyaxis",
                 color: .orange
@@ -121,7 +121,7 @@ struct AdvertiserDashboardView: View {
             
             AdvertiserStatCard(
                 title: "ROI",
-                value: "\(viewModel.roi, specifier: "%.0f")%",
+                value: String(format: "%.0f%%", viewModel.roi),
                 change: viewModel.roiChange,
                 icon: "dollarsign.circle.fill",
                 color: .purple
@@ -308,9 +308,9 @@ struct AdvertiserDashboardView: View {
     private var metricsGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
             AdvertiserMetricCard(title: "Conversions", value: "\(viewModel.totalConversions)", icon: "checkmark.circle.fill", color: .green)
-            AdvertiserMetricCard(title: "Conversion Rate", value: "\(viewModel.conversionRate, specifier: "%.1f")%", icon: "percent", color: .blue)
-            AdvertiserMetricCard(title: "Avg CPC", value: "$\(viewModel.avgCPC, specifier: "%.2f")", icon: "dollarsign.circle", color: .orange)
-            AdvertiserMetricCard(title: "Total Spend", value: "$\(viewModel.totalSpend, specifier: "%.2f")", icon: "creditcard.fill", color: .purple)
+            AdvertiserMetricCard(title: "Conversion Rate", value: String(format: "%.1f%%", viewModel.conversionRate), icon: "percent", color: .blue)
+            AdvertiserMetricCard(title: "Avg CPC", value: String(format: "$%.2f", viewModel.avgCPC), icon: "dollarsign.circle", color: .orange)
+            AdvertiserMetricCard(title: "Total Spend", value: String(format: "$%.2f", viewModel.totalSpend), icon: "creditcard.fill", color: .purple)
         }
     }
     
@@ -661,17 +661,17 @@ struct CampaignDetailCard: View {
             HStack(spacing: 16) {
                 MetricPill(label: "Impressions", value: "\(campaign.impressions)")
                 MetricPill(label: "Clicks", value: "\(campaign.clicks)")
-                MetricPill(label: "CTR", value: "\(campaign.ctr, specifier: "%.1f")%")
+                MetricPill(label: "CTR", value: String(format: "%.1f%%", campaign.ctr))
             }
             
             ProgressView(value: campaign.spent / campaign.budget)
                 .tint(.blue)
             
             HStack {
-                Text("Spent: $\(campaign.spent, specifier: "%.2f")")
+                Text("Spent: " + String(format: "$%.2f", campaign.spent))
                     .font(.caption)
                 Spacer()
-                Text("Budget: $\(campaign.budget, specifier: "%.2f")")
+                Text("Budget: " + String(format: "$%.2f", campaign.budget))
                     .font(.caption)
             }
         }
