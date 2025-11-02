@@ -308,7 +308,7 @@ struct MainTabView: View {
 
             // Switch tabs on the next runloop tick so the focus change doesn't eat the tap
             DispatchQueue.main.async {
-                var tx = Transaction()
+                var tx = SwiftUI.Transaction()
                 tx.disablesAnimations = true
                 withTransaction(tx) {
                     selectedTab = targetTab
