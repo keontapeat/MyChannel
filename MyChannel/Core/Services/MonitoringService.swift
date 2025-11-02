@@ -184,7 +184,21 @@ final class MonitoringService: ObservableObject {
     
     func recordHTTPMetric(url: URL, httpMethod: String, responseCode: Int, requestSize: Int64, responseSize: Int64, startTime: Date, endTime: Date) {
         #if canImport(FirebasePerformance)
-        let metric = HTTPMetric(url: url, httpMethod: HTTPMethod(rawValue: httpMethod) ?? .get)
+        // Convert string to Firebase HTTPMethod
+        let fbHttpMethod: FirebasePerformance.HTTPMethod
+        switch httpMethod.uppercased() {
+        case "GET": fbHttpMethod = .get
+        case "POST": fbHttpMethod = .post
+        case "PUT": fbHttpMethod = .put
+        case "DELETE": fbHttpMethod = .delete
+        case "HEAD": fbHttpMethod = .head
+        case "PATCH": fbHttpMethod = .patch
+        case "OPTIONS": fbHttpMethod = .options
+        case "TRACE": fbHttpMethod = .trace
+        case "CONNECT": fbHttpMethod = .connect
+        default: fbHttpMethod = .get
+        }
+        let metric = HTTPMetric(url: url, httpMethod: fbHttpMethod)
         metric?.responseCode = responseCode
         metric?.requestPayloadSize = requestSize
         metric?.responsePayloadSize = responseSize
@@ -263,8 +277,8 @@ final class MonitoringService: ObservableObject {
     }
     
     private func updateMemoryUsage() {
-        var info = mach_task_basic_info()
-        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
+        var info = task_basic_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_basic_info_data_t>.size) / 4
         
         let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) {
             $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
