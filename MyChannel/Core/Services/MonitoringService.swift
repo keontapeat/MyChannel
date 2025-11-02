@@ -200,8 +200,8 @@ final class MonitoringService: ObservableObject {
         }
         let metric = HTTPMetric(url: url, httpMethod: fbHttpMethod)
         metric?.responseCode = responseCode
-        metric?.requestPayloadSize = requestSize
-        metric?.responsePayloadSize = responseSize
+        metric?.requestPayloadSize = Int(requestSize)
+        metric?.responsePayloadSize = Int(responseSize)
         
         // Calculate time
         let timeInterval = endTime.timeIntervalSince(startTime) * 1000 // ms
