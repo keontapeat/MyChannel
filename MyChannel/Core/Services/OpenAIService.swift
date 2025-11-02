@@ -272,7 +272,7 @@ enum OpenAIError: LocalizedError {
 // MARK: - Creator Helper Extensions
 
 extension OpenAIService {
-    /// Generate video script
+    /// Generate video script with GPT-5
     func generateVideoScript(topic: String, duration: Int) async throws -> String {
         let prompt = """
         Write a compelling \(duration)-minute video script about: \(topic)
@@ -286,10 +286,10 @@ extension OpenAIService {
         Make it engaging and authentic for YouTube/TikTok.
         """
         
-        return try await generate(prompt, model: .gpt4Turbo)
+        return try await generate(prompt, model: .gpt5Turbo)
     }
     
-    /// Optimize video SEO
+    /// Optimize video SEO with GPT-5
     func optimizeForSEO(title: String, description: String) async throws -> (title: String, description: String, tags: [String]) {
         let prompt = """
         Optimize this video for SEO:
@@ -310,7 +310,7 @@ extension OpenAIService {
         }
         """
         
-        let response = try await generate(prompt, model: .gpt4Turbo)
+        let response = try await generate(prompt, model: .gpt5Turbo)
         
         // Parse JSON response
         if let data = response.data(using: .utf8),

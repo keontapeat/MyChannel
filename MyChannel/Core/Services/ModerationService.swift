@@ -73,6 +73,9 @@ final class ModerationService: ObservableObject {
     private var db: Firestore { Firestore.firestore() }
     #endif
     
+    // 🔥 GPT-5 Powered AI Moderation
+    private let openAIService = OpenAIService.shared
+    
     func moderateVideo(videoId: String, videoURL: String, thumbnailURL: String, title: String, description: String) async -> ServiceModerationResult {
         // Simulate AI moderation API call
         let safetyScore = await simulateAIModerationScore(content: title + " " + description)
@@ -150,13 +153,51 @@ final class ModerationService: ObservableObject {
     }
     
     private func simulateAIModerationScore(content: String) async -> Double {
-        // Simulate API call delay
-        try? await Task.sleep(nanoseconds: 500_000_000)
+        // 🔥 GPT-5 Powered Content Moderation
+        let prompt = """
+        You are an advanced content moderation AI. Analyze the following content for safety and policy compliance.
         
+        Content: "\(content)"
+        
+        Rate the content on a scale of 0.0 to 1.0, where:
+        - 1.0 = Completely safe and appropriate
+        - 0.7-0.9 = Minor concerns, may need age restriction
+        - 0.4-0.6 = Moderate concerns, needs human review
+        - 0.0-0.3 = Severe violations, should be removed
+        
+        Consider these factors:
+        - Hate speech, harassment, bullying
+        - Violence, graphic content
+        - Sexual or adult content
+        - Spam, scams, misleading information
+        - Dangerous or illegal activities
+        - Child safety concerns
+        
+        Respond with ONLY a JSON object:
+        {
+          "safety_score": 0.0-1.0,
+          "reasoning": "Brief explanation",
+          "primary_concern": "category name or null"
+        }
+        """
+        
+        do {
+            let response = try await openAIService.generate(prompt, model: .gpt5Turbo)
+            
+            if let data = response.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let score = json["safety_score"] as? Double {
+                print("🛡️ GPT-5 Moderation: \(score) - \(json["reasoning"] ?? "")")
+                return max(0.0, min(1.0, score))
+            }
+        } catch {
+            print("⚠️ GPT-5 Moderation error: \(error), falling back to keyword-based")
+        }
+        
+        // Fallback to keyword-based scoring
         let lowercased = content.lowercased()
         var score = 1.0
         
-        // Simple keyword-based scoring for demo
         let problematicKeywords = ["spam", "hate", "violence", "explicit"]
         for keyword in problematicKeywords {
             if lowercased.contains(keyword) {
@@ -164,16 +205,65 @@ final class ModerationService: ObservableObject {
             }
         }
         
-        return max(0.0, min(1.0, score + Double.random(in: -0.1...0.1)))
+        return max(0.0, min(1.0, score))
     }
     
     private func detectCategories(content: String) async -> [ServiceModerationResult.SafetyCategory] {
+        // 🔥 GPT-5 Powered Category Detection
+        let prompt = """
+        Analyze this content and identify any safety concerns.
+        
+        Content: "\(content)"
+        
+        Categories to check:
+        - spam: Unsolicited commercial content, repetitive messages
+        - hateSpeech: Hateful or discriminatory content
+        - violence: Violent, gory, or disturbing content
+        - adultContent: Sexual or adult-oriented content
+        - harassment: Bullying, threats, or harassment
+        
+        Respond with ONLY a JSON array of category names that apply (or empty array if none):
+        ["category1", "category2"]
+        """
+        
+        do {
+            let response = try await openAIService.generate(prompt, model: .gpt5Turbo)
+            
+            if let data = response.data(using: .utf8),
+               let categoriesArray = try? JSONSerialization.jsonObject(with: data) as? [String] {
+                var result: [ServiceModerationResult.SafetyCategory] = []
+                
+                for categoryString in categoriesArray {
+                    switch categoryString.lowercased() {
+                    case "spam":
+                        result.append(.spam)
+                    case "hatespeech", "hate_speech":
+                        result.append(.hateSpeech)
+                    case "violence":
+                        result.append(.violence)
+                    case "adultcontent", "adult_content":
+                        result.append(.adultContent)
+                    case "harassment":
+                        result.append(.harassment)
+                    default:
+                        break
+                    }
+                }
+                
+                print("🛡️ GPT-5 detected categories: \(result)")
+                return result
+            }
+        } catch {
+            print("⚠️ GPT-5 Category detection error: \(error), falling back to keyword-based")
+        }
+        
+        // Fallback to keyword-based detection
         let lowercased = content.lowercased()
         var categories: [ServiceModerationResult.SafetyCategory] = []
         
-        if lowercased.contains("spam") { categories.append(ServiceModerationResult.SafetyCategory.spam) }
-        if lowercased.contains("hate") { categories.append(ServiceModerationResult.SafetyCategory.hateSpeech) }
-        if lowercased.contains("violence") { categories.append(ServiceModerationResult.SafetyCategory.violence) }
+        if lowercased.contains("spam") { categories.append(.spam) }
+        if lowercased.contains("hate") { categories.append(.hateSpeech) }
+        if lowercased.contains("violence") { categories.append(.violence) }
         
         return categories
     }
