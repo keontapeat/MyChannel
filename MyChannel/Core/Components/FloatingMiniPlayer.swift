@@ -23,6 +23,9 @@ struct FloatingMiniPlayer: View {
     @State private var isResizing = false
     @State private var lastTapTime: Date = Date()
     @State private var tapCount = 0
+    @State private var volume: Float = 1.0
+    @State private var playbackSpeed: Float = 1.0
+    @State private var selectedQuality: String = "Auto"
     
     var body: some View {
         if globalPlayer.shouldShowMiniPlayer && !globalPlayer.showingFullscreen,
@@ -51,6 +54,13 @@ struct FloatingMiniPlayer: View {
             }
             .allowsHitTesting(true)
             .zIndex(998) // Below tab bar but above content
+            .onAppear {
+                // 🔥 SYNC INITIAL STATE: Get volume and speed from player
+                if let player = globalPlayer.player {
+                    volume = player.volume
+                    playbackSpeed = player.rate
+                }
+            }
         }
     }
 
@@ -98,6 +108,19 @@ struct FloatingMiniPlayer: View {
                 } else if let u = URL(string: video.thumbnailURL) {
                     AppAsyncImage(url: u) { $0.resizable().aspectRatio(contentMode: .fill) } placeholder: { Rectangle().fill(AppTheme.Colors.surface) }
                         .clipped()
+                }
+                
+                // 🔥 BUFFERING INDICATOR
+                if !globalPlayer.isPlaying && globalPlayer.player?.rate == 0 && globalPlayer.player?.currentItem != nil {
+                    ZStack {
+                        Circle()
+                            .fill(.black.opacity(0.6))
+                            .frame(width: 40, height: 40)
+                        
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(0.8)
+                    }
                 }
                 
                 // 🔥 DOUBLE TAP ZONES: Left (rewind) and Right (forward)
@@ -216,34 +239,184 @@ struct FloatingMiniPlayer: View {
             // 🔥 YOUTUBE PARITY: Enhanced controls cluster
             VStack(spacing: 6) {
                 HStack(spacing: 6) {
-                    // Volume control
-                    Button(action: { 
-                        showingVolumeSlider.toggle()
-                        HapticManager.shared.impact(style: .light) 
-                    }) {
-                        Image(systemName: "speaker.wave.2.fill")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .padding(6)
-                            .background(AppTheme.Colors.textSecondary.opacity(0.08))
-                            .clipShape(Circle())
+                    // Volume control with popup
+                    ZStack {
+                        Button(action: { 
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                showingVolumeSlider.toggle()
+                                if showingVolumeSlider {
+                                    showingSpeedMenu = false
+                                    showingQualityMenu = false
+                                }
+                            }
+                            HapticManager.shared.impact(style: .light) 
+                        }) {
+                            Image(systemName: volume > 0.5 ? "speaker.wave.2.fill" : volume > 0 ? "speaker.wave.1.fill" : "speaker.slash.fill")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(showingVolumeSlider ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                                .padding(6)
+                                .background(showingVolumeSlider ? AppTheme.Colors.primary.opacity(0.15) : AppTheme.Colors.textSecondary.opacity(0.08))
+                                .clipShape(Circle())
+                        }
+                        
+                        // Volume slider popup
+                        if showingVolumeSlider {
+                            VStack(spacing: 8) {
+                                Slider(value: $volume, in: 0...1)
+                                    .tint(AppTheme.Colors.primary)
+                                    .frame(width: 120)
+                                    .onChange(of: volume) { newValue in
+                                        globalPlayer.player?.volume = newValue
+                                    }
+                                
+                                Text("\(Int(volume * 100))%")
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                            }
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(.ultraThinMaterial)
+                                    .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.Colors.cardBackground.opacity(0.98)))
+                                    .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 4)
+                            )
+                            .offset(x: -70, y: -80)
+                            .transition(.asymmetric(insertion: .scale.combined(with: .opacity), removal: .opacity))
+                        }
                     }
                     
-                    // Speed control
-                    Button(action: { 
-                        showingSpeedMenu.toggle()
-                        HapticManager.shared.impact(style: .light) 
-                    }) {
-                        Text("1x")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .padding(6)
-                            .background(AppTheme.Colors.textSecondary.opacity(0.08))
-                            .clipShape(Circle())
+                    // Speed control with menu
+                    ZStack {
+                        Button(action: { 
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                showingSpeedMenu.toggle()
+                                if showingSpeedMenu {
+                                    showingVolumeSlider = false
+                                    showingQualityMenu = false
+                                }
+                            }
+                            HapticManager.shared.impact(style: .light) 
+                        }) {
+                            Text(String(format: "%.2gx", playbackSpeed))
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(showingSpeedMenu ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                                .padding(6)
+                                .background(showingSpeedMenu ? AppTheme.Colors.primary.opacity(0.15) : AppTheme.Colors.textSecondary.opacity(0.08))
+                                .clipShape(Circle())
+                        }
+                        
+                        // Speed menu popup
+                        if showingSpeedMenu {
+                            VStack(spacing: 4) {
+                                ForEach([0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { speed in
+                                    Button(action: {
+                                        playbackSpeed = Float(speed)
+                                        globalPlayer.player?.rate = Float(speed)
+                                        withAnimation {
+                                            showingSpeedMenu = false
+                                        }
+                                        HapticManager.shared.impact(style: .light)
+                                    }) {
+                                        HStack {
+                                            Text(speed == 1.0 ? "Normal" : String(format: "%.2gx", speed))
+                                                .font(.system(size: 12, weight: playbackSpeed == speed ? .bold : .regular))
+                                                .foregroundColor(playbackSpeed == speed ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
+                                            
+                                            Spacer()
+                                            
+                                            if playbackSpeed == speed {
+                                                Image(systemName: "checkmark")
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(AppTheme.Colors.primary)
+                                            }
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(playbackSpeed == speed ? AppTheme.Colors.primary.opacity(0.1) : Color.clear)
+                                        .cornerRadius(6)
+                                    }
+                                }
+                            }
+                            .padding(8)
+                            .frame(width: 140)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(.ultraThinMaterial)
+                                    .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.Colors.cardBackground.opacity(0.98)))
+                                    .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 4)
+                            )
+                            .offset(x: -75, y: -140)
+                            .transition(.asymmetric(insertion: .scale.combined(with: .opacity), removal: .opacity))
+                        }
                     }
                 }
                 
                 HStack(spacing: 6) {
+                    // Quality selector
+                    ZStack {
+                        Button(action: { 
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                showingQualityMenu.toggle()
+                                if showingQualityMenu {
+                                    showingVolumeSlider = false
+                                    showingSpeedMenu = false
+                                }
+                            }
+                            HapticManager.shared.impact(style: .light) 
+                        }) {
+                            Text(selectedQuality == "Auto" ? "HD" : selectedQuality)
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(showingQualityMenu ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                                .padding(6)
+                                .background(showingQualityMenu ? AppTheme.Colors.primary.opacity(0.15) : AppTheme.Colors.textSecondary.opacity(0.08))
+                                .clipShape(Circle())
+                        }
+                        
+                        // Quality menu popup
+                        if showingQualityMenu {
+                            VStack(spacing: 4) {
+                                ForEach(["Auto", "4K", "1080p", "720p", "480p", "360p"], id: \.self) { quality in
+                                    Button(action: {
+                                        selectedQuality = quality
+                                        // TODO: Implement actual quality switching via HLS stream selection
+                                        withAnimation {
+                                            showingQualityMenu = false
+                                        }
+                                        HapticManager.shared.impact(style: .light)
+                                    }) {
+                                        HStack {
+                                            Text(quality)
+                                                .font(.system(size: 12, weight: selectedQuality == quality ? .bold : .regular))
+                                                .foregroundColor(selectedQuality == quality ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
+                                            
+                                            Spacer()
+                                            
+                                            if selectedQuality == quality {
+                                                Image(systemName: "checkmark")
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(AppTheme.Colors.primary)
+                                            }
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(selectedQuality == quality ? AppTheme.Colors.primary.opacity(0.1) : Color.clear)
+                                        .cornerRadius(6)
+                                    }
+                                }
+                            }
+                            .padding(8)
+                            .frame(width: 140)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(.ultraThinMaterial)
+                                    .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.Colors.cardBackground.opacity(0.98)))
+                                    .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 4)
+                            )
+                            .offset(x: -75, y: -120)
+                            .transition(.asymmetric(insertion: .scale.combined(with: .opacity), removal: .opacity))
+                        }
+                    }
+                    
                     // Expand to fullscreen
                     Button(action: { expandPlayer(); HapticManager.shared.impact(style: .light) }) {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -617,7 +790,9 @@ struct FloatingMiniPlayer: View {
                     Button("Quality") { showingQualityMenu = true }
                     Button("Speed") { showingSpeedMenu = true }
                     Button("Captions") { /* Toggle captions */ }
-                    Button("Picture in Picture") { /* Enable PiP */ }
+                    Button(globalPlayer.isPiPActive ? "Exit Picture in Picture" : "Picture in Picture") { 
+                        globalPlayer.togglePictureInPicture()
+                    }
                 } label: {
                     Image(systemName: "gearshape.fill")
                         .font(.system(size: 16, weight: .medium))

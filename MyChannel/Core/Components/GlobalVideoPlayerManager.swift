@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AVFoundation
+import AVKit
 import Combine
 
 @MainActor
@@ -25,11 +26,15 @@ class GlobalVideoPlayerManager: ObservableObject {
     @Published var shouldShowMiniPlayer = false
     @Published var isTransitioning = false
     @Published var pausedByFlicks = false
+    @Published var isPiPActive = false
     
     private var playerManager: VideoPlayerManager?
     private var cancellables = Set<AnyCancellable>()
     private var isCleanedUp = false
     private var wasPlayingBeforeFlicks = false
+    
+    // 🔥 YOUTUBE PARITY: Picture-in-Picture support
+    private var pipController: AVPictureInPictureController?
 
     var player: AVPlayer? {
         playerManager?.player
@@ -37,6 +42,50 @@ class GlobalVideoPlayerManager: ObservableObject {
     
     private init() {
         setupPlayerManager()
+        configureAudioSession()
+    }
+    
+    // 🔥 YOUTUBE PARITY: Configure audio session for background playback
+    private func configureAudioSession() {
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .moviePlayback, options: [])
+            try audioSession.setActive(true)
+            print("✅ [GlobalVideoPlayerManager] Audio session configured for background playback")
+        } catch {
+            print("⚠️ [GlobalVideoPlayerManager] Failed to configure audio session: \(error)")
+        }
+    }
+    
+    // 🔥 YOUTUBE PARITY: Setup Picture-in-Picture controller
+    func setupPictureInPicture(for playerLayer: AVPlayerLayer) {
+        guard AVPictureInPictureController.isPictureInPictureSupported() else {
+            print("⚠️ [GlobalVideoPlayerManager] PiP not supported on this device")
+            return
+        }
+        
+        pipController = AVPictureInPictureController(playerLayer: playerLayer)
+        pipController?.delegate = nil // Can add delegate for events if needed
+        print("✅ [GlobalVideoPlayerManager] PiP controller configured")
+    }
+    
+    // 🔥 YOUTUBE PARITY: Toggle Picture-in-Picture mode
+    func togglePictureInPicture() {
+        guard let pipController = pipController else {
+            print("⚠️ [GlobalVideoPlayerManager] PiP controller not configured")
+            return
+        }
+        
+        if pipController.isPictureInPictureActive {
+            pipController.stopPictureInPicture()
+            isPiPActive = false
+            print("📺 [GlobalVideoPlayerManager] Stopping PiP")
+        } else {
+            pipController.startPictureInPicture()
+            isPiPActive = true
+            print("📺 [GlobalVideoPlayerManager] Starting PiP")
+        }
+        HapticManager.shared.impact(style: .medium)
     }
     
     deinit {
