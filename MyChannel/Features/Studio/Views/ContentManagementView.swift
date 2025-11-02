@@ -269,10 +269,10 @@ struct ContentManagementView: View {
         }
         
         // Apply sort
-        return filtered.sorted { video1, video2 in
+        return filtered.sorted { (video1: Video, video2: Video) in
             switch sortOption {
             case .uploadDate:
-                return video1.uploadDate > video2.uploadDate
+                return video1.createdAt > video2.createdAt
             case .views:
                 return video1.viewCount > video2.viewCount
             case .likes:
@@ -412,7 +412,7 @@ struct VideoManagementRow: View {
                 .font(.system(size: 12))
                 .foregroundColor(AppTheme.Colors.textSecondary)
                 
-                Text(formatDate(video.uploadDate))
+                Text(formatDate(video.createdAt))
                     .font(.system(size: 11))
                     .foregroundColor(AppTheme.Colors.textSecondary)
             }
@@ -541,7 +541,7 @@ struct VideoEditorSheet: View {
                 updatedVideo.description = description
                 updatedVideo.category = category
                 
-                try await VideoFirestoreService.shared.updateVideo(updatedVideo)
+                try await VideoFirestoreService.shared.saveVideo(updatedVideo)
                 HapticManager.shared.notification(type: .success)
                 dismiss()
             } catch {

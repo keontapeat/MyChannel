@@ -48,9 +48,9 @@ struct PlaylistManagementView: View {
     
     private var playlistStatsHeader: some View {
         HStack(spacing: 12) {
-            StatsCard(title: "Playlists", value: "\(playlists.count)", icon: "list.bullet.rectangle", color: .blue)
-            StatsCard(title: "Total Videos", value: "0", icon: "play.rectangle", color: .green)
-            StatsCard(title: "Total Views", value: "0", icon: "eye", color: .purple)
+            PlaylistStatsCard(title: "Playlists", value: "\(playlists.count)", icon: "list.bullet.rectangle", color: .blue)
+            PlaylistStatsCard(title: "Total Videos", value: "0", icon: "play.rectangle", color: .green)
+            PlaylistStatsCard(title: "Total Views", value: "0", icon: "eye", color: .purple)
         }
     }
     
@@ -236,4 +236,29 @@ struct EditPlaylistSheet: View {
     }
 }
 
-
+// MARK: - PlaylistStatsCard
+struct PlaylistStatsCard: View {
+    let title: String
+    let value: String
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 24))
+                .foregroundColor(color)
+            
+            Text(value)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(.primary)
+            
+            Text(title)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+}

@@ -95,38 +95,40 @@ struct StudioSettingsView: View {
     }
     
     private var advancedSection: some View {
-        Section("Advanced") {
-            Button(action: {}) {
-                HStack {
-                    Text("API Access")
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .foregroundColor(.secondary)
+        Group {
+            Section("Advanced") {
+                Button(action: {}) {
+                    HStack {
+                        Text("API Access")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Button(action: {}) {
+                    HStack {
+                        Text("Webhooks")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Button(action: {}) {
+                    HStack {
+                        Text("Developer Console")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
             
-            Button(action: {}) {
-                HStack {
-                    Text("Webhooks")
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .foregroundColor(.secondary)
-                }
+            Section {
+                Button("Clear Cache", role: .destructive) {}
+                Button("Reset All Settings", role: .destructive) {}
             }
-            
-            Button(action: {}) {
-                HStack {
-                    Text("Developer Console")
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .foregroundColor(.secondary)
-                }
-            }
-        }
-        
-        Section {
-            Button("Clear Cache", role: .destructive) {}
-            Button("Reset All Settings", role: .destructive) {}
         }
     }
 }
