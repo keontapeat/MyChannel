@@ -95,7 +95,7 @@ struct AdvertiserDashboardView: View {
     // MARK: - Top Stats Bar
     private var topStatsBar: some View {
         HStack(spacing: 16) {
-            StatCard(
+            AdvertiserStatCard(
                 title: "Impressions",
                 value: viewModel.formatNumber(viewModel.totalImpressions),
                 change: viewModel.impressionsChange,
@@ -103,7 +103,7 @@ struct AdvertiserDashboardView: View {
                 color: .blue
             )
             
-            StatCard(
+            AdvertiserStatCard(
                 title: "Clicks",
                 value: viewModel.formatNumber(viewModel.totalClicks),
                 change: viewModel.clicksChange,
@@ -111,7 +111,7 @@ struct AdvertiserDashboardView: View {
                 color: .green
             )
             
-            StatCard(
+            AdvertiserStatCard(
                 title: "CTR",
                 value: "\(viewModel.ctr, specifier: "%.1f")%",
                 change: viewModel.ctrChange,
@@ -119,7 +119,7 @@ struct AdvertiserDashboardView: View {
                 color: .orange
             )
             
-            StatCard(
+            AdvertiserStatCard(
                 title: "ROI",
                 value: "\(viewModel.roi, specifier: "%.0f")%",
                 change: viewModel.roiChange,
@@ -230,7 +230,7 @@ struct AdvertiserDashboardView: View {
                 .font(.headline)
             
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                QuickActionButton(
+                AdvertiserQuickActionButton(
                     icon: "plus.circle.fill",
                     title: "Create Campaign",
                     color: .blue
@@ -238,7 +238,7 @@ struct AdvertiserDashboardView: View {
                     showingCreateCampaign = true
                 }
                 
-                QuickActionButton(
+                AdvertiserQuickActionButton(
                     icon: "photo.on.rectangle.angled",
                     title: "Upload Creative",
                     color: .green
@@ -246,7 +246,7 @@ struct AdvertiserDashboardView: View {
                     // TODO
                 }
                 
-                QuickActionButton(
+                AdvertiserQuickActionButton(
                     icon: "person.3.fill",
                     title: "Build Audience",
                     color: .orange
@@ -254,7 +254,7 @@ struct AdvertiserDashboardView: View {
                     selectedTab = .audiences
                 }
                 
-                QuickActionButton(
+                AdvertiserQuickActionButton(
                     icon: "creditcard.fill",
                     title: "Add Funds",
                     color: .purple
@@ -307,10 +307,10 @@ struct AdvertiserDashboardView: View {
     
     private var metricsGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-            MetricCard(title: "Conversions", value: "\(viewModel.totalConversions)", icon: "checkmark.circle.fill", color: .green)
-            MetricCard(title: "Conversion Rate", value: "\(viewModel.conversionRate, specifier: "%.1f")%", icon: "percent", color: .blue)
-            MetricCard(title: "Avg CPC", value: "$\(viewModel.avgCPC, specifier: "%.2f")", icon: "dollarsign.circle", color: .orange)
-            MetricCard(title: "Total Spend", value: "$\(viewModel.totalSpend, specifier: "%.2f")", icon: "creditcard.fill", color: .purple)
+            AdvertiserMetricCard(title: "Conversions", value: "\(viewModel.totalConversions)", icon: "checkmark.circle.fill", color: .green)
+            AdvertiserMetricCard(title: "Conversion Rate", value: "\(viewModel.conversionRate, specifier: "%.1f")%", icon: "percent", color: .blue)
+            AdvertiserMetricCard(title: "Avg CPC", value: "$\(viewModel.avgCPC, specifier: "%.2f")", icon: "dollarsign.circle", color: .orange)
+            AdvertiserMetricCard(title: "Total Spend", value: "$\(viewModel.totalSpend, specifier: "%.2f")", icon: "creditcard.fill", color: .purple)
         }
     }
     
@@ -476,7 +476,7 @@ struct AdvertiserDashboardView: View {
             }
             
             ForEach(viewModel.paymentMethods) { method in
-                PaymentMethodRow(method: method)
+                AdvertiserPaymentMethodRow(method: method)
             }
         }
         .padding()
@@ -551,7 +551,7 @@ struct AdvertiserDashboardView: View {
 
 // MARK: - Supporting Views
 
-struct StatCard: View {
+struct AdvertiserStatCard: View {
     let title: String
     let value: String
     let change: Double
@@ -584,7 +584,7 @@ struct StatCard: View {
     }
 }
 
-struct QuickActionButton: View {
+struct AdvertiserQuickActionButton: View {
     let icon: String
     let title: String
     let color: Color
@@ -701,7 +701,7 @@ struct MetricPill: View {
     }
 }
 
-struct MetricCard: View {
+struct AdvertiserMetricCard: View {
     let title: String
     let value: String
     let icon: String
@@ -789,7 +789,7 @@ struct DemographicBar: View {
     }
 }
 
-struct PaymentMethodRow: View {
+struct AdvertiserPaymentMethodRow: View {
     let method: PaymentMethod
     
     var body: some View {
