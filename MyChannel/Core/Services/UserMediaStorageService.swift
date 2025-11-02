@@ -68,6 +68,17 @@ final class UserMediaStorageService: ObservableObject {
         return ""
         #endif
     }
+    
+    func deleteImage(from urlString: String) async throws {
+        #if canImport(FirebaseStorage)
+        print("🗑️ [UserMediaStorageService] Deleting image from Storage: \(urlString)")
+        let ref = storage.reference(forURL: urlString)
+        try await ref.delete()
+        print("✅ [UserMediaStorageService] Image deleted from Storage")
+        #else
+        throw NSError(domain: "UserMediaStorageService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Firebase Storage not available"])
+        #endif
+    }
 }
 
 

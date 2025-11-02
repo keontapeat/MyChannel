@@ -277,6 +277,10 @@ class VideoStorageService: ObservableObject {
         // Implementation for file deletion
     }
     
+    func deleteVideo(from urlString: String) async throws {
+        try await deleteFile(url: urlString)
+    }
+    
     func getSignedURL(for path: String, expiresIn: TimeInterval = 3600) async throws -> String {
         // Implementation for signed URLs
         return path

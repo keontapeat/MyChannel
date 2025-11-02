@@ -135,5 +135,14 @@ final class UserFirestoreService: ObservableObject {
         return nil
         #endif
     }
+    
+    /// Delete user document from Firestore
+    func deleteUser(userId: String) async throws {
+        #if canImport(FirebaseFirestore)
+        let ref = db.collection("users").document(userId)
+        try await ref.delete()
+        print("✅ User document deleted from Firestore: \(userId)")
+        #endif
+    }
 }
 
