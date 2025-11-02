@@ -72,6 +72,16 @@ struct FloatingMiniPlayer: View {
         return String(format: "%d:%02d", m, r)
     }
     
+    private func formatViewCount(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.1fM", Double(count) / 1_000_000)
+        } else if count >= 1_000 {
+            return String(format: "%.1fK", Double(count) / 1_000)
+        } else {
+            return "\(count)"
+        }
+    }
+    
     // MARK: - Calculation Methods
     private func calculateOffset() -> CGFloat {
         let baseOffset = isDragging ? dragOffset : globalPlayer.miniplayerOffset
@@ -210,14 +220,47 @@ struct FloatingMiniPlayer: View {
 
             // Text + controls
             VStack(alignment: .leading, spacing: 6) {
-                Text(video.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
-                Text(video.creator.displayName)
-                    .font(.system(size: 11))
-                    .foregroundStyle(AppTheme.Colors.textSecondary)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(video.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                    
+                    // 🔥 YOUTUBE PARITY: LIVE badge
+                    if video.isLiveStream {
+                        HStack(spacing: 2) {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 6, height: 6)
+                            
+                            Text("LIVE")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.red)
+                        .cornerRadius(4)
+                    }
+                }
+                
+                HStack(spacing: 6) {
+                    Text(video.creator.displayName)
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                        .lineLimit(1)
+                    
+                    // 🔥 YOUTUBE PARITY: Live viewer count
+                    if video.isLiveStream {
+                        HStack(spacing: 3) {
+                            Image(systemName: "eye.fill")
+                                .font(.system(size: 8))
+                            Text("\(formatViewCount(video.viewCount))")
+                                .font(.system(size: 9, weight: .medium))
+                        }
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                }
                 
                 // 🔥 YOUTUBE PARITY: "Up Next" preview
                 if let upNext = globalPlayer.upNextVideo {
@@ -734,6 +777,20 @@ struct FloatingMiniPlayer: View {
                 Rectangle()
                     .fill(Color.black.opacity(0.3))
                     .frame(height: 3)
+                
+                // 🔥 YOUTUBE PARITY: Chapter markers
+                if let video = globalPlayer.currentVideo,
+                   let chapters = video.chapters,
+                   !chapters.isEmpty,
+                   globalPlayer.duration > 0 {
+                    ForEach(chapters) { chapter in
+                        let chapterProgress = chapter.timestamp / globalPlayer.duration
+                        Rectangle()
+                            .fill(Color.white.opacity(0.6))
+                            .frame(width: 1, height: 6)
+                            .offset(x: geometry.size.width * CGFloat(chapterProgress))
+                    }
+                }
                 
                 // Progress track
                 Rectangle()
