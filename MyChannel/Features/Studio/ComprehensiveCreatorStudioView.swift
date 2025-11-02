@@ -1116,10 +1116,10 @@ struct MembershipMonetizationView: View {
     @Binding var settings: MembershipSettings
     @State private var membershipEnabled = true
     @State private var showingAddTier = false
-    @State private var tiers: [MembershipTier] = [
-        MembershipTier(name: "Bronze", price: 4.99, perks: ["Early access to videos", "Custom badge"], color: .orange),
-        MembershipTier(name: "Silver", price: 9.99, perks: ["Everything in Bronze", "Members-only content", "Priority replies"], color: .gray),
-        MembershipTier(name: "Gold", price: 24.99, perks: ["Everything in Silver", "Monthly Q&A", "Exclusive merch discount"], color: .yellow)
+    @State private var tiers: [MonetizationMembershipTier] = [
+        MonetizationMembershipTier(name: "Bronze", price: 4.99, perks: ["Early access to videos", "Custom badge"], color: .orange),
+        MonetizationMembershipTier(name: "Silver", price: 9.99, perks: ["Everything in Bronze", "Members-only content", "Priority replies"], color: .gray),
+        MonetizationMembershipTier(name: "Gold", price: 24.99, perks: ["Everything in Silver", "Monthly Q&A", "Exclusive merch discount"], color: .yellow)
     ]
     
     var body: some View {
@@ -1218,7 +1218,7 @@ struct MembershipMonetizationView: View {
     }
 }
 
-struct MembershipTier: Identifiable {
+struct MonetizationMembershipTier: Identifiable {
     let id = UUID()
     var name: String
     var price: Double
@@ -1227,7 +1227,7 @@ struct MembershipTier: Identifiable {
 }
 
 struct MembershipTierCard: View {
-    let tier: MembershipTier
+    let tier: MonetizationMembershipTier
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1699,7 +1699,7 @@ struct RevenueAnalyticsView: View {
                     let breakdown = getRevenueBreakdown()
                     
                     ForEach(breakdown, id: \.source) { item in
-                        RevenueSourceRow(
+                        MonetizationRevenueSourceRow(
                             icon: item.icon,
                             source: item.source,
                             amount: item.amount,
@@ -1718,7 +1718,7 @@ struct RevenueAnalyticsView: View {
                         .padding(.horizontal)
                     
                     ForEach(0..<3, id: \.self) { index in
-                        TopEarningVideoRow(
+                        MonetizationTopEarningVideoRow(
                             rank: index + 1,
                             title: "Video Title \(index + 1)",
                             revenue: Double.random(in: 100...1000),
@@ -1800,7 +1800,7 @@ struct RevenueBreakdownItem {
     let color: Color
 }
 
-struct RevenueSourceRow: View {
+struct MonetizationRevenueSourceRow: View {
     let icon: String
     let source: String
     let amount: Double
@@ -1842,7 +1842,7 @@ struct RevenueSourceRow: View {
     }
 }
 
-struct TopEarningVideoRow: View {
+struct MonetizationTopEarningVideoRow: View {
     let rank: Int
     let title: String
     let revenue: Double

@@ -561,7 +561,7 @@ private struct WrapTags: View {
             isVerified: true
         )
     }
-    return ArtistDetailView(
+    ArtistDetailView(
         name: "Top Artist",
         avatarURL: friendUser.profileImageURL ?? "",
         videos: vids,
