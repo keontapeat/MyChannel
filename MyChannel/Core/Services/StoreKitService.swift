@@ -58,34 +58,33 @@ final class StoreKitService: ObservableObject {
         }
     }
     
-    @available(iOS 15.0, *)
     func hasActiveSubscription() async -> Bool {
-        for await result in Transaction.currentEntitlements {
-            if case .verified(let tx) = result, subscriptionIDs.contains(tx.productID) {
-                if tx.revocationDate == nil && tx.expirationDate ?? .distantFuture > Date() {
-                    return true
+        if #available(iOS 15.0, *) {
+            for await result in Transaction.currentEntitlements {
+                if case .verified(let tx) = result, subscriptionIDs.contains(tx.productID) {
+                    if tx.revocationDate == nil && tx.expirationDate ?? .distantFuture > Date() {
+                        return true
+                    }
                 }
             }
+            return false
+        } else {
+            // For iOS 14 and below, assume no active subscription
+            // Or implement alternative check using receipt validation
+            return false
         }
-        return false
     }
     
-    // Fallback for older iOS versions
-    func hasActiveSubscriptionLegacy() async -> Bool {
-        // For iOS 14 and below, assume no active subscription
-        // Or implement alternative check using receipt validation
-        return false
-    }
-    
-    @available(iOS 15.0, *)
     private func updatePurchased() async {
-        var ids = Set<String>()
-        for await result in Transaction.currentEntitlements {
-            if case .verified(let tx) = result {
-                ids.insert(tx.productID)
+        if #available(iOS 15.0, *) {
+            var ids = Set<String>()
+            for await result in Transaction.currentEntitlements {
+                if case .verified(let tx) = result {
+                    ids.insert(tx.productID)
+                }
             }
+            purchasedProductIDs = ids
         }
-        purchasedProductIDs = ids
     }
 }
 
