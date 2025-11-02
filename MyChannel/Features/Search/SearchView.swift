@@ -69,7 +69,8 @@ struct SearchView: View {
         .ignoresSafeArea(.keyboard, edges: .bottom)
 
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SearchLoseFocus"))) { _ in
-            var tx = Transaction(); tx.disablesAnimations = true
+            var tx = SwiftUI.Transaction()
+            tx.disablesAnimations = true
             withTransaction(tx) {
                 isSearchFieldFocused = false
             }
@@ -77,7 +78,8 @@ struct SearchView: View {
 
         // Always resign focus when leaving the Search tab
         .onDisappear {
-            var tx = Transaction(); tx.disablesAnimations = true
+            var tx = SwiftUI.Transaction()
+            tx.disablesAnimations = true
             withTransaction(tx) {
                 isSearchFieldFocused = false
             }
@@ -129,7 +131,8 @@ struct SearchView: View {
 
                 if !searchText.isEmpty {
                     Button {
-                        var tx = Transaction(); tx.disablesAnimations = true
+                        var tx = SwiftUI.Transaction()
+                        tx.disablesAnimations = true
                         withTransaction(tx) { searchText = "" }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
