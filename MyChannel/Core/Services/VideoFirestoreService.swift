@@ -156,7 +156,7 @@ final class VideoFirestoreService: ObservableObject {
                             followerCount: currentUser.followerCount,
                             followingCount: currentUser.followingCount,
                             joinDate: currentUser.joinDate,
-                            totalViews: (updatedUserData["totalViews"] as? Int) ?? (currentUser.totalViews + 1),
+                            totalViews: (updatedUserData["totalViews"] as? Int) ?? ((currentUser.totalViews ?? 0) + 1),
                             totalEarnings: currentUser.totalEarnings,
                             membershipTiers: currentUser.membershipTiers,
                             bannerVideoURL: currentUser.bannerVideoURL,
