@@ -245,7 +245,7 @@ struct CreateCampaignView: View {
                         }
                     }
                     
-                    FlowLayout(items: campaignBuilder.locations) { location in
+                    CampaignFlowLayout(items: campaignBuilder.locations) { location in
                         HStack(spacing: 4) {
                             Text(location)
                                 .font(.caption)
@@ -279,7 +279,7 @@ struct CreateCampaignView: View {
                         }
                     }
                     
-                    FlowLayout(items: campaignBuilder.interests) { interest in
+                    CampaignFlowLayout(items: campaignBuilder.interests) { interest in
                         HStack(spacing: 4) {
                             Text(interest)
                                 .font(.caption)
@@ -722,7 +722,7 @@ struct AudienceTemplateCard: View {
     }
 }
 
-struct FlowLayout: View {
+struct CampaignFlowLayout: View {
     let items: [String]
     let itemView: (String) -> AnyView
     
