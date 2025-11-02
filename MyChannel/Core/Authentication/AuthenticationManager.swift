@@ -297,7 +297,11 @@ class AuthenticationManager: ObservableObject {
     }
     
     // MARK: - Sign Out
-    func signOut() {
+    func signOut() throws {
+        #if canImport(FirebaseAuth)
+        try Auth.auth().signOut()
+        #endif
+        
         withAnimation(.easeInOut(duration: 0.5)) {
             currentUser = nil
             isAuthenticated = false
@@ -306,6 +310,30 @@ class AuthenticationManager: ObservableObject {
         
         print("You've been signed out")
         NotificationCenter.default.post(name: .userDidLogout, object: nil)
+    }
+    
+    // MARK: - Delete Account
+    func deleteAccount() async throws {
+        #if canImport(FirebaseAuth)
+        guard let user = Auth.auth().currentUser else {
+            throw NSError(domain: "AuthenticationManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "No authenticated user"])
+        }
+        
+        // Delete Firebase Auth account
+        try await user.delete()
+        
+        // Clear local state
+        await MainActor.run {
+            currentUser = nil
+            isAuthenticated = false
+            authState = .unauthenticated
+        }
+        
+        print("✅ Firebase Auth account deleted")
+        NotificationCenter.default.post(name: .userDidLogout, object: nil)
+        #else
+        throw NSError(domain: "AuthenticationManager", code: 2, userInfo: [NSLocalizedDescriptionKey: "Firebase Auth not available"])
+        #endif
     }
     
     // MARK: - User Management
