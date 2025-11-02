@@ -221,7 +221,7 @@ struct CreatorMonetizationView: View {
             HStack(spacing: 0) {
                 QuickStat(
                     label: "Available",
-                    value: "$\(viewModel.availableBalance, specifier: "%.2f")",
+                    value: String(format: "$%.2f", viewModel.availableBalance),
                     color: .green
                 )
                 
@@ -229,7 +229,7 @@ struct CreatorMonetizationView: View {
                 
                 QuickStat(
                     label: "Pending",
-                    value: "$\(viewModel.pendingBalance, specifier: "%.2f")",
+                    value: String(format: "$%.2f", viewModel.pendingBalance),
                     color: .orange
                 )
                 
@@ -237,7 +237,7 @@ struct CreatorMonetizationView: View {
                 
                 QuickStat(
                     label: "All Time",
-                    value: "$\(viewModel.totalEarnings, specifier: "%.2f")",
+                    value: String(format: "$%.2f", viewModel.totalEarnings),
                     color: .blue
                 )
             }
@@ -297,7 +297,7 @@ struct CreatorMonetizationView: View {
                 .font(.headline)
             
             VStack(spacing: 12) {
-                RevenueSourceRow(
+                CreatorRevenueSourceRow(
                     icon: "play.rectangle.fill",
                     title: "Video Ads",
                     amount: viewModel.videoAdsRevenue,
@@ -305,7 +305,7 @@ struct CreatorMonetizationView: View {
                     color: .blue
                 )
                 
-                RevenueSourceRow(
+                CreatorRevenueSourceRow(
                     icon: "person.2.fill",
                     title: "Memberships",
                     amount: viewModel.membershipsRevenue,
@@ -313,7 +313,7 @@ struct CreatorMonetizationView: View {
                     color: .purple
                 )
                 
-                RevenueSourceRow(
+                CreatorRevenueSourceRow(
                     icon: "message.fill",
                     title: "Super Chat",
                     amount: viewModel.superChatRevenue,
@@ -321,7 +321,7 @@ struct CreatorMonetizationView: View {
                     color: .green
                 )
                 
-                RevenueSourceRow(
+                CreatorRevenueSourceRow(
                     icon: "bag.fill",
                     title: "Merchandise",
                     amount: viewModel.merchRevenue,
@@ -600,7 +600,7 @@ struct QuickStat: View {
     }
 }
 
-struct RevenueSourceRow: View {
+struct CreatorRevenueSourceRow: View {
     let icon: String
     let title: String
     let amount: Double
@@ -633,10 +633,10 @@ struct RevenueSourceRow: View {
             Spacer()
             
             VStack(alignment: .trailing, spacing: 4) {
-                Text("$\(amount, specifier: "%.2f")")
+                Text(String(format: "$%.2f", amount))
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                Text("\(percentage, specifier: "%.0f")%")
+                Text(String(format: "%.0f%%", percentage))
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
@@ -934,7 +934,7 @@ class CreatorMonetizationViewModel: ObservableObject {
             "💡 Upload at 6pm EST for 30% more views (prime time!)",
             "💡 Videos 10-15 minutes long earn 2x more from ads",
             "💡 Enable mid-roll ads on videos over 8 minutes",
-            "💡 Gaming content has your highest CPM ($\(Double.random(in: 20...30), specifier: "%.2f"))",
+            "💡 Gaming content has your highest CPM ($" + String(format: "%.2f", Double.random(in: 20...30)) + ")",
             "💡 Add end screens to increase watch time by 25%"
         ]
     }
