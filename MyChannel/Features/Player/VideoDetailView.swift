@@ -743,6 +743,11 @@ struct VideoDetailView: View {
                     if let uid = AppState.shared.currentUser?.id {
                         Task { await HistoryService.shared.logStart(userId: uid, video: video) }
                     }
+                    
+                    // 🔥 TRACK VIEW COUNT: Increment view count in Firestore for real-time stats
+                    Task {
+                        await VideoFirestoreService.shared.incrementViewCount(videoId: video.id)
+                    }
                     // Fetch simple VMAP for preroll and pause content while ad plays
                     Task {
                         // 🔥 NO VMAP ADS ON YOUR OWN VIDEOS

@@ -110,6 +110,14 @@ struct ContentManagementView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshCreatorStudio"))) { _ in
+            print("🔄 [ContentManagementView] Received RefreshCreatorStudio notification - reloading videos")
+            loadVideos()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshProfile"))) { _ in
+            print("🔄 [ContentManagementView] Received RefreshProfile notification - reloading videos")
+            loadVideos()
+        }
         .fullScreenCover(item: $showingVideoAnalytics) { videoId in
             NavigationStack {
                 VideoAnalyticsView(videoId: videoId)

@@ -154,6 +154,18 @@ struct VideoAnalyticsView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshCreatorStudio"))) { _ in
+            print("🔄 [VideoAnalyticsView] Received RefreshCreatorStudio notification - reloading analytics")
+            Task {
+                await loadAnalytics()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshProfile"))) { _ in
+            print("🔄 [VideoAnalyticsView] Received RefreshProfile notification - reloading analytics")
+            Task {
+                await loadAnalytics()
+            }
+        }
     }
     
     private func loadAnalytics() async {

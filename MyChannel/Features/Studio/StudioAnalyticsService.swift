@@ -41,14 +41,29 @@ final class StudioAnalyticsService: ObservableObject {
     func fetchVideoAnalytics(videoId: String, dateRange: DateRange = .last28Days) async -> StudioVideoAnalytics? {
         #if canImport(FirebaseFirestore)
         do {
-            let doc = try await db.collection("video_analytics").document(videoId).getDocument()
-            if let data = doc.data() {
-                return StudioVideoAnalytics(
-                    id: doc.documentID,
+            print("📊 [StudioAnalyticsService] Fetching analytics for video: \(videoId)")
+            
+            // 🔥 REAL-TIME SYNC: Get actual view count from video document
+            let videoDoc = try await db.collection("videos").document(videoId).getDocument()
+            var actualViews = 0
+            var actualImpressions = 0
+            
+            if let videoData = videoDoc.data() {
+                actualViews = (videoData["viewCount"] as? Int) ?? 0
+                actualImpressions = (videoData["impressions"] as? Int) ?? (actualViews * 3) // Estimate if not tracked
+                print("✅ [StudioAnalyticsService] Got real views from video: \(actualViews)")
+            }
+            
+            // Try to get detailed analytics
+            let analyticsDoc = try await db.collection("video_analytics").document(videoId).getDocument()
+            if let data = analyticsDoc.data() {
+                // Use real views from video document, supplemented by analytics data
+                let analytics = StudioVideoAnalytics(
+                    id: analyticsDoc.documentID,
                     videoId: videoId,
-                    impressions: (data["impressions"] as? Int) ?? 0,
-                    views: (data["views"] as? Int) ?? 0,
-                    ctr: (data["ctr"] as? Double) ?? 0.0,
+                    impressions: (data["impressions"] as? Int) ?? actualImpressions,
+                    views: actualViews, // 🔥 Always use actual view count from video
+                    ctr: (data["ctr"] as? Double) ?? (actualViews > 0 ? Double(actualViews) / Double(max(actualImpressions, 1)) : 0.05),
                     avgViewDuration: (data["avgViewDuration"] as? TimeInterval) ?? 0,
                     avgViewDurationPercent: (data["avgViewDurationPercent"] as? Double) ?? 0.0,
                     rpm: (data["rpm"] as? Double) ?? 0.0,
@@ -56,34 +71,38 @@ final class StudioAnalyticsService: ObservableObject {
                     trafficSources: (data["trafficSources"] as? [String: Int]) ?? [:],
                     demographics: parseDemographics(data["demographics"])
                 )
+                print("✅ [StudioAnalyticsService] Returning analytics with \(actualViews) views")
+                return analytics
+            } else if actualViews > 0 {
+                // Video exists with views but no detailed analytics yet - create basic analytics
+                print("📊 [StudioAnalyticsService] Creating basic analytics from video data")
+                return StudioVideoAnalytics(
+                    id: videoId,
+                    videoId: videoId,
+                    impressions: actualImpressions,
+                    views: actualViews,
+                    ctr: Double(actualViews) / Double(max(actualImpressions, 1)),
+                    avgViewDuration: 0,
+                    avgViewDurationPercent: 0.0,
+                    rpm: 0.0,
+                    retentionCurve: generateMockRetentionCurve(),
+                    trafficSources: ["Direct": actualViews],
+                    demographics: StudioVideoAnalytics.Demographics(
+                        ageGroups: [:],
+                        genders: [:],
+                        countries: [:],
+                        devices: [:]
+                    )
+                )
             }
-        } catch { }
+        } catch {
+            print("⚠️ [StudioAnalyticsService] Error fetching analytics: \(error)")
+        }
         #endif
         
-        // Mock fallback
-        return StudioVideoAnalytics(
-            id: videoId,
-            videoId: videoId,
-            impressions: Int.random(in: 5000...50000),
-            views: Int.random(in: 1000...15000),
-            ctr: Double.random(in: 0.02...0.12),
-            avgViewDuration: TimeInterval.random(in: 30...180),
-            avgViewDurationPercent: Double.random(in: 0.3...0.8),
-            rpm: Double.random(in: 0.5...5.0),
-            retentionCurve: generateMockRetentionCurve(),
-            trafficSources: [
-                "Browse": Int.random(in: 200...1000),
-                "Search": Int.random(in: 100...500),
-                "Suggested": Int.random(in: 300...800),
-                "External": Int.random(in: 50...200)
-            ],
-            demographics: StudioVideoAnalytics.Demographics(
-                ageGroups: ["13-17": 15, "18-24": 35, "25-34": 30, "35-44": 15, "45+": 5],
-                genders: ["Male": 60, "Female": 35, "Other": 5],
-                countries: ["US": 45, "UK": 20, "CA": 15, "AU": 10, "Other": 10],
-                devices: ["Mobile": 70, "Desktop": 20, "TV": 8, "Tablet": 2]
-            )
-        )
+        // Return nil if no data available (will show empty state in UI)
+        print("ℹ️ [StudioAnalyticsService] No analytics data available for video: \(videoId)")
+        return nil
     }
     
     private func parseRetentionCurve(_ data: Any?) -> [StudioVideoAnalytics.RetentionPoint] {

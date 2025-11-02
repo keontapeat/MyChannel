@@ -109,6 +109,79 @@ final class VideoFirestoreService: ObservableObject {
     func getUserVideos(userId: String, limit: Int = 24) async throws -> [Video] {
         return await fetchVideosByCreator(creatorId: userId, limit: limit)
     }
+    
+    // MARK: - Real-time View Count Updates
+    func incrementViewCount(videoId: String) async {
+        #if canImport(FirebaseFirestore)
+        do {
+            print("👁️ [VideoFirestoreService] Incrementing view count for video: \(videoId)")
+            let ref = db.collection("videos").document(videoId)
+            
+            // Increment the video's view count
+            try await ref.updateData([
+                "viewCount": FieldValue.increment(Int64(1))
+            ])
+            print("✅ [VideoFirestoreService] View count incremented successfully")
+            
+            // Get the video's creator ID to update their total views
+            let videoDoc = try await ref.getDocument()
+            if let videoData = videoDoc.data(),
+               let creatorId = videoData["userId"] as? String {
+                print("👤 [VideoFirestoreService] Incrementing total views for creator: \(creatorId)")
+                let userRef = db.collection("users").document(creatorId)
+                try await userRef.updateData([
+                    "totalViews": FieldValue.increment(Int64(1))
+                ])
+                print("✅ [VideoFirestoreService] Creator total views incremented")
+                
+                // Update local user if it's the current user
+                if let currentUser = AppState.shared.currentUser, currentUser.id == creatorId {
+                    if let updatedUserData = try? await userRef.getDocument().data() {
+                        let updatedUser = User(
+                            id: currentUser.id,
+                            username: currentUser.username,
+                            displayName: currentUser.displayName,
+                            email: currentUser.email,
+                            profileImageURL: currentUser.profileImageURL,
+                            bannerImageURL: currentUser.bannerImageURL,
+                            bio: currentUser.bio,
+                            subscriberCount: currentUser.subscriberCount,
+                            videoCount: currentUser.videoCount,
+                            isVerified: currentUser.isVerified,
+                            isCreator: currentUser.isCreator,
+                            createdAt: currentUser.createdAt,
+                            location: currentUser.location,
+                            website: currentUser.website,
+                            socialLinks: currentUser.socialLinks,
+                            followerCount: currentUser.followerCount,
+                            followingCount: currentUser.followingCount,
+                            joinDate: currentUser.joinDate,
+                            totalViews: (updatedUserData["totalViews"] as? Int) ?? (currentUser.totalViews + 1),
+                            totalEarnings: currentUser.totalEarnings,
+                            membershipTiers: currentUser.membershipTiers,
+                            bannerVideoURL: currentUser.bannerVideoURL,
+                            bannerVideoMuted: currentUser.bannerVideoMuted,
+                            bannerVideoContentMode: currentUser.bannerVideoContentMode
+                        )
+                        await MainActor.run {
+                            AppState.shared.currentUser = updatedUser
+                            AuthenticationManager.shared.currentUser = updatedUser
+                        }
+                        print("✅ [VideoFirestoreService] Local user totalViews updated to: \(updatedUser.totalViews)")
+                    }
+                }
+            }
+            
+            // Notify profile and Creator Studio to refresh stats
+            await MainActor.run {
+                NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
+                NotificationCenter.default.post(name: NSNotification.Name("RefreshCreatorStudio"), object: videoId)
+            }
+        } catch {
+            print("⚠️ [VideoFirestoreService] Failed to increment view count: \(error)")
+        }
+        #endif
+    }
 }
 
 
