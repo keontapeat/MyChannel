@@ -136,8 +136,8 @@ class FlicksPerformanceMonitor: ObservableObject {
     }
     
     private func getMemoryUsage() -> Double {
-        var info = mach_task_basic_info()
-        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size)/4
+        var info = task_basic_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_basic_info_data_t>.size)/4
         
         let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) {
             $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
