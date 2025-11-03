@@ -83,7 +83,7 @@ struct AccountSwitcherView: View {
 
                     if auth.isAuthenticated {
                         Button(role: .destructive) {
-                            auth.signOut()
+                            try? auth.signOut()
                             appState.clearUser()
                             dismiss()
                         } label: {

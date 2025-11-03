@@ -56,7 +56,7 @@ struct GoogleAccountView: View {
 
                         if auth.isAuthenticated {
                             Button(role: .destructive) {
-                                auth.signOut()
+                                try? auth.signOut()
                                 HapticManager.shared.impact(style: .light)
                             } label: {
                                 Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right.fill")
