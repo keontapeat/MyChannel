@@ -176,28 +176,73 @@ struct AssetBouncyStoriesRow: View {
         }) {
             VStack(spacing: 8) {
                 ZStack {
+                    // 🔥 INSTAGRAM/FACEBOOK PARITY: Gradient Ring
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.98, green: 0.38, blue: 0.38),
+                                    Color(red: 0.98, green: 0.55, blue: 0.25),
+                                    Color(red: 0.85, green: 0.26, blue: 0.86),
+                                    Color(red: 0.53, green: 0.36, blue: 0.95)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 82, height: 82)
+                        .shadow(color: Color(red: 0.85, green: 0.26, blue: 0.86).opacity(0.4), radius: 8, x: 0, y: 4)
+                    
+                    // White border
                     Circle()
                         .fill(Color.white)
-                        .frame(width: 80, height: 80)
-                        .shadow(color: .black.opacity(0.12), radius: 5, x: 0, y: 2)
-
-                    Circle()
-                        .fill(Color(.systemGray6))
-                        .frame(width: 74, height: 74)
-                        .overlay {
-                            Image(systemName: "plus")
-                                .font(.system(size: 22, weight: .bold))
-                                .foregroundColor(.primary)
+                        .frame(width: 76, height: 76)
+                    
+                    // 🔥 USER'S PROFILE PICTURE (like Instagram)
+                    ProfileAvatarView(
+                        urlString: getUserProfileImageURL(),
+                        size: 70
+                    )
+                    .clipShape(Circle())
+                    
+                    // 🔥 Plus Button Overlay (bottom-right corner like Instagram)
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color(red: 0.85, green: 0.26, blue: 0.86),
+                                                Color(red: 0.53, green: 0.36, blue: 0.95)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 28, height: 28)
+                                    .shadow(color: Color(red: 0.85, green: 0.26, blue: 0.86).opacity(0.5), radius: 4, x: 0, y: 2)
+                                
+                                Circle()
+                                    .strokeBorder(Color.white, lineWidth: 2)
+                                    .frame(width: 28, height: 28)
+                                
+                                Image(systemName: "plus")
+                                    .font(.system(size: 14, weight: .black))
+                                    .foregroundColor(.white)
+                            }
+                            .offset(x: 4, y: 4)
                         }
-
-                    Circle()
-                        .stroke(Color.white, lineWidth: 3)
-                        .frame(width: 80, height: 80)
+                    }
+                    .frame(width: 82, height: 82)
                 }
-
+                
+                // 🔥 Better text styling like Instagram
                 Text("Your story")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.primary)
                     .frame(width: 80)
             }
             .frame(width: 88, height: 124)
@@ -206,6 +251,13 @@ struct AssetBouncyStoriesRow: View {
         .buttonStyle(.plain)
         .contentShape(Rectangle())
         .accessibilityLabel("Add your story")
+    }
+    
+    // 🔥 Get current user's profile picture
+    private func getUserProfileImageURL() -> String {
+        // Fetch from AppState when available
+        // For now, return empty string and ProfileAvatarView will show initials
+        ""
     }
 }
 
