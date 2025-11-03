@@ -528,10 +528,6 @@ struct FloatingMiniPlayer: View {
         }
     }
     
-    private func calculateBottomPadding(geometry: GeometryProxy) -> CGFloat {
-        return max(0, geometry.safeAreaInsets.bottom + 10)
-    }
-    
     private var progressBar: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
