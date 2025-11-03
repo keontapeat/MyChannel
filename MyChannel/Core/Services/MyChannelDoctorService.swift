@@ -143,10 +143,12 @@ class MyChannelDoctorService: ObservableObject {
         // Calculate health score
         let score = calculateHealthScore(metrics: metrics, issues: issues)
         
-        await MainActor.run {
+        // Get user ID on MainActor
+        let userId = await MainActor.run {
             self.healthScore = score
             self.criticalIssues = issues.filter { $0.severity == .critical && !$0.resolved }
             self.recommendations = recs.sorted { $0.priority > $1.priority }
+            return AuthenticationManager.shared.currentUser?.id
         }
         
         // Save report to Firestore
@@ -157,7 +159,7 @@ class MyChannelDoctorService: ObservableObject {
             metrics: metrics,
             aiInsights: aiInsights,
             timestamp: Date(),
-            userId: AuthenticationManager.shared.currentUser?.id
+            userId: userId
         )
         
         await saveReport(report)
@@ -206,7 +208,7 @@ class MyChannelDoctorService: ObservableObject {
         var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size)/4
         
         let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) {
-            $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
                 task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
             }
         }
