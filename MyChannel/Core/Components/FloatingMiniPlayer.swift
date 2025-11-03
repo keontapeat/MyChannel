@@ -347,50 +347,6 @@ struct FloatingMiniPlayer: View {
         }
     }
     
-    private var volumeControlButton: some View {
-        Button(action: { globalPlayer.player?.volume = globalPlayer.player?.volume == 0 ? 1 : 0 }) {
-            Image(systemName: (globalPlayer.player?.volume ?? 0) > 0 ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                .font(.system(size: 12))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .padding(6)
-                .background(AppTheme.Colors.textSecondary.opacity(0.08))
-                .clipShape(Circle())
-        }
-    }
-    
-    private var speedControlButton: some View {
-        Button(action: {}) {
-            Image(systemName: "gauge")
-                .font(.system(size: 12))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .padding(6)
-                .background(AppTheme.Colors.textSecondary.opacity(0.08))
-                .clipShape(Circle())
-        }
-    }
-    
-    private var qualityControlButton: some View {
-        Button(action: {}) {
-            Image(systemName: "gearshape")
-                .font(.system(size: 12))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .padding(6)
-                .background(AppTheme.Colors.textSecondary.opacity(0.08))
-                .clipShape(Circle())
-        }
-    }
-    
-    private var pipButton: some View {
-        Button(action: { globalPlayer.togglePictureInPicture() }) {
-            Image(systemName: "pip")
-                .font(.system(size: 12))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .padding(6)
-                .background(AppTheme.Colors.textSecondary.opacity(0.08))
-                .clipShape(Circle())
-        }
-    }
-    
     private var miniPlayerControlsCluster: some View {
         VStack(spacing: 6) {
             HStack(spacing: 6) {
