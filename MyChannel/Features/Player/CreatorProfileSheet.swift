@@ -15,6 +15,8 @@ struct CreatorProfileSheet: View {
     
     @State private var isSubscribed = false
     @State private var showingFullProfile = false
+    @State private var creatorVideos: [Video] = []
+    @State private var isLoadingVideos = false
     
     var body: some View {
         NavigationView {
@@ -140,8 +142,49 @@ struct CreatorProfileSheet: View {
                         
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
-                                ForEach(Video.sampleVideos.prefix(5)) { video in
-                                    CompactVideoCard(video: video)
+                                if isLoadingVideos {
+                                    ForEach(0..<3, id: \.self) { _ in
+                                        VStack(spacing: 8) {
+                                            Rectangle()
+                                                .fill(AppTheme.Colors.surface)
+                                                .frame(width: 140, height: 78)
+                                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                                .shimmer()
+                                            
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Rectangle()
+                                                    .fill(AppTheme.Colors.surface)
+                                                    .frame(width: 120, height: 12)
+                                                    .shimmer()
+                                                Rectangle()
+                                                    .fill(AppTheme.Colors.surface)
+                                                    .frame(width: 80, height: 10)
+                                                    .shimmer()
+                                            }
+                                        }
+                                        .frame(width: 140)
+                                    }
+                                    .padding(.horizontal, 20)
+                                } else if creatorVideos.isEmpty {
+                                    VStack(spacing: 8) {
+                                        Image(systemName: "video.slash")
+                                            .font(.system(size: 32))
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
+                                        Text("No videos yet")
+                                            .font(.subheadline)
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 40)
+                                } else {
+                                    ForEach(creatorVideos.prefix(5)) { video in
+                                        CompactVideoCard(video: video)
+                                            .onTapGesture {
+                                                // Play video
+                                                GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: true, queue: creatorVideos)
+                                                dismiss()
+                                            }
+                                    }
                                 }
                             }
                             .padding(.horizontal, 20)
@@ -165,12 +208,36 @@ struct CreatorProfileSheet: View {
         }
         .onAppear {
             isSubscribed = appState.isSubscribedTo(creator.id)
+            loadCreatorVideos()
         }
         .fullScreenCover(isPresented: $showingFullProfile) {
             // Navigate to full profile view
             ProfileView()
                 .environmentObject(authManager)
                 .environmentObject(appState)
+        }
+    }
+    
+    private func loadCreatorVideos() {
+        isLoadingVideos = true
+        
+        Task {
+            do {
+                // 🔥 REAL DATA: Fetch actual videos from Firestore
+                let videos = try await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: creator.id)
+                
+                await MainActor.run {
+                    self.creatorVideos = videos
+                    self.isLoadingVideos = false
+                    print("✅ Loaded \(videos.count) videos for creator: \(creator.displayName)")
+                }
+            } catch {
+                await MainActor.run {
+                    self.creatorVideos = []
+                    self.isLoadingVideos = false
+                    print("❌ Failed to load creator videos: \(error)")
+                }
+            }
         }
     }
     

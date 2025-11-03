@@ -38,7 +38,7 @@ struct Shimmer: ViewModifier {
 }
 
 extension View {
-    func shimmer(active: Bool) -> some View {
+    func shimmer(active: Bool = true) -> some View {
         modifier(Shimmer(active: active))
     }
 }
