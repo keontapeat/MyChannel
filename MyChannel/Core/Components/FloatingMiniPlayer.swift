@@ -107,6 +107,17 @@ struct FloatingMiniPlayer: View {
     }
     
     private func miniPlayerView(video: Video, geometry: GeometryProxy) -> some View {
+        HStack(spacing: 10) {
+            miniPlayerVideoSection(video: video)
+            miniPlayerInfoSection(video: video)
+        }
+        .padding(10)
+        .background(AppTheme.Colors.surface)
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
+    }
+    
+    private func miniPlayerVideoSection(video: Video) -> some View {
         let thumbnailView: some View = Group {
             if let u = URL(string: video.thumbnailURL) {
                 AppAsyncImage(url: u) { $0.resizable().aspectRatio(contentMode: .fill) } placeholder: { Rectangle().fill(AppTheme.Colors.surface) }
@@ -127,7 +138,8 @@ struct FloatingMiniPlayer: View {
             }
         }
         
-        return HStack(spacing: 10) {
+        return ZStack(alignment: .center) {
+            videoPlayerView
             // 🔥 YOUTUBE PARITY: Enhanced video player with gestures
             ZStack(alignment: .center) {
                 videoPlayerView
@@ -229,7 +241,11 @@ struct FloatingMiniPlayer: View {
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.08), lineWidth: 0.5))
             .cornerRadius(10)
             .shadow(color: .black.opacity(0.25), radius: 10, x: 0, y: 6)
-
+        }
+    }
+    
+    private func miniPlayerInfoSection(video: Video) -> some View {
+        HStack(spacing: 10) {
             // Text + controls
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
@@ -510,19 +526,10 @@ struct FloatingMiniPlayer: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.Colors.cardBackground.opacity(0.95)))
-                .shadow(color: .black.opacity(0.25), radius: 20, x: 0, y: 10)
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.08), lineWidth: 0.5))
-        )
-        .padding(.horizontal, 16)
-        .padding(.bottom, calculateBottomPadding(geometry: geometry))
-        .compositingGroup()
-        .drawingGroup(opaque: false, colorMode: .linear)
+    }
+    
+    private func calculateBottomPadding(geometry: GeometryProxy) -> CGFloat {
+        return max(0, geometry.safeAreaInsets.bottom + 10)
     }
     
     private var progressBar: some View {
