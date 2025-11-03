@@ -282,7 +282,7 @@ struct LiveShowCard: View {
                 }
                 .foregroundColor(.white)
                 .padding(.horizontal, 10)
-                .padding(.vertical: 6)
+                .padding(.vertical, 6)
                 .background(.red)
                 .clipShape(Capsule())
                 .padding(10)
@@ -625,7 +625,7 @@ struct ProductDetailSheet: View {
                             }
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical: 18)
+                            .padding(.vertical, 18)
                             .background(AppTheme.Colors.primary)
                             .clipShape(RoundedRectangle(cornerRadius: 14))
                             .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 4)
