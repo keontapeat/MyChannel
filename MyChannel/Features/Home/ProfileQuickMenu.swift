@@ -192,7 +192,7 @@ struct ProfileQuickMenu: View {
                     isDestructive: true,
                     action: {
                         HapticManager.shared.impact(style: .medium)
-                        authManager.signOut()
+                        try? authManager.signOut()
                         isPresented = false
                     }
                 )
