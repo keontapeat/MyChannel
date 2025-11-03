@@ -62,7 +62,6 @@ struct FloatingMiniPlayer: View {
                 }
             }
         }
-    }
 
     // MARK: - Utils
     private func formatTime(_ t: TimeInterval) -> String {
