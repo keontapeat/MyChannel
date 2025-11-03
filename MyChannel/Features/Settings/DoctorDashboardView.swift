@@ -189,42 +189,42 @@ struct DoctorDashboardView: View {
                 .padding(.horizontal)
             
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                MetricCard(
+                DoctorMetricCard(
                     title: "Launch Time",
                     value: String(format: "%.2fs", metrics.appLaunchTime),
                     icon: "speedometer",
                     status: metrics.appLaunchTime < 2.0 ? .good : .warning
                 )
                 
-                MetricCard(
+                DoctorMetricCard(
                     title: "Frame Rate",
                     value: String(format: "%.0f fps", metrics.averageFrameRate),
                     icon: "waveform",
                     status: metrics.averageFrameRate >= 55 ? .good : .warning
                 )
                 
-                MetricCard(
+                DoctorMetricCard(
                     title: "Memory",
                     value: String(format: "%.0f MB", metrics.memoryUsageMB),
                     icon: "memorychip",
                     status: metrics.memoryUsageMB < 300 ? .good : .critical
                 )
                 
-                MetricCard(
+                DoctorMetricCard(
                     title: "Network",
                     value: String(format: "%.0f ms", metrics.networkLatencyMs),
                     icon: "wifi",
                     status: metrics.networkLatencyMs < 500 ? .good : .warning
                 )
                 
-                MetricCard(
+                DoctorMetricCard(
                     title: "DB Query",
                     value: String(format: "%.2fs", metrics.databaseQueryTime),
                     icon: "cylinder.fill",
                     status: metrics.databaseQueryTime < 1.0 ? .good : .warning
                 )
                 
-                MetricCard(
+                DoctorMetricCard(
                     title: "Crash-Free",
                     value: String(format: "%.1f%%", metrics.crashFreeRate),
                     icon: "checkmark.shield.fill",
@@ -399,7 +399,7 @@ struct StatusBadge: View {
     }
 }
 
-struct MetricCard: View {
+struct DoctorMetricCard: View {
     let title: String
     let value: String
     let icon: String
