@@ -233,6 +233,7 @@ struct FloatingMiniPlayer: View {
                     .padding(6)
                     Spacer() 
                 }
+            }
             .frame(width: playerSize.width, height: playerSize.height)
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.08), lineWidth: 0.5))
             .cornerRadius(10)
