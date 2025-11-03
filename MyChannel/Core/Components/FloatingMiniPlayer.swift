@@ -570,74 +570,7 @@ struct FloatingMiniPlayer: View {
         .frame(height: 3)
     }
     
-    private func videoInfoAndControls(video: Video) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(video.title)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                
-                Text(video.creator.displayName)
-                    .font(.system(size: 12))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                    .lineLimit(1)
-            }
-            
-            Spacer(minLength: 8)
-            
-            // Control buttons
-            VStack(alignment: .trailing, spacing: 8) {
-                // Title + channel
-                HStack(spacing: 8) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(video.title).font(.system(size: 14, weight: .medium)).foregroundColor(AppTheme.Colors.textPrimary).lineLimit(1)
-                        Text(video.creator.displayName).font(.system(size: 12)).foregroundColor(AppTheme.Colors.textSecondary).lineLimit(1)
-                    }
-                    Spacer(minLength: 8)
-                    // Play/Pause control
-                    Button(action: { globalPlayer.togglePlayPause(); HapticManager.shared.impact(style: .light) }) {
-                        Image(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(AppTheme.Colors.primary)
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(ScaleButtonStyle())
-
-                    // Close control
-                    Button(action: closePlayer) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .padding(8)
-                            .background(AppTheme.Colors.textSecondary.opacity(0.1))
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(ScaleButtonStyle())
-                }
-
-                // Scrubbable slider + time
-                VStack(spacing: 4) {
-                    Slider(
-                        value: Binding(
-                            get: { Double(globalPlayer.currentProgress) },
-                            set: { globalPlayer.seek(to: max(0, min(1, $0))) }
-                        )
-                    )
-                    .tint(AppTheme.Colors.primary)
-                    HStack {
-                        Text(formatTime(globalPlayer.currentTime)).font(.caption2.monospacedDigit()).foregroundColor(AppTheme.Colors.textSecondary)
-                        Spacer()
-                        Text(formatTime(globalPlayer.duration)).font(.caption2.monospacedDigit()).foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 12)
-    }
+    
     
     private var miniPlayerBackground: some View {
         RoundedRectangle(cornerRadius: 16)
