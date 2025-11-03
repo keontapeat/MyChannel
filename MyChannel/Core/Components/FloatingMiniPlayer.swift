@@ -107,18 +107,30 @@ struct FloatingMiniPlayer: View {
     }
     
     private func miniPlayerView(video: Video, geometry: GeometryProxy) -> some View {
-        HStack(spacing: 10) {
+        let thumbnailView: some View = Group {
+            if let u = URL(string: video.thumbnailURL) {
+                AppAsyncImage(url: u) { $0.resizable().aspectRatio(contentMode: .fill) } placeholder: { Rectangle().fill(AppTheme.Colors.surface) }
+                    .clipped()
+            } else {
+                Rectangle().fill(AppTheme.Colors.surface)
+            }
+        }
+        
+        let videoPlayerView: some View = Group {
+            if let player = globalPlayer.player {
+                VideoPlayer(player: player)
+                    .aspectRatio(16/9, contentMode: .fill)
+                    .allowsHitTesting(false)
+                    .clipped()
+            } else {
+                thumbnailView
+            }
+        }
+        
+        return HStack(spacing: 10) {
             // 🔥 YOUTUBE PARITY: Enhanced video player with gestures
             ZStack(alignment: .center) {
-                if let player = globalPlayer.player {
-                    VideoPlayer(player: player)
-                        .aspectRatio(16/9, contentMode: .fill)
-                        .allowsHitTesting(false)
-                        .clipped()
-                } else if let u = URL(string: video.thumbnailURL) {
-                    AppAsyncImage(url: u) { $0.resizable().aspectRatio(contentMode: .fill) } placeholder: { Rectangle().fill(AppTheme.Colors.surface) }
-                        .clipped()
-                }
+                videoPlayerView
                 
                 // 🔥 BUFFERING INDICATOR
                 if !globalPlayer.isPlaying && globalPlayer.player?.rate == 0 && globalPlayer.player?.currentItem != nil {
@@ -783,8 +795,8 @@ struct FloatingMiniPlayer: View {
                    let chapters = video.chapters,
                    !chapters.isEmpty,
                    globalPlayer.duration > 0 {
-                    ForEach(chapters) { chapter in
-                        let chapterProgress = chapter.timestamp / globalPlayer.duration
+                    ForEach(chapters, id: \.id) { chapter in
+                        let chapterProgress = chapter.start / globalPlayer.duration
                         Rectangle()
                             .fill(Color.white.opacity(0.6))
                             .frame(width: 1, height: 6)
