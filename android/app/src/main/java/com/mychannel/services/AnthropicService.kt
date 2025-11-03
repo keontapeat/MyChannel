@@ -16,7 +16,7 @@ import javax.inject.Singleton
  * 🤖 Anthropic Claude Service - Advanced AI
  * 
  * Features:
- * - Claude 3.5 Sonnet integration
+ * - Claude Sonnet 4.5 integration (latest model)
  * - Content quality analysis
  * - Semantic understanding
  * - Script generation
@@ -46,7 +46,7 @@ class AnthropicService @Inject constructor(
      */
     suspend fun generateWithClaude(
         prompt: String,
-        model: ClaudeModel = ClaudeModel.CLAUDE_3_5_SONNET,
+        model: ClaudeModel = ClaudeModel.CLAUDE_SONNET_4_5,
         maxTokens: Int = 2000
     ): String = withContext(Dispatchers.IO) {
         val requestBody = """
@@ -127,7 +127,7 @@ class AnthropicService @Inject constructor(
             Format as JSON array.
         """.trimIndent()
         
-        return generateWithClaude(prompt, ClaudeModel.CLAUDE_3_5_SONNET)
+        return generateWithClaude(prompt, ClaudeModel.CLAUDE_SONNET_4_5)
     }
 }
 
@@ -135,13 +135,14 @@ class AnthropicService @Inject constructor(
  * Claude Model enum
  */
 enum class ClaudeModel(val value: String) {
-    CLAUDE_3_5_SONNET("claude-3-5-sonnet-20241022"),
+    CLAUDE_SONNET_4_5("claude-sonnet-4-20250514"),  // 🔥 Latest and most powerful model
+    CLAUDE_3_5_SONNET("claude-3-5-sonnet-20241022"), // Previous generation
     CLAUDE_3_OPUS("claude-3-opus-20240229"),
     CLAUDE_3_SONNET("claude-3-sonnet-20240229"),
     CLAUDE_3_HAIKU("claude-3-haiku-20240307");
     
     companion object {
-        val DEFAULT = CLAUDE_3_5_SONNET
+        val DEFAULT = CLAUDE_SONNET_4_5  // 🔥 Now using Sonnet 4.5 by default
     }
 }
 

@@ -34,7 +34,7 @@ class AnthropicService: ObservableObject {
         let messages: [Message]
         let system: String?
         
-        init(model: String = "claude-3-5-sonnet-20241022", maxTokens: Int = 1024, messages: [Message], system: String? = nil) {
+        init(model: String = "claude-sonnet-4-20250514", maxTokens: Int = 1024, messages: [Message], system: String? = nil) {
             self.model = model
             self.max_tokens = maxTokens
             self.messages = messages
@@ -68,7 +68,7 @@ class AnthropicService: ObservableObject {
     func sendMessage(
         _ message: String,
         system: String? = nil,
-        model: String = "claude-3-5-sonnet-20241022",
+        model: String = "claude-sonnet-4-20250514",
         maxTokens: Int = 1024
     ) async throws -> String {
         let apiKey = AppSecrets.anthropicAPIKey
@@ -91,7 +91,7 @@ class AnthropicService: ObservableObject {
     func sendConversation(
         _ messages: [Message],
         system: String? = nil,
-        model: String = "claude-3-5-sonnet-20241022",
+        model: String = "claude-sonnet-4-20250514",
         maxTokens: Int = 1024
     ) async throws -> String {
         let apiKey = AppSecrets.anthropicAPIKey

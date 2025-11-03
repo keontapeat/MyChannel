@@ -232,13 +232,13 @@ func generateReply(to comment: String) async throws -> String {
 
 ## 📊 Available Models
 
-The service uses `claude-3-5-sonnet-20241022` by default (best balance of speed/quality).
+The service uses `claude-sonnet-4-20250514` by default (latest Claude Sonnet 4.5 - most powerful model).
 
 You can change models per request:
 ```swift
 let response = try await AnthropicService.shared.sendMessage(
     "Your prompt",
-    model: "claude-3-5-sonnet-20241022", // Current default
+    model: "claude-sonnet-4-20250514", // 🔥 Current default (Sonnet 4.5)
     maxTokens: 2048 // Adjust for longer responses
 )
 ```
