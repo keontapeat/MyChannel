@@ -206,7 +206,7 @@ class MyChannelDoctorService: ObservableObject {
     private func getMemoryUsage() -> Double {
         // Use process_info to get memory usage
         var taskInfo = task_vm_info_data_t()
-        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size) / MemoryLayout<natural_t>.size
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
         
         let result = withUnsafeMutablePointer(to: &taskInfo) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
