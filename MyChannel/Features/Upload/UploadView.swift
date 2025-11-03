@@ -49,6 +49,10 @@ struct UploadView: View {
     @State private var showDubImporter = false
     private let supportedLangs = ["en","es","fr","de","pt","hi","ja","zh","ar","ru"]
     
+    // Pro Editor
+    @State private var showProEditor = false
+    @State private var proEditorVideoURL: URL?
+    
     enum UploadStep {
         case selectMedia
         case editVideo
@@ -315,6 +319,11 @@ struct UploadView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $showProEditor) {
+            if let videoURL = proEditorVideoURL {
+                ProEditorView(videoURL: videoURL, existingVideo: nil)
+            }
+        }
         .onChange(of: uploadManager.selectedVideo) { newValue in
             if newValue != nil {
                 Task {
@@ -336,6 +345,13 @@ struct UploadView: View {
                         uploadStep = .editVideo
                     }
                 }
+            }
+        }
+        // Launch Pro Editor notification
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("LaunchProEditor"))) { note in
+            if let url = note.object as? URL {
+                proEditorVideoURL = url
+                showProEditor = true
             }
         }
     }
@@ -658,6 +674,23 @@ struct UploadView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
+                        // Pro Editor - Full Premiere Pro-style suite
+                        EditingToolCard(
+                            title: "Pro Editor",
+                            subtitle: "Full editing suite",
+                            icon: "wand.and.stars",
+                            color: .purple
+                        ) {
+                            // Launch Pro Editor
+                            if let videoURL = uploadManager.videoURL {
+                                NotificationCenter.default.post(
+                                    name: NSNotification.Name("LaunchProEditor"),
+                                    object: videoURL
+                                )
+                            }
+                            HapticManager.shared.impact(style: .heavy)
+                        }
+                        
                         ForEach(EditingTool.allCases) { tool in
                             EditingToolCard(
                                 title: tool.title,
@@ -762,10 +795,10 @@ struct UploadView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
-        .background(LinearGradient(colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary], startPoint: .leading, endPoint: .trailing))
+        .background(AppTheme.Colors.primary)
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 15, x: 0, y: 8)
-        .scaleEffect(isAnimating ? 1.02 : 1.0)
+        .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 4)
+        .scaleEffect(isAnimating ? 0.98 : 1.0)
         .animation(.easeInOut(duration: 0.1), value: isAnimating)
     }
     
@@ -965,14 +998,9 @@ struct UploadView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 18)
-                        .background(
-                            LinearGradient(
-                                colors: uploadManager.title.isEmpty ? [AppTheme.Colors.textTertiary, AppTheme.Colors.textTertiary] : [AppTheme.Colors.primary, AppTheme.Colors.secondary],
-                                startPoint: .leading, endPoint: .trailing
-                            )
-                        )
+                        .background(uploadManager.title.isEmpty ? AppTheme.Colors.textTertiary : AppTheme.Colors.primary)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: uploadManager.title.isEmpty ? .clear : AppTheme.Colors.primary.opacity(0.4), radius: 15, x: 0, y: 8)
+                        .shadow(color: uploadManager.title.isEmpty ? .clear : AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 4)
                     }
                     .buttonStyle(.plain)
                     .disabled(uploadManager.title.isEmpty)
@@ -1131,9 +1159,9 @@ struct UploadView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(LinearGradient(colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary], startPoint: .leading, endPoint: .trailing))
+                        .background(AppTheme.Colors.primary)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 15, x: 0, y: 8)
+                        .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 4)
                     }
                     .buttonStyle(.plain)
                 } else {
@@ -1153,9 +1181,9 @@ struct UploadView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(LinearGradient(colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary], startPoint: .leading, endPoint: .trailing))
+                        .background(AppTheme.Colors.primary)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 15, x: 0, y: 8)
+                        .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 4)
                     }
                     .buttonStyle(.plain)
                 }
@@ -1308,46 +1336,49 @@ struct EditingToolCard: View {
             VStack(spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(color.opacity(isPressed ? 0.2 : 0.1))
-                        .frame(width: 50, height: 50)
+                        .fill(isPressed ? color.opacity(0.15) : AppTheme.Colors.cardBackground)
+                        .frame(width: 56, height: 56)
                         .overlay(
                             Circle()
-                                .stroke(color.opacity(isPressed ? 0.6 : 0.3), lineWidth: isPressed ? 2 : 1)
+                                .stroke(isPressed ? color.opacity(0.4) : AppTheme.Colors.divider.opacity(0.2), lineWidth: 1.5)
                         )
                     Image(systemName: icon)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(color)
-                        .scaleEffect(isPressed ? 1.1 : 1.0)
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(isPressed ? color : AppTheme.Colors.textSecondary)
+                        .scaleEffect(isPressed ? 1.05 : 1.0)
                 }
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
+                .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isPressed)
                 
                 VStack(spacing: 4) {
                     Text(title)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
                     Text(subtitle)
                         .font(.system(size: 12))
                         .foregroundColor(AppTheme.Colors.textSecondary)
+                        .lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
+            .padding(.horizontal, 12)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(isPressed ? color.opacity(0.05) : AppTheme.Colors.surface)
+                    .fill(isPressed ? AppTheme.Colors.cardBackground.opacity(0.8) : AppTheme.Colors.surface)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(isPressed ? color.opacity(0.3) : .clear, lineWidth: 1.5)
+                            .stroke(AppTheme.Colors.divider.opacity(isPressed ? 0.4 : 0.2), lineWidth: 1)
                     )
             )
             .shadow(
-                color: isPressed ? color.opacity(0.2) : .black.opacity(0.05),
-                radius: isPressed ? 8 : 5,
+                color: .black.opacity(isPressed ? 0.1 : 0.04),
+                radius: isPressed ? 10 : 6,
                 x: 0,
-                y: isPressed ? 4 : 2
+                y: isPressed ? 6 : 3
             )
-            .scaleEffect(isPressed ? 1.02 : 1.0)
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isPressed)
+            .scaleEffect(isPressed ? 0.98 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isPressed)
         }
         .buttonStyle(.plain)
         .simultaneousGesture(
@@ -1734,9 +1765,9 @@ struct ProfessionalToggleRow: View {
                         Text("PRO")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(LinearGradient(colors: [.purple, .blue], startPoint: .leading, endPoint: .trailing))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(AppTheme.Colors.primary)
                             .clipShape(Capsule())
                     }
                 }

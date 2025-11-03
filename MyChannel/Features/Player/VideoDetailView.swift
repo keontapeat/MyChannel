@@ -876,7 +876,7 @@ struct VideoDetailView: View {
             // CRITICAL FIX: Only trigger endscreen if this is OUR player item, not other players (banners, previews, etc)
             if let item = notification.object as? AVPlayerItem,
                item == playerManager.player?.currentItem {
-                beginEndscreen()
+            beginEndscreen()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowTranscript"))) { _ in
