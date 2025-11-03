@@ -320,7 +320,7 @@ struct FeaturedTemplateCard: View {
                 }
                 .foregroundColor(.white)
                 .padding(.horizontal, 10)
-                .padding(.vertical: 6)
+                .padding(.vertical, 6)
                 .background(Color.orange)
                 .clipShape(Capsule())
                 .padding(10)

@@ -62,7 +62,8 @@ struct FloatingMiniPlayer: View {
                 }
             }
         }
-
+    }
+    
     // MARK: - Utils
     private func formatTime(_ t: TimeInterval) -> String {
         let s = Int(t.rounded())

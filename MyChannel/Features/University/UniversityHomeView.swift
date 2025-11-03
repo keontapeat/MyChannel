@@ -168,7 +168,7 @@ struct UniversityHomeView: View {
                 .foregroundColor(.white.opacity(0.8))
         }
         .padding(.horizontal, 12)
-        .padding(.vertical: 8)
+        .padding(.vertical, 8)
         .background(Color.white.opacity(0.2))
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
