@@ -551,7 +551,7 @@ struct CreateCampaignView: View {
             // Campaign Summary
             VStack(alignment: .leading, spacing: 16) {
                 SummaryRow(label: "Campaign Name", value: campaignBuilder.campaignName)
-                SummaryRow(label: "Objective", value: campaignBuilder.objective.title)
+                SummaryRow(label: "Objective", value: campaignBuilder.objective?.title ?? "Not selected")
                 SummaryRow(label: "Budget", value: "$\(campaignBuilder.budget, specifier: "%.2f") \(campaignBuilder.budgetType == .daily ? "per day" : "total")")
                 SummaryRow(label: "Audience Size", value: "\(campaignBuilder.estimatedReach) users")
                 SummaryRow(label: "Start Date", value: campaignBuilder.startDate.formatted(date: .abbreviated, time: .omitted))
