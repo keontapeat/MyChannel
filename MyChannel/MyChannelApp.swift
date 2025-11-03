@@ -46,6 +46,9 @@ struct MyChannelApp: App {
                 .onAppear {
                     print("📱 App appeared with MC logo splash!")
                     
+                    // 🏥 Start MyChannel Doctor 24/7 monitoring
+                    MyChannelDoctorService.shared.startMonitoring()
+                    
                     // Start performance optimization after UI is ready
                     PerformanceOptimizer.shared.optimizeAppLaunch()
                     

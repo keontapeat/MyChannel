@@ -213,12 +213,14 @@ struct MainTabView: View {
                     }
                 }
 
-            // Keep global mini player hidden on Flicks
-            if selectedTab != .flicks {
-                SafeFloatingMiniPlayer()
-                    .environmentObject(globalPlayer)
-                    .zIndex(998)
-            }
+            // 🔥 REMOVED: FloatingMiniPlayer - Now using iOS native Picture-in-Picture (YouTube style)
+            // The native PiP provides a floating player that works system-wide, even outside the app
+            // Users can move it around, resize it, and it persists across app navigation
+            // if selectedTab != .flicks {
+            //     SafeFloatingMiniPlayer()
+            //         .environmentObject(globalPlayer)
+            //         .zIndex(998)
+            // }
         }
         .overlay(alignment: .bottom) {
             CustomTabBar(

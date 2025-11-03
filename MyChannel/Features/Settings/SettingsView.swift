@@ -65,6 +65,28 @@ struct SettingsView: View {
                     }
                 }
                 
+                Section("Developer") {
+                    NavigationLink(destination: DoctorDashboardView()) {
+                        HStack {
+                            Image(systemName: "stethoscope")
+                                .foregroundColor(.blue)
+                            Text("MyChannel Doctor")
+                            
+                            Spacer()
+                            
+                            // Live health indicator
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 8, height: 8)
+                                Text("Active")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+                
                 Section("About") {
                     Button("About MyChannel") {
                         showingAbout = true

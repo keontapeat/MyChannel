@@ -339,20 +339,38 @@ class GlobalVideoPlayerManager: ObservableObject {
     
     func minimizePlayer() {
         guard currentVideo != nil, !isCleanedUp else { return }
+        
+        print("🔄 [GlobalVideoPlayerManager] Minimizing to PiP mode (YouTube style)")
+        
+        // 🔥 ALWAYS use Picture-in-Picture mode (YouTube style floating player)
+        togglePictureInPicture()
+        
+        // Close fullscreen with animation
         isTransitioning = true
         withAnimation(.easeOut(duration: 0.2)) {
             showingFullscreen = false
-            isMiniplayer = true
-            shouldShowMiniPlayer = true
+            // Don't show bottom bar mini player anymore
+            isMiniplayer = false
+            shouldShowMiniPlayer = false
         }
+        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self = self, !self.isCleanedUp else { return }
             self.isTransitioning = false
         }
+        
+        HapticManager.shared.impact(style: .medium)
     }
     
     func expandPlayer() {
         guard currentVideo != nil, !isCleanedUp else { return }
+        
+        print("🔄 [GlobalVideoPlayerManager] Expanding from PiP to fullscreen")
+        
+        // 🔥 Exit PiP mode if active
+        if isPiPActive {
+            togglePictureInPicture()
+        }
         
         isTransitioning = true
         
@@ -366,10 +384,17 @@ class GlobalVideoPlayerManager: ObservableObject {
             guard let self = self, !self.isCleanedUp else { return }
             self.isTransitioning = false
         }
+        
+        HapticManager.shared.impact(style: .medium)
     }
     
     func closePlayer() {
         guard !isCleanedUp else { return }
+        
+        // 🔥 Stop PiP if active
+        if isPiPActive {
+            togglePictureInPicture()
+        }
         
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             playerManager?.pause()
@@ -379,6 +404,8 @@ class GlobalVideoPlayerManager: ObservableObject {
             shouldShowMiniPlayer = false
             miniplayerOffset = 0
         }
+        
+        HapticManager.shared.impact(style: .light)
     }
     
     // MARK: - Navigation Handling for Mini Player
