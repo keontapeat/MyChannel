@@ -139,7 +139,7 @@ struct CreateStoryView: View {
                 .padding()
                 
                 // Loading overlay
-                if viewModel.isProcessing {
+                if viewModel.processingState.isProcessing {
                     ProcessingOverlay()
                 }
             }
@@ -184,10 +184,13 @@ struct CreateStoryView: View {
                 .presentationDetents([.height(220), .large])
                 .presentationDragIndicator(.visible)
         }
-        .alert("Error", isPresented: $viewModel.showingError) {
+        .alert("Error", isPresented: Binding(
+            get: { viewModel.processingState.showingError },
+            set: { viewModel.processingState.showingError = $0 }
+        )) {
             Button("OK") { }
         } message: {
-            Text(viewModel.errorMessage)
+            Text(viewModel.processingState.errorMessage)
         }
     }
     
@@ -212,7 +215,7 @@ struct StoryPreviewCanvas: View {
             Group {
                 switch viewModel.storyType {
                 case .camera:
-                    if viewModel.isCameraActive {
+                    if viewModel.cameraState.isActive {
                         CameraPreviewView(viewModel: viewModel)
                     } else {
                         Color.black.opacity(0.8)
@@ -264,17 +267,17 @@ struct StoryPreviewCanvas: View {
                 height: geometry.size.height
             )
             .clipped()
-            .scaleEffect(viewModel.scale)
-            .offset(viewModel.offset)
+            .scaleEffect(viewModel.transformState.scale)
+            .offset(viewModel.transformState.offset)
         }
         .aspectRatio(9/16, contentMode: .fit)
         .cornerRadius(20)
         .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
         .overlay(alignment: .topLeading) {
-            if let fp = viewModel.focusPoint {
+            if let fp = viewModel.cameraState.focusPoint {
                 FocusPulseView()
                     .position(x: fp.x * geometry.size.width, y: fp.y * geometry.size.height)
-                    .id(viewModel.focusPulseID)
+                    .id(viewModel.cameraState.focusPulseID)
             }
         }
     }
@@ -324,9 +327,9 @@ struct StoryCreationHeader: View {
                 HStack(spacing: 16) {
                     // Flash button
                     Button(action: onFlashToggle) {
-                        Image(systemName: viewModel.flashMode.iconName)
+                        Image(systemName: viewModel.cameraState.flashMode.iconName)
                             .font(.system(size: 20))
-                            .foregroundColor(viewModel.flashMode == .on ? .yellow : .white)
+                            .foregroundColor(viewModel.cameraState.flashMode == .on ? .yellow : .white)
                             .frame(width: 40, height: 40)
                             .background(.black.opacity(0.6))
                             .clipShape(Circle())
@@ -345,8 +348,8 @@ struct StoryCreationHeader: View {
             }
             
             // Timer/Duration display
-            if viewModel.isRecording {
-                Text(viewModel.recordingDuration)
+            if viewModel.cameraState.isRecording {
+                Text(viewModel.cameraState.recordingDuration)
                     .font(.system(.body, design: .monospaced))
                     .foregroundColor(.white)
                     .padding(.horizontal, 12)
@@ -413,7 +416,7 @@ struct StoryCreationControls: View {
                 if viewModel.canPost {
                     Button(action: onPost) {
                         HStack(spacing: 8) {
-                            if viewModel.isProcessing {
+                            if viewModel.processingState.isProcessing {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .scaleEffect(0.8)
@@ -422,7 +425,7 @@ struct StoryCreationControls: View {
                                     .font(.system(size: 16, weight: .medium))
                             }
                             
-                            Text(viewModel.isProcessing ? "Posting..." : "Share Story")
+                            Text(viewModel.processingState.isProcessing ? "Posting..." : "Share Story")
                                 .font(.system(size: 16, weight: .semibold))
                         }
                         .foregroundColor(.white)
@@ -432,10 +435,10 @@ struct StoryCreationControls: View {
                         .cornerRadius(25)
                         .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 8, x: 0, y: 4)
                     }
-                    .disabled(viewModel.isProcessing)
+                    .disabled(viewModel.processingState.isProcessing)
                     .overlay(alignment: .bottom) {
-                        if viewModel.isProcessing {
-                            UploadProgressToast(progress: viewModel.uploadProgress)
+                        if viewModel.processingState.isProcessing {
+                            UploadProgressToast(progress: viewModel.processingState.uploadProgress)
                                 .offset(y: -70)
                         }
                     }
@@ -443,7 +446,7 @@ struct StoryCreationControls: View {
                     // Capture button for camera mode
                     if viewModel.storyType == .camera {
                         CaptureButton(
-                            isRecording: viewModel.isRecording,
+                            isRecording: viewModel.cameraState.isRecording,
                             onTap: { viewModel.capturePhoto() },
                             onLongPress: { pressed in
                                 if pressed {
@@ -454,8 +457,8 @@ struct StoryCreationControls: View {
                             }
                         )
                         .overlay(alignment: .topTrailing) {
-                            if viewModel.isRecording {
-                                Text(viewModel.recordingDuration)
+                            if viewModel.cameraState.isRecording {
+                                Text(viewModel.cameraState.recordingDuration)
                                     .font(.system(.caption, design: .monospaced))
                                     .foregroundStyle(.white)
                                     .padding(6)
@@ -673,14 +676,17 @@ struct TextModeControls: View {
                 HStack {
                     Image(systemName: "textformat.size.smaller")
                         .foregroundStyle(.white.opacity(0.7))
-                    Slider(value: $viewModel.textFontSize, in: 12...72)
+                    Slider(value: Binding(
+                        get: { viewModel.textEditingState.fontSize },
+                        set: { viewModel.textEditingState.fontSize = $0 }
+                    ), in: 12...72)
                         .tint(.white)
                     Image(systemName: "textformat.size.larger")
                         .foregroundStyle(.white.opacity(0.7))
                 }
                 .font(.system(size: 16))
                 
-                Text("Font Size: \(Int(viewModel.textFontSize))")
+                Text("Font Size: \(Int(viewModel.textEditingState.fontSize))")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.8))
             }
@@ -694,10 +700,10 @@ struct TextModeControls: View {
                             .frame(width: 32, height: 32)
                             .overlay(
                                 Circle()
-                                    .stroke(.white, lineWidth: viewModel.textColor == color ? 3 : 0)
+                                    .stroke(.white, lineWidth: viewModel.textEditingState.color == color ? 3 : 0)
                             )
                             .onTapGesture {
-                                viewModel.textColor = color
+                                viewModel.textEditingState.color = color
                                 HapticManager.shared.selection()
                             }
                     }
@@ -709,14 +715,14 @@ struct TextModeControls: View {
             HStack(spacing: 20) {
                 ForEach([TextAlignment.leading, TextAlignment.center, TextAlignment.trailing], id: \.self) { alignment in
                     Button(action: {
-                        viewModel.textAlignment = alignment
+                        viewModel.textEditingState.alignment = alignment
                         HapticManager.shared.selection()
                     }) {
                         Image(systemName: alignment.iconName)
                             .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(viewModel.textAlignment == alignment ? AppTheme.Colors.primary : .white.opacity(0.7))
+                            .foregroundStyle(viewModel.textEditingState.alignment == alignment ? AppTheme.Colors.primary : .white.opacity(0.7))
                             .frame(width: 44, height: 44)
-                            .background(.white.opacity(viewModel.textAlignment == alignment ? 0.2 : 0.1), in: Circle())
+                            .background(.white.opacity(viewModel.textEditingState.alignment == alignment ? 0.2 : 0.1), in: Circle())
                     }
                 }
             }

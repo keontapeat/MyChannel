@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct SearchView: View {
     @Environment(\.dismiss) private var dismiss
@@ -17,6 +18,11 @@ struct SearchView: View {
     @State private var searchFilters = SearchFilters()
     @State private var showingFilters = false
     @FocusState private var isSearchFieldFocused: Bool
+    
+    // ⚡ PERFORMANCE: Debounced search with Combine
+    @State private var searchTask: Task<Void, Never>?
+    @State private var cancellables = Set<AnyCancellable>()
+    private let searchSubject = PassthroughSubject<String, Never>()
 
     var body: some View {
         NavigationStack {
@@ -90,15 +96,27 @@ struct SearchView: View {
                 if !searchText.isEmpty { performSearch() }
             }
         }
-        .onChange(of: searchText) { newValue in
-            if !newValue.isEmpty {
-                Task {
-                    try await Task.sleep(nanoseconds: 300_000_000)
-                    if searchText == newValue {
-                        await searchService.getSearchSuggestions(for: newValue)
+        .onAppear {
+            // ⚡ PERFORMANCE: Setup debounced search with Combine
+            searchSubject
+                .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+                .removeDuplicates()
+                .sink { [weak searchService] query in
+                    guard !query.isEmpty else { return }
+                    Task {
+                        await searchService?.getSearchSuggestions(for: query)
                     }
                 }
-            }
+                .store(in: &cancellables)
+        }
+        .onChange(of: searchText) { newValue in
+            // Send to debounced publisher
+            searchSubject.send(newValue)
+        }
+        .onDisappear {
+            // ⚡ PERFORMANCE: Cancel search task and cleanup
+            searchTask?.cancel()
+            cancellables.removeAll()
         }
     }
 
@@ -163,17 +181,32 @@ struct SearchView: View {
     // MARK: - Actions
     private func performSearch() {
         guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        
+        // ⚡ PERFORMANCE: Cancel previous search task
+        searchTask?.cancel()
+        
         isSearching = true
-        Task {
+        searchTask = Task {
+            defer { 
+                Task { @MainActor in isSearching = false }
+            }
+            
             do {
                 let _ = try await searchService.search(query: searchText, filters: searchFilters)
-                if !recentSearches.contains(searchText) {
-                    recentSearches.insert(searchText, at: 0)
-                    if recentSearches.count > 10 { recentSearches.removeLast() }
+                
+                // Check if task was cancelled
+                guard !Task.isCancelled else { return }
+                
+                await MainActor.run {
+                    if !recentSearches.contains(searchText) {
+                        recentSearches.insert(searchText, at: 0)
+                        if recentSearches.count > 10 { recentSearches.removeLast() }
+                    }
+                    isSearching = false
                 }
-                await MainActor.run { isSearching = false }
             } catch {
-                print("Search error: \(error)")
+                guard !Task.isCancelled else { return }
+                print("🚨 [SearchView] Search error: \(error)")
                 await MainActor.run { isSearching = false }
             }
         }
