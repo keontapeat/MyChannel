@@ -36,7 +36,7 @@ struct QuickProfileMenu: View {
                             .font(.title3.weight(.bold))
                             .foregroundColor(AppTheme.Colors.textPrimary)
                         
-                        if user.isVerified {
+                        if user.shouldShowVerificationBadge {
                             Image(systemName: "checkmark.seal.fill")
                                 .font(.body)
                                 .foregroundColor(.blue)

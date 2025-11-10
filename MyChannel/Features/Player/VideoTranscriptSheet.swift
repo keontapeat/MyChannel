@@ -85,18 +85,18 @@ struct VideoTranscriptSheet: View {
         }
     }
     
-    private var mockTranscriptSegments: [TranscriptSegment] {
+    private var mockTranscriptSegments: [VideoTranscriptSegment] {
         [
-            TranscriptSegment(id: "1", startTime: 0, endTime: 5, text: "Welcome to this amazing video tutorial where we'll explore the latest features in iOS development."),
-            TranscriptSegment(id: "2", startTime: 5, endTime: 12, text: "Today we're going to dive deep into SwiftUI and learn how to create beautiful, responsive user interfaces."),
-            TranscriptSegment(id: "3", startTime: 12, endTime: 18, text: "First, let's start by understanding the basic concepts of declarative programming in SwiftUI."),
-            TranscriptSegment(id: "4", startTime: 18, endTime: 25, text: "SwiftUI allows us to describe our user interface using a simple, intuitive syntax that's easy to read and maintain."),
-            TranscriptSegment(id: "5", startTime: 25, endTime: 32, text: "One of the key advantages of SwiftUI is its ability to automatically handle state management and view updates.")
+            VideoTranscriptSegment(id: "1", startTime: 0, endTime: 5, text: "Welcome to this amazing video tutorial where we'll explore the latest features in iOS development."),
+            VideoTranscriptSegment(id: "2", startTime: 5, endTime: 12, text: "Today we're going to dive deep into SwiftUI and learn how to create beautiful, responsive user interfaces."),
+            VideoTranscriptSegment(id: "3", startTime: 12, endTime: 18, text: "First, let's start by understanding the basic concepts of declarative programming in SwiftUI."),
+            VideoTranscriptSegment(id: "4", startTime: 18, endTime: 25, text: "SwiftUI allows us to describe our user interface using a simple, intuitive syntax that's easy to read and maintain."),
+            VideoTranscriptSegment(id: "5", startTime: 25, endTime: 32, text: "One of the key advantages of SwiftUI is its ability to automatically handle state management and view updates.")
         ]
     }
 }
 
-struct TranscriptSegment: Identifiable {
+struct VideoTranscriptSegment: Identifiable {
     let id: String
     let startTime: TimeInterval
     let endTime: TimeInterval
@@ -104,7 +104,7 @@ struct TranscriptSegment: Identifiable {
 }
 
 struct TranscriptSegmentView: View {
-    let segment: TranscriptSegment
+    let segment: VideoTranscriptSegment
     let searchText: String
     let isHighlighted: Bool
     

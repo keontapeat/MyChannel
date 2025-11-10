@@ -15,13 +15,19 @@ final class AdsService: ObservableObject {
         let base = AppConfig.API.adsBaseURL
         let path = AppConfig.API.Endpoints.adsVMAP
         guard let url = URL(string: base + path + "?videoId=\(videoId)") else { return nil }
-        var req = URLRequest(url: url)
-        req.timeoutInterval = AppConfig.API.timeout
+        
+        // ⚡ PERFORMANCE: Use NetworkOptimizer for caching and deduplication
         do {
-            let (data, resp) = try await URLSession.shared.data(for: req)
-            guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return nil }
+            let data = try await NetworkOptimizer.shared.optimizedRequest(
+                for: url,
+                priority: .high,
+                cachePolicy: .returnCacheDataElseLoad
+            )
             return try? JSONDecoder().decode(VMAPResponse.self, from: data)
-        } catch { return nil }
+        } catch {
+            print("🚨 [AdsService] Failed to fetch VMAP: \(error)")
+            return nil
+        }
     }
 }
 
@@ -32,11 +38,11 @@ struct ServedAd: Codable {
     let creativeUri: String
     let clickUrl: String
     let duration: Int
-    let q0: String
-    let q25: String
-    let q50: String
-    let q75: String
-    let q100: String
+    var q0: String
+    var q25: String
+    var q50: String
+    var q75: String
+    var q100: String
 }
 
 // MARK: - Enhanced AdsService for Real Monetization
@@ -51,48 +57,54 @@ extension AdsService {
         
         print("✅ Serving ads for video \(video.id ?? "unknown") - monetized: \(video.monetization?.isMonetized ?? true)")
         
-        // 🔥 GUARANTEED AD SERVING: Always return a working ad for testing
-        let testAd = ServedAd(
-            impressionId: UUID().uuidString,
-            creativeUri: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-            clickUrl: "https://mychannel.com",
-            duration: 15,
-            q0: "https://example.com/q0",
-            q25: "https://example.com/q25", 
-            q50: "https://example.com/q50",
-            q75: "https://example.com/q75",
-            q100: "https://example.com/q100"
-        )
-        
-        print("🎯 Returning test ad: \(testAd.creativeUri)")
-        return testAd
+        // 🔥 CHECK FREQUENCY CAP: Don't show too many ads to same user
+        if await isFrequencyCapped(userId: video.creator.id, videoId: video.id) {
+            print("⏸️ [Ads] Frequency cap reached - skipping ad")
+            return nil
+        }
         
         // 🔥 REAL ADS INTEGRATION: Use multiple ad networks for better fill rates
         let adNetworks = [
+            // Google Ad Manager (highest CPM)
             "https://pubads.g.doubleclick.net/gampad/ads?iu=/21775744923/external/single_ad_samples&sz=640x480&cust_params=sample_ct%3Dlinear&ciu_szs=300x250%2C728x90&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=\(Int.random(in: 1000...9999))",
-            "https://vast.yomedia.vn/ads?zone=1234&format=vast&w=640&h=480",
-            "https://ads.yahoo.com/vast?pid=12345&w=640&h=480&format=vast"
+            // SpotX
+            "https://search.spotxchange.com/vast/2.0/85394?app%5Bname%5D=MyChannel&app%5Bbundle%5D=com.mychannel.app",
+            // PubMatic
+            "https://ads.pubmatic.com/AdServer/vast?partnerID=YOUR_PARTNER_ID",
+            // Index Exchange
+            "https://as-sec.casalemedia.com/cygnus?s=YOUR_SITE_ID&w=640&h=480"
         ]
         
         // Try each ad network until we get a valid response
         for adNetworkURL in adNetworks {
             if let vastResponse = await tryFetchAd(from: adNetworkURL, for: video, personalized: personalized) {
+                // Track that we served an ad
+                await trackAdServed(userId: video.creator.id, videoId: video.id, adId: vastResponse.impressionId ?? "")
+                
+                print("✅ [Ads] Served real ad from network")
                 return vastResponse
             }
         }
         
-        // Fallback to sample ad if no real ads available (for demo purposes)
-        return ServedAd(
+        print("⚠️ [Ads] No real ads available, using fallback")
+        
+        // Fallback to sample ad if no real ads available (for demo/testing)
+        let fallbackAd = ServedAd(
             impressionId: UUID().uuidString,
             creativeUri: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
             clickUrl: "https://mychannel.app/advertise",
-            duration: 30,
+            duration: 15,
             q0: "https://analytics.mychannel.app/ad/impression?id=\(UUID().uuidString)",
             q25: "https://analytics.mychannel.app/ad/quartile?id=\(UUID().uuidString)&q=25",
             q50: "https://analytics.mychannel.app/ad/quartile?id=\(UUID().uuidString)&q=50", 
             q75: "https://analytics.mychannel.app/ad/quartile?id=\(UUID().uuidString)&q=75",
             q100: "https://analytics.mychannel.app/ad/complete?id=\(UUID().uuidString)"
         )
+        
+        // Track fallback ad
+        await trackAdServed(userId: video.creator.id, videoId: video.id, adId: fallbackAd.impressionId ?? "fallback")
+        
+        return fallbackAd
     }
     
     private static func tryFetchAd(from urlString: String, for video: Video, personalized: Bool) async -> ServedAd? {
@@ -253,6 +265,251 @@ extension AdsService {
         
         // Notify analytics service
         await AdvancedAnalyticsService.shared.trackRevenue(videoId: video.id, amount: adRevenue, source: "ads")
+    }
+    
+    // MARK: - 🎯 FREQUENCY CAPPING
+    
+    private static var adImpressions: [String: [Date]] = [:]
+    private static let maxAdsPerHour = 4
+    private static let maxAdsPerDay = 20
+    
+    private static func isFrequencyCapped(userId: String, videoId: String) async -> Bool {
+        let key = "\(userId)_\(videoId)"
+        let now = Date()
+        
+        // Get recent impressions
+        let recentImpressions = adImpressions[key]?.filter {
+            now.timeIntervalSince($0) < 3600 // Last hour
+        } ?? []
+        
+        // Check hourly cap
+        if recentImpressions.count >= maxAdsPerHour {
+            return true
+        }
+        
+        // Check daily cap
+        let dailyImpressions = adImpressions[key]?.filter {
+            now.timeIntervalSince($0) < 86400 // Last 24 hours
+        } ?? []
+        
+        return dailyImpressions.count >= maxAdsPerDay
+    }
+    
+    private static func trackAdServed(userId: String, videoId: String, adId: String) async {
+        let key = "\(userId)_\(videoId)"
+        
+        if adImpressions[key] == nil {
+            adImpressions[key] = []
+        }
+        
+        adImpressions[key]?.append(Date())
+        
+        // Clean up old impressions (older than 24 hours)
+        let cutoff = Date().addingTimeInterval(-86400)
+        adImpressions[key] = adImpressions[key]?.filter { $0 > cutoff }
+    }
+    
+    // MARK: - 🎬 MID-ROLL ADS
+    
+    static func requestMidRoll(for video: Video, at timestamp: TimeInterval, personalized: Bool = true) async -> ServedAd? {
+        guard video.monetization?.isMonetized ?? true else { return nil }
+        
+        // Check if mid-roll is configured
+        guard let adBreaks = video.monetization?.adBreaks,
+              adBreaks.contains(where: { abs($0.timeStamp - timestamp) < 5.0 }) else {
+            return nil
+        }
+        
+        print("🎬 [Ads] Requesting mid-roll at \(timestamp)s")
+        
+        // Use same logic as pre-roll but with mid-roll tracking
+        if var ad = await requestPreRoll(for: video, personalized: personalized) {
+            ad.q0 = ad.q0.replacingOccurrences(of: "impression", with: "midroll_impression")
+            return ad
+        }
+        
+        return nil
+    }
+    
+    // MARK: - 🏁 POST-ROLL ADS
+    
+    static func requestPostRoll(for video: Video, personalized: Bool = true) async -> ServedAd? {
+        guard video.monetization?.isMonetized ?? true else { return nil }
+        
+        print("🏁 [Ads] Requesting post-roll")
+        
+        // Use same logic as pre-roll but with post-roll tracking
+        if var ad = await requestPreRoll(for: video, personalized: personalized) {
+            ad.q0 = ad.q0.replacingOccurrences(of: "impression", with: "postroll_impression")
+            return ad
+        }
+        
+        return nil
+    }
+    
+    // MARK: - 📊 COMPANION ADS
+    
+    struct CompanionAd: Codable {
+        let id: String
+        let width: Int
+        let height: Int
+        let imageURL: String
+        let clickURL: String
+        let altText: String
+    }
+    
+    static func requestCompanionAd(for video: Video) async -> CompanionAd? {
+        guard video.monetization?.isMonetized ?? true else { return nil }
+        
+        // Request companion banner ad (300x250, 728x90, etc.)
+        return CompanionAd(
+            id: UUID().uuidString,
+            width: 300,
+            height: 250,
+            imageURL: "https://via.placeholder.com/300x250?text=Ad",
+            clickURL: "https://mychannel.app/advertise",
+            altText: "Advertisement"
+        )
+    }
+    
+    // MARK: - 🎭 AD PODS (Multiple ads in sequence)
+    
+    static func requestAdPod(for video: Video, maxAds: Int = 2) async -> [ServedAd] {
+        var ads: [ServedAd] = []
+        
+        for _ in 0..<maxAds {
+            if let ad = await requestPreRoll(for: video) {
+                ads.append(ad)
+            }
+        }
+        
+        print("🎭 [Ads] Serving ad pod with \(ads.count) ads")
+        
+        return ads
+    }
+    
+    // MARK: - 🛡️ BRAND SAFETY
+    
+    private static var blockedAdvertisers: Set<String> = []
+    private static var blockedCategories: Set<String> = ["gambling", "alcohol", "dating"]
+    
+    static func isAdAllowed(advertiserId: String, category: String) -> Bool {
+        if blockedAdvertisers.contains(advertiserId) {
+            print("🚫 [Ads] Blocked advertiser: \(advertiserId)")
+            return false
+        }
+        
+        if blockedCategories.contains(category.lowercased()) {
+            print("🚫 [Ads] Blocked category: \(category)")
+            return false
+        }
+        
+        return true
+    }
+    
+    static func blockAdvertiser(_ advertiserId: String) {
+        blockedAdvertisers.insert(advertiserId)
+        print("🚫 [Ads] Advertiser blocked: \(advertiserId)")
+    }
+    
+    static func blockCategory(_ category: String) {
+        blockedCategories.insert(category.lowercased())
+        print("🚫 [Ads] Category blocked: \(category)")
+    }
+    
+    // MARK: - 📊 ADVANCED ANALYTICS
+    
+    struct AdAnalytics: Codable {
+        var impressions: Int = 0
+        var starts: Int = 0
+        var firstQuartile: Int = 0
+        var midpoint: Int = 0
+        var thirdQuartile: Int = 0
+        var completes: Int = 0
+        var clicks: Int = 0
+        var skips: Int = 0
+        var errors: Int = 0
+        var totalRevenue: Double = 0
+        
+        var completionRate: Double {
+            guard starts > 0 else { return 0 }
+            return Double(completes) / Double(starts)
+        }
+        
+        var ctr: Double {
+            guard impressions > 0 else { return 0 }
+            return Double(clicks) / Double(impressions)
+        }
+        
+        var skipRate: Double {
+            guard starts > 0 else { return 0 }
+            return Double(skips) / Double(starts)
+        }
+    }
+    
+    private static var analytics: [String: AdAnalytics] = [:]
+    
+    static func trackAdEvent(videoId: String, event: AdEvent) async {
+        let key = videoId
+        
+        if analytics[key] == nil {
+            analytics[key] = AdAnalytics()
+        }
+        
+        switch event {
+        case .impression:
+            analytics[key]?.impressions += 1
+        case .start:
+            analytics[key]?.starts += 1
+        case .firstQuartile:
+            analytics[key]?.firstQuartile += 1
+        case .midpoint:
+            analytics[key]?.midpoint += 1
+        case .thirdQuartile:
+            analytics[key]?.thirdQuartile += 1
+        case .complete:
+            analytics[key]?.completes += 1
+        case .click:
+            analytics[key]?.clicks += 1
+        case .skip:
+            analytics[key]?.skips += 1
+        case .error:
+            analytics[key]?.errors += 1
+        case .revenue(let amount):
+            analytics[key]?.totalRevenue += amount
+        }
+    }
+    
+    enum AdEvent {
+        case impression, start, firstQuartile, midpoint, thirdQuartile, complete, click, skip, error, revenue(Double)
+    }
+    
+    static func getAnalytics(for videoId: String) -> AdAnalytics? {
+        return analytics[videoId]
+    }
+    
+    // MARK: - 🎯 GDPR/CCPA CONSENT
+    
+    private static var userConsent: [String: ConsentStatus] = [:]
+    
+    enum ConsentStatus {
+        case granted
+        case denied
+        case notAsked
+    }
+    
+    static func setUserConsent(userId: String, consent: ConsentStatus) {
+        userConsent[userId] = consent
+        print("📋 [Ads] User consent updated: \(consent)")
+    }
+    
+    static func hasUserConsent(userId: String) -> Bool {
+        return userConsent[userId] == .granted
+    }
+    
+    static func canServePersonalizedAds(userId: String) -> Bool {
+        let consent = userConsent[userId] ?? .notAsked
+        return consent == .granted
     }
 }
 

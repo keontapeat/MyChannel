@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import Combine
 
 // MARK: - Preview-safe onReceive helper
 struct ConditionalOnReceiveModifier<P: Publisher>: ViewModifier where P.Failure == Never {
@@ -1611,9 +1610,14 @@ struct MinimalContentSections: View {
         .onReceive(globalPlayer.$shouldShowMiniPlayer.removeDuplicates()) { isMini in
             NotificationCenter.default.post(name: NSNotification.Name(isMini ? "LivePreviewsShouldPause" : "LivePreviewsShouldResume"), object: nil)
         }
-        .task { await loadBlockbusters() }
-        .task { await loadFriendChannelVideos() }
-        .task { await loadLiveChannelsAPI() }
+        .task {
+            // ⚡ PERFORMANCE FIX: Load all in parallel instead of sequentially
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { await loadBlockbusters() }
+                group.addTask { await loadFriendChannelVideos() }
+                group.addTask { await loadLiveChannelsAPI() }
+            }
+        }
     }
 
     // Loader for TMDB popular trailers powering the Home Free Movies row
@@ -1953,6 +1957,12 @@ struct MinimalVideoCard: View {
                         }
                     }
                 )
+                .onAppear {
+                    // ⚡ PERFORMANCE: Prefetch thumbnail
+                    if let url = video.posterCandidates.first {
+                        ImagePrefetcher.shared.prefetch(url: url)
+                    }
+                }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(video.title)
@@ -1974,6 +1984,7 @@ struct MinimalVideoCard: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
+        .drawingGroup() // ⚡ PERFORMANCE: Flatten view hierarchy for smoother scrolling
     }
 }
 
@@ -2353,23 +2364,49 @@ private struct TopIndieFilmmakersSection: View {
     }
 
     private var filmmakers: [Filmmaker] {
-        // Merch HD as top filmmaker
-        // Use local asset if available, otherwise use placeholder
-        let assetName = "MerchHDAvatar"
+        // Tee Cee as #1 top filmmaker
+        // Check multiple possible asset names (case-sensitive)
+        let possibleNames = ["TeeCeeAvatar", "TeeCee", "tee_cee", "TeeC eeAvatar", "TeeCee_Avatar"]
+        var teeCeeAvatar = "https://i.pravatar.cc/200?u=tee_cee" // Default
+        var foundAssetName: String? = nil
+        
+        for assetName in possibleNames {
+            if UIImage(named: assetName) != nil {
+                foundAssetName = assetName
+                teeCeeAvatar = "asset://\(assetName)" // 🔥 FIX: Use asset:// prefix like Merch HD
+                print("✅ Found Tee Cee asset: \(assetName)")
+                break
+            }
+        }
+        
+        if foundAssetName == nil {
+            print("⚠️ Tee Cee assets not found. Checked: \(possibleNames.joined(separator: ", "))")
+            print("💡 Make sure the image is added to Assets.xcassets with exact name 'TeeCeeAvatar'")
+            print("💡 Asset names are case-sensitive - check spelling exactly")
+        }
+        
+        let teeCee = Filmmaker(
+            name: "Tee Cee",
+            films: 24,
+            score: 100, // Highest score for #1 position
+            avatar: teeCeeAvatar
+        )
+        
+        // Merch HD as #2 filmmaker
+        let merchHDAssetName = "MerchHDAvatar"
         let merchHDAvatar: String
-        if UIImage(named: assetName) != nil {
-            // Revert to legacy string; actual rendering will hard-wire the asset
-            merchHDAvatar = "asset://\(assetName)"
-            print("✅ Found Merch HD asset: \(assetName)")
+        if UIImage(named: merchHDAssetName) != nil {
+            merchHDAvatar = "asset://\(merchHDAssetName)"
+            print("✅ Found Merch HD asset: \(merchHDAssetName)")
         } else {
             merchHDAvatar = "https://i.pravatar.cc/200?u=merch_hd"
-            print("⚠️ Merch HD asset '\(assetName)' not found - using placeholder")
+            print("⚠️ Merch HD asset '\(merchHDAssetName)' not found - using placeholder")
         }
         
         let merchHD = Filmmaker(
             name: "Merch HD",
             films: 15,
-            score: 100, // Highest score to ensure #1 position
+            score: 99, // Second highest score for #2 position
             avatar: merchHDAvatar
         )
         
@@ -2381,12 +2418,12 @@ private struct TopIndieFilmmakersSection: View {
             Filmmaker(
                 name: n,
                 films: Int.random(in: 2...12),
-                score: Int.random(in: 60...99),
+                score: Int.random(in: 60...98), // Max 98 to stay below MerchHD
                 avatar: "https://i.pravatar.cc/200?u=indie_\(idx)"
             )
         }
         
-        var all = [merchHD] + items
+        var all = [teeCee, merchHD] + items
         return all.sorted { $0.score > $1.score }
     }
 
@@ -2412,13 +2449,31 @@ private struct TopIndieFilmmakersSection: View {
                                             .stroke(AppTheme.Colors.primary, lineWidth: 3)
                                             .frame(width: 64, height: 64)
 
-                                        if idx == 0, let merchImage = UIImage(named: "MerchHDAvatar") {
-                                            // Force Merch HD to show the local asset as #1
-                                            Image(uiImage: merchImage)
-                                                .resizable()
-                                                .scaledToFill()
-                                                .frame(width: 58, height: 58)
-                                                .clipShape(Circle())
+                                        // 🔥 FIX: Check for asset images first (for Tee Cee and Merch HD)
+                                        if f.avatar.hasPrefix("asset://") {
+                                            let assetName = String(f.avatar.dropFirst(8)) // Remove "asset://" prefix
+                                            if let assetImage = UIImage(named: assetName) {
+                                                Image(uiImage: assetImage)
+                                                    .resizable()
+                                                    .scaledToFill()
+                                                    .frame(width: 58, height: 58)
+                                                    .clipShape(Circle())
+                                            } else {
+                                                // Fallback if asset not found - try AppAsyncImage
+                                                if let url = URL(string: f.avatar) {
+                                                    AppAsyncImage(url: url) { img in
+                                                        img.resizable().scaledToFill()
+                                                    } placeholder: { 
+                                                        Color.white
+                                                    }
+                                                    .frame(width: 58, height: 58)
+                                                    .clipShape(Circle())
+                                                } else {
+                                                    Color.white
+                                                        .frame(width: 58, height: 58)
+                                                        .clipShape(Circle())
+                                                }
+                                            }
                                         } else if let url = URL(string: f.avatar) {
                                             AppAsyncImage(url: url) { img in
                                                 img.resizable().scaledToFill()
@@ -2610,7 +2665,22 @@ struct ForYouSection: View {
     
     private func loadForYou(userId: String) async {
         isLoading = true
-        // 🔥 Use home feed that includes uploaded videos
+        
+        // 🚀 NEW: Use fair discovery engine for new creators
+        let fairFeedVideos = await NewUserDiscoveryEngine.shared.generateFairFeed(
+            limit: 20,
+            userId: userId,
+            includeNewCreators: true
+        )
+        
+        if !fairFeedVideos.isEmpty {
+            forYouVideos = fairFeedVideos
+            isLoading = false
+            print("✅ [HomeView] Loaded \(fairFeedVideos.count) videos with new creator discovery")
+            return
+        }
+        
+        // Fallback: Use home feed that includes uploaded videos
         var feed = await personalizedService.generateHomeFeed(limit: 12)
         
         // Add featured video "Juicy Booty Banger" at the beginning (fake video - thumbnail only)

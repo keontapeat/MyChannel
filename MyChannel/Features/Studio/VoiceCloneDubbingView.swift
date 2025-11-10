@@ -47,7 +47,7 @@ struct VoiceCloneDubbingView: View {
             .navigationTitle("Voice Clone Dubbing")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showLanguagePicker) {
-                LanguagePickerSheet(selectedLanguages: $selectedLanguages, availableLanguages: viewModel.availableLanguages)
+                DubbingLanguagePickerSheet(selectedLanguages: $selectedLanguages, availableLanguages: viewModel.availableLanguages)
             }
         }
         .onAppear {
@@ -131,21 +131,21 @@ struct VoiceCloneDubbingView: View {
     // MARK: - Stats Section
     private var statsSection: some View {
         HStack(spacing: 12) {
-            StatBox(
+            DubbingStatBox(
                 icon: "video.fill",
                 value: "\(viewModel.totalDubbedVideos)",
                 label: "Videos Dubbed",
                 color: .blue
             )
             
-            StatBox(
+            DubbingStatBox(
                 icon: "globe",
                 value: "\(viewModel.activeLanguages)",
                 label: "Languages",
                 color: .green
             )
             
-            StatBox(
+            DubbingStatBox(
                 icon: "eye.fill",
                 value: viewModel.internationalViews,
                 label: "Global Views",
@@ -192,7 +192,7 @@ struct VoiceCloneDubbingView: View {
                 .background(AppTheme.Colors.surface)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             } else {
-                FlowLayout(spacing: 10) {
+                DubbingFlowLayout(spacing: 10) {
                     ForEach(Array(selectedLanguages), id: \.self) { language in
                         LanguageChip(language: language) {
                             selectedLanguages.remove(language)
@@ -308,7 +308,7 @@ struct VoiceCloneDubbingView: View {
 
 // MARK: - Supporting Views
 
-struct StatBox: View {
+struct DubbingStatBox: View {
     let icon: String
     let value: String
     let label: String
@@ -466,7 +466,7 @@ struct EmptyStateView: View {
 }
 
 // MARK: - Language Picker Sheet
-struct LanguagePickerSheet: View {
+struct DubbingLanguagePickerSheet: View {
     @Binding var selectedLanguages: Set<String>
     let availableLanguages: [String]
     @Environment(\.dismiss) private var dismiss
@@ -545,7 +545,7 @@ struct LanguagePickerSheet: View {
 }
 
 // FlowLayout helper
-struct FlowLayout: Layout {
+struct DubbingFlowLayout: Layout {
     var spacing: CGFloat = 8
     
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {

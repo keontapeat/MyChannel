@@ -167,7 +167,7 @@ struct SmartPlaylistsView: View {
             
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                 ForEach(viewModel.yourPlaylists) { playlist in
-                    PlaylistCard(playlist: playlist) {
+                    SmartPlaylistCard(playlist: playlist) {
                         selectedPlaylist = playlist
                     }
                 }
@@ -328,7 +328,7 @@ struct AIPlaylistCard: View {
     }
 }
 
-struct PlaylistCard: View {
+struct SmartPlaylistCard: View {
     let playlist: SmartPlaylist
     let action: () -> Void
     

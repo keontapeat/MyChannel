@@ -12,21 +12,21 @@ struct AppTheme {
     
     // MARK: - Colors
     struct Colors {
-        static let primary = Color(hex: "FF6B6B")
-        static let secondary = Color(hex: "4ECDC4")
-        static let accent = Color(hex: "45B7D1")
-        static let background = Color(hex: "FFFFFF")
-        static let surface = Color(hex: "F8F9FA")
-        static let cardBackground = Color(hex: "FFFFFF")
-        static let textPrimary = Color(hex: "1A1A1A")
-        static let textSecondary = Color(hex: "6B7280")
-        static let textTertiary = Color(hex: "9CA3AF")
-        static let divider = Color(hex: "E5E7EB")
-        static let success = Color(hex: "10B981")
-        static let warning = Color(hex: "F59E0B")
-        static let error = Color(hex: "EF4444")
+        static let primary = Color(hex: "FF6B6B") ?? Color.red
+        static let secondary = Color(hex: "4ECDC4") ?? Color.teal
+        static let accent = Color(hex: "45B7D1") ?? Color.blue
+        static let background = Color(hex: "FFFFFF") ?? Color.white
+        static let surface = Color(hex: "F8F9FA") ?? Color(white: 0.97)
+        static let cardBackground = Color(hex: "FFFFFF") ?? Color.white
+        static let textPrimary = Color(hex: "1A1A1A") ?? Color.black
+        static let textSecondary = Color(hex: "6B7280") ?? Color.gray
+        static let textTertiary = Color(hex: "9CA3AF") ?? Color.gray
+        static let divider = Color(hex: "E5E7EB") ?? Color.gray.opacity(0.3)
+        static let success = Color(hex: "10B981") ?? Color.green
+        static let warning = Color(hex: "F59E0B") ?? Color.orange
+        static let error = Color(hex: "EF4444") ?? Color.red
         // ADD: secondary background for chips, tags, elevated containers
-        static let backgroundSecondary = Color(hex: "F2F3F5")
+        static let backgroundSecondary = Color(hex: "F2F3F5") ?? Color(white: 0.95)
         static let gradient = LinearGradient(
             colors: [primary, secondary],
             startPoint: .topLeading,

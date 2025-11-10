@@ -11,6 +11,10 @@ import AVFoundation
 import SwiftUI
 import Combine
 
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
+
 enum EditorTool {
     case trim, split, speed, filters, audio, text, transitions, effects
 }
@@ -199,10 +203,14 @@ class ProVideoEditor: ObservableObject {
         
         do {
             // Upload to storage
-            let downloadURL = try await VideoStreamingService.shared.uploadVideo(at: newURL)
+            let uploadedVideo = try await VideoStreamingService.shared.uploadVideo(
+                url: newURL,
+                title: video.title,
+                description: video.description
+            )
             
             // Update Firestore
-            try await VideoFirestoreService.shared.updateVideoURL(videoId: video.id, newURL: downloadURL)
+            try await VideoFirestoreService.shared.updateVideoURL(videoId: video.id, newURL: uploadedVideo.videoURL)
             
             print("✅ Video updated successfully!")
         } catch {
@@ -211,8 +219,10 @@ class ProVideoEditor: ObservableObject {
     }
     
     deinit {
-        if let observer = timeObserver {
-            player?.removeTimeObserver(observer)
+        Task { @MainActor in
+            if let observer = timeObserver {
+                player?.removeTimeObserver(observer)
+            }
         }
     }
 }
@@ -227,7 +237,7 @@ struct VideoClip: Identifiable {
 extension VideoFirestoreService {
     func updateVideoURL(videoId: String, newURL: String) async throws {
         #if canImport(FirebaseFirestore)
-        let ref = db.collection("videos").document(videoId)
+        let ref = Firestore.firestore().collection("videos").document(videoId)
         try await ref.updateData([
             "videoURL": newURL,
             "updatedAt": FieldValue.serverTimestamp()
@@ -245,7 +255,7 @@ extension VideoFirestoreService {
         if let category = category { updates["category"] = category.rawValue }
         if let tags = tags { updates["tags"] = tags }
         
-        let ref = db.collection("videos").document(videoId)
+        let ref = Firestore.firestore().collection("videos").document(videoId)
         try await ref.updateData(updates)
         print("✅ Video metadata updated in Firestore")
         #endif

@@ -1,0 +1,54 @@
+# SwiftLint Configuration for MyChannel
+# This helps catch common errors before they become compiler issues
+
+# Disable rules that are too strict for your codebase
+disabled_rules:
+  - line_length
+  - file_length
+  - type_body_length
+  - function_body_length
+  - cyclomatic_complexity
+  - force_cast
+  - force_try
+  
+# Enable opt-in rules that catch common issues
+opt_in_rules:
+  - empty_count
+  - explicit_init
+  - redundant_nil_coalescing
+  - unused_import
+  - unused_declaration
+  - duplicate_imports
+
+# Files to include/exclude
+included:
+  - MyChannel
+
+excluded:
+  - Pods
+  - MyChannel/Generated
+  - MyChannel/Resources
+  - Scripts
+  - .build
+  - DerivedData
+
+# Custom rules
+custom_rules:
+  # Catch potential duplicate declarations
+  duplicate_type_name:
+    name: "Duplicate Type Name"
+    regex: '(struct|class|enum|protocol)\s+(\w+)'
+    message: "Check for duplicate type names across files"
+    severity: warning
+
+# Reporter type
+reporter: "xcode"
+
+# Auto-fix settings
+autocorrect: true
+
+# Warning thresholds
+warning_threshold: 100
+error_threshold: 500
+
+

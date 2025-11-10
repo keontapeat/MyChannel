@@ -63,129 +63,227 @@ struct ImmersiveFullscreenPlayerView: View {
     }
 
     private var overlayControls: some View {
-        VStack {
-            HStack {
-                Button {
-                    dismissToInline()
-                } label: {
-                    Image(systemName: "chevron.up")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(12)
-                        .background(Color.black.opacity(0.35))
-                        .clipShape(Circle())
-                }
-                .accessibilityLabel("Dismiss fullscreen")
-
+        ZStack {
+            // Top gradient overlay
+            VStack {
+                LinearGradient(
+                    colors: [.black.opacity(0.7), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 150)
+                .ignoresSafeArea(edges: .top)
+                
                 Spacer()
-
-                Text(video.title)
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.black.opacity(0.35))
-                    .clipShape(Capsule())
-
+            }
+            
+            // Bottom gradient overlay
+            VStack {
                 Spacer()
-
-                Menu {
-                    // Placeholder menus; can be wired to real selectors from VideoPlayerManager
-                    Button("Quality") {}
-                    Button("Playback Speed") {}
-                    Button("Captions…") {}
-                    Button("Audio Track…") {}
-                    Button("Share") {}
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(12)
-                        .background(Color.black.opacity(0.35))
-                        .clipShape(Circle())
-                }
-
-                Button {
-                    isPiPActive.toggle()
-                } label: {
-                    Image(systemName: isPiPActive ? "pip.exit" : "pip.enter")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(12)
-                        .background(Color.black.opacity(0.35))
-                        .clipShape(Circle())
-                }
+                
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.8)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 220)
+                .ignoresSafeArea(edges: .bottom)
             }
-            .padding(.top, 18)
-            .padding(.horizontal, 16)
-
-            Spacer()
-
-            // Basic center control
-            Button {
-                globalPlayer.togglePlayPause()
-            } label: {
-                Image(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 52, weight: .bold))
-                    .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.6), radius: 8)
-            }
-            .accessibilityLabel(globalPlayer.isPlaying ? "Pause" : "Play")
-
-            Spacer()
-
-            // Progress + actions bar
-            VStack(spacing: 12) {
-                // Simple progress representation (binds to global state)
-                ProgressView(value: globalPlayer.currentProgress)
-                    .progressViewStyle(.linear)
-                    .tint(.red)
-                    .padding(.horizontal, 16)
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                let width = UIScreen.main.bounds.width - 32
-                                let progress = min(max(Double(value.location.x / width), 0), 1)
-                                globalPlayer.seek(to: progress)
-                            }
-                    )
-
-                HStack(spacing: 20) {
-                    Button { globalPlayer.seekBackward() } label: {
-                        Image(systemName: "gobackward.10").foregroundColor(.white).font(.title3)
+            
+            VStack(spacing: 0) {
+                // Top Controls
+                HStack(spacing: 12) {
+                    Button {
+                        dismissToInline()
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
                     }
-                    Button { globalPlayer.togglePlayPause() } label: {
-                        Image(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill").foregroundColor(.white).font(.title2)
+                    .accessibilityLabel("Exit fullscreen")
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(video.title)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        
+                        Text(video.creator.displayName)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white.opacity(0.8))
+                            .lineLimit(1)
                     }
-                    Button { globalPlayer.seekForward() } label: {
-                        Image(systemName: "goforward.10").foregroundColor(.white).font(.title3)
-                    }
+                    
+                    Spacer()
+                    
+                    // AirPlay
                     Button {
                         showRoutePicker.toggle()
                     } label: {
-                        Image(systemName: "airplayaudio").foregroundColor(.white).font(.title3)
+                        Image(systemName: "airplayvideo")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
                     }
-                    Spacer()
+                    
+                    // Settings Menu
+                    Menu {
+                        Button("Quality") {}
+                        Button("Playback Speed") {}
+                        Button("Captions") {}
+                        Button("Audio Track") {}
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
+                    }
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
-                .background(
-                    Group {
-                        if showRoutePicker {
-                            AirPlayRouteView()
-                                .frame(height: 44)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .padding(.horizontal, 20)
+                .padding(.top, 50)
+                
+                Spacer()
+                
+                // Center Play/Pause (YouTube style)
+                HStack(spacing: 60) {
+                    // Rewind
+                    Button {
+                        globalPlayer.seekBackward()
+                        HapticManager.shared.impact(style: .medium)
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color.white.opacity(0.2))
+                                .frame(width: 70, height: 70)
+                            
+                            Image(systemName: "gobackward.10")
+                                .font(.system(size: 28, weight: .semibold))
+                                .foregroundColor(.white)
                         }
                     }
-                )
+                    .accessibilityLabel("Rewind 10 seconds")
+                    
+                    // Play/Pause
+                    Button {
+                        globalPlayer.togglePlayPause()
+                        HapticManager.shared.impact(style: .light)
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color.white.opacity(0.25))
+                                .frame(width: 85, height: 85)
+                            
+                            Image(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 36, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .accessibilityLabel(globalPlayer.isPlaying ? "Pause" : "Play")
+                    
+                    // Forward
+                    Button {
+                        globalPlayer.seekForward()
+                        HapticManager.shared.impact(style: .medium)
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color.white.opacity(0.2))
+                                .frame(width: 70, height: 70)
+                            
+                            Image(systemName: "goforward.10")
+                                .font(.system(size: 28, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .accessibilityLabel("Forward 10 seconds")
+                }
+                
+                Spacer()
+                
+                // Bottom Controls (YouTube style)
+                VStack(spacing: 16) {
+                    // Progress bar with thumb
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            // Background track
+                            Rectangle()
+                                .fill(Color.white.opacity(0.3))
+                                .frame(height: 4)
+                            
+                            // Buffered progress (optional - can wire to actual buffer if available)
+                            Rectangle()
+                                .fill(Color.white.opacity(0.5))
+                                .frame(width: geometry.size.width * CGFloat(globalPlayer.currentProgress), height: 4)
+                            
+                            // Current progress
+                            Rectangle()
+                                .fill(Color.red)
+                                .frame(width: geometry.size.width * CGFloat(globalPlayer.currentProgress), height: 4)
+                            
+                            // Scrubber thumb
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 14, height: 14)
+                                .offset(x: geometry.size.width * CGFloat(globalPlayer.currentProgress) - 7)
+                        }
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    let progress = min(max(Double(value.location.x / geometry.size.width), 0), 1)
+                                    globalPlayer.seek(to: progress)
+                                }
+                        )
+                    }
+                    .frame(height: 14)
+                    .padding(.horizontal, 20)
+                    
+                    // Time stamps and controls
+                    HStack {
+                        // Current time / Duration
+                        Text("\(formatTime(globalPlayer.currentTime)) / \(formatTime(globalPlayer.duration))")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .monospacedDigit()
+                        
+                        Spacer()
+                        
+                        // Fullscreen toggle (to exit)
+                        Button {
+                            isPiPActive.toggle()
+                        } label: {
+                            Image(systemName: isPiPActive ? "pip.exit" : "pip.enter")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundColor(.white)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Circle())
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 30)
+                }
             }
-            .background(
-                LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
-                    .ignoresSafeArea(edges: .bottom)
-            )
         }
         .transition(.opacity)
+    }
+    
+    private func formatTime(_ timeInterval: TimeInterval) -> String {
+        guard !timeInterval.isNaN && !timeInterval.isInfinite else { return "0:00" }
+        
+        let totalSeconds = Int(timeInterval)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+        
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            return String(format: "%d:%02d", minutes, seconds)
+        }
     }
 
     private var dragGesture: some Gesture {

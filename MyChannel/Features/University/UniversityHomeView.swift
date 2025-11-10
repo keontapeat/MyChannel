@@ -143,9 +143,9 @@ struct UniversityHomeView: View {
                     .foregroundColor(.white.opacity(0.9))
                 
                 HStack(spacing: 16) {
-                    statBadge(icon: "clock.fill", value: "\(viewModel.totalWatchHours)h", label: "Watched")
-                    statBadge(icon: "medal.fill", value: "\(viewModel.certificatesEarned)", label: "Certificates")
-                    statBadge(icon: "chart.line.uptrend.xyaxis", value: "\(viewModel.skillLevel)", label: "Level")
+                    statBadge(icon: "clock.fill", value: "\(viewModel.progress.totalWatchHours)h", label: "Watched")
+                    statBadge(icon: "medal.fill", value: "\(viewModel.progress.certificatesEarned)", label: "Certificates")
+                    statBadge(icon: "chart.line.uptrend.xyaxis", value: "\(viewModel.progress.skillLevel)", label: "Level")
                 }
             }
             .padding(24)
@@ -193,38 +193,38 @@ struct UniversityHomeView: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
                 progressCard(
                     title: "Watch Time",
-                    value: "\(viewModel.totalWatchHours)",
+                    value: "\(viewModel.progress.totalWatchHours)",
                     suffix: "hours",
                     icon: "play.circle.fill",
                     color: .blue,
-                    progress: Double(viewModel.totalWatchHours) / 1000.0
+                    progress: Double(viewModel.progress.totalWatchHours) / 1000.0
                 )
                 
                 progressCard(
                     title: "Subjects Studied",
-                    value: "\(viewModel.subjectsStudied)",
+                    value: "\(viewModel.progress.subjectsStudied)",
                     suffix: "topics",
                     icon: "books.vertical.fill",
                     color: .purple,
-                    progress: Double(viewModel.subjectsStudied) / 50.0
+                    progress: Double(viewModel.progress.subjectsStudied) / 50.0
                 )
                 
                 progressCard(
                     title: "Videos Completed",
-                    value: "\(viewModel.videosCompleted)",
+                    value: "\(viewModel.progress.videosCompleted)",
                     suffix: "videos",
                     icon: "checkmark.circle.fill",
                     color: .green,
-                    progress: Double(viewModel.videosCompleted) / 500.0
+                    progress: Double(viewModel.progress.videosCompleted) / 500.0
                 )
                 
                 progressCard(
                     title: "AI Verification",
-                    value: "\(viewModel.verificationScore)",
+                    value: "\(viewModel.progress.verificationScore)",
                     suffix: "%",
                     icon: "checkmark.shield.fill",
                     color: .orange,
-                    progress: Double(viewModel.verificationScore) / 100.0
+                    progress: Double(viewModel.progress.verificationScore) / 100.0
                 )
             }
         }
@@ -666,7 +666,7 @@ struct UniversityHomeView: View {
             
             VStack(spacing: 12) {
                 ForEach(viewModel.topLearners.prefix(5)) { learner in
-                    LeaderboardRow(learner: learner)
+                    UniversityLeaderboardRow(learner: learner)
                 }
             }
         }
@@ -966,7 +966,7 @@ struct CertificateCard: View {
             }
             
             VStack(spacing: 8) {
-                Text("Earned on \(certificate.earnedDate.formatted(date: .abbreviated, time: .omitted))")
+                Text("Earned on \(certificate.earnedDate?.formatted(date: .abbreviated, time: .omitted) ?? "N/A")")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textSecondary)
                 
@@ -1131,7 +1131,7 @@ struct MilestoneCard: View {
     }
 }
 
-struct LeaderboardRow: View {
+struct UniversityLeaderboardRow: View {
     let learner: Learner
     
     var body: some View {

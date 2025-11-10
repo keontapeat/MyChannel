@@ -213,7 +213,7 @@ struct FanGiftingView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(GiftCategory.allCategories) { category in
-                        CategoryChip(category: category) {
+                        GiftCategoryChip(category: category) {
                             // Filter by category
                         }
                     }
@@ -347,7 +347,7 @@ struct GiftCard: View {
     }
 }
 
-struct CategoryChip: View {
+struct GiftCategoryChip: View {
     let category: GiftCategory
     let action: () -> Void
     

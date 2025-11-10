@@ -20,38 +20,57 @@ class CreateStoryViewModel: ObservableObject {
     @Published var backgroundMusic: MusicItem?
     @Published var backgroundGradient: [Color] = [.blue, .purple]
     
-    // Camera properties
-    @Published var isCameraActive = false
-    @Published var isRecording = false
-    @Published var flashMode: FlashMode = .off
-    @Published var cameraPosition: AVCaptureDevice.Position = .back
+    // ⚡ PERFORMANCE: Combine camera properties into single state
+    @Published var cameraState: CameraState = .empty
     
-    // Processing states
-    @Published var isProcessing = false
-    @Published var showingError = false
-    @Published var errorMessage = ""
+    struct CameraState {
+        var isActive = false
+        var isRecording = false
+        var flashMode: FlashMode = .off
+        var position: AVCaptureDevice.Position = .back
+        var recordingDuration = "00:00"
+        var focusPoint: CGPoint? = nil
+        var focusPulseID: UUID = UUID()
+        
+        static let empty = CameraState()
+    }
     
-    // Transform properties
-    @Published var scale: CGFloat = 1.0
-    @Published var offset = CGSize.zero
+    // ⚡ PERFORMANCE: Combine processing states into single state
+    @Published var processingState: ProcessingState = .empty
     
-    // Recording duration
-    @Published var recordingDuration = "00:00"
-    // Focus point (0...1 normalized in preview coordinates)
-    @Published var focusPoint: CGPoint? = nil
-    @Published var focusPulseID: UUID = UUID()
+    struct ProcessingState {
+        var isProcessing = false
+        var showingError = false
+        var errorMessage = ""
+        var uploadProgress: Double = 0.0
+        
+        static let empty = ProcessingState()
+    }
+    
+    // ⚡ PERFORMANCE: Combine transform properties into single state
+    @Published var transformState: TransformState = .empty
+    
+    struct TransformState {
+        var scale: CGFloat = 1.0
+        var offset = CGSize.zero
+        
+        static let empty = TransformState()
+    }
+    
+    // ⚡ PERFORMANCE: Combine text editing properties into single state
+    @Published var textEditingState: TextEditingState = .empty
+    
+    struct TextEditingState {
+        var fontSize: Double = 32
+        var color: Color = .white
+        var alignment: TextAlignment = .center
+        
+        static let empty = TextEditingState()
+    }
     
     // Publish
     @Published var caption: String = ""
     @Published var audience: Audience = .public
-    
-    // Text editing properties
-    @Published var textFontSize: Double = 32
-    @Published var textColor: Color = .white
-    @Published var textAlignment: TextAlignment = .center
-    
-    // Upload progress
-    @Published var uploadProgress: Double = 0.0
     
     // MARK: - Private Properties
     private var recordingTimer: Timer?
@@ -198,7 +217,7 @@ class CreateStoryViewModel: ObservableObject {
     
     func addTextOverlay(_ textStyle: TextOverlay) {
         textOverlay = textStyle
-        if storyType == .camera && !isCameraActive {
+        if storyType == .camera && !cameraState.isActive {
             storyType = .text
         }
         haptic.impactOccurred()
@@ -233,30 +252,30 @@ class CreateStoryViewModel: ObservableObject {
     }
     
     func toggleFlash() {
-        switch flashMode {
+        switch cameraState.flashMode {
         case .off:
-            flashMode = .on
+            cameraState.flashMode = .on
         case .on:
-            flashMode = .auto
+            cameraState.flashMode = .auto
         case .auto:
-            flashMode = .off
+            cameraState.flashMode = .off
         }
         haptic.impactOccurred()
     }
     
     func switchCamera() {
-        cameraPosition = cameraPosition == .back ? .front : .back
+        cameraState.position = cameraState.position == .back ? .front : .back
         haptic.impactOccurred()
     }
     
     func updateScale(_ newScale: CGFloat) {
-        scale = max(0.5, min(3.0, newScale))
+        transformState.scale = max(0.5, min(3.0, newScale))
     }
     
     func updateOffset(_ translation: CGSize) {
-        offset = CGSize(
-            width: offset.width + translation.width,
-            height: offset.height + translation.height
+        transformState.offset = CGSize(
+            width: transformState.offset.width + translation.width,
+            height: transformState.offset.height + translation.height
         )
     }
     
@@ -268,9 +287,9 @@ class CreateStoryViewModel: ObservableObject {
     }
     
     func startRecording() {
-        guard !isRecording else { return }
+        guard !cameraState.isRecording else { return }
         
-        isRecording = true
+        cameraState.isRecording = true
         recordingStartTime = Date()
         
         // Start recording timer
@@ -284,16 +303,16 @@ class CreateStoryViewModel: ObservableObject {
         
         // Auto-stop after 15 seconds
         DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
-            if self.isRecording {
+            if self.cameraState.isRecording {
                 self.stopRecording()
             }
         }
     }
     
     func stopRecording() {
-        guard isRecording else { return }
+        guard cameraState.isRecording else { return }
         
-        isRecording = false
+        cameraState.isRecording = false
         recordingTimer?.invalidate()
         recordingTimer = nil
         
@@ -307,11 +326,11 @@ class CreateStoryViewModel: ObservableObject {
     // MARK: - Focus / Tap-to-focus (visual only for now)
     func focus(at point: CGPoint) {
         // point is normalized (0...1)
-        focusPoint = point
-        focusPulseID = UUID()
+        cameraState.focusPoint = point
+        cameraState.focusPulseID = UUID()
         haptic.impactOccurred()
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.focusPoint = nil
+            self?.cameraState.focusPoint = nil
         }
     }
     
@@ -320,7 +339,7 @@ class CreateStoryViewModel: ObservableObject {
         let duration = Date().timeIntervalSince(startTime)
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
-        recordingDuration = String(format: "%02d:%02d", minutes, seconds)
+        cameraState.recordingDuration = String(format: "%02d:%02d", minutes, seconds)
     }
     
     private func simulateMediaCapture(type: MediaItem.MediaType) async {
@@ -342,8 +361,8 @@ class CreateStoryViewModel: ObservableObject {
     }
     
     func createStory() async -> Story {
-        isProcessing = true
-        uploadProgress = 0.0
+        processingState.isProcessing = true
+        processingState.uploadProgress = 0.0
         
         let storyContent = createStoryContent()
         let storyStickers = createStoryStickers()
@@ -360,15 +379,20 @@ class CreateStoryViewModel: ObservableObject {
                 let signed = try await StoryAPIService.shared.getSignedUploadUrl(filename: filename, contentType: contentType)
                 
                 // 2) Download the selected media data (if remote)
-                let (data, _) = try await URLSession.shared.data(from: media.url)
+                // ⚡ PERFORMANCE: Use NetworkOptimizer for caching and deduplication
+                let data = try await NetworkOptimizer.shared.optimizedRequest(
+                    for: media.url,
+                    priority: .high,
+                    cachePolicy: .returnCacheDataElseLoad
+                )
                 
                 // 3) Upload to signed URL
                 try await StoryAPIService.shared.uploadMedia(data: data, to: signed.url, contentType: contentType)
-                uploadProgress = 0.85
+                processingState.uploadProgress = 0.85
                 
                 // 4) Finalize
                 let finalized = try await StoryAPIService.shared.finalize(object: signed.object, bucket: signed.bucket, contentType: contentType)
-                uploadProgress = 0.92
+                processingState.uploadProgress = 0.92
                 
                 // 5) Create story metadata
                 let s = try await StoryAPIService.shared.createStory(
@@ -384,7 +408,7 @@ class CreateStoryViewModel: ObservableObject {
                     audience: audience.rawValue
                 )
                 created = s
-                uploadProgress = 1.0
+                processingState.uploadProgress = 1.0
                 try? await DatabaseService.shared.saveStory(s)
             } catch {
                 // Fallback to local-only on any failure
@@ -419,11 +443,11 @@ class CreateStoryViewModel: ObservableObject {
                 stickers: storyStickers
             )
             if let c = created { try? await DatabaseService.shared.saveStory(c) }
-            uploadProgress = 1.0
+            processingState.uploadProgress = 1.0
         }
         
-        isProcessing = false
-        uploadProgress = 0.0
+        processingState.isProcessing = false
+        processingState.uploadProgress = 0.0
         return created ?? Story(
             creatorId: creatorId,
             mediaURL: selectedMedia?.url.absoluteString ?? "",
@@ -528,7 +552,7 @@ class CreateStoryViewModel: ObservableObject {
     }
     
     func showError(_ message: String) {
-        errorMessage = message
-        showingError = true
+        processingState.errorMessage = message
+        processingState.showingError = true
     }
 }

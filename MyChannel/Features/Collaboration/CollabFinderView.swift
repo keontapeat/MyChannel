@@ -198,14 +198,14 @@ struct CollabFinderView: View {
             }
             
             HStack(spacing: 16) {
-                RevenueCard(
+                CollabRevenueCard(
                     title: "This Month",
                     amount: viewModel.projectedMonthlyRevenue,
                     trend: "+24%",
                     color: .green
                 )
                 
-                RevenueCard(
+                CollabRevenueCard(
                     title: "Per Collab",
                     amount: viewModel.avgRevenuePerCollab,
                     trend: "+15%",
@@ -232,7 +232,7 @@ struct CollabFinderView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(CollabCategory.allCategories) { category in
-                        CategoryChip(category: category) {
+                        CollabCategoryChip(category: category) {
                             // Filter by category
                         }
                     }
@@ -344,9 +344,9 @@ struct CollabMatchCard: View {
                 
                 // Key Insights
                 VStack(spacing: 10) {
-                    InsightRow(icon: "chart.line.uptrend.xyaxis", text: "Audience Overlap: \(match.audienceOverlap)%", color: .green)
-                    InsightRow(icon: "dollarsign.circle.fill", text: "Est. Revenue: $\(match.projectedRevenue)", color: .blue)
-                    InsightRow(icon: "eye.fill", text: "Projected Views: \(match.projectedViews)", color: .purple)
+                    CollabInsightRow(icon: "chart.line.uptrend.xyaxis", text: "Audience Overlap: \(match.audienceOverlap)%", color: .green)
+                    CollabInsightRow(icon: "dollarsign.circle.fill", text: "Est. Revenue: $\(match.projectedRevenue)", color: .blue)
+                    CollabInsightRow(icon: "eye.fill", text: "Projected Views: \(match.projectedViews)", color: .purple)
                 }
                 .padding(.top, 8)
             }
@@ -368,7 +368,7 @@ struct CollabMatchCard: View {
     }
 }
 
-struct InsightRow: View {
+struct CollabInsightRow: View {
     let icon: String
     let text: String
     let color: Color
@@ -474,7 +474,7 @@ struct EmptyCollabsView: View {
     }
 }
 
-struct RevenueCard: View {
+struct CollabRevenueCard: View {
     let title: String
     let amount: String
     let trend: String
@@ -505,7 +505,7 @@ struct RevenueCard: View {
     }
 }
 
-struct CategoryChip: View {
+struct CollabCategoryChip: View {
     let category: CollabCategory
     let action: () -> Void
     

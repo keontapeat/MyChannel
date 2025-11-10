@@ -295,6 +295,30 @@ struct MembershipTier: Identifiable, Codable, Equatable {
 }
 
 // MARK: - Sample Data Extensions  
+// MARK: - Verification & Owner Extensions
+extension User {
+    /// 🔥 YOUTUBE PARITY: Owner emails that should be automatically verified
+    private static let ownerEmails: Set<String> = [
+        "keontapeat@mychannel.live",
+        "keontapeat@gmail.com"
+    ]
+    
+    /// Check if this user is the owner
+    var isOwner: Bool {
+        Self.ownerEmails.contains(email.lowercased())
+    }
+    
+    /// 🔥 YOUTUBE PARITY: Show verification badge if verified OR if owner
+    var shouldShowVerificationBadge: Bool {
+        isVerified || isOwner
+    }
+    
+    /// Get effective verification status (verified OR owner)
+    var effectiveIsVerified: Bool {
+        isVerified || isOwner
+    }
+}
+
 extension User {
     static let sampleUsers: [User] = [
         User(

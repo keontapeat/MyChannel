@@ -116,29 +116,25 @@ struct AIContentFactoryView: View {
                 StatCard(
                     title: "Generated",
                     value: "\(aiEngine.generationStats.totalGenerated)",
-                    icon: "video.fill",
-                    color: .blue
+                    icon: "video.fill"
                 )
                 
                 StatCard(
                     title: "Avg Viral Score",
                     value: "\(Int(aiEngine.generationStats.averageViralScore * 100))%",
-                    icon: "chart.line.uptrend.xyaxis",
-                    color: .green
+                    icon: "chart.line.uptrend.xyaxis"
                 )
                 
                 StatCard(
                     title: "Success Rate",
                     value: "\(Int(aiEngine.generationStats.successRate * 100))%",
-                    icon: "clock.fill",
-                    color: .purple
+                    icon: "clock.fill"
                 )
                 
                 StatCard(
                     title: "Trending",
                     value: "\(aiEngine.trendingTopics.count)",
-                    icon: "flame.fill",
-                    color: .orange
+                    icon: "flame.fill"
                 )
             }
         }

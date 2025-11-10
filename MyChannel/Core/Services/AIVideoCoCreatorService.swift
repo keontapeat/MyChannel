@@ -295,12 +295,21 @@ struct EditingSuggestion: Identifiable, Codable {
 }
 
 struct AICoCreatorThumbnail: Identifiable, Codable {
-    let id = UUID()
+    let id: String
     let imageURL: String
     let style: ThumbnailStyle
     let elements: [ThumbnailElement]
     let predictedCTR: Double
     let confidence: Double
+    
+    init(imageURL: String, style: ThumbnailStyle, elements: [ThumbnailElement], predictedCTR: Double, confidence: Double) {
+        self.id = UUID().uuidString
+        self.imageURL = imageURL
+        self.style = style
+        self.elements = elements
+        self.predictedCTR = predictedCTR
+        self.confidence = confidence
+    }
 }
 
 struct ThumbnailElement: Codable {
@@ -391,8 +400,10 @@ enum AICoCreatorAudienceType: String, Codable, CaseIterable {
     }
 }
 
-enum ThumbnailStyle: String, Codable, CaseIterable {
+enum ThumbnailStyle: String, Codable, CaseIterable, Identifiable {
     case clickbait, professional, artistic, minimal, bold
+    
+    var id: String { rawValue }
     
     var displayName: String {
         switch self {
@@ -401,6 +412,16 @@ enum ThumbnailStyle: String, Codable, CaseIterable {
         case .artistic: return "Artistic"
         case .minimal: return "Minimal"
         case .bold: return "Bold & Colorful"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .clickbait: return "bolt.fill"
+        case .professional: return "briefcase.fill"
+        case .artistic: return "paintpalette.fill"
+        case .minimal: return "rectangle.fill"
+        case .bold: return "burst.fill"
         }
     }
 }

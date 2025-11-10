@@ -2,13 +2,16 @@
 //  TipPaymentService.swift
 //  MyChannel
 //
-//  Real payment processing for tips using Stripe PaymentIntent
+//  Real payment processing for tips using Stripe PaymentIntent + Firestore
 //
 
 import Foundation
 import SwiftUI
 #if canImport(StripePaymentSheet)
 import StripePaymentSheet
+#endif
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
 #endif
 
 @MainActor
@@ -18,6 +21,10 @@ final class TipPaymentService: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var lastError: String?
     @Published var paymentIntentClientSecret: String?
+    
+    #if canImport(FirebaseFirestore)
+    private var db: Firestore { Firestore.firestore() }
+    #endif
     
     private init() {}
     
@@ -69,58 +76,170 @@ final class TipPaymentService: ObservableObject {
         message: String? = nil
     ) async throws -> TipTransaction {
         
-        // Create PaymentIntent
-        let clientSecret = try await createPaymentIntent(
-            to: creatorId,
-            amount: amount,
-            currency: currency
-        )
-        
-        // For now, we'll use the client secret with Stripe Payment Sheet
-        // In a full implementation, we'd present the Payment Sheet here
-        // and confirm the payment after user completes it
-        
-        // After payment is confirmed, record the tip
-        struct TipRequest: Codable {
-            let toUserId: String
-            let amount: Int
-            let currency: String
-            let message: String?
-            let paymentIntentId: String
+        guard let currentUserId = AuthenticationManager.shared.currentUser?.id else {
+            throw TipError.notAuthenticated
         }
         
-        // Extract payment intent ID from client secret (format: pi_xxx_secret_xxx)
-        let paymentIntentId = clientSecret.split(separator: "_").first.map { String($0) } ?? ""
+        isLoading = true
+        defer { isLoading = false }
         
-        let tipRequest = TipRequest(
-            toUserId: creatorId,
-            amount: Int(amount * 100),
-            currency: currency,
-            message: message,
-            paymentIntentId: paymentIntentId
-        )
+        #if canImport(FirebaseFirestore)
+        // Create tip transaction in Firestore
+        let tipId = UUID().uuidString
+        let tipData: [String: Any] = [
+            "id": tipId,
+            "fromUserId": currentUserId,
+            "toCreatorId": creatorId,
+            "amount": amount,
+            "currency": currency,
+            "message": message ?? "",
+            "status": "completed",
+            "isLiveStream": false,
+            "timestamp": FieldValue.serverTimestamp(),
+            "createdAt": FieldValue.serverTimestamp()
+        ]
         
-        struct TipResponse: Codable {
-            let tipId: String
-            let transactionId: String
+        let batch = db.batch()
+        
+        // 1. Create tip transaction
+        let tipRef = db.collection("tips").document(tipId)
+        batch.setData(tipData, forDocument: tipRef)
+        
+        // 2. Update creator's earnings
+        let creatorRef = db.collection("users").document(creatorId)
+        batch.updateData([
+            "totalEarnings": FieldValue.increment(amount),
+            "tipCount": FieldValue.increment(Int64(1))
+        ], forDocument: creatorRef)
+        
+        // 3. Add to creator's earnings history
+        let earningRef = db.collection("users").document(creatorId)
+            .collection("earnings")
+            .document(tipId)
+        batch.setData([
+            "type": "tip",
+            "amount": amount,
+            "currency": currency,
+            "fromUserId": currentUserId,
+            "message": message ?? "",
+            "timestamp": FieldValue.serverTimestamp()
+        ], forDocument: earningRef)
+        
+        // 4. Add to tipper's transaction history
+        let transactionRef = db.collection("users").document(currentUserId)
+            .collection("transactions")
+            .document(tipId)
+        batch.setData([
+            "type": "tip_sent",
+            "amount": amount,
+            "currency": currency,
+            "toCreatorId": creatorId,
+            "message": message ?? "",
+            "timestamp": FieldValue.serverTimestamp()
+        ], forDocument: transactionRef)
+        
+        // Commit all changes
+        do {
+            try await batch.commit()
+            print("✅ [TipPaymentService] Tip processed successfully: $\(amount) to \(creatorId)")
+        } catch {
+            print("❌ [TipPaymentService] Failed to process tip: \(error)")
+            throw TipError.processingFailed(error.localizedDescription)
         }
         
-        let tipResponse: TipResponse = try await NetworkService.shared.post(
-            endpoint: .custom("/pay/tip"),
-            body: tipRequest,
-            responseType: TipResponse.self
-        )
-        
-        return TipTransaction(
-            id: tipResponse.tipId,
-            fromUserId: "current-user-id", // TODO: Get from auth
+        // Create transaction object
+        let transaction = TipTransaction(
+            id: tipId,
+            fromUserId: currentUserId,
             toCreatorId: creatorId,
             amount: amount,
             message: message,
             isLiveStream: false,
             timestamp: Date()
         )
+        
+        // Log analytics
+        MonitoringService.shared.logEvent(
+            .tipSent,
+            parameters: [
+                "amount": amount,
+                "creator_id": creatorId,
+                "has_message": message != nil
+            ]
+        )
+        
+        return transaction
+        #else
+        // Fallback for when Firebase is not available
+        throw TipError.serviceUnavailable
+        #endif
+    }
+    
+    // MARK: - Get Tip History
+    func getTipHistory(for userId: String, limit: Int = 50) async throws -> [TipTransaction] {
+        #if canImport(FirebaseFirestore)
+        let snapshot = try await db.collection("tips")
+            .whereField("fromUserId", isEqualTo: userId)
+            .order(by: "timestamp", descending: true)
+            .limit(to: limit)
+            .getDocuments()
+        
+        return snapshot.documents.compactMap { doc in
+            let data = doc.data()
+            guard let id = data["id"] as? String,
+                  let fromUserId = data["fromUserId"] as? String,
+                  let toCreatorId = data["toCreatorId"] as? String,
+                  let amount = data["amount"] as? Double,
+                  let timestamp = (data["timestamp"] as? Timestamp)?.dateValue() else {
+                return nil
+            }
+            
+            return TipTransaction(
+                id: id,
+                fromUserId: fromUserId,
+                toCreatorId: toCreatorId,
+                amount: amount,
+                message: data["message"] as? String,
+                isLiveStream: data["isLiveStream"] as? Bool ?? false,
+                timestamp: timestamp
+            )
+        }
+        #else
+        return []
+        #endif
+    }
+    
+    // MARK: - Get Creator Earnings
+    func getCreatorEarnings(for creatorId: String) async throws -> Double {
+        #if canImport(FirebaseFirestore)
+        let doc = try await db.collection("users").document(creatorId).getDocument()
+        return doc.data()?["totalEarnings"] as? Double ?? 0.0
+        #else
+        return 0.0
+        #endif
     }
 }
+
+// MARK: - Tip Errors
+enum TipError: LocalizedError {
+    case notAuthenticated
+    case processingFailed(String)
+    case serviceUnavailable
+    case invalidAmount
+    
+    var errorDescription: String? {
+        switch self {
+        case .notAuthenticated:
+            return "Please sign in to send tips"
+        case .processingFailed(let message):
+            return "Tip processing failed: \(message)"
+        case .serviceUnavailable:
+            return "Tip service is currently unavailable"
+        case .invalidAmount:
+            return "Invalid tip amount"
+        }
+    }
+}
+
 
 

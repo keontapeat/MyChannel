@@ -180,7 +180,7 @@ struct ProfessionalVideoPlayer: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text("@\(video.creator.username)").font(.subheadline.weight(.semibold)).foregroundStyle(.white).lineLimit(1)
-                        if video.creator.isVerified { Image(systemName: "checkmark.seal.fill").font(.caption2).foregroundStyle(AppTheme.Colors.primary) }
+                        if video.creator.shouldShowVerificationBadge { Image(systemName: "checkmark.seal.fill").font(.caption2).foregroundStyle(AppTheme.Colors.primary) }
                     }
                     Text(video.title).font(.callout.weight(.semibold)).foregroundStyle(.white.opacity(0.95)).lineLimit(2)
                 }

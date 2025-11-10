@@ -12,8 +12,17 @@ struct VideoDetailView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
     @StateObject private var playerManager = VideoPlayerManager() // Single player manager
+    
+    // 🔥 REAL-TIME VIEW COUNT: Make view count reactive
+    @State private var currentViewCount: Int
+    @StateObject private var viewTracker = RealtimeViewTracker.shared
 
     private var isYouTube: Bool { video.contentSource == .youtube && video.externalID != nil }
+    
+    init(video: Video) {
+        self.video = video
+        _currentViewCount = State(initialValue: video.viewCount)
+    }
 
     // MARK: - Player States
     @State private var showPlayer = false
@@ -50,6 +59,7 @@ struct VideoDetailView: View {
     @State private var currentChapterTitle: String = ""
     @State private var showingChapterTooltip = false
     @State private var chapterTooltipX: CGFloat = 0
+    @State private var hoveredChapter: Video.Chapter? = nil  // 🔥 YOUTUBE PARITY: Chapter tooltip state
     @State private var showUpNext = false
     @State private var upNextCountdown = 5
     @State private var upNextVideo: Video? = nil
@@ -84,416 +94,642 @@ struct VideoDetailView: View {
     @State private var hasWatchedThreshold = false
     @State private var showingCinemaMode = false
     @State private var showingCreatorProfile = false
+    @State private var showingQueueSidebar = false  // 🔥 YOUTUBE PARITY: Queue sidebar
+
+    // MARK: - Video Player Section (Extracted to fix compiler timeout)
+    @ViewBuilder
+    private var videoPlayerSection: some View {
+        ZStack {
+            if isYouTube {
+                youtubePlayerView
+            } else {
+                avPlayerView
+            }
+        }
+        .background(Color.black)
+        .overlay(alignment: .topLeading) {
+            if showDebugHUD, let stats = playerManager.currentPlaybackStats() {
+                debugHUDView(stats: stats)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var youtubePlayerView: some View {
+        YouTubePlayerView(
+            videoID: video.externalID ?? "",
+            autoplay: true,
+            startTime: 0,
+            muted: false,
+            showControls: true
+        )
+        .frame(maxWidth: .infinity)
+        .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
+        .background(Color.black)
+        
+        // Minimal top bar for YouTube embed
+        HStack {
+            Button(action: { dismiss() }) {
+                ZStack {
+                    Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
+                    Image(systemName: "xmark").font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
+                }
+            }
+            .buttonStyle(ScaleButtonStyle())
+            
+            Spacer()
+            
+            Text(video.title)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(.white)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.4)))
+            
+            Spacer()
+            
+            Spacer().frame(width: 36)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+    
+    // 🔥 FIX: Get the correct player (global if from mini player, local otherwise)
+    private var activePlayer: AVPlayer? {
+        let globalPlayer = GlobalVideoPlayerManager.shared
+        if globalPlayer.currentVideo?.id == video.id, let globalPlayerInstance = globalPlayer.player {
+            return globalPlayerInstance  // Use global player if same video (from mini player)
+        }
+        return playerManager.player  // Otherwise use local player
+    }
+    
+    @ViewBuilder
+    private var avPlayerView: some View {
+        Group {
+            if let player = activePlayer {
+                VideoPlayer(player: player)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
+                    .background(Color.black)
+            } else {
+                // 🔥 FIX: Show black background while player loads (prevents white screen)
+                Color.black
+                    .frame(maxWidth: .infinity)
+                    .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
+                    .overlay {
+                        ProgressView()
+                            .tint(.white)
+                    }
+            }
+        }
+        .onLongPressGesture(minimumDuration: 0.5) {
+            withAnimation(.spring()) { showDebugHUD.toggle() }
+        }
+        
+        // Paid promotion badge (first 8s)
+        if (video.isSponsored ?? false) && playerManager.currentTime < 8 {
+            paidPromotionBadge
+        }
+        
+        // Invisible tap/drag area
+        videoTapArea
+        
+        // Overlay controls
+        avPlayerControls
+        
+        // Ad overlay
+        if showingAd, let url = prerollURL {
+            adOverlay(url: url)
+        }
+        
+        // End-screen overlay
+        if showUpNext, let next = (upNextVideo ?? Video.sampleVideos.first(where: { $0.id != video.id })) {
+            endScreenOverlay(next: next)
+        }
+        
+        // Loading indicator
+        if playerManager.isLoading {
+            loadingIndicator
+        }
+    }
+    
+    @ViewBuilder
+    private var paidPromotionBadge: some View {
+        HStack {
+            Text("Paid promotion")
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.black.opacity(0.6))
+                .clipShape(Capsule())
+            Spacer()
+        }
+        .padding(.top, 8)
+        .padding(.leading, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .transition(.opacity)
+    }
+    
+    @ViewBuilder
+    private var videoTapArea: some View {
+        Color.clear
+            .contentShape(Rectangle())
+            // 🔥 YOUTUBE PARITY: Double-tap to seek 10 seconds (simultaneous with single tap)
+            .simultaneousGesture(
+                TapGesture(count: 2)
+                    .onEnded { location in
+                        let screenWidth = UIScreen.main.bounds.width
+                        let tapX = location.x
+                        
+                        // Left third = rewind 10s, Right third = forward 10s
+                        if tapX < screenWidth / 3 {
+                            // Left edge - rewind 10 seconds
+                            playerManager.seekBackward(10)
+                            showSeekRippleBackward = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                showSeekRippleBackward = false
+                            }
+                            HapticManager.shared.impact(style: .medium)
+                            print("⏪ Double-tap left: Rewind 10s")
+                        } else if tapX > screenWidth * 2/3 {
+                            // Right edge - forward 10 seconds
+                            playerManager.seekForward(10)
+                            showSeekRippleForward = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                showSeekRippleForward = false
+                            }
+                            HapticManager.shared.impact(style: .medium)
+                            print("⏩ Double-tap right: Forward 10s")
+                        }
+                    }
+            )
+            .onTapGesture {
+                print("📱 Video tapped - Current controls state: \(showVideoControls)")
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    showVideoControls.toggle()
+                }
+                
+                if showVideoControls {
+                    resetControlsHideTimer()
+                }
+            }
+            // 🔥 YOUTUBE PARITY: Speed gestures (swipe up/down on right edge to change playback speed)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                    .onChanged { value in
+                        let screenWidth = UIScreen.main.bounds.width
+                        let tapX = value.startLocation.x
+                        
+                        // Right edge (last 20% of screen) = speed control
+                        if tapX > screenWidth * 0.8 {
+                            let verticalSwipe = value.translation.height
+                            
+                            // Swipe up = increase speed, Swipe down = decrease speed
+                            if abs(verticalSwipe) > 30 {
+                                let speedChange = verticalSwipe < 0 ? 0.25 : -0.25
+                                let newSpeed = max(0.25, min(2.0, playbackRate + Float(speedChange)))
+                                
+                                if abs(newSpeed - playbackRate) >= 0.25 {
+                                    playbackRate = newSpeed
+                                    playerManager.setPlaybackRate(newSpeed)
+                                    HapticManager.shared.impact(style: .light)
+                                    print("⚡ Speed changed to: \(newSpeed)x")
+                                }
+                            }
+                        }
+                    }
+            )
+            .gesture(
+                DragGesture(minimumDistance: 12, coordinateSpace: .local)
+                    .onEnded { value in
+                        if value.translation.height > 60 {
+                            presentFullscreenPlayer()
+                        } else if value.translation.height < -60 {
+                            minimizeToMiniPlayer()
+                        }
+                    }
+            )
+            .zIndex(1)
+    }
+    
+    @ViewBuilder
+    private var avPlayerControls: some View {
+        VStack(spacing: 0) {
+            topControlBar
+            Spacer()
+            centerControls
+            bottomProgressArea
+        }
+        .transition(.opacity)
+        .zIndex(10)
+        .allowsHitTesting(showVideoControls)
+    }
+    
+    @ViewBuilder
+    private var topControlBar: some View {
+        HStack {
+            Button(action: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    globalPlayer.closePlayer()
+                    dismiss()
+                }
+            }) {
+                ZStack {
+                    Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
+                    Image(systemName: "xmark").font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
+                }
+            }
+            .buttonStyle(ScaleButtonStyle())
+            
+            Spacer()
+            
+            HStack {
+                InteractiveRichTextTitleView(
+                    title: video.title,
+                    onChannelTap: { channelName in
+                        // Navigate to channel profile
+                        print("📺 Navigate to channel: \(channelName)")
+                        // TODO: Implement channel navigation
+                    },
+                    onHashtagTap: { hashtag in
+                        // Navigate to hashtag search
+                        print("🔍 Navigate to hashtag: \(hashtag)")
+                        // TODO: Implement hashtag search navigation
+                    },
+                    textColor: .white  // 🔥 FIX: White text for visibility on black background
+                )
+                .font(.system(size: 15, weight: .medium))
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .shadow(color: .black.opacity(0.8), radius: 2)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+            }
+            .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.4)))
+            
+            Spacer()
+            
+            topControlButtons
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .background(LinearGradient(colors: [.black.opacity(0.8), .clear], startPoint: .top, endPoint: .bottom))
+        .opacity(showVideoControls ? 1.0 : 0.0)
+    }
+    
+    @ViewBuilder
+    private var topControlButtons: some View {
+        // Quality selector
+        Button(action: { showingQualitySelector = true }) {
+            ZStack {
+                Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
+                Image(systemName: "aqi.medium").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
+            }
+        }
+        .buttonStyle(ScaleButtonStyle())
+        
+        // Subtitles / CC toggle
+        if !playerManager.availableSubtitleOptions().isEmpty {
+            Button(action: { showingSubtitlePicker = true }) {
+                ZStack {
+                    Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
+                    Image(systemName: "captions.bubble").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
+                }
+            }
+            .buttonStyle(ScaleButtonStyle())
+        }
+        
+        // Chapters toggle
+        let hasChapters = (video.chapters?.isEmpty == false) || !video.parsedChaptersFromDescription.isEmpty
+        if hasChapters {
+            Button(action: { showingChapters = true }) {
+                ZStack {
+                    Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
+                    Image(systemName: "list.bullet.rectangle").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
+                }
+            }
+            .buttonStyle(ScaleButtonStyle())
+        }
+        
+        // Theater Mode Toggle
+        Button(action: {
+            withAnimation(.spring()) {
+                isTheaterMode.toggle()
+            }
+        }) {
+            ZStack {
+                Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
+                Image(systemName: isTheaterMode ? "rectangle.compress.vertical" : "rectangle.expand.vertical")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
+        .buttonStyle(ScaleButtonStyle())
+        
+        // Mini player button
+        Button(action: { minimizeToMiniPlayer() }) {
+            ZStack {
+                Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
+                Image(systemName: "pip.enter").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
+            }
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+    
+    @ViewBuilder
+    private var centerControls: some View {
+        HStack(spacing: 24) {
+            Button(action: { playerManager.seekBackward(10); HapticManager.shared.impact(style: .light) }) {
+                Image(systemName: "gobackward.10").font(.system(size: 28, weight: .semibold)).foregroundColor(.white)
+            }
+            Button(action: { playerManager.togglePlayPause(); HapticManager.shared.impact(style: .medium) }) {
+                Image(systemName: playerManager.isPlaying ? "pause.circle.fill" : "play.circle.fill").font(.system(size: 56, weight: .semibold)).foregroundColor(.white)
+            }
+            Button(action: { playerManager.seekForward(10); HapticManager.shared.impact(style: .light) }) {
+                Image(systemName: "goforward.10").font(.system(size: 28, weight: .semibold)).foregroundColor(.white)
+            }
+        }
+        .padding(.bottom, 18)
+        .opacity(showVideoControls ? 1.0 : 0.0)
+    }
+    
+    @ViewBuilder
+    private var bottomProgressArea: some View {
+        VStack {
+            progressSlider
+            progressTimeControls
+        }
+        .background(LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom))
+        .opacity(showVideoControls ? 1.0 : 0.0)
+    }
+    
+    @ViewBuilder
+    private var progressSlider: some View {
+        Slider(
+            value: Binding(
+                get: { playerManager.duration > 0 ? playerManager.currentTime / playerManager.duration : 0 },
+                set: { fraction in
+                    if isScrubbing {
+                        scrubFraction = max(0, min(1, fraction))
+                        let t = playerManager.duration * scrubFraction
+                        scrubPreviewImage = playerManager.thumbnail(at: t)
+                    } else {
+                        playerManager.seek(to: fraction)
+                    }
+                }
+            ),
+            onEditingChanged: { editing in
+                isScrubbing = editing
+                if !editing {
+                    playerManager.seek(to: scrubFraction)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        scrubPreviewImage = nil
+                    }
+                }
+            }
+        )
+        .tint(.white)
+        .padding(.horizontal, 20)
+        .overlay(alignment: .bottomLeading) {
+            chapterTicks
+        }
+        .overlay(alignment: .topLeading) {
+            scrubPreview
+        }
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .onEnded { value in
+                    if value.translation.width > 80 { playerManager.seekBackward(10) }
+                    if value.translation.width < -80 { playerManager.seekForward(10) }
+                }
+        )
+    }
+    
+    @ViewBuilder
+    // 🔥 YOUTUBE PARITY: Chapter ticks with tooltips
+    private var chapterTicks: some View {
+        if let chapters = video.chapters, !chapters.isEmpty, playerManager.duration > 0 {
+            GeometryReader { geometry in
+                let trackWidth = geometry.size.width - 40
+                HStack(spacing: 0) {
+                    ForEach(chapters.sorted(by: { $0.start < $1.start })) { chapter in
+                        let p = max(0, min(1, chapter.start / playerManager.duration))
+                        let x = CGFloat(p) * trackWidth
+                        
+                        ZStack(alignment: .top) {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.45))
+                                .frame(width: 1, height: 8)
+                            
+                            // 🔥 YOUTUBE PARITY: Chapter tooltip on long press
+                            if let hoveredChapter = hoveredChapter, hoveredChapter.id == chapter.id {
+                                VStack(spacing: 4) {
+                                    Text(chapter.title)
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .fill(Color.black.opacity(0.8))
+                                        )
+                                    
+                                    Text(formatTime(chapter.start))
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.white.opacity(0.8))
+                                }
+                                .offset(y: -50)
+                                .transition(.opacity.combined(with: .scale))
+                            }
+                        }
+                        .offset(x: x)
+                        .onLongPressGesture(minimumDuration: 0.3) {
+                            hoveredChapter = chapter
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                if hoveredChapter?.id == chapter.id {
+                                    hoveredChapter = nil
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(height: 50)
+            .padding(.horizontal, 28)
+        }
+    }
+    
+    @ViewBuilder
+    private var scrubPreview: some View {
+        if isScrubbing, let img = scrubPreviewImage, playerManager.duration > 0 {
+            let trackWidth = UIScreen.main.bounds.width - 40
+            let x = CGFloat(scrubFraction) * max(0, trackWidth - 160)
+            VStack(spacing: 6) {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 160, height: 90)
+                    .clipped()
+                    .cornerRadius(8)
+                    .shadow(radius: 3)
+                Text(formatTime(playerManager.duration * scrubFraction))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.black.opacity(0.6))
+                    .clipShape(Capsule())
+            }
+            .offset(x: x, y: -100)
+            .transition(.opacity)
+        }
+    }
+    
+    @ViewBuilder
+    private var progressTimeControls: some View {
+        HStack {
+            Text(formatTime(playerManager.currentTime)).foregroundColor(.white).font(.caption.monospacedDigit())
+            Spacer()
+            quickControls
+            Text(formatTime(playerManager.duration)).foregroundColor(.white).font(.caption.monospacedDigit())
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 10)
+    }
+    
+    @ViewBuilder
+    private var quickControls: some View {
+        HStack(spacing: 12) {
+            Button(action: { showingQualitySelector = true }) {
+                HStack(spacing: 4) {
+                    Image(systemName: playerManager.selectedQuality.is4K ? "4k.tv" : (playerManager.selectedQuality.isHD ? "hifispeaker.2" : "tv"))
+                    Text(playerManager.selectedQuality == .auto ? "Auto" : playerManager.selectedQuality.rawValue)
+                }
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.white.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(ScaleButtonStyle())
+            
+            Button(action: { showingPlaybackSpeedSelector = true }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "gauge.medium")
+                    Text(String(format: "%.1fx", playbackRate))
+                }
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.white.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(ScaleButtonStyle())
+            
+            Button(action: { isPiPActive.toggle() }) {
+                Image(systemName: isPiPActive ? "pip.exit" : "pip.enter")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(ScaleButtonStyle())
+            
+            // 🔥 YOUTUBE PARITY: Queue button
+            Button(action: { 
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    showingQueueSidebar.toggle()
+                }
+            }) {
+                Image(systemName: "list.bullet")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(showingQueueSidebar ? AppTheme.Colors.primary : .white)
+            }
+            .buttonStyle(ScaleButtonStyle())
+            
+            AirPlayRoutePickerView()
+                .frame(width: 24, height: 24)
+        }
+    }
+    
+    @ViewBuilder
+    private func adOverlay(url: String) -> some View {
+        AdPlayerOverlay(adUrl: url) {
+            withAnimation { showingAd = false }
+            if pendingContentResume { playerManager.play(); pendingContentResume = false }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
+        .transition(.opacity)
+        .zIndex(100)
+    }
+    
+    @ViewBuilder
+    private func endScreenOverlay(next: Video) -> some View {
+        ZStack {
+            Rectangle().fill(Color.black.opacity(0.6))
+            VStack(spacing: 12) {
+                Text("Up next in \(upNextCountdown)s").font(.headline).foregroundColor(.white)
+                HStack(spacing: 12) {
+                    AsyncImage(url: URL(string: next.thumbnailURL)) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: { Rectangle().fill(.gray.opacity(0.3)) }
+                    .frame(width: 160, height: 90)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(next.title).font(.subheadline).lineLimit(2).foregroundColor(.white)
+                        Text(next.creator.displayName).font(.caption).foregroundColor(.white.opacity(0.85))
+                    }
+                    Spacer()
+                }
+                HStack(spacing: 12) {
+                    Button("Cancel") { cancelEndscreen() }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(Color.white.opacity(0.15), in: Capsule())
+                    Button("Play now") { playNext(next) }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(Color.white, in: Capsule())
+                }
+            }
+            .padding()
+        }
+        .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
+        .transition(.opacity)
+        .zIndex(50)
+    }
+    
+    @ViewBuilder
+    private var loadingIndicator: some View {
+        ZStack {
+            Circle().fill(.black.opacity(0.6)).frame(width: 80, height: 80)
+            ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white)).scaleEffect(1.2)
+        }
+        .zIndex(100)
+    }
+    
+    @ViewBuilder
+    private func debugHUDView(stats: VideoPlayerManager.PlaybackStats) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("⚙️ Debug HUD").font(.caption2).bold().foregroundColor(.white)
+            Text("Res: \(stats.width)x\(stats.height)").font(.caption2).foregroundColor(.white)
+            Text("Bitrate: \(stats.bitrateKbps) kbps").font(.caption2).foregroundColor(.white)
+            Text(String(format: "FPS: %.1f", stats.fps)).font(.caption2).foregroundColor(.white)
+            Text(String(format: "Time: %.1f/%.1f", stats.currentTime, stats.duration)).font(.caption2).foregroundColor(.white)
+        }
+        .padding(8)
+        .background(Color.black.opacity(0.6))
+        .cornerRadius(8)
+        .padding(12)
+        .transition(.opacity)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             // ALL-IN-ONE Video Player with YouTube-style controls
-            ZStack {
-                if isYouTube {
-                    YouTubePlayerView(
-                        videoID: video.externalID ?? "",
-                        autoplay: true,
-                        startTime: 0,
-                        muted: false,
-                        showControls: true
-                    )
-                    .frame(maxWidth: .infinity)
-                    .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
-                    .background(Color.black)
-
-                    // Minimal top bar for YouTube embed
-                    HStack {
-                        Button(action: { dismiss() }) {
-                            ZStack {
-                                Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                                Image(systemName: "xmark").font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
-                            }
-                        }
-                        .buttonStyle(ScaleButtonStyle())
-
-                        Spacer()
-
-                        Text(video.title)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(.white)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 6)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.4)))
-
-                        Spacer()
-
-                        Spacer().frame(width: 36)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                } else {
-                    // EXISTING AVPlayer path
-                    VideoPlayer(player: playerManager.player)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
-                    .background(Color.black)
-                    .onLongPressGesture(minimumDuration: 0.5) {
-                        withAnimation(.spring()) { showDebugHUD.toggle() }
-                    }
-                    
-                    // Paid promotion badge (first 8s)
-                    if (video.isSponsored ?? false) && playerManager.currentTime < 8 {
-                        HStack {
-                            Text("Paid promotion")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.black.opacity(0.6))
-                                .clipShape(Capsule())
-                            Spacer()
-                        }
-                        .padding(.top, 8)
-                        .padding(.leading, 12)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .transition(.opacity)
-                    }
-                    
-                    // Invisible tap/drag area to show/hide controls and drive fullscreen/miniplayer gestures
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            print("📱 Video tapped - Current controls state: \(showVideoControls)")
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                showVideoControls.toggle()
-                            }
-                            
-                            if showVideoControls {
-                                resetControlsHideTimer()
-                            }
-                        }
-                        .gesture(
-                            DragGesture(minimumDistance: 12, coordinateSpace: .local)
-                                .onEnded { value in
-                                    if value.translation.height > 60 {
-                                        presentFullscreenPlayer()
-                                    } else if value.translation.height < -60 {
-                                        minimizeToMiniPlayer()
-                                    }
-                                }
-                        )
-                        .zIndex(1)
-                    
-                    // Overlay controls for AVPlayer
-                    VStack(spacing: 0) {
-                        
-                        // Top control bar
-                        HStack {
-                            Button(action: {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                    globalPlayer.closePlayer()
-                                    dismiss()
-                                }
-                            }) {
-                                ZStack {
-                                    Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                                    Image(systemName: "xmark").font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
-                                }
-                            }
-                            .buttonStyle(ScaleButtonStyle())
-                            
-                            Spacer()
-                            
-                            HStack {
-                                Text(video.title)
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(.white)
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.center)
-                                    .shadow(color: .black.opacity(0.8), radius: 2)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 6)
-                            }
-                            .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.4)))
-                            
-                            Spacer()
-                            // Quick gear opens Quality selector
-                            Button(action: { showingQualitySelector = true }) {
-                                ZStack {
-                                    Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                                    Image(systemName: "aqi.medium").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
-                                }
-                            }
-                            .buttonStyle(ScaleButtonStyle())
-
-                            
-
-                            // Subtitles / CC toggle if tracks are available
-                            if !playerManager.availableSubtitleOptions().isEmpty {
-                                Button(action: { showingSubtitlePicker = true }) {
-                                    ZStack {
-                                        Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                                        Image(systemName: "captions.bubble").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
-                                    }
-                                }
-                                .buttonStyle(ScaleButtonStyle())
-                            }
-
-                            let hasChapters = (video.chapters?.isEmpty == false) || !video.parsedChaptersFromDescription.isEmpty
-                            if hasChapters {
-                                Button(action: { showingChapters = true }) {
-                                    ZStack {
-                                        Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                                        Image(systemName: "list.bullet.rectangle").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
-                                    }
-                                }
-                                .buttonStyle(ScaleButtonStyle())
-                            }
-
-                            // Theater Mode Toggle
-                            Button(action: { 
-                                withAnimation(.spring()) { 
-                                    isTheaterMode.toggle() 
-                                }
-                            }) {
-                                ZStack {
-                                    Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                                    Image(systemName: isTheaterMode ? "rectangle.compress.vertical" : "rectangle.expand.vertical")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.white)
-                                }
-                            }
-                            .buttonStyle(ScaleButtonStyle())
-
-                            Button(action: { minimizeToMiniPlayer() }) {
-                                ZStack {
-                                    Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                                    Image(systemName: "pip.enter").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
-                                }
-                            }
-                            .buttonStyle(ScaleButtonStyle())
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                        .background(LinearGradient(colors: [.black.opacity(0.8), .clear], startPoint: .top, endPoint: .bottom))
-                        .opacity(showVideoControls ? 1.0 : 0.0)
-                        
-                        Spacer()
-
-                        // Center controls
-                        HStack(spacing: 24) {
-                            Button(action: { playerManager.seekBackward(10); HapticManager.shared.impact(style: .light) }) {
-                                Image(systemName: "gobackward.10").font(.system(size: 28, weight: .semibold)).foregroundColor(.white)
-                            }
-                            Button(action: { playerManager.togglePlayPause(); HapticManager.shared.impact(style: .medium) }) {
-                                Image(systemName: playerManager.isPlaying ? "pause.circle.fill" : "play.circle.fill").font(.system(size: 56, weight: .semibold)).foregroundColor(.white)
-                            }
-                            Button(action: { playerManager.seekForward(10); HapticManager.shared.impact(style: .light) }) {
-                                Image(systemName: "goforward.10").font(.system(size: 28, weight: .semibold)).foregroundColor(.white)
-                            }
-                        }
-                        .padding(.bottom, 18)
-                        .opacity(showVideoControls ? 1.0 : 0.0)
-
-                        // Bottom progress area with chapter ticks
-                        VStack {
-                            Slider(
-                                value: Binding(
-                                    get: { playerManager.duration > 0 ? playerManager.currentTime / playerManager.duration : 0 },
-                                    set: { fraction in
-                                        if isScrubbing {
-                                            scrubFraction = max(0, min(1, fraction))
-                                            let t = playerManager.duration * scrubFraction
-                                            scrubPreviewImage = playerManager.thumbnail(at: t)
-                                        } else {
-                                            playerManager.seek(to: fraction)
-                                        }
-                                    }
-                                ),
-                                onEditingChanged: { editing in
-                                    isScrubbing = editing
-                                    if !editing {
-                                        playerManager.seek(to: scrubFraction)
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                            scrubPreviewImage = nil
-                                        }
-                                    }
-                                }
-                            )
-                            .tint(.white)
-                            .padding(.horizontal, 20)
-                            .overlay(alignment: .bottomLeading) {
-                                // Chapter tick marks (lightweight)
-                                if let chapters = video.chapters, !chapters.isEmpty, playerManager.duration > 0 {
-                                    HStack(spacing: 0) {
-                                        ForEach(chapters.sorted(by: { $0.start < $1.start })) { c in
-                                            let p = max(0, min(1, c.start / playerManager.duration))
-                                            Rectangle()
-                                                .fill(Color.white.opacity(0.45))
-                                                .frame(width: 1, height: 8)
-                                                .offset(x: CGFloat(p) * (UIScreen.main.bounds.width - 40 - 16))
-                                        }
-                                    }
-                                    .padding(.horizontal, 28)
-                                }
-                            }
-                            .overlay(alignment: .topLeading) {
-                                if isScrubbing, let img = scrubPreviewImage, playerManager.duration > 0 {
-                                    let trackWidth = UIScreen.main.bounds.width - 40 // 20pt horizontal padding each side
-                                    let x = CGFloat(scrubFraction) * max(0, trackWidth - 160) // keep preview inside
-                                    VStack(spacing: 6) {
-                                        Image(uiImage: img)
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 160, height: 90)
-                                            .clipped()
-                                            .cornerRadius(8)
-                                            .shadow(radius: 3)
-                                        Text(formatTime(playerManager.duration * scrubFraction))
-                                            .font(.caption2.monospacedDigit())
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(Color.black.opacity(0.6))
-                                            .clipShape(Capsule())
-                                    }
-                                    .offset(x: x, y: -100)
-                                    .transition(.opacity)
-                                }
-                            }
-                            .gesture(
-                                DragGesture(minimumDistance: 20)
-                                    .onEnded { value in
-                                        // Double-tap seek style: detect quick horizontal flicks
-                                        if value.translation.width > 80 { playerManager.seekBackward(10) }
-                                        if value.translation.width < -80 { playerManager.seekForward(10) }
-                                    }
-                            )
-                            HStack {
-                                Text(formatTime(playerManager.currentTime)).foregroundColor(.white).font(.caption.monospacedDigit())
-                                Spacer()
-                                // Quick controls: Quality and Speed
-                                HStack(spacing: 12) {
-                                    Button(action: { showingQualitySelector = true }) {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: playerManager.selectedQuality.is4K ? "4k.tv" : (playerManager.selectedQuality.isHD ? "hifispeaker.2" : "tv"))
-                                            Text(playerManager.selectedQuality == .auto ? "Auto" : playerManager.selectedQuality.rawValue)
-                                        }
-                                        .font(.caption.weight(.semibold))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.white.opacity(0.12), in: Capsule())
-                                    }
-                                    .buttonStyle(ScaleButtonStyle())
-
-                                    Button(action: { showingPlaybackSpeedSelector = true }) {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "gauge.medium")
-                                            Text(String(format: "%.1fx", playbackRate))
-                                        }
-                                        .font(.caption.weight(.semibold))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.white.opacity(0.12), in: Capsule())
-                                    }
-                                    .buttonStyle(ScaleButtonStyle())
-
-                                    // System PiP toggle
-                                    Button(action: { isPiPActive.toggle() }) {
-                                        Image(systemName: isPiPActive ? "pip.exit" : "pip.enter")
-                                            .font(.caption.weight(.semibold))
-                                    }
-                                    .buttonStyle(ScaleButtonStyle())
-
-                                    AirPlayRoutePickerView()
-                                        .frame(width: 24, height: 24)
-                                }
-                                Text(formatTime(playerManager.duration)).foregroundColor(.white).font(.caption.monospacedDigit())
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 10)
-                        }
-                        .background(LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom))
-                        .opacity(showVideoControls ? 1.0 : 0.0)
-                    }
-                    .transition(.opacity)
-                    .zIndex(10)
-                    .allowsHitTesting(showVideoControls)
-
-                // Simple preroll ad overlay when available
-                if showingAd, let url = prerollURL {
-                    AdPlayerOverlay(adUrl: url) {
-                        withAnimation { showingAd = false }
-                        if pendingContentResume { playerManager.play(); pendingContentResume = false }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
-                    .transition(.opacity)
-                    .zIndex(100)
-                }
-
-                    // End-screen overlay (visual) when video ends
-                    if showUpNext, let next = (upNextVideo ?? Video.sampleVideos.first(where: { $0.id != video.id })) {
-                        ZStack {
-                            Rectangle().fill(Color.black.opacity(0.6))
-                            VStack(spacing: 12) {
-                                Text("Up next in \(upNextCountdown)s").font(.headline).foregroundColor(.white)
-                                HStack(spacing: 12) {
-                                    AsyncImage(url: URL(string: next.thumbnailURL)) { image in
-                                        image.resizable().scaledToFill()
-                                    } placeholder: { Rectangle().fill(.gray.opacity(0.3)) }
-                                    .frame(width: 160, height: 90)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(next.title).font(.subheadline).lineLimit(2).foregroundColor(.white)
-                                        Text(next.creator.displayName).font(.caption).foregroundColor(.white.opacity(0.85))
-                                    }
-                                    Spacer()
-                                }
-                                HStack(spacing: 12) {
-                                    Button("Cancel") { cancelEndscreen() }
-                                        .buttonStyle(.plain)
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 14).padding(.vertical, 8)
-                                        .background(Color.white.opacity(0.15), in: Capsule())
-                                    Button("Play now") { playNext(next) }
-                                        .buttonStyle(.plain)
-                                        .foregroundColor(.black)
-                                        .padding(.horizontal, 14).padding(.vertical, 8)
-                                        .background(Color.white, in: Capsule())
-                                }
-                            }
-                            .padding()
-                        }
-                        .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
-                        .transition(.opacity)
-                        .zIndex(50)
-                    }
-                    
-                    if playerManager.isLoading {
-                        ZStack {
-                            Circle().fill(.black.opacity(0.6)).frame(width: 80, height: 80)
-                            ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white)).scaleEffect(1.2)
-                        }
-                        .zIndex(100)
-                    }
-                }
-            }
-            .background(Color.black)
-            .overlay(alignment: .topLeading) {
-                if showDebugHUD, let stats = playerManager.currentPlaybackStats() {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("⚙️ Debug HUD").font(.caption2).bold().foregroundColor(.white)
-                        Text("Res: \(stats.width)x\(stats.height)").font(.caption2).foregroundColor(.white)
-                        Text("Bitrate: \(stats.bitrateKbps) kbps").font(.caption2).foregroundColor(.white)
-                        Text(String(format: "FPS: %.1f", stats.fps)).font(.caption2).foregroundColor(.white)
-                        Text(String(format: "Time: %.1f/%.1f", stats.currentTime, stats.duration)).font(.caption2).foregroundColor(.white)
-                    }
-                    .padding(8)
-                    .background(Color.black.opacity(0.6))
-                    .cornerRadius(8)
-                    .padding(12)
-                    .transition(.opacity)
-                }
-            }
+            videoPlayerSection
 
             // Video metadata and controls (with Up Next autoplay)
             VideoDetailMetaView(video: video,
@@ -511,7 +747,8 @@ struct VideoDetailView: View {
                                         showingChapters = true
                                     }
                                 },
-                                onProfileTap: { showingCreatorProfile = true })
+                                onProfileTap: { showingCreatorProfile = true },
+                                dynamicViewCount: currentViewCount) // 🔥 REAL-TIME: Pass reactive view count
             .overlay(alignment: .bottom) {
                 // Simple Up Next bar with autoplay toggle
                 if let next = Video.sampleVideos.first(where: { $0.id != video.id }) {
@@ -663,7 +900,44 @@ struct VideoDetailView: View {
                 print("📱 Is YouTube: \(isYouTube)")
                 print("💰 Video monetized: \(video.monetization?.isMonetized ?? false)")
                 
-                GlobalVideoPlayerManager.shared.stopImmediately()
+                // 🔥 FIX: Check if global player already has this video playing (from mini player)
+                let globalPlayer = GlobalVideoPlayerManager.shared
+                let isFromMiniPlayer = globalPlayer.currentVideo?.id == video.id && globalPlayer.player != nil
+                
+                if isFromMiniPlayer {
+                    print("✅ [VideoDetailView] Video already playing in global player - using global player")
+                    // Use the global player's manager instead of creating a new one
+                    // This prevents white screen and ensures smooth transition
+                    if let existingManager = globalPlayer.exposedPlayerManager {
+                        // 🔥 FIX: Use the existing player manager from global player
+                        // We can't reassign @StateObject, but we can use the global player's player directly
+                        // The VideoPlayer view will use globalPlayer.player
+                        isPlayerReady = true
+                        showPlayer = true
+                        isViewAppeared = true
+                        
+                        // Update view count
+                        Task {
+                            let latestCount = await RealtimeViewTracker.shared.getViewCount(for: video.id)
+                            currentViewCount = latestCount
+                        }
+                        
+                        // Sync playback state
+                        if let player = globalPlayer.player {
+                            playbackRate = player.rate
+                            // Note: Playback state is managed by globalPlayer.isPlaying
+                        }
+                        
+                        print("✅ [VideoDetailView] Adopted global player - ready to display")
+                        return
+                    }
+                }
+                
+                // 🔥 FIX: Only stop if not from mini player (to prevent interrupting playback)
+                if !isFromMiniPlayer {
+                    GlobalVideoPlayerManager.shared.stopImmediately()
+                }
+                
                 if !isYouTube {
                     // 🔥 ADD ADS LOGIC: Check for ads before playing video
                     Task { @MainActor in
@@ -744,9 +1018,23 @@ struct VideoDetailView: View {
                         Task { await HistoryService.shared.logStart(userId: uid, video: video) }
                     }
                     
-                    // 🔥 TRACK VIEW COUNT: Increment view count in Firestore for real-time stats
+                    // 🔥 TRACK VIEW COUNT: Always track views, including own videos
                     Task {
+                        let userId = AuthenticationManager.shared.currentUser?.id
+                        print("👁️ [VideoDetailView] Tracking view for video: \(video.id), userId: \(userId ?? "anonymous")")
+                        print("👁️ [VideoDetailView] Video creator: \(video.creator.id)")
+                        print("👁️ [VideoDetailView] Is own video: \(userId == video.creator.id)")
+                        
+                        // Track with RealtimeViewTracker
+                        await RealtimeViewTracker.shared.startViewSession(videoId: video.id, userId: userId)
+                        
+                        // Also call FirestoreService for backwards compatibility
                         await VideoFirestoreService.shared.incrementViewCount(videoId: video.id)
+                        
+                        // Update local view count immediately for UI
+                        await MainActor.run {
+                            currentViewCount = video.viewCount + 1
+                        }
                     }
                     // Fetch simple VMAP for preroll and pause content while ad plays
                     Task {
@@ -885,10 +1173,46 @@ struct VideoDetailView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowVideoInfo"))) { _ in
             showingVideoInfo = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("VideoViewCountUpdated"))) { notification in
+            // 🔥 REAL-TIME: Update view count when it changes
+            if let userInfo = notification.userInfo,
+               let videoId = userInfo["videoId"] as? String,
+               videoId == video.id,
+               let viewCount = userInfo["viewCount"] as? Int {
+                print("📊 [VideoDetailView] View count updated: \(viewCount)")
+                currentViewCount = viewCount
+            }
+        }
+        .task {
+            // 🔥 FIX: Initialize view count from video model
+            if currentViewCount == video.viewCount {
+                // Try to get the latest view count from Firestore
+                let latestCount = await RealtimeViewTracker.shared.getViewCount(for: video.id)
+                if latestCount > 0 {
+                    currentViewCount = latestCount
+                }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SeekToTimestamp"))) { notification in
             if let timestamp = notification.object as? TimeInterval {
                 let progress = playerManager.duration > 0 ? timestamp / playerManager.duration : 0
                 playerManager.seek(to: progress)
+            }
+        }
+        // 🔥 YOUTUBE PARITY: Auto quality selection when video loads
+        .onChange(of: playerManager.duration) { _ in
+            if playerManager.duration > 0 && playerManager.selectedQuality == .auto {
+                playerManager.autoSelectQuality()
+            }
+        }
+        // 🔥 YOUTUBE PARITY: Queue sidebar
+        .overlay(alignment: .trailing) {
+            if showingQueueSidebar {
+                VideoQueueSidebar(
+                    globalPlayer: globalPlayer,
+                    isPresented: $showingQueueSidebar
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
     }
@@ -912,8 +1236,32 @@ struct VideoDetailView: View {
     }
 
     private func minimizeToMiniPlayer() {
+        // 🔥 FIX: Ensure player continues playing and mini player stays visible
+        // Set state BEFORE dismissing to prevent race conditions
         globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
+        
+        // Explicitly ensure mini player is shown immediately
+        globalPlayer.shouldShowMiniPlayer = true
+        globalPlayer.isMiniplayer = true
+        
+        // Ensure player is playing
+        if let player = globalPlayer.player, player.rate == 0 {
+            player.play()
+        }
+        
+        // Dismiss the view
         dismiss()
+        
+        // Double-check after dismissal to ensure state persists
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            if globalPlayer.currentVideo != nil {
+                globalPlayer.shouldShowMiniPlayer = true
+                globalPlayer.isMiniplayer = true
+                if let player = globalPlayer.player, player.rate == 0 {
+                    player.play()
+                }
+            }
+        }
     }
     
     private func formatTime(_ timeInterval: TimeInterval) -> String {

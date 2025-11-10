@@ -197,9 +197,9 @@ struct OnboardingPage: Identifiable, Hashable {
     let gradient: [Color]
 
     static let sample: [OnboardingPage] = [
-        .init(title: "Discover creators", subtitle: "Follow pros, artists, and communities you love.", systemImage: "person.2.fill", gradient: [AppTheme.Colors.primary.opacity(0.9), .blue.opacity(0.7)]),
-        .init(title: "Watch your way", subtitle: "Shorts, long-form, live—seamless and smooth.", systemImage: "play.rectangle.fill", gradient: [.purple.opacity(0.9), .pink.opacity(0.7)]),
-        .init(title: "Create in seconds", subtitle: "Upload, trim, and share with powerful tools.", systemImage: "plus.circle.fill", gradient: [.orange.opacity(0.9), .red.opacity(0.7)])
+        .init(title: "Discover creators", subtitle: "Follow pros, artists, and communities you love.", systemImage: "person.2.fill", gradient: [AppTheme.Colors.primary, Color.blue]),
+        .init(title: "Watch your way", subtitle: "Shorts, long-form, live—seamless and smooth.", systemImage: "play.rectangle.fill", gradient: [Color.purple, Color.pink]),
+        .init(title: "Create in seconds", subtitle: "Upload, trim, and share with powerful tools.", systemImage: "plus.circle.fill", gradient: [Color.orange, Color.red])
     ]
 }
 

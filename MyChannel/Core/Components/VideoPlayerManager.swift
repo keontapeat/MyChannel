@@ -455,6 +455,31 @@ class VideoPlayerManager: ObservableObject {
             #endif
         }
     }
+    
+    // 🔥 YOUTUBE PARITY: Auto quality selection based on network conditions
+    func autoSelectQuality() {
+        let networkOptimizer = NetworkOptimizer.shared
+        
+        // Get current network quality
+        let connectionQuality = networkOptimizer.connectionQuality
+        
+        // Auto-select quality based on network
+        let recommendedQuality: VideoQuality
+        switch connectionQuality {
+        case .excellent:
+            recommendedQuality = .quality1080p
+        case .good:
+            recommendedQuality = .quality720p
+        case .poor:
+            recommendedQuality = .quality360p
+        }
+        
+        // Only auto-select if user hasn't manually selected a quality
+        if selectedQuality == .auto {
+            setPreferredQuality(recommendedQuality)
+            print("📊 [VideoPlayer] Auto-selected quality: \(recommendedQuality.rawValue) based on network: \(connectionQuality)")
+        }
+    }
 
     // MARK: - Playback Stats
     struct PlaybackStats {

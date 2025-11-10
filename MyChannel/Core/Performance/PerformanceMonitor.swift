@@ -20,7 +20,7 @@ class PerformanceMonitor: ObservableObject {
     
     @Published var currentMetrics = PerformanceMetrics()
     @Published var isMonitoring = false
-    @Published var alerts: [PerformanceAlert] = []
+    @Published var alerts: [SystemPerformanceAlert] = []
     
     private var cancellables = Set<AnyCancellable>()
     private let logger = Logger(subsystem: "com.mychannel.performance", category: "monitoring")
@@ -118,35 +118,35 @@ class PerformanceMonitor: ObservableObject {
     // MARK: - Threshold Checking
     private func checkCPUThreshold(_ usage: Double) {
         if usage > thresholds.cpuWarning {
-            addAlert(.cpuHigh(usage))
+            addAlert(SystemPerformanceAlert.cpuHigh(usage))
         }
     }
     
     private func checkMemoryThreshold(_ usage: Double) {
         if usage > thresholds.memoryWarning {
-            addAlert(.memoryHigh(usage))
+            addAlert(SystemPerformanceAlert.memoryHigh(usage))
         }
     }
     
     private func checkNetworkThreshold(_ latency: TimeInterval) {
         if latency > thresholds.networkLatencyWarning {
-            addAlert(.networkSlow(latency))
+            addAlert(SystemPerformanceAlert.networkSlow(latency))
         }
     }
     
     private func checkFrameRateThreshold(_ frameRate: Double) {
         if frameRate < thresholds.frameRateWarning {
-            addAlert(.frameRateLow(frameRate))
+            addAlert(SystemPerformanceAlert.frameRateLow(frameRate))
         }
     }
     
     private func checkBatteryThreshold(_ drainRate: Double) {
         if drainRate > thresholds.batteryDrainWarning {
-            addAlert(.batteryDrainHigh(drainRate))
+            addAlert(SystemPerformanceAlert.batteryDrainHigh(drainRate))
         }
     }
     
-    private func addAlert(_ alert: PerformanceAlert) {
+    private func addAlert(_ alert: SystemPerformanceAlert) {
         // Avoid duplicate alerts
         if !alerts.contains(where: { $0.type == alert.type }) {
             alerts.append(alert)
@@ -159,7 +159,7 @@ class PerformanceMonitor: ObservableObject {
         }
     }
     
-    func dismissAlert(_ alert: PerformanceAlert) {
+    func dismissAlert(_ alert: SystemPerformanceAlert) {
         alerts.removeAll { $0.id == alert.id }
     }
     
@@ -190,7 +190,7 @@ class PerformanceMonitor: ObservableObject {
         logger.info("👆 User action: \(action) took \(String(format: "%.3f", duration))s")
         
         if duration > 1.0 {
-            addAlert(.slowUserAction(action, duration))
+            addAlert(SystemPerformanceAlert.slowUserAction(action, duration))
         }
     }
     
@@ -491,7 +491,8 @@ struct PerformanceThresholds {
     let batteryDrainWarning: Double = 20.0 // % per hour
 }
 
-struct PerformanceAlert: Identifiable {
+// Note: Renamed to avoid conflict with SharedAgentTypes.PerformanceAlert
+struct SystemPerformanceAlert: Identifiable {
     let id = UUID()
     let type: AlertType
     let message: String
@@ -506,43 +507,43 @@ struct PerformanceAlert: Identifiable {
         case slowUserAction(String, TimeInterval)
     }
     
-    static func cpuHigh(_ usage: Double) -> PerformanceAlert {
-        PerformanceAlert(
+    static func cpuHigh(_ usage: Double) -> SystemPerformanceAlert {
+        SystemPerformanceAlert(
             type: .cpuHigh(usage),
             message: "High CPU usage: \(String(format: "%.1f", usage))%"
         )
     }
     
-    static func memoryHigh(_ usage: Double) -> PerformanceAlert {
-        PerformanceAlert(
+    static func memoryHigh(_ usage: Double) -> SystemPerformanceAlert {
+        SystemPerformanceAlert(
             type: .memoryHigh(usage),
             message: "High memory usage: \(String(format: "%.1f", usage))MB"
         )
     }
     
-    static func networkSlow(_ latency: TimeInterval) -> PerformanceAlert {
-        PerformanceAlert(
+    static func networkSlow(_ latency: TimeInterval) -> SystemPerformanceAlert {
+        SystemPerformanceAlert(
             type: .networkSlow(latency),
             message: "Slow network: \(String(format: "%.2f", latency))s latency"
         )
     }
     
-    static func frameRateLow(_ frameRate: Double) -> PerformanceAlert {
-        PerformanceAlert(
+    static func frameRateLow(_ frameRate: Double) -> SystemPerformanceAlert {
+        SystemPerformanceAlert(
             type: .frameRateLow(frameRate),
             message: "Low frame rate: \(String(format: "%.1f", frameRate)) FPS"
         )
     }
     
-    static func batteryDrainHigh(_ drainRate: Double) -> PerformanceAlert {
-        PerformanceAlert(
+    static func batteryDrainHigh(_ drainRate: Double) -> SystemPerformanceAlert {
+        SystemPerformanceAlert(
             type: .batteryDrainHigh(drainRate),
             message: "High battery drain: \(String(format: "%.1f", drainRate))%/hour"
         )
     }
     
-    static func slowUserAction(_ action: String, _ duration: TimeInterval) -> PerformanceAlert {
-        PerformanceAlert(
+    static func slowUserAction(_ action: String, _ duration: TimeInterval) -> SystemPerformanceAlert {
+        SystemPerformanceAlert(
             type: .slowUserAction(action, duration),
             message: "Slow \(action): \(String(format: "%.2f", duration))s"
         )
@@ -572,7 +573,7 @@ enum PerformanceRecommendation {
 struct PerformanceReport {
     let timestamp: Date
     let metrics: PerformanceMetrics
-    let alerts: [PerformanceAlert]
+    let alerts: [SystemPerformanceAlert]
     let recommendations: [PerformanceRecommendation]
 }
 

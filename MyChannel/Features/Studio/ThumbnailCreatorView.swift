@@ -145,7 +145,7 @@ struct ThumbnailCreatorView: View {
             quickActionsGrid
             
             // Recent Generations
-            if !viewModel.recentThumbnails.isEmpty {
+            if !viewModel.generatedThumbnails.isEmpty {
                 recentGenerationsSection
             }
         }
@@ -183,7 +183,7 @@ struct ThumbnailCreatorView: View {
     private func thumbnailPreview(_ image: UIImage) -> some View {
         VStack(spacing: 16) {
             // Viral Score
-            if let score = viewModel.viralScore {
+            if let score = viewModel.viralScore ?? viewModel.analysis?.score {
                 viralScoreBadge(score)
             }
             
@@ -209,7 +209,7 @@ struct ThumbnailCreatorView: View {
                 .padding(12)
                 .background(AppTheme.Colors.surface)
                 .clipShape(Capsule())
-            } else if let analysis = viewModel.thumbnailAnalysis {
+            } else if let analysis = viewModel.analysis {
                 thumbnailStatsRow(analysis)
             }
         }
@@ -252,10 +252,9 @@ struct ThumbnailCreatorView: View {
     
     private func thumbnailStatsRow(_ analysis: ThumbnailAnalysis) -> some View {
         HStack(spacing: 12) {
-            statChip(icon: "eye.fill", value: "\(analysis.clickPrediction)%", label: "CTR")
-            statChip(icon: "face.smiling.fill", value: analysis.emotionScore, label: "Emotion")
-            statChip(icon: "textformat.size", value: "\(analysis.textReadability)%", label: "Readable")
-            statChip(icon: "paintpalette.fill", value: analysis.colorScore, label: "Colors")
+            statChip(icon: "eye.fill", value: analysis.clickPotential, label: "CTR")
+            statChip(icon: "face.smiling.fill", value: analysis.emotionalImpact, label: "Emotion")
+            statChip(icon: "textformat.size", value: analysis.readability, label: "Readable")
         }
     }
     
@@ -285,94 +284,10 @@ struct ThumbnailCreatorView: View {
     
     private var aiGenerationCard: some View {
         VStack(spacing: 20) {
-            HStack {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "wand.and.stars")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.primary)
-                        
-                        Text("AI Generation")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                    }
-                    
-                    Text("Powered by GPT-5 & Claude 4.5")
-                        .font(.system(size: 13))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                }
-                
-                Spacer()
-            }
-            
-            // Video Title Input
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Video Title")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                TextField("Enter your video title...", text: $viewModel.videoTitle)
-                    .font(.system(size: 16))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .padding(14)
-                    .background(AppTheme.Colors.cardBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
-                    )
-            }
-            
-            // Style Selector
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Thumbnail Style")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(ThumbnailStyle.allCases) { style in
-                            StyleChip(
-                                title: style.rawValue,
-                                icon: style.icon,
-                                isSelected: viewModel.selectedStyle == style
-                            ) {
-                                viewModel.selectedStyle = style
-                                HapticManager.shared.impact(style: .light)
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Generate Button
-            Button {
-                Task {
-                    await viewModel.generateThumbnail()
-                }
-            } label: {
-                HStack(spacing: 12) {
-                    if viewModel.isGenerating {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(0.9)
-                    } else {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 18, weight: .bold))
-                    }
-                    
-                    Text(viewModel.isGenerating ? "Generating..." : "Generate Thumbnail")
-                        .font(.system(size: 17, weight: .bold))
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(AppTheme.Colors.primary)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 4)
-            }
-            .disabled(viewModel.videoTitle.isEmpty || viewModel.isGenerating)
-            .opacity(viewModel.videoTitle.isEmpty ? 0.5 : 1.0)
+            aiGenerationHeader
+            videoTitleInput
+            styleSelector
+            generateButton
         }
         .padding(20)
         .background(AppTheme.Colors.surface)
@@ -382,6 +297,100 @@ struct ThumbnailCreatorView: View {
                 .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 10)
+    }
+    
+    private var aiGenerationHeader: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                    
+                    Text("AI Generation")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                }
+                
+                Text("Powered by GPT-5 & Claude 4.5")
+                    .font(.system(size: 13))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+            
+            Spacer()
+        }
+    }
+    
+    private var videoTitleInput: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Video Title")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+            
+            TextField("Enter your video title...", text: $viewModel.videoTitle)
+                .font(.system(size: 16))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .padding(14)
+                .background(AppTheme.Colors.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
+                )
+        }
+    }
+    
+    private var styleSelector: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Thumbnail Style")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(ThumbnailStyle.allCases) { style in
+                        StyleChip(
+                            title: style.rawValue,
+                            icon: style.icon,
+                            isSelected: viewModel.selectedStyle == style
+                        ) {
+                            viewModel.selectedStyle = style
+                            HapticManager.shared.impact(style: .light)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private var generateButton: some View {
+        Button {
+            Task {
+                await viewModel.generateThumbnail()
+            }
+        } label: {
+            HStack(spacing: 12) {
+                if viewModel.isGenerating {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.9)
+                } else {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 18, weight: .bold))
+                }
+                
+                Text(viewModel.isGenerating ? "Generating..." : "Generate Thumbnail")
+                    .font(.system(size: 17, weight: .bold))
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(AppTheme.Colors.primary)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 4)
+        }
+        .disabled(viewModel.videoTitle.isEmpty || viewModel.isGenerating)
+        .opacity(viewModel.videoTitle.isEmpty ? 0.5 : 1.0)
     }
     
     private var quickActionsGrid: some View {
@@ -440,16 +449,14 @@ struct ThumbnailCreatorView: View {
                 
                 Spacer()
                 
-                Button("Clear") {
-                    viewModel.clearRecent()
-                }
+                Button("Clear") { viewModel.clearRecent() }
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(AppTheme.Colors.primary)
             }
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(viewModel.recentThumbnails) { thumbnail in
+                    ForEach(viewModel.generatedThumbnails) { thumbnail in
                         RecentThumbnailCard(thumbnail: thumbnail) {
                             viewModel.selectThumbnail(thumbnail)
                         }
@@ -554,13 +561,12 @@ struct ThumbnailCreatorView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(ThumbnailFilter.allCases) { filter in
+                    ForEach(viewModel.filters) { filter in
                         FilterButton(
                             filter: filter,
-                            isSelected: viewModel.selectedFilter == filter
-                        ) {
-                            viewModel.applyFilter(filter)
-                        }
+                            isSelected: viewModel.selectedFilter?.id == filter.id,
+                            action: { viewModel.applyFilter(filter) }
+                        )
                     }
                 }
             }
@@ -629,7 +635,7 @@ struct ThumbnailCreatorView: View {
             if let thumbnail = viewModel.currentThumbnail {
                 thumbnailPreview(thumbnail)
                 
-                if let analysis = viewModel.thumbnailAnalysis {
+                if let analysis = viewModel.analysis {
                     detailedAnalysisSection(analysis)
                 } else {
                     Button {
@@ -670,14 +676,14 @@ struct ThumbnailCreatorView: View {
                         .frame(width: 140, height: 140)
                     
                     Circle()
-                        .trim(from: 0, to: CGFloat(analysis.overallScore) / 100)
-                        .stroke(scoreColor(analysis.overallScore), style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                        .trim(from: 0, to: CGFloat(analysis.score) / 100)
+                        .stroke(scoreColor(analysis.score), style: StrokeStyle(lineWidth: 12, lineCap: .round))
                         .frame(width: 140, height: 140)
                         .rotationEffect(.degrees(-90))
-                        .animation(.spring(response: 1.0, dampingFraction: 0.8), value: analysis.overallScore)
+                        .animation(.spring(response: 1.0, dampingFraction: 0.8), value: analysis.score)
                     
                     VStack(spacing: 4) {
-                        Text("\(analysis.overallScore)")
+                        Text("\(analysis.score)")
                             .font(.system(size: 42, weight: .bold))
                             .foregroundColor(AppTheme.Colors.textPrimary)
                         Text("Viral Score")
@@ -688,7 +694,7 @@ struct ThumbnailCreatorView: View {
                 
                 Text(analysis.verdict)
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(scoreColor(analysis.overallScore))
+                    .foregroundColor(scoreColor(analysis.score))
                     .multilineTextAlignment(.center)
             }
             .padding(24)
@@ -891,26 +897,18 @@ struct RecentThumbnailCard: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {
-                Image(uiImage: thumbnail.image)
-                    .resizable()
-                    .aspectRatio(16/9, contentMode: .fill)
-                    .frame(width: 140, height: 80)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
-                    )
-                
-                if let score = thumbnail.viralScore {
-                    HStack(spacing: 4) {
-                        Image(systemName: "flame.fill")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.orange)
-                        Text("\(score)")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                    }
+                AsyncImage(url: URL(string: thumbnail.imageURL)) { image in
+                    image.resizable()
+                } placeholder: {
+                    Rectangle().fill(AppTheme.Colors.cardBackground)
                 }
+                .aspectRatio(16/9, contentMode: .fill)
+                .frame(width: 140, height: 80)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
+                )
             }
         }
     }
@@ -926,14 +924,14 @@ struct FilterButton: View {
             VStack(spacing: 8) {
                 // Preview circle
                 Circle()
-                    .fill(filter.previewColor)
+                    .fill(AppTheme.Colors.cardBackground)
                     .frame(width: 44, height: 44)
                     .overlay(
                         Circle()
                             .stroke(isSelected ? AppTheme.Colors.primary : Color.clear, lineWidth: 2)
                     )
                 
-                Text(filter.rawValue)
+                Text(filter.name)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
             }
@@ -948,14 +946,16 @@ struct TemplateCard: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(template.color.opacity(0.15))
-                    .aspectRatio(16/9, contentMode: .fit)
-                    .overlay(
-                        Image(systemName: template.icon)
-                            .font(.system(size: 32, weight: .medium))
-                            .foregroundColor(template.color)
-                    )
+                AsyncImage(url: URL(string: template.thumbnailURL)) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(16/9, contentMode: .fill)
+                } placeholder: {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AppTheme.Colors.cardBackground)
+                        .aspectRatio(16/9, contentMode: .fit)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 12))
                 
                 Text(template.name)
                     .font(.system(size: 14, weight: .semibold))

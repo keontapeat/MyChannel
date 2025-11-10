@@ -228,7 +228,7 @@ class VertexAIService: ObservableObject {
     // MARK: - Content Moderation
     
     /// Moderate content using Vertex AI's safety features
-    func moderateContent(_ text: String) async throws -> ModerationResult {
+    func moderateContent(_ text: String) async throws -> VertexModerationResult {
         let response = try await generateWithGemini(
             """
             Analyze this content for safety issues. Respond with JSON:
@@ -246,11 +246,11 @@ class VertexAIService: ObservableObject {
         
         // Parse JSON response
         if let data = response.data(using: .utf8),
-           let json = try? JSONDecoder().decode(ModerationResult.self, from: data) {
+           let json = try? JSONDecoder().decode(VertexModerationResult.self, from: data) {
             return json
         }
         
-        return ModerationResult(isSafe: true, categories: [], severity: "low", recommendation: "approve")
+        return VertexModerationResult(isSafe: true, categories: [], severity: "low", recommendation: "approve")
     }
     
     // MARK: - Thumbnail Generation
@@ -354,7 +354,8 @@ enum GeminiModel: String {
     case gemini15Flash = "gemini-1.5-flash"
 }
 
-struct ModerationResult: Codable {
+// Note: ModerationResult is now in SharedAgentTypes.swift
+struct VertexModerationResult: Codable {
     let isSafe: Bool
     let categories: [String]
     let severity: String

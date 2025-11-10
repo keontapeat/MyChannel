@@ -12,21 +12,33 @@ import Combine
 
 @MainActor
 class UniversityViewModel: ObservableObject {
-    // User Progress
-    @Published var totalWatchHours: Int = 0
-    @Published var certificatesEarned: Int = 0
-    @Published var skillLevel: Int = 1
-    @Published var subjectsStudied: Int = 0
-    @Published var videosCompleted: Int = 0
-    @Published var verificationScore: Int = 85
+    // ⚡ PERFORMANCE: Combine related progress metrics into single state
+    @Published var progress: UserProgress = .empty
     
-    // Streaks & Goals
-    @Published var currentStreak: Int = 0
-    @Published var longestStreak: Int = 0
-    @Published var activeGoals: [LearningGoal] = []
-    @Published var dailyGoal: LearningGoal?
-    @Published var todayProgress: Double = 0
-    @Published var todayGoalMet: Bool = false
+    struct UserProgress {
+        var totalWatchHours: Int = 0
+        var certificatesEarned: Int = 0
+        var skillLevel: Int = 1
+        var subjectsStudied: Int = 0
+        var videosCompleted: Int = 0
+        var verificationScore: Int = 85
+        
+        static let empty = UserProgress()
+    }
+    
+    // ⚡ PERFORMANCE: Combine streaks & goals into single state
+    @Published var streaksAndGoals: StreaksAndGoals = .empty
+    
+    struct StreaksAndGoals {
+        var currentStreak: Int = 0
+        var longestStreak: Int = 0
+        var activeGoals: [LearningGoal] = []
+        var dailyGoal: LearningGoal?
+        var todayProgress: Double = 0
+        var todayGoalMet: Bool = false
+        
+        static let empty = StreaksAndGoals()
+    }
     
     // Learning Paths
     @Published var activePaths: [LearningPath] = []
@@ -62,18 +74,25 @@ class UniversityViewModel: ObservableObject {
         // Load from Firestore
         // For now, mock data
         await MainActor.run {
-            totalWatchHours = 142
-            certificatesEarned = 3
-            skillLevel = 8
-            subjectsStudied = 12
-            videosCompleted = 87
-            verificationScore = 92
+            // ⚡ PERFORMANCE: Update combined state structures
+            progress = UserProgress(
+                totalWatchHours: 142,
+                certificatesEarned: 3,
+                skillLevel: 8,
+                subjectsStudied: 12,
+                videosCompleted: 87,
+                verificationScore: 92
+            )
             
             // Streaks
-            currentStreak = 15
-            longestStreak = 23
-            todayProgress = 2.5
-            todayGoalMet = true
+            streaksAndGoals = StreaksAndGoals(
+                currentStreak: 15,
+                longestStreak: 23,
+                activeGoals: [],
+                dailyGoal: nil,
+                todayProgress: 2.5,
+                todayGoalMet: true
+            )
             
             // Load active goals
             loadActiveGoals()
@@ -99,12 +118,12 @@ class UniversityViewModel: ObservableObject {
     
     func updateStreak(watchDuration: TimeInterval) async {
         let hoursWatched = watchDuration / 3600.0
-        todayProgress += hoursWatched
+        streaksAndGoals.todayProgress += hoursWatched
         
         // Check if daily goal met
-        if let goal = dailyGoal {
-            if todayProgress >= goal.targetHours {
-                todayGoalMet = true
+        if let goal = streaksAndGoals.dailyGoal {
+            if streaksAndGoals.todayProgress >= goal.targetHours {
+                streaksAndGoals.todayGoalMet = true
                 await maintainStreak()
             }
         }
@@ -114,14 +133,14 @@ class UniversityViewModel: ObservableObject {
     }
     
     private func maintainStreak() async {
-        currentStreak += 1
-        if currentStreak > longestStreak {
-            longestStreak = currentStreak
+        streaksAndGoals.currentStreak += 1
+        if streaksAndGoals.currentStreak > streaksAndGoals.longestStreak {
+            streaksAndGoals.longestStreak = streaksAndGoals.currentStreak
         }
         
         // Award streak milestone rewards
-        if currentStreak % 7 == 0 {
-            await awardStreakMilestone(days: currentStreak)
+        if streaksAndGoals.currentStreak % 7 == 0 {
+            await awardStreakMilestone(days: streaksAndGoals.currentStreak)
         }
         
         HapticManager.shared.notification(type: .success)
@@ -137,7 +156,7 @@ class UniversityViewModel: ObservableObject {
             let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
             if !calendar.isDate(lastActivity, inSameDayAs: today) &&
                !calendar.isDate(lastActivity, inSameDayAs: yesterday) {
-                currentStreak = 0
+                streaksAndGoals.currentStreak = 0
                 await saveStreakProgress()
             }
         }
@@ -172,7 +191,7 @@ class UniversityViewModel: ObservableObject {
     
     private func loadActiveGoals() {
         // Load from Firestore
-        activeGoals = [
+        streaksAndGoals.activeGoals = [
             LearningGoal(
                 id: "1",
                 userId: "user1",
@@ -195,15 +214,15 @@ class UniversityViewModel: ObservableObject {
                 subjectId: nil,
                 category: nil,
                 targetHours: 2,
-                currentHours: todayProgress,
+                currentHours: streaksAndGoals.todayProgress,
                 targetDate: Calendar.current.date(byAdding: .day, value: 1, to: Date())!,
                 createdDate: Date(),
-                isCompleted: todayGoalMet,
+                isCompleted: streaksAndGoals.todayGoalMet,
                 reward: LearningGoal.GoalReward(type: .points, value: 50)
             )
         ]
         
-        dailyGoal = activeGoals.first { Calendar.current.isDateInToday($0.targetDate) }
+        streaksAndGoals.dailyGoal = streaksAndGoals.activeGoals.first { Calendar.current.isDateInToday($0.targetDate) }
     }
     
     func createGoal(title: String, description: String, subjectId: String?, category: SubjectCategory?, targetHours: Double, targetDate: Date) async {
@@ -222,28 +241,28 @@ class UniversityViewModel: ObservableObject {
             reward: nil
         )
         
-        activeGoals.append(goal)
+        streaksAndGoals.activeGoals.append(goal)
         
         // Save to Firestore
         print("🎯 Created goal: \(title)")
     }
     
     func updateGoalProgress(goalId: String, additionalHours: Double) async {
-        if let index = activeGoals.firstIndex(where: { $0.id == goalId }) {
-            activeGoals[index].currentHours += additionalHours
+        if let index = streaksAndGoals.activeGoals.firstIndex(where: { $0.id == goalId }) {
+            streaksAndGoals.activeGoals[index].currentHours += additionalHours
             
             // Check if goal completed
-            if activeGoals[index].progress >= 1.0 && !activeGoals[index].isCompleted {
+            if streaksAndGoals.activeGoals[index].progress >= 1.0 && !streaksAndGoals.activeGoals[index].isCompleted {
                 await completeGoal(goalId: goalId)
             }
         }
     }
     
     private func completeGoal(goalId: String) async {
-        guard let index = activeGoals.firstIndex(where: { $0.id == goalId }) else { return }
+        guard let index = streaksAndGoals.activeGoals.firstIndex(where: { $0.id == goalId }) else { return }
         
-        activeGoals[index].isCompleted = true
-        let goal = activeGoals[index]
+        streaksAndGoals.activeGoals[index].isCompleted = true
+        let goal = streaksAndGoals.activeGoals[index]
         
         // Award rewards
         if let reward = goal.reward {

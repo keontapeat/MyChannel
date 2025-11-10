@@ -10,6 +10,9 @@ import UIKit
 import Combine
 import AVFoundation
 import Network
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct FlicksCommentsSheet: View {
     let video: Video
@@ -277,6 +280,102 @@ struct FlicksView: View {
         loadError = nil
         defer { isLoading = false }
 
+        // 🔥 PRIORITY 1: Try to load from Firestore (actual uploaded videos)
+        var firestoreVideos: [Video] = []
+        
+        #if canImport(FirebaseFirestore)
+        do {
+            let db = Firestore.firestore()
+            // Try "shorts" collection first
+            let shortsSnap = try await db.collection("shorts")
+                .order(by: "createdAt", descending: true)
+                .limit(to: 50)
+                .getDocuments()
+            
+            if !shortsSnap.documents.isEmpty {
+                firestoreVideos = shortsSnap.documents.compactMap { doc in
+                    let d = doc.data()
+                    let defaultCreator = AppState.shared.currentUser ?? User.defaultUser
+                    return Video(
+                        id: doc.documentID,
+                        title: d["title"] as? String ?? "Untitled Flick",
+                        description: d["description"] as? String ?? "",
+                        thumbnailURL: d["thumbnailUrl"] as? String ?? (d["thumbnailURL"] as? String ?? ""),
+                        videoURL: d["videoUrl"] as? String ?? (d["videoURL"] as? String ?? ""),
+                        duration: (d["duration"] as? Double) ?? 0,
+                        viewCount: (d["viewCount"] as? Int) ?? 0,
+                        likeCount: (d["likeCount"] as? Int) ?? 0,
+                        commentCount: (d["commentCount"] as? Int) ?? 0,
+                        createdAt: (d["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
+                        creator: defaultCreator,
+                        category: .shorts,
+                        tags: d["tags"] as? [String] ?? [],
+                        isPublic: true,
+                        quality: [.quality720p],
+                        aspectRatio: .portrait,
+                        isLiveStream: false,
+                        contentSource: .userUploaded,
+                        isVerified: false
+                    )
+                }
+            }
+            
+            // If no shorts, try "videos" collection with portrait aspect ratio
+            if firestoreVideos.isEmpty {
+                let videosSnap = try await db.collection("videos")
+                    .whereField("isPublic", isEqualTo: true)
+                    .order(by: "createdAt", descending: true)
+                    .limit(to: 50)
+                    .getDocuments()
+                
+                firestoreVideos = videosSnap.documents.compactMap { doc in
+                    let d = doc.data()
+                    let defaultCreator = AppState.shared.currentUser ?? User.defaultUser
+                    // Only include portrait videos (short-form)
+                    let aspectRatio = (d["aspectRatio"] as? String) ?? "landscape"
+                    if aspectRatio != "portrait" && d["category"] as? String != "shorts" {
+                        return nil
+                    }
+                    
+                    return Video(
+                        id: doc.documentID,
+                        title: d["title"] as? String ?? "Untitled Video",
+                        description: d["description"] as? String ?? "",
+                        thumbnailURL: d["thumbnailUrl"] as? String ?? (d["thumbnailURL"] as? String ?? ""),
+                        videoURL: d["videoUrl"] as? String ?? (d["videoURL"] as? String ?? ""),
+                        duration: (d["duration"] as? Double) ?? 0,
+                        viewCount: (d["viewCount"] as? Int) ?? 0,
+                        likeCount: (d["likeCount"] as? Int) ?? 0,
+                        commentCount: (d["commentCount"] as? Int) ?? 0,
+                        createdAt: (d["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
+                        creator: defaultCreator,
+                        category: VideoCategory(rawValue: d["category"] as? String ?? "entertainment") ?? .entertainment,
+                        tags: d["tags"] as? [String] ?? [],
+                        isPublic: true,
+                        quality: [.quality720p],
+                        aspectRatio: .portrait,
+                        isLiveStream: false,
+                        contentSource: .userUploaded,
+                        isVerified: false
+                    )
+                }
+            }
+        } catch {
+            print("⚠️ [FlicksView] Error loading from Firestore: \(error.localizedDescription)")
+        }
+        #endif
+        
+        // If we got videos from Firestore, use them!
+        if !firestoreVideos.isEmpty {
+            await MainActor.run {
+                self.videos = firestoreVideos.shuffled()
+                self.currentIndex = 0
+                print("✅ [FlicksView] Loaded \(firestoreVideos.count) videos from Firestore")
+            }
+            return
+        }
+        
+        // 🔥 PRIORITY 2: Try YouTube API if key is available
         if !AppSecrets.youtubeAPIKey.isEmpty {
             do {
                 async let a = YouTubeAPIService.shared.fetchShorts(query: "funny pets", maxResults: 20)
@@ -288,6 +387,7 @@ struct FlicksView: View {
                 await MainActor.run {
                     self.videos = sorted.isEmpty ? makeYouTubeDemoVideos() : sorted
                     self.currentIndex = 0
+                    print("✅ [FlicksView] Loaded \(sorted.count) videos from YouTube")
                 }
             } catch {
                 await MainActor.run {
@@ -297,9 +397,11 @@ struct FlicksView: View {
                 }
             }
         } else {
+            // 🔥 PRIORITY 3: Fallback to demo videos
             await MainActor.run {
                 self.videos = makeYouTubeDemoVideos()
                 self.currentIndex = 0
+                print("⚠️ [FlicksView] No Firestore videos or YouTube key. Showing \(self.videos.count) demo videos")
             }
         }
     }

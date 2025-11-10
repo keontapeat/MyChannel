@@ -59,7 +59,7 @@ struct PremiumLiveTVSection: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(LiveTVChannel.ChannelCategory.allCases, id: \.self) { category in
-                        CategoryChip(
+                        LiveTVCategoryChip(
                             category: category,
                             isSelected: selectedCategory == category,
                             channelCount: channels.filter { $0.category == category }.count
@@ -110,7 +110,7 @@ struct PremiumLiveTVSection: View {
 }
 
 // MARK: - Category Chip
-struct CategoryChip: View {
+struct LiveTVCategoryChip: View {
     let category: LiveTVChannel.ChannelCategory
     let isSelected: Bool
     let channelCount: Int

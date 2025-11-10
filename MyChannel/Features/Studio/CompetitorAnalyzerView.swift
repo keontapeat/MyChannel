@@ -140,29 +140,29 @@ struct CompetitorAnalyzerView: View {
             VStack(spacing: 14) {
                 PerformanceMetricRow(
                     label: "Avg Views per Video",
-                    yourValue: viewModel.yourAvgViews,
-                    competitorAvg: viewModel.competitorAvgViews,
+                    yourValue: viewModel.metrics.yourAvgViews,
+                    competitorAvg: viewModel.metrics.competitorAvgViews,
                     isHigherBetter: true
                 )
                 
                 PerformanceMetricRow(
                     label: "Engagement Rate",
-                    yourValue: viewModel.yourEngagementRate,
-                    competitorAvg: viewModel.competitorEngagementRate,
+                    yourValue: viewModel.metrics.yourEngagementRate,
+                    competitorAvg: viewModel.metrics.competitorEngagementRate,
                     isHigherBetter: true
                 )
                 
                 PerformanceMetricRow(
                     label: "Upload Frequency",
-                    yourValue: viewModel.yourUploadFreq,
-                    competitorAvg: viewModel.competitorUploadFreq,
+                    yourValue: viewModel.metrics.yourUploadFreq,
+                    competitorAvg: viewModel.metrics.competitorUploadFreq,
                     isHigherBetter: true
                 )
                 
                 PerformanceMetricRow(
                     label: "Subscriber Growth",
-                    yourValue: viewModel.yourSubGrowth,
-                    competitorAvg: viewModel.competitorSubGrowth,
+                    yourValue: viewModel.metrics.yourSubGrowth,
+                    competitorAvg: viewModel.metrics.competitorSubGrowth,
                     isHigherBetter: true
                 )
             }

@@ -100,10 +100,12 @@ final class IPTVOrgService {
         var req = URLRequest(url: url)
         req.timeoutInterval = 12
         req.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw URLError(.badServerResponse)
-        }
+        // ⚡ PERFORMANCE: Use NetworkOptimizer for caching and deduplication
+        // Note: "no-cache" header means we want fresh data, but NetworkOptimizer still handles deduplication
+        let data = try await NetworkOptimizer.shared.optimizedRequest(
+            for: req,
+            priority: .normal
+        )
         return try JSONDecoder().decode(T.self, from: data)
     }
 

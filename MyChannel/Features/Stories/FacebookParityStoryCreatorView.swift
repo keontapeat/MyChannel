@@ -105,9 +105,18 @@ struct FacebookParityStoryCreatorView: View {
         .fullScreenCover(isPresented: $showingTextEditor) {
             FacebookTextEditorView(
                 text: viewModel.textOverlay?.text ?? "",
-                fontSize: $viewModel.textFontSize,
-                textColor: $viewModel.textColor,
-                alignment: $viewModel.textAlignment,
+                fontSize: Binding(
+                    get: { viewModel.textEditingState.fontSize },
+                    set: { viewModel.textEditingState.fontSize = $0 }
+                ),
+                textColor: Binding(
+                    get: { viewModel.textEditingState.color },
+                    set: { viewModel.textEditingState.color = $0 }
+                ),
+                alignment: Binding(
+                    get: { viewModel.textEditingState.alignment },
+                    set: { viewModel.textEditingState.alignment = $0 }
+                ),
                 onSave: { textOverlay in
                     viewModel.addTextOverlay(textOverlay)
                 }
@@ -157,7 +166,7 @@ struct FacebookParityStoryCreatorView: View {
             // Settings/Flash
             HStack(spacing: 16) {
                 Button(action: { viewModel.toggleFlash() }) {
-                    Image(systemName: viewModel.flashMode.iconName)
+                    Image(systemName: viewModel.cameraState.flashMode.iconName)
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(width: 44, height: 44)
@@ -210,8 +219,8 @@ struct FacebookParityStoryCreatorView: View {
             // Text Overlay
             if let textOverlay = viewModel.textOverlay {
                 Text(textOverlay.text)
-                    .font(.system(size: CGFloat(viewModel.textFontSize), weight: .bold, design: .rounded))
-                    .foregroundColor(viewModel.textColor)
+                    .font(.system(size: CGFloat(viewModel.textEditingState.fontSize), weight: .bold, design: .rounded))
+                    .foregroundColor(viewModel.textEditingState.color)
                     .multilineTextAlignment(.center)
                     .padding()
                     .background(
@@ -291,35 +300,35 @@ struct FacebookParityStoryCreatorView: View {
         VStack(spacing: 16) {
             // Primary Tools Row
             HStack(spacing: 24) {
-                ToolButton(
+                StoryToolButton(
                     icon: "camera.filters",
                     title: "Filters",
                     isActive: facebookEngine.currentFilter != nil,
                     action: { showingFilterPicker = true }
                 )
                 
-                ToolButton(
+                StoryToolButton(
                     icon: "face.smiling",
                     title: "Effects",
                     isActive: facebookEngine.currentEffect != nil,
                     action: { showingEffectPicker = true }
                 )
                 
-                ToolButton(
+                StoryToolButton(
                     icon: "rectangle.3.group",
                     title: "Layout",
                     isActive: currentLayoutMode != .single,
                     action: { showingLayoutPicker = true }
                 )
                 
-                ToolButton(
+                StoryToolButton(
                     icon: "textformat",
                     title: "Text",
                     isActive: viewModel.textOverlay != nil,
                     action: { showingTextEditor = true }
                 )
                 
-                ToolButton(
+                StoryToolButton(
                     icon: "face.dashed",
                     title: "Stickers",
                     isActive: !viewModel.stickers.isEmpty,
@@ -329,21 +338,21 @@ struct FacebookParityStoryCreatorView: View {
             
             // Secondary Tools Row
             HStack(spacing: 24) {
-                ToolButton(
+                StoryToolButton(
                     icon: "music.note",
                     title: "Music",
                     isActive: viewModel.backgroundMusic != nil,
                     action: { showingMusicLibrary = true }
                 )
                 
-                ToolButton(
+                StoryToolButton(
                     icon: "slider.horizontal.3",
                     title: "Adjust",
                     isActive: false,
                     action: { showingAdvancedEditor = true }
                 )
                 
-                ToolButton(
+                StoryToolButton(
                     icon: "repeat",
                     title: "Boomerang",
                     isActive: isBoomerangMode,
@@ -353,7 +362,7 @@ struct FacebookParityStoryCreatorView: View {
                     }
                 )
                 
-                ToolButton(
+                StoryToolButton(
                     icon: "magnifyingglass",
                     title: "Superzoom",
                     isActive: isSuperzoomMode,
@@ -363,7 +372,7 @@ struct FacebookParityStoryCreatorView: View {
                     }
                 )
                 
-                ToolButton(
+                StoryToolButton(
                     icon: "hand.raised",
                     title: "Hands Free",
                     isActive: isHandsFreeMode,
@@ -400,23 +409,23 @@ struct FacebookParityStoryCreatorView: View {
                         .frame(width: 80, height: 80)
                     
                     Circle()
-                        .fill(viewModel.isRecording ? Color.red : Color.clear)
+                        .fill(viewModel.cameraState.isRecording ? Color.red : Color.clear)
                         .frame(width: 60, height: 60)
                         .overlay(
                             Circle()
                                 .stroke(Color.black, lineWidth: 2)
                         )
                     
-                    if viewModel.isRecording {
+                    if viewModel.cameraState.isRecording {
                         RoundedRectangle(cornerRadius: 4)
                             .fill(Color.white)
                             .frame(width: 20, height: 20)
                     }
                 }
-                .scaleEffect(viewModel.isRecording ? 1.2 : 1.0)
-                .animation(.easeInOut(duration: 0.1), value: viewModel.isRecording)
+                .scaleEffect(viewModel.cameraState.isRecording ? 1.2 : 1.0)
+                .animation(.easeInOut(duration: 0.1), value: viewModel.cameraState.isRecording)
             }
-            .disabled(viewModel.isProcessing)
+            .disabled(viewModel.processingState.isProcessing)
             
             Spacer()
             
@@ -441,7 +450,7 @@ struct FacebookParityStoryCreatorView: View {
                     in: Capsule()
                 )
             }
-            .disabled(!viewModel.canPost || viewModel.isProcessing)
+            .disabled(!viewModel.canPost || viewModel.processingState.isProcessing)
             .opacity(viewModel.canPost ? 1.0 : 0.6)
         }
         .padding(.horizontal, 20)
@@ -515,12 +524,13 @@ struct FacebookParityStoryCreatorView: View {
     
     private func captureOrRecord() {
         if selectedCreationMode == .video || isBoomerangMode || isSuperzoomMode {
-            if viewModel.isRecording {
+            if viewModel.cameraState.isRecording {
                 // Stop recording
-                viewModel.isRecording = false
+                viewModel.cameraState.isRecording = false
+                viewModel.stopRecording()
             } else {
                 // Start recording
-                viewModel.isRecording = true
+                viewModel.startRecording()
             }
         } else {
             // Take photo
@@ -605,7 +615,7 @@ struct CreationModeButton: View {
     }
 }
 
-struct ToolButton: View {
+struct StoryToolButton: View {
     let icon: String
     let title: String
     let isActive: Bool

@@ -206,12 +206,12 @@ extension DRMService: AVAssetResourceLoaderDelegate {
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         request.httpBody = spc
         
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw DRMError.licenseRequestFailed
-        }
+        // ⚡ PERFORMANCE: Use NetworkOptimizer for request deduplication
+        // Note: POST requests are not cached, but NetworkOptimizer handles deduplication
+        let data = try await NetworkOptimizer.shared.optimizedRequest(
+            for: request,
+            priority: .high
+        )
         
         return data
     }

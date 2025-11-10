@@ -378,11 +378,12 @@ extension ImageCache {
     
     func clearOldEntries() {
         // Clear entries older than 1 hour
-        cache.removeAllObjects() // Simplified for now
+        // Note: ImageCache handles its own cleanup
+        ImageCache.shared.clearCache()
     }
     
     func clearAll() {
-        cache.removeAllObjects()
+        ImageCache.shared.clearCache()
     }
 }
 

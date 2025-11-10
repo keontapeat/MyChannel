@@ -18,16 +18,16 @@ struct CameraPreviewView: View {
             CameraPreview(cameraManager: cameraManager)
                 .onAppear {
                     cameraManager.startSession()
-                    viewModel.isCameraActive = true
+                    viewModel.cameraState.isActive = true
                 }
                 .onDisappear {
                     cameraManager.stopSession()
-                    viewModel.isCameraActive = false
+                    viewModel.cameraState.isActive = false
                 }
-                .onChange(of: viewModel.cameraPosition) { newPosition in
+                .onChange(of: viewModel.cameraState.position) { newPosition in
                     cameraManager.switchCamera(to: newPosition)
                 }
-                .onChange(of: viewModel.flashMode) { newFlashMode in
+                .onChange(of: viewModel.cameraState.flashMode) { newFlashMode in
                     cameraManager.setFlashMode(newFlashMode)
                 }
             

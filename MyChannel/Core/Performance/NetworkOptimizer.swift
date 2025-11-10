@@ -41,6 +41,27 @@ class NetworkOptimizer: ObservableObject {
         
         setupNetworkMonitoring()
         configureRequestQueue()
+        setupMemoryWarningObserver()
+    }
+    
+    // ⚡ PERFORMANCE: Clear caches on memory warning
+    private func setupMemoryWarningObserver() {
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            print("⚠️ [NetworkOptimizer] Memory warning - clearing caches")
+            self?.clearCaches()
+        }
+    }
+    
+    private func clearCaches() {
+        urlCache.removeAllCachedResponses()
+        imageRequestCache.removeAllObjects()
+        pendingRequests.values.forEach { $0.cancel() }
+        pendingRequests.removeAll()
+        print("✅ [NetworkOptimizer] Caches cleared")
     }
     
     // MARK: - Network Monitoring
@@ -109,6 +130,36 @@ class NetworkOptimizer: ObservableObject {
         optimizedRequest.timeoutInterval = timeoutForPriority(priority)
         
         // Execute request with retry logic
+        return try await executeWithRetry(optimizedRequest, priority: priority)
+    }
+    
+    // ⚡ PERFORMANCE: Overload for custom requests (POST, headers, body)
+    func optimizedRequest(
+        for request: URLRequest,
+        priority: RequestPriority = .normal
+    ) async throws -> Data {
+        // POST requests shouldn't be cached
+        if request.httpMethod == "POST" {
+            var optimizedRequest = request
+            optimizedRequest.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
+            optimizedRequest.setValue("keep-alive", forHTTPHeaderField: "Connection")
+            optimizedRequest.timeoutInterval = timeoutForPriority(priority)
+            optimizedRequest.cachePolicy = .reloadIgnoringLocalCacheData
+            
+            return try await executeWithRetry(optimizedRequest, priority: priority)
+        }
+        
+        // For GET requests, check cache first
+        if let cachedResponse = urlCache.cachedResponse(for: request) {
+            return cachedResponse.data
+        }
+        
+        // Create optimized request
+        var optimizedRequest = request
+        optimizedRequest.setValue("gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
+        optimizedRequest.setValue("keep-alive", forHTTPHeaderField: "Connection")
+        optimizedRequest.timeoutInterval = timeoutForPriority(priority)
+        
         return try await executeWithRetry(optimizedRequest, priority: priority)
     }
     

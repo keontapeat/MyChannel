@@ -14,8 +14,8 @@ import SwiftUI
 class ThumbnailABTestService: ObservableObject {
     static let shared = ThumbnailABTestService()
     
-    @Published var activeTests: [ThumbnailTest] = []
-    @Published var completedTests: [ThumbnailTest] = []
+    @Published var activeTests: [ABThumbnailTest] = []
+    @Published var completedTests: [ABThumbnailTest] = []
     @Published var testResults: [ThumbnailTestResult] = []
     @Published var isCreatingTest = false
     
@@ -36,7 +36,7 @@ class ThumbnailABTestService: ObservableObject {
         testDuration: TimeInterval = 7 * 24 * 3600, // 7 days default
         trafficSplit: [Double] = [0.5, 0.5], // Equal split default
         successMetric: TestSuccessMetric = .clickThroughRate
-    ) async throws -> ThumbnailTest {
+    ) async throws -> ABThumbnailTest {
         
         guard thumbnailVariants.count >= 2 else {
             throw ThumbnailTestError.insufficientVariants
@@ -53,7 +53,7 @@ class ThumbnailABTestService: ObservableObject {
         isCreatingTest = true
         defer { isCreatingTest = false }
         
-        let test = ThumbnailTest(
+        let test = ABThumbnailTest(
             id: UUID().uuidString,
             videoId: videoId,
             variants: thumbnailVariants,
@@ -69,7 +69,7 @@ class ThumbnailABTestService: ObservableObject {
         try await networkService.post(
             endpoint: .custom("/thumbnail-tests"),
             body: test,
-            responseType: ThumbnailTest.self
+            responseType: ABThumbnailTest.self
         )
         
         // Start serving variants
@@ -100,7 +100,7 @@ class ThumbnailABTestService: ObservableObject {
         try await networkService.put(
             endpoint: .custom("/thumbnail-tests/\(testId)"),
             body: test,
-            responseType: ThumbnailTest.self
+            responseType: ABThumbnailTest.self
         )
         
         // Move to completed tests
@@ -224,7 +224,7 @@ class ThumbnailABTestService: ObservableObject {
         }
     }
     
-    private func startServingVariants(test: ThumbnailTest) async {
+    private func startServingVariants(test: ABThumbnailTest) async {
         // Configure CDN to serve different thumbnail variants
         let requestBody: [String: Any] = [
             "videoId": test.videoId,
@@ -249,7 +249,7 @@ class ThumbnailABTestService: ObservableObject {
         )
     }
     
-    private func calculateTestResults(test: ThumbnailTest) async throws -> ThumbnailTestResult {
+    private func calculateTestResults(test: ABThumbnailTest) async throws -> ThumbnailTestResult {
         // Get performance data for each variant
         var variantResults: [VariantResult] = []
         
@@ -383,7 +383,8 @@ class ThumbnailABTestService: ObservableObject {
 
 // MARK: - Models
 
-struct ThumbnailTest: Identifiable, Codable {
+// Note: Renamed to avoid conflict with SharedAgentTypes.ThumbnailTest
+struct ABThumbnailTest: Identifiable, Codable {
     let id: String
     let videoId: String
     let variants: [ThumbnailVariant]

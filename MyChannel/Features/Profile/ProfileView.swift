@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct ProfileView: View {
     @EnvironmentObject var authManager: AuthenticationManager
@@ -20,6 +23,12 @@ struct ProfileView: View {
     @State private var userVideos: [Video] = []
     @State private var watchHistory: [Video] = []
     @State private var isIncognito: Bool = false
+    
+    // ⚡ PERFORMANCE: Pagination state
+    @State private var isLoadingMoreVideos = false
+    @State private var hasMoreVideos = true
+    @State private var lastVideoDocument: Any? = nil // Firestore DocumentSnapshot
+    private let videosPerPage = 24
 
     @State private var scrollOffset: CGFloat = 0
     @State private var isLoading: Bool = true
@@ -29,6 +38,12 @@ struct ProfileView: View {
     // Video Analytics Navigation
     @State private var showingVideoAnalytics: Bool = false
     @State private var videoToAnalyze: Video?
+    
+    // Premium & Downloads Navigation
+    @StateObject private var storeKit = StoreKitService.shared
+    @State private var showingDownloads = false
+    @State private var showingPremiumBenefits = false
+    @State private var showingMyChannelPlus = false
 
     private var currentUser: User {
         if let appUser = appState.currentUser {
@@ -161,11 +176,14 @@ struct ProfileView: View {
                 )
                 
                 // Profile Content
-                SafeProfileContentView(
-                    selectedTab: selectedTab,
-                    user: user,
-                    videos: userVideos
-                )
+                    SafeProfileContentView(
+                        selectedTab: selectedTab,
+                        user: user,
+                        videos: userVideos,
+                        onLoadMore: { await loadMoreVideos() },
+                        hasMoreVideos: hasMoreVideos,
+                        isLoadingMore: isLoadingMoreVideos
+                    )
                 
                 // Quick Actions and Links
                 VStack(spacing: 16) {
@@ -243,6 +261,179 @@ struct ProfileView: View {
                         .shadow(color: AppTheme.Colors.primary.opacity(0.25), radius: 8, x: 0, y: 4)
                     }
                     .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    
+                    // 🔥 PREMIUM & DOWNLOADS SECTION
+                    VStack(spacing: 12) {
+                        // Downloads (if premium)
+                        if storeKit.isPremium {
+                            Button {
+                                showingDownloads = true
+                                HapticManager.shared.impact(style: .light)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.blue.opacity(0.15))
+                                            .frame(width: 44, height: 44)
+                                        
+                                        Image(systemName: "arrow.down.circle.fill")
+                                            .font(.system(size: 20, weight: .semibold))
+                                            .foregroundColor(.blue)
+                                    }
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Downloads")
+                                            .font(.system(size: 17, weight: .semibold))
+                                            .foregroundColor(AppTheme.Colors.textPrimary)
+                                        
+                                        Text("Watch videos offline")
+                                            .font(.system(size: 13))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(16)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(12)
+                            }
+                        }
+                        
+                        // Premium Benefits (if premium) or Upgrade to Plus+ (if not premium)
+                        Button {
+                            if storeKit.isPremium {
+                                showingPremiumBenefits = true
+                            } else {
+                                showingMyChannelPlus = true
+                            }
+                            HapticManager.shared.impact(style: .light)
+                        } label: {
+                            HStack(spacing: 12) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.black.opacity(0.15))
+                                        .frame(width: 44, height: 44)
+                                    
+                                    Image(systemName: "crown.fill")
+                                        .font(.system(size: 20, weight: .semibold))
+                                        .foregroundColor(.black)
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(storeKit.isPremium ? "Your Premium Benefits" : "MyChannel Plus+")
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundColor(AppTheme.Colors.textPrimary)
+                                    
+                                    Text(storeKit.isPremium ? "View your usage stats" : "Try 7 days free")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                if !storeKit.isPremium {
+                                    Text("FREE TRIAL")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.black)
+                                        .cornerRadius(6)
+                                }
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(16)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(12)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    
+                    // 🔥 YOUTUBE PARITY: Professional Features Section
+                    VStack(spacing: 0) {
+                        // Header
+                        HStack {
+                            Text("Features")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 24)
+                        .padding(.bottom, 16)
+                        
+                        // Feature Cards (YouTube-style: clean, minimal, no emojis, neutral colors)
+                        VStack(spacing: 12) {
+                            // 1. MyChannel University
+                            YouTubeStyleFeatureCard(
+                                icon: "graduationcap.fill",
+                                title: "MyChannel University",
+                                subtitle: "Learn & earn certificates",
+                                destination: UniversityHomeView()
+                            )
+                            
+                            // 2. Gaming & Esports
+                            YouTubeStyleFeatureCard(
+                                icon: "gamecontroller.fill",
+                                title: "Gaming & Esports",
+                                subtitle: "Tournaments & competitions",
+                                destination: GamingView()
+                            )
+                            
+                            // 3. Championship Hub
+                            YouTubeStyleFeatureCard(
+                                icon: "crown.fill",
+                                title: "Championship Hub",
+                                subtitle: "Belts, rankings & VS matches",
+                                destination: ChampionshipHubView()
+                            )
+                            
+                            // 4. Thumbnail Creator
+                            YouTubeStyleFeatureCard(
+                                icon: "photo.on.rectangle.angled",
+                                title: "Thumbnail Creator",
+                                subtitle: "AI-powered thumbnails",
+                                destination: ThumbnailCreatorView()
+                            )
+                            
+                            // 5. Live Shopping
+                            YouTubeStyleFeatureCard(
+                                icon: "bag.fill",
+                                title: "Live Shopping",
+                                subtitle: "Shop from creators",
+                                destination: LiveShoppingView()
+                            )
+                            
+                            // 6. Streamer Awards
+                            YouTubeStyleFeatureCard(
+                                icon: "trophy.fill",
+                                title: "Streamer Awards",
+                                subtitle: "Compete to be the best • Rankings & Achievements",
+                                destination: LiveStreamerAwardsView()
+                            )
+                            
+                            // 7. AGI Agent Dashboard (Admin Only)
+                            if currentUser.email.lowercased() == "keontapeat@mychannel.live" || currentUser.email.lowercased() == "keontapeat@gmail.com" {
+                                YouTubeStyleFeatureCard(
+                                    icon: "brain.head.profile",
+                                    title: "AGI Agent Dashboard",
+                                    subtitle: "Manage all 30 AI agents",
+                                    destination: AGIAgentDashboardView(),
+                                    isAdmin: true
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 24)
+                    }
                     .padding(.bottom, 120)
                     
                     // History Section
@@ -310,6 +501,21 @@ struct ProfileView: View {
         .sheet(isPresented: $showingSettings) {
             ProfileSettingsWrapper()
         }
+        .fullScreenCover(isPresented: $showingDownloads) {
+            NavigationStack {
+                DownloadsView()
+            }
+        }
+        .fullScreenCover(isPresented: $showingPremiumBenefits) {
+            NavigationStack {
+                PremiumBenefitsView()
+            }
+        }
+        .fullScreenCover(isPresented: $showingMyChannelPlus) {
+            NavigationStack {
+                MyChannelPlusView()
+            }
+        }
     }
 
     // MARK: - Loading View
@@ -366,18 +572,29 @@ struct ProfileView: View {
             user = currentUser
             Task { @MainActor in
                 let creatorId = user.id
-                // 🔥 LOAD ONLY REAL VIDEOS: Get actual uploaded videos from Firestore
-                var vids = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: creatorId)
-                
-                // Check local storage as backup
-                if vids.isEmpty {
-                    if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: creatorId), !localVids.isEmpty {
-                        vids = localVids
+                // ⚡ PERFORMANCE: Load only first page (24 videos) for faster initial load
+                do {
+                    let result = try await VideoFirestoreService.shared.fetchVideosByCreatorPaginated(
+                        creatorId: creatorId,
+                        limit: videosPerPage,
+                        lastDocument: nil
+                    )
+                    userVideos = result.videos
+                    lastVideoDocument = result.lastDocument
+                    hasMoreVideos = result.videos.count == videosPerPage
+                    
+                    // Check local storage as backup only if Firestore is empty
+                    if userVideos.isEmpty {
+                        if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: creatorId), !localVids.isEmpty {
+                            userVideos = Array(localVids.prefix(videosPerPage))
+                            hasMoreVideos = localVids.count > videosPerPage
+                        }
                     }
+                } catch {
+                    print("🚨 [ProfileView] Error loading videos: \(error)")
+                    userVideos = []
+                    hasMoreVideos = false
                 }
-                
-                // NO MOCK DATA - Only show real videos the user has actually posted
-                userVideos = vids
                 
                 // 🔥 REAL-TIME STATS UPDATE: Update user stats based on ACTUAL videos only
                 // Ensure video count matches EXACTLY what's displayed - no mock data
@@ -438,22 +655,29 @@ struct ProfileView: View {
                 print("🔄 Setting user state to new user with profileImageURL: \(newUser.profileImageURL ?? "nil")")
                 user = newUser
                 Task { @MainActor in
-                    // 🔥 LOAD ONLY REAL VIDEOS: No mock data
-                    let vids = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: newUser.id)
-
-                    // Check local storage as backup only
-                    let finalVideos: [Video]
-                    if vids.isEmpty {
-                        if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: newUser.id), !localVids.isEmpty {
-                            finalVideos = localVids
-                        } else {
-                            finalVideos = [] // NO MOCK DATA - empty if no real videos
+                    // ⚡ PERFORMANCE: Load only first page (24 videos)
+                    do {
+                        let result = try await VideoFirestoreService.shared.fetchVideosByCreatorPaginated(
+                            creatorId: newUser.id,
+                            limit: videosPerPage,
+                            lastDocument: nil
+                        )
+                        userVideos = result.videos
+                        lastVideoDocument = result.lastDocument
+                        hasMoreVideos = result.videos.count == videosPerPage
+                        
+                        // Check local storage as backup only if Firestore is empty
+                        if userVideos.isEmpty {
+                            if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: newUser.id), !localVids.isEmpty {
+                                userVideos = Array(localVids.prefix(videosPerPage))
+                                hasMoreVideos = localVids.count > videosPerPage
+                            }
                         }
-                    } else {
-                        finalVideos = vids
+                    } catch {
+                        print("🚨 [ProfileView] Error loading videos: \(error)")
+                        userVideos = []
+                        hasMoreVideos = false
                     }
-                    
-                    userVideos = finalVideos
                     
                     // Update user stats to match actual video count
                     var updatedUser = newUser
@@ -466,7 +690,7 @@ struct ProfileView: View {
                         bannerImageURL: newUser.bannerImageURL,
                         bio: newUser.bio,
                         subscriberCount: newUser.subscriberCount,
-                        videoCount: finalVideos.count, // 🔥 EXACT COUNT
+                        videoCount: userVideos.count, // 🔥 EXACT COUNT
                         isVerified: newUser.isVerified,
                         isCreator: newUser.isCreator,
                         createdAt: newUser.createdAt,
@@ -476,7 +700,7 @@ struct ProfileView: View {
                         followerCount: newUser.followerCount,
                         followingCount: newUser.followingCount,
                         joinDate: newUser.joinDate,
-                        totalViews: finalVideos.reduce(0) { $0 + $1.viewCount }, // 🔥 REAL TOTAL VIEWS
+                        totalViews: userVideos.reduce(0) { $0 + $1.viewCount }, // 🔥 REAL TOTAL VIEWS
                         totalEarnings: newUser.totalEarnings,
                         membershipTiers: newUser.membershipTiers,
                         bannerVideoURL: newUser.bannerVideoURL,
@@ -510,6 +734,38 @@ struct ProfileView: View {
         loadProfileSafely()
     }
     
+    // ⚡ PERFORMANCE: Load more videos (pagination)
+    private func loadMoreVideos() async {
+        guard !isLoadingMoreVideos && hasMoreVideos else { return }
+        
+        isLoadingMoreVideos = true
+        defer { isLoadingMoreVideos = false }
+        
+        #if canImport(FirebaseFirestore)
+        do {
+            guard let lastDoc = lastVideoDocument as? DocumentSnapshot else {
+                hasMoreVideos = false
+                return
+            }
+            
+            let result = try await VideoFirestoreService.shared.fetchVideosByCreatorPaginated(
+                creatorId: user.id,
+                limit: videosPerPage,
+                lastDocument: lastDoc
+            )
+            
+            await MainActor.run {
+                userVideos.append(contentsOf: result.videos)
+                lastVideoDocument = result.lastDocument
+                hasMoreVideos = result.videos.count == videosPerPage
+            }
+        } catch {
+            print("🚨 [ProfileView] Error loading more videos: \(error)")
+            await MainActor.run { hasMoreVideos = false }
+        }
+        #endif
+    }
+    
     // MARK: - Profile Content with Tabs
     @ViewBuilder
     private var profileContentWithTabs: some View {
@@ -520,7 +776,10 @@ struct ProfileView: View {
                     ProfileContentSection(
                         selectedTab: selectedTab,
                         user: user,
-                        videos: userVideos
+                        videos: userVideos,
+                        onLoadMore: { await loadMoreVideos() },
+                        hasMoreVideos: hasMoreVideos,
+                        isLoadingMore: isLoadingMoreVideos
                     )
                     .padding(.top, 8)
                     .background(AppTheme.Colors.background)
@@ -635,12 +894,18 @@ private struct ProfileContentSection: View {
     let selectedTab: ProfileTab
     let user: User
     let videos: [Video]
+    var onLoadMore: (() async -> Void)? = nil // ⚡ PERFORMANCE: Pagination callback
+    var hasMoreVideos: Bool = false // ⚡ PERFORMANCE: Pagination state
+    var isLoadingMore: Bool = false // ⚡ PERFORMANCE: Loading state
 
     var body: some View {
         SafeProfileContentView(
             selectedTab: selectedTab,
             user: user,
-            videos: videos
+            videos: videos,
+            onLoadMore: onLoadMore,
+            hasMoreVideos: hasMoreVideos,
+            isLoadingMore: isLoadingMore
         )
     }
 }
@@ -964,4 +1229,70 @@ extension Notification.Name {
 
 #Preview("Profile Settings Wrapper") {
     ProfileSettingsWrapper()
+}
+
+// MARK: - YouTube-Style Feature Card Component
+struct YouTubeStyleFeatureCard<Destination: View>: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let destination: Destination
+    var isAdmin: Bool = false
+    
+    var body: some View {
+        NavigationLink(destination: destination) {
+            HStack(spacing: 16) {
+                // Icon (YouTube-style: neutral background, subtle)
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.Colors.surface)
+                        .frame(width: 44, height: 44)
+                    
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                }
+                
+                // Content
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(title)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                        
+                        if isAdmin {
+                            Text("ADMIN")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.red, in: Capsule())
+                        }
+                    }
+                    
+                    Text(subtitle)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .lineLimit(1)
+                }
+                
+                Spacer()
+                
+                // Chevron (YouTube-style: subtle)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textTertiary)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppTheme.Colors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
 }

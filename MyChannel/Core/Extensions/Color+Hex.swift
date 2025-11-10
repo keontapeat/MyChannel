@@ -2,94 +2,67 @@
 //  Color+Hex.swift
 //  MyChannel
 //
-//  Created by AI Assistant on 8/9/25.
+//  Color extension for hex color support
 //
 
 import SwiftUI
 
 extension Color {
-    // MARK: - Hex Color Initializer
-    init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let a, r, g, b: UInt64
-        switch hex.count {
-        case 3: // RGB (12-bit)
-            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6: // RGB (24-bit)
-            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8: // ARGB (32-bit)
-            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default:
-            (a, r, g, b) = (1, 1, 1, 0)
+    /// Initialize a Color from a hex string (e.g., "#FF5733" or "FF5733")
+    init?(hex: String) {
+        var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
+        
+        var rgb: UInt64 = 0
+        
+        guard Scanner(string: hexSanitized).scanHexInt64(&rgb) else {
+            return nil
         }
-
-        self.init(
-            .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue:  Double(b) / 255,
-            opacity: Double(a) / 255
-        )
+        
+        let length = hexSanitized.count
+        let r, g, b, a: Double
+        
+        if length == 6 {
+            r = Double((rgb & 0xFF0000) >> 16) / 255.0
+            g = Double((rgb & 0x00FF00) >> 8) / 255.0
+            b = Double(rgb & 0x0000FF) / 255.0
+            a = 1.0
+        } else if length == 8 {
+            r = Double((rgb & 0xFF000000) >> 24) / 255.0
+            g = Double((rgb & 0x00FF0000) >> 16) / 255.0
+            b = Double((rgb & 0x0000FF00) >> 8) / 255.0
+            a = Double(rgb & 0x000000FF) / 255.0
+        } else {
+            return nil
+        }
+        
+        self.init(red: r, green: g, blue: b, opacity: a)
     }
     
-    // MARK: - Hex String Representation
-    var hexString: String {
-        guard let components = UIColor(self).cgColor.components else {
-            return "#000000"
-        }
+    /// Convert Color to hex string
+    func toHex() -> String? {
+        #if os(macOS)
+        guard let components = NSColor(self).cgColor.components else { return nil }
+        #else
+        guard let components = UIColor(self).cgColor.components else { return nil }
+        #endif
         
         let r = components[0]
         let g = components[1]
         let b = components[2]
+        let a = components.count >= 4 ? components[3] : 1.0
         
-        return String(
-            format: "#%02X%02X%02X",
-            Int(r * 255),
-            Int(g * 255),
-            Int(b * 255)
-        )
-    }
-}
-
-#Preview {
-    VStack(spacing: 16) {
-        Text("Color Hex Extension")
-            .font(AppTheme.Typography.title1)
-        
-        HStack(spacing: 16) {
-            VStack {
-                Rectangle()
-                    .fill(Color(hex: "FF6B6B"))
-                    .frame(width: 50, height: 50)
-                    .cornerRadius(8)
-                Text("#FF6B6B")
-                    .font(AppTheme.Typography.caption)
-            }
-            
-            VStack {
-                Rectangle()
-                    .fill(Color(hex: "4ECDC4"))
-                    .frame(width: 50, height: 50)
-                    .cornerRadius(8)
-                Text("#4ECDC4")
-                    .font(AppTheme.Typography.caption)
-            }
-            
-            VStack {
-                Rectangle()
-                    .fill(Color(hex: "45B7D1"))
-                    .frame(width: 50, height: 50)
-                    .cornerRadius(8)
-                Text("#45B7D1")
-                    .font(AppTheme.Typography.caption)
-            }
+        if a == 1.0 {
+            return String(format: "#%02lX%02lX%02lX",
+                         lroundf(Float(r * 255)),
+                         lroundf(Float(g * 255)),
+                         lroundf(Float(b * 255)))
+        } else {
+            return String(format: "#%02lX%02lX%02lX%02lX",
+                         lroundf(Float(r * 255)),
+                         lroundf(Float(g * 255)),
+                         lroundf(Float(b * 255)),
+                         lroundf(Float(a * 255)))
         }
-        
-        Text("Hex String: \(AppTheme.Colors.primary.hexString)")
-            .font(AppTheme.Typography.caption)
-            .foregroundColor(AppTheme.Colors.textSecondary)
     }
-    .padding()
 }

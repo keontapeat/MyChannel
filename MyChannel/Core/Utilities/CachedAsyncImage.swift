@@ -1,32 +1,8 @@
 import SwiftUI
-
-// MARK: - Image Cache for Performance
-class ImageCache {
-    static let shared = ImageCache()
-    let cache = NSCache<NSURL, UIImage>()
-    
-    private init() {
-        cache.countLimit = 100 // Max 100 images
-        cache.totalCostLimit = 1024 * 1024 * 100 // Max 100MB
-    }
-    
-    func image(for url: URL) -> UIImage? {
-        return cache.object(forKey: url as NSURL)
-    }
-    
-    func setImage(_ image: UIImage, for url: URL) {
-        cache.setObject(image, forKey: url as NSURL, cost: image.diskSize)
-    }
-}
-
-fileprivate extension UIImage {
-    var diskSize: Int {
-        return self.cgImage?.bytesPerRow ?? 0 * (self.cgImage?.height ?? 0)
-    }
-}
-
+import UIKit
 
 // MARK: - Cached AsyncImage for Performance
+// Note: ImageCache is defined in ImagePrefetcher.swift to avoid duplication
 struct CachedAsyncImage<Content: View, Placeholder: View>: View {
     private let url: URL?
     private let content: (Image) -> Content
@@ -77,7 +53,7 @@ struct CachedAsyncImage<Content: View, Placeholder: View>: View {
             do {
                 let (data, _) = try await URLSession.shared.data(from: url)
                 if let uiImage = UIImage(data: data) {
-                    ImageCache.shared.setImage(uiImage, for: url)
+                    ImageCache.shared.store(uiImage, for: url)
                     await MainActor.run {
                         self.image = uiImage
                         self.isLoading = false

@@ -720,7 +720,7 @@ struct RevenueAnalytics: Codable {
 
 struct CompetitorAnalysis: Codable, Identifiable {
     let id = UUID()
-    let similarChannels: [CompetitorChannel]
+    let similarChannels: [AnalyticsCompetitorChannel]
     let marketPosition: MarketPosition
     let contentGaps: [AnalyticsContentGap]
     let competitiveAdvantages: [String]
@@ -885,7 +885,7 @@ struct DeviceMetric: Codable, Identifiable {
 struct GenderBreakdown: Codable { let male: Double; let female: Double; let other: Double }
 struct TrafficSourceMetric: Codable { let source: String; let percentage: Double }
 struct RevenueSourceMetric: Codable { let source: String; let amount: Double }
-struct CompetitorChannel: Codable { let channelId: String; let name: String; let subscribers: Int; let growthRate: Double }
+struct AnalyticsCompetitorChannel: Codable { let channelId: String; let name: String; let subscribers: Int; let growthRate: Double }
 struct MarketPosition: Codable { let rank: Int; let percentile: Double; let category: String }
 struct AnalyticsContentGap: Codable { let topic: String; let opportunity: String; let difficulty: String }
 struct AnalyticsGrowthPrediction: Codable { 

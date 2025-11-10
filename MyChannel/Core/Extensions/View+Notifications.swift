@@ -73,14 +73,14 @@ extension View {
     
     func modernConfetti(trigger: Bool) -> some View {
         self.overlay(
-            ConfettiView(trigger: trigger)
+            ModernConfettiView(trigger: trigger)
                 .allowsHitTesting(false)
         )
     }
 }
 
-// MARK: - Confetti Animation View
-struct ConfettiView: View {
+// MARK: - Modern Confetti Animation View
+struct ModernConfettiView: View {
     let trigger: Bool
     @State private var particles: [ConfettiParticle] = []
     

@@ -340,7 +340,7 @@ struct AICoCreatorView: View {
             } else {
                 LazyVStack(spacing: 12) {
                     ForEach(aiService.contentGaps.prefix(3)) { gap in
-                        ContentGapCard(gap: gap)
+                        AICoCreatorContentGapCard(gap: gap)
                     }
                 }
             }
@@ -481,7 +481,7 @@ struct ContentGapPlaceholder: View {
     }
 }
 
-struct ContentGapCard: View {
+struct AICoCreatorContentGapCard: View {
     let gap: AIContentGap
     
     var body: some View {

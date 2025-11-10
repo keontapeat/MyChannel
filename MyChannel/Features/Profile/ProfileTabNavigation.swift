@@ -78,37 +78,41 @@ struct ProfileTabButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 0) { // remove vertical gaps for flush look
-                HStack(spacing: 6) {
-                    Image(systemName: tab.iconName)
-                        .font(.system(size: 14, weight: .medium))
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    // Icon (YouTube-style: only show when selected or on hover)
+                    if isSelected {
+                        Image(systemName: tab.iconName)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.primary)
+                    }
                     
                     Text(tab.title)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 15, weight: isSelected ? .semibold : .regular))
+                        .foregroundColor(
+                            isSelected ? AppTheme.Colors.textPrimary : AppTheme.Colors.textSecondary
+                        )
                     
                     if let count = getTabCount(for: tab) {
-                        Text("(\(count))")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        Text("\(count)")
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundColor(AppTheme.Colors.textTertiary)
                     }
                 }
-                .foregroundColor(
-                    isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary
-                )
                 .padding(.horizontal, 16)
-                .frame(height: 49) // iOS tab height
+                .frame(height: 48)
                 
-                // Selection Indicator
-                RoundedRectangle(cornerRadius: 1.5)
+                // Selection Indicator (YouTube-style: bottom border)
+                Rectangle()
                     .fill(AppTheme.Colors.primary)
-                    .frame(height: 3)
+                    .frame(height: 2)
                     .scaleEffect(x: isSelected ? 1.0 : 0.0, y: 1.0, anchor: .center)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isSelected)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
-        .scaleEffect(isPressed ? 0.96 : 1.0)
+        .scaleEffect(isPressed ? 0.97 : 1.0)
         .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isPressed)
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)

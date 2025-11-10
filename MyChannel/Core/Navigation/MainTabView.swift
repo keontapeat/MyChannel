@@ -12,6 +12,7 @@ struct MainTabView: View {
     // Simple environment object access without complex initialization
     @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var appState: AppState
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
     @StateObject private var inbox = NotificationsInboxService.shared
     
@@ -91,7 +92,81 @@ struct MainTabView: View {
         // Present video detail only when triggered by mini player event
         .fullScreenCover(isPresented: $presentMiniPlayerDetail) {
             if let video = globalPlayer.currentVideo {
-                VideoDetailView(video: video)
+                ZStack {
+                    // 🔥 FIX: Black background to prevent white screen flash
+                    Color.black.ignoresSafeArea()
+                    
+                    VideoDetailView(video: video)
+                        .onAppear {
+                            print("📺 [MainTabView] VideoDetailView appeared from mini player")
+                            
+                            // 🔥 FIX: Ensure player is properly set up BEFORE view appears
+                            // This prevents white screen flash
+                            if let player = globalPlayer.player {
+                                print("✅ [MainTabView] Player exists and is ready")
+                                
+                                // Ensure player is playing if it was playing before
+                                if globalPlayer.isPlaying && player.rate == 0 {
+                                    print("▶️ [MainTabView] Resuming playback")
+                                    player.play()
+                                }
+                                
+                                // Ensure fullscreen state is set correctly
+                                globalPlayer.showingFullscreen = true
+                                globalPlayer.shouldShowMiniPlayer = false
+                                globalPlayer.isMiniplayer = false
+                            } else {
+                                print("⚠️ [MainTabView] Player is nil - setting up new player")
+                                // Player was lost - set it up again
+                                globalPlayer.exposedPlayerManager?.setupPlayer(with: video)
+                                
+                                // Wait for player to be ready
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                    if let player = globalPlayer.player {
+                                        if globalPlayer.isPlaying {
+                                            player.play()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .onDisappear {
+                            print("📺 [MainTabView] VideoDetailView disappeared")
+                            
+                            // 🔥 FIX: When dismissing, ensure mini player is restored if video is still playing
+                            if globalPlayer.currentVideo != nil {
+                                let wasPlaying = globalPlayer.isPlaying
+                                
+                                // Restore mini player state
+                                globalPlayer.showingFullscreen = false
+                                
+                                // Only show mini player if video was playing
+                                if wasPlaying {
+                                    globalPlayer.shouldShowMiniPlayer = true
+                                    globalPlayer.isMiniplayer = true
+                                    print("✅ [MainTabView] Restored mini player")
+                                } else {
+                                    // Video wasn't playing, don't show mini player
+                                    globalPlayer.shouldShowMiniPlayer = false
+                                    globalPlayer.isMiniplayer = false
+                                    print("✅ [MainTabView] Video not playing - mini player hidden")
+                                }
+                            }
+                        }
+                }
+            } else {
+                // 🔥 FIX: Fallback if video is nil (shouldn't happen, but prevent white screen)
+                Color.black.ignoresSafeArea()
+                    .overlay {
+                        ProgressView()
+                            .tint(.white)
+                    }
+                    .onAppear {
+                        print("⚠️ [MainTabView] No video available - dismissing")
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            presentMiniPlayerDetail = false
+                        }
+                    }
             }
         }
         .ignoresSafeArea(.keyboard)
@@ -182,6 +257,21 @@ struct MainTabView: View {
                 GlobalVideoPlayerManager.shared.resumeAfterLeavingFlicks()
             }
         }
+        // 🔥 AUTO PiP: Start Picture-in-Picture when app goes to background
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .background || newPhase == .inactive {
+                // Auto-start PiP if video is playing and mini player is visible
+                if globalPlayer.shouldShowMiniPlayer,
+                   globalPlayer.currentVideo != nil,
+                   let player = globalPlayer.player,
+                   player.rate > 0 {
+                    // Ensure PiP is set up and start it
+                    Task { @MainActor in
+                        await globalPlayer.startPiPWhenBackgrounding()
+                    }
+                }
+            }
+        }
     }
     
     @ViewBuilder
@@ -212,15 +302,17 @@ struct MainTabView: View {
                         Color.clear.frame(height: tabBarReservedBottomInset + (globalPlayer.shouldShowMiniPlayer ? 96 : 0))
                     }
                 }
-
-            // 🔥 REMOVED: FloatingMiniPlayer - Now using iOS native Picture-in-Picture (YouTube style)
-            // The native PiP provides a floating player that works system-wide, even outside the app
-            // Users can move it around, resize it, and it persists across app navigation
-            // if selectedTab != .flicks {
-            //     SafeFloatingMiniPlayer()
-            //         .environmentObject(globalPlayer)
-            //         .zIndex(998)
-            // }
+            if globalPlayer.shouldShowMiniPlayer,
+               !globalPlayer.showingFullscreen,
+               selectedTab != .flicks {
+                SafeFloatingMiniPlayer()
+                    .environmentObject(globalPlayer)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, tabBarReservedBottomInset + 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(998)
+                    .animation(.easeInOut(duration: 0.25), value: globalPlayer.shouldShowMiniPlayer)
+            }
         }
         .overlay(alignment: .bottom) {
             CustomTabBar(
@@ -1297,7 +1389,7 @@ struct TVStaticOverlay: View {
     let isActive: Bool
 
     var body: some View {
-        TimelineView(.animation) { context in
+        SwiftUI.TimelineView(.periodic(from: Date.now, by: 0.1)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
             let seed = Int(t * 60) % 10
 

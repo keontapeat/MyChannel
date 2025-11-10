@@ -12,13 +12,19 @@ struct SafeProfileContentView: View {
     let selectedTab: ProfileTab
     let user: User
     let videos: [Video]
+    var onLoadMore: (() async -> Void)? = nil // ⚡ PERFORMANCE: Pagination callback
+    var hasMoreVideos: Bool = false // ⚡ PERFORMANCE: Pagination state
+    var isLoadingMore: Bool = false // ⚡ PERFORMANCE: Loading state
     
     var body: some View {
         SafeViewWrapper {
             ProfileContentView(
                 selectedTab: selectedTab,
                 user: user,
-                videos: videos
+                videos: videos,
+                onLoadMore: onLoadMore,
+                hasMoreVideos: hasMoreVideos,
+                isLoadingMore: isLoadingMore
             )
         } fallback: {
             ProfileContentFallback(selectedTab: selectedTab)
@@ -31,12 +37,21 @@ struct ProfileContentView: View {
     let selectedTab: ProfileTab
     let user: User
     let videos: [Video]
+    var onLoadMore: (() async -> Void)? = nil // ⚡ PERFORMANCE: Pagination callback
+    var hasMoreVideos: Bool = false // ⚡ PERFORMANCE: Pagination state
+    var isLoadingMore: Bool = false // ⚡ PERFORMANCE: Loading state
     
     var body: some View {
         LazyVStack(spacing: 0) {
             switch selectedTab {
             case .videos:
-                ProfileVideosView(videos: videos, user: user)
+                ProfileVideosView(
+                    videos: videos,
+                    user: user,
+                    onLoadMore: onLoadMore,
+                    hasMoreVideos: hasMoreVideos,
+                    isLoadingMore: isLoadingMore
+                )
             case .shorts:
                 ProfileShortsView(videos: videos, user: user)
             case .playlists:
@@ -55,6 +70,9 @@ struct ProfileContentView: View {
 struct ProfileVideosView: View {
     let videos: [Video]
     let user: User
+    var onLoadMore: (() async -> Void)? = nil // ⚡ PERFORMANCE: Pagination callback
+    var hasMoreVideos: Bool = false // ⚡ PERFORMANCE: Pagination state
+    var isLoadingMore: Bool = false // ⚡ PERFORMANCE: Loading state
     
     @State private var layoutMode: VideoLayoutMode = .list1
     @State private var sortMode: SortMode = .newest
@@ -193,11 +211,33 @@ struct ProfileVideosView: View {
     private var videosBody: some View {
         if layoutMode == .grid2 {
             LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(displayVideos) { video in
+                ForEach(displayVideos, id: \.id) { video in
                     ProfileVideoCard(video: video, ownerId: user.id)
+                        .id(video.id) // ⚡ PERFORMANCE: Explicit ID for better diffing
                         .onTapGesture {
                             HapticManager.shared.impact(style: .light)
                             NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
+                        }
+                        .onAppear {
+                            // ⚡ PERFORMANCE: Prefetch next page when near bottom
+                            if video == displayVideos.suffix(3).first {
+                                Task {
+                                    if !isLoadingMore {
+                                        await onLoadMore?()
+                                    }
+                                }
+                            }
+                        }
+                }
+                // ⚡ PERFORMANCE: "Load More" button for pagination
+                if hasMoreVideos {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .task {
+                            if !isLoadingMore {
+                                await onLoadMore?()
+                            }
                         }
                 }
             }
@@ -205,13 +245,35 @@ struct ProfileVideosView: View {
         } else {
             // Single video view: one full-width 16:9 card per row
             LazyVStack(spacing: 12) {
-                ForEach(displayVideos) { video in
+                ForEach(displayVideos, id: \.id) { video in
                     FullWidthVideoCard(video: video, ownerId: user.id)
+                        .id(video.id) // ⚡ PERFORMANCE: Explicit ID for better diffing
                         .onTapGesture {
                             HapticManager.shared.impact(style: .light)
                             NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
                         }
                         .padding(.horizontal, 16)
+                        .onAppear {
+                            // ⚡ PERFORMANCE: Prefetch next page when near bottom
+                            if video == displayVideos.suffix(3).first {
+                                Task {
+                                    if !isLoadingMore {
+                                        await onLoadMore?()
+                                    }
+                                }
+                            }
+                        }
+                }
+                // ⚡ PERFORMANCE: "Load More" button for pagination
+                if hasMoreVideos {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .task {
+                            if !isLoadingMore {
+                                await onLoadMore?()
+                            }
+                        }
                 }
             }
         }
@@ -317,6 +379,7 @@ struct ProfileVideoCard: View {
                 appState.toggleSubscription(for: video.creator.id)
             }
         }
+        .drawingGroup() // ⚡ PERFORMANCE: Flatten view hierarchy for smoother scrolling
     }
     
     @ViewBuilder
@@ -553,7 +616,7 @@ struct ProfileCommunityPost: View {
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(AppTheme.Colors.textPrimary)
                         
-                        if author.isVerified {
+                        if author.shouldShowVerificationBadge {
                             Image(systemName: "checkmark.seal.fill")
                                 .font(.system(size: 14))
                                 .foregroundStyle(AppTheme.Colors.primary)
@@ -677,14 +740,14 @@ struct ProfileStatsSection: View {
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 12) {
-                StatCard(
+                ProfileStatCard(
                     title: "Subscribers",
                     value: "\(user.subscriberCount.formatted())",
                     icon: "person.2.fill",
                     color: AppTheme.Colors.primary
                 )
                 
-                StatCard(
+                ProfileStatCard(
                     title: "Videos",
                     value: "\(user.videoCount)",
                     icon: "play.rectangle.fill",
@@ -692,7 +755,7 @@ struct ProfileStatsSection: View {
                 )
                 
                 if let totalViews = user.totalViews {
-                    StatCard(
+                    ProfileStatCard(
                         title: "Total Views",
                         value: "\(totalViews.formatted())",
                         icon: "eye.fill",
@@ -700,7 +763,7 @@ struct ProfileStatsSection: View {
                     )
                 }
                 
-                StatCard(
+                ProfileStatCard(
                     title: "Joined",
                     value: user.createdAt.formatted(.dateTime.year().month(.abbreviated)),
                     icon: "calendar.badge.plus",
@@ -716,7 +779,7 @@ struct ProfileStatsSection: View {
 }
 
 // MARK: - Stat Card
-struct StatCard: View {
+struct ProfileStatCard: View {
     let title: String
     let value: String
     let icon: String
@@ -1101,6 +1164,7 @@ private struct FullWidthVideoCard: View {
                 appState.toggleSubscription(for: video.creator.id)
             }
         }
+        .drawingGroup() // ⚡ PERFORMANCE: Flatten view hierarchy for smoother scrolling
     }
 }
 

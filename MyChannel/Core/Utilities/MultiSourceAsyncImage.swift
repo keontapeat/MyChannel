@@ -47,7 +47,7 @@ struct MultiSourceAsyncImage<Content: View, Placeholder: View>: View {
         if url.scheme == "asset" {
             let assetName = url.host ?? url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             if !assetName.isEmpty, let ui = UIImage(named: assetName) {
-                ImageCache.shared.setImage(ui, for: url)
+                ImageCache.shared.store(ui, for: url)
                 self.image = ui
                 return
             } else {
@@ -78,7 +78,7 @@ struct MultiSourceAsyncImage<Content: View, Placeholder: View>: View {
                     return
                 }
                 if let ui = UIImage(data: data) {
-                    ImageCache.shared.setImage(ui, for: url)
+                    ImageCache.shared.store(ui, for: url)
                     await MainActor.run { self.image = ui }
                 } else {
                     await tryNext()

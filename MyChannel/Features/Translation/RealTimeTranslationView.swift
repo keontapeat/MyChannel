@@ -231,25 +231,25 @@ struct RealTimeTranslationView: View {
             }
             
             VStack(spacing: 12) {
-                FeatureRow(
+                TranslationFeatureRow(
                     icon: "waveform",
                     title: "Speech-to-Text",
                     description: "Automatic caption generation in real-time"
                 )
                 
-                FeatureRow(
+                TranslationFeatureRow(
                     icon: "text.quote",
                     title: "Live Captions",
                     description: "See translations as the video plays"
                 )
                 
-                FeatureRow(
+                TranslationFeatureRow(
                     icon: "speaker.wave.3.fill",
                     title: "Text-to-Speech",
                     description: "Listen to translations in your language"
                 )
                 
-                FeatureRow(
+                TranslationFeatureRow(
                     icon: "rectangle.and.pencil.and.ellipsis",
                     title: "Download Transcripts",
                     description: "Save full transcriptions for later"
@@ -348,7 +348,7 @@ struct TranslationStatCard: View {
     }
 }
 
-struct FeatureRow: View {
+struct TranslationFeatureRow: View {
     let icon: String
     let title: String
     let description: String

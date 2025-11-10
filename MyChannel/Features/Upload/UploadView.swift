@@ -167,28 +167,33 @@ struct UploadView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
     }
     
+    @ViewBuilder
+    private var cancelConfirmationButtons: some View {
+        Button("Save Draft & Close") {
+            Task {
+                isSavingDraft = true
+                do {
+                    let draft = try UploadDraftStorage.shared.saveDraft(from: uploadManager)
+                    restoreDraft = draft
+                    dismiss()
+                } catch {
+                    dismiss()
+                }
+                isSavingDraft = false
+            }
+        }
+        Button("Discard Changes", role: .destructive) {
+            dismiss()
+        }
+        Button("Cancel", role: .cancel) { }
+    }
+    
     var body: some View {
         NavigationStack {
             mainContent
         }
         .confirmationDialog("Leave creator?", isPresented: $showCancelConfirm, titleVisibility: .visible) {
-            Button("Save Draft & Close") {
-                Task {
-                    isSavingDraft = true
-                    do {
-                        let draft = try UploadDraftStorage.shared.saveDraft(from: uploadManager)
-                        restoreDraft = draft
-                        dismiss()
-                    } catch {
-                        dismiss()
-                    }
-                    isSavingDraft = false
-                }
-            }
-            Button("Discard Changes", role: .destructive) {
-                dismiss()
-            }
-            Button("Cancel", role: .cancel) { }
+            cancelConfirmationButtons
         } message: {
             Text("You can save your progress as a draft and continue later.")
         }
@@ -296,7 +301,7 @@ struct UploadView: View {
             }
         }
         .sheet(isPresented: $showQualitySettings) {
-            QualitySettingsView(selected: $uploadQuality)
+            UploadQualitySettingsView(selected: $uploadQuality)
         }
         .fullScreenCover(isPresented: $showLiveSetup) {
             GoLiveSetupView {
@@ -711,7 +716,8 @@ struct UploadView: View {
                 Spacer(minLength: 40)
                 
                 editingActionButtons
-                .padding(.horizontal, 20)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 100) // 🔥 FIX: Add padding to account for tab bar
             }
         }
     }
@@ -901,7 +907,8 @@ struct UploadView: View {
                 .padding(.horizontal, 20)
                 
                 VStack(spacing: 20) {
-                    ProfessionalInputField(title: "Title", text: $uploadManager.title, placeholder: "Give your video a catchy title...", icon: "text.cursor", isRequired: true, maxLength: 100)
+                    // 🔥 YOUTUBE PARITY: Title field with @channel autocomplete
+                    ChannelMentionTextField(title: "Title", text: $uploadManager.title, placeholder: "Give your video a catchy title... (use @ to tag channels)", icon: "text.cursor", isRequired: true, maxLength: 100)
                     
                     ProfessionalTextEditor(title: "Description", text: $uploadManager.description, placeholder: "Tell viewers what your video is about...", icon: "text.bubble", maxLength: 500)
                     
@@ -1112,110 +1119,172 @@ struct UploadView: View {
     
     // MARK: - Completed View
     private var completedView: some View {
-        VStack(spacing: 32) {
-            Spacer()
+        ZStack {
+            // Gradient background
+            LinearGradient(
+                colors: [
+                    Color(red: 0.95, green: 0.97, blue: 1.0),
+                    Color(red: 0.98, green: 0.95, blue: 1.0)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
             
-            VStack(spacing: 24) {
-                ZStack {
-                    Circle()
-                        .fill(Color.green.opacity(0.12))
-                        .frame(width: 130, height: 130)
-                    
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 70, weight: .semibold))
-                        .foregroundColor(.green)
-                        .scaleEffect(showingSuccessAnimation ? 1.15 : 1.0)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.65), value: showingSuccessAnimation)
-                }
+            VStack(spacing: 0) {
+                Spacer()
                 
-                VStack(spacing: 8) {
-                    Text("Video Published!")
-                        .font(.system(size: 30, weight: .bold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                    Text("Your video is now live")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                }
-            }
-            
-            VStack(spacing: 16) {
-                if let uploadedVideo = uploadManager.uploadedVideo {
-                    Button {
-                        HapticManager.shared.impact(style: .medium)
-                        // Navigate to video detail to play it
-                        NotificationCenter.default.post(
-                            name: NSNotification.Name("NavigateToVideo"),
-                            object: uploadedVideo
-                        )
-                        dismiss()
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "play.circle.fill")
-                                .font(.system(size: 18, weight: .semibold))
+                // Success Animation
+                VStack(spacing: 28) {
+                    ZStack {
+                        // Outer pulse ring
+                        Circle()
+                            .fill(AppTheme.Colors.primary.opacity(0.1))
+                            .frame(width: 160, height: 160)
+                            .scaleEffect(showingSuccessAnimation ? 1.2 : 1.0)
+                            .opacity(showingSuccessAnimation ? 0 : 1)
+                        
+                        // Middle ring
+                        Circle()
+                            .fill(AppTheme.Colors.primary.opacity(0.15))
+                            .frame(width: 140, height: 140)
+                        
+                        // Inner circle with checkmark
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [AppTheme.Colors.primary, AppTheme.Colors.primary.opacity(0.8)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 110, height: 110)
+                                .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 20, x: 0, y: 10)
+                            
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 52, weight: .bold))
                                 .foregroundColor(.white)
-                            Text("Watch Your Video")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
+                                .scaleEffect(showingSuccessAnimation ? 1.0 : 0.5)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(AppTheme.Colors.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 4)
                     }
-                    .buttonStyle(.plain)
-                } else {
+                    .animation(.spring(response: 0.6, dampingFraction: 0.7), value: showingSuccessAnimation)
+                    
+                    VStack(spacing: 12) {
+                        Text("Video Published!")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                        
+                        Text("Your video is now live")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                }
+                .padding(.bottom, 48)
+                
+                // Action buttons
+                VStack(spacing: 14) {
+                    if let uploadedVideo = uploadManager.uploadedVideo {
+                        // Watch Video (Primary)
+                        Button {
+                            HapticManager.shared.impact(style: .medium)
+                            NotificationCenter.default.post(
+                                name: NSNotification.Name("NavigateToVideo"),
+                                object: uploadedVideo
+                            )
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 20, weight: .semibold))
+                                Text("Watch Your Video")
+                                    .font(.system(size: 17, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                            .background(
+                                LinearGradient(
+                                    colors: [AppTheme.Colors.primary, AppTheme.Colors.primary.opacity(0.85)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .shadow(color: AppTheme.Colors.primary.opacity(0.35), radius: 15, x: 0, y: 8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    
+                    // Go to Profile
                     Button {
-                        HapticManager.shared.impact(style: .medium)
-                        // Fallback: Go to your channel
+                        HapticManager.shared.impact(style: .light)
                         NotificationCenter.default.post(name: NSNotification.Name("SwitchToProfileTab"), object: nil)
                         dismiss()
                     } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "play.circle.fill")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
-                            Text("Watch Your Video")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
+                        HStack(spacing: 10) {
+                            Image(systemName: "person.circle.fill")
+                                .font(.system(size: 20, weight: .semibold))
+                            Text("Go to Your Channel")
+                                .font(.system(size: 17, weight: .semibold))
                         }
+                        .foregroundColor(AppTheme.Colors.textPrimary)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(AppTheme.Colors.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 4)
+                        .padding(.vertical, 18)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(AppTheme.Colors.divider, lineWidth: 1.5)
+                        )
+                        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    // Create Another Video
+                    Button {
+                        HapticManager.shared.impact(style: .light)
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            uploadStep = .selectMedia
+                        }
+                        uploadManager.resetForm()
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "plus.circle")
+                                .font(.system(size: 20, weight: .semibold))
+                            Text("Create Another Video")
+                                .font(.system(size: 17, weight: .semibold))
+                        }
+                        .foregroundColor(AppTheme.Colors.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 18)
+                        .background(AppTheme.Colors.primary.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+                    
+                    // Share Video
+                    Button {
+                        HapticManager.shared.impact(style: .light)
+                        // TODO: Implement share sheet
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 16, weight: .medium))
+                            Text("Share Video")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
                     }
                     .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 24)
                 
-                Button {
-                    HapticManager.shared.impact(style: .light)
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                        uploadStep = .selectMedia
-                    }
-                    uploadManager.resetForm()
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "plus.circle").font(.system(size: 18, weight: .semibold)).foregroundColor(AppTheme.Colors.primary)
-                        Text("Create Another Video").font(.system(size: 18, weight: .semibold)).foregroundColor(AppTheme.Colors.primary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(AppTheme.Colors.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.Colors.primary, lineWidth: 2))
-                }
-                .buttonStyle(.plain)
-                
-                Button("Share Video") {
-                    HapticManager.shared.impact(style: .light)
-                }
-                .font(.system(size: 16))
-                .foregroundColor(AppTheme.Colors.textSecondary)
+                Spacer()
+                Spacer()
             }
-            .padding(.horizontal, 20)
-            
-            Spacer()
         }
     }
     
@@ -1487,7 +1556,7 @@ private struct ModeButton: View {
     }
 }
 
-private struct QualitySettingsView: View {
+private struct UploadQualitySettingsView: View {
     @Binding var selected: UploadView.VideoQuality
     var body: some View {
         NavigationStack {
@@ -1643,57 +1712,111 @@ struct ProfessionalPicker<T: CaseIterable & Hashable & RawRepresentable>: View w
     }
 }
 
+// 🔥 YOUTUBE PARITY: Professional tag input with sleek, modern design
 struct ProfessionalTagInput: View {
     let title: String
     @Binding var selectedTags: Set<String>
     let icon: String
     
     @State private var inputText = ""
+    @FocusState private var isInputFocused: Bool
     private let suggestedTags = ["Tutorial", "Educational", "Fun", "Music", "Gaming", "Tech", "Lifestyle", "Comedy", "Trending", "Creative"]
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(title).font(.system(size: 16, weight: .semibold)).foregroundColor(AppTheme.Colors.textPrimary)
-                Spacer()
-                Text("\(selectedTags.count)/10").font(.system(size: 12)).foregroundColor(selectedTags.count > 10 ? .red : AppTheme.Colors.textTertiary)
-            }
-            
-            HStack(spacing: 12) {
-                Image(systemName: icon).font(.system(size: 16)).foregroundColor(AppTheme.Colors.textTertiary).frame(width: 20)
-                TextField("Add tags to help people discover your video", text: $inputText)
-                    .font(.system(size: 16))
+        VStack(alignment: .leading, spacing: 16) {
+            // Header with count
+            HStack(alignment: .center, spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
-                    .onSubmit { addTag() }
-                Button("Add") { addTag() }
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.primary)
-                    .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || selectedTags.count >= 10)
+                
+                Spacer()
+                
+                // Count badge (YouTube-style)
+                Text("\(selectedTags.count)/10")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(selectedTags.count >= 10 ? .red : AppTheme.Colors.textSecondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(selectedTags.count >= 10 ? Color.red.opacity(0.1) : AppTheme.Colors.surface)
+                    )
             }
-            .padding(16)
-            .background(AppTheme.Colors.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1))
             
+            // Input field (YouTube-style clean design)
+            HStack(spacing: 12) {
+                TextField("Add tags", text: $inputText)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .focused($isInputFocused)
+                    .onSubmit { addTag() }
+                    .submitLabel(.done)
+                
+                if !inputText.isEmpty {
+                    Button(action: { inputText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+                    }
+                }
+                
+                Button(action: addTag) {
+                    Text("Add")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(canAddTag ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
+                }
+                .disabled(!canAddTag)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isInputFocused ? AppTheme.Colors.surface : AppTheme.Colors.surface.opacity(0.6))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(isInputFocused ? AppTheme.Colors.primary.opacity(0.5) : AppTheme.Colors.divider.opacity(0.2), lineWidth: isInputFocused ? 1.5 : 1)
+                    )
+            )
+            .animation(.easeInOut(duration: 0.2), value: isInputFocused)
+            
+            // Selected tags (YouTube-style horizontal scroll)
             if !selectedTags.isEmpty {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 8) {
-                    ForEach(Array(selectedTags).sorted(), id: \.self) { tag in
-                        ProfessionalTagChip(tag: tag, isSelected: true) {
-                            selectedTags.remove(tag)
-                            HapticManager.shared.impact(style: .light)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(selectedTags).sorted(), id: \.self) { tag in
+                            YouTubeStyleTagChip(tag: tag, isSelected: true) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    selectedTags.remove(tag)
+                                }
+                                HapticManager.shared.impact(style: .light)
+                            }
                         }
                     }
+                    .padding(.horizontal, 2)
                 }
             }
             
-            if !suggestedTags.filter({ !selectedTags.contains($0) }).isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Suggested Tags").font(.system(size: 14, weight: .medium)).foregroundColor(AppTheme.Colors.textSecondary)
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 8) {
-                        ForEach(suggestedTags.filter { !selectedTags.contains($0) }.prefix(6), id: \.self) { tag in
-                            ProfessionalTagChip(tag: tag, isSelected: false) {
+            // Suggested tags (YouTube-style clean layout)
+            if !availableSuggestedTags.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Suggested")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .padding(.leading, 4)
+                    
+                    // Flow layout for suggested tags
+                    FlowLayout(spacing: 8) {
+                        ForEach(availableSuggestedTags.prefix(8), id: \.self) { tag in
+                            YouTubeStyleTagChip(tag: tag, isSelected: false) {
                                 if selectedTags.count < 10 {
-                                    selectedTags.insert(tag)
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        selectedTags.insert(tag)
+                                    }
                                     HapticManager.shared.impact(style: .light)
                                 }
                             }
@@ -1704,17 +1827,29 @@ struct ProfessionalTagInput: View {
         }
     }
     
+    private var canAddTag: Bool {
+        let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && !selectedTags.contains(trimmed) && selectedTags.count < 10
+    }
+    
+    private var availableSuggestedTags: [String] {
+        suggestedTags.filter { !selectedTags.contains($0) }
+    }
+    
     private func addTag() {
         let tag = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !tag.isEmpty && !selectedTags.contains(tag) && selectedTags.count < 10 {
-            selectedTags.insert(tag)
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                selectedTags.insert(tag)
+            }
             inputText = ""
             HapticManager.shared.impact(style: .light)
         }
     }
 }
 
-struct ProfessionalTagChip: View {
+// 🔥 YOUTUBE PARITY: Sleek tag chip design
+struct YouTubeStyleTagChip: View {
     let tag: String
     let isSelected: Bool
     let action: () -> Void
@@ -1722,19 +1857,87 @@ struct ProfessionalTagChip: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Text(tag).font(.system(size: 14, weight: .medium)).lineLimit(1)
-                Image(systemName: isSelected ? "xmark" : "plus").font(.system(size: 12, weight: .bold))
+                Text(tag)
+                    .font(.system(size: 14, weight: .medium))
+                    .lineLimit(1)
+                
+                Image(systemName: isSelected ? "xmark" : "plus")
+                    .font(.system(size: 11, weight: .semibold))
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+            .padding(.vertical, 7)
+            .background(
+                Capsule()
+                    .fill(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+            )
             .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
-            .clipShape(RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(isSelected ? .clear : AppTheme.Colors.divider.opacity(0.3), lineWidth: 1))
+            .overlay(
+                Capsule()
+                    .stroke(isSelected ? Color.clear : AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
     }
 }
+
+// 🔥 YOUTUBE PARITY: Flow layout for tags (wraps to multiple lines)
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+    
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = computeRows(proposal: proposal, subviews: subviews)
+        let height = rows.reduce(0) { $0 + $1.maxHeight } + CGFloat(rows.count - 1) * spacing
+        return CGSize(width: proposal.width ?? 0, height: height)
+    }
+    
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let rows = computeRows(proposal: proposal, subviews: subviews)
+        var y = bounds.minY
+        for row in rows {
+            var x = bounds.minX
+            for (index, size) in row.sizes.enumerated() {
+                let subview = subviews[row.startIndex + index]
+                subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.maxHeight + spacing
+        }
+    }
+    
+    private func computeRows(proposal: ProposedViewSize, subviews: Subviews) -> [Row] {
+        var rows: [Row] = []
+        var currentRow = Row(startIndex: 0, sizes: [], maxHeight: 0)
+        var x: CGFloat = 0
+        
+        for (index, subview) in subviews.enumerated() {
+            let size = subview.sizeThatFits(proposal)
+            
+            if x + size.width > (proposal.width ?? 0) && !currentRow.sizes.isEmpty {
+                rows.append(currentRow)
+                currentRow = Row(startIndex: index, sizes: [], maxHeight: 0)
+                x = 0
+            }
+            
+            currentRow.sizes.append(size)
+            currentRow.maxHeight = max(currentRow.maxHeight, size.height)
+            x += size.width + spacing
+        }
+        
+        if !currentRow.sizes.isEmpty {
+            rows.append(currentRow)
+        }
+        
+        return rows
+    }
+    
+    struct Row {
+        let startIndex: Int
+        var sizes: [CGSize]
+        var maxHeight: CGFloat
+    }
+}
+
+// Old ProfessionalTagChip replaced by YouTubeStyleTagChip above
 
 struct ProfessionalToggleRow: View {
     let title: String

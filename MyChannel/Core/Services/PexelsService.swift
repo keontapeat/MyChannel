@@ -24,7 +24,11 @@ final class PexelsService {
         ]
         var req = URLRequest(url: comps.url!)
         req.addValue(apiKey, forHTTPHeaderField: "Authorization")
-        let (data, _) = try await URLSession.shared.data(for: req)
+        // ⚡ PERFORMANCE: Use NetworkOptimizer for caching and deduplication
+        let data = try await NetworkOptimizer.shared.optimizedRequest(
+            for: req,
+            priority: .normal
+        )
         let decoded = try JSONDecoder().decode(PexelsVideosResponse.self, from: data)
         return decoded.videos.compactMap { v in
             guard let link = v.video_files.first?.link, let _ = URL(string: link) else { return nil }

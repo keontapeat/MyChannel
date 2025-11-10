@@ -11,6 +11,9 @@ import SwiftUI
 import Combine
 import CoreML
 
+// Import shared types
+// VideoMetadata and Trend are now in SharedAgentTypes.swift
+
 @MainActor
 class PredictiveAnalyticsEngine: ObservableObject {
     static let shared = PredictiveAnalyticsEngine()
@@ -664,7 +667,7 @@ enum ContentType: String, Codable {
 
 // Placeholder structs for ML model inputs/outputs
 struct VideoFeatures: Codable {}
-struct VideoMetadata: Codable {}
+// Note: VideoMetadata is now in SharedAgentTypes.swift
 struct AudienceActivityPattern: Codable {}
 struct CompetitorTimingPattern: Codable {}
 struct PlatformEngagementPattern: Codable {}
@@ -706,7 +709,7 @@ struct GrowthFactor: Codable {}
 struct GrowthBottleneck: Codable {}
 struct GrowthOpportunity: Codable {}
 struct ActionItem: Codable {}
-struct Trend: Codable {}
+// Note: Trend is now in SharedAgentTypes.swift
 struct CompetitorTrend: Codable {}
 struct TrendLifecycle: Codable {}
 struct CompetitorInsight: Codable {}

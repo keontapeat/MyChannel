@@ -45,15 +45,21 @@ class CompetitorAnalyzerViewModel: ObservableObject {
     @Published var contentGaps: [ContentGap] = []
     @Published var aiInsights: [AIInsight] = []
     
-    // Performance Metrics
-    @Published var yourAvgViews = "45K"
-    @Published var competitorAvgViews = "38K"
-    @Published var yourEngagementRate = "8.2%"
-    @Published var competitorEngagementRate = "6.9%"
-    @Published var yourUploadFreq = "3/week"
-    @Published var competitorUploadFreq = "4/week"
-    @Published var yourSubGrowth = "+12%"
-    @Published var competitorSubGrowth = "+15%"
+    // ⚡ PERFORMANCE: Combine related metrics into single state to reduce re-renders
+    @Published var metrics: CompetitorMetrics = .empty
+    
+    struct CompetitorMetrics {
+        var yourAvgViews = "45K"
+        var competitorAvgViews = "38K"
+        var yourEngagementRate = "8.2%"
+        var competitorEngagementRate = "6.9%"
+        var yourUploadFreq = "3/week"
+        var competitorUploadFreq = "4/week"
+        var yourSubGrowth = "+12%"
+        var competitorSubGrowth = "+15%"
+        
+        static let empty = CompetitorMetrics()
+    }
     
     func loadData() async {
         // Load tracked competitors from Firestore

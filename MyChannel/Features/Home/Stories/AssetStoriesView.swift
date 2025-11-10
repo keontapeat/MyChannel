@@ -175,74 +175,41 @@ struct AssetBouncyStoriesRow: View {
             onAddStory()
         }) {
             VStack(spacing: 8) {
-                ZStack {
-                    // 🔥 INSTAGRAM/FACEBOOK PARITY: Gradient Ring
+                ZStack(alignment: .bottomTrailing) {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 0.98, green: 0.38, blue: 0.38),
-                                    Color(red: 0.98, green: 0.55, blue: 0.25),
-                                    Color(red: 0.85, green: 0.26, blue: 0.86),
-                                    Color(red: 0.53, green: 0.36, blue: 0.95)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                        .fill(AppTheme.Colors.surface)
+                        .frame(width: 78, height: 78)
+                        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                        .overlay(
+                            ProfileAvatarView(
+                                urlString: getUserProfileImageURL(),
+                                size: 72
                             )
+                            .clipShape(Circle())
                         )
-                        .frame(width: 82, height: 82)
-                        .shadow(color: Color(red: 0.85, green: 0.26, blue: 0.86).opacity(0.4), radius: 8, x: 0, y: 4)
-                    
-                    // White border
+                        .overlay(
+                            Circle()
+                                .stroke(AppTheme.Colors.divider, lineWidth: 1.5)
+                        )
+
                     Circle()
-                        .fill(Color.white)
-                        .frame(width: 76, height: 76)
-                    
-                    // 🔥 USER'S PROFILE PICTURE (like Instagram)
-                    ProfileAvatarView(
-                        urlString: getUserProfileImageURL(),
-                        size: 70
-                    )
-                    .clipShape(Circle())
-                    
-                    // 🔥 Plus Button Overlay (bottom-right corner like Instagram)
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(red: 0.85, green: 0.26, blue: 0.86),
-                                                Color(red: 0.53, green: 0.36, blue: 0.95)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 28, height: 28)
-                                    .shadow(color: Color(red: 0.85, green: 0.26, blue: 0.86).opacity(0.5), radius: 4, x: 0, y: 2)
-                                
-                                Circle()
-                                    .strokeBorder(Color.white, lineWidth: 2)
-                                    .frame(width: 28, height: 28)
-                                
-                                Image(systemName: "plus")
-                                    .font(.system(size: 14, weight: .black))
-                                    .foregroundColor(.white)
-                            }
-                            .offset(x: 4, y: 4)
-                        }
-                    }
-                    .frame(width: 82, height: 82)
+                        .fill(AppTheme.Colors.primary)
+                        .frame(width: 26, height: 26)
+                        .overlay(
+                            Image(systemName: "plus")
+                                .font(.system(size: 13, weight: .black))
+                                .foregroundColor(.white)
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white, lineWidth: 2)
+                        )
+                        .offset(x: 6, y: 6)
                 }
-                
-                // 🔥 Better text styling like Instagram
-                Text("Your story")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.primary)
+
+                Text("Create story")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
                     .frame(width: 80)
             }
             .frame(width: 88, height: 124)

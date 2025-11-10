@@ -12,7 +12,7 @@ struct GeneratedFlick: Identifiable, Codable {
     let id: String
     let title: String
     let thumbnailURL: String
-    let duration: Int
+    let duration: TimeInterval
     let viralScore: Int
     let predictedViews: String
     let startTime: Double
@@ -128,7 +128,7 @@ class VideoRepurposerViewModel: ObservableObject {
                     id: UUID().uuidString,
                     title: generateFlickTitle(index: i, videoTitle: video.title),
                     thumbnailURL: video.thumbnailURL,
-                    duration: Int.random(in: 15...60),
+                    duration: TimeInterval(Int.random(in: 15...60)),
                     viralScore: Int.random(in: 70...95),
                     predictedViews: "\(Int.random(in: 10...500))K",
                     startTime: Double(i * 60),

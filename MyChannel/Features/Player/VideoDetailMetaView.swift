@@ -23,6 +23,7 @@ struct VideoDetailMetaView: View {
     let onComment: () -> Void
     var onChapters: (() -> Void)? = nil
     var onProfileTap: (() -> Void)? = nil
+    var dynamicViewCount: Int? = nil // 🔥 REAL-TIME: Override view count for live updates
     
     // MARK: - Animation States
     @State private var likeAnimationScale: CGFloat = 1.0
@@ -148,7 +149,7 @@ struct VideoDetailMetaView: View {
                     .font(.caption)
                     .foregroundColor(AppTheme.Colors.textSecondary)
                 
-                Text("\(video.formattedViewCount) views")
+                Text("\(formatCount(dynamicViewCount ?? video.viewCount)) views")
                     .font(.system(size: 14, weight: .medium))
             }
             
@@ -174,7 +175,7 @@ struct VideoDetailMetaView: View {
         .padding(.top, 8)
         .padding(.bottom, 10)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(video.formattedViewCount) views, \(video.timeAgo)")
+        .accessibilityLabel("\(formatCount(dynamicViewCount ?? video.viewCount)) views, \(video.timeAgo)")
     }
     
     // MARK: - YouTube-Style Action Buttons
@@ -413,18 +414,44 @@ struct VideoDetailMetaView: View {
         .padding(.top, 20)
     }
     
-    // MARK: - Intelligent Description Section
+    // MARK: - Intelligent Description Section (YouTube-style with rich text)
     private var intelligentDescriptionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             let previewText = String(video.description.prefix(120))
             let shouldShowMore = video.description.count > 120
+            let displayText = expandedDescription ? video.description : previewText + (shouldShowMore ? "..." : "")
             
-            Text(expandedDescription ? video.description : previewText + (shouldShowMore ? "..." : ""))
-                .font(.system(size: 15, weight: .regular))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .lineLimit(expandedDescription ? nil : 3)
-                .fixedSize(horizontal: false, vertical: true)
-                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: expandedDescription)
+            // 🔥 YOUTUBE PARITY: Rich text description with clickable links, timestamps, @mentions, #hashtags
+            RichTextDescriptionView(
+                description: displayText,
+                onLinkTap: { url in
+                    // Open link in Safari
+                    if UIApplication.shared.canOpenURL(url) {
+                        UIApplication.shared.open(url)
+                    }
+                },
+                onTimestampTap: { time in
+                    // Seek video to timestamp
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("SeekToTimestamp"),
+                        object: time
+                    )
+                },
+                onChannelTap: { channelName in
+                    // Navigate to channel profile
+                    print("📺 Navigate to channel: \(channelName)")
+                    // TODO: Implement channel navigation
+                },
+                onHashtagTap: { hashtag in
+                    // Navigate to hashtag search
+                    print("🔍 Navigate to hashtag: \(hashtag)")
+                    // TODO: Implement hashtag search navigation
+                }
+            )
+            .font(.system(size: 15, weight: .regular))
+            .lineLimit(expandedDescription ? nil : 3)
+            .fixedSize(horizontal: false, vertical: true)
+            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: expandedDescription)
             
             if shouldShowMore {
                 Button(action: {

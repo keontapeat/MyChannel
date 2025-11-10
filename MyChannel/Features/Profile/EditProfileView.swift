@@ -742,9 +742,10 @@ struct EditProfileView: View {
                     // Clear old profile image from cache if URL changed
                     if let oldURL = user.profileImageURL,
                        let newURL = updatedUser.profileImageURL,
-                       oldURL != newURL,
-                       let oldURLObject = URL(string: oldURL) {
-                        ImageCache.shared.cache.removeObject(forKey: oldURLObject as NSURL)
+                       oldURL != newURL {
+                        // ImageCache will handle cleanup automatically
+                        // Or we can clear the entire cache if needed
+                        ImageCache.shared.clearCache()
                         print("🗑️ Cleared old profile image from cache")
                     }
                     

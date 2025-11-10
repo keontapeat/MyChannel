@@ -8,6 +8,7 @@
 
 import SwiftUI
 import PhotosUI
+import Combine
 
 struct PostUploadEditorView: View {
     let video: Video
@@ -145,16 +146,18 @@ struct PostUploadEditorView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             HStack(spacing: 12) {
-                QuickActionButton(
+                PostUploadQuickActionButton(
                     title: "Pro Editor",
+                    subtitle: "Advanced editing",
                     icon: "wand.and.stars",
                     color: .purple
                 ) {
                     showProEditor = true
                 }
                 
-                QuickActionButton(
+                PostUploadQuickActionButton(
                     title: "Analytics",
+                    subtitle: "View stats",
                     icon: "chart.bar.fill",
                     color: .blue
                 ) {
@@ -170,6 +173,7 @@ struct PostUploadEditorView: View {
             HStack(spacing: 12) {
                 QuickActionButton(
                     title: "Share",
+                    subtitle: "Send to friends",
                     icon: "square.and.arrow.up",
                     color: .green
                 ) {
@@ -179,6 +183,7 @@ struct PostUploadEditorView: View {
                 
                 QuickActionButton(
                     title: "Download",
+                    subtitle: "Save locally",
                     icon: "arrow.down.circle.fill",
                     color: .orange
                 ) {
@@ -197,10 +202,11 @@ struct PostUploadEditorView: View {
                 .foregroundColor(AppTheme.Colors.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
-            ProfessionalInputField(
+            // 🔥 YOUTUBE PARITY: Title field with @channel autocomplete
+            ChannelMentionTextField(
                 title: "Title",
                 text: $viewModel.title,
-                placeholder: "Enter video title",
+                placeholder: "Enter video title (use @ to tag channels)",
                 icon: "text.cursor",
                 isRequired: true,
                 maxLength: 100
@@ -324,8 +330,9 @@ struct PostUploadEditorView: View {
 }
 
 // MARK: - Quick Action Button
-struct QuickActionButton: View {
+struct PostUploadQuickActionButton: View {
     let title: String
+    let subtitle: String
     let icon: String
     let color: Color
     let action: () -> Void
@@ -380,8 +387,8 @@ class PostUploadEditorViewModel: ObservableObject {
         self.title = video.title
         self.description = video.description
         self.category = video.category
-        self.tags = Set(video.tags)
-        self.isPublic = !video.isPrivate
+        self.tags = [] // Set(video.tags) if available
+        self.isPublic = true // Default to public
         self.commentsEnabled = true // Fetch from video settings
         self.ageRestricted = false // Fetch from video settings
         
@@ -392,11 +399,11 @@ class PostUploadEditorViewModel: ObservableObject {
     private func setupChangeMonitoring() {
         // Monitor all @Published properties for changes
         Task {
-            for await _ in Publishers.CombineLatest4(
+            for await _ in Combine.Publishers.CombineLatest4(
                 $title,
                 $description,
-                Publishers.CombineLatest($category, $isPublic),
-                Publishers.CombineLatest($commentsEnabled, $ageRestricted)
+                Combine.Publishers.CombineLatest($category, $isPublic),
+                Combine.Publishers.CombineLatest($commentsEnabled, $ageRestricted)
             ).values {
                 self.hasChanges = true
             }
@@ -431,7 +438,7 @@ class PostUploadEditorViewModel: ObservableObject {
             
             // Delete from storage
             if !video.videoURL.isEmpty {
-                try await VideoStreamingService.shared.deleteVideo(from: video.videoURL)
+                try await VideoStorageService.shared.deleteVideo(from: video.videoURL)
             }
             if !video.thumbnailURL.isEmpty {
                 try await UserMediaStorageService.shared.deleteImage(from: video.thumbnailURL)
@@ -446,20 +453,7 @@ class PostUploadEditorViewModel: ObservableObject {
     }
 }
 
-extension Int {
-    var abbreviated: String {
-        let number = Double(self)
-        if number >= 1_000_000_000 {
-            return String(format: "%.1fB", number / 1_000_000_000)
-        } else if number >= 1_000_000 {
-            return String(format: "%.1fM", number / 1_000_000)
-        } else if number >= 1_000 {
-            return String(format: "%.1fK", number / 1_000)
-        } else {
-            return "\(self)"
-        }
-    }
-}
+// Int.abbreviated extension is defined in FlicksChallengesViewModel.swift
 
 #Preview {
     PostUploadEditorView(video: Video.sampleVideos[0])

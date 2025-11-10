@@ -41,7 +41,7 @@ struct MembershipsManagerView: View {
                 Button(action: { showingCreate = true }) { Image(systemName: "plus") }
             }
         }
-        .sheet(isPresented: $showingCreate) { CreateTierSheet { createTier($0) } }
+        .sheet(isPresented: $showingCreate) { MembershipCreateTierSheet { createTier($0) } }
         .navigationTitle("Memberships")
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadSettings(); await loadTiers() }
@@ -85,7 +85,7 @@ struct MembershipsManagerView: View {
     }
 }
 
-private struct CreateTierSheet: View {
+private struct MembershipCreateTierSheet: View {
     var onCreate: (MembershipTier) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var name: String = ""

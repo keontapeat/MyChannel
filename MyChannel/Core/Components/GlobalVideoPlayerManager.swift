@@ -32,9 +32,19 @@ class GlobalVideoPlayerManager: ObservableObject {
     @Published var videoQueue: [Video] = []
     @Published var queueIndex: Int = 0
     
+    // 🔥 REAL-TIME VIEW TRACKING: AI monitoring integration
+    private let viewTracker = RealtimeViewTracker.shared
+    private var currentViewSessionId: String?
+    private var heartbeatTimer: Timer?
+    
     private var playerManager: VideoPlayerManager?
+    
+    // 🔥 FIX: Expose playerManager for VideoDetailView to use when expanding from mini player
+    var exposedPlayerManager: VideoPlayerManager? {
+        playerManager
+    }
     private var cancellables = Set<AnyCancellable>()
-    private var isCleanedUp = false
+    internal(set) var isCleanedUp = false // 🔥 FIX: Make accessible to FloatingMiniPlayer
     private var wasPlayingBeforeFlicks = false
     
     // 🔥 YOUTUBE PARITY: Picture-in-Picture support
@@ -60,6 +70,55 @@ class GlobalVideoPlayerManager: ObservableObject {
     private init() {
         setupPlayerManager()
         configureAudioSession()
+        setupViewTracking()
+    }
+    
+    // MARK: - Real-time View Tracking
+    
+    private func setupViewTracking() {
+        // Setup heartbeat timer for view tracking (every 10 seconds)
+        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            Task { @MainActor in
+                await self.sendViewHeartbeat()
+            }
+        }
+    }
+    
+    private func startViewTracking(for video: Video) async {
+        // End previous session if exists
+        if let sessionId = currentViewSessionId {
+            await viewTracker.endViewSession(sessionId: sessionId)
+        }
+        
+        // Start new view session
+        let userId = AuthenticationManager.shared.currentUser?.id
+        await viewTracker.startViewSession(videoId: video.id, userId: userId)
+        
+        // Store session ID
+        currentViewSessionId = UUID().uuidString
+        
+        print("👁️ [GlobalPlayer] Started view tracking for: \(video.title)")
+    }
+    
+    private func sendViewHeartbeat() async {
+        guard let sessionId = currentViewSessionId,
+              let video = currentVideo else { return }
+        
+        await viewTracker.updateViewHeartbeat(
+            sessionId: sessionId,
+            currentTime: currentTime,
+            isPlaying: isPlaying
+        )
+    }
+    
+    private func endViewTracking() async {
+        guard let sessionId = currentViewSessionId else { return }
+        
+        await viewTracker.endViewSession(sessionId: sessionId)
+        currentViewSessionId = nil
+        
+        print("👋 [GlobalPlayer] Ended view tracking")
     }
     
     // 🔥 YOUTUBE PARITY: Configure audio session for background playback
@@ -103,6 +162,30 @@ class GlobalVideoPlayerManager: ObservableObject {
             print("📺 [GlobalVideoPlayerManager] Starting PiP")
         }
         HapticManager.shared.impact(style: .medium)
+    }
+    
+    // 🔥 AUTO PiP: Start Picture-in-Picture when app goes to background
+    func startPiPWhenBackgrounding() async {
+        guard shouldShowMiniPlayer,
+              currentVideo != nil,
+              let player = player,
+              player.rate > 0 else {
+            return
+        }
+        
+        // Check if PiP is already active
+        if isPiPActive {
+            return
+        }
+        
+        // Try to get the player layer from the PiP container view
+        // Note: PiP is handled by PlayerPiPContainerView which has its own controller
+        // We just need to trigger it via the binding
+        if !isPiPActive {
+            // The PiP will be activated by the PlayerPiPContainerView when isPiPActive is set to true
+            // But we need the player layer, so we'll rely on the VideoDetailView's PiP container
+            print("📺 [GlobalVideoPlayerManager] PiP should be handled by PlayerPiPContainerView")
+        }
     }
     
     deinit {
@@ -234,6 +317,9 @@ class GlobalVideoPlayerManager: ObservableObject {
                                     showFullscreen: Bool) {
         guard !isCleanedUp else { return }
 
+        print("🔄 [GlobalPlayer] Adopting external player manager for: \(video.title)")
+        print("🔄 [GlobalPlayer] showFullscreen: \(showFullscreen)")
+
         // Point our manager to the external one and wire observers
         playerManager = externalManager
         setupObservers()
@@ -241,12 +327,43 @@ class GlobalVideoPlayerManager: ObservableObject {
         currentVideo = video
         isPlaying = externalManager.isPlaying
 
-        // Re-enable mini player – show mini when not fullscreen
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
-            showingFullscreen = showFullscreen
-            isMiniplayer = !showFullscreen
-            shouldShowMiniPlayer = !showFullscreen
-            miniplayerOffset = 0
+        // 🔥 VIEW TRACKING: Always track views, even for own videos
+        Task {
+            await startViewTracking(for: video)
+        }
+
+        // 🔥 FIX: Set state immediately (not in animation) to prevent race conditions
+        showingFullscreen = showFullscreen
+        isMiniplayer = !showFullscreen
+        shouldShowMiniPlayer = !showFullscreen
+        miniplayerOffset = 0
+        
+        // Ensure player is playing if it was playing before
+        if externalManager.isPlaying, let player = player, player.rate == 0 {
+            player.play()
+        }
+        
+        print("✅ [GlobalPlayer] Mini player state: shouldShow=\(shouldShowMiniPlayer), isMini=\(isMiniplayer), fullscreen=\(showingFullscreen)")
+        
+        // 🔥 SAFEGUARD: Multi-check to ensure mini player state persists
+        if !showFullscreen {
+            for delay in [0.1, 0.3, 0.5, 1.0] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    guard let self = self, !self.isCleanedUp, self.currentVideo != nil else { return }
+                    // Aggressively restore mini player state if it gets lost
+                    if !self.shouldShowMiniPlayer || !self.isMiniplayer {
+                        print("⚠️ [GlobalPlayer] Mini player state LOST at \(delay)s - RESTORING")
+                        self.shouldShowMiniPlayer = true
+                        self.isMiniplayer = true
+                        self.showingFullscreen = false
+                    }
+                    // Ensure player continues playing
+                    if let player = self.player, player.rate == 0, self.isPlaying {
+                        print("🔄 [GlobalPlayer] Player paused unexpectedly - resuming")
+                        player.play()
+                    }
+                }
+            }
         }
     }
 
@@ -280,11 +397,15 @@ class GlobalVideoPlayerManager: ObservableObject {
         isMiniplayer = !showFullscreen
         shouldShowMiniPlayer = !showFullscreen
         
-        // Start playing with delay to avoid timing issues
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self = self, !self.isCleanedUp else { return }
-            self.playerManager?.play()
+        // 🔥 REAL-TIME VIEW TRACKING: Start tracking this view
+        Task {
+            await startViewTracking(for: video)
         }
+        
+        // 🔥 YOUTUBE PARITY: DO NOT auto-play - require user to press play button
+        // Videos should only play when user explicitly taps play
+        // This prevents videos from starting over or playing without user interaction
+        isPlaying = false
         
         // Add haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
@@ -340,44 +461,97 @@ class GlobalVideoPlayerManager: ObservableObject {
     func minimizePlayer() {
         guard currentVideo != nil, !isCleanedUp else { return }
         
-        print("🔄 [GlobalVideoPlayerManager] Minimizing to PiP mode (YouTube style)")
+        print("🔄 [GlobalVideoPlayerManager] Minimizing to mini player (YouTube style)")
         
-        // 🔥 ALWAYS use Picture-in-Picture mode (YouTube style floating player)
-        togglePictureInPicture()
-        
-        // Close fullscreen with animation
+        // 🔥 FIX: Set state IMMEDIATELY without animation to prevent race conditions
+        showingFullscreen = false
+        isMiniplayer = true
+        shouldShowMiniPlayer = true
         isTransitioning = true
-        withAnimation(.easeOut(duration: 0.2)) {
-            showingFullscreen = false
-            // Don't show bottom bar mini player anymore
-            isMiniplayer = false
-            shouldShowMiniPlayer = false
-        }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        print("✅ [GlobalVideoPlayerManager] Mini player state SET - shouldShow: \(shouldShowMiniPlayer), isMini: \(isMiniplayer)")
+        
+        // End transition state
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             guard let self = self, !self.isCleanedUp else { return }
             self.isTransitioning = false
+            
+            // 🔥 VERIFY: Ensure state persists after transition
+            if !self.shouldShowMiniPlayer || !self.isMiniplayer {
+                print("⚠️ [GlobalVideoPlayerManager] Mini player state LOST after minimize - RESTORING")
+                self.shouldShowMiniPlayer = true
+                self.isMiniplayer = true
+                self.showingFullscreen = false
+            }
         }
         
         HapticManager.shared.impact(style: .medium)
     }
     
     func expandPlayer() {
-        guard currentVideo != nil, !isCleanedUp else { return }
+        guard let video = currentVideo, !isCleanedUp else {
+            print("⚠️ [GlobalPlayer] Cannot expand - no video or cleaned up")
+            return
+        }
         
-        print("🔄 [GlobalVideoPlayerManager] Expanding from PiP to fullscreen")
+        print("🔄 [GlobalVideoPlayerManager] Expanding from mini player to fullscreen")
+        print("🔄 [GlobalVideoPlayerManager] Video: \(video.title)")
+        print("🔄 [GlobalVideoPlayerManager] Player exists: \(player != nil)")
         
         // 🔥 Exit PiP mode if active
         if isPiPActive {
             togglePictureInPicture()
         }
         
+        // 🔥 FIX: Ensure player is ready before presenting
+        guard let player = player else {
+            print("🚨 [GlobalPlayer] No player available - setting up new player")
+            setupPlayerManager()
+            playerManager?.setupPlayer(with: video)
+            // Wait a bit for player to be ready
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.presentFullscreenVideo()
+            }
+            return
+        }
+        
+        // 🔥 FIX: Ensure player is attached and ready
+        if player.currentItem == nil {
+            print("⚠️ [GlobalPlayer] Player has no current item - setting up")
+            playerManager?.setupPlayer(with: video)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.presentFullscreenVideo()
+            }
+            return
+        }
+        
+        // Player is ready - present immediately
+        presentFullscreenVideo()
+    }
+    
+    // 🔥 FIX: Separate function to present fullscreen video
+    private func presentFullscreenVideo() {
+        guard let video = currentVideo, !isCleanedUp else { return }
+        
         isTransitioning = true
         
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            showingFullscreen = true
-            isMiniplayer = false
-            shouldShowMiniPlayer = false
+        // Set state BEFORE presenting to prevent white screen
+        showingFullscreen = true
+        isMiniplayer = false
+        shouldShowMiniPlayer = false
+        
+        // 🔥 FIX: Send notification to present VideoDetailView
+        // This triggers the fullScreenCover in MainTabView
+        NotificationCenter.default.post(
+            name: NSNotification.Name("PresentVideoDetailFromMiniPlayer"),
+            object: nil,
+            userInfo: ["video": video]
+        )
+        
+        // Ensure player continues playing
+        if let player = player, player.rate == 0, isPlaying {
+            print("▶️ [GlobalPlayer] Resuming playback in fullscreen")
+            player.play()
         }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -386,6 +560,7 @@ class GlobalVideoPlayerManager: ObservableObject {
         }
         
         HapticManager.shared.impact(style: .medium)
+        print("✅ [GlobalPlayer] Fullscreen presentation triggered")
     }
     
     func closePlayer() {
@@ -394,6 +569,11 @@ class GlobalVideoPlayerManager: ObservableObject {
         // 🔥 Stop PiP if active
         if isPiPActive {
             togglePictureInPicture()
+        }
+        
+        // 🔥 REAL-TIME VIEW TRACKING: End view session
+        Task {
+            await endViewTracking()
         }
         
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {

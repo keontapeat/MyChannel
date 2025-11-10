@@ -110,18 +110,23 @@ struct ProfileHeaderView: View {
                     .transition(.scale.combined(with: .opacity))
 
                 VStack(spacing: 6) {
+                    // 🔥 YOUTUBE PARITY: Verification badge next to name, properly centered
                     HStack(spacing: 6) {
+                        Spacer()  // 🔥 FIX: Push content to center
+                        
                         Text(user.displayName)
                             .font(.title2.weight(.bold))
                             .foregroundColor(.white)
                             .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
 
-                        if user.isVerified {
+                        if user.shouldShowVerificationBadge {
                             Image(systemName: "checkmark.seal.fill")
                                 .font(.title3)
                                 .foregroundColor(.blue)
                                 .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
                         }
+                        
+                        Spacer()  // 🔥 FIX: Push content to center
                     }
                     .opacity(opacityForFactor(0.08))
 
@@ -299,7 +304,7 @@ private struct CollapsedProfileBar: View {
                 Text(user.displayName)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
-                if user.isVerified {
+                if user.shouldShowVerificationBadge {
                     Image(systemName: "checkmark.seal.fill")
                         .font(.footnote)
                         .foregroundStyle(AppTheme.Colors.primary)

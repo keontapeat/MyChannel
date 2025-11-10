@@ -109,7 +109,7 @@ private struct ProfileCard: View {
                         .font(.body.weight(.semibold))
                         .foregroundColor(.primary)
                     
-                    if user.isVerified {
+                    if user.shouldShowVerificationBadge {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.caption)
                             .foregroundColor(.blue)

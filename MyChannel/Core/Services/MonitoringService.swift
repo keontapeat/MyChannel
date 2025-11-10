@@ -364,6 +364,9 @@ final class MonitoringService: ObservableObject {
         case aiRequestComplete = "ai_request_complete"
         case highMemoryUsage = "high_memory_usage"
         case purchaseComplete = "purchase_complete"
+        case tipSent = "tip_sent"
+        case discoveryImpression = "discovery_impression"
+        case discoveryClick = "discovery_click"
         case errorOccurred = "error_occurred"
     }
     

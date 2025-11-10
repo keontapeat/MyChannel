@@ -38,7 +38,7 @@ struct MyChannelApp: App {
         print("✅ MyChannelApp init completed")
     }
     
-    var body: some Scene {
+    var body: some SwiftUI.Scene {
         WindowGroup {
             SplashContainer()
                 .environmentObject(authManager)

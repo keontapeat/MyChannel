@@ -10,9 +10,10 @@ import AVKit
 
 struct FloatingMiniPlayer: View {
     @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
-    @State private var dragOffset: CGFloat = 0
+    @State private var dragOffset: CGSize = .zero
     @State private var isDragging = false
-    @State private var lastDragTranslation: CGFloat = 0
+    @State private var position: CGPoint = .zero  // 🔥 YOUTUBE PARITY: Free-floating position
+    @State private var lastPosition: CGPoint = .zero  // Store last position before drag
     
     // 🔥 YOUTUBE PARITY: Advanced mini player controls
     @State private var showingControls = false
@@ -28,38 +29,58 @@ struct FloatingMiniPlayer: View {
     @State private var selectedQuality: String = "Auto"
     
     var body: some View {
-        if globalPlayer.shouldShowMiniPlayer && !globalPlayer.showingFullscreen,
-           let video = globalPlayer.currentVideo {
+        // 🔥 FIX: More robust condition checking to prevent mini player from disappearing
+        // 🔥 FIX: Ensure player exists and is ready to prevent error states
+        if let video = globalPlayer.currentVideo,
+           globalPlayer.shouldShowMiniPlayer,
+           !globalPlayer.showingFullscreen,
+           !globalPlayer.isCleanedUp,
+           globalPlayer.player != nil {
             
             GeometryReader { geometry in
-                VStack { // isolate from parent layout to reduce layout thrash
-                    Spacer()
-                    
-                    miniPlayerView(video: video, geometry: geometry)
-                        .offset(y: calculateOffset())
-                        .opacity(calculateOpacity())
-                        .scaleEffect(calculateScale())
-                        .gesture(
+                // 🔥 YOUTUBE PARITY: Free-floating mini player that can be dragged anywhere
+                miniPlayerView(video: video, geometry: geometry)
+                    .position(
+                        x: position.x == 0 ? geometry.size.width - (playerSize.width / 2) - 20 : position.x,
+                        y: position.y == 0 ? geometry.size.height - (playerSize.height / 2) - 100 : position.y
+                    )
+                    .offset(dragOffset)
+                    .gesture(
+                        SimultaneousGesture(
+                            freeFloatingDragGesture(geometry: geometry),
                             SimultaneousGesture(
-                                miniPlayerDragGesture,
-                                SimultaneousGesture(
-                                    horizontalSwipeGesture,
-                                    pinchToResizeGesture
-                                )
+                                horizontalSwipeGesture,
+                                pinchToResizeGesture
                             )
                         )
-                        .transaction { tx in tx.disablesAnimations = true }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    )
+                    .onAppear {
+                        // 🔥 YOUTUBE PARITY: Initialize position to bottom-right corner
+                        if position == .zero {
+                            position = CGPoint(
+                                x: geometry.size.width - (playerSize.width / 2) - 20,
+                                y: geometry.size.height - (playerSize.height / 2) - 100
+                            )
+                        }
+                    }
+                    .transaction { tx in tx.disablesAnimations = isDragging }
+                    .drawingGroup()
+                    .compositingGroup()
             }
             .allowsHitTesting(true)
             .zIndex(998) // Below tab bar but above content
+            // 🔥 FIX: Ensure mini player doesn't interfere with home feed rendering
+            .background(Color.clear) // Transparent background to avoid blocking
             .onAppear {
                 // 🔥 SYNC INITIAL STATE: Get volume and speed from player
                 if let player = globalPlayer.player {
                     volume = player.volume
                     playbackSpeed = player.rate
                 }
+                print("🎥 [MiniPlayer] Mini player appeared - shouldShow: \(globalPlayer.shouldShowMiniPlayer)")
+            }
+            .onDisappear {
+                print("⚠️ [MiniPlayer] Mini player disappeared unexpectedly - shouldShow: \(globalPlayer.shouldShowMiniPlayer)")
             }
         }
     }
@@ -82,165 +103,183 @@ struct FloatingMiniPlayer: View {
         }
     }
     
-    // MARK: - Calculation Methods
-    private func calculateOffset() -> CGFloat {
-        let baseOffset = isDragging ? dragOffset : globalPlayer.miniplayerOffset
-        return max(-50, baseOffset) // Prevent dragging too far up
-    }
+    // MARK: - Calculation Methods (Removed - using free-floating position instead)
     
-    private func calculateOpacity() -> Double {
-        let totalOffset = calculateOffset()
-        if totalOffset > 0 {
-            return max(0.1, 1.0 - (totalOffset / 150.0))
-        } else {
-            return 1.0
-        }
-    }
-    
-    private func calculateScale() -> CGFloat {
-        let totalOffset = calculateOffset()
-        if totalOffset > 0 {
-            return max(0.85, 1.0 - (totalOffset / 400.0))
-        } else {
-            return min(1.05, 1.0 + (abs(totalOffset) / 200.0))
-        }
-    }
-    
+    @ViewBuilder
     private func miniPlayerView(video: Video, geometry: GeometryProxy) -> some View {
-        HStack(spacing: 10) {
-            miniPlayerVideoSection(video: video)
-            miniPlayerInfoSection(video: video)
+        // 🔥 YOUTUBE-STYLE PIP MINI PLAYER
+        VStack(spacing: 0) {
+            miniPlayerVideoSection(video: video, geometry: geometry)
         }
-        .padding(10)
-        .background(AppTheme.Colors.surface)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
+        .background(Color.black)
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.4), radius: 20, x: 0, y: 10)
     }
     
-    private func miniPlayerVideoSection(video: Video) -> some View {
+    @ViewBuilder
+    private func miniPlayerVideoSection(video: Video, geometry: GeometryProxy) -> some View {
         let thumbnailView: some View = Group {
             if let u = URL(string: video.thumbnailURL) {
-                AppAsyncImage(url: u) { $0.resizable().aspectRatio(contentMode: .fill) } placeholder: { Rectangle().fill(AppTheme.Colors.surface) }
+                AppAsyncImage(url: u) { $0.resizable().aspectRatio(contentMode: .fill) } placeholder: { Rectangle().fill(Color.black) }
                     .clipped()
             } else {
-                Rectangle().fill(AppTheme.Colors.surface)
+                Rectangle().fill(Color.black)
             }
         }
         
         let videoPlayerView: some View = Group {
             if let player = globalPlayer.player {
                 VideoPlayer(player: player)
-                    .aspectRatio(16/9, contentMode: .fill)
+                    .aspectRatio(16/9, contentMode: .fit)
                     .allowsHitTesting(false)
                     .clipped()
+                    // 🔥 FIX: Prevent video glitching - ensure proper rendering
+                    .drawingGroup() // Optimize rendering performance
+                    .compositingGroup() // Isolate rendering context
             } else {
                 thumbnailView
             }
         }
         
-        return ZStack(alignment: .center) {
+        let playerWidth = geometry.size.width - 40
+        let playerHeight = playerWidth * 9 / 16
+        
+        return ZStack {
+            // Video Player
             videoPlayerView
-                
-                // 🔥 BUFFERING INDICATOR
-                if !globalPlayer.isPlaying && globalPlayer.player?.rate == 0 && globalPlayer.player?.currentItem != nil {
-                    ZStack {
-                        Circle()
-                            .fill(.black.opacity(0.6))
-                            .frame(width: 40, height: 40)
-                        
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(0.8)
-                    }
-                }
-                
-                // 🔥 DOUBLE TAP ZONES: Left (rewind) and Right (forward)
-                HStack(spacing: 0) {
-                    // Left side - Rewind 10s
-                    Rectangle()
-                        .fill(Color.clear)
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) {
-                            globalPlayer.seekBackward()
-                            showSeekFeedback(isForward: false)
-                            HapticManager.shared.impact(style: .medium)
-                        }
-                        .onTapGesture(count: 1) {
-                            handleSingleTap()
-                        }
-                    
-                    // Center - Play/Pause (smaller area)
-                    Rectangle()
-                        .fill(Color.clear)
-                        .frame(width: 40)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            globalPlayer.togglePlayPause()
-                            HapticManager.shared.impact(style: .light)
-                        }
-                    
-                    // Right side - Forward 10s
-                    Rectangle()
-                        .fill(Color.clear)
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) {
-                            globalPlayer.seekForward()
-                            showSeekFeedback(isForward: true)
-                            HapticManager.shared.impact(style: .medium)
-                        }
-                        .onTapGesture(count: 1) {
-                            handleSingleTap()
-                        }
-                }
-                
-                // 🔥 SEEK FEEDBACK ANIMATION
-                if showingControls {
-                    seekFeedbackOverlay
-                }
-                
-                // Play/Pause button (only when not playing or controls visible)
-                if !globalPlayer.isPlaying || showingControls {
-                    Button(action: { globalPlayer.togglePlayPause(); HapticManager.shared.impact(style: .light) }) {
-                        Image(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black)
+            
+            // Dark gradient overlay for better contrast
+            LinearGradient(
+                colors: [Color.black.opacity(0.6), Color.clear, Color.black.opacity(0.7)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+            
+            // Top Controls
+            VStack {
+                HStack {
+                    // Close button
+                    Button(action: closePlayer) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.white)
-                            .padding(8)
-                            .background(.black.opacity(0.55))
-                            .clipShape(Circle())
+                            .frame(width: 36, height: 36)
+                            .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .opacity(showingControls ? 1.0 : 0.8)
+                    
+                    Spacer()
+                    
+                    // Video title (centered) with @channel and #hashtag support
+                    InteractiveRichTextTitleView(
+                        title: video.title,
+                        onChannelTap: { channelName in
+                            // Navigate to channel
+                            print("📺 Mini player: Navigate to channel: \(channelName)")
+                        },
+                        onHashtagTap: { hashtag in
+                            // Navigate to hashtag search
+                            print("🔍 Mini player: Navigate to hashtag: \(hashtag)")
+                        },
+                        textColor: .white  // 🔥 FIX: White text for visibility on video background
+                    )
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
+                    .frame(maxWidth: 180)
+                    
+                    Spacer()
+                    
+                    // Settings/PiP button
+                    Button(action: {
+                        HapticManager.shared.impact(style: .light)
+                        // Toggle PiP or expand
+                        NotificationCenter.default.post(name: NSNotification.Name("PresentVideoDetailFromMiniPlayer"), object: nil)
+                    }) {
+                        Image(systemName: "pip.enter")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
                 }
-
-                // 🔥 ADVANCED CONTROLS OVERLAY
-                if showingControls {
-                    advancedControlsOverlay
-                }
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
                 
-                // Close button (always visible)
-                VStack { 
-                    HStack { 
-                        Spacer()
-                        Button(action: closePlayer) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(6)
-                                .background(.black.opacity(0.5))
-                                .clipShape(Circle())
+                Spacer()
+                
+                // Bottom Controls
+                VStack(spacing: 12) {
+                    // Play controls
+                    HStack(spacing: 48) {
+                        // Rewind 10s
+                        Button(action: {
+                            globalPlayer.seekBackward()
+                            HapticManager.shared.impact(style: .medium)
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.white.opacity(0.15))
+                                    .frame(width: 52, height: 52)
+                                
+                                Image(systemName: "gobackward.10")
+                                    .font(.system(size: 22, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        
+                        // Play/Pause
+                        Button(action: {
+                            globalPlayer.togglePlayPause()
+                            HapticManager.shared.impact(style: .light)
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.white.opacity(0.15))
+                                    .frame(width: 62, height: 62)
+                                
+                                Image(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill")
+                                    .font(.system(size: 26, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        
+                        // Forward 10s
+                        Button(action: {
+                            globalPlayer.seekForward()
+                            HapticManager.shared.impact(style: .medium)
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.white.opacity(0.15))
+                                    .frame(width: 52, height: 52)
+                                
+                                Image(systemName: "goforward.10")
+                                    .font(.system(size: 22, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
                         }
                         .buttonStyle(.plain)
                     }
-                    .padding(6)
-                    Spacer() 
+                    
+                    // Progress bar
+                    scrubbableProgressBar
+                        .padding(.horizontal, 16)
                 }
+                .padding(.bottom, 16)
             }
-            .frame(width: playerSize.width, height: playerSize.height)
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.08), lineWidth: 0.5))
-            .cornerRadius(10)
-            .shadow(color: .black.opacity(0.25), radius: 10, x: 0, y: 6)
         }
+        .frame(width: playerWidth, height: playerHeight)
+        .cornerRadius(16)
+        .clipped()
     }
     
+    @ViewBuilder
     private func miniPlayerInfoSection(video: Video) -> some View {
         HStack(spacing: 10) {
             videoMetadataSection(video: video)
@@ -248,6 +287,7 @@ struct FloatingMiniPlayer: View {
         }
     }
     
+    @ViewBuilder
     private func videoMetadataSection(video: Video) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             videoTitleRow(video: video)
@@ -262,6 +302,7 @@ struct FloatingMiniPlayer: View {
         .frame(maxWidth: .infinity)
     }
     
+    @ViewBuilder
     private func videoTitleRow(video: Video) -> some View {
         HStack(spacing: 6) {
             Text(video.title)
@@ -291,6 +332,7 @@ struct FloatingMiniPlayer: View {
         .cornerRadius(4)
     }
     
+    @ViewBuilder
     private func creatorInfoRow(video: Video) -> some View {
         HStack(spacing: 6) {
             Text(video.creator.displayName)
@@ -304,6 +346,7 @@ struct FloatingMiniPlayer: View {
         }
     }
     
+    @ViewBuilder
     private func liveViewerCount(viewCount: Int) -> some View {
         HStack(spacing: 3) {
             Image(systemName: "eye.fill")
@@ -314,6 +357,7 @@ struct FloatingMiniPlayer: View {
         .foregroundColor(AppTheme.Colors.textSecondary)
     }
     
+    @ViewBuilder
     private func upNextPreview(upNext: Video) -> some View {
         HStack(spacing: 6) {
             Text("Up Next:")
@@ -347,8 +391,17 @@ struct FloatingMiniPlayer: View {
     private var miniPlayerControlsCluster: some View {
         VStack(spacing: 6) {
             HStack(spacing: 6) {
-                // Volume control with popup
-                ZStack {
+                volumeControl
+                speedControl
+                qualityControl
+                expandButton
+                closeButton
+            }
+        }
+    }
+    
+    private var volumeControl: some View {
+        ZStack {
                         Button(action: { 
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 showingVolumeSlider.toggle()
@@ -391,77 +444,90 @@ struct FloatingMiniPlayer: View {
                             .offset(x: -70, y: -80)
                             .transition(.asymmetric(insertion: .scale.combined(with: .opacity), removal: .opacity))
                         }
-                    }
-                    
-                    // Speed control with menu
-                    ZStack {
-                        Button(action: { 
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                showingSpeedMenu.toggle()
-                                if showingSpeedMenu {
-                                    showingVolumeSlider = false
-                                    showingQualityMenu = false
-                                }
-                            }
-                            HapticManager.shared.impact(style: .light) 
-                        }) {
-                            Text(String(format: "%.2gx", playbackSpeed))
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(showingSpeedMenu ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
-                                .padding(6)
-                                .background(showingSpeedMenu ? AppTheme.Colors.primary.opacity(0.15) : AppTheme.Colors.textSecondary.opacity(0.08))
-                                .clipShape(Circle())
-                        }
-                        
-                        // Speed menu popup
-                        if showingSpeedMenu {
-                            VStack(spacing: 4) {
-                                ForEach([0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { speed in
-                                    Button(action: {
-                                        playbackSpeed = Float(speed)
-                                        globalPlayer.player?.rate = Float(speed)
-                                        withAnimation {
-                                            showingSpeedMenu = false
-                                        }
-                                        HapticManager.shared.impact(style: .light)
-                                    }) {
-                                        HStack {
-                                            Text(speed == 1.0 ? "Normal" : String(format: "%.2gx", speed))
-                                                .font(.system(size: 12, weight: playbackSpeed == speed ? .bold : .regular))
-                                                .foregroundColor(playbackSpeed == speed ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
-                                            
-                                            Spacer()
-                                            
-                                            if playbackSpeed == speed {
-                                                Image(systemName: "checkmark")
-                                                    .font(.system(size: 10, weight: .bold))
-                                                    .foregroundColor(AppTheme.Colors.primary)
-                                            }
-                                        }
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 8)
-                                        .background(playbackSpeed == speed ? AppTheme.Colors.primary.opacity(0.1) : Color.clear)
-                                        .cornerRadius(6)
-                                    }
-                                }
-                            }
-                            .padding(8)
-                            .frame(width: 140)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(.ultraThinMaterial)
-                                    .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.Colors.cardBackground.opacity(0.98)))
-                                    .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 4)
-                            )
-                            .offset(x: -75, y: -140)
-                            .transition(.asymmetric(insertion: .scale.combined(with: .opacity), removal: .opacity))
-                        }
+        }
+    }
+    
+    private var speedControl: some View {
+        ZStack {
+            Button(action: { 
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    showingSpeedMenu.toggle()
+                    if showingSpeedMenu {
+                        showingVolumeSlider = false
+                        showingQualityMenu = false
                     }
                 }
+                HapticManager.shared.impact(style: .light) 
+            }) {
+                speedButtonLabel
+            }
+            
+            if showingSpeedMenu {
+                speedMenuPopup
+            }
+        }
+    }
+    
+    private var speedButtonLabel: some View {
+        Text(String(format: "%.2gx", playbackSpeed))
+            .font(.system(size: 10, weight: .bold))
+            .foregroundColor(showingSpeedMenu ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+            .padding(6)
+            .background(showingSpeedMenu ? AppTheme.Colors.primary.opacity(0.15) : AppTheme.Colors.textSecondary.opacity(0.08))
+            .clipShape(Circle())
+    }
+    
+    private var speedMenuPopup: some View {
+        VStack(spacing: 4) {
+            ForEach([0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { speed in
+                speedMenuItem(speed: speed)
+            }
+        }
+        .padding(8)
+        .frame(width: 140)
+        .background(speedMenuBackground)
+        .offset(x: -75, y: -140)
+        .transition(.asymmetric(insertion: .scale.combined(with: .opacity), removal: .opacity))
+    }
+    
+    private func speedMenuItem(speed: Double) -> some View {
+        Button(action: {
+            playbackSpeed = Float(speed)
+            globalPlayer.player?.rate = Float(speed)
+            withAnimation {
+                showingSpeedMenu = false
+            }
+            HapticManager.shared.impact(style: .light)
+        }) {
+            HStack {
+                Text(speed == 1.0 ? "Normal" : String(format: "%.2gx", speed))
+                    .font(.system(size: 12, weight: Float(speed) == playbackSpeed ? .bold : .regular))
+                    .foregroundColor(Float(speed) == playbackSpeed ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
                 
-                HStack(spacing: 6) {
-                    // Quality selector
-                    ZStack {
+                Spacer()
+                
+                if Float(speed) == playbackSpeed {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Float(speed) == playbackSpeed ? AppTheme.Colors.primary.opacity(0.1) : Color.clear)
+            .cornerRadius(6)
+        }
+    }
+    
+    private var speedMenuBackground: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(.ultraThinMaterial)
+            .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.Colors.cardBackground.opacity(0.98)))
+            .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 4)
+    }
+    
+    private var qualityControl: some View {
+        ZStack {
                         Button(action: { 
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 showingQualityMenu.toggle()
@@ -523,29 +589,28 @@ struct FloatingMiniPlayer: View {
                             .offset(x: -75, y: -120)
                             .transition(.asymmetric(insertion: .scale.combined(with: .opacity), removal: .opacity))
                         }
-                    }
-                    
-                    // Expand to fullscreen
-                    Button(action: { expandPlayer(); HapticManager.shared.impact(style: .light) }) {
+        }
+    }
+    
+    private var expandButton: some View {
+        Button(action: { expandPlayer(); HapticManager.shared.impact(style: .light) }) {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                             .padding(6)
                             .background(AppTheme.Colors.textSecondary.opacity(0.08))
                             .clipShape(Circle())
-                    }
-                    
-                    // Close player
-                    Button(action: closePlayer) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .padding(6)
-                            .background(AppTheme.Colors.textSecondary.opacity(0.08))
-                            .clipShape(Circle())
-                    }
-                }
-            }
+        }
+    }
+    
+    private var closeButton: some View {
+        Button(action: closePlayer) {
+            Image(systemName: "xmark")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .padding(6)
+                .background(AppTheme.Colors.textSecondary.opacity(0.08))
+                .clipShape(Circle())
         }
     }
     
@@ -599,62 +664,101 @@ struct FloatingMiniPlayer: View {
     }
     
     // MARK: - Gesture Handling
-    private var miniPlayerDragGesture: some Gesture {
-        DragGesture(minimumDistance: 8, coordinateSpace: .global)
+    
+    // 🔥 YOUTUBE PARITY: Free-floating drag gesture (can drag anywhere on screen)
+    private func freeFloatingDragGesture(geometry: GeometryProxy) -> some Gesture {
+        DragGesture(minimumDistance: 5, coordinateSpace: .global)
             .onChanged { value in
                 if !isDragging {
                     isDragging = true
-                    lastDragTranslation = 0
+                    lastPosition = position
                     HapticManager.shared.impact(style: .light)
                 }
                 
-                let translation = value.translation.height
-                let velocity = translation - lastDragTranslation
+                // Calculate new position
+                let newX = lastPosition.x + value.translation.width
+                let newY = lastPosition.y + value.translation.height
                 
-                // Add some resistance when dragging up
-                if translation < 0 {
-                    dragOffset = translation * 0.3
-                } else {
-                    dragOffset = translation
-                }
+                // Keep within screen bounds
+                let halfWidth = playerSize.width / 2
+                let halfHeight = playerSize.height / 2
+                let minX = halfWidth + 10
+                let maxX = geometry.size.width - halfWidth - 10
+                let minY = halfHeight + 50  // Account for status bar
+                let maxY = geometry.size.height - halfHeight - 100  // Account for tab bar
                 
-                lastDragTranslation = translation
-                
-                // Provide haptic feedback at thresholds
-                if translation > 100 && dragOffset < 90 {
-                    HapticManager.shared.impact(style: .medium)
-                } else if translation < -30 && dragOffset > -25 {
-                    HapticManager.shared.impact(style: .medium)
-                }
+                // Update drag offset for smooth movement
+                dragOffset = CGSize(
+                    width: value.translation.width,
+                    height: value.translation.height
+                )
             }
             .onEnded { value in
                 isDragging = false
-                lastDragTranslation = 0
                 
-                let finalOffset = value.translation.height
-                let momentum = value.verticalMomentum
+                // Calculate final position
+                let finalX = lastPosition.x + value.translation.width
+                let finalY = lastPosition.y + value.translation.height
                 
-                withAnimation(.interactiveSpring(response: 0.4, dampingFraction: 0.8)) {
-                    dragOffset = 0
-                    
-                    // Determine action based on gesture
-                    if finalOffset > 120 || momentum > 160 {
-                        // Dismiss
-                        globalPlayer.closePlayer()
-                        HapticManager.shared.impact(style: .heavy)
-                    } else if finalOffset < -60 || momentum < -140 {
-                        // Expand to fullscreen and present VideoDetail
-                        globalPlayer.expandPlayer()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                            NotificationCenter.default.post(name: NSNotification.Name("PresentVideoDetailFromMiniPlayer"), object: nil)
-                        }
-                        HapticManager.shared.impact(style: .medium)
-                    } else {
-                        // Reset position
-                        globalPlayer.miniplayerOffset = 0
-                        HapticManager.shared.impact(style: .light)
-                    }
+                // Keep within bounds
+                let halfWidth = playerSize.width / 2
+                let halfHeight = playerSize.height / 2
+                let minX = halfWidth + 10
+                let maxX = geometry.size.width - halfWidth - 10
+                let minY = halfHeight + 50
+                let maxY = geometry.size.height - halfHeight - 100
+                
+                // 🔥 YOUTUBE PARITY: Snap to nearest edge
+                let snapX: CGFloat
+                let snapY: CGFloat
+                
+                // Snap horizontally to left or right edge
+                let centerX = geometry.size.width / 2
+                if finalX < centerX {
+                    snapX = minX  // Snap to left
+                } else {
+                    snapX = maxX  // Snap to right
                 }
+                
+                // Check if user swiped down to dismiss
+                let verticalSwipe = abs(value.translation.height)
+                let horizontalSwipe = abs(value.translation.width)
+                
+                if verticalSwipe > 150 && value.translation.height > 0 && verticalSwipe > horizontalSwipe {
+                    // Swipe down to dismiss
+                    globalPlayer.closePlayer()
+                    HapticManager.shared.impact(style: .heavy)
+                    return
+                }
+                
+                // Check if user swiped up to expand
+                if verticalSwipe > 100 && value.translation.height < 0 && verticalSwipe > horizontalSwipe {
+                    // Swipe up to expand
+                    globalPlayer.expandPlayer()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        NotificationCenter.default.post(name: NSNotification.Name("PresentVideoDetailFromMiniPlayer"), object: nil)
+                    }
+                    HapticManager.shared.impact(style: .medium)
+                    return
+                }
+                
+                // Snap vertically (keep current Y or snap to top/bottom if near edges)
+                if finalY < minY + 50 {
+                    snapY = minY  // Snap to top
+                } else if finalY > maxY - 50 {
+                    snapY = maxY  // Snap to bottom
+                } else {
+                    snapY = max(minY, min(maxY, finalY))  // Keep within bounds
+                }
+                
+                // Animate to snapped position
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    position = CGPoint(x: snapX, y: snapY)
+                    dragOffset = .zero
+                    lastPosition = position
+                }
+                
+                HapticManager.shared.impact(style: .light)
             }
     }
     
@@ -894,20 +998,25 @@ struct FloatingMiniPlayer: View {
         lastTapTime = now
         
         if tapCount == 1 {
-            // Single tap - toggle controls
+            // Single tap - KEEP MINI PLAYER VISIBLE, just toggle controls
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 if self.tapCount == 1 {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         self.showingControls.toggle()
                     }
-                    // Auto-hide controls after 3 seconds
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            self.showingControls = false
+                    // Auto-hide controls after 3 seconds (but keep mini player visible)
+                    if self.showingControls {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                self.showingControls = false
+                            }
                         }
                     }
                 }
             }
+        } else if tapCount == 2 {
+            // Double tap - expand to fullscreen
+            expandPlayer()
         }
     }
     

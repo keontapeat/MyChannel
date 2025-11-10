@@ -74,6 +74,19 @@ final class SmartCacheService: ObservableObject {
     private init() {
         setupCacheMonitoring()
         loadCacheStats()
+        setupMemoryWarningObserver()
+    }
+    
+    // ⚡ PERFORMANCE: Clear caches on memory warning
+    private func setupMemoryWarningObserver() {
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            print("⚠️ [SmartCacheService] Memory warning - clearing caches")
+            self?.clearMemoryCache() // Calls the public function below
+        }
     }
     
     // MARK: - Main Cache Interface

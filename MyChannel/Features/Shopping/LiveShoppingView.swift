@@ -297,8 +297,7 @@ struct LiveShowCard: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(.black.opacity(0.7))
-                .clipShape(Capsule())
+                .background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 20))
                 .padding(10)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }

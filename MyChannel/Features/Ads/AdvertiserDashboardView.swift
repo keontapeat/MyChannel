@@ -276,7 +276,7 @@ struct AdvertiserDashboardView: View {
             }
             
             if viewModel.campaigns.isEmpty {
-                EmptyStateView(
+                AdvertiserEmptyStateView(
                     icon: "megaphone.fill",
                     title: "No Campaigns Yet",
                     message: "Create your first campaign and start reaching millions of viewers!",
@@ -917,7 +917,7 @@ struct CreativeCard: View {
     }
 }
 
-struct EmptyStateView: View {
+struct AdvertiserEmptyStateView: View {
     let icon: String
     let title: String
     let message: String

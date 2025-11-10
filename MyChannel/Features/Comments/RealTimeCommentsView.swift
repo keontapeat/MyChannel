@@ -268,8 +268,14 @@ struct RealTimeCommentRow: View {
                         }
                     }
                     
-                    // Comment text with mentions and hashtags
-                    RichCommentText(text: comment.text)
+                    // 🔥 YOUTUBE PARITY: Comment text with clickable timestamps, @mentions, #hashtags
+                    RichCommentText(text: comment.text) { timestamp in
+                        // Seek video to timestamp
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("SeekToTimestamp"),
+                            object: timestamp
+                        )
+                    }
                     
                     // Comment actions
                     HStack(spacing: 16) {
@@ -364,47 +370,175 @@ struct RealTimeCommentRow: View {
     }
 }
 
-// MARK: - Rich Comment Text
+// 🔥 YOUTUBE PARITY: Rich comment text with clickable timestamps, @mentions, #hashtags
 struct RichCommentText: View {
     let text: String
+    let onTimestampTap: ((TimeInterval) -> Void)?
+    
+    init(text: String, onTimestampTap: ((TimeInterval) -> Void)? = nil) {
+        self.text = text
+        self.onTimestampTap = onTimestampTap
+    }
     
     var body: some View {
-        Text(processedText)
-            .font(.system(size: 14))
-            .foregroundColor(AppTheme.Colors.textPrimary)
-            .fixedSize(horizontal: false, vertical: true)
+        parseAndDisplayComment()
     }
     
-    private var processedText: AttributedString {
-        var attributedString = AttributedString(text)
+    @ViewBuilder
+    private func parseAndDisplayComment() -> some View {
+        let segments = parseComment(text)
         
-        // Process mentions (@username)
-        let mentionRegex = try! NSRegularExpression(pattern: "@\\w+", options: [])
-        let mentionMatches = mentionRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.count))
-        
-        for match in mentionMatches.reversed() {
-            let range = Range(match.range, in: text)!
-            let startIndex = attributedString.index(attributedString.startIndex, offsetByCharacters: match.range.location)
-            let endIndex = attributedString.index(startIndex, offsetByCharacters: match.range.length)
-            
-            attributedString[startIndex..<endIndex].foregroundColor = AppTheme.Colors.primary
-            attributedString[startIndex..<endIndex].font = .system(size: 14, weight: .medium)
+        HStack(spacing: 0) {
+            ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
+                switch segment.type {
+                case .timestamp:
+                    if let time = segment.timestamp {
+                        Button(action: {
+                            onTimestampTap?(time)
+                        }) {
+                            Text(segment.text)
+                                .foregroundColor(AppTheme.Colors.primary)
+                                .fontWeight(.medium)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text(segment.text)
+                            .foregroundColor(AppTheme.Colors.primary)
+                            .fontWeight(.medium)
+                    }
+                    
+                case .mention:
+                    Text(segment.text)
+                        .foregroundColor(AppTheme.Colors.primary)
+                        .fontWeight(.medium)
+                    
+                case .hashtag:
+                    Text(segment.text)
+                        .foregroundColor(AppTheme.Colors.primary)
+                        .fontWeight(.medium)
+                    
+                case .plain:
+                    Text(segment.text)
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                }
+            }
         }
-        
-        // Process hashtags (#hashtag)
-        let hashtagRegex = try! NSRegularExpression(pattern: "#\\w+", options: [])
-        let hashtagMatches = hashtagRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.count))
-        
-        for match in hashtagMatches.reversed() {
-            let startIndex = attributedString.index(attributedString.startIndex, offsetByCharacters: match.range.location)
-            let endIndex = attributedString.index(startIndex, offsetByCharacters: match.range.length)
-            
-            attributedString[startIndex..<endIndex].foregroundColor = AppTheme.Colors.primary
-            attributedString[startIndex..<endIndex].font = .system(size: 14, weight: .medium)
-        }
-        
-        return attributedString
+        .font(.system(size: 14))
+        .fixedSize(horizontal: false, vertical: true)
     }
+    
+    private func parseComment(_ text: String) -> [CommentSegment] {
+        var segments: [CommentSegment] = []
+        var currentIndex = text.startIndex
+        
+        // Regex patterns
+        let timestampPattern = #"(\d{1,2}):(\d{2})(?::(\d{2}))?"#  // Timestamps: 1:23 or 1:23:45
+        let mentionPattern = #"@([a-zA-Z0-9_.-]+)"#  // @mentions
+        let hashtagPattern = #"#([a-zA-Z0-9_]+)"#  // #hashtags
+        
+        var matches: [(range: Range<String.Index>, type: CommentSegmentType, timestamp: TimeInterval?)] = []
+        
+        // Find timestamps
+        if let timestampRegex = try? NSRegularExpression(pattern: timestampPattern, options: []) {
+            let nsString = text as NSString
+            let results = timestampRegex.matches(in: text, options: [], range: NSRange(location: 0, length: nsString.length))
+            
+            for result in results {
+                if let range = Range(result.range, in: text) {
+                    let timestampText = String(text[range])
+                    if let time = parseTimestamp(timestampText) {
+                        matches.append((range: range, type: .timestamp, timestamp: time))
+                    }
+                }
+            }
+        }
+        
+        // Find @mentions
+        if let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: []) {
+            let nsString = text as NSString
+            let results = mentionRegex.matches(in: text, options: [], range: NSRange(location: 0, length: nsString.length))
+            
+            for result in results {
+                if let range = Range(result.range, in: text) {
+                    matches.append((range: range, type: .mention, timestamp: nil))
+                }
+            }
+        }
+        
+        // Find #hashtags
+        if let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: []) {
+            let nsString = text as NSString
+            let results = hashtagRegex.matches(in: text, options: [], range: NSRange(location: 0, length: nsString.length))
+            
+            for result in results {
+                if let range = Range(result.range, in: text) {
+                    matches.append((range: range, type: .hashtag, timestamp: nil))
+                }
+            }
+        }
+        
+        // Sort matches by position
+        matches.sort { $0.range.lowerBound < $1.range.lowerBound }
+        
+        // Build segments
+        for match in matches {
+            if currentIndex < match.range.lowerBound {
+                let plainText = String(text[currentIndex..<match.range.lowerBound])
+                if !plainText.isEmpty {
+                    segments.append(CommentSegment(text: plainText, type: .plain))
+                }
+            }
+            
+            let matchText = String(text[match.range])
+            segments.append(CommentSegment(text: matchText, type: match.type, timestamp: match.timestamp))
+            
+            currentIndex = match.range.upperBound
+        }
+        
+        if currentIndex < text.endIndex {
+            let plainText = String(text[currentIndex...])
+            if !plainText.isEmpty {
+                segments.append(CommentSegment(text: plainText, type: .plain))
+            }
+        }
+        
+        if segments.isEmpty {
+            segments.append(CommentSegment(text: text, type: .plain))
+        }
+        
+        return segments
+    }
+    
+    private func parseTimestamp(_ text: String) -> TimeInterval? {
+        let components = text.split(separator: ":").compactMap { Int($0) }
+        
+        if components.count == 2 {
+            return TimeInterval(components[0] * 60 + components[1])
+        } else if components.count == 3 {
+            return TimeInterval(components[0] * 3600 + components[1] * 60 + components[2])
+        }
+        
+        return nil
+    }
+}
+
+struct CommentSegment {
+    let text: String
+    let type: CommentSegmentType
+    let timestamp: TimeInterval?
+    
+    init(text: String, type: CommentSegmentType, timestamp: TimeInterval? = nil) {
+        self.text = text
+        self.type = type
+        self.timestamp = timestamp
+    }
+}
+
+enum CommentSegmentType {
+    case plain
+    case timestamp
+    case mention
+    case hashtag
 }
 
 // MARK: - Reply Row

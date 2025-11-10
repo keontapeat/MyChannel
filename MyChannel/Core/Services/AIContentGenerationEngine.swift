@@ -459,6 +459,15 @@ struct AIGenerationStats: Codable {
     var successRate: Double = 0.95
 }
 
+struct AIGeneratedContent: Codable {
+    let title: String
+    let description: String
+    let thumbnailURL: String
+    let script: String
+    let tags: [String]
+    let estimatedViralScore: Double
+}
+
 struct AIScript: Codable {
     let title: String
     let description: String
@@ -475,8 +484,8 @@ struct AIVoiceover: Codable {
     let audioURL: String
     let duration: TimeInterval
     let voiceType: AIVoiceType
-    let emotion: VoiceEmotion
-    let quality: AudioQuality
+    let emotion: AIVoiceEmotion
+    let quality: AIAudioQuality
 }
 
 struct AIVisuals: Codable {
@@ -584,11 +593,11 @@ enum AIVoiceType: String, Codable, CaseIterable {
     case professional, friendly, energetic, authoritative, casual
 }
 
-enum VoiceEmotion: String, Codable, CaseIterable {
+enum AIVoiceEmotion: String, Codable, CaseIterable {
     case neutral, engaging, excited, calm, serious
 }
 
-enum AudioQuality: String, Codable, CaseIterable {
+enum AIAudioQuality: String, Codable, CaseIterable {
     case standard, high, studio, broadcast
 }
 
@@ -681,7 +690,7 @@ class AdvancedScriptAI {
 }
 
 class VoiceSynthesisAI {
-    func synthesizeVoice(script: String, voice: AIVoiceType, emotion: VoiceEmotion, speed: Double, includeBreaths: Bool) async throws -> AIVoiceover {
+    func synthesizeVoice(script: String, voice: AIVoiceType, emotion: AIVoiceEmotion, speed: Double, includeBreaths: Bool) async throws -> AIVoiceover {
         return AIVoiceover(
             audioURL: "https://example.com/voiceover.mp3",
             duration: 300,
@@ -792,6 +801,8 @@ struct VideoAnalysis {
     let primaryAudience: AIGenerationAudienceType = .general
     let viralPotential: Double = 0.7
     let recommendations: [String] = []
+    let suggestions: [String] = []
+    let engagementPotential: Double = 0.75
 }
 
 struct ScriptSection: Codable {

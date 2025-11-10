@@ -271,7 +271,7 @@ struct FlicksChallengesView: View {
             
             VStack(spacing: 12) {
                 ForEach(viewModel.topSubmissions.prefix(10)) { submission in
-                    LeaderboardRow(submission: submission)
+                    FlicksChallengeLeaderboardRow(submission: submission)
                 }
             }
         }
@@ -373,7 +373,7 @@ struct ChallengeStatItem: View {
     }
 }
 
-struct LeaderboardRow: View {
+struct FlicksChallengeLeaderboardRow: View {
     let submission: ChallengeSubmission
     
     var medalColor: Color {

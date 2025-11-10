@@ -4,6 +4,7 @@ import Foundation
 // Uses TMDB for discovery and watch-provider availability. Requires TMDB_API_KEY in environment.
 // Note: TMDB does not provide direct stream URLs. We surface provider deep links for external playback.
 final class TMDBService {
+    // ⚡ PERFORMANCE: Use NetworkOptimizer for caching and deduplication
     static let shared = TMDBService()
     private init() {}
 
@@ -68,7 +69,12 @@ final class TMDBService {
                 URLQueryItem(name: "page", value: String(page))
             ]
         )
-        let (data, _) = try await URLSession.shared.data(for: discoverReq)
+        // ⚡ PERFORMANCE: Use NetworkOptimizer for caching and deduplication
+        let data = try await NetworkOptimizer.shared.optimizedRequest(
+            for: discoverReq.url!,
+            priority: .normal,
+            cachePolicy: .returnCacheDataElseLoad
+        )
         let discover = try JSONDecoder().decode(DiscoverResponse.self, from: data)
 
         var results: [FreeMovie] = []
@@ -135,7 +141,12 @@ final class TMDBService {
                 URLQueryItem(name: "page", value: String(page))
             ]
         )
-        let (data, _) = try await URLSession.shared.data(for: discoverReq)
+        // ⚡ PERFORMANCE: Use NetworkOptimizer for caching and deduplication
+        let data = try await NetworkOptimizer.shared.optimizedRequest(
+            for: discoverReq.url!,
+            priority: .normal,
+            cachePolicy: .returnCacheDataElseLoad
+        )
         let discover = try JSONDecoder().decode(DiscoverResponse.self, from: data)
 
         var results: [FreeMovie] = []
@@ -188,19 +199,34 @@ final class TMDBService {
 
     private func providersFor(movieID: Int) async throws -> ProvidersResponse {
         let req = try makeRequest(path: "movie/\(movieID)/watch/providers", query: [])
-        let (data, _) = try await URLSession.shared.data(for: req)
+        // ⚡ PERFORMANCE: Use NetworkOptimizer for caching and deduplication
+        let data = try await NetworkOptimizer.shared.optimizedRequest(
+            for: req.url!,
+            priority: .normal,
+            cachePolicy: .returnCacheDataElseLoad
+        )
         return try JSONDecoder().decode(ProvidersResponse.self, from: data)
     }
 
     private func detailsFor(movieID: Int) async throws -> MovieDetails? {
         let req = try makeRequest(path: "movie/\(movieID)", query: [])
-        let (data, _) = try await URLSession.shared.data(for: req)
+        // ⚡ PERFORMANCE: Use NetworkOptimizer for caching and deduplication
+        let data = try await NetworkOptimizer.shared.optimizedRequest(
+            for: req.url!,
+            priority: .normal,
+            cachePolicy: .returnCacheDataElseLoad
+        )
         return try? JSONDecoder().decode(MovieDetails.self, from: data)
     }
 
     private func videosFor(movieID: Int) async throws -> VideosResponse {
         let req = try makeRequest(path: "movie/\(movieID)/videos", query: [])
-        let (data, _) = try await URLSession.shared.data(for: req)
+        // ⚡ PERFORMANCE: Use NetworkOptimizer for caching and deduplication
+        let data = try await NetworkOptimizer.shared.optimizedRequest(
+            for: req.url!,
+            priority: .normal,
+            cachePolicy: .returnCacheDataElseLoad
+        )
         return try JSONDecoder().decode(VideosResponse.self, from: data)
     }
 

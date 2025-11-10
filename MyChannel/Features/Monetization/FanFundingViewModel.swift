@@ -14,53 +14,18 @@ struct FundingTier: Identifiable, Codable {
     let description: String
     let price: Double
     let icon: String
-    let color: Color
+    let colorHex: String // Store as hex string for Codable
     var subscriberCount: Int
     let perks: [String]
     let creatorId: String
-}
-
-extension Color: Codable {
+    
+    // Computed property to get Color from hex
+    var color: Color {
+        Color(hex: colorHex) ?? .blue
+    }
+    
     enum CodingKeys: String, CodingKey {
-        case red, green, blue, alpha
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let red = try container.decode(Double.self, forKey: .red)
-        let green = try container.decode(Double.self, forKey: .green)
-        let blue = try container.decode(Double.self, forKey: .blue)
-        let alpha = try container.decode(Double.self, forKey: .alpha)
-        self.init(red: red, green: green, blue: blue, opacity: alpha)
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        let components = self.components()
-        try container.encode(components.red, forKey: .red)
-        try container.encode(components.green, forKey: .green)
-        try container.encode(components.blue, forKey: .blue)
-        try container.encode(components.alpha, forKey: .alpha)
-    }
-    
-    private func components() -> (red: Double, green: Double, blue: Double, alpha: Double) {
-        #if os(macOS)
-        let nsColor = NSColor(self)
-        return (
-            red: Double(nsColor.redComponent),
-            green: Double(nsColor.greenComponent),
-            blue: Double(nsColor.blueComponent),
-            alpha: Double(nsColor.alphaComponent)
-        )
-        #else
-        let uiColor = UIColor(self)
-        var red: CGFloat = 0
-        var green: CGFloat = 0
-        var blue: CGFloat = 0
-        var alpha: CGFloat = 0
-        uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        return (red: Double(red), green: Double(green), blue: Double(blue), alpha: Double(alpha))
-        #endif
+        case id, name, description, price, icon, colorHex, subscriberCount, perks, creatorId
     }
 }
 
@@ -117,7 +82,7 @@ class FanFundingViewModel: ObservableObject {
                 description: "Get access to exclusive content and behind-the-scenes",
                 price: 4.99,
                 icon: "medal.fill",
-                color: Color(red: 0.8, green: 0.5, blue: 0.2),
+                colorHex: "#CC8033", // Bronze color
                 subscriberCount: 234,
                 perks: [
                     "Exclusive videos every week",
@@ -133,7 +98,7 @@ class FanFundingViewModel: ObservableObject {
                 description: "Get everything in Bronze plus live streams and Q&As",
                 price: 9.99,
                 icon: "star.fill",
-                color: Color(red: 0.7, green: 0.7, blue: 0.7),
+                colorHex: "#B3B3B3", // Silver color
                 subscriberCount: 156,
                 perks: [
                     "Everything in Bronze",
@@ -150,7 +115,7 @@ class FanFundingViewModel: ObservableObject {
                 description: "Ultimate access with personal shoutouts and more",
                 price: 24.99,
                 icon: "crown.fill",
-                color: Color(red: 1.0, green: 0.8, blue: 0.0),
+                colorHex: "#FFCC00", // Gold color
                 subscriberCount: 97,
                 perks: [
                     "Everything in Silver",

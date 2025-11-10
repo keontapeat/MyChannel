@@ -38,6 +38,24 @@ final class VideoFirestoreService: ObservableObject {
         print("  - Thumbnail URL: \(video.thumbnailURL)")
         
         let ref = db.collection("videos").document(video.id)
+        
+        // 🔥 FIX: Check if video already exists to preserve viewCount
+        let existingDoc = try? await ref.getDocument()
+        let existingViewCount = existingDoc?.data()?["viewCount"] as? Int
+        
+        // 🔥 FIX: Preserve existing viewCount if video already exists
+        // NEVER reset viewCount to 0 when updating video metadata
+        let viewCountToSave: Int
+        if let existingCount = existingViewCount {
+            // Video exists - ALWAYS preserve existing count (even if 0)
+            viewCountToSave = existingCount
+            print("  🔥 Preserving existing viewCount: \(existingCount)")
+        } else {
+            // New video - initialize to 0 (or use video's count if provided)
+            viewCountToSave = max(video.viewCount, 0)
+            print("  📊 Initializing viewCount for new video: \(viewCountToSave)")
+        }
+        
         let data: [String: Any] = [
             "userId": video.creator.id,
             "title": video.title,
@@ -45,18 +63,19 @@ final class VideoFirestoreService: ObservableObject {
             "thumbnailUrl": video.thumbnailURL,
             "videoUrl": video.videoURL,
             "duration": video.duration,
-            "viewCount": video.viewCount,
+            "viewCount": viewCountToSave,  // 🔥 FIX: Preserve existing count
             "likeCount": video.likeCount,
             "commentCount": video.commentCount,
             "category": video.category.rawValue,
             "tags": video.tags,
             "isPublic": video.isPublic,
-            "createdAt": FieldValue.serverTimestamp(),
+            "createdAt": existingDoc?.data()?["createdAt"] ?? FieldValue.serverTimestamp(),  // Preserve original createdAt
             "updatedAt": FieldValue.serverTimestamp()
         ]
         
-        try await ref.setData(data)
-        print("✅ [VideoFirestoreService] Video saved successfully to Firestore")
+        // 🔥 FIX: Use merge: true to preserve existing fields (especially viewCount)
+        try await ref.setData(data, merge: true)
+        print("✅ [VideoFirestoreService] Video saved successfully to Firestore (viewCount preserved: \(viewCountToSave))")
         #endif
     }
     
@@ -67,32 +86,68 @@ final class VideoFirestoreService: ObservableObject {
         #endif
     }
 
-    func fetchVideosByCreator(creatorId: String, limit: Int = 24) async -> [Video] {
+    func fetchVideosByCreator(creatorId: String, limit: Int = 24, startAfter: DocumentSnapshot? = nil) async -> [Video] {
         #if canImport(FirebaseFirestore)
         do {
-            print("📺 [VideoFirestoreService] Fetching videos for creator: \(creatorId)")
-            let snap = try await db.collection("videos")
+            print("📺 [VideoFirestoreService] Fetching videos for creator: \(creatorId), limit: \(limit)")
+            var query: Query = db.collection("videos")
                 .whereField("userId", isEqualTo: creatorId)
                 .order(by: "createdAt", descending: true)
                 .limit(to: limit)
-                .getDocuments()
+            
+            // ⚡ PERFORMANCE: Add pagination support
+            if let startAfter = startAfter {
+                query = query.start(afterDocument: startAfter)
+            }
+            
+            let snap = try await query.getDocuments()
             print("📺 [VideoFirestoreService] Found \(snap.documents.count) videos in Firestore")
             
-            let videos = snap.documents.compactMap { doc in
+            // 🔥 FIX: Use for-loop instead of compactMap since we need async/await
+            var videos: [Video] = []
+            for doc in snap.documents {
                 let d = doc.data()
-                print("  - Video: \(d["title"] as? String ?? "untitled") (id: \(doc.documentID))")
-                return Video(
+                
+                // 🔥 FIX: ALWAYS fetch viewCount from Firestore first (never default to 0)
+                var viewCount = 0
+                if let firestoreCount = d["viewCount"] as? Int {
+                    viewCount = firestoreCount
+                } else if let firestoreCount = d["viewCount"] as? Int64 {
+                    viewCount = Int(firestoreCount)
+                } else {
+                    // Field doesn't exist - initialize it to 0 in Firestore
+                    print("  ⚠️ [VideoFirestoreService] viewCount missing for \(doc.documentID), initializing to 0")
+                    try? await db.collection("videos").document(doc.documentID).updateData([
+                        "viewCount": 0
+                    ])
+                }
+                
+                print("  - Video: \(d["title"] as? String ?? "untitled") (id: \(doc.documentID)) - Firestore viewCount: \(viewCount)")
+                
+                // 🔥 FIX: Get real-time view count from tracker (which fetches from Firestore)
+                // This ensures we have the most up-to-date count
+                let trackerCount = await RealtimeViewTracker.shared.getViewCount(for: doc.documentID)
+                
+                // Use the higher of the two (Firestore or tracker cache)
+                let finalViewCount = max(viewCount, trackerCount)
+                
+                if trackerCount != viewCount {
+                    print("  📊 View count sync: Firestore=\(viewCount), Tracker=\(trackerCount), Using=\(finalViewCount)")
+                }
+                
+                let video = Video(
                     id: doc.documentID,
                     title: d["title"] as? String ?? "",
                     description: d["description"] as? String ?? "",
                     thumbnailURL: d["thumbnailUrl"] as? String ?? "",
                     videoURL: d["videoUrl"] as? String ?? "",
                     duration: (d["duration"] as? Double) ?? 0,
-                    viewCount: (d["viewCount"] as? Int) ?? 0,
+                    viewCount: finalViewCount, // 🔥 FIX: Use the synced count
                     likeCount: (d["likeCount"] as? Int) ?? 0,
                     creator: AppState.shared.currentUser ?? User.defaultUser,
                     category: .entertainment
                 )
+                videos.append(video)
             }
             print("✅ [VideoFirestoreService] Returning \(videos.count) videos")
             return videos
@@ -102,6 +157,71 @@ final class VideoFirestoreService: ObservableObject {
         }
         #else
         return []
+        #endif
+    }
+    
+    // ⚡ PERFORMANCE: Paginated fetch with last document tracking
+    func fetchVideosByCreatorPaginated(creatorId: String, limit: Int = 24, lastDocument: DocumentSnapshot? = nil) async throws -> (videos: [Video], lastDocument: DocumentSnapshot?) {
+        #if canImport(FirebaseFirestore)
+        do {
+            var query: Query = db.collection("videos")
+                .whereField("userId", isEqualTo: creatorId)
+                .order(by: "createdAt", descending: true)
+                .limit(to: limit)
+            
+            if let lastDocument = lastDocument {
+                query = query.start(afterDocument: lastDocument)
+            }
+            
+            let snap = try await query.getDocuments()
+            let lastDoc = snap.documents.last
+            
+            var videos: [Video] = []
+            for doc in snap.documents {
+                let d = doc.data()
+                
+                // 🔥 FIX: ALWAYS fetch viewCount from Firestore first (same as fetchVideosByCreator)
+                var viewCount = 0
+                if let firestoreCount = d["viewCount"] as? Int {
+                    viewCount = firestoreCount
+                } else if let firestoreCount = d["viewCount"] as? Int64 {
+                    viewCount = Int(firestoreCount)
+                } else {
+                    // Field doesn't exist - initialize it to 0 in Firestore
+                    print("  ⚠️ [VideoFirestoreService] viewCount missing for \(doc.documentID), initializing to 0")
+                    try? await db.collection("videos").document(doc.documentID).updateData([
+                        "viewCount": 0
+                    ])
+                }
+                
+                // 🔥 FIX: Get real-time view count from tracker (which fetches from Firestore)
+                let trackerCount = await RealtimeViewTracker.shared.getViewCount(for: doc.documentID)
+                
+                // Use the higher of the two (Firestore or tracker cache)
+                let finalViewCount = max(viewCount, trackerCount)
+                
+                let video = Video(
+                    id: doc.documentID,
+                    title: d["title"] as? String ?? "",
+                    description: d["description"] as? String ?? "",
+                    thumbnailURL: d["thumbnailUrl"] as? String ?? "",
+                    videoURL: d["videoUrl"] as? String ?? "",
+                    duration: (d["duration"] as? Double) ?? 0,
+                    viewCount: finalViewCount, // 🔥 FIX: Use the synced count
+                    likeCount: (d["likeCount"] as? Int) ?? 0,
+                    creator: AppState.shared.currentUser ?? User.defaultUser,
+                    category: .entertainment
+                )
+                videos.append(video)
+            }
+            
+            return (videos, lastDoc)
+        } catch {
+            print("🚨 [VideoFirestoreService] Error fetching paginated videos: \(error)")
+            return ([], nil)
+        }
+        #else
+        return ([], nil)
         #endif
     }
     
@@ -167,7 +287,7 @@ final class VideoFirestoreService: ObservableObject {
                             AppState.shared.currentUser = updatedUser
                             AuthenticationManager.shared.currentUser = updatedUser
                         }
-                        print("✅ [VideoFirestoreService] Local user totalViews updated to: \(updatedUser.totalViews)")
+                        print("✅ [VideoFirestoreService] Local user totalViews updated to: \(updatedUser.totalViews ?? 0)")
                     }
                 }
             }

@@ -41,6 +41,38 @@ struct AppSecrets {
         return ""
     }
     
+    // MARK: - 🚀 NEW SUPER AGI PARTNERS
+    
+    static var runwayAPIKey: String {
+        if let keychainValue = KeychainManager.shared.get("RUNWAY_API_KEY"),
+           !keychainValue.isEmpty {
+            return keychainValue
+        }
+        let env = ProcessInfo.processInfo.environment["RUNWAY_API_KEY"] ?? ""
+        if !env.isEmpty { return env }
+        return ""
+    }
+    
+    static var elevenLabsAPIKey: String {
+        if let keychainValue = KeychainManager.shared.get("ELEVENLABS_API_KEY"),
+           !keychainValue.isEmpty {
+            return keychainValue
+        }
+        let env = ProcessInfo.processInfo.environment["ELEVENLABS_API_KEY"] ?? ""
+        if !env.isEmpty { return env }
+        return ""
+    }
+    
+    static var stabilityAPIKey: String {
+        if let keychainValue = KeychainManager.shared.get("STABILITY_API_KEY"),
+           !keychainValue.isEmpty {
+            return keychainValue
+        }
+        let env = ProcessInfo.processInfo.environment["STABILITY_API_KEY"] ?? ""
+        if !env.isEmpty { return env }
+        return ""
+    }
+    
     static var googleCloudAPIKey: String {
         if let keychainValue = KeychainManager.shared.get(KeychainManager.APIKey.googleCloud.rawValue),
            !keychainValue.isEmpty {
@@ -70,6 +102,33 @@ struct AppSecrets {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
         
+        return ""
+    }
+    
+    // MARK: - Stripe (Payment Processing)
+    
+    static var stripePublishableKey: String {
+        if let keychainValue = KeychainManager.shared.get("STRIPE_PUBLISHABLE_KEY"),
+           !keychainValue.isEmpty {
+            return keychainValue
+        }
+        let env = ProcessInfo.processInfo.environment["STRIPE_PUBLISHABLE_KEY"] ?? ""
+        if !env.isEmpty { return env }
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "STRIPE_PUBLISHABLE_KEY") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        return ""
+    }
+    
+    static var stripeSecretKey: String {
+        // SECRET KEY - Never expose in client app!
+        // Should only be used server-side or in secure backend
+        if let keychainValue = KeychainManager.shared.get("STRIPE_SECRET_KEY"),
+           !keychainValue.isEmpty {
+            return keychainValue
+        }
+        let env = ProcessInfo.processInfo.environment["STRIPE_SECRET_KEY"] ?? ""
+        if !env.isEmpty { return env }
         return ""
     }
     
@@ -120,6 +179,18 @@ struct AppSecrets {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
         return (ProcessInfo.processInfo.environment["YOUTUBE_API_KEY"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    static var pineconeAPIKey: String? {
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "PINECONE_API_KEY") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        
+        let env = (ProcessInfo.processInfo.environment["PINECONE_API_KEY"] ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !env.isEmpty { return env }
+        
+        return nil
     }
 }
 

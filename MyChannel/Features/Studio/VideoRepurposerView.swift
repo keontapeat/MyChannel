@@ -237,7 +237,7 @@ struct VideoRepurposerView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(RepurposeTemplate.allTemplates) { template in
-                        TemplateCard(template: template) {
+                        RepurposerTemplateCard(template: template) {
                             // Use template
                         }
                     }
@@ -258,25 +258,25 @@ struct VideoRepurposerView: View {
             }
             
             VStack(spacing: 14) {
-                HowItWorksStep(
+                RepurposerHowItWorksStep(
                     number: "1",
                     title: "AI Analyzes Video",
                     description: "Scans your entire video for engaging moments, key topics, and viral potential"
                 )
                 
-                HowItWorksStep(
+                RepurposerHowItWorksStep(
                     number: "2",
                     title: "Extracts Highlights",
                     description: "Automatically finds and extracts the best 15-60 second clips"
                 )
                 
-                HowItWorksStep(
+                RepurposerHowItWorksStep(
                     number: "3",
                     title: "Smart Editing",
                     description: "Adds captions, music, transitions, and optimizes for mobile viewing"
                 )
                 
-                HowItWorksStep(
+                RepurposerHowItWorksStep(
                     number: "4",
                     title: "Ready to Publish",
                     description: "Review, edit, and publish your Flicks with one tap"
@@ -403,7 +403,8 @@ struct GeneratedFlickCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
     
-    private func formatDuration(_ seconds: Int) -> String {
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let seconds = Int(duration)
         let mins = seconds / 60
         let secs = seconds % 60
         return String(format: "%d:%02d", mins, secs)
@@ -433,7 +434,7 @@ struct EmptyFlicksView: View {
     }
 }
 
-struct TemplateCard: View {
+struct RepurposerTemplateCard: View {
     let template: RepurposeTemplate
     let action: () -> Void
     
@@ -473,7 +474,7 @@ struct TemplateCard: View {
     }
 }
 
-struct HowItWorksStep: View {
+struct RepurposerHowItWorksStep: View {
     let number: String
     let title: String
     let description: String
@@ -518,57 +519,16 @@ struct VideoSelectorSheet: View {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     ForEach(viewModel.availableVideos) { video in
-                        Button {
-                            selectedVideo = video
-                            Task {
-                                await viewModel.repurposeVideo(video)
-                            }
-                            dismiss()
-                        } label: {
-                            HStack(spacing: 14) {
-                                AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                                    image.resizable().aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Rectangle().fill(AppTheme.Colors.cardBackground)
-                                }
-                                .frame(width: 120, height: 68)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(video.title)
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundColor(AppTheme.Colors.textPrimary)
-                                        .lineLimit(2)
-                                    
-                                    HStack(spacing: 12) {
-                                        Text(formatDuration(video.duration))
-                                            .font(.system(size: 13))
-                                        
-                                        Text("\(video.viewCount) views")
-                                            .font(.system(size: 13))
-                                    }
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                }
-                                
-                                Spacer()
-                                
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.Colors.textTertiary)
-                            }
-                            .padding(12)
-                            .background(AppTheme.Colors.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
+                        videoSelectorButton(for: video)
                     }
                 }
-                .padding(20)
+                .padding()
             }
             .background(AppTheme.Colors.background)
             .navigationTitle("Select Video")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Cancel") {
                         dismiss()
                     }
@@ -577,7 +537,60 @@ struct VideoSelectorSheet: View {
         }
     }
     
-    private func formatDuration(_ seconds: Int) -> String {
+    private func videoSelectorButton(for video: Video) -> some View {
+        Button {
+            selectedVideo = video
+            Task {
+                await viewModel.repurposeVideo(video)
+            }
+            dismiss()
+        } label: {
+            HStack(spacing: 14) {
+                videoThumbnail(video.thumbnailURL)
+                videoDetails(video)
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.Colors.textTertiary)
+            }
+            .padding(12)
+            .background(AppTheme.Colors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+    
+    private func videoThumbnail(_ url: String) -> some View {
+        AsyncImage(url: URL(string: url)) { image in
+            image.resizable().aspectRatio(contentMode: .fill)
+        } placeholder: {
+            Rectangle().fill(AppTheme.Colors.cardBackground)
+        }
+        .frame(width: 120, height: 68)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+    
+    private func videoDetails(_ video: Video) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(video.title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .lineLimit(2)
+            
+            HStack(spacing: 12) {
+                Text(formatDuration(video.duration))
+                    .font(.system(size: 13))
+                
+                Text("\(video.viewCount) views")
+                    .font(.system(size: 13))
+            }
+            .foregroundColor(AppTheme.Colors.textSecondary)
+        }
+    }
+    
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let seconds = Int(duration)
         let mins = seconds / 60
         let secs = seconds % 60
         return String(format: "%d:%02d", mins, secs)
