@@ -402,10 +402,14 @@ class GlobalVideoPlayerManager: ObservableObject {
             await startViewTracking(for: video)
         }
         
-        // 🔥 YOUTUBE PARITY: DO NOT auto-play - require user to press play button
-        // Videos should only play when user explicitly taps play
-        // This prevents videos from starting over or playing without user interaction
-        isPlaying = false
+        // 🔥 AUTO-PLAY: Videos auto-play when opened (like YouTube)
+        // View counting happens in VideoPlayerManager.play() - tracks ONCE per video
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self = self else { return }
+            self.playerManager?.play()  // Auto-play the video
+            self.isPlaying = true
+            print("▶️ [GlobalVideoPlayerManager] Auto-playing video")
+        }
         
         // Add haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)

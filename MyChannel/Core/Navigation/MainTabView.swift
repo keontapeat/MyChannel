@@ -302,7 +302,27 @@ struct MainTabView: View {
                         Color.clear.frame(height: tabBarReservedBottomInset + (globalPlayer.shouldShowMiniPlayer ? 96 : 0))
                     }
                 }
-            // 🔥 FIX: Show mini player with more robust conditions
+            // 🔥 FIX: Tab bar properly positioned at bottom
+            VStack {
+                Spacer()
+                CustomTabBar(
+                    selectedTab: $selectedTab,
+                    notificationBadges: notificationBadges,
+                    isHidden: false,
+                    onUploadTap: {
+                        if appState.requireAuthentication(hint: "Sign in to upload videos.") {
+                            showingUpload = true
+                        }
+                    },
+                    onTabSelected: handleTabSelection
+                )
+                .padding(.bottom, 8)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .zIndex(999)  // Tab bar below mini player
+            .allowsHitTesting(true)
+            
+            // 🔥 FIX: Mini player ABOVE tab bar with higher z-index
             if globalPlayer.shouldShowMiniPlayer,
                !globalPlayer.showingFullscreen,
                globalPlayer.currentVideo != nil,
@@ -313,7 +333,7 @@ struct MainTabView: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, tabBarReservedBottomInset + 12)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(998)
+                    .zIndex(1000)  // 🔥 CRITICAL: Higher than tab bar (999)
                     .animation(.easeInOut(duration: 0.25), value: globalPlayer.shouldShowMiniPlayer)
                     .onAppear {
                         print("✅ [MainTabView] Mini player appeared - shouldShow: \(globalPlayer.shouldShowMiniPlayer), isMini: \(globalPlayer.isMiniplayer)")
@@ -321,29 +341,7 @@ struct MainTabView: View {
                     .onDisappear {
                         print("⚠️ [MainTabView] Mini player disappeared - shouldShow: \(globalPlayer.shouldShowMiniPlayer), isMini: \(globalPlayer.isMiniplayer)")
                     }
-            } else {
-                // 🔥 DEBUG: Log why mini player is not showing
-                if globalPlayer.currentVideo != nil {
-                    print("⚠️ [MainTabView] Mini player NOT showing - shouldShow: \(globalPlayer.shouldShowMiniPlayer), fullscreen: \(globalPlayer.showingFullscreen), player: \(globalPlayer.player != nil), tab: \(selectedTab)")
-                }
             }
-        }
-        .overlay(alignment: .bottom) {
-            CustomTabBar(
-                selectedTab: $selectedTab,
-                notificationBadges: notificationBadges,
-                isHidden: false,
-                onUploadTap: {
-                    if appState.requireAuthentication(hint: "Sign in to upload videos.") {
-                        showingUpload = true
-                    }
-                },
-                onTabSelected: handleTabSelection
-            )
-            .zIndex(999)
-            .ignoresSafeArea(.keyboard)
-            .ignoresSafeArea(.container, edges: .bottom)
-            .allowsHitTesting(true)
         }
         .ignoresSafeArea(.keyboard)
         .fullScreenCover(isPresented: $showingUpload) {

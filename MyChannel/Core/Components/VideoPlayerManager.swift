@@ -31,6 +31,7 @@ class VideoPlayerManager: ObservableObject {
     private var lastSavedSecond: Int = -1
     private var midrollServed: Bool = false
     private var imageGenerator: AVAssetImageGenerator?
+    private var hasTrackedView = false  // 🔥 FIX: Track view ONCE per video
 
     // MARK: - Lightweight LRU Cache for AVPlayerItem and Session Resume
     private static var itemCache: [String: AVPlayerItem] = [:]
@@ -138,6 +139,7 @@ class VideoPlayerManager: ObservableObject {
             // Clean up any existing player first
             cleanup()
             isCleanedUp = false // Reset cleanup flag
+            hasTrackedView = false  // 🔥 FIX: Reset view tracking for new video
             
             currentVideo = video
             isLoading = true
@@ -374,11 +376,11 @@ class VideoPlayerManager: ObservableObject {
         isLoading = false
         updateNowPlayingInfo()
         
-        // 🔥 FIX: Track view count when video actually starts playing
-        // Use a flag to prevent double-tracking
-        if let video = currentVideo {
+        // 🔥 FIX: Track view ONLY ONCE when video STARTS playing (not on every play/pause)
+        if !hasTrackedView, let video = currentVideo {
+            hasTrackedView = true  // Mark as tracked to prevent double-counting
             let videoId = video.id
-            print("👁️ [VideoPlayerManager] Video playing - tracking view: \(videoId)")
+            print("👁️🔥 [VideoPlayerManager] TRACKING VIEW for video: \(videoId)")
             
             Task {
                 let userId = AuthenticationManager.shared.currentUser?.id
@@ -404,6 +406,8 @@ class VideoPlayerManager: ObservableObject {
                     print("📢 [VideoPlayerManager] View count notification posted: \(latestCount)")
                 }
             }
+        } else if hasTrackedView {
+            print("⏯️ [VideoPlayerManager] View already tracked, skipping (play/pause event)")
         } else {
             print("⚠️ [VideoPlayerManager] No current video to track view")
         }

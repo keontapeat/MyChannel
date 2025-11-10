@@ -149,8 +149,9 @@ class RealtimeViewTracker: ObservableObject {
     private func incrementViewCount(videoId: String, userId: String?) async {
         #if canImport(FirebaseFirestore)
         do {
-            print("🔥 [ViewTracker] Incrementing view count for: \(videoId)")
+            print("🔥🔥🔥 [ViewTracker] ⚡ INCREMENTING VIEW COUNT for: \(videoId)")
             print("🔥 [ViewTracker] User ID: \(userId ?? "anonymous")")
+            print("🔥 [ViewTracker] Timestamp: \(Date())")
             
             // 🔥 FIX: Always track views, even for own videos
             // No filtering - all views count, including self-views
@@ -160,28 +161,31 @@ class RealtimeViewTracker: ObservableObject {
             // 🔥 FIX: Check if document exists and ensure viewCount field exists
             let videoDoc = try await videoRef.getDocument()
             if !videoDoc.exists {
-                print("⚠️ [ViewTracker] Video document doesn't exist: \(videoId)")
+                print("⚠️⚠️⚠️ [ViewTracker] Video document doesn't exist: \(videoId) - CREATING NOW")
                 // Create the document with initial viewCount
                 try await videoRef.setData([
                     "viewCount": 1,
                     "createdAt": FieldValue.serverTimestamp()
                 ], merge: true)
-                print("✅ [ViewTracker] Created video document with viewCount: 1")
+                print("✅✅✅ [ViewTracker] Created video document with viewCount: 1")
             } else {
                 // Document exists - check if viewCount field exists
                 let data = videoDoc.data()
                 if data?["viewCount"] == nil {
-                    print("⚠️ [ViewTracker] viewCount field missing, initializing to 1")
+                    print("⚠️⚠️⚠️ [ViewTracker] viewCount field missing, initializing to 1")
                     // Field doesn't exist, set it to 1
                     try await videoRef.setData([
                         "viewCount": 1
                     ], merge: true)
+                    print("✅✅✅ [ViewTracker] Initialized viewCount field to 1")
                 } else {
                     // Field exists, use increment
+                    let currentCount = data?["viewCount"] as? Int ?? 0
+                    print("📊 [ViewTracker] Current count: \(currentCount), incrementing...")
                     try await videoRef.updateData([
                         "viewCount": FieldValue.increment(Int64(1))
                     ])
-                    print("✅ [ViewTracker] Incremented viewCount field")
+                    print("✅✅✅ [ViewTracker] Incremented viewCount from \(currentCount) to \(currentCount + 1)")
                 }
             }
             
@@ -205,6 +209,7 @@ class RealtimeViewTracker: ObservableObject {
             
             // 🔥 FIX: Fetch ACTUAL count from Firestore after incrementing (not just local cache)
             // This ensures we have the real persisted count
+            print("📡 [ViewTracker] Fetching updated view count from Firestore...")
             let updatedDoc = try await videoRef.getDocument()
             if let data = updatedDoc.data(),
                let actualCount = data["viewCount"] as? Int {
@@ -217,7 +222,8 @@ class RealtimeViewTracker: ObservableObject {
                     userInfo: ["videoId": videoId, "viewCount": actualCount]
                 )
                 
-                print("✅ [ViewTracker] ✅ View count incremented and synced: \(videoId) → \(actualCount) views (from Firestore)")
+                print("✅✅✅ [ViewTracker] VIEW COUNT SUCCESSFULLY UPDATED: \(videoId) → \(actualCount) views (from Firestore)")
+                print("📢 [ViewTracker] Notification posted to UI with count: \(actualCount)")
             } else {
                 // Fallback: increment local cache
                 let currentCount = viewCountsByVideo[videoId] ?? 0
@@ -230,7 +236,7 @@ class RealtimeViewTracker: ObservableObject {
                     userInfo: ["videoId": videoId, "viewCount": newCount]
                 )
                 
-                print("✅ [ViewTracker] ✅ View count incremented (fallback): \(videoId) → \(newCount) views")
+                print("⚠️ [ViewTracker] Using fallback count: \(videoId) → \(newCount) views")
             }
             
         } catch {

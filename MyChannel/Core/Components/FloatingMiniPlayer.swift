@@ -68,7 +68,7 @@ struct FloatingMiniPlayer: View {
                     .compositingGroup()
             }
             .allowsHitTesting(true)
-            .zIndex(998) // Below tab bar but above content
+            .zIndex(10000) // 🔥 FIX: ABOVE EVERYTHING for YouTube parity (tab bar is 999)
             // 🔥 FIX: Ensure mini player doesn't interfere with home feed rendering
             .background(Color.clear) // Transparent background to avoid blocking
             .onAppear {

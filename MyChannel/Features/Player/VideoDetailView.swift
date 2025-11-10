@@ -53,6 +53,7 @@ struct VideoDetailView: View {
     @State private var showVideoControls = true
     @State private var controlsHideTimer: Timer?
     @State private var showingFullscreenOverlay = false
+    @State private var showingVideoEditor = false  // 🔥 FIX: Add video editor sheet
     @State private var showSeekRippleForward = false
     @State private var showSeekRippleBackward = false
     @State private var lastDoubleTapTime = Date.distantPast  // 🔥 YOUTUBE PARITY: Double-tap detection
@@ -873,6 +874,10 @@ struct VideoDetailView: View {
                                   isWatchLater: $isWatchLater)
                 .presentationDetents([.medium])
         }
+        // 🔥 FIX: Video editor sheet (YouTube-style edit interface)
+        .sheet(isPresented: $showingVideoEditor) {
+            PostUploadEditorView(video: video)
+        }
         .sheet(isPresented: $showingSubtitlePicker) {
             NavigationView {
                 List {
@@ -1198,6 +1203,13 @@ struct VideoDetailView: View {
                         break
                     }
                 }
+            }
+        }
+        // 🔥 FIX: Listen for "Open Video Editor" notification
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenVideoEditor"))) { notification in
+            if let editVideo = notification.object as? Video, editVideo.id == video.id {
+                print("📝 [VideoDetailView] Opening video editor")
+                showingVideoEditor = true
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { notification in

@@ -824,19 +824,13 @@ struct UploadView: View {
         ScrollView {
             VStack(spacing: 24) {
                 if let thumbnail = uploadManager.thumbnail {
-                    VStack(spacing: 12) {
-                        Text("Your Video")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        
-                        Image(uiImage: thumbnail)
-                            .resizable()
-                            .aspectRatio(16/9, contentMode: .fit)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .frame(maxWidth: 300)
-                            .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
-                    }
+                    // 🔥 FIX: Clean upload flow - no "Your Video" text
+                    Image(uiImage: thumbnail)
+                        .resizable()
+                        .aspectRatio(16/9, contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .frame(maxWidth: 300)
+                        .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
                 }
                 
                 VStack(spacing: 12) {

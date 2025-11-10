@@ -2580,9 +2580,22 @@ private struct TopMyChannelsSection: View {
                                             .stroke(AppTheme.Colors.primary, lineWidth: 3)
                                             .frame(width: 64, height: 64)
 
-                                        AppAsyncImage(url: URL(string: c.avatar)) { img in
-                                            img.resizable().scaledToFill()
-                                        } placeholder: { Color.white }
+                                        // 🔥 FIX: Better image loading with visible placeholder
+                                        CachedAsyncImage(url: URL(string: c.avatar)) { image in
+                                            image
+                                                .resizable()
+                                                .scaledToFill()
+                                        } placeholder: {
+                                            ZStack {
+                                                Circle()
+                                                    .fill(AppTheme.Colors.surface)
+                                                Image(systemName: "person.circle.fill")
+                                                    .resizable()
+                                                    .scaledToFit()
+                                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                                                    .padding(8)
+                                            }
+                                        }
                                         .frame(width: 58, height: 58)
                                         .clipShape(Circle())
                                     }
