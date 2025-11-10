@@ -144,13 +144,33 @@ class VideoPlayerManager: ObservableObject {
             hasError = false
         }
         
-        print("🎬 VideoPlayerManager setting up player for: \(video.title)")
-        print("🔗 Video URL: \(video.videoURL)")
+        print("🎬 [VideoPlayerManager] Setting up player for: \(video.title)")
+        print("🔗 [VideoPlayerManager] Video URL: \(video.videoURL)")
+        print("📊 [VideoPlayerManager] Video ID: \(video.id)")
+        print("👤 [VideoPlayerManager] Creator: \(video.creator.displayName)")
+        print("📹 [VideoPlayerManager] Content Source: \(video.contentSource?.rawValue ?? "userUploaded")")
         
         // 🔥 FIX: Use simple AVPlayer for non-DRM content (uploaded videos)
         guard let url = URL(string: video.videoURL) else {
-            await MainActor.run { handleError("Invalid video URL: \(video.videoURL)") }
+            let errorMsg = "Invalid video URL: \(video.videoURL)"
+            print("❌ [VideoPlayerManager] \(errorMsg)")
+            await MainActor.run { handleError(errorMsg) }
             return
+        }
+        
+        // 🔥 FIX: Verify URL is accessible before creating player
+        print("🔍 [VideoPlayerManager] Verifying video URL accessibility...")
+        let urlString = url.absoluteString
+        
+        // Check if it's a Firebase Storage URL
+        if urlString.contains("firebasestorage.googleapis.com") || urlString.contains("firebase") {
+            print("✅ [VideoPlayerManager] Firebase Storage URL detected")
+        } else if urlString.hasPrefix("file://") {
+            print("✅ [VideoPlayerManager] Local file URL detected")
+        } else if urlString.hasPrefix("http://") || urlString.hasPrefix("https://") {
+            print("✅ [VideoPlayerManager] Remote HTTP/HTTPS URL detected")
+        } else {
+            print("⚠️ [VideoPlayerManager] Unknown URL format: \(urlString)")
         }
         
         // Check if this needs DRM (only for YouTube/external content)
@@ -252,8 +272,11 @@ class VideoPlayerManager: ObservableObject {
                 case .readyToPlay:
                     self.isLoading = false
                     self.duration = CMTimeGetSeconds(playerItem.duration)
+                    print("✅ [VideoPlayerManager] Video ready to play: \(self.currentVideo?.title ?? "unknown")")
                 case .failed:
-                    self.handleError("Failed to load video")
+                    let error = playerItem.error?.localizedDescription ?? "Unknown error"
+                    print("❌ [VideoPlayerManager] Video failed to load: \(error)")
+                    self.handleError("Failed to load video: \(error)")
                 case .unknown:
                     self.isLoading = true
                 @unknown default:
@@ -261,6 +284,8 @@ class VideoPlayerManager: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+        
+        // 🔥 REMOVED: Duplicate view tracking - now handled in play() method
         
         playerItem.publisher(for: \.loadedTimeRanges)
             .receive(on: DispatchQueue.main)
@@ -335,12 +360,54 @@ class VideoPlayerManager: ObservableObject {
     
     // MARK: - Safe Playback Controls
     func play() {
-        guard let player = player, !isCleanedUp else { return }
+        guard let player = player, !isCleanedUp else { 
+            print("⚠️ [VideoPlayerManager] Cannot play - player is nil or cleaned up")
+            return 
+        }
+        
+        print("▶️ [VideoPlayerManager] Playing video: \(currentVideo?.title ?? "unknown")")
+        print("🔗 [VideoPlayerManager] Video URL: \(currentVideo?.videoURL ?? "no URL")")
+        print("🆔 [VideoPlayerManager] Video ID: \(currentVideo?.id ?? "no ID")")
         
         player.play()
         isPlaying = true
         isLoading = false
         updateNowPlayingInfo()
+        
+        // 🔥 FIX: Track view count when video actually starts playing
+        // Use a flag to prevent double-tracking
+        if let video = currentVideo {
+            let videoId = video.id
+            print("👁️ [VideoPlayerManager] Video playing - tracking view: \(videoId)")
+            
+            Task {
+                let userId = AuthenticationManager.shared.currentUser?.id
+                
+                // Track with RealtimeViewTracker (handles Firestore increment)
+                await RealtimeViewTracker.shared.startViewSession(videoId: videoId, userId: userId)
+                print("✅ [VideoPlayerManager] View session started")
+                
+                // Also call FirestoreService for backwards compatibility
+                await VideoFirestoreService.shared.incrementViewCount(videoId: videoId)
+                print("✅ [VideoPlayerManager] View count incremented in Firestore")
+                
+                // Update UI with latest count
+                let latestCount = await RealtimeViewTracker.shared.getViewCount(for: videoId)
+                print("📊 [VideoPlayerManager] Latest view count: \(latestCount)")
+                
+                await MainActor.run {
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("VideoViewCountUpdated"),
+                        object: nil,
+                        userInfo: ["videoId": videoId, "viewCount": latestCount]
+                    )
+                    print("📢 [VideoPlayerManager] View count notification posted: \(latestCount)")
+                }
+            }
+        } else {
+            print("⚠️ [VideoPlayerManager] No current video to track view")
+        }
+        
         Task { await AnalyticsService.shared.trackVideoPlay(videoId: currentVideo?.id ?? "unknown", position: currentTime) }
     }
     

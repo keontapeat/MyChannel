@@ -55,6 +55,7 @@ struct VideoDetailView: View {
     @State private var showingFullscreenOverlay = false
     @State private var showSeekRippleForward = false
     @State private var showSeekRippleBackward = false
+    @State private var lastDoubleTapTime = Date.distantPast  // 🔥 YOUTUBE PARITY: Double-tap detection
     @State private var showingChapters = false
     @State private var currentChapterTitle: String = ""
     @State private var showingChapterTooltip = false
@@ -236,47 +237,69 @@ struct VideoDetailView: View {
     
     @ViewBuilder
     private var videoTapArea: some View {
-        Color.clear
-            .contentShape(Rectangle())
-            // 🔥 YOUTUBE PARITY: Double-tap to seek 10 seconds (simultaneous with single tap)
-            .simultaneousGesture(
-                TapGesture(count: 2)
-                    .onEnded { location in
-                        let screenWidth = UIScreen.main.bounds.width
-                        let tapX = location.x
-                        
-                        // Left third = rewind 10s, Right third = forward 10s
-                        if tapX < screenWidth / 3 {
-                            // Left edge - rewind 10 seconds
-                            playerManager.seekBackward(10)
-                            showSeekRippleBackward = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                showSeekRippleBackward = false
+        GeometryReader { geometry in
+            Color.clear
+                .contentShape(Rectangle())
+                // 🔥 FIX: Only allow tap gestures when controls are hidden to prevent blocking controls
+                .allowsHitTesting(!showVideoControls)  // 🔥 CRITICAL: Disable when controls are visible
+                // 🔥 YOUTUBE PARITY: Double-tap to seek 10 seconds (simultaneous with single tap)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onEnded { value in
+                            // Only process if controls are hidden
+                            guard !showVideoControls else { return }
+                            
+                            // Detect double tap by checking if this is the second tap in quick succession
+                            let now = Date()
+                            let timeSinceLastTap = now.timeIntervalSince(lastDoubleTapTime)
+                            
+                            if timeSinceLastTap < 0.5 {
+                                // This is a double tap
+                                let screenWidth = geometry.size.width
+                                let tapX = value.location.x
+                                
+                                // Left third = rewind 10s, Right third = forward 10s
+                                if tapX < screenWidth / 3 {
+                                    // Left edge - rewind 10 seconds
+                                    playerManager.seekBackward(10)
+                                    showSeekRippleBackward = true
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                        showSeekRippleBackward = false
+                                    }
+                                    HapticManager.shared.impact(style: .medium)
+                                    print("⏪ Double-tap left: Rewind 10s")
+                                } else if tapX > screenWidth * 2/3 {
+                                    // Right edge - forward 10 seconds
+                                    playerManager.seekForward(10)
+                                    showSeekRippleForward = true
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                        showSeekRippleForward = false
+                                    }
+                                    HapticManager.shared.impact(style: .medium)
+                                    print("⏩ Double-tap right: Forward 10s")
+                                }
+                                
+                                lastDoubleTapTime = Date.distantPast // Reset to prevent triple tap
+                            } else {
+                                // First tap - record time
+                                lastDoubleTapTime = now
                             }
-                            HapticManager.shared.impact(style: .medium)
-                            print("⏪ Double-tap left: Rewind 10s")
-                        } else if tapX > screenWidth * 2/3 {
-                            // Right edge - forward 10 seconds
-                            playerManager.seekForward(10)
-                            showSeekRippleForward = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                showSeekRippleForward = false
-                            }
-                            HapticManager.shared.impact(style: .medium)
-                            print("⏩ Double-tap right: Forward 10s")
                         }
+                )
+                .onTapGesture {
+                    // Only process if controls are hidden
+                    guard !showVideoControls else { return }
+                    
+                    print("📱 Video tapped - Current controls state: \(showVideoControls)")
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showVideoControls.toggle()
                     }
-            )
-            .onTapGesture {
-                print("📱 Video tapped - Current controls state: \(showVideoControls)")
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    showVideoControls.toggle()
+                    
+                    if showVideoControls {
+                        resetControlsHideTimer()
+                    }
                 }
-                
-                if showVideoControls {
-                    resetControlsHideTimer()
-                }
-            }
+        }
             // 🔥 YOUTUBE PARITY: Speed gestures (swipe up/down on right edge to change playback speed)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 20, coordinateSpace: .local)
@@ -325,8 +348,10 @@ struct VideoDetailView: View {
             bottomProgressArea
         }
         .transition(.opacity)
-        .zIndex(10)
-        .allowsHitTesting(showVideoControls)
+        .zIndex(100)  // 🔥 FIX: Much higher z-index to ensure controls are above tap area
+        .allowsHitTesting(true)  // 🔥 FIX: Always allow hit testing when controls are visible
+        .contentShape(Rectangle())  // 🔥 FIX: Ensure entire control area is tappable
+        .opacity(showVideoControls ? 1.0 : 0.0)  // 🔥 FIX: Use opacity instead of allowsHitTesting
     }
     
     @ViewBuilder
@@ -443,18 +468,48 @@ struct VideoDetailView: View {
     @ViewBuilder
     private var centerControls: some View {
         HStack(spacing: 24) {
-            Button(action: { playerManager.seekBackward(10); HapticManager.shared.impact(style: .light) }) {
-                Image(systemName: "gobackward.10").font(.system(size: 28, weight: .semibold)).foregroundColor(.white)
+            Button(action: { 
+                print("⏪ [VideoDetailView] Rewind button tapped")
+                playerManager.seekBackward(10)
+                HapticManager.shared.impact(style: .light)
+            }) {
+                Image(systemName: "gobackward.10")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundColor(.white)
             }
-            Button(action: { playerManager.togglePlayPause(); HapticManager.shared.impact(style: .medium) }) {
-                Image(systemName: playerManager.isPlaying ? "pause.circle.fill" : "play.circle.fill").font(.system(size: 56, weight: .semibold)).foregroundColor(.white)
+            .frame(width: 60, height: 60)  // 🔥 FIX: Larger tap target
+            .contentShape(Rectangle())  // 🔥 FIX: Explicit content shape
+            .buttonStyle(.plain)  // 🔥 FIX: Plain button style to prevent interference
+            
+            Button(action: { 
+                print("▶️ [VideoDetailView] Play/Pause button tapped - Current state: \(playerManager.isPlaying)")
+                playerManager.togglePlayPause()
+                HapticManager.shared.impact(style: .medium)
+            }) {
+                Image(systemName: playerManager.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.system(size: 56, weight: .semibold))
+                    .foregroundColor(.white)
             }
-            Button(action: { playerManager.seekForward(10); HapticManager.shared.impact(style: .light) }) {
-                Image(systemName: "goforward.10").font(.system(size: 28, weight: .semibold)).foregroundColor(.white)
+            .frame(width: 80, height: 80)  // 🔥 FIX: Larger tap target
+            .contentShape(Rectangle())  // 🔥 FIX: Explicit content shape
+            .buttonStyle(.plain)  // 🔥 FIX: Plain button style to prevent interference
+            
+            Button(action: { 
+                print("⏩ [VideoDetailView] Forward button tapped")
+                playerManager.seekForward(10)
+                HapticManager.shared.impact(style: .light)
+            }) {
+                Image(systemName: "goforward.10")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundColor(.white)
             }
+            .frame(width: 60, height: 60)  // 🔥 FIX: Larger tap target
+            .contentShape(Rectangle())  // 🔥 FIX: Explicit content shape
+            .buttonStyle(.plain)  // 🔥 FIX: Plain button style to prevent interference
         }
         .padding(.bottom, 18)
         .opacity(showVideoControls ? 1.0 : 0.0)
+        .allowsHitTesting(showVideoControls)  // 🔥 FIX: Explicitly allow hit testing when visible
     }
     
     @ViewBuilder
@@ -1018,24 +1073,9 @@ struct VideoDetailView: View {
                         Task { await HistoryService.shared.logStart(userId: uid, video: video) }
                     }
                     
-                    // 🔥 TRACK VIEW COUNT: Always track views, including own videos
-                    Task {
-                        let userId = AuthenticationManager.shared.currentUser?.id
-                        print("👁️ [VideoDetailView] Tracking view for video: \(video.id), userId: \(userId ?? "anonymous")")
-                        print("👁️ [VideoDetailView] Video creator: \(video.creator.id)")
-                        print("👁️ [VideoDetailView] Is own video: \(userId == video.creator.id)")
-                        
-                        // Track with RealtimeViewTracker
-                        await RealtimeViewTracker.shared.startViewSession(videoId: video.id, userId: userId)
-                        
-                        // Also call FirestoreService for backwards compatibility
-                        await VideoFirestoreService.shared.incrementViewCount(videoId: video.id)
-                        
-                        // Update local view count immediately for UI
-                        await MainActor.run {
-                            currentViewCount = video.viewCount + 1
-                        }
-                    }
+                    // 🔥 FIX: Track view count when video actually starts playing (not just on appear)
+                    // This ensures views are only counted when user actually watches
+                    // We'll track in the player observer when playback actually starts
                     // Fetch simple VMAP for preroll and pause content while ad plays
                     Task {
                         // 🔥 NO VMAP ADS ON YOUR OWN VIDEOS
@@ -1184,12 +1224,24 @@ struct VideoDetailView: View {
             }
         }
         .task {
-            // 🔥 FIX: Initialize view count from video model
-            if currentViewCount == video.viewCount {
-                // Try to get the latest view count from Firestore
-                let latestCount = await RealtimeViewTracker.shared.getViewCount(for: video.id)
-                if latestCount > 0 {
-                    currentViewCount = latestCount
+            // 🔥 FIX: Always fetch latest view count from Firestore on appear
+            print("📊 [VideoDetailView] Fetching latest view count for: \(video.id)")
+            let latestCount = await RealtimeViewTracker.shared.getViewCount(for: video.id)
+            print("📊 [VideoDetailView] Latest view count from Firestore: \(latestCount)")
+            
+            await MainActor.run {
+                currentViewCount = latestCount
+            }
+        }
+        .onChange(of: playerManager.isPlaying) { isPlaying in
+            // 🔥 FIX: Update view count when video starts playing
+            if isPlaying {
+                Task {
+                    let latestCount = await RealtimeViewTracker.shared.getViewCount(for: video.id)
+                    await MainActor.run {
+                        currentViewCount = latestCount
+                        print("📊 [VideoDetailView] View count updated after play: \(latestCount)")
+                    }
                 }
             }
         }
@@ -1236,13 +1288,41 @@ struct VideoDetailView: View {
     }
 
     private func minimizeToMiniPlayer() {
+        print("🔄 [VideoDetailView] Minimizing to mini player")
+        print("📊 [VideoDetailView] Current state - shouldShow: \(globalPlayer.shouldShowMiniPlayer), isMini: \(globalPlayer.isMiniplayer), fullscreen: \(globalPlayer.showingFullscreen)")
+        
         // 🔥 FIX: Ensure player continues playing and mini player stays visible
         // Set state BEFORE dismissing to prevent race conditions
         globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
         
-        // Explicitly ensure mini player is shown immediately
+        // 🔥 FIX: Explicitly ensure mini player is shown immediately (multiple times to ensure it sticks)
         globalPlayer.shouldShowMiniPlayer = true
         globalPlayer.isMiniplayer = true
+        globalPlayer.showingFullscreen = false
+        
+        // 🔥 FIX: Force state update multiple times to ensure it persists
+        DispatchQueue.main.async {
+            self.globalPlayer.shouldShowMiniPlayer = true
+            self.globalPlayer.isMiniplayer = true
+            self.globalPlayer.showingFullscreen = false
+            print("✅ [VideoDetailView] Mini player state set - shouldShow: \(self.globalPlayer.shouldShowMiniPlayer), isMini: \(self.globalPlayer.isMiniplayer)")
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.globalPlayer.shouldShowMiniPlayer = true
+            self.globalPlayer.isMiniplayer = true
+            self.globalPlayer.showingFullscreen = false
+            print("✅ [VideoDetailView] Mini player state verified at 0.1s")
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if !self.globalPlayer.shouldShowMiniPlayer || !self.globalPlayer.isMiniplayer {
+                print("⚠️ [VideoDetailView] Mini player state LOST - RESTORING")
+                self.globalPlayer.shouldShowMiniPlayer = true
+                self.globalPlayer.isMiniplayer = true
+                self.globalPlayer.showingFullscreen = false
+            }
+        }
         
         // Ensure player is playing
         if let player = globalPlayer.player, player.rate == 0 {

@@ -302,8 +302,11 @@ struct MainTabView: View {
                         Color.clear.frame(height: tabBarReservedBottomInset + (globalPlayer.shouldShowMiniPlayer ? 96 : 0))
                     }
                 }
+            // 🔥 FIX: Show mini player with more robust conditions
             if globalPlayer.shouldShowMiniPlayer,
                !globalPlayer.showingFullscreen,
+               globalPlayer.currentVideo != nil,
+               globalPlayer.player != nil,
                selectedTab != .flicks {
                 SafeFloatingMiniPlayer()
                     .environmentObject(globalPlayer)
@@ -312,6 +315,17 @@ struct MainTabView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(998)
                     .animation(.easeInOut(duration: 0.25), value: globalPlayer.shouldShowMiniPlayer)
+                    .onAppear {
+                        print("✅ [MainTabView] Mini player appeared - shouldShow: \(globalPlayer.shouldShowMiniPlayer), isMini: \(globalPlayer.isMiniplayer)")
+                    }
+                    .onDisappear {
+                        print("⚠️ [MainTabView] Mini player disappeared - shouldShow: \(globalPlayer.shouldShowMiniPlayer), isMini: \(globalPlayer.isMiniplayer)")
+                    }
+            } else {
+                // 🔥 DEBUG: Log why mini player is not showing
+                if globalPlayer.currentVideo != nil {
+                    print("⚠️ [MainTabView] Mini player NOT showing - shouldShow: \(globalPlayer.shouldShowMiniPlayer), fullscreen: \(globalPlayer.showingFullscreen), player: \(globalPlayer.player != nil), tab: \(selectedTab)")
+                }
             }
         }
         .overlay(alignment: .bottom) {

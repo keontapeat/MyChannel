@@ -177,7 +177,13 @@ class VideoUploadManager: ObservableObject {
             uploadedVideo = try await uploadVideoWithProgress(videoData, metadata: metadata)
             if let uploadedVideo {
                 // 🔥 SAVE TO FIRESTORE: Ensure video is saved to Firestore for profile display
+                // 🔥 FIX: Ensure viewCount is initialized to 0 in Firestore
+                print("💾 [VideoUploadManager] Saving video to Firestore with viewCount: 0")
                 try? await VideoFirestoreService.shared.saveVideo(uploadedVideo)
+                
+                // 🔥 FIX: Verify viewCount was saved correctly
+                let savedCount = await RealtimeViewTracker.shared.getViewCount(for: uploadedVideo.id)
+                print("📊 [VideoUploadManager] Verified viewCount after save: \(savedCount)")
                 
                 // Persist to local profile and refresh AppState
                 try? await DatabaseService.shared.saveVideo(uploadedVideo)
@@ -395,7 +401,7 @@ class VideoUploadManager: ObservableObject {
                 thumbnailURL: thumbnailURLString ?? "",
                 videoURL: videoURL.absoluteString,
                 duration: max(1, videoDuration),
-                viewCount: 0,
+                viewCount: 0,  // 🔥 FIX: Always initialize to 0 for new videos
                 likeCount: 0,
                 commentCount: 0,
                 creator: creatorUser,

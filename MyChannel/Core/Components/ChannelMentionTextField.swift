@@ -283,7 +283,7 @@ struct ChannelMentionTextField: View {
             
             // Find where the mention query ends (space or end of string)
             if let spaceIndex = afterMention.firstIndex(of: " ") {
-                let remaining = String(afterMention[after: spaceIndex])
+                let remaining = String(afterMention[afterMention.index(after: spaceIndex)...])
                 text = beforeAt + "@\(user.username) " + remaining
             } else {
                 text = beforeAt + "@\(user.username) "

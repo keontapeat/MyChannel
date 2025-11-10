@@ -237,11 +237,43 @@ final class VideoFirestoreService: ObservableObject {
             print("👁️ [VideoFirestoreService] Incrementing view count for video: \(videoId)")
             let ref = db.collection("videos").document(videoId)
             
-            // Increment the video's view count
-            try await ref.updateData([
-                "viewCount": FieldValue.increment(Int64(1))
-            ])
-            print("✅ [VideoFirestoreService] View count incremented successfully")
+            // 🔥 FIX: Check if document exists first
+            let doc = try await ref.getDocument()
+            if !doc.exists {
+                print("⚠️ [VideoFirestoreService] Video document doesn't exist, creating with viewCount: 1")
+                try await ref.setData([
+                    "viewCount": 1,
+                    "createdAt": FieldValue.serverTimestamp()
+                ], merge: true)
+                print("✅ [VideoFirestoreService] Created video document with viewCount: 1")
+                return
+            }
+            
+            // Check if viewCount field exists
+            let data = doc.data()
+            if data?["viewCount"] == nil {
+                print("⚠️ [VideoFirestoreService] viewCount field missing, initializing to 1")
+                try await ref.setData([
+                    "viewCount": 1
+                ], merge: true)
+                print("✅ [VideoFirestoreService] Initialized viewCount to 1")
+            } else {
+                // Field exists, use increment
+                try await ref.updateData([
+                    "viewCount": FieldValue.increment(Int64(1))
+                ])
+                print("✅ [VideoFirestoreService] View count incremented successfully")
+            }
+            
+            // 🔥 FIX: Fetch updated count to verify
+            let updatedDoc = try await ref.getDocument()
+            if let updatedData = updatedDoc.data(),
+               let newCount = updatedData["viewCount"] as? Int {
+                print("📊 [VideoFirestoreService] Updated view count: \(videoId) → \(newCount) views")
+            } else if let updatedData = updatedDoc.data(),
+                      let newCount64 = updatedData["viewCount"] as? Int64 {
+                print("📊 [VideoFirestoreService] Updated view count: \(videoId) → \(Int(newCount64)) views")
+            }
             
             // Get the video's creator ID to update their total views
             let videoDoc = try await ref.getDocument()

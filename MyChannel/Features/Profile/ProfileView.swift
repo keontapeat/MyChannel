@@ -216,14 +216,15 @@ struct ProfileView: View {
                     
                     NavigationLink(destination: ComprehensiveCreatorStudioView()) {
                         HStack(spacing: 12) {
+                            // 🔥 YOUTUBE PARITY: Neutral icon background (not red)
                             ZStack {
                                 Circle()
-                                    .fill(AppTheme.Colors.primary)
+                                    .fill(AppTheme.Colors.surface)
                                     .frame(width: 44, height: 44)
                                 
                                 Image(systemName: "chart.bar.xaxis")
                                     .font(.system(size: 20, weight: .semibold))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
                             }
                             
                             VStack(alignment: .leading, spacing: 2) {
@@ -233,32 +234,25 @@ struct ProfileView: View {
                                 
                                 Text("Manage your content")
                                     .font(.system(size: 13))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
                             }
                             
                             Spacer()
                             
+                            // 🔥 YOUTUBE PARITY: Subtle chevron (not primary color)
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(AppTheme.Colors.primary)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(AppTheme.Colors.textTertiary)
                         }
                         .padding(16)
                         .background(
-                            LinearGradient(
-                                colors: [
-                                    AppTheme.Colors.primary.opacity(0.15),
-                                    AppTheme.Colors.primary.opacity(0.08)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(AppTheme.Colors.surface)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+                                )
                         )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(AppTheme.Colors.primary.opacity(0.4), lineWidth: 2)
-                        )
-                        .cornerRadius(16)
-                        .shadow(color: AppTheme.Colors.primary.opacity(0.25), radius: 8, x: 0, y: 4)
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
@@ -351,8 +345,14 @@ struct ProfileView: View {
                                     .foregroundColor(.secondary)
                             }
                             .padding(16)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(AppTheme.Colors.surface)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
                         }
                     }
                     .padding(.horizontal, 16)
@@ -809,32 +809,28 @@ struct ProfileView: View {
                         
                         NavigationLink(destination: ComprehensiveCreatorStudioView()) {
                             HStack(spacing: 10) {
+                                // 🔥 YOUTUBE PARITY: Neutral icon (not red)
                                 Image(systemName: "chart.bar.xaxis")
-                                    .foregroundColor(AppTheme.Colors.primary)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
                                 Text("Open Creator Studio")
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundColor(AppTheme.Colors.textPrimary)
                                 Spacer()
                                 Image(systemName: "chevron.right")
-                                    .foregroundColor(AppTheme.Colors.primary)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textTertiary)  // 🔥 YOUTUBE PARITY: Subtle chevron
                             }
                             .padding()
                             .background(
-                                LinearGradient(
-                                    colors: [
-                                        AppTheme.Colors.primary.opacity(0.1),
-                                        AppTheme.Colors.primary.opacity(0.05)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .overlay(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .stroke(AppTheme.Colors.primary.opacity(0.3), lineWidth: 1)
+                                    .fill(AppTheme.Colors.surface)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+                                    )
                             )
-                            .cornerRadius(12)
-                            .shadow(color: AppTheme.Colors.primary.opacity(0.2), radius: 4, x: 0, y: 2)
+                            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
                         }
                         .padding(.horizontal)
                         
