@@ -16,7 +16,7 @@ struct LiveChatView: View {
     @State private var showingChatSettings = false
     @State private var showingSuperChatSheet = false
     @State private var autoScroll = true
-    @State private var selectedMessage: ChatMessage?
+    @State private var selectedMessage: LiveChatMessage?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -225,7 +225,7 @@ struct LiveChatView: View {
         let content = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return }
         
-        let message = ChatMessage(
+        let message = LiveChatMessage(
             streamId: streamId,
             userId: "current-user-id",
             username: "CurrentUser",
@@ -244,14 +244,14 @@ struct LiveChatView: View {
         }
     }
     
-    private func replyToMessage(_ message: ChatMessage) {
+    private func replyToMessage(_ message: LiveChatMessage) {
         messageText = "@\(message.username) "
     }
 }
 
 // MARK: - Chat Message View
 struct ChatMessageView: View {
-    let message: ChatMessage
+    let message: LiveChatMessage
     let isStreamer: Bool
     let onTap: () -> Void
     let onReply: () -> Void
@@ -364,7 +364,7 @@ struct ChatMessageView: View {
 
 // MARK: - Pinned Message View
 struct PinnedMessageView: View {
-    let message: ChatMessage
+    let message: LiveChatMessage
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {

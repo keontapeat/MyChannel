@@ -381,6 +381,7 @@ class PostUploadEditorViewModel: ObservableObject {
     @Published var thumbnail: UIImage?
     
     @Published var hasChanges = false
+    @Published var errorMessage: String?
     
     init(video: Video) {
         self.video = video
@@ -413,6 +414,58 @@ class PostUploadEditorViewModel: ObservableObject {
     func saveChanges() async {
         print("💾 Saving changes to video...")
         
+        // 🛡️ CPS GUARDIAN: Check content compliance BEFORE publishing
+        print("🛡️ [CPS Guardian] Analyzing content for compliance...")
+        
+        do {
+            let metadata = VertexVideoMetadata(
+                title: title,
+                description: description,
+                category: category.rawValue,
+                duration: video.duration
+            )
+            
+            let triageResult = try await VertexAIAgentService.shared.triageContent(
+                videoID: video.id,
+                metadata: metadata,
+                transcript: nil,
+                audioFingerprint: nil
+            )
+            
+            print("🛡️ [CPS Guardian] Decision: \(triageResult.decision), Confidence: \(triageResult.confidence)")
+            
+            // Handle CPS Guardian decision
+            switch triageResult.decision {
+            case .reject:
+                // BLOCK: Content violates policies
+                print("🚨 [CPS Guardian] Content REJECTED: \(triageResult.reasoning)")
+                await MainActor.run {
+                    errorMessage = "Content blocked: \(triageResult.reasoning)"
+                }
+                HapticManager.shared.notification(type: .error)
+                return
+                
+            case .holdForReview:
+                // FLAG for manual review (but allow save for now)
+                print("⚠️ [CPS Guardian] Content FLAGGED for review: \(triageResult.reasoning)")
+                // TODO: Send alert to admin dashboard for manual review
+                
+            case .allowWithWarning:
+                // ALLOW with warning
+                print("⚠️ [CPS Guardian] Content APPROVED with warnings: \(triageResult.reasoning)")
+                // TODO: Show warning to user about potential issues
+                
+            case .allow:
+                // APPROVE: Content is clean
+                print("✅ [CPS Guardian] Content APPROVED")
+            }
+            
+        } catch {
+            print("⚠️ [CPS Guardian] Agent unavailable, proceeding anyway: \(error)")
+            // Graceful degradation - don't block if CPS agent fails
+        }
+        
+        // Proceed with saving metadata
         do {
             try await VideoFirestoreService.shared.updateVideoMetadata(
                 videoId: video.id,

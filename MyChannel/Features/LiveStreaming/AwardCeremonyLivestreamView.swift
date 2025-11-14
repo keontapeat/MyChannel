@@ -322,19 +322,11 @@ struct AwardCeremonyLivestreamView: View {
             // Chat input
             ChatInputView(onSend: { messageText in
                 Task {
-                    let message = ChatMessage(
+                    let message = LiveChatMessage(
                         streamId: "award-ceremony-2025",
                         userId: "current-user", // TODO: Get from auth
                         username: "Guest",
-                        userAvatarURL: nil,
-                        content: messageText,
-                        messageType: .regular,
-                        timestamp: Date(),
-                        isHighlighted: false,
-                        isPinned: false,
-                        isModerated: false,
-                        badges: [],
-                        emotes: []
+                        content: messageText
                     )
                     try? await chatService.sendMessage(message)
                 }
@@ -690,7 +682,7 @@ struct ChatInputView: View {
 // MARK: - Chat Message Row
 
 struct ChatMessageRow: View {
-    let message: ChatMessage
+    let message: LiveChatMessage
     
     var body: some View {
         HStack(alignment: .top, spacing: AppTheme.Spacing.sm) {

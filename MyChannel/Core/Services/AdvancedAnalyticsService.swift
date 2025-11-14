@@ -23,7 +23,7 @@ class AdvancedAnalyticsService: ObservableObject {
     @Published var videoPerformance: [VideoAnalytics] = []
     @Published var audienceInsights: EnhancedAudienceInsights?
     @Published var revenueAnalytics: RevenueAnalytics?
-    @Published var competitorAnalysis: CompetitorAnalysis?
+    @Published var competitorAnalysis: AnalyticsCompetitorAnalysis?
     
     // Real-time updates (YouTube Studio updates every 15 minutes, we update every 30 seconds)
     @Published var liveViewerCount: Int = 0
@@ -718,7 +718,7 @@ struct RevenueAnalytics: Codable {
     let topRevenueVideos: [String]
 }
 
-struct CompetitorAnalysis: Codable, Identifiable {
+struct AnalyticsCompetitorAnalysis: Codable, Identifiable {
     let id = UUID()
     let similarChannels: [AnalyticsCompetitorChannel]
     let marketPosition: MarketPosition

@@ -187,8 +187,8 @@ struct SuperChatView<Service: LiveChatServiceProtocol & ObservableObject>: View 
         isProcessingPayment = true
         
         // Simulate payment processing
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            let superChatMessage = ChatMessage(
+        let workItem = DispatchWorkItem {
+            let superChatMessage = LiveChatMessage(
                 streamId: streamId,
                 userId: "current-user-id",
                 username: "CurrentUser",
@@ -205,6 +205,8 @@ struct SuperChatView<Service: LiveChatServiceProtocol & ObservableObject>: View 
                 }
             }
         }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: workItem)
     }
 }
 

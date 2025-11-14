@@ -20,7 +20,7 @@ struct ProfileTabNavigation: View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 12) {
                         ForEach(ProfileTab.allCases) { tab in
                             ProfileTabButton(
                                 tab: tab,
@@ -30,20 +30,24 @@ struct ProfileTabNavigation: View {
                                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                         selectedTab = tab
                                         // Scroll to selected tab to ensure it's visible
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                         withAnimation(.easeInOut(duration: 0.3)) {
                                             proxy.scrollTo(tab.id, anchor: .center)
+                                            }
                                         }
                                     }
                                     HapticManager.shared.impact(style: .light)
                                 }
                             )
                             .id(tab.id)
+                            .fixedSize(horizontal: true, vertical: false) // Prevent tabs from shrinking horizontally
                         }
                     }
-                    .padding(.horizontal, 16) // Add horizontal padding so tabs aren't cut off
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 20) // Add horizontal padding so tabs aren't cut off
+                    .padding(.vertical, 8)
+                    .frame(minHeight: 56) // Ensure minimum height
                 }
-                .frame(height: 52)
+                .frame(height: 56)
             }
         }
         .background {

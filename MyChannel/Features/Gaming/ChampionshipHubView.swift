@@ -3,14 +3,15 @@
 //  MyChannel
 //
 //  Created by AI Assistant on 11/6/25.
-//  🏆 CHAMPIONSHIP HUB - All belts & rankings! 🔥
+//  🏆 CHAMPIONSHIP HUB - All medals & rankings! 🔥
 //
 
 import SwiftUI
 
 struct ChampionshipHubView: View {
-    @StateObject private var beltSystem = ChampionshipBeltSystem.shared
-    @State private var selectedDivision: ChampionshipBeltSystem.BeltDivision = .middleweight
+    @StateObject private var medalSystem = ChampionshipBeltSystem.shared
+    @StateObject private var tournamentService = TournamentService.shared
+    @State private var selectedDivision: ChampionshipBeltSystem.ChampionshipDivision = .gold
     
     var body: some View {
         ScrollView {
@@ -18,8 +19,44 @@ struct ChampionshipHubView: View {
                 // Header
                 headerSection
                 
-                // All Belts
-                beltsGrid
+                // 3D Tournament Bracket (if active tournament)
+                if let tournament = tournamentService.activeTournaments.first {
+                    TournamentBracket3DView(tournament: tournament)
+                } else if !tournamentService.upcomingTournaments.isEmpty,
+                          let upcoming = tournamentService.upcomingTournaments.first {
+                    // Show upcoming tournament
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Upcoming Tournament")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                            
+                            Spacer()
+                            
+                            Text("Starts \(upcoming.startDate.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.system(size: 13))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                        
+                        Text(upcoming.name)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                        
+                        HStack {
+                            Label("$\(Int(upcoming.prizePool)) Prize Pool", systemImage: "dollarsign.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppTheme.Colors.primary)
+                            
+                            Spacer()
+                        }
+                    }
+                    .padding(16)
+                    .background(AppTheme.Colors.surface)
+                    .cornerRadius(16)
+                }
+                
+                // All Medals
+                medalsGrid
                 
                 // Selected Division Rankings
                 rankingsSection
@@ -33,6 +70,12 @@ struct ChampionshipHubView: View {
         .background(AppTheme.Colors.background)
         .navigationTitle("🏆 Championships")
         .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            await tournamentService.fetchActiveTournaments()
+        }
+        .onAppear {
+            tournamentService.loadActiveTournaments()
+        }
     }
     
     // MARK: - Header
@@ -50,15 +93,15 @@ struct ChampionshipHubView: View {
                     )
                     .frame(width: 100, height: 100)
                 
-                Image(systemName: "crown.fill")
+                Image(systemName: "medal.fill")
                     .font(.system(size: 50, weight: .bold))
                     .foregroundColor(.white)
             }
             
-            Text("Championship Belts")
+            Text("Championship Medals")
                 .font(.system(size: 28, weight: .bold))
             
-            Text("6 divisions • 6 champions • Defend or conquer!")
+            Text("6 medals • Compete to be #1!")
                 .font(.system(size: 15))
                 .foregroundColor(.secondary)
         }
@@ -66,9 +109,9 @@ struct ChampionshipHubView: View {
         .padding(.vertical, 20)
     }
     
-    // MARK: - Belts Grid
+    // MARK: - Medals Grid
     
-    private var beltsGrid: some View {
+    private var medalsGrid: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("All Divisions")
                 .font(.system(size: 24, weight: .bold))
@@ -77,13 +120,13 @@ struct ChampionshipHubView: View {
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 16) {
-                ForEach(beltSystem.allBelts) { belt in
-                    BeltCard(
-                        belt: belt,
-                        champion: beltSystem.champions[belt.id],
-                        isSelected: selectedDivision == belt.division
+                ForEach(medalSystem.allMedals) { medal in
+                    MedalCard(
+                        medal: medal,
+                        champion: medalSystem.champions[medal.id],
+                        isSelected: selectedDivision == medal.division
                     ) {
-                        selectedDivision = belt.division
+                        selectedDivision = medal.division
                     }
                 }
             }
@@ -105,14 +148,14 @@ struct ChampionshipHubView: View {
                     .foregroundColor(.secondary)
             }
             
-            if let rankings = beltSystem.rankings[selectedDivision], !rankings.isEmpty {
+            if let rankings = medalSystem.rankings[selectedDivision], !rankings.isEmpty {
                 VStack(spacing: 12) {
-                    ForEach(rankings) { fighter in
-                        FighterRankingCard(fighter: fighter)
+                    ForEach(rankings) { competitor in
+                        CompetitorRankingCard(competitor: competitor)
                     }
                 }
             } else {
-                Text("No ranked fighters yet")
+                Text("No ranked competitors yet")
                     .font(.system(size: 15))
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity)
@@ -142,10 +185,10 @@ struct ChampionshipHubView: View {
     }
 }
 
-// MARK: - Belt Card
+// MARK: - Medal Card
 
-struct BeltCard: View {
-    let belt: ChampionshipBeltSystem.ChampionshipBelt
+struct MedalCard: View {
+    let medal: ChampionshipBeltSystem.ChampionshipMedal
     let champion: ChampionshipBeltSystem.Champion?
     let isSelected: Bool
     let action: () -> Void
@@ -154,11 +197,11 @@ struct BeltCard: View {
         Button(action: action) {
             VStack(spacing: 12) {
                 // Division Icon
-                Text(belt.division.icon)
+                Text(medal.division.icon)
                     .font(.system(size: 44))
                 
                 // Division Name
-                Text(belt.division.rawValue)
+                Text(medal.division.rawValue)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
                     .multilineTextAlignment(.center)
@@ -212,10 +255,10 @@ struct BeltCard: View {
     }
 }
 
-// MARK: - Fighter Ranking Card
+// MARK: - Competitor Ranking Card
 
-struct FighterRankingCard: View {
-    let fighter: ChampionshipBeltSystem.RankedFighter
+struct CompetitorRankingCard: View {
+    let competitor: ChampionshipBeltSystem.RankedCompetitor
     
     var body: some View {
         HStack(spacing: 16) {
@@ -225,18 +268,18 @@ struct FighterRankingCard: View {
                     .fill(rankColor.opacity(0.2))
                     .frame(width: 50, height: 50)
                 
-                Text("#\(fighter.rank)")
+                Text("#\(competitor.rank)")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(rankColor)
             }
             
-            // Fighter Info
+            // Competitor Info
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text("Fighter")
+                    Text("Competitor")
                         .font(.system(size: 16, weight: .bold))
                     
-                    if fighter.isContender {
+                    if competitor.isContender {
                         Text("CONTENDER")
                             .font(.system(size: 9, weight: .bold))
                             .foregroundColor(.white)
@@ -248,22 +291,22 @@ struct FighterRankingCard: View {
                 }
                 
                 HStack(spacing: 12) {
-                    Text("\(fighter.wins)-\(fighter.losses)")
+                    Text("\(competitor.wins)-\(competitor.losses)")
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                     
                     Text("•")
                         .foregroundColor(.secondary)
                     
-                    Text("\(Int(fighter.winRate))% win rate")
+                    Text("\(Int(competitor.winRate))% win rate")
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                     
-                    if fighter.winStreak > 0 {
+                    if competitor.winStreak > 0 {
                         Text("•")
                             .foregroundColor(.secondary)
                         
-                        Text("🔥 \(fighter.winStreak) streak")
+                        Text("🔥 \(competitor.winStreak) streak")
                             .font(.system(size: 13))
                             .foregroundColor(.orange)
                     }
@@ -274,7 +317,7 @@ struct FighterRankingCard: View {
             
             // Points
             VStack(alignment: .trailing, spacing: 4) {
-                Text("\(fighter.points)")
+                Text("\(competitor.points)")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(AppTheme.Colors.primary)
                 
@@ -289,7 +332,7 @@ struct FighterRankingCard: View {
     }
     
     private var rankColor: Color {
-        switch fighter.rank {
+        switch competitor.rank {
         case 1: return .yellow
         case 2: return .gray
         case 3: return .orange

@@ -25,6 +25,7 @@ class VideoPlayerManager: ObservableObject {
     @Published var selectedQuality: VideoQuality = .auto
     
     private var timeObserver: Any?
+    private var playerStateObserver: NSKeyValueObservation?  // 🔥 NEW: KVO for play/pause accuracy
     private var cancellables = Set<AnyCancellable>()
     private var currentVideo: Video?
     private var isCleanedUp = false
@@ -105,6 +106,10 @@ class VideoPlayerManager: ObservableObject {
             player?.removeTimeObserver(timeObserver)
             self.timeObserver = nil
         }
+        
+        // 🔥 NEW: Remove KVO observer
+        playerStateObserver?.invalidate()
+        playerStateObserver = nil
         
         // Pause and clear player
         player?.pause()
@@ -218,6 +223,30 @@ class VideoPlayerManager: ObservableObject {
         player.automaticallyWaitsToMinimizeStalling = true
         player.currentItem?.preferredForwardBufferDuration = 1
         player.currentItem?.canUseNetworkResourcesForLiveStreamingWhilePaused = true
+        
+        // 🔥 NEW: Add KVO observer for accurate play/pause state tracking
+        playerStateObserver = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, change in
+            Task { @MainActor in
+                guard let self = self, !self.isCleanedUp else { return }
+                
+                let newStatus = player.timeControlStatus
+                let newIsPlaying = newStatus == .playing
+                let newIsLoading = newStatus == .waitingToPlayAtSpecifiedRate
+                
+                // Only update if state actually changed (prevents redundant UI updates)
+                if self.isPlaying != newIsPlaying {
+                    self.isPlaying = newIsPlaying
+                    print("🎬 [VideoPlayerManager] Play state changed via KVO: \(newIsPlaying ? "PLAYING ▶️" : "PAUSED ⏸️")")
+                }
+                
+                if self.isLoading != newIsLoading {
+                    self.isLoading = newIsLoading
+                    if newIsLoading {
+                        print("⏳ [VideoPlayerManager] Video buffering...")
+                    }
+                }
+            }
+        }
         
         if let playerItem = player.currentItem {
             setupObservers(for: playerItem)
@@ -385,13 +414,10 @@ class VideoPlayerManager: ObservableObject {
             Task {
                 let userId = AuthenticationManager.shared.currentUser?.id
                 
-                // Track with RealtimeViewTracker (handles Firestore increment)
+                // 🔥 FIX: Track with RealtimeViewTracker ONLY (handles Firestore increment)
+                // Don't call VideoFirestoreService.shared.incrementViewCount - that would be a DUPLICATE!
                 await RealtimeViewTracker.shared.startViewSession(videoId: videoId, userId: userId)
-                print("✅ [VideoPlayerManager] View session started")
-                
-                // Also call FirestoreService for backwards compatibility
-                await VideoFirestoreService.shared.incrementViewCount(videoId: videoId)
-                print("✅ [VideoPlayerManager] View count incremented in Firestore")
+                print("✅ [VideoPlayerManager] View session started (view count incremented in Firestore)")
                 
                 // Update UI with latest count
                 let latestCount = await RealtimeViewTracker.shared.getViewCount(for: videoId)

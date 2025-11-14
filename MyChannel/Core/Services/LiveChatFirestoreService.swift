@@ -35,7 +35,7 @@ final class LiveChatFirestoreService {
         let createdAt: Date
     }
 
-    func mirrorMessage(streamId: String, message: ChatMessage) async {
+    func mirrorMessage(streamId: String, message: LiveChatMessage) async {
         #if canImport(FirebaseFirestore)
         let ref = db.collection("live").document(streamId).collection("messages").document(message.id)
         let doc = ChatDoc(
@@ -60,16 +60,16 @@ final class LiveChatFirestoreService {
         #endif
     }
 
-    func fetchRecent(streamId: String, limit: Int = 50) async -> [ChatMessage] {
+    func fetchRecent(streamId: String, limit: Int = 50) async -> [LiveChatMessage] {
         #if canImport(FirebaseFirestore)
         do {
             let snap = try await db.collection("live").document(streamId).collection("messages")
                 .order(by: "createdAt", descending: true)
                 .limit(to: limit)
                 .getDocuments()
-            let items: [ChatMessage] = snap.documents.compactMap { doc in
+            let items: [LiveChatMessage] = snap.documents.compactMap { doc in
                 let d = doc.data()
-                return ChatMessage(
+                return LiveChatMessage(
                     id: doc.documentID,
                     streamId: streamId,
                     userId: (d["userId"] as? String) ?? "",

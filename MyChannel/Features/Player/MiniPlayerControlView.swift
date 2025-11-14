@@ -8,6 +8,15 @@
 import SwiftUI
 import AVKit
 
+// MARK: - ScaleButtonStyle
+struct ScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
 struct MiniPlayerControlView: View {
     let video: Video
     @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared

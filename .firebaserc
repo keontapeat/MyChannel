@@ -1,6 +1,7 @@
 {
   "projects": {
-    "default": "mychannel-ca26d"
+    "default": "mychannel-ca26d",
+    "production": "mychannel-ca26d"
   },
   "targets": {
     "mychannel-ca26d": {

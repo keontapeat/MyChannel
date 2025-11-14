@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct MessageOptionsView<Service: LiveChatServiceProtocol & ObservableObject>: View {
-    let message: ChatMessage
+    let message: LiveChatMessage
     @ObservedObject var chatService: Service
     @Environment(\.dismiss) private var dismiss
     @State private var showingReportOptions = false
@@ -325,7 +325,7 @@ struct OptionRow: View {
 }
 
 struct ReportMessageView: View {
-    let message: ChatMessage
+    let message: LiveChatMessage
     @Environment(\.dismiss) private var dismiss
     @State private var selectedReason = ReportReason.spam
     @State private var additionalDetails = ""
@@ -427,7 +427,7 @@ struct ReportMessageView: View {
 
 #Preview {
     MessageOptionsView(
-        message: ChatMessage(
+        message: LiveChatMessage(
             streamId: "stream-1",
             userId: "user-1",
             username: "TestUser",

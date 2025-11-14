@@ -28,7 +28,7 @@ class NetworkOptimizer: ObservableObject {
     
     // Caching
     private let urlCache: URLCache
-    private let imageRequestCache = NSCache<NSString, CachedResponse>()
+    private let imageRequestCache = NSCache<NSString, NetworkCachedResponse>()
     
     private init() {
         // Configure URL cache for better performance
@@ -229,7 +229,7 @@ class NetworkOptimizer: ObservableObject {
         }
         
         // Cache the response
-        let cachedResponse = CachedResponse(data: data, timestamp: Date())
+        let cachedResponse = NetworkCachedResponse(data: data, timestamp: Date())
         imageRequestCache.setObject(cachedResponse, forKey: cacheKey)
         
         return image
@@ -323,7 +323,7 @@ enum NetworkOptimizerError: Error {
     case unknown
 }
 
-class CachedResponse {
+class NetworkCachedResponse {
     let data: Data
     let timestamp: Date
     

@@ -189,7 +189,14 @@ struct AppConfig {
         static let enableBiometricAuth = true
         static let sessionDuration: TimeInterval = 24 * 60 * 60 // 24 hours
         static let maxLoginAttempts = 5
-        static let enableSSLPinning = true
+        // Disable SSL pinning for staging (KAS server has wrong certificate)
+        static let enableSSLPinning: Bool = {
+            #if DEBUG
+            return false // Allow self-signed/mismatched certs in development/staging
+            #else
+            return true // Enable for production only
+            #endif
+        }()
     }
     
     // MARK: - Storage Configuration

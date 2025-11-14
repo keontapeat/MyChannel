@@ -73,5 +73,37 @@
 	<string>MyChannel uses Face ID to securely access your account</string>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>MyChannel respects your privacy. This helps us show you relevant content and improve your experience</string>
+	
+	<!-- 🔒 APP TRANSPORT SECURITY - Allow staging domain with mismatched cert -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<!-- Staging API (KAS server has wrong certificate) -->
+			<key>staging-api.mychannel.app</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<false/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+			</dict>
+			<!-- Development API (if needed) -->
+			<key>dev-api.mychannel.app</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<false/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+			</dict>
+		</dict>
+	</dict>
 </dict>
 </plist>

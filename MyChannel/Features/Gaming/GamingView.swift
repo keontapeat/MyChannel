@@ -70,8 +70,10 @@ struct GamingView: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color(red: 0.8, green: 0.2, blue: 0.4),
-                            Color(red: 0.4, green: 0.1, blue: 0.8)
+                            // 🔥 PlayStation blue + DraftKings green + YouTube sleek vibe
+                            Color(red: 0.0, green: 0.3, blue: 0.8),  // PlayStation blue
+                            Color(red: 0.0, green: 0.5, blue: 0.7),  // Teal accent
+                            Color(red: 0.1, green: 0.6, blue: 0.3)   // DraftKings green
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing

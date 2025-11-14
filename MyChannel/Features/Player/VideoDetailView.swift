@@ -241,21 +241,24 @@ struct VideoDetailView: View {
         GeometryReader { geometry in
             Color.clear
                 .contentShape(Rectangle())
-                // 🔥 FIX: Only allow tap gestures when controls are hidden to prevent blocking controls
-                .allowsHitTesting(!showVideoControls)  // 🔥 CRITICAL: Disable when controls are visible
+                // 🔥 FIX: ALWAYS allow tap gestures to bring controls back when hidden
+                .allowsHitTesting(true)  // 🔥 CRITICAL: Always enabled so single-tap works
                 // 🔥 YOUTUBE PARITY: Double-tap to seek 10 seconds (simultaneous with single tap)
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 0)
                         .onEnded { value in
-                            // Only process if controls are hidden
-                            guard !showVideoControls else { return }
-                            
                             // Detect double tap by checking if this is the second tap in quick succession
                             let now = Date()
                             let timeSinceLastTap = now.timeIntervalSince(lastDoubleTapTime)
                             
                             if timeSinceLastTap < 0.5 {
-                                // This is a double tap
+                                // This is a double tap - only seek if controls are hidden
+                                guard !showVideoControls else { 
+                                    // Reset double tap timer if controls are visible (prevents seeking while using controls)
+                                    lastDoubleTapTime = Date.distantPast
+                                    return 
+                                }
+                                
                                 let screenWidth = geometry.size.width
                                 let tapX = value.location.x
                                 
@@ -288,9 +291,7 @@ struct VideoDetailView: View {
                         }
                 )
                 .onTapGesture {
-                    // Only process if controls are hidden
-                    guard !showVideoControls else { return }
-                    
+                    // 🔥 FIX: Always toggle controls on single tap (show if hidden, hide if visible)
                     print("📱 Video tapped - Current controls state: \(showVideoControls)")
                     withAnimation(.easeInOut(duration: 0.25)) {
                         showVideoControls.toggle()
@@ -486,6 +487,10 @@ struct VideoDetailView: View {
                 print("▶️ [VideoDetailView] Play/Pause button tapped - Current state: \(playerManager.isPlaying)")
                 playerManager.togglePlayPause()
                 HapticManager.shared.impact(style: .medium)
+                
+                // 🔥 FIX: Keep controls visible when play/pause is tapped
+                showVideoControls = true
+                resetControlsHideTimer()
             }) {
                 Image(systemName: playerManager.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.system(size: 56, weight: .semibold))
@@ -1285,11 +1290,28 @@ struct VideoDetailView: View {
     
     private func resetControlsHideTimer() {
         controlsHideTimer?.invalidate()
-        controlsHideTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: false) { _ in
+        
+        // 🔥 FIX: Only auto-hide controls if video is PLAYING (not when paused)
+        guard playerManager.isPlaying else { 
+            print("⏸️ [VideoDetailView] Controls NOT auto-hiding (video paused)")
+            return 
+        }
+        
+        // 🔥 FIX: 5 second delay before auto-hiding (YouTube standard)
+        controlsHideTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { _ in
+            // Double-check video is still playing before hiding
+            guard playerManager.isPlaying else { 
+                print("⏸️ [VideoDetailView] Cancelled auto-hide (video paused)")
+                return 
+            }
+            
             withAnimation(.easeInOut(duration: 0.25)) {
                 showVideoControls = false
+                print("⏰ [VideoDetailView] Controls auto-hidden after 5s")
             }
         }
+        
+        print("⏱️ [VideoDetailView] Controls hide timer reset (5s)")
     }
 
     // MARK: - Gesture Actions
@@ -1430,15 +1452,7 @@ struct VideoDetailView: View {
     }
 }
 
-// MARK: - Custom Button Style
-
-struct ScaleButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-    }
-}
+// MARK: - Preview
 
 #Preview {
     NavigationView {

@@ -3,7 +3,7 @@
 //  MyChannel
 //
 //  Created by AI Assistant on 11/6/25.
-//  🏆 CHAMPIONSHIP BELT SYSTEM - UFC-style championship belts! 🔥
+//  🏆 CHAMPIONSHIP MEDAL SYSTEM - Olympics-style competitive championships! 🔥
 //  Worth $50M+ in engagement
 //
 
@@ -14,69 +14,73 @@ import FirebaseFirestore
 class ChampionshipBeltSystem: ObservableObject {
     static let shared = ChampionshipBeltSystem()
     
-    @Published var allBelts: [ChampionshipBelt] = []
-    @Published var champions: [String: Champion] = [:] // beltId -> champion
-    @Published var rankings: [BeltDivision: [RankedFighter]] = [:]
-    @Published var myBelts: [ChampionshipBelt] = []
+    @Published var allMedals: [ChampionshipMedal] = []
+    @Published var champions: [String: Champion] = [:] // medalId -> champion
+    @Published var rankings: [ChampionshipDivision: [RankedCompetitor]] = [:]
+    @Published var myMedals: [ChampionshipMedal] = []
     
     private let db = Firestore.firestore()
     
     private init() {
-        setupBelts()
+        setupMedals()
         loadChampions()
     }
     
-    // MARK: - 🏆 BELT DIVISIONS
+    // MARK: - 🏆 CHAMPIONSHIP DIVISIONS
     
-    enum BeltDivision: String, CaseIterable, Identifiable {
-        case lightweight = "Lightweight"        // $1-100 wagers
-        case welterweight = "Welterweight"      // $101-500
-        case middleweight = "Middleweight"      // $501-1,000
-        case heavyweight = "Heavyweight"        // $1,001-5,000
-        case superHeavyweight = "Super Heavyweight" // $5,001-10,000
-        case ultraHeavyweight = "Ultra Heavyweight" // $10,001+
+    enum ChampionshipDivision: String, CaseIterable, Identifiable {
+        case bronze = "Bronze Medal"        // $1-100 wagers
+        case silver = "Silver Medal"        // $101-500
+        case gold = "Gold Medal"            // $501-1,000
+        case platinum = "Platinum Medal"   // $1,001-5,000
+        case diamond = "Diamond Medal"      // $5,001-10,000
+        case legend = "Legend Medal"        // $10,001+
         
         var id: String { rawValue }
         
         var wagerRange: ClosedRange<Double> {
             switch self {
-            case .lightweight: return 1...100
-            case .welterweight: return 101...500
-            case .middleweight: return 501...1000
-            case .heavyweight: return 1001...5000
-            case .superHeavyweight: return 5001...10000
-            case .ultraHeavyweight: return 10001...100000
+            case .bronze: return 1...100
+            case .silver: return 101...500
+            case .gold: return 501...1000
+            case .platinum: return 1001...5000
+            case .diamond: return 5001...10000
+            case .legend: return 10001...100000
             }
         }
         
         var icon: String {
             switch self {
-            case .lightweight: return "🥉"
-            case .welterweight: return "🥈"
-            case .middleweight: return "🥇"
-            case .heavyweight: return "💎"
-            case .superHeavyweight: return "👑"
-            case .ultraHeavyweight: return "🔥"
+            case .bronze: return "🥉"
+            case .silver: return "🥈"
+            case .gold: return "🥇"
+            case .platinum: return "💎"
+            case .diamond: return "💠"
+            case .legend: return "👑"
             }
         }
         
         var color: String {
             switch self {
-            case .lightweight: return "bronze"
-            case .welterweight: return "silver"
-            case .middleweight: return "gold"
-            case .heavyweight: return "cyan"
-            case .superHeavyweight: return "purple"
-            case .ultraHeavyweight: return "red"
+            case .bronze: return "bronze"
+            case .silver: return "silver"
+            case .gold: return "gold"
+            case .platinum: return "cyan"
+            case .diamond: return "blue"
+            case .legend: return "purple"
             }
+        }
+        
+        var displayName: String {
+            rawValue
         }
     }
     
-    // MARK: - 🏅 CHAMPIONSHIP BELT
+    // MARK: - 🏅 CHAMPIONSHIP MEDAL
     
-    struct ChampionshipBelt: Identifiable {
+    struct ChampionshipMedal: Identifiable {
         let id: String
-        let division: BeltDivision
+        let division: ChampionshipDivision
         let name: String
         var currentChampionId: String?
         var defenseCount: Int
@@ -86,7 +90,7 @@ class ChampionshipBeltSystem: ObservableObject {
         var isVacant: Bool
         
         var title: String {
-            "\(division.rawValue) Championship Belt"
+            "\(division.rawValue) Championship Medal"
         }
     }
     
@@ -95,8 +99,8 @@ class ChampionshipBeltSystem: ObservableObject {
     struct Champion: Identifiable {
         let id: String
         let userId: String
-        let beltId: String
-        let division: BeltDivision
+        let medalId: String
+        let division: ChampionshipDivision
         var wonAt: Date
         var defenses: Int
         var nextDefenseDate: Date
@@ -110,12 +114,12 @@ class ChampionshipBeltSystem: ObservableObject {
         }
     }
     
-    // MARK: - 🥊 RANKED FIGHTER
+    // MARK: - 🥇 RANKED COMPETITOR
     
-    struct RankedFighter: Identifiable {
+    struct RankedCompetitor: Identifiable {
         let id: String
         let userId: String
-        let division: BeltDivision
+        let division: ChampionshipDivision
         var rank: Int
         var points: Int
         var wins: Int
@@ -139,7 +143,7 @@ class ChampionshipBeltSystem: ObservableObject {
     
     struct TitleDefense: Identifiable {
         let id: String
-        let beltId: String
+        let medalId: String
         let championId: String
         let challengerId: String
         let matchId: String
@@ -161,11 +165,11 @@ class ChampionshipBeltSystem: ObservableObject {
         }
     }
     
-    // MARK: - ⚡ SETUP BELTS
+    // MARK: - ⚡ SETUP MEDALS
     
-    private func setupBelts() {
-        allBelts = BeltDivision.allCases.map { division in
-            ChampionshipBelt(
+    private func setupMedals() {
+        allMedals = ChampionshipDivision.allCases.map { division in
+            ChampionshipMedal(
                 id: UUID().uuidString,
                 division: division,
                 name: "\(division.rawValue) Championship",
@@ -179,20 +183,20 @@ class ChampionshipBeltSystem: ObservableObject {
         }
     }
     
-    // MARK: - 🏆 WIN BELT
+    // MARK: - 🏆 AWARD MEDAL
     
-    func awardBelt(to userId: String, division: BeltDivision, from matchId: String) async throws {
-        print("🏆 Awarding \(division.rawValue) belt to \(userId)")
+    func awardMedal(to userId: String, division: ChampionshipDivision, from matchId: String) async throws {
+        print("🏆 Awarding \(division.rawValue) championship medal to \(userId)")
         
-        guard let belt = allBelts.first(where: { $0.division == division }) else {
-            throw BeltError.beltNotFound
+        guard let medal = allMedals.first(where: { $0.division == division }) else {
+            throw MedalError.medalNotFound
         }
         
         // Create champion record
         let champion = Champion(
             id: UUID().uuidString,
             userId: userId,
-            beltId: belt.id,
+            medalId: medal.id,
             division: division,
             wonAt: Date(),
             defenses: 0,
@@ -203,7 +207,7 @@ class ChampionshipBeltSystem: ObservableObject {
         // Save to Firestore
         try await db.collection("champions").document(champion.id).setData([
             "userId": champion.userId,
-            "beltId": champion.beltId,
+            "medalId": champion.medalId,
             "division": champion.division.rawValue,
             "wonAt": Timestamp(date: champion.wonAt),
             "defenses": champion.defenses,
@@ -211,31 +215,31 @@ class ChampionshipBeltSystem: ObservableObject {
             "status": champion.status.rawValue
         ])
         
-        // Update belt
-        try await db.collection("belts").document(belt.id).updateData([
+        // Update medal
+        try await db.collection("medals").document(medal.id).updateData([
             "currentChampionId": userId,
             "isVacant": false,
             "lastDefense": Timestamp(date: Date())
         ])
         
-        champions[belt.id] = champion
+        champions[medal.id] = champion
         
-        print("✅ Belt awarded! Next defense in 30 days")
+        print("✅ Championship medal awarded! Next defense in 30 days")
     }
     
-    // MARK: - 🛡️ DEFEND BELT
+    // MARK: - 🛡️ DEFEND MEDAL
     
-    func defendBelt(beltId: String, against challengerId: String) async throws -> TitleDefense {
-        print("🛡️ Scheduling title defense...")
+    func defendMedal(medalId: String, against challengerId: String) async throws -> TitleDefense {
+        print("🛡️ Scheduling championship defense...")
         
-        guard let champion = champions[beltId] else {
-            throw BeltError.noChampion
+        guard let champion = champions[medalId] else {
+            throw MedalError.noChampion
         }
         
         // Create title defense
         let defense = TitleDefense(
             id: UUID().uuidString,
-            beltId: beltId,
+            medalId: medalId,
             championId: champion.userId,
             challengerId: challengerId,
             matchId: UUID().uuidString,
@@ -245,7 +249,7 @@ class ChampionshipBeltSystem: ObservableObject {
         
         // Save to Firestore
         try await db.collection("title_defenses").document(defense.id).setData([
-            "beltId": defense.beltId,
+            "medalId": defense.medalId,
             "championId": defense.championId,
             "challengerId": defense.challengerId,
             "matchId": defense.matchId,
@@ -253,18 +257,18 @@ class ChampionshipBeltSystem: ObservableObject {
             "status": defense.status.rawValue
         ])
         
-        print("✅ Title defense scheduled!")
+        print("✅ Championship defense scheduled!")
         
         return defense
     }
     
     // MARK: - 📊 UPDATE RANKINGS
     
-    func updateRankings(userId: String, division: BeltDivision, points: Int) async throws {
+    func updateRankings(userId: String, division: ChampionshipDivision, points: Int) async throws {
         print("📊 Updating rankings for \(userId)")
         
-        // Update fighter stats
-        try await db.collection("fighter_rankings")
+        // Update competitor stats
+        try await db.collection("competitor_rankings")
             .document("\(division.rawValue)_\(userId)")
             .setData([
                 "userId": userId,
@@ -277,20 +281,20 @@ class ChampionshipBeltSystem: ObservableObject {
         await recalculateRankings(for: division)
     }
     
-    private func recalculateRankings(for division: BeltDivision) async {
+    private func recalculateRankings(for division: ChampionshipDivision) async {
         do {
-            let snapshot = try await db.collection("fighter_rankings")
+            let snapshot = try await db.collection("competitor_rankings")
                 .whereField("division", isEqualTo: division.rawValue)
                 .order(by: "points", descending: true)
                 .limit(to: 15)
                 .getDocuments()
             
-            var ranked: [RankedFighter] = []
+            var ranked: [RankedCompetitor] = []
             
             for (index, doc) in snapshot.documents.enumerated() {
                 let data = doc.data()
                 
-                let fighter = RankedFighter(
+                let competitor = RankedCompetitor(
                     id: doc.documentID,
                     userId: data["userId"] as? String ?? "",
                     division: division,
@@ -303,7 +307,7 @@ class ChampionshipBeltSystem: ObservableObject {
                     totalEarnings: data["totalEarnings"] as? Double ?? 0
                 )
                 
-                ranked.append(fighter)
+                ranked.append(competitor)
             }
             
             rankings[division] = ranked
@@ -315,9 +319,9 @@ class ChampionshipBeltSystem: ObservableObject {
     
     // MARK: - 🔥 GET CONTENDERS
     
-    func getTopContenders(for division: BeltDivision, limit: Int = 3) -> [RankedFighter] {
-        guard let fighters = rankings[division] else { return [] }
-        return Array(fighters.prefix(limit))
+    func getTopContenders(for division: ChampionshipDivision, limit: Int = 3) -> [RankedCompetitor] {
+        guard let competitors = rankings[division] else { return [] }
+        return Array(competitors.prefix(limit))
     }
     
     // MARK: - 🎖️ HALL OF FAME
@@ -351,32 +355,32 @@ class ChampionshipBeltSystem: ObservableObject {
         }
     }
     
-    func getDivisionForWager(_ wager: Double) -> BeltDivision {
-        for division in BeltDivision.allCases {
+    func getDivisionForWager(_ wager: Double) -> ChampionshipDivision {
+        for division in ChampionshipDivision.allCases {
             if division.wagerRange.contains(wager) {
                 return division
             }
         }
-        return .ultraHeavyweight
+        return .legend
     }
 }
 
 // MARK: - Errors
 
-enum BeltError: LocalizedError {
-    case beltNotFound
+enum MedalError: LocalizedError {
+    case medalNotFound
     case noChampion
     case notRanked
     case invalidDivision
     
     var errorDescription: String? {
         switch self {
-        case .beltNotFound:
-            return "Championship belt not found"
+        case .medalNotFound:
+            return "Championship medal not found"
         case .noChampion:
-            return "No current champion for this belt"
+            return "No current champion for this medal"
         case .notRanked:
-            return "Fighter not ranked in this division"
+            return "Competitor not ranked in this division"
         case .invalidDivision:
             return "Invalid division"
         }

@@ -14,7 +14,7 @@ import Network
 class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
     static let shared = RealTimeChatService()
     
-    @Published var messages: [ChatMessage] = []
+    @Published var messages: [LiveChatMessage] = []
     @Published var chatUsers: [ChatUser] = []
     @Published var statistics: ChatStatistics = ChatStatistics()
     @Published var settings: ChatSettings = ChatSettings()
@@ -31,8 +31,8 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
     private var currentStreamId: String?
     private var reconnectAttempts = 0
     private let maxReconnectAttempts = 5
-    private var messageQueue: [ChatMessage] = []
-    private let messageBuffer = PassthroughSubject<ChatMessage, Never>()
+    private var messageQueue: [LiveChatMessage] = []
+    private let messageBuffer = PassthroughSubject<LiveChatMessage, Never>()
     
     // Connection monitoring
     private let networkMonitor = NWPathMonitor()
@@ -160,7 +160,7 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
         }
     }
     
-    func sendMessage(_ message: ChatMessage) async throws {
+    func sendMessage(_ message: LiveChatMessage) async throws {
         guard isConnected, let webSocketTask = webSocketTask else {
             throw ChatError.connectionFailed("Not connected to chat")
         }
@@ -198,7 +198,7 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
     }
     
     func sendSuperChat(streamId: String, message: String, amount: Double) async throws {
-        let superChatMessage = ChatMessage(
+        let superChatMessage = LiveChatMessage(
             streamId: streamId,
             userId: "current-user-id", 
             username: "CurrentUser",
@@ -211,7 +211,7 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
         try await sendMessage(superChatMessage)
     }
     
-    func getMessages(for streamId: String, limit: Int) async throws -> [ChatMessage] {
+    func getMessages(for streamId: String, limit: Int) async throws -> [LiveChatMessage] {
         return Array(messages.suffix(limit))
     }
     
@@ -242,7 +242,7 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
                     self.messages.remove(at: index)
                 case .highlight:
                     var updatedMessage = self.messages[index]
-                    updatedMessage = ChatMessage(
+                    updatedMessage = LiveChatMessage(
                         id: updatedMessage.id,
                         streamId: updatedMessage.streamId,
                         userId: updatedMessage.userId,
@@ -521,7 +521,7 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
         messageSendTimes.append(now)
     }
     
-    private func validateMessage(_ message: ChatMessage) throws {
+    private func validateMessage(_ message: LiveChatMessage) throws {
         if message.content.isEmpty {
             throw ChatError.invalidMessage("Message content cannot be empty")
         }
@@ -576,7 +576,7 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
         try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
         
         await MainActor.run {
-            self.messages = ChatMessage.sampleMessages
+            self.messages = LiveChatMessage.sampleMessages
             self.chatUsers = ChatUser.sampleUsers
             self.statistics = ChatStatistics(
                 activeUsers: 1234,
@@ -593,7 +593,7 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
     
     private func setupSampleData() {
         // Initialize with sample data for demo
-        messages = ChatMessage.sampleMessages
+        messages = LiveChatMessage.sampleMessages
         chatUsers = ChatUser.sampleUsers
     }
     
@@ -610,7 +610,7 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
 // MARK: - WebSocket Message Types
 
 enum WebSocketMessage: Codable {
-    case chatMessage(ChatMessage)
+    case chatMessage(LiveChatMessage)
     case userJoined(ChatUser)
     case userLeft(String)
     case statisticsUpdate(ChatStatistics)
@@ -638,7 +638,7 @@ enum WebSocketMessage: Codable {
         
         switch type {
         case .chatMessage:
-            let message = try container.decode(ChatMessage.self, forKey: .data)
+            let message = try container.decode(LiveChatMessage.self, forKey: .data)
             self = .chatMessage(message)
         case .userJoined:
             let user = try container.decode(ChatUser.self, forKey: .data)

@@ -45,6 +45,29 @@ class VersusMatchService: ObservableObject {
             throw MatchError.invalidWagerAmount
         }
         
+        // 🤖 AI: Optimize match with Match Orchestrator Agent
+        var optimizedRules = rules
+        do {
+            print("🤖 [Match Orchestrator] Optimizing match rules...")
+            let orchestration = try await VertexAIAgentService.shared.orchestrateMatch(
+                challengerId: challengerId,
+                opponentId: opponentId,
+                wagerAmount: wagerAmount
+            )
+            
+            // Apply AI-optimized rules
+            optimizedRules = VersusMatch.MatchRules(
+                duration: orchestration.suggestedDuration,
+                category: category,
+                winCondition: rules.winCondition
+            )
+            
+            print("✅ [Match Orchestrator] Match optimized: \(orchestration.suggestedDuration)s duration, fairness: \(orchestration.fairnessScore)")
+        } catch {
+            print("⚠️ [Match Orchestrator] AI unavailable, using default rules: \(error)")
+            // Graceful degradation - continue with original rules
+        }
+        
         // Create match
         let match = VersusMatch(
             id: UUID().uuidString,
@@ -53,7 +76,7 @@ class VersusMatchService: ObservableObject {
             matchType: matchType,
             wagerAmount: wagerAmount,
             category: category,
-            rules: rules,
+            rules: optimizedRules,
             status: .pending,
             createdAt: Date(),
             scheduledDate: scheduledDate

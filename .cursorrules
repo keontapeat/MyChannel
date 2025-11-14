@@ -188,9 +188,12 @@ VStack { /* content */ }
 - Use SF Symbols for all icons
 - Always provide semantic names
 - Support dark mode and dynamic type
+- **NEVER use "sparkles" icon** - Use "star.fill", "star", or other professional icons instead
 ```swift
 Image(systemName: "play.circle.fill")
 Label("Watch", systemImage: "play.rectangle")
+// ✅ CORRECT: star.fill, star, plus.circle.fill
+// ❌ WRONG: sparkles, sparkle (too playful/unprofessional)
 ```
 
 ### SwiftUI Best Practices
@@ -8945,4 +8948,1120 @@ Before shipping any UI component, verify:
 ---
 
 **REMEMBER: YouTube-level design = Professional, Sleek, Modern. NO EXCEPTIONS. Apply to ALL views.** 🎨🔥
+
+---
+
+## 🛡️ COMMAND EXECUTION & PROJECT SAFETY BEST PRACTICES
+
+### ⚠️ CRITICAL: Project Safety Rules
+
+**NEVER run commands that could:**
+- Delete source code files
+- Modify git history destructively
+- Delete user data or databases
+- Remove dependencies without backup
+- Overwrite production configurations
+- Clear important caches without verification
+
+### ✅ SAFE COMMAND PATTERNS
+
+#### 1. Build & Compile Commands
+```bash
+# ✅ SAFE: Build commands
+xcodebuild -project MyChannel.xcodeproj -scheme MyChannel -sdk iphoneos -configuration Debug build
+
+# ✅ SAFE: Clean build (removes DerivedData)
+xcodebuild clean -project MyChannel.xcodeproj -scheme MyChannel
+
+# ✅ SAFE: Check for errors only
+xcodebuild build 2>&1 | grep -E "error:|warning:" | head -20
+
+# ❌ NEVER: Delete DerivedData while Xcode is building
+# ❌ NEVER: Kill Xcode processes while building
+```
+
+#### 2. Git Commands (SAFE Operations Only)
+```bash
+# ✅ SAFE: Read-only git operations
+git status
+git log --oneline -10
+git diff
+git branch -a
+git show HEAD
+
+# ✅ SAFE: Non-destructive operations
+git add .
+git commit -m "message"
+git push origin branch-name
+git pull origin branch-name
+git checkout branch-name
+
+# ✅ SAFE: Restore from git (undoes local changes)
+git restore path/to/file.swift
+git checkout -- path/to/file.swift
+
+# ⚠️ DANGEROUS (Only with explicit user approval):
+# git reset --hard (destroys uncommitted changes)
+# git push --force (rewrites history)
+# git clean -fd (deletes untracked files)
+# git rebase (rewrites history)
+
+# ❌ NEVER: Force push to main/master
+# ❌ NEVER: Hard reset without user confirmation
+# ❌ NEVER: Delete branches without checking if they're merged
+```
+
+#### 3. File Operations (SAFE Patterns)
+```bash
+# ✅ SAFE: Read files
+cat path/to/file.swift
+head -20 path/to/file.swift
+tail -20 path/to/file.swift
+ls -la directory/
+
+# ✅ SAFE: Search files
+grep -r "pattern" path/
+find . -name "*.swift" -type f
+
+# ✅ SAFE: Create/Write files (with write tool, not terminal)
+# Use write() or search_replace() tools instead
+
+# ⚠️ DANGEROUS (Only with explicit user approval):
+# rm -rf directory/ (deletes directory)
+# mv file1 file2 (renames/moves)
+# cp file1 file2 (copies)
+
+# ❌ NEVER: Delete files without user confirmation
+# ❌ NEVER: Move/rename files without backup
+# ❌ NEVER: Delete entire directories (like DerivedData) without checking if Xcode is running
+```
+
+#### 4. Xcode DerivedData Management
+```bash
+# ✅ SAFE: Check if Xcode is running first
+ps aux | grep -i xcode | grep -v grep
+
+# ✅ SAFE: Remove lock files only
+rm -f "/path/to/build.db-shm" "/path/to/build.db-wal"
+
+# ✅ SAFE: Clean build (Xcode's safe clean)
+xcodebuild clean
+
+# ⚠️ DANGEROUS: Delete entire DerivedData folder
+# Only do this if:
+# 1. Xcode is NOT building
+# 2. User explicitly requests it
+# 3. Build is completely stuck
+# Command: rm -rf "/Users/keonta/Library/Developer/Xcode/DerivedData/MyChannel-*"
+
+# ❌ NEVER: Delete DerivedData while Xcode is building
+# ❌ NEVER: Delete DerivedData without checking running processes
+```
+
+#### 5. Package Manager Commands
+```bash
+# ✅ SAFE: Read package info
+swift package resolve
+swift package show-dependencies
+
+# ✅ SAFE: Update packages (non-destructive)
+xcodebuild -resolvePackageDependencies
+
+# ⚠️ DANGEROUS: Removing packages
+# Always check dependencies first
+# Always commit before removing
+
+# ❌ NEVER: Remove packages without checking what depends on them
+```
+
+#### 6. Process Management
+```bash
+# ✅ SAFE: Check running processes
+ps aux | grep -i "process_name" | grep -v grep
+
+# ✅ SAFE: List Xcode processes
+ps aux | grep -i xcode | grep -v grep
+
+# ⚠️ DANGEROUS: Killing processes
+# Only kill if:
+# 1. Process is confirmed stuck
+# 2. User explicitly requests it
+# 3. Process ID is verified
+# Command: kill -9 PID (only as last resort)
+
+# ❌ NEVER: Kill Xcode while it's building
+# ❌ NEVER: Kill processes without checking what they're doing
+```
+
+### 🔒 PROJECT PROTECTION RULES
+
+#### Before Running ANY Command:
+1. **Check if Xcode is building** - Never interrupt builds
+2. **Verify file paths** - Ensure paths exist before operations
+3. **Check git status** - Don't lose uncommitted work
+4. **Backup critical files** - Before destructive operations
+5. **Test in safe environment** - Use test branches when possible
+
+#### Command Execution Checklist:
+```bash
+# ✅ ALWAYS DO THIS BEFORE DESTRUCTIVE COMMANDS:
+
+# 1. Check git status
+git status
+
+# 2. Check if Xcode is running
+ps aux | grep -i xcode | grep -v grep
+
+# 3. Verify file exists
+ls -la path/to/file
+
+# 4. Check current directory
+pwd
+
+# 5. List what will be affected
+ls -la directory/to/delete/
+```
+
+### 🚨 DANGEROUS COMMANDS (Require Explicit User Approval)
+
+**These commands MUST have user approval before running:**
+
+```bash
+# Destructive Git Operations
+git reset --hard HEAD
+git push --force
+git rebase -i HEAD~5
+git clean -fd
+
+# File Deletion
+rm -rf directory/
+rm -f *.swift
+find . -name "*.swift" -delete
+
+# Process Termination
+kill -9 PID
+killall Xcode
+killall xcodebuild
+
+# DerivedData Deletion
+rm -rf ~/Library/Developer/Xcode/DerivedData/MyChannel-*
+
+# Package Removal
+swift package remove dependency
+# (Remove from Package.swift manually)
+
+# Database Operations
+# (Never run SQL DELETE/UPDATE without backup)
+```
+
+### ✅ SAFE COMMAND PATTERNS FOR CURSOR
+
+#### Reading Files
+```bash
+# ✅ SAFE: Always use read_file tool instead of terminal
+# Terminal: cat file.swift (only for quick checks)
+# Preferred: read_file tool (safer, more reliable)
+```
+
+#### Building Projects
+```bash
+# ✅ SAFE: Build with error filtering
+xcodebuild build 2>&1 | grep -E "error:|warning:" | head -20
+
+# ✅ SAFE: Check build status only
+xcodebuild build 2>&1 | grep -E "Build succeeded|BUILD SUCCEEDED|error:"
+
+# ❌ NEVER: Run full build without filtering (too verbose)
+```
+
+#### Checking Status
+```bash
+# ✅ SAFE: Quick status checks
+git status --short
+ps aux | grep -i xcode | wc -l  # Count processes
+ls -1 | wc -l  # Count files
+
+# ❌ NEVER: Run commands that modify state as "checks"
+```
+
+### 🔐 GIT SAFETY RULES
+
+#### Always Before Git Operations:
+1. **Check status**: `git status`
+2. **Check current branch**: `git branch --show-current`
+3. **Check for uncommitted changes**: `git diff --stat`
+4. **Verify remote state**: `git fetch origin` (read-only)
+
+#### Safe Git Workflow:
+```bash
+# ✅ SAFE: Standard workflow
+git status                    # Check state
+git add .                     # Stage changes
+git commit -m "message"       # Commit
+git push origin branch-name   # Push
+
+# ✅ SAFE: Undo local changes (non-destructive)
+git restore path/to/file.swift
+git checkout -- path/to/file.swift
+
+# ⚠️ DANGEROUS: Only with approval
+git reset --hard HEAD         # Destroys uncommitted changes
+git push --force              # Rewrites remote history
+```
+
+### 🛠️ XCODE BUILD SAFETY
+
+#### Before Building:
+```bash
+# ✅ ALWAYS: Check if Xcode is building
+ps aux | grep -i "xcodebuild\|SWBBuildService" | grep -v grep
+
+# ✅ ALWAYS: Check for lock files
+ls -la ~/Library/Developer/Xcode/DerivedData/MyChannel-*/Build/Intermediates.noindex/XCBuildData/build.db*
+
+# ✅ SAFE: Clean if needed (only if not building)
+xcodebuild clean
+```
+
+#### Build Database Lock Resolution:
+```bash
+# ✅ SAFE: Remove lock files (if Xcode is NOT building)
+rm -f "path/to/build.db-shm" "path/to/build.db-wal"
+
+# ✅ SAFE: Clean build
+xcodebuild clean
+
+# ⚠️ LAST RESORT: Delete DerivedData (only if build is completely stuck)
+# 1. Verify Xcode is NOT building
+# 2. Get user approval
+# 3. Delete: rm -rf ~/Library/Developer/Xcode/DerivedData/MyChannel-*
+```
+
+### 📦 PACKAGE MANAGEMENT SAFETY
+
+#### Before Package Operations:
+```bash
+# ✅ SAFE: Check current packages
+swift package show-dependencies
+
+# ✅ SAFE: Resolve packages (non-destructive)
+xcodebuild -resolvePackageDependencies
+
+# ⚠️ DANGEROUS: Removing packages
+# Always check what depends on it first
+grep -r "PackageName" . --include="*.swift"
+```
+
+### 🗂️ FILE SYSTEM SAFETY
+
+#### File Operations Rules:
+```bash
+# ✅ SAFE: Read operations
+cat file.swift
+head -20 file.swift
+tail -20 file.swift
+ls -la directory/
+
+# ✅ SAFE: Search operations
+grep -r "pattern" .
+find . -name "*.swift" -type f
+
+# ⚠️ DANGEROUS: Write/Delete operations
+# ALWAYS use Cursor tools (write, search_replace) instead of terminal
+# Terminal write/delete only with explicit user approval
+
+# ❌ NEVER: Delete files via terminal without confirmation
+# ❌ NEVER: Move files without backup
+# ❌ NEVER: Overwrite files without checking contents
+```
+
+### 🔍 VERIFICATION COMMANDS (Always Safe)
+
+```bash
+# ✅ ALWAYS SAFE: Verification commands
+pwd                                    # Current directory
+whoami                                 # Current user
+git status                             # Git state (read-only)
+git log --oneline -5                   # Recent commits (read-only)
+ps aux | grep process                  # Check processes (read-only)
+ls -la                                 # List files (read-only)
+cat file.swift                         # Read file (read-only)
+grep -r "pattern" .                    # Search (read-only)
+xcodebuild -list                       # List schemes (read-only)
+swift --version                        # Check version (read-only)
+```
+
+### 🚫 NEVER RUN THESE COMMANDS
+
+```bash
+# ❌ NEVER: Destructive without approval
+rm -rf ~/Documents/MyChannel           # Deletes entire project
+git reset --hard origin/main           # Destroys local changes
+git push --force origin main           # Rewrites remote history
+killall -9 Xcode                       # Kills Xcode (loses work)
+rm -rf ~/Library/Developer/Xcode/DerivedData  # Deletes all DerivedData
+
+# ❌ NEVER: Without checking first
+rm -rf directory/                      # Check contents first
+git clean -fd                          # Check what will be deleted
+xcodebuild clean                       # Check if building first
+
+# ❌ NEVER: On production/main branch
+git push --force origin main
+git reset --hard origin/main
+```
+
+### ✅ COMMAND EXECUTION BEST PRACTICES
+
+#### 1. Always Verify Before Destructive Operations
+```bash
+# ✅ CORRECT: Check first, then act
+ls -la directory/to/delete/           # Verify what will be deleted
+git status                             # Check git state
+ps aux | grep xcode                    # Check if Xcode is running
+# Then proceed with operation
+```
+
+#### 2. Use Non-Destructive Alternatives
+```bash
+# ✅ PREFERRED: Use Cursor tools
+# write() tool instead of: echo "content" > file.swift
+# search_replace() tool instead of: sed -i 's/old/new/g' file.swift
+# read_file() tool instead of: cat file.swift
+
+# ✅ SAFE: Terminal only for read-only operations
+cat file.swift                         # Quick read
+grep pattern file.swift                # Quick search
+```
+
+#### 3. Error Handling
+```bash
+# ✅ ALWAYS: Check exit codes
+command && echo "Success" || echo "Failed"
+
+# ✅ ALWAYS: Redirect errors
+command 2>&1 | grep error
+
+# ✅ ALWAYS: Limit output
+command | head -20
+```
+
+#### 4. Background Processes
+```bash
+# ✅ SAFE: Check for background processes
+ps aux | grep -i "process_name"
+
+# ⚠️ DANGEROUS: Killing processes
+# Only if explicitly requested and process is confirmed stuck
+```
+
+### 📋 COMMAND EXECUTION CHECKLIST
+
+**Before running ANY command, verify:**
+
+- [ ] Is this a read-only operation? (SAFE)
+- [ ] Does it modify files? (Use Cursor tools if possible)
+- [ ] Does it delete anything? (Requires approval)
+- [ ] Is Xcode building? (Don't interrupt)
+- [ ] Are there uncommitted changes? (Check git status)
+- [ ] Is this the correct directory? (Verify with `pwd`)
+- [ ] Are file paths correct? (Verify with `ls`)
+- [ ] Will this affect production? (Check branch)
+
+### 🎯 QUICK REFERENCE: Safe vs Dangerous
+
+**✅ ALWAYS SAFE:**
+- `git status`, `git log`, `git diff`
+- `ls`, `cat`, `head`, `tail`
+- `grep`, `find` (read-only)
+- `ps aux | grep` (checking processes)
+- `xcodebuild -list` (listing schemes)
+- `swift --version` (checking versions)
+
+**⚠️ REQUIRES APPROVAL:**
+- `git reset --hard`
+- `git push --force`
+- `rm -rf directory/`
+- `kill -9 PID`
+- Deleting DerivedData
+- Removing packages
+
+**❌ NEVER:**
+- Delete source code files
+- Force push to main
+- Kill Xcode while building
+- Delete user data
+- Modify production configs
+
+---
+
+## 🛡️ PROJECT SAFETY SUMMARY
+
+**Golden Rules:**
+1. **Read-only operations are always safe**
+2. **File modifications use Cursor tools (write, search_replace)**
+3. **Destructive operations require explicit user approval**
+4. **Always check git status before operations**
+5. **Never interrupt Xcode builds**
+6. **Verify file paths before operations**
+7. **Backup before destructive operations**
+8. **Test in safe branches when possible**
+
+**When in doubt: ASK the user before running destructive commands!** 🛡️
+
+---
+
+## 💰 REAL MONEY VS MATCHES SYSTEM PATTERNS
+
+### VS Match Architecture
+```swift
+// ✅ CORRECT: VS Match creation with compliance checks
+func createMatch(challengerId: String, opponentId: String, wagerAmount: Double) async throws -> VersusMatch {
+    // 1. Compliance check FIRST
+    try await VSMatchComplianceService.shared.canUserWager(userId: challengerId, amount: wagerAmount)
+    
+    // 2. Hold funds in escrow
+    try await MoneyEscrowService.shared.holdFunds(userId: challengerId, amount: wagerAmount, matchId: matchId)
+    
+    // 3. Create match
+    let match = VersusMatch(...)
+    
+    // 4. Save to Firestore
+    try await db.collection("versus_matches").document(match.id).setData(...)
+    
+    return match
+}
+```
+
+### Compliance Service Pattern
+```swift
+// ✅ CORRECT: Always check compliance before wagering
+func canUserWager(userId: String, amount: Double) async throws -> ComplianceCheckResult {
+    // Check: age (18+), KYC (for $500+), terms, region, account status, daily limits
+    // Throw ComplianceError if any check fails
+}
+```
+
+### Wallet Service Pattern
+```swift
+// ✅ CORRECT: Wallet operations with transaction tracking
+func depositFunds(userId: String, amount: Double) async throws -> DepositResult {
+    // 1. Validate amount ($5-$10K)
+    // 2. Create Stripe payment intent
+    // 3. Update wallet balance
+    // 4. Record VSMatchTransaction
+    // 5. Return DepositResult
+}
+```
+
+### Escrow Pattern
+```swift
+// ✅ CORRECT: Escrow flow
+// 1. Hold funds when match created/accepted
+// 2. Release to winner after match completion
+// 3. Refund if match cancelled/declined
+// 4. Always use MoneyEscrowService.shared
+```
+
+### VS Match Rules
+- **Always check compliance** before creating/accepting matches
+- **Hold funds in escrow** before match starts
+- **10% platform fee** on all matches
+- **Wager range**: $1 - $100,000
+- **Use VSMatchTransaction** (not generic Transaction) to avoid naming conflicts
+- **Record all transactions** in Firestore for audit trail
+- **Validate amounts** before processing
+- **Check wallet balance** before holding funds
+
+---
+
+## 🏆 CHAMPIONSHIP MEDALS SYSTEM (OLYMPICS-STYLE)
+
+### ⚠️ CRITICAL: NO UFC TERMINOLOGY
+
+**NEVER use:**
+- ❌ "Belts", "Belt divisions", "Belt system"
+- ❌ "Lightweight", "Welterweight", "Middleweight", "Heavyweight" (UFC weight classes)
+- ❌ "Fighters", "Fights", "Title fights"
+- ❌ UFC-style terminology
+
+**ALWAYS use:**
+- ✅ "Medals", "Medal divisions", "Medal system"
+- ✅ "Bronze Medal", "Silver Medal", "Gold Medal", "Platinum Medal", "Diamond Medal", "Legend Medal"
+- ✅ "Competitors", "Matches", "Championship matches"
+- ✅ Olympics-style terminology
+
+### Championship Division Pattern
+```swift
+// ✅ CORRECT: Olympics-style divisions
+enum ChampionshipDivision: String, CaseIterable {
+    case bronze = "Bronze Medal"        // $1-100
+    case silver = "Silver Medal"        // $101-500
+    case gold = "Gold Medal"            // $501-1,000
+    case platinum = "Platinum Medal"    // $1,001-5,000
+    case diamond = "Diamond Medal"     // $5,001-10,000
+    case legend = "Legend Medal"        // $10,001+
+    
+    var icon: String {
+        switch self {
+        case .bronze: return "🥉"
+        case .silver: return "🥈"
+        case .gold: return "🥇"
+        case .platinum: return "💎"
+        case .diamond: return "💠"
+        case .legend: return "👑"
+        }
+    }
+}
+```
+
+### Medal System Rules
+- **Use "medals" not "belts"** in all code and UI
+- **Use "competitors" not "fighters"**
+- **Use "championship matches" not "title fights"**
+- **Header text**: "6 medals • Compete to be #1!" (not "6 divisions")
+- **Default selection**: `.gold` (Gold Medal division)
+- **Rankings show**: Who's #1 in each medal division
+- **Olympics-style**: Competitive spirit, not combat sports
+
+---
+
+## 🎮 TOURNAMENT BRACKET PATTERNS
+
+### 3D Tournament Bracket Pattern
+```swift
+// ✅ CORRECT: 3D bracket with proper scrolling
+struct TournamentBracket3DView: View {
+    let tournament: BracketTournament
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 24) {
+                ForEach(tournament.rounds) { round in
+                    bracketRound(round: round, roundNumber: roundNumber, depth: depth)
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .frame(height: 600)
+    }
+}
+```
+
+### Bracket Model Naming
+```swift
+// ✅ CORRECT: Use "Bracket" prefix to avoid conflicts
+struct BracketTournament: Identifiable { }
+struct BracketRound: Identifiable { }
+struct BracketMatch: Identifiable { }
+struct BracketTeam: Identifiable { }
+
+// ❌ WRONG: Generic names conflict with other models
+struct Tournament { }  // Conflicts with GamingAgents.Tournament
+struct Match { }       // Conflicts with other Match types
+```
+
+### Tournament Bracket Rules
+- **Always use ScrollView(.horizontal)** for bracket navigation
+- **Match cards**: 200x120 size (not 220x130 to prevent overlap)
+- **Spacing**: 20pt between matches, 24pt between rounds
+- **Height**: 600pt for bracket container
+- **3D effects**: Use `rotation3DEffect` and `scaleEffect` for depth
+- **Connecting lines**: L-shaped bracket flow (NBA-style)
+- **Winner indicators**: Glowing dots on connecting lines
+- **Realistic styling**: Gradients, shadows, highlights for depth
+
+### Tournament Service Pattern
+```swift
+// ✅ CORRECT: Tournament data management
+class TournamentService: ObservableObject {
+    @Published var activeTournaments: [BracketTournament] = []
+    
+    func fetchActiveTournaments() async throws {
+        // Fetch from Firestore tournaments collection
+        // Parse BracketRound, BracketMatch, BracketTeam
+        // Return BracketTournament objects
+    }
+}
+```
+
+---
+
+## 🔧 COMMON SWIFT COMPILATION ERRORS & FIXES
+
+### ZStack Fill Error
+```swift
+// ❌ WRONG: Can't use .fill() with ZStack
+RoundedRectangle(cornerRadius: 24)
+    .fill(
+        ZStack {
+            RoundedRectangle(...).fill(...)
+        }
+    )
+
+// ✅ CORRECT: ZStack directly contains shapes
+ZStack {
+    RoundedRectangle(cornerRadius: 24)
+        .fill(LinearGradient(...))
+    
+    RoundedRectangle(cornerRadius: 24)
+        .fill(LinearGradient(...))
+}
+```
+
+### Type Mismatch in Ternary
+```swift
+// ❌ WRONG: Different types in ternary
+.background(
+    isWinner ? LinearGradient(...) : Color.clear
+)
+
+// ✅ CORRECT: Use Group with if-else
+.background(
+    Group {
+        if isWinner {
+            LinearGradient(...)
+        } else {
+            Color.clear
+        }
+    }
+)
+```
+
+### Type Naming Conflicts
+```swift
+// ❌ WRONG: Generic names conflict
+struct Transaction { }  // Conflicts with AdvertiserViewModel.Transaction
+enum TransactionType { } // Conflicts with MoneyMakerAgents.TransactionType
+
+// ✅ CORRECT: Use specific prefixes
+struct VSMatchTransaction { }  // VS Match specific
+enum VSMatchTransactionType { } // VS Match specific
+enum VSMatchTransactionStatus { } // VS Match specific
+```
+
+### Build Database Lock Resolution
+```bash
+# ✅ SAFE: Remove lock files (if Xcode NOT building)
+rm -f "path/to/build.db-shm" "path/to/build.db-wal"
+
+# ✅ SAFE: Clean build
+xcodebuild clean
+
+# ⚠️ LAST RESORT: Delete DerivedData (only if completely stuck)
+# 1. Check: ps aux | grep -i xcodebuild | grep -v grep
+# 2. If no builds running: rm -rf ~/Library/Developer/Xcode/DerivedData/MyChannel-*
+```
+
+---
+
+## 🎨 3D SWIFTUI EFFECTS PATTERNS
+
+### 3D Rotation Pattern
+```swift
+// ✅ CORRECT: Realistic 3D rotation
+.rotation3DEffect(
+    .degrees(Double(depth) * 10),
+    axis: (x: 0, y: 1, z: 0),
+    perspective: 0.5
+)
+.scaleEffect(1.0 - Double(depth) * 0.1) // Perspective scaling
+```
+
+### 3D Shadow Pattern
+```swift
+// ✅ CORRECT: Depth-based shadows
+.shadow(
+    color: .black.opacity(0.25),
+    radius: 20 + Double(depth) * 4,
+    x: Double(depth) * 3,
+    y: Double(depth) * 3 + 8
+)
+```
+
+### 3D Gradient Pattern
+```swift
+// ✅ CORRECT: Layered gradients for depth
+ZStack {
+    // Base gradient
+    RoundedRectangle(cornerRadius: 18)
+        .fill(LinearGradient(...))
+    
+    // Highlight layer
+    RoundedRectangle(cornerRadius: 18)
+        .fill(LinearGradient(
+            colors: [Color.white.opacity(0.12), Color.clear],
+            startPoint: .topLeading,
+            endPoint: .center
+        ))
+    
+    // Border glow
+    RoundedRectangle(cornerRadius: 18)
+        .stroke(LinearGradient(...), lineWidth: 1.5)
+}
+```
+
+---
+
+## 📱 PROFILE TAB NAVIGATION PATTERNS
+
+### Scrollable Tab Navigation
+```swift
+// ✅ CORRECT: Horizontally scrollable tabs
+ScrollView(.horizontal, showsIndicators: false) {
+    HStack(spacing: 12) {
+        ForEach(ProfileTab.allCases) { tab in
+            ProfileTabButton(...)
+                .id(tab.id)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+    }
+    .padding(.horizontal, 20)
+}
+.frame(height: 56)
+```
+
+### Tab Selection with Auto-Scroll
+```swift
+// ✅ CORRECT: Scroll to selected tab
+ScrollViewReader { proxy in
+    ScrollView(.horizontal) {
+        // Tabs...
+    }
+    .onChange(of: selectedTab) { newTab in
+        withAnimation {
+            proxy.scrollTo(newTab.id, anchor: .center)
+        }
+    }
+}
+```
+
+### Tab Navigation Rules
+- **Always use ScrollView(.horizontal)** for tab navigation
+- **Use .fixedSize(horizontal: true)** to prevent tab shrinking
+- **Auto-scroll to selected tab** using ScrollViewReader
+- **Padding**: 20pt horizontal, 8pt vertical
+- **Spacing**: 12pt between tabs
+- **Height**: 56pt for tab bar
+
+---
+
+## 🔄 TYPE NAMING CONVENTIONS (Avoid Conflicts)
+
+### Service-Specific Type Prefixes
+```swift
+// ✅ CORRECT: Use service-specific prefixes
+// VS Match Wallet
+struct VSMatchTransaction { }
+enum VSMatchTransactionType { }
+enum VSMatchTransactionStatus { }
+
+// Tournament Bracket
+struct BracketTournament { }
+struct BracketRound { }
+struct BracketMatch { }
+struct BracketTeam { }
+
+// Championship Medals
+struct ChampionshipMedal { }
+enum ChampionshipDivision { }
+struct RankedCompetitor { }
+```
+
+### Type Naming Rules
+- **Prefix types with service name** (VSMatch, Bracket, Championship)
+- **Avoid generic names** (Transaction, Tournament, Match, Team)
+- **Check for existing types** before creating new ones
+- **Use grep to find conflicts**: `grep -r "struct Transaction" .`
+- **Rename if conflict found** before compilation
+
+---
+
+## 🎯 YOUTUBE PARITY PATTERNS
+
+### Video Player Controls
+```swift
+// ✅ CORRECT: Always-accessible controls
+.videoTapArea
+    .allowsHitTesting(true)  // Always enabled
+    .onTapGesture {
+        // Always toggle controls (show if hidden, hide if visible)
+        withAnimation {
+            showVideoControls.toggle()
+        }
+    }
+```
+
+### Mini-Player Pattern
+```swift
+// ✅ CORRECT: Free-floating, resizable mini-player
+FloatingMiniPlayer()
+    .zIndex(10000)  // Above everything
+    .gesture(freeFloatingDragGesture)
+    .gesture(pinchToResizeGesture)
+```
+
+### View Tracking Pattern
+```swift
+// ✅ CORRECT: Track view ONCE when video starts playing
+if !hasTrackedView, let video = currentVideo {
+    hasTrackedView = true
+    await RealtimeViewTracker.shared.startViewSession(videoId: video.id, userId: userId)
+    await VideoFirestoreService.shared.incrementViewCount(videoId: video.id)
+}
+```
+
+---
+
+## 🛠️ BUILD & COMPILATION PATTERNS
+
+### Build Error Resolution Checklist
+1. **Check for type conflicts**: `grep -r "struct TypeName" .`
+2. **Check for duplicate files**: Look for "Multiple commands produce" errors
+3. **Check for missing imports**: Verify all `#if canImport` blocks
+4. **Check for Swift syntax errors**: ZStack fill, ternary type mismatches
+5. **Resolve build database locks**: Remove lock files or clean DerivedData
+
+### Common Build Fixes
+```swift
+// Fix: ZStack fill error
+// Change: .fill(ZStack { ... })
+// To: ZStack { ... } (remove .fill wrapper)
+
+// Fix: Ternary type mismatch
+// Change: condition ? TypeA : TypeB
+// To: Group { if condition { TypeA } else { TypeB } }
+
+// Fix: Type naming conflict
+// Change: struct Transaction { }
+// To: struct VSMatchTransaction { }
+```
+
+---
+
+## 📊 REAL MONEY COMPLIANCE PATTERNS
+
+### Compliance Check Pattern
+```swift
+// ✅ CORRECT: Always check compliance before wagering
+func createMatch(wagerAmount: Double) async throws {
+    // 1. Age verification (18+)
+    guard await VSMatchComplianceService.shared.isAgeVerified(userId: userId) else {
+        throw ComplianceError.ageNotVerified
+    }
+    
+    // 2. KYC (for $500+)
+    if wagerAmount > 500 {
+        let kycStatus = await VSMatchComplianceService.shared.getKYCStatus(userId: userId)
+        guard kycStatus == .approved else {
+            throw ComplianceError.kycRequired
+        }
+    }
+    
+    // 3. Terms of Service
+    guard await VSMatchComplianceService.shared.hasAcceptedTerms(userId: userId) else {
+        throw ComplianceError.termsNotAccepted
+    }
+    
+    // 4. Region check
+    guard await VSMatchComplianceService.shared.isRegionAllowed(userId: userId) else {
+        throw ComplianceError.regionRestricted
+    }
+    
+    // 5. Daily limit check
+    let dailyWagered = await VSMatchComplianceService.shared.getDailyWagerAmount(userId: userId)
+    let dailyLimit = await VSMatchComplianceService.shared.getDailyWagerLimit(userId: userId)
+    guard dailyWagered + wagerAmount <= dailyLimit else {
+        throw ComplianceError.dailyLimitExceeded
+    }
+    
+    // Proceed with match creation
+}
+```
+
+### Compliance Rules
+- **Always verify age (18+)** before any wager
+- **KYC required** for wagers over $500
+- **Terms must be accepted** before wagering
+- **Region restrictions** apply (skill-based gaming laws)
+- **Daily limits** enforced by account tier
+- **Account status** must be active (not suspended/banned)
+
+---
+
+## 💳 WALLET SERVICE PATTERNS
+
+### Wallet Transaction Pattern
+```swift
+// ✅ CORRECT: Always use VSMatchTransaction (not Transaction)
+let transaction = VSMatchTransaction(
+    id: UUID().uuidString,
+    userId: userId,
+    type: .deposit,
+    amount: amount,
+    status: .completed,
+    createdAt: Date(),
+    description: "Deposit to wallet",
+    matchId: nil  // Always provide, even if nil
+)
+```
+
+### Wallet Balance Update Pattern
+```swift
+// ✅ CORRECT: Update balance atomically
+func updateBalance(userId: String, amount: Double, type: VSMatchTransactionType) async throws {
+    let walletRef = db.collection("vs_match_wallets").document(userId)
+    let currentData = try await walletRef.getDocument().data() ?? [:]
+    let currentBalance = currentData["availableBalance"] as? Double ?? 0.0
+    
+    let newBalance: Double
+    switch type {
+    case .deposit, .win, .refund:
+        newBalance = currentBalance + amount
+    case .withdrawal, .wager, .fee:
+        newBalance = currentBalance - amount
+    }
+    
+    try await walletRef.setData([
+        "availableBalance": newBalance,
+        "updatedAt": FieldValue.serverTimestamp()
+    ], merge: true)
+}
+```
+
+### Wallet Rules
+- **Always validate amounts** ($5-$10K for deposits, $10+ for withdrawals)
+- **Check balance** before withdrawals
+- **Record all transactions** in Firestore
+- **Use VSMatchTransaction** type (not generic Transaction)
+- **Hold funds** for pending withdrawals
+- **Calculate fees** (2.5% withdrawal fee, min $1, max $25)
+
+---
+
+## 🎬 TOURNAMENT BRACKET UI PATTERNS
+
+### Bracket Round Layout
+```swift
+// ✅ CORRECT: Proper spacing and sizing
+VStack(spacing: 20) {  // Increased spacing to prevent overlap
+    ForEach(round.matches) { match in
+        matchCard3D(match: match, depth: depth)
+            .frame(width: 200, height: 120)  // Compact size
+    }
+}
+.padding(.vertical, 24)
+.padding(.horizontal, 18)
+```
+
+### Bracket Connectors Pattern
+```swift
+// ✅ CORRECT: L-shaped bracket flow
+Path { path in
+    // Horizontal line from match
+    path.move(to: CGPoint(x: startX, y: startY))
+    path.addLine(to: CGPoint(x: startX + 20, y: startY))
+    
+    // Vertical line to next round
+    path.addLine(to: CGPoint(x: startX + 20, y: endY))
+    
+    // Horizontal line to next round
+    path.addLine(to: CGPoint(x: endX, y: endY))
+}
+.stroke(LinearGradient(...), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+```
+
+### Bracket Rules
+- **Horizontally scrollable** (ScrollView(.horizontal))
+- **Match cards**: 200x120 (compact to prevent overlap)
+- **Spacing**: 20pt between matches, 24pt between rounds
+- **Connecting lines**: L-shaped (NBA-style bracket flow)
+- **Winner indicators**: Glowing dots on lines
+- **3D depth**: Use rotation3DEffect and scaleEffect
+- **Realistic styling**: Gradients, shadows, highlights
+
+---
+
+## 🔍 DEBUGGING PATTERNS
+
+### Type Conflict Resolution
+```bash
+# ✅ CORRECT: Find all type definitions
+grep -r "struct Transaction" .
+grep -r "enum TransactionType" .
+
+# ✅ CORRECT: Rename conflicting types
+# Change: struct Transaction
+# To: struct VSMatchTransaction (or service-specific name)
+```
+
+### Build Database Lock Resolution
+```bash
+# ✅ SAFE: Check if Xcode is building
+ps aux | grep -i "xcodebuild\|SWBBuildService" | grep -v grep
+
+# ✅ SAFE: Remove lock files (if NOT building)
+rm -f "path/to/build.db-shm" "path/to/build.db-wal"
+
+# ✅ SAFE: Clean build
+xcodebuild clean
+
+# ⚠️ LAST RESORT: Delete DerivedData (only if stuck)
+# 1. Verify NOT building
+# 2. Get user approval
+# 3. Delete: rm -rf ~/Library/Developer/Xcode/DerivedData/MyChannel-*
+```
+
+### Swift Compilation Error Patterns
+```swift
+// Error: "Instance method 'fill(_:style:)' requires that 'ZStack' conform to 'ShapeStyle'"
+// Fix: Remove .fill() wrapper, use ZStack directly
+
+// Error: "Result values in '? :' expression have mismatching types"
+// Fix: Use Group { if condition { TypeA } else { TypeB } }
+
+// Error: "'TypeName' is ambiguous for type lookup"
+// Fix: Rename type with service-specific prefix (VSMatch, Bracket, etc.)
+
+// Error: "Property 'id' requires that 'Type' be a class type"
+// Fix: Add explicit type annotation: (match: BracketMatch) -> [String: Any] in
+```
+
+---
+
+## 🎯 QUICK REFERENCE: New Patterns
+
+### VS Match System
+- Use `VSMatchComplianceService` for all compliance checks
+- Use `VSMatchWalletService` for wallet operations
+- Use `MoneyEscrowService` for escrow
+- Use `VSMatchTransaction` (not Transaction)
+- Always check compliance before wagering
+
+### Championship Medals
+- Use "medals" not "belts"
+- Use "Bronze/Silver/Gold/Platinum/Diamond/Legend Medal" divisions
+- Use "competitors" not "fighters"
+- Header: "6 medals • Compete to be #1!"
+
+### Tournament Brackets
+- Use `BracketTournament`, `BracketRound`, `BracketMatch`, `BracketTeam`
+- Horizontally scrollable with proper spacing
+- Match cards: 200x120 size
+- 3D effects with rotation3DEffect and scaleEffect
+
+### Type Naming
+- Prefix with service name (VSMatch, Bracket, Championship)
+- Check for conflicts before creating types
+- Rename if conflict found
+
+### Build Safety
+- Check if Xcode is building before operations
+- Remove lock files if stuck
+- Clean build before deleting DerivedData
+- Always verify file paths
+
+---
+
+**These patterns ensure consistency, prevent errors, and maintain project safety!** 🔥🛡️
 

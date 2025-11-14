@@ -9,7 +9,7 @@ import SwiftUI
 import Combine
 
 // MARK: - Chat Message Model
-struct ChatMessage: Identifiable, Codable, Equatable, Hashable {
+struct LiveChatMessage: Identifiable, Codable, Equatable, Hashable {
     let id: String
     let streamId: String
     let userId: String
@@ -71,7 +71,7 @@ struct ChatMessage: Identifiable, Codable, Equatable, Hashable {
     }
     
     // MARK: - Equatable & Hashable
-    static func == (lhs: ChatMessage, rhs: ChatMessage) -> Bool {
+    static func == (lhs: LiveChatMessage, rhs: LiveChatMessage) -> Bool {
         lhs.id == rhs.id
     }
     
@@ -336,7 +336,7 @@ struct ChatSettings: Codable, Equatable {
 // MARK: - Live Chat Service Protocol
 protocol LiveChatServiceProtocol {
     // Observed state properties for UI binding
-    var messages: [ChatMessage] { get }
+    var messages: [LiveChatMessage] { get }
     var chatUsers: [ChatUser] { get }
     var statistics: ChatStatistics { get }
     var settings: ChatSettings { get }
@@ -345,9 +345,9 @@ protocol LiveChatServiceProtocol {
 
     func connectToChat(streamId: String) async throws
     func disconnectFromChat() async throws
-    func sendMessage(_ message: ChatMessage) async throws
+    func sendMessage(_ message: LiveChatMessage) async throws
     func sendSuperChat(streamId: String, message: String, amount: Double) async throws
-    func getMessages(for streamId: String, limit: Int) async throws -> [ChatMessage]
+    func getMessages(for streamId: String, limit: Int) async throws -> [LiveChatMessage]
     func getChatUsers(for streamId: String) async throws -> [ChatUser]
     func getChatStatistics(for streamId: String) async throws -> ChatStatistics
     func moderateMessage(messageId: String, action: ChatModerationAction) async throws
@@ -390,7 +390,7 @@ enum ChatModerationAction: String, CaseIterable {
 
 // MARK: - Mock Live Chat Service
 class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
-    @Published var messages: [ChatMessage] = []
+    @Published var messages: [LiveChatMessage] = []
     @Published var chatUsers: [ChatUser] = []
     @Published var statistics: ChatStatistics = ChatStatistics()
     @Published var settings: ChatSettings = ChatSettings()
@@ -414,7 +414,7 @@ class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
         await MainActor.run {
             self.isConnected = true
             self.isLoading = false
-            self.messages = ChatMessage.sampleMessages
+            self.messages = LiveChatMessage.sampleMessages
             self.chatUsers = ChatUser.sampleUsers
             self.statistics = ChatStatistics(
                 activeUsers: 1234,
@@ -443,7 +443,7 @@ class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
         }
     }
     
-    func sendMessage(_ message: ChatMessage) async throws {
+    func sendMessage(_ message: LiveChatMessage) async throws {
         guard isConnected else {
             throw NSError(domain: "ChatError", code: 400, userInfo: [NSLocalizedDescriptionKey: "Not connected to chat"])
         }
@@ -459,7 +459,7 @@ class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
     }
     
     func sendSuperChat(streamId: String, message: String, amount: Double) async throws {
-        let superChatMessage = ChatMessage(
+        let superChatMessage = LiveChatMessage(
             streamId: streamId,
             userId: "current-user-id",
             username: "CurrentUser",
@@ -472,7 +472,7 @@ class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
         try await sendMessage(superChatMessage)
     }
     
-    func getMessages(for streamId: String, limit: Int) async throws -> [ChatMessage] {
+    func getMessages(for streamId: String, limit: Int) async throws -> [LiveChatMessage] {
         return Array(messages.suffix(limit))
     }
     
@@ -493,7 +493,7 @@ class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
                 messages.remove(at: index)
             }
         case .highlight:
-            let highlightedMessage = ChatMessage(
+            let highlightedMessage = LiveChatMessage(
                 id: messages[index].id,
                 streamId: messages[index].streamId,
                 userId: messages[index].userId,
@@ -534,7 +534,7 @@ class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
         // Unpin other messages first
         for i in messages.indices {
             if messages[i].isPinned {
-                let unpinnedMessage = ChatMessage(
+                let unpinnedMessage = LiveChatMessage(
                     id: messages[i].id,
                     streamId: messages[i].streamId,
                     userId: messages[i].userId,
@@ -556,7 +556,7 @@ class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
         }
         
         // Pin the selected message
-        let pinnedMessage = ChatMessage(
+        let pinnedMessage = LiveChatMessage(
             id: messages[index].id,
             streamId: messages[index].streamId,
             userId: messages[index].userId,
@@ -582,7 +582,7 @@ class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
     func unpinMessage(messageId: String) async throws {
         guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
         
-        let unpinnedMessage = ChatMessage(
+        let unpinnedMessage = LiveChatMessage(
             id: messages[index].id,
             streamId: messages[index].streamId,
             userId: messages[index].userId,
@@ -614,7 +614,7 @@ class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
     
     // MARK: - Private Methods
     private func setupSampleData() {
-        messages = ChatMessage.sampleMessages
+        messages = LiveChatMessage.sampleMessages
         chatUsers = ChatUser.sampleUsers
     }
     
@@ -648,7 +648,7 @@ class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
             "Keep up the great work! ❤️"
         ]
         
-        let newMessage = ChatMessage(
+        let newMessage = LiveChatMessage(
             streamId: streamId,
             userId: randomUser.id,
             username: randomUser.username,
@@ -662,16 +662,16 @@ class MockLiveChatService: LiveChatServiceProtocol, ObservableObject {
 }
 
 // MARK: - Sample Data
-extension ChatMessage {
-    static let sampleMessages: [ChatMessage] = [
-        ChatMessage(
+extension LiveChatMessage {
+    static let sampleMessages: [LiveChatMessage] = [
+        LiveChatMessage(
             streamId: "stream-1",
             userId: "user-1",
             username: "TechFan2024",
             content: "This stream is incredible! Love the new setup 🔥",
             badges: [UserBadge(name: "Subscriber", iconName: "heart.fill", color: "00FF7F", description: "Channel Subscriber")]
         ),
-        ChatMessage(
+        LiveChatMessage(
             streamId: "stream-1",
             userId: "user-2",
             username: "CodeMaster",
@@ -679,7 +679,7 @@ extension ChatMessage {
             isHighlighted: true,
             superChatAmount: 5.00
         ),
-        ChatMessage(
+        LiveChatMessage(
             streamId: "stream-1",
             userId: "user-3",
             username: "ModeratorMax",
@@ -687,14 +687,14 @@ extension ChatMessage {
             messageType: .moderator,
             badges: [UserBadge(name: "Moderator", iconName: "shield.fill", color: "FF4444", description: "Chat Moderator")]
         ),
-        ChatMessage(
+        LiveChatMessage(
             streamId: "stream-1",
             userId: "user-4",
             username: "ArtLover",
             content: "Your art style is so unique! ✨",
             badges: [UserBadge(name: "VIP", iconName: "star.fill", color: "9146FF", description: "VIP Member")]
         ),
-        ChatMessage(
+        LiveChatMessage(
             streamId: "stream-1",
             userId: "user-5",
             username: "GameStreamer",

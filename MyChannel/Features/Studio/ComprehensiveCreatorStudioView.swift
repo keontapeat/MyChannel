@@ -26,6 +26,7 @@ struct ComprehensiveCreatorStudioView: View {
     
     enum StudioTab: String, CaseIterable, Hashable {
         case dashboard = "Dashboard"
+        case aiStudio = "AI Studio"
         case content = "Content"
         case analytics = "Analytics"
         case earnings = "Earnings"
@@ -42,6 +43,7 @@ struct ComprehensiveCreatorStudioView: View {
         var icon: String {
             switch self {
             case .dashboard: return "chart.bar.xaxis"
+            case .aiStudio: return "brain.head.profile"
             case .content: return "play.rectangle"
             case .analytics: return "chart.line.uptrend.xyaxis"
             case .earnings: return "dollarsign.circle"
@@ -210,6 +212,9 @@ struct ComprehensiveCreatorStudioView: View {
         case .dashboard:
             StudioDashboardView()
                 .navigationTitle("Dashboard")
+        case .aiStudio:
+            AICreatorStudioView()
+                .navigationTitle("AI Studio")
         case .content:
             ContentManagementView()
                 .navigationTitle("Content")
@@ -256,6 +261,8 @@ struct ComprehensiveCreatorStudioView: View {
         switch selectedTab {
         case .dashboard:
             StudioDashboardView()
+        case .aiStudio:
+            AICreatorStudioView()
         case .content:
             ContentManagementView()
         case .analytics:

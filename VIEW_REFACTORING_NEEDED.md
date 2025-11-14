@@ -98,3 +98,6 @@ var fontSizeBinding: Binding<Double> {
 
 **Note**: This is a breaking change for the views, but the ViewModel is already updated and working. The views will need to be updated to compile.
 
+
+
+

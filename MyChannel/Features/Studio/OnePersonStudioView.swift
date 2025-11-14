@@ -316,9 +316,9 @@ struct OnePersonStudioView: View {
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 12) {
-                StatCard(title: "Generations", value: "\(selfImproving.totalGenerations)", icon: "sparkles")
-                StatCard(title: "Success Rate", value: "\(Int(selfImproving.successRate * 100))%", icon: "checkmark.circle")
-                StatCard(title: "Avg Rating", value: String(format: "%.1f", selfImproving.averageUserRating), icon: "star.fill")
+                SimpleStudioStatCard(title: "Generations", value: "\(selfImproving.totalGenerations)", icon: "sparkles")
+                SimpleStudioStatCard(title: "Success Rate", value: "\(Int(selfImproving.successRate * 100))%", icon: "checkmark.circle")
+                SimpleStudioStatCard(title: "Avg Rating", value: String(format: "%.1f", selfImproving.averageUserRating), icon: "star.fill")
             }
         }
         .padding(20)
@@ -732,7 +732,7 @@ struct ToolButton: View {
     }
 }
 
-struct StatCard: View {
+struct SimpleStudioStatCard: View {
     let title: String
     let value: String
     let icon: String

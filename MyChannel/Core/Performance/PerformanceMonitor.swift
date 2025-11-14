@@ -601,11 +601,11 @@ struct PerformanceMonitorView: View {
             
             if monitor.isMonitoring {
                 VStack(spacing: 16) {
-                    MetricRow(title: "CPU Usage", value: "\(String(format: "%.1f", monitor.currentMetrics.cpuUsage))%")
-                    MetricRow(title: "Memory Usage", value: "\(String(format: "%.1f", monitor.currentMetrics.memoryUsage))MB")
-                    MetricRow(title: "Frame Rate", value: "\(String(format: "%.1f", monitor.currentMetrics.frameRate)) FPS")
-                    MetricRow(title: "Network Latency", value: "\(String(format: "%.2f", monitor.currentMetrics.networkLatency))s")
-                    MetricRow(title: "Battery Drain", value: "\(String(format: "%.1f", monitor.currentMetrics.batteryDrainRate))%/h")
+                    MonitorMetricRow(title: "CPU Usage", value: "\(String(format: "%.1f", monitor.currentMetrics.cpuUsage))%")
+                    MonitorMetricRow(title: "Memory Usage", value: "\(String(format: "%.1f", monitor.currentMetrics.memoryUsage))MB")
+                    MonitorMetricRow(title: "Frame Rate", value: "\(String(format: "%.1f", monitor.currentMetrics.frameRate)) FPS")
+                    MonitorMetricRow(title: "Network Latency", value: "\(String(format: "%.2f", monitor.currentMetrics.networkLatency))s")
+                    MonitorMetricRow(title: "Battery Drain", value: "\(String(format: "%.1f", monitor.currentMetrics.batteryDrainRate))%/h")
                 }
                 
                 if !monitor.alerts.isEmpty {
@@ -641,7 +641,7 @@ struct PerformanceMonitorView: View {
     }
 }
 
-struct MetricRow: View {
+struct MonitorMetricRow: View {
     let title: String
     let value: String
     

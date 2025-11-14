@@ -10,10 +10,10 @@ import AVKit
 
 struct FloatingMiniPlayer: View {
     @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
-    @State private var dragOffset: CGSize = .zero
-    @State private var isDragging = false
+    @GestureState private var dragState = CGSize.zero  // 🔥 NEW: Use @GestureState for smoother dragging
     @State private var position: CGPoint = .zero  // 🔥 YOUTUBE PARITY: Free-floating position
     @State private var lastPosition: CGPoint = .zero  // Store last position before drag
+    @State private var isDragging = false
     
     // 🔥 YOUTUBE PARITY: Advanced mini player controls
     @State private var showingControls = false
@@ -44,7 +44,8 @@ struct FloatingMiniPlayer: View {
                         x: position.x == 0 ? geometry.size.width - (playerSize.width / 2) - 20 : position.x,
                         y: position.y == 0 ? geometry.size.height - (playerSize.height / 2) - 100 : position.y
                     )
-                    .offset(dragOffset)
+                    .offset(dragState)  // 🔥 NEW: Use @GestureState for buttery smooth dragging
+                    .animation(.interactiveSpring(), value: dragState)  // 🔥 NEW: Smooth animation during drag
                     .gesture(
                         SimultaneousGesture(
                             freeFloatingDragGesture(geometry: geometry),
@@ -63,8 +64,7 @@ struct FloatingMiniPlayer: View {
                             )
                         }
                     }
-                    .transaction { tx in tx.disablesAnimations = isDragging }
-                    .drawingGroup()
+                    .drawingGroup(opaque: false, colorMode: .linear)  // 🔥 OPTIMIZED: Better rendering
                     .compositingGroup()
             }
             .allowsHitTesting(true)
@@ -668,30 +668,19 @@ struct FloatingMiniPlayer: View {
     // 🔥 YOUTUBE PARITY: Free-floating drag gesture (can drag anywhere on screen)
     private func freeFloatingDragGesture(geometry: GeometryProxy) -> some Gesture {
         DragGesture(minimumDistance: 5, coordinateSpace: .global)
-            .onChanged { value in
+            .updating($dragState) { value, state, transaction in
+                // 🔥 NEW: Use @GestureState for automatic state reset and smoother updates
+                state = value.translation
+                transaction.animation = .interactiveSpring()
+                
+                // Set dragging flag on first update
                 if !isDragging {
-                    isDragging = true
-                    lastPosition = position
-                    HapticManager.shared.impact(style: .light)
+                    DispatchQueue.main.async {
+                        isDragging = true
+                        lastPosition = position
+                        HapticManager.shared.impact(style: .light)
+                    }
                 }
-                
-                // Calculate new position
-                let newX = lastPosition.x + value.translation.width
-                let newY = lastPosition.y + value.translation.height
-                
-                // Keep within screen bounds
-                let halfWidth = playerSize.width / 2
-                let halfHeight = playerSize.height / 2
-                let minX = halfWidth + 10
-                let maxX = geometry.size.width - halfWidth - 10
-                let minY = halfHeight + 50  // Account for status bar
-                let maxY = geometry.size.height - halfHeight - 100  // Account for tab bar
-                
-                // Update drag offset for smooth movement
-                dragOffset = CGSize(
-                    width: value.translation.width,
-                    height: value.translation.height
-                )
             }
             .onEnded { value in
                 isDragging = false
@@ -751,10 +740,9 @@ struct FloatingMiniPlayer: View {
                     snapY = max(minY, min(maxY, finalY))  // Keep within bounds
                 }
                 
-                // Animate to snapped position
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                // 🔥 OPTIMIZED: Animate to snapped position with smoother, longer animation (YouTube-style)
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7, blendDuration: 0.3)) {
                     position = CGPoint(x: snapX, y: snapY)
-                    dragOffset = .zero
                     lastPosition = position
                 }
                 
@@ -831,7 +819,8 @@ struct FloatingMiniPlayer: View {
                     targetScale = 1.0 // Normal
                 }
                 
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                // 🔥 OPTIMIZED: Smoother resize animation with blend duration
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8, blendDuration: 0.2)) {
                     playerSize = CGSize(
                         width: baseWidth * targetScale,
                         height: baseHeight * targetScale

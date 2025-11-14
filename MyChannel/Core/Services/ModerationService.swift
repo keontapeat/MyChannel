@@ -135,11 +135,11 @@ final class ModerationService: ObservableObject {
         )
     }
     
-    func checkCopyrightMatch(fingerprint: ContentFingerprint) async -> [CopyrightMatch] {
+    func checkCopyrightMatch(fingerprint: ContentFingerprint) async -> [ModerationCopyrightMatch] {
         // Simulate copyright database lookup
         if fingerprint.pdqHash?.contains("suspicious") == true {
             return [
-                CopyrightMatch(
+                ModerationCopyrightMatch(
                     matchId: UUID().uuidString,
                     ownerName: "Example Rights Holder",
                     confidence: 0.92,
@@ -313,7 +313,7 @@ final class ModerationService: ObservableObject {
     }
 }
 
-struct CopyrightMatch: Identifiable, Codable {
+struct ModerationCopyrightMatch: Identifiable, Codable {
     let id = UUID().uuidString
     let matchId: String
     let ownerName: String

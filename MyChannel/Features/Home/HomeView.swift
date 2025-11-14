@@ -138,6 +138,12 @@ struct HomeView: View {
                         )
                         .padding(.bottom, 40)
 
+                        // 🔥 AI-POWERED RECOMMENDATIONS (NEW!)
+                        AIRecommendationsSection { video in
+                            route = .video(video)
+                        }
+                        .padding(.bottom, 24)
+                        
                         MinimalContentSections(
                             onPlayVideo: { video in route = .video(video) },
                             onSelectMovie: { movie in route = .movie(movie) },

@@ -308,15 +308,11 @@ struct ProfileView: View {
                             HapticManager.shared.impact(style: .light)
                         } label: {
                             HStack(spacing: 12) {
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.black.opacity(0.15))
-                                        .frame(width: 44, height: 44)
-                                    
-                                    Image(systemName: "crown.fill")
-                                        .font(.system(size: 20, weight: .semibold))
-                                        .foregroundColor(.black)
-                                }
+                                // 🔥 FIX: Clean icon without circle (like other tabs)
+                                Image(systemName: "plus.circle")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                    .frame(width: 44, height: 44)
                                 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(storeKit.isPremium ? "Your Premium Benefits" : "MyChannel Plus+")
@@ -392,7 +388,7 @@ struct ProfileView: View {
                             YouTubeStyleFeatureCard(
                                 icon: "crown.fill",
                                 title: "Championship Hub",
-                                subtitle: "Belts, rankings & VS matches",
+                                subtitle: "Medals, rankings & VS matches",
                                 destination: ChampionshipHubView()
                             )
                             
