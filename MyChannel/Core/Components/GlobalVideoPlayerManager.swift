@@ -475,17 +475,29 @@ class GlobalVideoPlayerManager: ObservableObject {
         
         print("✅ [GlobalVideoPlayerManager] Mini player state SET - shouldShow: \(shouldShowMiniPlayer), isMini: \(isMiniplayer)")
         
-        // End transition state
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            guard let self = self, !self.isCleanedUp else { return }
-            self.isTransitioning = false
-            
-            // 🔥 VERIFY: Ensure state persists after transition
-            if !self.shouldShowMiniPlayer || !self.isMiniplayer {
-                print("⚠️ [GlobalVideoPlayerManager] Mini player state LOST after minimize - RESTORING")
-                self.shouldShowMiniPlayer = true
-                self.isMiniplayer = true
-                self.showingFullscreen = false
+        // 🔥 PERSISTENCE: Multi-check to ensure state persists
+        for delay in [0.1, 0.3, 0.5, 1.0, 2.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self = self, !self.isCleanedUp, self.currentVideo != nil else { return }
+                
+                // Aggressively restore mini player state if it gets lost
+                if !self.shouldShowMiniPlayer || !self.isMiniplayer || self.showingFullscreen {
+                    print("⚠️ [GlobalVideoPlayerManager] Mini player state LOST at \(delay)s - RESTORING")
+                    self.shouldShowMiniPlayer = true
+                    self.isMiniplayer = true
+                    self.showingFullscreen = false
+                }
+                
+                // Ensure player continues playing
+                if let player = self.player, player.rate == 0, self.isPlaying {
+                    print("🔄 [GlobalVideoPlayerManager] Player paused unexpectedly - resuming")
+                    player.play()
+                }
+                
+                if delay == 1.0 {
+                    self.isTransitioning = false
+                    print("✅ [GlobalVideoPlayerManager] Mini player transition complete - state verified")
+                }
             }
         }
         

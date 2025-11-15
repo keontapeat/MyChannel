@@ -208,9 +208,48 @@ class VideoPlayerManager: ObservableObject {
                 setupPlayerCommon(player: player)
             }
         } else {
-            // 🔥 SIMPLE PLAYER: For uploaded videos, use simple AVPlayer
-            print("✅ Using simple AVPlayer for uploaded video")
-            let player = AVPlayer(url: url)
+            // 🔥 YOUTUBE-LEVEL OPTIMIZATION: Enhanced player setup
+            print("✅ Using optimized AVPlayer for uploaded video")
+            
+            // Create asset with preloading enabled
+            let asset = AVURLAsset(url: url, options: [
+                AVURLAssetPreferPreciseDurationAndTimingKey: true,
+                AVURLAssetHTTPHeaderFieldsKey: [
+                    "User-Agent": "MyChannel iOS \(AppConfig.appVersion)"
+                ]
+            ])
+            asset.resourceLoader.preloadsEligibleContentKeys = true
+            
+            // Create player item with optimized buffer settings
+            let playerItem = AVPlayerItem(asset: asset)
+            
+            // 🔥 YOUTUBE PARITY: Dynamic buffer sizing based on network
+            let networkQuality = NetworkOptimizer.shared.connectionQuality
+            switch networkQuality {
+            case .excellent:
+                playerItem.preferredForwardBufferDuration = 10.0 // 10 seconds on Wi-Fi
+                print("📊 [Buffer] Set to 10s (Wi-Fi)")
+            case .good:
+                playerItem.preferredForwardBufferDuration = 5.0  // 5 seconds on good cellular
+                print("📊 [Buffer] Set to 5s (Good Cellular)")
+            case .poor:
+                playerItem.preferredForwardBufferDuration = 2.0  // 2 seconds on poor network
+                print("📊 [Buffer] Set to 2s (Poor Network)")
+            }
+            
+            // Create player with optimized settings
+            let player = AVPlayer(playerItem: playerItem)
+            player.automaticallyWaitsToMinimizeStalling = true
+            
+            // 🔥 PRELOAD: Start buffering immediately
+            player.preroll(atRate: 1.0) { success in
+                if success {
+                    print("✅ [Preload] Video buffered successfully")
+                } else {
+                    print("⚠️ [Preload] Video buffering incomplete")
+                }
+            }
+            
             await MainActor.run {
                 self.player = player
                 setupPlayerCommon(player: player)
@@ -405,7 +444,7 @@ class VideoPlayerManager: ObservableObject {
         isLoading = false
         updateNowPlayingInfo()
         
-        // 🔥 FIX: Track view ONLY ONCE when video STARTS playing (not on every play/pause)
+        // 🔥 VIEW TRACKING: Track view ONCE when video starts playing
         if !hasTrackedView, let video = currentVideo {
             hasTrackedView = true  // Mark as tracked to prevent double-counting
             let videoId = video.id
@@ -414,10 +453,18 @@ class VideoPlayerManager: ObservableObject {
             Task {
                 let userId = AuthenticationManager.shared.currentUser?.id
                 
+                print("👁️ [ViewTracking] Starting view session for: \(video.title)")
+                print("👤 [ViewTracking] User ID: \(userId ?? "anonymous")")
+                print("📺 [ViewTracking] Video ID: \(video.id)")
+                
                 // 🔥 FIX: Track with RealtimeViewTracker ONLY (handles Firestore increment)
-                // Don't call VideoFirestoreService.shared.incrementViewCount - that would be a DUPLICATE!
                 await RealtimeViewTracker.shared.startViewSession(videoId: videoId, userId: userId)
                 print("✅ [VideoPlayerManager] View session started (view count incremented in Firestore)")
+                
+                // 🔥 YOUTUBE PARITY: Start performance monitoring
+                BandwidthMonitor.shared.startMonitoring(player: player)
+                StallRecoveryManager.shared.monitorForStalls(player: player, video: video)
+                print("📊 [Monitoring] Bandwidth & stall recovery monitoring started")
                 
                 // Update UI with latest count
                 let latestCount = await RealtimeViewTracker.shared.getViewCount(for: videoId)
