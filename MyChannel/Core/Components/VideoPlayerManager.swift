@@ -26,6 +26,7 @@ class VideoPlayerManager: ObservableObject {
     
     private var timeObserver: Any?
     private var playerStateObserver: NSKeyValueObservation?  // 🔥 NEW: KVO for play/pause accuracy
+    private var statusObserver: NSKeyValueObservation?  // 🔥 NEW: KVO for preroll readiness
     private var cancellables = Set<AnyCancellable>()
     private var currentVideo: Video?
     private var isCleanedUp = false
@@ -107,9 +108,11 @@ class VideoPlayerManager: ObservableObject {
             self.timeObserver = nil
         }
         
-        // 🔥 NEW: Remove KVO observer
+        // 🔥 NEW: Remove KVO observers
         playerStateObserver?.invalidate()
         playerStateObserver = nil
+        statusObserver?.invalidate()
+        statusObserver = nil
         
         // Pause and clear player
         player?.pause()
@@ -241,18 +244,28 @@ class VideoPlayerManager: ObservableObject {
             let player = AVPlayer(playerItem: playerItem)
             player.automaticallyWaitsToMinimizeStalling = true
             
-            // 🔥 PRELOAD: Start buffering immediately
-            player.preroll(atRate: 1.0) { success in
-                if success {
-                    print("✅ [Preload] Video buffered successfully")
-                } else {
-                    print("⚠️ [Preload] Video buffering incomplete")
-                }
-            }
-            
             await MainActor.run {
                 self.player = player
                 setupPlayerCommon(player: player)
+            }
+            
+            // 🔥 PRELOAD: Wait for player to be ready, then start buffering
+            // Observe player status and preroll when ready
+            let statusObserver = player.observe(\.status, options: [.new]) { player, _ in
+                if player.status == .readyToPlay {
+                    player.preroll(atRate: 1.0) { success in
+                        if success {
+                            print("✅ [Preload] Video buffered successfully")
+                        } else {
+                            print("⚠️ [Preload] Video buffering incomplete")
+                        }
+                    }
+                }
+            }
+            
+            // Store observer to prevent premature deallocation
+            await MainActor.run {
+                self.statusObserver = statusObserver
             }
         }
     }
