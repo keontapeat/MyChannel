@@ -432,8 +432,8 @@ struct VideoDetailView: View {
         }
         .buttonStyle(ScaleButtonStyle())
         
-        // Mini player button
-        Button(action: { minimizeToMiniPlayer() }) {
+        // Mini player / PiP button (always uses system PiP when available)
+        Button(action: { triggerMiniPlayerOrPiP() }) {
             ZStack {
                 Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
                 Image(systemName: "pip.enter").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
@@ -664,7 +664,7 @@ struct VideoDetailView: View {
             }
             .buttonStyle(ScaleButtonStyle())
             
-            Button(action: { isPiPActive.toggle() }) {
+            Button(action: { triggerMiniPlayerOrPiP() }) {
                 Image(systemName: isPiPActive ? "pip.exit" : "pip.enter")
                     .font(.caption.weight(.semibold))
             }
@@ -913,6 +913,13 @@ struct VideoDetailView: View {
         .sheet(isPresented: $showingCreatorProfile) {
             CreatorProfileSheet(creator: video.creator)
                 .presentationDetents([.large])
+        }
+        .onChange(of: isPiPActive) { isActive in
+            globalPlayer.isPiPActive = isActive
+            if isActive {
+                globalPlayer.shouldShowMiniPlayer = false
+                globalPlayer.isMiniplayer = false
+            }
         }
         .overlay(alignment: .topTrailing) {
             // Video Cards Overlay (YouTube-style)
@@ -1350,6 +1357,21 @@ struct VideoDetailView: View {
                     player.play()
                 }
             }
+        }
+    }
+
+    private func triggerMiniPlayerOrPiP() {
+        if AVPictureInPictureController.isPictureInPictureSupported() {
+            if isPiPActive {
+                print("📺 [VideoDetailView] Exiting system PiP")
+                isPiPActive = false
+            } else {
+                print("📺 [VideoDetailView] Entering system PiP from inline mode")
+                isPiPActive = true
+            }
+        } else {
+            print("⚠️ [VideoDetailView] PiP not supported - falling back to in-app mini player")
+            minimizeToMiniPlayer()
         }
     }
     
