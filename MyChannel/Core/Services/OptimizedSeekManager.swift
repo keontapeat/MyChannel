@@ -199,7 +199,9 @@ class OptimizedSeekManager {
     }
     
     deinit {
-        clearCache()
+        // Note: Cannot call @MainActor methods from deinit
+        // Cache will be cleaned up when manager is deallocated
+        print("🗑️ [Seek] OptimizedSeekManager deallocated")
     }
 }
 

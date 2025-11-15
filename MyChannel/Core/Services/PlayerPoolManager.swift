@@ -138,7 +138,9 @@ class PlayerPoolManager {
     }
     
     deinit {
-        clearPool()
+        // Note: Cannot call @MainActor methods from deinit
+        // Pool will be cleaned up when manager is deallocated
+        print("🗑️ [PlayerPool] PlayerPoolManager deallocated")
     }
 }
 
