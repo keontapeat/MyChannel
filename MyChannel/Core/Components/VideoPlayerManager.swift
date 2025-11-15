@@ -214,7 +214,7 @@ class VideoPlayerManager: ObservableObject {
             // Create asset with preloading enabled
             let asset = AVURLAsset(url: url, options: [
                 AVURLAssetPreferPreciseDurationAndTimingKey: true,
-                AVURLAssetHTTPHeaderFieldsKey: [
+                "AVURLAssetHTTPHeaderFieldsKey": [
                     "User-Agent": "MyChannel iOS \(AppConfig.appVersion)"
                 ]
             ])
