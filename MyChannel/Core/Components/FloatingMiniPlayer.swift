@@ -66,7 +66,9 @@ struct FloatingMiniPlayer: View {
                     }
                     .drawingGroup(opaque: false, colorMode: .linear)  // 🔥 OPTIMIZED: Better rendering
                     .compositingGroup()
+                    .allowsHitTesting(true)
             }
+            .allowsHitTesting(false)
             .allowsHitTesting(true)
             .zIndex(10000) // 🔥 FIX: ABOVE EVERYTHING for YouTube parity (tab bar is 999)
             // 🔥 FIX: Ensure mini player doesn't interfere with home feed rendering

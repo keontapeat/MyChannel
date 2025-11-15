@@ -343,10 +343,10 @@ struct MainTabView: View {
                selectedTab != .flicks {
                 SafeFloatingMiniPlayer()
                     .environmentObject(globalPlayer)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, tabBarReservedBottomInset + 12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(1000)  // 🔥 CRITICAL: Higher than tab bar (999)
+                    .zIndex(2000)
                     .animation(.easeInOut(duration: 0.25), value: globalPlayer.shouldShowMiniPlayer)
                     .onAppear {
                         print("✅ [MainTabView] Mini player appeared - shouldShow: \(globalPlayer.shouldShowMiniPlayer), isMini: \(globalPlayer.isMiniplayer)")

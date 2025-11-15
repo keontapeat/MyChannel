@@ -114,6 +114,11 @@ struct VideoDetailView: View {
                 debugHUDView(stats: stats)
             }
         }
+        .highPriorityGesture(
+            TapGesture().onEnded {
+                handlePlayerTap()
+            }
+        )
     }
     
     @ViewBuilder
@@ -291,15 +296,7 @@ struct VideoDetailView: View {
                         }
                 )
                 .onTapGesture {
-                    // 🔥 FIX: Always toggle controls on single tap (show if hidden, hide if visible)
-                    print("📱 Video tapped - Current controls state: \(showVideoControls)")
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        showVideoControls.toggle()
-                    }
-                    
-                    if showVideoControls {
-                        resetControlsHideTimer()
-                    }
+                    handlePlayerTap()
                 }
         }
             // 🔥 YOUTUBE PARITY: Speed gestures (swipe up/down on right edge to change playback speed)
@@ -340,6 +337,20 @@ struct VideoDetailView: View {
             )
             .zIndex(1)
     }
+    private func handlePlayerTap() {
+        print("📱 Video tapped - Current controls state: \(showVideoControls)")
+        if showVideoControls {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showVideoControls = false
+            }
+        } else {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showVideoControls = true
+            }
+            resetControlsHideTimer()
+        }
+    }
+
     
     @ViewBuilder
     private var avPlayerControls: some View {
