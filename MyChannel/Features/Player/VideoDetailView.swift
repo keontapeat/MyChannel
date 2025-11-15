@@ -114,11 +114,7 @@ struct VideoDetailView: View {
                 debugHUDView(stats: stats)
             }
         }
-        .highPriorityGesture(
-            TapGesture().onEnded {
-                handlePlayerTap()
-            }
-        )
+        // 🔥 FIX: Removed highPriorityGesture - taps handled by PlayerTapCaptureView now
     }
     
     @ViewBuilder
@@ -201,11 +197,12 @@ struct VideoDetailView: View {
             paidPromotionBadge
         }
         
-        // Invisible tap/drag area
-        videoTapArea
-        
-        // Overlay controls
+        // Overlay controls (MUST be above tap area to receive taps)
         avPlayerControls
+        
+        // Invisible tap/drag area (disabled when controls visible so buttons work)
+        videoTapArea
+            .allowsHitTesting(!showVideoControls)  // 🔥 FIX: Disable tap area when controls visible
         
         // Ad overlay
         if showingAd, let url = prerollURL {
@@ -325,8 +322,8 @@ struct VideoDetailView: View {
             bottomProgressArea
         }
         .transition(.opacity)
-        .zIndex(100)  // 🔥 FIX: Much higher z-index to ensure controls are above tap area
-        .allowsHitTesting(true)  // 🔥 FIX: Always allow hit testing when controls are visible
+        .zIndex(200)  // 🔥 FIX: Much higher z-index to ensure controls are above tap area
+        .allowsHitTesting(showVideoControls)  // 🔥 FIX: Only allow hit testing when controls are visible
         .contentShape(Rectangle())  // 🔥 FIX: Ensure entire control area is tappable
         .opacity(showVideoControls ? 1.0 : 0.0)  // 🔥 FIX: Use opacity instead of allowsHitTesting
     }
