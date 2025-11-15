@@ -180,6 +180,29 @@ class AppState: ObservableObject {
         }
     }
     
+    // 🔥 NEW: Track video watch for University
+    func trackUniversityWatch(video: Video, watchTime: TimeInterval, completionPercentage: Double, aiVerificationScore: Int? = nil) {
+        guard let userId = currentUser?.id else { return }
+        
+        Task {
+            do {
+                try await UniversityWatchTrackingService.shared.trackVideoWatch(
+                    userId: userId,
+                    videoId: video.id,
+                    title: video.title,
+                    duration: video.duration,
+                    watchTime: watchTime,
+                    completionPercentage: completionPercentage,
+                    aiVerificationScore: aiVerificationScore
+                )
+                
+                print("✅ [AppState] Tracked University watch: \(video.title)")
+            } catch {
+                print("⚠️ [AppState] Failed to track University watch: \(error)")
+            }
+        }
+    }
+    
     func clearCurrentVideo() {
         currentlyPlayingVideo = nil
         isVideoPlayerVisible = false

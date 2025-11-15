@@ -103,6 +103,43 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         self.membershipTiers = membershipTiers
     }
     
+    /// Return a copy of the user with updated stats while preserving immutable identity fields.
+    func updating(
+        subscriberCount: Int? = nil,
+        videoCount: Int? = nil,
+        followerCount: Int? = nil,
+        followingCount: Int? = nil,
+        totalViews: Int? = nil,
+        totalEarnings: Double? = nil
+    ) -> User {
+        User(
+            id: id,
+            username: username,
+            displayName: displayName,
+            email: email,
+            profileImageURL: profileImageURL,
+            bannerImageURL: bannerImageURL,
+            bio: bio,
+            subscriberCount: subscriberCount ?? self.subscriberCount,
+            videoCount: videoCount ?? self.videoCount,
+            isVerified: isVerified,
+            isCreator: isCreator,
+            createdAt: createdAt,
+            location: location,
+            website: website,
+            socialLinks: socialLinks,
+            followerCount: followerCount ?? self.followerCount,
+            followingCount: followingCount ?? self.followingCount,
+            joinDate: joinDate,
+            totalViews: totalViews ?? self.totalViews,
+            totalEarnings: totalEarnings ?? self.totalEarnings,
+            membershipTiers: membershipTiers,
+            bannerVideoURL: bannerVideoURL,
+            bannerVideoMuted: bannerVideoMuted,
+            bannerVideoContentMode: bannerVideoContentMode
+        )
+    }
+    
     // MARK: - Equatable
     static func == (lhs: User, rhs: User) -> Bool {
         lhs.id == rhs.id

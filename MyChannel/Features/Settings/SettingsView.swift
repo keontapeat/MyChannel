@@ -11,6 +11,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var storeKit = StoreKitService.shared
+    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared // 🔥 FIX: Access global player to hide mini player
     
     // State
     @State private var showingPremiumBenefits = false
@@ -76,6 +77,24 @@ struct SettingsView: View {
         .overlay {
             if isDeletingAccount {
                 deletingOverlay
+            }
+        }
+        .onAppear {
+            // 🔥 FIX: Hide mini player when viewing settings page
+            // YouTube-style: mini player shouldn't show on profile/settings/upload pages
+            if globalPlayer.shouldShowMiniPlayer {
+                print("🎥 [SettingsView] Hiding mini player on settings page")
+                globalPlayer.shouldShowMiniPlayer = false
+                globalPlayer.isMiniplayer = false
+            }
+        }
+        .onDisappear {
+            // 🔥 FIX: Restore mini player when leaving settings page (if video is still playing)
+            if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen {
+                print("🎥 [SettingsView] Restoring mini player when leaving settings page")
+                globalPlayer.shouldShowMiniPlayer = true
+                globalPlayer.isMiniplayer = true
+                globalPlayer.ensurePlayerAttached()
             }
         }
     }

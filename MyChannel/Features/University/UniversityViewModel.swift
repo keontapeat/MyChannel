@@ -40,7 +40,16 @@ class UniversityViewModel: ObservableObject {
         static let empty = StreaksAndGoals()
     }
     
-    // Learning Paths
+    // 🔥 NEW: Career Paths & Progress
+    @Published var totalUniversityHours: Double = 0
+    @Published var certificatesEarned: Int = 0
+    @Published var activeCareerPathsCount: Int = 0
+    @Published var averageAIScore: Int = 0
+    @Published var careerPathsProgress: [(CareerPath, CareerPathProgress)] = []
+    @Published var continueLearningVideos: [ContinueLearningVideo] = []
+    @Published var careerPathsWithVideos: [(careerPath: CareerPath, progress: CareerPathProgress, videos: [UniversityVideo])] = []
+    
+    // Learning Paths (Legacy - Keep for other tabs)
     @Published var activePaths: [LearningPath] = []
     @Published var recommendedPaths: [LearningPath] = []
     
@@ -51,7 +60,7 @@ class UniversityViewModel: ObservableObject {
     @Published var trendingSubjects: [UniversitySubject] = []
     @Published var allSubjects: [UniversitySubject] = []
     
-    // Certificates
+    // Certificates (Legacy - Keep for other tabs)
     @Published var earnedCertificates: [Certificate] = []
     @Published var availableCertificates: [Certificate] = []
     
@@ -70,21 +79,81 @@ class UniversityViewModel: ObservableObject {
     // User Profile
     private var userProfile: UserLearningProfile?
     
+    // Services
+    private let watchTrackingService = UniversityWatchTrackingService.shared
+    private let categorizationService = AICareerCategorizationService.shared
+    private let seedDataService = UniversitySeedDataService.shared
+    
     func loadUserProgress() async {
-        // Load from Firestore
-        // For now, mock data
+        print("🎓 [UniversityVM] Loading user progress...")
+        
+        // Get current user
+        guard let userId = AppState.shared.currentUser?.id else {
+            print("⚠️ [UniversityVM] No user logged in")
+            return
+        }
+        
+        // 🌱 Seed initial data if first time
+        do {
+            try await seedDataService.seedUserData(userId: userId)
+        } catch {
+            print("⚠️ [UniversityVM] Failed to seed data: \(error)")
+        }
+        
+        // 🔥 NEW: Load Career Path Progress
+        do {
+            let progressList = try await watchTrackingService.fetchUserProgress(userId: userId)
+            
+            await MainActor.run {
+                // Calculate totals
+                totalUniversityHours = progressList.map(\.totalHours).reduce(0, +)
+                certificatesEarned = progressList.filter(\.certificateEarned).count
+                activeCareerPathsCount = progressList.count
+                
+                // Calculate average AI score
+                if !progressList.isEmpty {
+                    let totalScore = progressList.map(\.averageAIScore).reduce(0, +)
+                    averageAIScore = totalScore / progressList.count
+                } else {
+                    averageAIScore = 0
+                }
+                
+                // Build career paths progress list
+                careerPathsProgress = progressList.compactMap { progress in
+                    guard let careerPath = CareerPath.getCareerPath(byId: progress.careerPathId) else {
+                        return nil
+                    }
+                    return (careerPath, progress)
+                }
+                
+                print("✅ [UniversityVM] Loaded \(progressList.count) career paths")
+                print("   Total Hours: \(Int(totalUniversityHours))")
+                print("   Certificates: \(certificatesEarned)")
+                print("   Average AI Score: \(averageAIScore)")
+            }
+            
+            // Load Continue Learning Videos
+            await loadContinueLearningVideos(userId: userId)
+            
+            // Load Career Path Videos
+            await loadCareerPathVideos(userId: userId)
+            
+        } catch {
+            print("🚨 [UniversityVM] Failed to load progress: \(error)")
+        }
+        
+        // ⚡ PERFORMANCE: Update legacy combined state structures
         await MainActor.run {
-            // ⚡ PERFORMANCE: Update combined state structures
             progress = UserProgress(
-                totalWatchHours: 142,
-                certificatesEarned: 3,
-                skillLevel: 8,
-                subjectsStudied: 12,
-                videosCompleted: 87,
-                verificationScore: 92
+                totalWatchHours: Int(totalUniversityHours),
+                certificatesEarned: certificatesEarned,
+                skillLevel: min(10, Int(totalUniversityHours / 50) + 1),
+                subjectsStudied: activeCareerPathsCount,
+                videosCompleted: careerPathsProgress.map { $0.1.videosWatched }.reduce(0, +),
+                verificationScore: averageAIScore
             )
             
-            // Streaks
+            // Streaks (keep existing logic)
             streaksAndGoals = StreaksAndGoals(
                 currentStreak: 15,
                 longestStreak: 23,
@@ -97,7 +166,7 @@ class UniversityViewModel: ObservableObject {
             // Load active goals
             loadActiveGoals()
             
-            // Load paths
+            // Load paths (legacy)
             loadLearningPaths()
             
             // Load activity
@@ -549,6 +618,105 @@ class UniversityViewModel: ObservableObject {
                 currentStreak: 38
             )
         ]
+    }
+    
+    // MARK: - 🔥 NEW: Career Path Methods
+    
+    private func loadContinueLearningVideos(userId: String) async {
+        // Load incomplete videos from watch history
+        // For now, use mock data
+        let mockVideos = [
+            ContinueLearningVideo(
+                id: "1",
+                video: UniversityVideo(
+                    id: "1",
+                    videoId: "vid1",
+                    title: "Advanced Swift Patterns: Protocol-Oriented Programming",
+                    thumbnailURL: "https://picsum.photos/400/225",
+                    duration: 2400,
+                    creatorId: "creator1",
+                    creatorName: "iOS Academy",
+                    creatorAvatarURL: "https://picsum.photos/100/100",
+                    careerPaths: ["ios-development"],
+                    skillTags: ["Swift", "Protocols"],
+                    difficultyLevel: .advanced,
+                    isUniversityContent: true,
+                    certificateEligible: true,
+                    aiCategorizationScore: 0.95,
+                    watchProgress: 0.65,
+                    lastWatchedAt: Date(),
+                    aiVerificationScore: 92,
+                    completed: false
+                ),
+                careerPathId: "ios-development",
+                careerPathName: "iOS Development",
+                careerPathColor: Color(red: 0.0, green: 0.5, blue: 0.9),
+                progressPercentage: 0.65,
+                timeRemaining: 840,
+                lastWatchedAt: Date().addingTimeInterval(-3600)
+            )
+        ]
+        
+        await MainActor.run {
+            continueLearningVideos = mockVideos
+        }
+    }
+    
+    private func loadCareerPathVideos(userId: String) async {
+        // Load videos for each active career path
+        // For now, use mock data
+        let mockCareerPathVideos: [(careerPath: CareerPath, progress: CareerPathProgress, videos: [UniversityVideo])] = careerPathsProgress.map { (careerPath, progress) in
+            let mockVideos = (0..<10).map { index in
+                UniversityVideo(
+                    id: "\(careerPath.id)_\(index)",
+                    videoId: "vid\(index)",
+                    title: "\(careerPath.name): Lesson \(index + 1)",
+                    thumbnailURL: "https://picsum.photos/400/\(225 + index)",
+                    duration: TimeInterval(1200 + index * 300),
+                    creatorId: "creator\(index)",
+                    creatorName: "Expert Teacher \(index + 1)",
+                    creatorAvatarURL: "https://picsum.photos/\(100 + index)/100",
+                    careerPaths: [careerPath.id],
+                    skillTags: Array(careerPath.skillTags.prefix(3)),
+                    difficultyLevel: [.beginner, .intermediate, .advanced, .expert].randomElement() ?? .intermediate,
+                    isUniversityContent: true,
+                    certificateEligible: true,
+                    aiCategorizationScore: Double.random(in: 0.8...0.99),
+                    watchProgress: index < 3 ? Double.random(in: 0.1...0.7) : 0.0,
+                    lastWatchedAt: index < 3 ? Date().addingTimeInterval(-Double(index) * 3600) : nil,
+                    aiVerificationScore: Int.random(in: 75...95),
+                    completed: index < 2
+                )
+            }
+            
+            return (careerPath: careerPath, progress: progress, videos: mockVideos)
+        }
+        
+        await MainActor.run {
+            careerPathsWithVideos = mockCareerPathVideos
+        }
+    }
+    
+    func playVideo(_ continueVideo: ContinueLearningVideo) {
+        print("▶️ [UniversityVM] Playing video: \(continueVideo.video.title)")
+        print("   Resuming from: \(Int(continueVideo.progressPercentage * 100))%")
+        
+        // TODO: Integrate with GlobalVideoPlayerManager
+        // GlobalVideoPlayerManager.shared.playVideo(video, startAt: continueVideo.progressPercentage)
+    }
+    
+    func playUniversityVideo(_ video: UniversityVideo) {
+        print("▶️ [UniversityVM] Playing University video: \(video.title)")
+        
+        // TODO: Integrate with GlobalVideoPlayerManager
+        // Also track with UniversityWatchTrackingService
+    }
+    
+    func navigateToCareerPath(_ careerPath: CareerPath, progress: CareerPathProgress) {
+        print("🎯 [UniversityVM] Navigate to career path: \(careerPath.name)")
+        print("   Progress: \(progress.progressPercentage)%")
+        
+        // TODO: Navigate to CareerPathDetailView
     }
 }
 

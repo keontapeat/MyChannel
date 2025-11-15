@@ -1120,7 +1120,10 @@ private struct FullWidthVideoCard: View {
                 HStack(spacing: 4) {
                     Text(video.creator.displayName)
                     Text("•")
-                    Text("\(video.formattedViewCount) views")
+                    HStack(spacing: 2) {
+                        ReactiveViewCountText(videoId: video.id, initialCount: video.viewCount)
+                        Text("views")
+                    }
                     Text("•")
                     Text(video.uploadTimeAgo)
                 }
@@ -1218,11 +1221,12 @@ struct ReactiveViewCountText: View {
     
     var body: some View {
         Text(formatViewCount(viewCount))
-            .onAppear {
-                // Load latest count from Firestore
-                Task {
-                    let latestCount = await RealtimeViewTracker.shared.getViewCount(for: videoId)
+            .task {
+                // 🔥 FIX: Load latest count from Firestore immediately
+                let latestCount = await RealtimeViewTracker.shared.getViewCount(for: videoId)
+                await MainActor.run {
                     viewCount = latestCount
+                    print("📊 [ReactiveViewCount] Loaded count for \(videoId): \(latestCount)")
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("VideoViewCountUpdated"))) { notification in
@@ -1231,6 +1235,7 @@ struct ReactiveViewCountText: View {
                    notificationVideoId == videoId,
                    let count = userInfo["viewCount"] as? Int {
                     viewCount = count
+                    print("📊 [ReactiveViewCount] Updated count for \(videoId): \(count)")
                 }
             }
     }

@@ -24,6 +24,15 @@ struct PlayerPiPContainerView: UIViewRepresentable {
 
     func updateUIView(_ uiView: PlayerLayerView, context: Context) {
         uiView.playerLayer.player = player
+        // 🔥 CRITICAL: Setup PiP controller if not already set
+        if context.coordinator.pipController == nil && AVPictureInPictureController.isPictureInPictureSupported() {
+            context.coordinator.pipController = AVPictureInPictureController(playerLayer: uiView.playerLayer)
+            context.coordinator.pipController?.delegate = context.coordinator
+            context.coordinator.pipController?.canStartPictureInPictureAutomaticallyFromInline = true
+            print("✅ [PlayerPiPContainerView] PiP controller created")
+        }
+        
+        // Start/stop PiP based on binding
         if isPictureInPictureActive {
             context.coordinator.startPiP()
         } else {

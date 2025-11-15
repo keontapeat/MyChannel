@@ -95,62 +95,145 @@ struct UniversityHomeView: View {
     // MARK: - Dashboard Content
     private var dashboardContent: some View {
         VStack(spacing: 24) {
-            // Hero Card
-            universityHeroCard
+            // 🔥 NEW: University Hero Card - Total Hours & Certificates
+            revolutionaryHeroCard
             
-            // Learning Stats
-            learningStatsCard
-            
-            // Active Learning Paths
-            if !viewModel.activePaths.isEmpty {
-                activeLearningPaths
+            // 🔥 NEW: Continue Learning Section (Incomplete Videos)
+            if !viewModel.continueLearningVideos.isEmpty {
+                ContinueLearningSection(videos: viewModel.continueLearningVideos) { video in
+                    // Play video from where user left off
+                    viewModel.playVideo(video)
+                }
             }
             
-            // Recent Activity
-            recentActivitySection
+            // 🔥 NEW: Certificate Progress Grid
+            if !viewModel.careerPathsProgress.isEmpty {
+                CertificateProgressGrid(
+                    careerPathsProgress: viewModel.careerPathsProgress.map { ($0, $1) }
+                ) { careerPath, progress in
+                    viewModel.navigateToCareerPath(careerPath, progress: progress)
+                }
+            }
             
-            // Trending Subjects
-            trendingSubjects
+            // 🔥 NEW: Career Path Video Rows (Netflix Style)
+            ForEach(viewModel.careerPathsWithVideos, id: \.careerPath.id) { item in
+                CareerPathVideoRow(
+                    careerPath: item.careerPath,
+                    progress: item.progress,
+                    videos: item.videos
+                ) { video in
+                    viewModel.playUniversityVideo(video)
+                }
+            }
         }
     }
     
-    private var universityHeroCard: some View {
-        ZStack(alignment: .leading) {
+    // 🔥 NEW: Revolutionary Hero Card - Total University Hours & Career Credentials
+    private var revolutionaryHeroCard: some View {
+        ZStack {
+            // Animated Gradient Background
             RoundedRectangle(cornerRadius: 24)
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color(red: 0.2, green: 0.4, blue: 0.9),
-                            Color(red: 0.1, green: 0.2, blue: 0.6)
+                            Color(red: 0.15, green: 0.3, blue: 0.85),
+                            Color(red: 0.25, green: 0.15, blue: 0.65),
+                            Color(red: 0.1, green: 0.2, blue: 0.5)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(height: 200)
+                .frame(height: 220)
             
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 10) {
-                    Image(systemName: "graduationcap.fill")
-                        .font(.system(size: 28, weight: .bold))
-                    Text("MyChannel University")
-                        .font(.system(size: 26, weight: .bold))
+            // Content
+            VStack(alignment: .leading, spacing: 20) {
+                // Header
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.white.opacity(0.2))
+                            .frame(width: 50, height: 50)
+                        
+                        Image(systemName: "graduationcap.fill")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("MyChannel University")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(.white)
+                        
+                        Text("AI-Tracked Career Credentials")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white.opacity(0.85))
+                    }
+                    
+                    Spacer()
                 }
-                .foregroundColor(.white)
                 
-                Text("AI-Verified Learning Platform")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white.opacity(0.9))
-                
-                HStack(spacing: 16) {
-                    statBadge(icon: "clock.fill", value: "\(viewModel.progress.totalWatchHours)h", label: "Watched")
-                    statBadge(icon: "medal.fill", value: "\(viewModel.progress.certificatesEarned)", label: "Certificates")
-                    statBadge(icon: "chart.line.uptrend.xyaxis", value: "\(viewModel.progress.skillLevel)", label: "Level")
+                // Stats
+                HStack(spacing: 20) {
+                    // Total University Hours (BIG NUMBER)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock.fill")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("\(Int(viewModel.totalUniversityHours))")
+                                .font(.system(size: 36, weight: .bold))
+                            Text("hrs")
+                                .font(.system(size: 18, weight: .semibold))
+                                .offset(y: 8)
+                        }
+                        .foregroundColor(.white)
+                        
+                        Text("Total Learning Time")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    
+                    Spacer()
+                    
+                    // Certificates Earned
+                    VStack(alignment: .trailing, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Text("\(viewModel.certificatesEarned)")
+                                .font(.system(size: 32, weight: .bold))
+                            Image(systemName: "medal.fill")
+                                .font(.system(size: 18, weight: .bold))
+                        }
+                        .foregroundColor(.yellow)
+                        
+                        Text("Certificates Earned")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
                 }
+                
+                // Active Career Paths Indicator
+                HStack(spacing: 8) {
+                    Image(systemName: "chart.line.uptrend.xyaxis.circle.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                    
+                    Text("\(viewModel.activeCareerPathsCount) Active Career Paths")
+                        .font(.system(size: 14, weight: .semibold))
+                    
+                    Spacer()
+                    
+                    Text("Average AI Score: \(viewModel.averageAIScore)")
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .foregroundColor(.white.opacity(0.9))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.15))
+                .clipShape(Capsule())
             }
             .padding(24)
         }
-        .shadow(color: .black.opacity(0.2), radius: 20, x: 0, y: 10)
+        .shadow(color: Color(red: 0.15, green: 0.3, blue: 0.85).opacity(0.4), radius: 24, x: 0, y: 12)
+        .padding(.horizontal, 20)
     }
     
     private func statBadge(icon: String, value: String, label: String) -> some View {

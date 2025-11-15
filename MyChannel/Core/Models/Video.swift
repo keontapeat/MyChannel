@@ -50,6 +50,13 @@ struct Video: Identifiable, Codable, Hashable {
     var madeForKids: Bool?
     var transcript: VideoTranscript?
     
+    // 🔥 NEW: MyChannel University Properties
+    var isUniversityContent: Bool?  // Creator tagged this for University
+    var universityCareerPaths: [String]?  // Career path IDs this video teaches
+    var universitySkillTags: [String]?  // Specific skills covered
+    var universityDifficultyLevel: UniversityVideo.DifficultyLevel?  // Difficulty level
+    var universityCertificateEligible: Bool?  // Eligible for certificate tracking
+    
     // MARK: - Custom Coding Keys
     private enum CodingKeys: String, CodingKey {
         case id, title, description, thumbnailURL, videoURL, duration

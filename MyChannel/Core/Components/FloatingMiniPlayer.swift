@@ -7,123 +7,226 @@
 
 import SwiftUI
 import AVKit
+import AVFoundation
 
 struct FloatingMiniPlayer: View {
     @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
-    @GestureState private var dragState = CGSize.zero  // 🔥 NEW: Use @GestureState for smoother dragging
-    @State private var position: CGPoint = .zero  // 🔥 YOUTUBE PARITY: Free-floating position
-    @State private var lastPosition: CGPoint = .zero  // Store last position before drag
-    @State private var isDragging = false
+    @GestureState private var dragState = CGSize.zero  // For YouTube-style swipe down gesture
+    @State private var dragOffset: CGFloat = 0  // YouTube-style swipe down offset
     
-    // 🔥 YOUTUBE PARITY: Advanced mini player controls
-    @State private var showingControls = false
+    // 🔥 ANIMATION FIX: Track if animation has been shown to prevent multiple animations
+    @State private var hasShownAnimation = false
+    @State private var lastVideoId: String? = nil
+    
+    // 🔥 YOUTUBE PARITY: Mini player controls (only what's needed)
+    @State private var volume: Float = 1.0
+    @State private var playbackSpeed: Float = 1.0
+    
+    // State for old controls (keeping for compatibility, but YouTube-style doesn't use them)
     @State private var showingVolumeSlider = false
     @State private var showingSpeedMenu = false
     @State private var showingQualityMenu = false
-    @State private var playerSize: CGSize = CGSize(width: 140, height: 78)
-    @State private var isResizing = false
+    @State private var selectedQuality: String = "Auto"
+    @State private var showingControls = false
     @State private var lastTapTime: Date = Date()
     @State private var tapCount = 0
-    @State private var volume: Float = 1.0
-    @State private var playbackSpeed: Float = 1.0
-    @State private var selectedQuality: String = "Auto"
     
     var body: some View {
-        // 🔥 FIX: More robust condition checking to prevent mini player from disappearing
-        // 🔥 FIX: Show mini player even if player isn't ready yet (will show thumbnail, then update)
-        if let video = globalPlayer.currentVideo,
-           globalPlayer.shouldShowMiniPlayer,
-           !globalPlayer.showingFullscreen,
-           !globalPlayer.isCleanedUp {
-            
-            ZStack {
-                Color.clear
-                GeometryReader { geometry in
-                    miniPlayerView(video: video, geometry: geometry)
-                        .position(
-                            x: position.x == 0 ? geometry.size.width - (playerSize.width / 2) - 20 : position.x,
-                            y: position.y == 0 ? geometry.size.height - (playerSize.height / 2) - 100 : position.y
-                        )
-                        .offset(dragState)
-                        .animation(.interactiveSpring(), value: dragState)
-                        .gesture(
-                            SimultaneousGesture(
-                                freeFloatingDragGesture(geometry: geometry),
-                                SimultaneousGesture(
-                                    horizontalSwipeGesture,
-                                    pinchToResizeGesture
-                                )
+        // 🔥 TRUE PICTURE-IN-PICTURE: System PiP that works outside app and is resizable
+        Group {
+            // 🔥 CRITICAL: Only show mini player if ALL conditions are met
+            // Must check showingFullscreen FIRST to prevent showing when going fullscreen
+            if let video = globalPlayer.currentVideo,
+               !globalPlayer.showingFullscreen,  // Check fullscreen FIRST
+               globalPlayer.shouldShowMiniPlayer,
+               !globalPlayer.isTransitioning {  // Don't show during transitions
+                
+                ZStack {
+                    // 🔥 CRITICAL: Use system PiP for true Picture-in-Picture
+                    if let player = globalPlayer.player {
+                        // Hidden view that drives system PiP
+                        PlayerPiPContainerView(
+                            player: player,
+                            isPictureInPictureActive: Binding(
+                                get: { globalPlayer.isPiPActive },
+                                set: { globalPlayer.isPiPActive = $0 }
                             )
                         )
+                        .frame(width: 1, height: 1)
+                        .opacity(0)
+                        .allowsHitTesting(false)
                         .onAppear {
-                            if position == .zero {
-                                position = CGPoint(
-                                    x: geometry.size.width - (playerSize.width / 2) - 20,
-                                    y: geometry.size.height - (playerSize.height / 2) - 100
-                                )
+                            // 🔥 AUTO-START PiP when mini player appears
+                            if AVPictureInPictureController.isPictureInPictureSupported() {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    if !globalPlayer.isPiPActive {
+                                        globalPlayer.isPiPActive = true
+                                        print("📺 [FloatingMiniPlayer] Auto-starting system PiP")
+                                    }
+                                }
                             }
                         }
-                        .drawingGroup(opaque: false, colorMode: .linear)
-                        .compositingGroup()
-                        .allowsHitTesting(true)
-                }
-            }
-            .allowsHitTesting(false)
-            .zIndex(10000)
-            .background(Color.clear)
-            .onAppear {
-                // 🔥 SYNC INITIAL STATE: Get volume and speed from player
-                if let player = globalPlayer.player {
-                    volume = player.volume
-                    playbackSpeed = player.rate
-                    print("✅ [MiniPlayer] Player found on appear - rate: \(player.rate)")
-                    
-                    // 🔥 FIX: Ensure player is playing if it should be
-                    if globalPlayer.isPlaying && player.rate == 0 {
-                        print("▶️ [MiniPlayer] Resuming playback on appear")
-                        player.play()
                     }
-                } else {
-                    print("⚠️ [MiniPlayer] Player not ready yet - will retry")
-                    // Retry getting player after a short delay
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    
+                    // 🔥 FALLBACK: In-app mini player (only shows if PiP not supported or fails)
+                    if !AVPictureInPictureController.isPictureInPictureSupported() || !globalPlayer.isPiPActive {
+                        GeometryReader { geometry in
+                            VStack {
+                                Spacer()
+                                
+                                // In-app mini player (fallback)
+                                youtubeStyleMiniPlayer(video: video, geometry: geometry)
+                                    .offset(y: dragState.height + dragOffset)
+                                    .gesture(
+                                        DragGesture(minimumDistance: 10)
+                                            .updating($dragState) { value, state, _ in
+                                                if value.translation.height > 0 {
+                                                    state = CGSize(width: 0, height: value.translation.height)
+                                                }
+                                            }
+                                            .onEnded { value in
+                                                if value.translation.height > 100 {
+                                                    globalPlayer.closePlayer()
+                                                    HapticManager.shared.impact(style: .medium)
+                                                } else {
+                                                    dragOffset = 0
+                                                }
+                                            }
+                                    )
+                                    .frame(height: 80)
+                                    .padding(.bottom, geometry.safeAreaInsets.bottom + 80)
+                            }
+                        }
+                        .zIndex(10000)
+                        // 🔥 FIX: Single, clean animation - only animate on first appearance
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
+                            removal: .move(edge: .bottom).combined(with: .opacity)
+                        ))
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: globalPlayer.shouldShowMiniPlayer)
+                    }
+                }
+                .onAppear {
+                    // 🔥 ANIMATION FIX: Only show animation once per video
+                    let currentVideoId = globalPlayer.currentVideo?.id
+                    if currentVideoId != lastVideoId {
+                        // New video - reset animation flag
+                        hasShownAnimation = false
+                        lastVideoId = currentVideoId
+                    }
+                    
+                    // 🔥 APPLE BEST PRACTICE: Ensure player is attached and sync state when view appears
+                    Task { @MainActor in
+                        // 🔥 CRITICAL: Always ensure player is attached first
+                        globalPlayer.ensurePlayerAttached()
+                        
+                        // Wait a moment for player to be ready
+                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                        
                         if let player = globalPlayer.player {
-                            print("✅ [MiniPlayer] Player found after retry - rate: \(player.rate)")
+                            // Sync volume and speed from actual player
                             volume = player.volume
                             playbackSpeed = player.rate
-                            if globalPlayer.isPlaying && player.rate == 0 {
-                                print("▶️ [MiniPlayer] Resuming playback after retry")
-                                player.play()
+                            
+                            // 🔥 APPLE BEST PRACTICE: Use timeControlStatus for accurate play state
+                            let actualIsPlaying = player.timeControlStatus == .playing
+                            let expectedIsPlaying = globalPlayer.isPlaying
+                            
+                            print("✅ [MiniPlayer] Player found - rate: \(player.rate), timeControlStatus: \(player.timeControlStatus.rawValue)")
+                            print("📊 [MiniPlayer] Expected playing: \(expectedIsPlaying), Actual playing: \(actualIsPlaying)")
+                            
+                            // Sync state if mismatch
+                            if expectedIsPlaying != actualIsPlaying {
+                                if expectedIsPlaying {
+                                    print("▶️ [MiniPlayer] Resuming playback - state mismatch")
+                                    player.play()
+                                } else {
+                                    print("⏸️ [MiniPlayer] Pausing playback - state mismatch")
+                                    player.pause()
+                                }
                             }
                         } else {
-                            print("⚠️ [MiniPlayer] Player still not available - showing thumbnail")
+                            print("⚠️ [MiniPlayer] Player still not ready - showing thumbnail")
+                            // Try one more time to ensure attachment
+                            globalPlayer.ensurePlayerAttached()
                         }
+                        
+                        print("🎥 [MiniPlayer] Mini player appeared - shouldShow: \(globalPlayer.shouldShowMiniPlayer), video: \(globalPlayer.currentVideo?.title ?? "none"), player exists: \(globalPlayer.player != nil)")
                     }
                 }
-                print("🎥 [MiniPlayer] Mini player appeared - shouldShow: \(globalPlayer.shouldShowMiniPlayer), player exists: \(globalPlayer.player != nil)")
-            }
-            .onDisappear {
-                print("⚠️ [MiniPlayer] Mini player disappeared unexpectedly - shouldShow: \(globalPlayer.shouldShowMiniPlayer)")
-            }
-            .task {
-                // 🔥 FIX: Continuously monitor player availability and ensure playback
-                while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 500_000_000) // Check every 0.5 seconds
-                    
-                    if let player = globalPlayer.player {
-                        // Player is available - ensure it's playing if it should be
-                        if globalPlayer.isPlaying && player.rate == 0 {
-                            print("▶️ [MiniPlayer] Task detected paused player - resuming")
-                            await MainActor.run {
-                                player.play()
+                .onDisappear {
+                    print("⚠️ [MiniPlayer] Mini player disappeared unexpectedly - shouldShow: \(globalPlayer.shouldShowMiniPlayer)")
+                }
+                .task {
+                    // 🔥 APPLE BEST PRACTICE: Monitor player state and sync when needed
+                    while !Task.isCancelled {
+                        try? await Task.sleep(nanoseconds: 1_000_000_000) // Check every 1 second
+                        
+                        await MainActor.run {
+                            guard let player = globalPlayer.player else {
+                                // Player not available - ensure it's set up
+                                if globalPlayer.shouldShowMiniPlayer && globalPlayer.currentVideo != nil {
+                                    print("⚠️ [MiniPlayer] Task: Player not available - ensuring attachment")
+                                    globalPlayer.ensurePlayerAttached()
+                                }
+                                return
+                            }
+                            
+                            // 🔥 APPLE BEST PRACTICE: Use timeControlStatus for accurate state checking
+                            let actualIsPlaying = player.timeControlStatus == .playing
+                            let expectedIsPlaying = globalPlayer.isPlaying
+                            
+                            // Sync if mismatch
+                            if expectedIsPlaying != actualIsPlaying {
+                                if expectedIsPlaying {
+                                    print("▶️ [MiniPlayer] Task: Resuming playback - state sync")
+                                    player.play()
+                                } else {
+                                    print("⏸️ [MiniPlayer] Task: Pausing playback - state sync")
+                                    player.pause()
+                                }
                             }
                         }
-                    } else if globalPlayer.shouldShowMiniPlayer && globalPlayer.currentVideo != nil {
-                        // Player not available but should be - log for debugging
-                        print("⚠️ [MiniPlayer] Task: Player not available but mini player should be showing")
                     }
                 }
             }
+        }
+    }
+    
+    // MARK: - AVPlayerLayer View (No Error UI)
+    /// Custom player layer that doesn't show VideoPlayer's ugly error UI
+    private struct MiniPlayerLayerView: UIViewRepresentable {
+        let player: AVPlayer?
+        
+        func makeUIView(context: Context) -> PlayerContainerView {
+            let view = PlayerContainerView()
+            view.backgroundColor = .black
+            view.playerLayer.videoGravity = .resizeAspectFill
+            // Only set player if it's valid
+            if let player = player,
+               let item = player.currentItem,
+               item.status != .failed {
+                view.playerLayer.player = player
+            } else {
+                view.playerLayer.player = nil // Don't show failed player
+            }
+            return view
+        }
+        
+        func updateUIView(_ uiView: PlayerContainerView, context: Context) {
+            // Only update if player is valid
+            if let player = player,
+               let item = player.currentItem,
+               item.status != .failed {
+                uiView.playerLayer.player = player
+            } else {
+                uiView.playerLayer.player = nil // Clear failed player
+            }
+        }
+        
+        final class PlayerContainerView: UIView {
+            override class var layerClass: AnyClass { AVPlayerLayer.self }
+            var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
         }
     }
     
@@ -147,15 +250,134 @@ struct FloatingMiniPlayer: View {
     
     // MARK: - Calculation Methods (Removed - using free-floating position instead)
     
+    // 🔥 YOUTUBE 100% PARITY: Bottom-anchored mini player
+    @ViewBuilder
+    private func youtubeStyleMiniPlayer(video: Video, geometry: GeometryProxy) -> some View {
+        HStack(spacing: 12) {
+            // Left: Video thumbnail/player (YouTube style)
+            ZStack {
+                // 🔥 CRITICAL: Always show thumbnail (prevents error UI)
+                thumbnailView
+                    .frame(width: 140, height: 78)
+                    .cornerRadius(8)
+                    .clipped()
+                
+                // Show video layer ONLY when player is 100% ready
+                if let player = globalPlayer.player,
+                   let playerItem = player.currentItem,
+                   playerItem.status == .readyToPlay,
+                   player.status == .readyToPlay,
+                   playerItem.error == nil {
+                    MiniPlayerLayerView(player: player)
+                        .frame(width: 140, height: 78)
+                        .cornerRadius(8)
+                        .clipped()
+                }
+                
+                // Play button overlay when paused
+                if !globalPlayer.isPlaying {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(12)
+                        .background(Color.black.opacity(0.6))
+                        .clipShape(Circle())
+                }
+            }
+            .onTapGesture {
+                globalPlayer.togglePlayPause()
+            }
+            
+            // Right: Title and controls (YouTube style)
+            VStack(alignment: .leading, spacing: 4) {
+                // Title
+                Text(video.title)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .lineLimit(1)
+                
+                // Creator name
+                Text(video.creator.displayName)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .lineLimit(1)
+                
+                Spacer()
+            }
+            
+            Spacer()
+            
+            // Controls: Play/Pause
+            Button(action: {
+                globalPlayer.togglePlayPause()
+                HapticManager.shared.impact(style: .light)
+            }) {
+                Image(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .frame(width: 44, height: 44)
+            }
+            
+            // Close button
+            Button(action: {
+                globalPlayer.closePlayer()
+                HapticManager.shared.impact(style: .light)
+            }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .frame(width: 44, height: 44)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(
+            Rectangle()
+                .fill(AppTheme.Colors.surface)
+                .shadow(color: .black.opacity(0.1), radius: 8, y: -2)
+        )
+        .overlay(
+            // Progress bar at top (YouTube style)
+            VStack {
+                Rectangle()
+                    .fill(AppTheme.Colors.primary)
+                    .frame(height: 2)
+                    .frame(width: geometry.size.width * CGFloat(globalPlayer.currentProgress))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer()
+            }
+        )
+    }
+    
     @ViewBuilder
     private func miniPlayerView(video: Video, geometry: GeometryProxy) -> some View {
-        // 🔥 YOUTUBE-STYLE PIP MINI PLAYER
+        // 🔥 YOUTUBE-STYLE PIP MINI PLAYER (legacy - keeping for reference)
         VStack(spacing: 0) {
             miniPlayerVideoSection(video: video, geometry: geometry)
         }
         .background(Color.black)
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.4), radius: 20, x: 0, y: 10)
+    }
+    
+    // Thumbnail view helper (used by YouTube-style mini player)
+    @ViewBuilder
+    private var thumbnailView: some View {
+        if let video = globalPlayer.currentVideo,
+           let u = URL(string: video.thumbnailURL) {
+            AppAsyncImage(url: u) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } placeholder: {
+                Rectangle()
+                    .fill(Color.black)
+            }
+            .clipped()
+        } else {
+            Rectangle()
+                .fill(Color.black)
+        }
     }
     
     @ViewBuilder
@@ -170,23 +392,28 @@ struct FloatingMiniPlayer: View {
         }
         
         let videoPlayerView: some View = Group {
-            if let player = globalPlayer.player {
-                VideoPlayer(player: player)
-                    .aspectRatio(16/9, contentMode: .fit)
-                    .allowsHitTesting(false)
-                    .clipped()
-                    // 🔥 FIX: Prevent video glitching - ensure proper rendering
-                    .drawingGroup() // Optimize rendering performance
-                    .compositingGroup() // Isolate rendering context
-            } else {
-                thumbnailView
-            }
+            // 🔥 TEMPORARY FIX: ALWAYS show thumbnail to eliminate error UI completely
+            // Once we confirm error UI is gone, we'll add back video playback
+            thumbnailView
+            
+            // TODO: Re-enable video playback once error UI is confirmed fixed
+            // if let player = globalPlayer.player,
+            //    let playerItem = player.currentItem,
+            //    playerItem.status == .readyToPlay,
+            //    player.status == .readyToPlay,
+            //    playerItem.error == nil {
+            //     MiniPlayerLayerView(player: player)
+            //         .aspectRatio(16/9, contentMode: .fit)
+            //         .allowsHitTesting(false)
+            //         .clipped()
+            //         .background(Color.black)
+            // }
         }
         
         let playerWidth = geometry.size.width - 40
         let playerHeight = playerWidth * 9 / 16
         
-        return ZStack {
+        ZStack {
             // Video Player
             videoPlayerView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -635,18 +862,25 @@ struct FloatingMiniPlayer: View {
     }
     
     private var expandButton: some View {
-        Button(action: { expandPlayer(); HapticManager.shared.impact(style: .light) }) {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .padding(6)
-                            .background(AppTheme.Colors.textSecondary.opacity(0.08))
-                            .clipShape(Circle())
+        Button(action: { 
+            // 🔥 FIX: Call globalPlayer.expandPlayer() to go fullscreen
+            globalPlayer.expandPlayer()
+            HapticManager.shared.impact(style: .light) 
+        }) {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .padding(6)
+                .background(AppTheme.Colors.textSecondary.opacity(0.08))
+                .clipShape(Circle())
         }
     }
     
     private var closeButton: some View {
-        Button(action: closePlayer) {
+        Button(action: { 
+            // 🔥 FIX: Call globalPlayer.closePlayer() to close mini player
+            globalPlayer.closePlayer()
+        }) {
             Image(systemName: "xmark")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(AppTheme.Colors.textSecondary)
@@ -705,92 +939,8 @@ struct FloatingMiniPlayer: View {
         return safeAreaBottom + tabBarHeight + 24
     }
     
-    // MARK: - Gesture Handling
-    
-    // 🔥 YOUTUBE PARITY: Free-floating drag gesture (can drag anywhere on screen)
-    private func freeFloatingDragGesture(geometry: GeometryProxy) -> some Gesture {
-        DragGesture(minimumDistance: 5, coordinateSpace: .global)
-            .updating($dragState) { value, state, transaction in
-                // 🔥 NEW: Use @GestureState for automatic state reset and smoother updates
-                state = value.translation
-                transaction.animation = .interactiveSpring()
-                
-                // Set dragging flag on first update
-                if !isDragging {
-                    DispatchQueue.main.async {
-                        isDragging = true
-                        lastPosition = position
-                        HapticManager.shared.impact(style: .light)
-                    }
-                }
-            }
-            .onEnded { value in
-                isDragging = false
-                
-                // Calculate final position
-                let finalX = lastPosition.x + value.translation.width
-                let finalY = lastPosition.y + value.translation.height
-                
-                // Keep within bounds
-                let halfWidth = playerSize.width / 2
-                let halfHeight = playerSize.height / 2
-                let minX = halfWidth + 10
-                let maxX = geometry.size.width - halfWidth - 10
-                let minY = halfHeight + 50
-                let maxY = geometry.size.height - halfHeight - 100
-                
-                // 🔥 YOUTUBE PARITY: Snap to nearest edge
-                let snapX: CGFloat
-                let snapY: CGFloat
-                
-                // Snap horizontally to left or right edge
-                let centerX = geometry.size.width / 2
-                if finalX < centerX {
-                    snapX = minX  // Snap to left
-                } else {
-                    snapX = maxX  // Snap to right
-                }
-                
-                // Check if user swiped down to dismiss
-                let verticalSwipe = abs(value.translation.height)
-                let horizontalSwipe = abs(value.translation.width)
-                
-                if verticalSwipe > 150 && value.translation.height > 0 && verticalSwipe > horizontalSwipe {
-                    // Swipe down to dismiss
-                    globalPlayer.closePlayer()
-                    HapticManager.shared.impact(style: .heavy)
-                    return
-                }
-                
-                // Check if user swiped up to expand
-                if verticalSwipe > 100 && value.translation.height < 0 && verticalSwipe > horizontalSwipe {
-                    // Swipe up to expand
-                    globalPlayer.expandPlayer()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        NotificationCenter.default.post(name: NSNotification.Name("PresentVideoDetailFromMiniPlayer"), object: nil)
-                    }
-                    HapticManager.shared.impact(style: .medium)
-                    return
-                }
-                
-                // Snap vertically (keep current Y or snap to top/bottom if near edges)
-                if finalY < minY + 50 {
-                    snapY = minY  // Snap to top
-                } else if finalY > maxY - 50 {
-                    snapY = maxY  // Snap to bottom
-                } else {
-                    snapY = max(minY, min(maxY, finalY))  // Keep within bounds
-                }
-                
-                // 🔥 OPTIMIZED: Animate to snapped position with smoother, longer animation (YouTube-style)
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7, blendDuration: 0.3)) {
-                    position = CGPoint(x: snapX, y: snapY)
-                    lastPosition = position
-                }
-                
-                HapticManager.shared.impact(style: .light)
-            }
-    }
+    // MARK: - Gesture Handling (YouTube-style swipe down only)
+    // Old free-floating gestures removed - now using YouTube-style bottom-anchored player
     
     // MARK: - Actions
     private func expandPlayer() {
@@ -807,69 +957,13 @@ struct FloatingMiniPlayer: View {
         HapticManager.shared.impact(style: .light)
     }
     
-    // MARK: - 🔥 YOUTUBE PARITY: Additional Gestures
-    
-    private var horizontalSwipeGesture: some Gesture {
-        DragGesture(minimumDistance: 30, coordinateSpace: .local)
-            .onEnded { value in
-                let horizontalDistance = value.translation.width
-                let verticalDistance = abs(value.translation.height)
-                
-                // Only process horizontal swipes (not vertical drags)
-                if abs(horizontalDistance) > verticalDistance {
-                    if horizontalDistance > 50 {
-                        // Swipe right - Previous video
-                        navigateToPreviousVideo()
-                    } else if horizontalDistance < -50 {
-                        // Swipe left - Next video
-                        navigateToNextVideo()
-                    }
-                }
-            }
+    // MARK: - Navigation Helpers (for future swipe gestures)
+    private func navigateToPreviousVideo() {
+        globalPlayer.playPreviousVideo()
     }
     
-    private var pinchToResizeGesture: some Gesture {
-        MagnificationGesture()
-            .onChanged { value in
-                if !isResizing {
-                    isResizing = true
-                    HapticManager.shared.impact(style: .light)
-                }
-                
-                let baseWidth: CGFloat = 140
-                let baseHeight: CGFloat = 78
-                let scale = min(max(0.7, value), 1.5) // Limit scaling between 70% and 150%
-                
-                playerSize = CGSize(
-                    width: baseWidth * scale,
-                    height: baseHeight * scale
-                )
-            }
-            .onEnded { _ in
-                isResizing = false
-                // Snap to nearest size
-                let baseWidth: CGFloat = 140
-                let baseHeight: CGFloat = 78
-                let currentScale = playerSize.width / baseWidth
-                
-                let targetScale: CGFloat
-                if currentScale < 0.85 {
-                    targetScale = 0.7 // Small
-                } else if currentScale > 1.15 {
-                    targetScale = 1.5 // Large
-                } else {
-                    targetScale = 1.0 // Normal
-                }
-                
-                // 🔥 OPTIMIZED: Smoother resize animation with blend duration
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8, blendDuration: 0.2)) {
-                    playerSize = CGSize(
-                        width: baseWidth * targetScale,
-                        height: baseHeight * targetScale
-                    )
-                }
-                HapticManager.shared.impact(style: .medium)
-            }
+    private func navigateToNextVideo() {
+        globalPlayer.playNextVideo()
     }
     
     // MARK: - 🔥 YOUTUBE PARITY: Enhanced Components
@@ -1047,7 +1141,7 @@ struct FloatingMiniPlayer: View {
             }
         } else if tapCount == 2 {
             // Double tap - expand to fullscreen
-            expandPlayer()
+            globalPlayer.expandPlayer()
         }
     }
     
@@ -1058,20 +1152,12 @@ struct FloatingMiniPlayer: View {
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             withAnimation(.easeInOut(duration: 0.2)) {
-                showingControls = false
+                self.showingControls = false
             }
         }
     }
     
-    // MARK: - 🔥 YOUTUBE PARITY: Navigation Functions
-    
-    private func navigateToPreviousVideo() {
-        globalPlayer.playPreviousVideo()
-    }
-    
-    private func navigateToNextVideo() {
-        globalPlayer.playNextVideo()
-    }
+    // MARK: - Navigation functions already declared above (removed duplicate)
 }
 
 #Preview {

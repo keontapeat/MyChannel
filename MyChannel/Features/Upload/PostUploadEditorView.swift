@@ -44,6 +44,9 @@ struct PostUploadEditorView: View {
                         // Privacy & Settings
                         privacySection
                         
+                        // 🔥 NEW: MyChannel University Section
+                        universitySection
+                        
                         // Danger Zone
                         dangerZoneSection
                     }
@@ -263,6 +266,174 @@ struct PostUploadEditorView: View {
                 icon: "18.circle",
                 isOn: $viewModel.ageRestricted
             )
+        }
+    }
+    
+    // MARK: - 🔥 NEW: MyChannel University Section
+    private var universitySection: some View {
+        VStack(spacing: 20) {
+            // Header
+            HStack(spacing: 12) {
+                Image(systemName: "graduationcap.fill")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(UniversityTheme.Colors.academicBlue)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("MyChannel University")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    
+                    Text("Help students earn certificates by tagging educational content")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                
+                Spacer()
+            }
+            
+            // University Content Toggle
+            ProfessionalToggleRow(
+                title: "University Content",
+                subtitle: "Tag this video for certificate-eligible learning",
+                icon: "checkmark.seal.fill",
+                isOn: $viewModel.isUniversityContent
+            )
+            
+            // Show career path selection if enabled
+            if viewModel.isUniversityContent {
+                VStack(spacing: 16) {
+                    // Career Paths Selection
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Select Career Paths")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                        
+                        Text("Which career fields does this video teach?")
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        
+                        // Career Path Pills
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
+                            ForEach(CareerPath.allCareerPaths, id: \.id) { careerPath in
+                                CareerPathPillButton(
+                                    careerPath: careerPath,
+                                    isSelected: viewModel.selectedCareerPaths.contains(careerPath.id)
+                                ) {
+                                    viewModel.toggleCareerPath(careerPath.id)
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Difficulty Level Selection
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Difficulty Level")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                        
+                        HStack(spacing: 10) {
+                            ForEach([UniversityVideo.DifficultyLevel.beginner, .intermediate, .advanced, .expert], id: \.self) { level in
+                                DifficultyLevelButton(
+                                    level: level,
+                                    isSelected: viewModel.selectedDifficultyLevel == level
+                                ) {
+                                    viewModel.selectedDifficultyLevel = level
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Skill Tags
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Skill Tags (Optional)")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                        
+                        Text("Add specific skills covered in this video")
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        
+                        // Skill tags input
+                        HStack(spacing: 8) {
+                            TextField("e.g. SwiftUI, Async/Await", text: $viewModel.newSkillTag)
+                                .font(.system(size: 15, weight: .regular))
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(AppTheme.Colors.surface)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .stroke(AppTheme.Colors.divider, lineWidth: 1)
+                                        )
+                                )
+                                .onSubmit {
+                                    viewModel.addSkillTag()
+                                }
+                            
+                            Button(action: { viewModel.addSkillTag() }) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 28, weight: .medium))
+                                    .foregroundColor(UniversityTheme.Colors.academicBlue)
+                            }
+                        }
+                        
+                        // Display added tags
+                        if !viewModel.universitySkillTags.isEmpty {
+                            FlowLayout(spacing: 8) {
+                                ForEach(viewModel.universitySkillTags, id: \.self) { tag in
+                                    HStack(spacing: 6) {
+                                        Text(tag)
+                                            .font(.system(size: 13, weight: .medium))
+                                        
+                                        Button(action: { viewModel.removeSkillTag(tag) }) {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 14, weight: .semibold))
+                                        }
+                                    }
+                                    .foregroundColor(UniversityTheme.Colors.academicBlue)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 7)
+                                    .background(
+                                        Capsule()
+                                            .fill(UniversityTheme.Colors.academicBlue.opacity(0.1))
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Benefits Info Card
+                    HStack(spacing: 12) {
+                        Image(systemName: "info.circle.fill")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(UniversityTheme.Colors.certificateGold)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Certificate-Eligible Content")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                            
+                            Text("Students watching this video can earn progress toward career certificates.")
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(UniversityTheme.Colors.certificateGold.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(UniversityTheme.Colors.certificateGold.opacity(0.2), lineWidth: 1.5)
+                            )
+                    )
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
     }
     

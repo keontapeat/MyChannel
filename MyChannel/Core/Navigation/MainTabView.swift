@@ -94,6 +94,14 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowUpload"))) { _ in
             showingUpload = true
         }
+        .onChange(of: globalPlayer.fullscreenRequestToken) { _ in
+            // Additional safety: always honor fullscreen requests from the mini player,
+            // even if a notification is missed.
+            guard globalPlayer.showingFullscreen else { return }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+                presentMiniPlayerDetail = true
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .scrollToTopProfile)) { _ in
             // Handle scroll to top for profile
         }
@@ -113,6 +121,14 @@ struct MainTabView: View {
                         .onAppear {
                             print("📺 [MainTabView] VideoDetailView appeared from mini player")
                             
+                            // 🔥 CRITICAL: Ensure fullscreen state is set IMMEDIATELY
+                            // This prevents mini player from showing
+                            globalPlayer.showingFullscreen = true
+                            globalPlayer.shouldShowMiniPlayer = false
+                            globalPlayer.isMiniplayer = false
+                            
+                            print("✅ [MainTabView] Fullscreen state set - showingFullscreen: \(globalPlayer.showingFullscreen), shouldShowMiniPlayer: \(globalPlayer.shouldShowMiniPlayer)")
+                            
                             // 🔥 FIX: Ensure player is properly set up BEFORE view appears
                             // This prevents white screen flash
                             if let player = globalPlayer.player {
@@ -123,11 +139,6 @@ struct MainTabView: View {
                                     print("▶️ [MainTabView] Resuming playback")
                                     player.play()
                                 }
-                                
-                                // Ensure fullscreen state is set correctly
-                                globalPlayer.showingFullscreen = true
-                                globalPlayer.shouldShowMiniPlayer = false
-                                globalPlayer.isMiniplayer = false
                             } else {
                                 print("⚠️ [MainTabView] Player is nil - setting up new player")
                                 // Player was lost - set it up again
@@ -146,24 +157,16 @@ struct MainTabView: View {
                         .onDisappear {
                             print("📺 [MainTabView] VideoDetailView disappeared")
                             
-                            // 🔥 FIX: When dismissing, ensure mini player is restored if video is still playing
-                            if globalPlayer.currentVideo != nil {
-                                let wasPlaying = globalPlayer.isPlaying
-                                
-                                // Restore mini player state
+                            // 🔥 FIX: Only restore mini player if user is actually dismissing (not going to fullscreen)
+                            // Check if we're still in fullscreen mode - if so, don't restore mini player
+                            if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen {
+                                // User dismissed fullscreen - restore mini player
                                 globalPlayer.showingFullscreen = false
-                                
-                                // Only show mini player if video was playing
-                                if wasPlaying {
-                                    globalPlayer.shouldShowMiniPlayer = true
-                                    globalPlayer.isMiniplayer = true
-                                    print("✅ [MainTabView] Restored mini player")
-                                } else {
-                                    // Video wasn't playing, don't show mini player
-                                    globalPlayer.shouldShowMiniPlayer = false
-                                    globalPlayer.isMiniplayer = false
-                                    print("✅ [MainTabView] Video not playing - mini player hidden")
-                                }
+                                globalPlayer.shouldShowMiniPlayer = true
+                                globalPlayer.isMiniplayer = true
+                                print("✅ [MainTabView] Restored mini player - video: \(globalPlayer.currentVideo?.title ?? "unknown")")
+                            } else if globalPlayer.showingFullscreen {
+                                print("📺 [MainTabView] Still in fullscreen - NOT restoring mini player")
                             }
                         }
                 }
@@ -336,10 +339,10 @@ struct MainTabView: View {
             .allowsHitTesting(true)
             
             // 🔥 FIX: Mini player ABOVE tab bar with higher z-index
+            // 🔥 FIX: Don't require player != nil - mini player can show thumbnail while player loads
             if globalPlayer.shouldShowMiniPlayer,
                !globalPlayer.showingFullscreen,
-               globalPlayer.currentVideo != nil,
-               globalPlayer.player != nil {
+               globalPlayer.currentVideo != nil {
                 SafeFloatingMiniPlayer()
                     .environmentObject(globalPlayer)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -348,7 +351,7 @@ struct MainTabView: View {
                     .zIndex(2000)
                     .animation(.easeInOut(duration: 0.25), value: globalPlayer.shouldShowMiniPlayer)
                     .onAppear {
-                        print("✅ [MainTabView] Mini player appeared - shouldShow: \(globalPlayer.shouldShowMiniPlayer), isMini: \(globalPlayer.isMiniplayer)")
+                        print("✅ [MainTabView] Mini player appeared - shouldShow: \(globalPlayer.shouldShowMiniPlayer), isMini: \(globalPlayer.isMiniplayer), player exists: \(globalPlayer.player != nil)")
                     }
                     .onDisappear {
                         print("⚠️ [MainTabView] Mini player disappeared - shouldShow: \(globalPlayer.shouldShowMiniPlayer), isMini: \(globalPlayer.isMiniplayer)")

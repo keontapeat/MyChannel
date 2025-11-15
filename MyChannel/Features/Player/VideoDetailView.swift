@@ -218,6 +218,11 @@ struct VideoDetailView: View {
         if playerManager.isLoading {
             loadingIndicator
         }
+        
+        // 🔥 FIX: Error overlay (shows when video fails to load)
+        if playerManager.hasError, let errorMsg = playerManager.errorMessage {
+            errorOverlay(message: errorMsg)
+        }
     }
     
     @ViewBuilder
@@ -744,6 +749,55 @@ struct VideoDetailView: View {
     }
     
     @ViewBuilder
+    private func errorOverlay(message: String) -> some View {
+        ZStack {
+            // Background overlay
+            Color.black.opacity(0.8)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 20) {
+                // Error icon
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 48, weight: .semibold))
+                    .foregroundColor(.red)
+                
+                // Error message
+                VStack(spacing: 8) {
+                    Text("Video Error")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.white)
+                    
+                    Text(message)
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundColor(.white.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+                
+                // Retry button
+                Button(action: {
+                    // Retry loading video
+                    playerManager.hasError = false
+                    playerManager.errorMessage = nil
+                    playerManager.setupPlayer(with: video)
+                }) {
+                    Text("Retry")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(
+                            Capsule()
+                                .fill(AppTheme.Colors.primary)
+                        )
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .zIndex(200)
+    }
+    
+    @ViewBuilder
     private func debugHUDView(stats: VideoPlayerManager.PlaybackStats) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("⚙️ Debug HUD").font(.caption2).bold().foregroundColor(.white)
@@ -1101,8 +1155,9 @@ struct VideoDetailView: View {
                    globalPlayer.currentVideo?.id != video.id {
                     playerManager.performCleanup()
                 }
-                // Always show mini player when leaving detail if video still active
-                if globalPlayer.currentVideo != nil {
+                // 🔥 FIX: Only show mini player if NOT going to fullscreen AND not transitioning
+                // If user tapped full-screen button, they want fullscreen, not mini player
+                if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen && !globalPlayer.isTransitioning {
                     globalPlayer.minimizePlayer()
                     globalPlayer.ensurePlayerAttached()
                 }
@@ -1300,6 +1355,7 @@ struct VideoDetailView: View {
         showingFullscreenOverlay = true
     }
 
+    @MainActor
     private func minimizeToMiniPlayer() {
         print("🔄 [VideoDetailView] Minimizing to mini player")
         print("📊 [VideoDetailView] Current state - shouldShow: \(globalPlayer.shouldShowMiniPlayer), isMini: \(globalPlayer.isMiniplayer), fullscreen: \(globalPlayer.showingFullscreen)")
@@ -1311,73 +1367,28 @@ struct VideoDetailView: View {
         // Set state BEFORE dismissing to prevent race conditions
         let wasPlaying = playerManager.isPlaying
         globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
-        
-        // 🔥 FIX: Explicitly ensure mini player is shown immediately (multiple times to ensure it sticks)
-        globalPlayer.shouldShowMiniPlayer = true
-        globalPlayer.isMiniplayer = true
-        globalPlayer.showingFullscreen = false
+        enforceMiniPlayerStateIfNeeded(wasPlaying: wasPlaying, reason: "Initial minimize state")
         
         // 🔥 CRITICAL: Ensure player is playing AFTER adoption
         DispatchQueue.main.async {
-            // Set state
-            self.globalPlayer.shouldShowMiniPlayer = true
-            self.globalPlayer.isMiniplayer = true
-            self.globalPlayer.showingFullscreen = false
-            
-            // Ensure player is attached and playing
-            if let player = self.globalPlayer.player {
-                print("✅ [VideoDetailView] Player found after adoption - rate: \(player.rate)")
-                if wasPlaying && player.rate == 0 {
-                    print("▶️ [VideoDetailView] Resuming playback in mini player")
-                    player.play()
-                    self.globalPlayer.isPlaying = true
-                }
-            } else {
-                print("⚠️ [VideoDetailView] Player not found after adoption - checking playerManager")
-                // Fallback: check playerManager directly
-                if let manager = self.globalPlayer.exposedPlayerManager, let player = manager.player {
-                    print("✅ [VideoDetailView] Found player via exposedPlayerManager - rate: \(player.rate)")
-                    if wasPlaying && player.rate == 0 {
-                        print("▶️ [VideoDetailView] Resuming playback via manager")
-                        player.play()
-                        self.globalPlayer.isPlaying = true
-                    }
-                } else {
-                    print("🚨 [VideoDetailView] No player found - mini player will show thumbnail")
-                }
-            }
-            
-            print("✅ [VideoDetailView] Mini player state set - shouldShow: \(self.globalPlayer.shouldShowMiniPlayer), isMini: \(self.globalPlayer.isMiniplayer)")
+            self.enforceMiniPlayerStateIfNeeded(wasPlaying: wasPlaying, reason: "Immediate verification")
         }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            self.globalPlayer.shouldShowMiniPlayer = true
-            self.globalPlayer.isMiniplayer = true
-            self.globalPlayer.showingFullscreen = false
-            
-            // Double-check player is playing
-            if let player = self.globalPlayer.player, wasPlaying, player.rate == 0 {
-                print("▶️ [VideoDetailView] Resuming playback at 0.1s")
-                player.play()
-                self.globalPlayer.isPlaying = true
-            }
-            
-            print("✅ [VideoDetailView] Mini player state verified at 0.1s")
+            self.enforceMiniPlayerStateIfNeeded(wasPlaying: wasPlaying, reason: "0.1s verification")
         }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            if !self.globalPlayer.shouldShowMiniPlayer || !self.globalPlayer.isMiniplayer {
-                print("⚠️ [VideoDetailView] Mini player state LOST - RESTORING")
-                self.globalPlayer.shouldShowMiniPlayer = true
-                self.globalPlayer.isMiniplayer = true
-                self.globalPlayer.showingFullscreen = false
+            guard !self.globalPlayer.showingFullscreen else {
+                print("⛔️ [VideoDetailView] Skipping mini player restore (0.5s) because fullscreen requested")
+                return
             }
             
-            // Final check - ensure playback
-            if let player = self.globalPlayer.player, wasPlaying, player.rate == 0 {
-                print("▶️ [VideoDetailView] Final playback resume at 0.5s")
-                player.play()
-                self.globalPlayer.isPlaying = true
+            if !self.globalPlayer.shouldShowMiniPlayer || !self.globalPlayer.isMiniplayer {
+                print("⚠️ [VideoDetailView] Mini player state LOST - RESTORING")
+                self.enforceMiniPlayerStateIfNeeded(wasPlaying: wasPlaying, reason: "0.5s restore")
+            } else {
+                self.resumeMiniPlayerPlaybackIfNeeded(wasPlaying: wasPlaying, reason: "0.5s playback check")
             }
         }
         
@@ -1386,15 +1397,50 @@ struct VideoDetailView: View {
         
         // Double-check after dismissal to ensure state persists
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            if globalPlayer.currentVideo != nil {
-                globalPlayer.shouldShowMiniPlayer = true
-                globalPlayer.isMiniplayer = true
-                if let player = globalPlayer.player, wasPlaying, player.rate == 0 {
-                    print("▶️ [VideoDetailView] Resuming playback after dismissal")
-                    player.play()
-                    globalPlayer.isPlaying = true
-                }
+            guard !self.globalPlayer.showingFullscreen else {
+                print("⛔️ [VideoDetailView] Skipping post-dismiss restore because fullscreen requested")
+                return
             }
+            
+            if self.globalPlayer.currentVideo != nil {
+                self.enforceMiniPlayerStateIfNeeded(wasPlaying: wasPlaying, reason: "Post-dismiss verification")
+            }
+        }
+    }
+
+    @MainActor
+    private func enforceMiniPlayerStateIfNeeded(wasPlaying: Bool, reason: String) {
+        if globalPlayer.showingFullscreen {
+            print("⛔️ [VideoDetailView] Skipping mini player enforcement (\(reason)) because fullscreen requested")
+            return
+        }
+        
+        globalPlayer.shouldShowMiniPlayer = true
+        globalPlayer.isMiniplayer = true
+        globalPlayer.showingFullscreen = false
+        
+        resumeMiniPlayerPlaybackIfNeeded(wasPlaying: wasPlaying, reason: reason)
+        print("✅ [VideoDetailView] Mini player state confirmed (\(reason))")
+    }
+    
+    @MainActor
+    private func resumeMiniPlayerPlaybackIfNeeded(wasPlaying: Bool, reason: String) {
+        guard wasPlaying else { return }
+        
+        if let player = globalPlayer.player {
+            if player.rate == 0 {
+                print("▶️ [VideoDetailView] Resuming playback via global player (\(reason))")
+                player.play()
+                globalPlayer.isPlaying = true
+            }
+        } else if let manager = globalPlayer.exposedPlayerManager, let player = manager.player {
+            print("✅ [VideoDetailView] Using exposed player manager to resume playback (\(reason))")
+            if player.rate == 0 {
+                player.play()
+            }
+            globalPlayer.isPlaying = true
+        } else {
+            print("🚨 [VideoDetailView] Unable to resume playback (\(reason)) - no player available")
         }
     }
 
@@ -1471,10 +1517,8 @@ struct VideoDetailView: View {
             }
         }
 
-        // Consider prompting for review after successful completion
-        if let uid = AppState.shared.currentUser?.id {
-            Task { await ReviewGateService.shared.checkEligibilityAndPrompt(userId: uid) }
-        }
+        // 🔥 REMOVED: Rating popup - too annoying for users
+        // Users can rate the app manually from Settings if they want
     }
 
     private func playNext(_ next: Video) {

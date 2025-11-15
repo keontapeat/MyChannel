@@ -13,6 +13,7 @@ import FirebaseFirestore
 struct ProfileView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @EnvironmentObject private var appState: AppState
+    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared // 🔥 FIX: Access global player to hide mini player
 
     @State private var selectedTab: ProfileTab = .videos
     @State private var showingSettings: Bool = false
@@ -71,7 +72,26 @@ struct ProfileView: View {
                 profileContent
             }
         }
-        .onAppear { loadProfileSafely() }
+        .onAppear {
+            loadProfileSafely()
+            
+            // 🔥 FIX: Hide mini player when viewing your own profile page
+            // YouTube-style: mini player shouldn't show on profile/settings/upload pages
+            if globalPlayer.shouldShowMiniPlayer {
+                print("🎥 [ProfileView] Hiding mini player on profile page")
+                globalPlayer.shouldShowMiniPlayer = false
+                globalPlayer.isMiniplayer = false
+            }
+        }
+        .onDisappear {
+            // 🔥 FIX: Restore mini player when leaving profile page (if video is still playing)
+            if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen {
+                print("🎥 [ProfileView] Restoring mini player when leaving profile page")
+                globalPlayer.shouldShowMiniPlayer = true
+                globalPlayer.isMiniplayer = true
+                globalPlayer.ensurePlayerAttached()
+            }
+        }
         .onChange(of: authManager.currentUser) { newUser in
             handleUserChange(newUser)
         }
@@ -118,6 +138,15 @@ struct ProfileView: View {
                 videoToAnalyze = video
                 showingVideoAnalytics = true
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("VideoViewCountUpdated"))) { notification in
+            guard
+                let userInfo = notification.userInfo,
+                let videoId = userInfo["videoId"] as? String,
+                let latestCount = userInfo["viewCount"] as? Int
+            else { return }
+            
+            handleVideoViewCountUpdate(videoId: videoId, latestCount: latestCount)
         }
         .fullScreenCover(isPresented: $showingVideoAnalytics) {
             if let video = videoToAnalyze {
@@ -592,41 +621,8 @@ struct ProfileView: View {
                     hasMoreVideos = false
                 }
                 
-                // 🔥 REAL-TIME STATS UPDATE: Update user stats based on ACTUAL videos only
-                // Ensure video count matches EXACTLY what's displayed - no mock data
-                let actualVideoCount = userVideos.count // Use userVideos, not vids, to ensure accuracy
-                let totalViews = userVideos.reduce(0) { $0 + $1.viewCount }
-                
-                let updatedUser = User(
-                    id: user.id,
-                    username: user.username,
-                    displayName: user.displayName,
-                    email: user.email,
-                    profileImageURL: user.profileImageURL,
-                    bannerImageURL: user.bannerImageURL,
-                    bio: user.bio,
-                    subscriberCount: user.subscriberCount,
-                    videoCount: actualVideoCount, // 🔥 EXACT COUNT - matches userVideos.count
-                    isVerified: user.isVerified,
-                    isCreator: user.isCreator,
-                    createdAt: user.createdAt,
-                    location: user.location,
-                    website: user.website,
-                    socialLinks: user.socialLinks,
-                    followerCount: user.followerCount,
-                    followingCount: user.followingCount,
-                    joinDate: user.joinDate,
-                    totalViews: totalViews, // 🔥 REAL TOTAL VIEWS from actual videos
-                    totalEarnings: user.totalEarnings,
-                    membershipTiers: user.membershipTiers,
-                    bannerVideoURL: user.bannerVideoURL,
-                    bannerVideoMuted: user.bannerVideoMuted,
-                    bannerVideoContentMode: user.bannerVideoContentMode
-                )
-                user = updatedUser
-                
-                // Update AppState with new stats
-                appState.currentUser = updatedUser
+                // 🔥 REAL-TIME STATS UPDATE
+                recalculateUserStats(propagateGlobalState: true)
                 
                 // Fetch watch history from Firestore
                 if let uid = authManager.currentUser?.id {
@@ -641,6 +637,28 @@ struct ProfileView: View {
         }
     }
 
+    private func recalculateUserStats(propagateGlobalState: Bool = false) {
+        let actualVideoCount = userVideos.count
+        let totalViews = userVideos.reduce(0) { $0 + $1.viewCount }
+        let updatedUser = user.updating(videoCount: actualVideoCount, totalViews: totalViews)
+        applyUpdatedUser(updatedUser, propagateGlobalState: propagateGlobalState)
+    }
+    
+    private func applyUpdatedUser(_ updatedUser: User, propagateGlobalState: Bool) {
+        user = updatedUser
+        
+        guard propagateGlobalState else { return }
+        appState.currentUser = updatedUser
+    }
+    
+    private func handleVideoViewCountUpdate(videoId: String, latestCount: Int) {
+        guard let index = userVideos.firstIndex(where: { $0.id == videoId }) else { return }
+        guard userVideos[index].viewCount != latestCount else { return }
+        
+        userVideos[index].viewCount = latestCount
+        recalculateUserStats()
+    }
+    
     // REMOVED: createFallbackVideos() - No more mock/fallback videos
     // Only show real videos the user has actually posted
 
@@ -675,35 +693,7 @@ struct ProfileView: View {
                         hasMoreVideos = false
                     }
                     
-                    // Update user stats to match actual video count
-                    var updatedUser = newUser
-                    updatedUser = User(
-                        id: newUser.id,
-                        username: newUser.username,
-                        displayName: newUser.displayName,
-                        email: newUser.email,
-                        profileImageURL: newUser.profileImageURL,
-                        bannerImageURL: newUser.bannerImageURL,
-                        bio: newUser.bio,
-                        subscriberCount: newUser.subscriberCount,
-                        videoCount: userVideos.count, // 🔥 EXACT COUNT
-                        isVerified: newUser.isVerified,
-                        isCreator: newUser.isCreator,
-                        createdAt: newUser.createdAt,
-                        location: newUser.location,
-                        website: newUser.website,
-                        socialLinks: newUser.socialLinks,
-                        followerCount: newUser.followerCount,
-                        followingCount: newUser.followingCount,
-                        joinDate: newUser.joinDate,
-                        totalViews: userVideos.reduce(0) { $0 + $1.viewCount }, // 🔥 REAL TOTAL VIEWS
-                        totalEarnings: newUser.totalEarnings,
-                        membershipTiers: newUser.membershipTiers,
-                        bannerVideoURL: newUser.bannerVideoURL,
-                        bannerVideoMuted: newUser.bannerVideoMuted,
-                        bannerVideoContentMode: newUser.bannerVideoContentMode
-                    )
-                    user = updatedUser
+                    recalculateUserStats()
                     watchHistory = []
                 }
             } else {
@@ -830,8 +820,32 @@ struct ProfileView: View {
                         }
                         .padding(.horizontal)
                         
-                        // History Section (commented out due to scope issues)
-                        // History content would go here
+                        // 🔥 HISTORY SECTION - Full YouTube Parity
+                        NavigationLink(destination: WatchHistoryView()) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                Text("History")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                            }
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(AppTheme.Colors.surface)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
+                            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+                        }
+                        .padding(.horizontal)
                     }
                     .padding(.bottom, 24)
                 } header: {

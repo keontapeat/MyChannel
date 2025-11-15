@@ -17,6 +17,7 @@ struct UploadView: View {
     @StateObject private var uploadManager = VideoUploadManager()
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
+    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared // 🔥 FIX: Access global player to hide mini player
     
     @State private var uploadStep: UploadStep = .selectMedia
     @State private var creationMode: CreationMode = .video
@@ -357,6 +358,24 @@ struct UploadView: View {
             if let url = note.object as? URL {
                 proEditorVideoURL = url
                 showProEditor = true
+            }
+        }
+        .onAppear {
+            // 🔥 FIX: Hide mini player when viewing upload page
+            // YouTube-style: mini player shouldn't show on profile/settings/upload pages
+            if globalPlayer.shouldShowMiniPlayer {
+                print("🎥 [UploadView] Hiding mini player on upload page")
+                globalPlayer.shouldShowMiniPlayer = false
+                globalPlayer.isMiniplayer = false
+            }
+        }
+        .onDisappear {
+            // 🔥 FIX: Restore mini player when leaving upload page (if video is still playing)
+            if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen {
+                print("🎥 [UploadView] Restoring mini player when leaving upload page")
+                globalPlayer.shouldShowMiniPlayer = true
+                globalPlayer.isMiniplayer = true
+                globalPlayer.ensurePlayerAttached()
             }
         }
     }

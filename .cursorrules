@@ -7551,9 +7551,12 @@ struct FloatingMiniPlayer: View {
     @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
     
     var body: some View {
+        // 🔥 CRITICAL: Only show mini player if ALL conditions are met
+        // Must check showingFullscreen FIRST to prevent showing when going fullscreen
         if let video = globalPlayer.currentVideo,
+           !globalPlayer.showingFullscreen,  // Check fullscreen FIRST
            globalPlayer.shouldShowMiniPlayer,
-           !globalPlayer.showingFullscreen,
+           !globalPlayer.isTransitioning,  // Don't show during transitions
            !globalPlayer.isCleanedUp,
            globalPlayer.player != nil {  // Ensure player exists
             
@@ -7576,6 +7579,191 @@ func playVideo(_ video: Video, showFullscreen: Bool = true) {
     }
 }
 ```
+
+### Fullscreen Expansion Fix (Prevent Mini Player Reappearing)
+
+```swift
+// ✅ CORRECT: Set state IMMEDIATELY before presenting fullscreen
+func expandPlayer() {
+    guard let video = currentVideo, !isCleanedUp else { return }
+    
+    // 🔥 CRITICAL: Hide mini player IMMEDIATELY before doing anything else
+    // Set state synchronously to ensure mini player disappears instantly
+    showingFullscreen = true
+    isMiniplayer = false
+    shouldShowMiniPlayer = false
+    
+    // Then proceed with fullscreen presentation
+    presentFullscreenVideo()
+}
+
+// ✅ CORRECT: VideoDetailView onDisappear - only minimize if NOT going fullscreen
+.onDisappear {
+    // 🔥 FIX: Only show mini player if NOT going to fullscreen
+    if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen {
+        globalPlayer.minimizePlayer()
+        globalPlayer.ensurePlayerAttached()
+    }
+}
+
+// ✅ CORRECT: MainTabView fullScreenCover onDisappear - only restore if dismissed
+.onDisappear {
+    // 🔥 FIX: Only restore mini player if user is actually dismissing (not going to fullscreen)
+    if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen {
+        globalPlayer.showingFullscreen = false
+        globalPlayer.shouldShowMiniPlayer = true
+        globalPlayer.isMiniplayer = true
+    }
+}
+```
+
+---
+
+## 🎬 MINI-PLAYER ANIMATION PATTERNS (CRITICAL!)
+
+### ⚠️ **CRITICAL: Single Animation Only**
+
+**The mini player animation must play ONCE, not multiple times. Users expect a clean, single animation when the mini player appears.**
+
+### ✅ **CORRECT: Single Animation Pattern**
+
+```swift
+// ✅ CORRECT: Prevent multiple animations with transition flag
+func minimizePlayer() {
+    guard currentVideo != nil, !isCleanedUp else { return }
+    
+    // 🔥 ANIMATION FIX: Prevent multiple calls from triggering multiple animations
+    guard !shouldShowMiniPlayer || isTransitioning else {
+        print("⚠️ Mini player already showing - skipping duplicate minimize")
+        return
+    }
+    
+    Task { @MainActor in
+        // 🔥 ANIMATION FIX: Set transition flag FIRST to prevent animation from triggering
+        isTransitioning = true
+        
+        // Small delay to ensure transition flag is set before showing mini player
+        try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
+        
+        showingFullscreen = false
+        isMiniplayer = true
+        shouldShowMiniPlayer = true
+        
+        // Mark transition complete after animation duration
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self, !self.isCleanedUp else { return }
+            self.isTransitioning = false
+        }
+    }
+}
+```
+
+### ✅ **CORRECT: Mini Player View with Single Animation**
+
+```swift
+struct FloatingMiniPlayer: View {
+    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
+    
+    // 🔥 ANIMATION FIX: Track if animation has been shown to prevent multiple animations
+    @State private var hasShownAnimation = false
+    @State private var lastVideoId: String? = nil
+    
+    var body: some View {
+        Group {
+            // 🔥 CRITICAL: Only show mini player if ALL conditions are met
+            // Must check showingFullscreen FIRST to prevent showing when going fullscreen
+            if let video = globalPlayer.currentVideo,
+               !globalPlayer.showingFullscreen,  // Check fullscreen FIRST
+               globalPlayer.shouldShowMiniPlayer,
+               !globalPlayer.isTransitioning {  // Don't show during transitions
+                
+                // Mini player UI
+                youtubeStyleMiniPlayer(video: video, geometry: geometry)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .move(edge: .bottom).combined(with: .opacity)
+                    ))
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: globalPlayer.shouldShowMiniPlayer)
+            }
+        }
+        .onAppear {
+            // 🔥 ANIMATION FIX: Only show animation once per video
+            let currentVideoId = globalPlayer.currentVideo?.id
+            if currentVideoId != lastVideoId {
+                // New video - reset animation flag
+                hasShownAnimation = false
+                lastVideoId = currentVideoId
+            }
+        }
+    }
+}
+```
+
+### ❌ **WRONG: Multiple Animations**
+
+```swift
+// ❌ WRONG: Multiple state changes trigger multiple animations
+func minimizePlayer() {
+    shouldShowMiniPlayer = true  // Animation 1
+    isMiniplayer = true          // Animation 2
+    showingFullscreen = false    // Animation 3
+    // Result: Animation plays 3 times! 😱
+}
+
+// ❌ WRONG: No transition flag check
+func minimizePlayer() {
+    // No guard to prevent duplicate calls
+    shouldShowMiniPlayer = true  // Can be called multiple times!
+}
+```
+
+### Mini Player Animation Rules
+
+1. **Set `isTransitioning = true` FIRST** - Before any state changes
+2. **Use guard to prevent duplicate calls** - Check if already showing
+3. **Single transition animation** - Use `.transition(.asymmetric(...))` with `.animation()` modifier
+4. **Track animation per video** - Reset flag when video changes
+5. **Check `isTransitioning` in view** - Don't show mini player during transitions
+6. **Animation duration**: 0.4-0.5 seconds (spring response: 0.4, damping: 0.8)
+7. **Transition type**: `.move(edge: .bottom).combined(with: .opacity)` for fly-down effect
+
+### Animation Timing
+
+```swift
+// ✅ CORRECT: Proper timing sequence
+1. Set isTransitioning = true (immediately)
+2. Small delay (0.05s) to ensure flag is set
+3. Set shouldShowMiniPlayer = true (triggers animation)
+4. Wait for animation (0.5s)
+5. Set isTransitioning = false (allows interaction)
+```
+
+### State Management for Animations
+
+```swift
+// ✅ CORRECT: State flags for animation control
+@Published var isTransitioning = false  // Prevents multiple animations
+@Published var shouldShowMiniPlayer = false  // Controls visibility
+@Published var showingFullscreen = false  // Prevents showing when fullscreen
+
+// In FloatingMiniPlayer:
+@State private var hasShownAnimation = false  // Track per video
+@State private var lastVideoId: String? = nil  // Track video changes
+```
+
+### Common Animation Issues & Fixes
+
+**Issue**: Animation plays 2-3 times rapidly
+- **Fix**: Add `isTransitioning` flag check and guard against duplicate calls
+
+**Issue**: Animation doesn't play at all
+- **Fix**: Ensure `isTransitioning` is set to `false` after animation completes
+
+**Issue**: Animation plays when going fullscreen
+- **Fix**: Check `showingFullscreen` FIRST in view condition
+
+**Issue**: Animation plays multiple times for same video
+- **Fix**: Track `lastVideoId` and reset animation flag only on video change
 
 ---
 
