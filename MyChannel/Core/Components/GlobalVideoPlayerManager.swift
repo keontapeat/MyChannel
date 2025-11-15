@@ -169,23 +169,11 @@ class GlobalVideoPlayerManager: ObservableObject {
         guard shouldShowMiniPlayer,
               currentVideo != nil,
               let player = player,
-              player.rate > 0 else {
-            return
-        }
+              player.rate > 0 else { return }
+        if isPiPActive { return }
         
-        // Check if PiP is already active
-        if isPiPActive {
-            return
-        }
-        
-        // Try to get the player layer from the PiP container view
-        // Note: PiP is handled by PlayerPiPContainerView which has its own controller
-        // We just need to trigger it via the binding
-        if !isPiPActive {
-            // The PiP will be activated by the PlayerPiPContainerView when isPiPActive is set to true
-            // But we need the player layer, so we'll rely on the VideoDetailView's PiP container
-            print("📺 [GlobalVideoPlayerManager] PiP should be handled by PlayerPiPContainerView")
-        }
+        print("📺 [GlobalVideoPlayerManager] Auto-starting PiP while backgrounding")
+        isPiPActive = true
     }
     
     deinit {
@@ -247,10 +235,7 @@ class GlobalVideoPlayerManager: ObservableObject {
         if playerManager == nil { setupPlayerManager() }
         if let cv = currentVideo, playerManager?.player == nil {
             playerManager?.setupPlayer(with: cv)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                self?.playerManager?.play()
-                self?.isPlaying = true
-            }
+            playerManager?.requestAutoPlay()
         }
     }
     
@@ -391,6 +376,7 @@ class GlobalVideoPlayerManager: ObservableObject {
         }
         
         playerManager?.setupPlayer(with: video)
+        playerManager?.requestAutoPlay()
         
         // Default behavior – show mini when not fullscreen
         showingFullscreen = showFullscreen
@@ -400,15 +386,6 @@ class GlobalVideoPlayerManager: ObservableObject {
         // 🔥 REAL-TIME VIEW TRACKING: Start tracking this view
         Task {
             await startViewTracking(for: video)
-        }
-        
-        // 🔥 AUTO-PLAY: Videos auto-play when opened (like YouTube)
-        // View counting happens in VideoPlayerManager.play() - tracks ONCE per video
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            guard let self = self else { return }
-            self.playerManager?.play()  // Auto-play the video
-            self.isPlaying = true
-            print("▶️ [GlobalVideoPlayerManager] Auto-playing video")
         }
         
         // Add haptic feedback
@@ -429,11 +406,7 @@ class GlobalVideoPlayerManager: ObservableObject {
         
         stopImmediately()
         playerManager?.setupPlayer(with: nextVideo)
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            guard let self = self, !self.isCleanedUp else { return }
-            self.playerManager?.play()
-        }
+        playerManager?.requestAutoPlay()
         
         HapticManager.shared.impact(style: .medium)
         print("▶️ [GlobalVideoPlayerManager] Playing next video: \(nextVideo.title)")
@@ -452,11 +425,7 @@ class GlobalVideoPlayerManager: ObservableObject {
         
         stopImmediately()
         playerManager?.setupPlayer(with: previousVideo)
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            guard let self = self, !self.isCleanedUp else { return }
-            self.playerManager?.play()
-        }
+        playerManager?.requestAutoPlay()
         
         HapticManager.shared.impact(style: .medium)
         print("◀️ [GlobalVideoPlayerManager] Playing previous video: \(previousVideo.title)")

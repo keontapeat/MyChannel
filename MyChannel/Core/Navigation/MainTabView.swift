@@ -49,6 +49,19 @@ struct MainTabView: View {
             } else {
                 mainContent
                     .environmentObject(globalPlayer)
+                    .overlay(alignment: .topLeading) {
+                        if let player = globalPlayer.player {
+                            PlayerPiPContainerView(
+                                player: player,
+                                isPictureInPictureActive: Binding(
+                                    get: { globalPlayer.isPiPActive },
+                                    set: { globalPlayer.isPiPActive = $0 }
+                                )
+                            )
+                            .frame(width: 0, height: 0)
+                            .hidden()
+                        }
+                    }
             }
         }
         .onAppear {

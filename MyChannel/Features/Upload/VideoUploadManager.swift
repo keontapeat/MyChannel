@@ -263,6 +263,10 @@ class VideoUploadManager: ObservableObject {
                         print("✅ Creator Studio analytics auto-updated for video: \(uploadedVideo.title)")
                     }
                 }
+                
+                Task {
+                    await VideoPlaybackReadinessService.shared.prepareForPlayback(video: uploadedVideo)
+                }
             }
             // Upload captions/dubs if any were attached
             if let uploadedVideo {

@@ -1016,7 +1016,7 @@ struct VideoDetailView: View {
                                 playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
                                 videoQuality = AppState.shared.preferredVideoQuality
                             }
-                            playerManager.play()
+                            playerManager.requestAutoPlay()
                             return
                         }
                         
@@ -1029,7 +1029,7 @@ struct VideoDetailView: View {
                                 playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
                                 videoQuality = AppState.shared.preferredVideoQuality
                             }
-                            playerManager.play()
+                            playerManager.requestAutoPlay()
                             return
                         }
                         
@@ -1064,7 +1064,7 @@ struct VideoDetailView: View {
                                     playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
                                     videoQuality = AppState.shared.preferredVideoQuality
                                 }
-                                playerManager.play()
+                                playerManager.requestAutoPlay()
                             }
                         } else {
                             print("❌ No ads available - playing video directly")
@@ -1075,7 +1075,7 @@ struct VideoDetailView: View {
                                 playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
                                 videoQuality = AppState.shared.preferredVideoQuality
                             }
-                            playerManager.play()
+                            playerManager.requestAutoPlay()
                         }
                     }
                     // Log watch start to history

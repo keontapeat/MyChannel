@@ -26,7 +26,7 @@ class VideoPlayerManager: ObservableObject {
     
     private var timeObserver: Any?
     private var playerStateObserver: NSKeyValueObservation?  // 🔥 NEW: KVO for play/pause accuracy
-    private var statusObserver: NSKeyValueObservation?  // 🔥 NEW: KVO for preroll readiness
+    private var statusObserver: NSKeyValueObservation?  // 🔥 NEW: KVO for preroll readiness + autoplay
     private var cancellables = Set<AnyCancellable>()
     private var currentVideo: Video?
     private var isCleanedUp = false
@@ -34,6 +34,9 @@ class VideoPlayerManager: ObservableObject {
     private var midrollServed: Bool = false
     private var imageGenerator: AVAssetImageGenerator?
     private var hasTrackedView = false  // 🔥 FIX: Track view ONCE per video
+    private var pendingAutoPlay = false
+    private var autoPlayTask: Task<Void, Never>?
+    private var hasRequestedPreroll = false
 
     // MARK: - Lightweight LRU Cache for AVPlayerItem and Session Resume
     private static var itemCache: [String: AVPlayerItem] = [:]
@@ -113,6 +116,10 @@ class VideoPlayerManager: ObservableObject {
         playerStateObserver = nil
         statusObserver?.invalidate()
         statusObserver = nil
+        autoPlayTask?.cancel()
+        autoPlayTask = nil
+        pendingAutoPlay = false
+        hasRequestedPreroll = false
         
         // Pause and clear player
         player?.pause()
@@ -159,6 +166,10 @@ class VideoPlayerManager: ObservableObject {
         print("📊 [VideoPlayerManager] Video ID: \(video.id)")
         print("👤 [VideoPlayerManager] Creator: \(video.creator.displayName)")
         print("📹 [VideoPlayerManager] Content Source: \(video.contentSource?.rawValue ?? "userUploaded")")
+        
+        pendingAutoPlay = true
+        hasRequestedPreroll = false
+        scheduleAutoPlayFallback()
         
         // 🔥 FIX: Use simple AVPlayer for non-DRM content (uploaded videos)
         guard let url = URL(string: video.videoURL) else {
@@ -209,6 +220,7 @@ class VideoPlayerManager: ObservableObject {
                     return
                 }
                 setupPlayerCommon(player: player)
+                installReadyObserver(on: player)
             }
         } else {
             // 🔥 YOUTUBE-LEVEL OPTIMIZATION: Enhanced player setup
@@ -247,25 +259,7 @@ class VideoPlayerManager: ObservableObject {
             await MainActor.run {
                 self.player = player
                 setupPlayerCommon(player: player)
-            }
-            
-            // 🔥 PRELOAD: Wait for player to be ready, then start buffering
-            // Observe player status and preroll when ready
-            let statusObserver = player.observe(\.status, options: [.new]) { player, _ in
-                if player.status == .readyToPlay {
-                    player.preroll(atRate: 1.0) { success in
-                        if success {
-                            print("✅ [Preload] Video buffered successfully")
-                        } else {
-                            print("⚠️ [Preload] Video buffering incomplete")
-                        }
-                    }
-                }
-            }
-            
-            // Store observer to prevent premature deallocation
-            await MainActor.run {
-                self.statusObserver = statusObserver
+                installReadyObserver(on: player)
             }
         }
     }
@@ -314,6 +308,63 @@ class VideoPlayerManager: ObservableObject {
         Task {
             if let playerItem = player.currentItem {
                 await loadAssetProperties(for: playerItem.asset)
+            }
+        }
+    }
+    
+    private func installReadyObserver(on player: AVPlayer) {
+        statusObserver?.invalidate()
+        statusObserver = player.observe(\.status, options: [.new]) { [weak self] player, _ in
+            guard let self = self else { return }
+            Task { @MainActor in
+                self.handlePlayerReady(player: player)
+            }
+        }
+    }
+    
+    private func handlePlayerReady(player: AVPlayer) {
+        startPrebufferIfNeeded(on: player)
+        autoPlayIfNeeded(reason: "playerReady")
+    }
+    
+    private func startPrebufferIfNeeded(on player: AVPlayer) {
+        guard !hasRequestedPreroll else { return }
+        hasRequestedPreroll = true
+        player.preroll(atRate: 1.0) { success in
+            if success {
+                print("✅ [Preload] Video buffered successfully")
+            } else {
+                print("⚠️ [Preload] Video buffering incomplete")
+            }
+        }
+    }
+    
+    func requestAutoPlay() {
+        pendingAutoPlay = true
+        scheduleAutoPlayFallback()
+        autoPlayIfNeeded(reason: "manualRequest")
+    }
+    
+    private func autoPlayIfNeeded(reason: String) {
+        guard pendingAutoPlay, !isCleanedUp else { return }
+        guard let player = player, player.status == .readyToPlay else { return }
+        
+        pendingAutoPlay = false
+        autoPlayTask?.cancel()
+        autoPlayTask = nil
+        
+        if !isPlaying {
+            print("▶️ [VideoPlayerManager] Auto-playing via \(reason)")
+            play()
+        }
+    }
+    
+    private func scheduleAutoPlayFallback() {
+        autoPlayTask?.cancel()
+        autoPlayTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            await MainActor.run {
+                self?.autoPlayIfNeeded(reason: "fallbackTimer")
             }
         }
     }
@@ -447,6 +498,9 @@ class VideoPlayerManager: ObservableObject {
             print("⚠️ [VideoPlayerManager] Cannot play - player is nil or cleaned up")
             return 
         }
+        pendingAutoPlay = false
+        autoPlayTask?.cancel()
+        autoPlayTask = nil
         
         print("▶️ [VideoPlayerManager] Playing video: \(currentVideo?.title ?? "unknown")")
         print("🔗 [VideoPlayerManager] Video URL: \(currentVideo?.videoURL ?? "no URL")")
