@@ -15,6 +15,11 @@ service cloud.firestore {
     }
     function isAdmin() { return hasRole('admin'); }
     function isOwner(ownerId) { return isSignedIn() && ownerId == uid(); }
+    function isVideoAnalyticsUpdate() {
+      return isSignedIn() &&
+             request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(["viewCount", "totalWatchTime", "lastWatched"]);
+    }
 
     // Users
     match /users/{userId} {
@@ -53,7 +58,7 @@ service cloud.firestore {
         isAdmin() || (
           isOwner(resource.data.ownerUid) &&
           (request.resource.data.adSettings == resource.data.adSettings)
-        )
+        ) || isVideoAnalyticsUpdate()
       );
       allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
 
