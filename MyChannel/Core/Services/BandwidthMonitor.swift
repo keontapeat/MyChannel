@@ -121,7 +121,9 @@ class BandwidthMonitor: ObservableObject {
     }
     
     deinit {
-        stopMonitoring()
+        // Note: Cannot call @MainActor methods from deinit
+        // Cancellables will be cleaned up automatically on deallocation
+        print("🗑️ [Bandwidth] BandwidthMonitor deallocated")
     }
 }
 
