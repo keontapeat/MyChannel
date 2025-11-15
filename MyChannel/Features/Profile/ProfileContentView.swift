@@ -346,7 +346,7 @@ struct ProfileVideoCard: View {
                     .frame(height: 36, alignment: .topLeading) // keeps rows even
                 
                 HStack(spacing: 4) {
-                    Text(video.formattedViewCount)
+                    ReactiveViewCountText(videoId: video.id, initialCount: video.viewCount)
                     Text("•")
                     Text(video.uploadTimeAgo)
                 }
@@ -454,7 +454,7 @@ struct ProfileShortCard: View {
                         .font(.system(size: 10))
                         .foregroundStyle(.white)
                     
-                    Text(video.formattedViewCount)
+                    ReactiveViewCountText(videoId: video.id, initialCount: video.viewCount)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white)
                 }
@@ -1200,6 +1200,48 @@ struct PinnedVideosCarousel: View {
                 }
             }
             .padding(.vertical, 6)
+        }
+    }
+}
+
+// MARK: - Reactive View Count Component
+struct ReactiveViewCountText: View {
+    let videoId: String
+    let initialCount: Int
+    @State private var viewCount: Int
+    
+    init(videoId: String, initialCount: Int) {
+        self.videoId = videoId
+        self.initialCount = initialCount
+        _viewCount = State(initialValue: initialCount)
+    }
+    
+    var body: some View {
+        Text(formatViewCount(viewCount))
+            .onAppear {
+                // Load latest count from Firestore
+                Task {
+                    let latestCount = await RealtimeViewTracker.shared.getViewCount(for: videoId)
+                    viewCount = latestCount
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("VideoViewCountUpdated"))) { notification in
+                if let userInfo = notification.userInfo,
+                   let notificationVideoId = userInfo["videoId"] as? String,
+                   notificationVideoId == videoId,
+                   let count = userInfo["viewCount"] as? Int {
+                    viewCount = count
+                }
+            }
+    }
+    
+    private func formatViewCount(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.1fM", Double(count) / 1_000_000)
+        } else if count >= 1_000 {
+            return String(format: "%.1fK", Double(count) / 1_000)
+        } else {
+            return String(count)
         }
     }
 }

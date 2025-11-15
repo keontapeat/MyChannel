@@ -1358,17 +1358,24 @@ struct VideoDetailView: View {
     }
 
     private func triggerMiniPlayerOrPiP() {
+        print("📺 [VideoDetailView] Mini player button tapped")
+        print("📺 [VideoDetailView] PiP supported: \(AVPictureInPictureController.isPictureInPictureSupported())")
+        print("📺 [VideoDetailView] Current PiP state: \(isPiPActive)")
+        print("📺 [VideoDetailView] Current video: \(video.id)")
+        print("📺 [VideoDetailView] Player exists: \(playerManager.player != nil)")
+        
+        // 🔥 FIX: Always show in-app mini player first, then optionally start PiP
+        // This ensures the mini player appears even if PiP fails or isn't supported
+        minimizeToMiniPlayer()
+        
+        // Then try to start system PiP if supported (but don't require it)
         if AVPictureInPictureController.isPictureInPictureSupported() {
-            if isPiPActive {
-                print("📺 [VideoDetailView] Exiting system PiP")
-                isPiPActive = false
-            } else {
-                print("📺 [VideoDetailView] Entering system PiP from inline mode")
-                isPiPActive = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                if !self.isPiPActive {
+                    print("📺 [VideoDetailView] Starting system PiP after mini player")
+                    self.isPiPActive = true
+                }
             }
-        } else {
-            print("⚠️ [VideoDetailView] PiP not supported - falling back to in-app mini player")
-            minimizeToMiniPlayer()
         }
     }
     
