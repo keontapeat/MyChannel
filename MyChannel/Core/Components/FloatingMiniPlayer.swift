@@ -37,42 +37,41 @@ struct FloatingMiniPlayer: View {
            !globalPlayer.isCleanedUp,
            globalPlayer.player != nil {
             
-            GeometryReader { geometry in
-                // 🔥 YOUTUBE PARITY: Free-floating mini player that can be dragged anywhere
-                miniPlayerView(video: video, geometry: geometry)
-                    .position(
-                        x: position.x == 0 ? geometry.size.width - (playerSize.width / 2) - 20 : position.x,
-                        y: position.y == 0 ? geometry.size.height - (playerSize.height / 2) - 100 : position.y
-                    )
-                    .offset(dragState)  // 🔥 NEW: Use @GestureState for buttery smooth dragging
-                    .animation(.interactiveSpring(), value: dragState)  // 🔥 NEW: Smooth animation during drag
-                    .gesture(
-                        SimultaneousGesture(
-                            freeFloatingDragGesture(geometry: geometry),
+            ZStack {
+                Color.clear
+                GeometryReader { geometry in
+                    miniPlayerView(video: video, geometry: geometry)
+                        .position(
+                            x: position.x == 0 ? geometry.size.width - (playerSize.width / 2) - 20 : position.x,
+                            y: position.y == 0 ? geometry.size.height - (playerSize.height / 2) - 100 : position.y
+                        )
+                        .offset(dragState)
+                        .animation(.interactiveSpring(), value: dragState)
+                        .gesture(
                             SimultaneousGesture(
-                                horizontalSwipeGesture,
-                                pinchToResizeGesture
+                                freeFloatingDragGesture(geometry: geometry),
+                                SimultaneousGesture(
+                                    horizontalSwipeGesture,
+                                    pinchToResizeGesture
+                                )
                             )
                         )
-                    )
-                    .onAppear {
-                        // 🔥 YOUTUBE PARITY: Initialize position to bottom-right corner
-                        if position == .zero {
-                            position = CGPoint(
-                                x: geometry.size.width - (playerSize.width / 2) - 20,
-                                y: geometry.size.height - (playerSize.height / 2) - 100
-                            )
+                        .onAppear {
+                            if position == .zero {
+                                position = CGPoint(
+                                    x: geometry.size.width - (playerSize.width / 2) - 20,
+                                    y: geometry.size.height - (playerSize.height / 2) - 100
+                                )
+                            }
                         }
-                    }
-                    .drawingGroup(opaque: false, colorMode: .linear)  // 🔥 OPTIMIZED: Better rendering
-                    .compositingGroup()
-                    .allowsHitTesting(true)
+                        .drawingGroup(opaque: false, colorMode: .linear)
+                        .compositingGroup()
+                        .allowsHitTesting(true)
+                }
             }
             .allowsHitTesting(false)
-            .allowsHitTesting(true)
-            .zIndex(10000) // 🔥 FIX: ABOVE EVERYTHING for YouTube parity (tab bar is 999)
-            // 🔥 FIX: Ensure mini player doesn't interfere with home feed rendering
-            .background(Color.clear) // Transparent background to avoid blocking
+            .zIndex(10000)
+            .background(Color.clear)
             .onAppear {
                 // 🔥 SYNC INITIAL STATE: Get volume and speed from player
                 if let player = globalPlayer.player {

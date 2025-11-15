@@ -243,99 +243,63 @@ struct VideoDetailView: View {
     
     @ViewBuilder
     private var videoTapArea: some View {
-        GeometryReader { geometry in
-            Color.clear
-                .contentShape(Rectangle())
-                // 🔥 FIX: ALWAYS allow tap gestures to bring controls back when hidden
-                .allowsHitTesting(true)  // 🔥 CRITICAL: Always enabled so single-tap works
-                // 🔥 YOUTUBE PARITY: Double-tap to seek 10 seconds (simultaneous with single tap)
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 0)
-                        .onEnded { value in
-                            // Detect double tap by checking if this is the second tap in quick succession
-                            let now = Date()
-                            let timeSinceLastTap = now.timeIntervalSince(lastDoubleTapTime)
-                            
-                            if timeSinceLastTap < 0.5 {
-                                // This is a double tap - only seek if controls are hidden
-                                guard !showVideoControls else { 
-                                    // Reset double tap timer if controls are visible (prevents seeking while using controls)
-                                    lastDoubleTapTime = Date.distantPast
-                                    return 
-                                }
-                                
-                                let screenWidth = geometry.size.width
-                                let tapX = value.location.x
-                                
-                                // Left third = rewind 10s, Right third = forward 10s
-                                if tapX < screenWidth / 3 {
-                                    // Left edge - rewind 10 seconds
-                                    playerManager.seekBackward(10)
-                                    showSeekRippleBackward = true
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                        showSeekRippleBackward = false
-                                    }
-                                    HapticManager.shared.impact(style: .medium)
-                                    print("⏪ Double-tap left: Rewind 10s")
-                                } else if tapX > screenWidth * 2/3 {
-                                    // Right edge - forward 10 seconds
-                                    playerManager.seekForward(10)
-                                    showSeekRippleForward = true
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                        showSeekRippleForward = false
-                                    }
-                                    HapticManager.shared.impact(style: .medium)
-                                    print("⏩ Double-tap right: Forward 10s")
-                                }
-                                
-                                lastDoubleTapTime = Date.distantPast // Reset to prevent triple tap
-                            } else {
-                                // First tap - record time
-                                lastDoubleTapTime = now
-                            }
-                        }
-                )
-                .onTapGesture {
-                    handlePlayerTap()
+        PlayerTapCaptureView(
+            onSingleTap: { handlePlayerTap() },
+            onDoubleTap: { location, size in
+                let isLeft = location.x < size.width / 2
+                if isLeft {
+                    playerManager.seekBackward(10)
+                    showSeekRippleBackward = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        showSeekRippleBackward = false
+                    }
+                    HapticManager.shared.impact(style: .medium)
+                    print("⏪ Double-tap left: Rewind 10s")
+                } else {
+                    playerManager.seekForward(10)
+                    showSeekRippleForward = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        showSeekRippleForward = false
+                    }
+                    HapticManager.shared.impact(style: .medium)
+                    print("⏩ Double-tap right: Forward 10s")
                 }
-        }
-            // 🔥 YOUTUBE PARITY: Speed gestures (swipe up/down on right edge to change playback speed)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 20, coordinateSpace: .local)
-                    .onChanged { value in
-                        let screenWidth = UIScreen.main.bounds.width
-                        let tapX = value.startLocation.x
-                        
-                        // Right edge (last 20% of screen) = speed control
-                        if tapX > screenWidth * 0.8 {
-                            let verticalSwipe = value.translation.height
+            }
+        )
+        // 🔥 YOUTUBE PARITY: Speed gestures (swipe up/down on right edge to change playback speed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                .onChanged { value in
+                    let screenWidth = UIScreen.main.bounds.width
+                    let tapX = value.startLocation.x
+                    
+                    if tapX > screenWidth * 0.8 {
+                        let verticalSwipe = value.translation.height
+                        if abs(verticalSwipe) > 30 {
+                            let speedChange = verticalSwipe < 0 ? 0.25 : -0.25
+                            let newSpeed = max(0.25, min(2.0, playbackRate + Float(speedChange)))
                             
-                            // Swipe up = increase speed, Swipe down = decrease speed
-                            if abs(verticalSwipe) > 30 {
-                                let speedChange = verticalSwipe < 0 ? 0.25 : -0.25
-                                let newSpeed = max(0.25, min(2.0, playbackRate + Float(speedChange)))
-                                
-                                if abs(newSpeed - playbackRate) >= 0.25 {
-                                    playbackRate = newSpeed
-                                    playerManager.setPlaybackRate(newSpeed)
-                                    HapticManager.shared.impact(style: .light)
-                                    print("⚡ Speed changed to: \(newSpeed)x")
-                                }
+                            if abs(newSpeed - playbackRate) >= 0.25 {
+                                playbackRate = newSpeed
+                                playerManager.setPlaybackRate(newSpeed)
+                                HapticManager.shared.impact(style: .light)
+                                print("⚡ Speed changed to: \(newSpeed)x")
                             }
                         }
                     }
-            )
-            .gesture(
-                DragGesture(minimumDistance: 12, coordinateSpace: .local)
-                    .onEnded { value in
-                        if value.translation.height > 60 {
-                            presentFullscreenPlayer()
-                        } else if value.translation.height < -60 {
-                            minimizeToMiniPlayer()
-                        }
+                }
+        )
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 12, coordinateSpace: .local)
+                .onEnded { value in
+                    if value.translation.height > 60 {
+                        presentFullscreenPlayer()
+                    } else if value.translation.height < -60 {
+                        minimizeToMiniPlayer()
                     }
-            )
-            .zIndex(1)
+                }
+        )
+        .zIndex(1)
     }
     private func handlePlayerTap() {
         print("📱 Video tapped - Current controls state: \(showVideoControls)")

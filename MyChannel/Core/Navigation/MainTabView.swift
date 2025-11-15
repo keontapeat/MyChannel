@@ -339,8 +339,7 @@ struct MainTabView: View {
             if globalPlayer.shouldShowMiniPlayer,
                !globalPlayer.showingFullscreen,
                globalPlayer.currentVideo != nil,
-               globalPlayer.player != nil,
-               selectedTab != .flicks {
+               globalPlayer.player != nil {
                 SafeFloatingMiniPlayer()
                     .environmentObject(globalPlayer)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
