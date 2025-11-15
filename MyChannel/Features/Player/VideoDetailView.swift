@@ -1303,9 +1303,13 @@ struct VideoDetailView: View {
     private func minimizeToMiniPlayer() {
         print("🔄 [VideoDetailView] Minimizing to mini player")
         print("📊 [VideoDetailView] Current state - shouldShow: \(globalPlayer.shouldShowMiniPlayer), isMini: \(globalPlayer.isMiniplayer), fullscreen: \(globalPlayer.showingFullscreen)")
+        print("📊 [VideoDetailView] Player manager exists: \(playerManager != nil)")
+        print("📊 [VideoDetailView] Player exists: \(playerManager.player != nil)")
+        print("📊 [VideoDetailView] Is playing: \(playerManager.isPlaying)")
         
         // 🔥 FIX: Ensure player continues playing and mini player stays visible
         // Set state BEFORE dismissing to prevent race conditions
+        let wasPlaying = playerManager.isPlaying
         globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
         
         // 🔥 FIX: Explicitly ensure mini player is shown immediately (multiple times to ensure it sticks)
@@ -1313,11 +1317,36 @@ struct VideoDetailView: View {
         globalPlayer.isMiniplayer = true
         globalPlayer.showingFullscreen = false
         
-        // 🔥 FIX: Force state update multiple times to ensure it persists
+        // 🔥 CRITICAL: Ensure player is playing AFTER adoption
         DispatchQueue.main.async {
+            // Set state
             self.globalPlayer.shouldShowMiniPlayer = true
             self.globalPlayer.isMiniplayer = true
             self.globalPlayer.showingFullscreen = false
+            
+            // Ensure player is attached and playing
+            if let player = self.globalPlayer.player {
+                print("✅ [VideoDetailView] Player found after adoption - rate: \(player.rate)")
+                if wasPlaying && player.rate == 0 {
+                    print("▶️ [VideoDetailView] Resuming playback in mini player")
+                    player.play()
+                    self.globalPlayer.isPlaying = true
+                }
+            } else {
+                print("⚠️ [VideoDetailView] Player not found after adoption - checking playerManager")
+                // Fallback: check playerManager directly
+                if let manager = self.globalPlayer.exposedPlayerManager, let player = manager.player {
+                    print("✅ [VideoDetailView] Found player via exposedPlayerManager - rate: \(player.rate)")
+                    if wasPlaying && player.rate == 0 {
+                        print("▶️ [VideoDetailView] Resuming playback via manager")
+                        player.play()
+                        self.globalPlayer.isPlaying = true
+                    }
+                } else {
+                    print("🚨 [VideoDetailView] No player found - mini player will show thumbnail")
+                }
+            }
+            
             print("✅ [VideoDetailView] Mini player state set - shouldShow: \(self.globalPlayer.shouldShowMiniPlayer), isMini: \(self.globalPlayer.isMiniplayer)")
         }
         
@@ -1325,6 +1354,14 @@ struct VideoDetailView: View {
             self.globalPlayer.shouldShowMiniPlayer = true
             self.globalPlayer.isMiniplayer = true
             self.globalPlayer.showingFullscreen = false
+            
+            // Double-check player is playing
+            if let player = self.globalPlayer.player, wasPlaying, player.rate == 0 {
+                print("▶️ [VideoDetailView] Resuming playback at 0.1s")
+                player.play()
+                self.globalPlayer.isPlaying = true
+            }
+            
             print("✅ [VideoDetailView] Mini player state verified at 0.1s")
         }
         
@@ -1335,11 +1372,13 @@ struct VideoDetailView: View {
                 self.globalPlayer.isMiniplayer = true
                 self.globalPlayer.showingFullscreen = false
             }
-        }
-        
-        // Ensure player is playing
-        if let player = globalPlayer.player, player.rate == 0 {
-            player.play()
+            
+            // Final check - ensure playback
+            if let player = self.globalPlayer.player, wasPlaying, player.rate == 0 {
+                print("▶️ [VideoDetailView] Final playback resume at 0.5s")
+                player.play()
+                self.globalPlayer.isPlaying = true
+            }
         }
         
         // Dismiss the view
@@ -1350,8 +1389,10 @@ struct VideoDetailView: View {
             if globalPlayer.currentVideo != nil {
                 globalPlayer.shouldShowMiniPlayer = true
                 globalPlayer.isMiniplayer = true
-                if let player = globalPlayer.player, player.rate == 0 {
+                if let player = globalPlayer.player, wasPlaying, player.rate == 0 {
+                    print("▶️ [VideoDetailView] Resuming playback after dismissal")
                     player.play()
+                    globalPlayer.isPlaying = true
                 }
             }
         }

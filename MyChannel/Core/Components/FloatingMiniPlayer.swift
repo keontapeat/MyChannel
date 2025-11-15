@@ -30,12 +30,11 @@ struct FloatingMiniPlayer: View {
     
     var body: some View {
         // 🔥 FIX: More robust condition checking to prevent mini player from disappearing
-        // 🔥 FIX: Ensure player exists and is ready to prevent error states
+        // 🔥 FIX: Show mini player even if player isn't ready yet (will show thumbnail, then update)
         if let video = globalPlayer.currentVideo,
            globalPlayer.shouldShowMiniPlayer,
            !globalPlayer.showingFullscreen,
-           !globalPlayer.isCleanedUp,
-           globalPlayer.player != nil {
+           !globalPlayer.isCleanedUp {
             
             ZStack {
                 Color.clear
@@ -77,11 +76,53 @@ struct FloatingMiniPlayer: View {
                 if let player = globalPlayer.player {
                     volume = player.volume
                     playbackSpeed = player.rate
+                    print("✅ [MiniPlayer] Player found on appear - rate: \(player.rate)")
+                    
+                    // 🔥 FIX: Ensure player is playing if it should be
+                    if globalPlayer.isPlaying && player.rate == 0 {
+                        print("▶️ [MiniPlayer] Resuming playback on appear")
+                        player.play()
+                    }
+                } else {
+                    print("⚠️ [MiniPlayer] Player not ready yet - will retry")
+                    // Retry getting player after a short delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        if let player = globalPlayer.player {
+                            print("✅ [MiniPlayer] Player found after retry - rate: \(player.rate)")
+                            volume = player.volume
+                            playbackSpeed = player.rate
+                            if globalPlayer.isPlaying && player.rate == 0 {
+                                print("▶️ [MiniPlayer] Resuming playback after retry")
+                                player.play()
+                            }
+                        } else {
+                            print("⚠️ [MiniPlayer] Player still not available - showing thumbnail")
+                        }
+                    }
                 }
-                print("🎥 [MiniPlayer] Mini player appeared - shouldShow: \(globalPlayer.shouldShowMiniPlayer)")
+                print("🎥 [MiniPlayer] Mini player appeared - shouldShow: \(globalPlayer.shouldShowMiniPlayer), player exists: \(globalPlayer.player != nil)")
             }
             .onDisappear {
                 print("⚠️ [MiniPlayer] Mini player disappeared unexpectedly - shouldShow: \(globalPlayer.shouldShowMiniPlayer)")
+            }
+            .task {
+                // 🔥 FIX: Continuously monitor player availability and ensure playback
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 500_000_000) // Check every 0.5 seconds
+                    
+                    if let player = globalPlayer.player {
+                        // Player is available - ensure it's playing if it should be
+                        if globalPlayer.isPlaying && player.rate == 0 {
+                            print("▶️ [MiniPlayer] Task detected paused player - resuming")
+                            await MainActor.run {
+                                player.play()
+                            }
+                        }
+                    } else if globalPlayer.shouldShowMiniPlayer && globalPlayer.currentVideo != nil {
+                        // Player not available but should be - log for debugging
+                        print("⚠️ [MiniPlayer] Task: Player not available but mini player should be showing")
+                    }
+                }
             }
         }
     }
