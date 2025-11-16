@@ -13,6 +13,7 @@ struct LiveStreamerAwardsView: View {
     @State private var selectedTab: Tab = .leaderboard
     @State private var selectedTimeframe: LiveStreamerAwardsSystem.Timeframe = .weekly
     @State private var selectedCategory: LiveStreamerAwardsSystem.LeaderboardCategory = .overall
+    @State private var showLiveStream = false
     
     enum Tab {
         case leaderboard
@@ -45,6 +46,14 @@ struct LiveStreamerAwardsView: View {
         .background(AppTheme.Colors.background)
         .navigationTitle("🏆 Streamer Awards")
         .navigationBarTitleDisplayMode(.inline)
+        .fullScreenCover(isPresented: $showLiveStream) {
+            LiveCeremonyStreamView(
+                streamURL: "https://example.com/live-stream",
+                onDismiss: {
+                    showLiveStream = false
+                }
+            )
+        }
     }
     
     // MARK: - Tab Bar
@@ -159,116 +168,261 @@ struct LiveStreamerAwardsView: View {
     
     private var awardsView: some View {
         ScrollView {
-            VStack(spacing: 24) {
-                // Current Season Banner
-                seasonBanner
+            VStack(spacing: 32) {
+                // Section 1: Cinematic Hero Countdown
+                cinematicHeroSection
                 
-                // Award Categories
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Award Categories")
-                        .font(.system(size: 24, weight: .bold))
-                        .padding(.horizontal, 16)
-                    
-                    LazyVGrid(columns: [
-                        GridItem(.flexible()),
-                        GridItem(.flexible())
-                    ], spacing: 16) {
-                        ForEach(LiveStreamerAwardsSystem.AwardCategory.allCases) { category in
-                            AwardCategoryCard(category: category)
-                        }
-                    }
-                    .padding(.horizontal, 16)
+                // Section 2: Nominee Showcase
+                if awards.currentSeason.isVotingOpen {
+                    nomineeShowcaseSection
                 }
                 
-                // Previous Winners
+                // Section 3: Premium Category Explorer
+                premiumCategorySection
+                
+                // Section 4: Winner Hall of Fame
                 if !awards.currentSeason.winners.isEmpty {
-                    previousWinnersSection
+                    winnerHallOfFameSection
+                }
+                
+                // Section 5: Live Voting Interface
+                if awards.currentSeason.isVotingOpen {
+                    liveVotingSection
                 }
             }
             .padding(.vertical, 20)
         }
     }
     
-    private var seasonBanner: some View {
-        VStack(spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(awards.currentSeason.season.rawValue)
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    Text("Season \(awards.currentSeason.year)")
-                        .font(.system(size: 16))
-                        .foregroundColor(.white.opacity(0.8))
+    // MARK: - Section 1: Cinematic Hero
+    
+    private var cinematicHeroSection: some View {
+        CeremonyCountdownHero(
+            ceremonyDate: awards.currentSeason.ceremonyDate,
+            isLive: false, // TODO: Connect to live stream status
+            isVotingOpen: awards.currentSeason.isVotingOpen,
+            onWatchLive: {
+                showLiveStream = true
+            },
+            onVote: {
+                // Scroll to voting section
+                withAnimation {
+                    selectedTab = .awards
                 }
+            }
+        )
+    }
+    
+    // MARK: - Section 2: Nominee Showcase
+    
+    private var nomineeShowcaseSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Featured Nominees")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .padding(.horizontal, 16)
+                .staggeredReveal(index: 0)
+            
+            // Horizontal scrolling nominees by category
+            ForEach(Array(LiveStreamerAwardsSystem.AwardCategory.allCases.prefix(3).enumerated()), id: \.element.id) { categoryIndex, category in
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Image(systemName: category.icon)
+                            .font(.system(size: 16))
+                            .foregroundColor(category.color)
+                        
+                        Text(category.rawValue)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 16) {
+                            ForEach(0..<5, id: \.self) { index in
+                                NomineeCard(
+                                    nominee: AwardNominee(
+                                        id: "\(category.id)-\(index)",
+                                        streamerName: "Nominee \(index + 1)",
+                                        categoryName: category.rawValue,
+                                        voteCount: Int.random(in: 100...1000),
+                                        avgViewers: "2.4K",
+                                        hoursStreamed: "142",
+                                        subscribers: "856"
+                                    ),
+                                    isVoted: false,
+                                    onVote: {
+                                        // TODO: Handle vote
+                                    }
+                                )
+                                .staggeredReveal(index: index, delay: 0.05)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                }
+                .staggeredReveal(index: categoryIndex + 1)
+            }
+        }
+    }
+    
+    // MARK: - Section 3: Premium Categories
+    
+    @State private var expandedCategory: String?
+    
+    private var premiumCategorySection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Award Categories")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .padding(.horizontal, 16)
+                .staggeredReveal(index: 0)
+            
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 16) {
+                ForEach(Array(LiveStreamerAwardsSystem.AwardCategory.allCases.enumerated()), id: \.element.id) { index, category in
+                    PremiumCategoryCard(
+                        category: category,
+                        isExpanded: expandedCategory == category.id,
+                        onTap: {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                expandedCategory = expandedCategory == category.id ? nil : category.id
+                            }
+                        }
+                    )
+                    .pressScale()
+                    .staggeredReveal(index: index, delay: 0.05)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+    
+    // MARK: - Section 4: Winner Hall of Fame
+    
+    private var winnerHallOfFameSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "trophy.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(.awardGold)
+                
+                Text("Hall of Fame")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .staggeredReveal(index: 0)
+            
+            // Year timeline
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(Array([2024, 2023, 2022].enumerated()), id: \.element) { index, year in
+                        Text("\(year)")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.awardGold)
+                            .cornerRadius(20)
+                            .shimmer()
+                            .pressScale()
+                            .staggeredReveal(index: index, delay: 0.1)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            
+            // Winner cards
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 20) {
+                    ForEach(Array(awards.currentSeason.winners.prefix(5).enumerated()), id: \.element.id) { index, winner in
+                        WinnerSpotlightCard(
+                            winner: winner,
+                            year: 2024,
+                            onPlayVideo: {
+                                // TODO: Play acceptance speech
+                            }
+                        )
+                        .frame(width: 280)
+                        .pressScale()
+                        .staggeredReveal(index: index, delay: 0.08)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+    
+    // MARK: - Section 5: Live Voting
+    
+    private var liveVotingSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "chart.bar.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(AppTheme.Colors.primary)
+                
+                Text("Live Voting Results")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
                 
                 Spacer()
                 
-                VStack(alignment: .trailing, spacing: 4) {
-                    if awards.currentSeason.isVotingOpen {
-                        Text("VOTING OPEN")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.green)
-                            .cornerRadius(8)
-                    } else {
-                        Text("COMING SOON")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.orange)
-                            .cornerRadius(8)
-                    }
-                    
-                    Text("Ceremony: \(awards.currentSeason.ceremonyDate, style: .date)")
-                        .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.8))
-                }
-            }
-            
-            // Countdown
-            if awards.currentSeason.isVotingOpen {
-                HStack {
+                // Time remaining
+                HStack(spacing: 4) {
                     Image(systemName: "clock.fill")
-                        .foregroundColor(.white)
-                    Text("Voting ends in 14 days")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
+                        .font(.system(size: 12))
+                    Text("14d left")
+                        .font(.system(size: 13, weight: .semibold))
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(Color.white.opacity(0.2))
-                .cornerRadius(12)
+                .foregroundColor(.secondary)
             }
-        }
-        .padding(20)
-        .background(
-            LinearGradient(
-                colors: [.purple, .blue],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .cornerRadius(20)
-        .padding(.horizontal, 16)
-    }
-    
-    private var previousWinnersSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Previous Winners")
-                .font(.system(size: 24, weight: .bold))
-                .padding(.horizontal, 16)
+            .padding(.horizontal, 16)
             
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(awards.currentSeason.winners) { winner in
-                        WinnerCard(winner: winner)
+            // Category voting results
+            ForEach(Array(LiveStreamerAwardsSystem.AwardCategory.allCases.prefix(3)), id: \.id) { category in
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Image(systemName: category.icon)
+                            .font(.system(size: 14))
+                            .foregroundColor(category.color)
+                        
+                        Text(category.rawValue)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
                     }
+                    .padding(.horizontal, 16)
+                    
+                    VStack(spacing: 8) {
+                        ForEach(0..<3, id: \.self) { index in
+                            VotingProgressBar(
+                                nominee: AwardNominee(
+                                    id: "\(category.id)-vote-\(index)",
+                                    streamerName: "Nominee \(index + 1)",
+                                    categoryName: category.rawValue,
+                                    voteCount: Int.random(in: 100...1000),
+                                    avgViewers: "2.4K",
+                                    hoursStreamed: "142",
+                                    subscribers: "856"
+                                ),
+                                totalVotes: 2500,
+                                isLeading: index == 0
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(AppTheme.Colors.surface)
+                    .cornerRadius(16)
+                    .padding(.horizontal, 16)
                 }
-                .padding(.horizontal, 16)
             }
         }
     }
@@ -616,73 +770,6 @@ struct RankingCard: View {
     }
 }
 
-struct AwardCategoryCard: View {
-    let category: LiveStreamerAwardsSystem.AwardCategory
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            // Icon
-            ZStack {
-                Circle()
-                    .fill(category.color.opacity(0.2))
-                    .frame(width: 60, height: 60)
-                
-                Image(systemName: category.icon)
-                    .font(.system(size: 26))
-                    .foregroundColor(category.color)
-            }
-            
-            // Name
-            Text(category.rawValue)
-                .font(.system(size: 14, weight: .semibold))
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-            
-            // Prize
-            Text(category.prize)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
-        .background(AppTheme.Colors.surface)
-        .cornerRadius(16)
-    }
-}
-
-struct WinnerCard: View {
-    let winner: LiveStreamerAwardsSystem.Winner
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            // Trophy
-            Image(systemName: "trophy.fill")
-                .font(.system(size: 32))
-                .foregroundColor(.yellow)
-            
-            // Avatar
-            Circle()
-                .fill(Color.gray.opacity(0.3))
-                .frame(width: 60, height: 60)
-            
-            // Name
-            Text(winner.streamer.username)
-                .font(.system(size: 14, weight: .bold))
-            
-            // Category
-            Text(winner.category.rawValue)
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(width: 140)
-        .padding(.vertical, 16)
-        .background(AppTheme.Colors.surface)
-        .cornerRadius(16)
-    }
-}
 
 struct AchievementCard: View {
     let achievement: LiveStreamerAwardsSystem.Achievement

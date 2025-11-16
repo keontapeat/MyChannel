@@ -1,9 +1,18 @@
+//
+//  SubscriptionsView.swift
+//  MyChannel
+//
+//  Nuclear-level subscriptions feed (better than YouTube)
+//
+
 import SwiftUI
 
 struct SubscriptionsView: View {
     @EnvironmentObject private var authManager: AuthenticationManager
-    @StateObject private var feed = SubscriptionsFeedService.shared
-
+    @StateObject private var viewModel = SubscriptionsViewModel()
+    @State private var showFilterSheet = false
+    @State private var showSortSheet = false
+    
     var body: some View {
         Group {
             if !authManager.isAuthenticated {
@@ -15,95 +24,281 @@ struct SubscriptionsView: View {
             }
         }
     }
-
+    
     private var subscriptionsContent: some View {
         NavigationStack {
-            Group {
-                if feed.items.isEmpty {
-                    if #available(iOS 17.0, *) {
-                        ContentUnavailableView(
-                            "No Subscriptions Yet", 
-                            systemImage: "play.square.stack",
-                            description: Text("Subscribe to your favorite creators to see their latest videos here.")
-                        )
+            VStack(spacing: 0) {
+                // Tab Navigation
+                tabNavigation
+                
+                // Content
+                Group {
+                    if viewModel.isLoading && viewModel.videos.isEmpty {
+                        loadingView
+                    } else if viewModel.videos.isEmpty && viewModel.selectedTab == .feed {
+                        emptyStateView
                     } else {
-                        VStack(spacing: 16) {
-                            Image(systemName: "play.square.stack")
-                                .font(.system(size: 48))
-                                .foregroundColor(.secondary)
-                            Text("No Subscriptions Yet")
-                                .font(.headline)
-                            Text("Subscribe to your favorite creators to see their latest videos here.")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .padding()
-                    }
-                } else {
-                    List {
-                        ForEach(feed.items) { item in
-                            FeedItemRow(item: item)
-                                .onTapGesture {
-                                    NotificationCenter.default.post(
-                                        name: NSNotification.Name("NavigateToVideo"),
-                                        object: item.videoId
-                                    )
-                                }
+                        switch viewModel.selectedTab {
+                        case .feed:
+                            feedTab
+                        case .channels:
+                            channelsTab
                         }
                     }
-                    .listStyle(.plain)
                 }
             }
             .navigationTitle("")
-            .task {
-                if let userId = authManager.currentUser?.id {
-                    feed.listen(uid: userId)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    toolbarButtons
                 }
             }
-            .onDisappear {
-                feed.stop()
+            .sheet(isPresented: $showFilterSheet) {
+                filterSheet
+            }
+            .sheet(isPresented: $showSortSheet) {
+                sortSheet
+            }
+            .task {
+                if let userId = authManager.currentUser?.id {
+                    await viewModel.loadSubscribedVideos(userId: userId)
+                    await viewModel.loadSubscribedChannels(userId: userId)
+                }
+            }
+            .refreshable {
+                if let userId = authManager.currentUser?.id {
+                    await viewModel.refreshFeed(userId: userId)
+                }
             }
         }
     }
-}
-
-struct FeedItemRow: View {
-    let item: SubscriptionsFeedService.FeedItem
     
-    var body: some View {
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(.systemGray6))
-                .frame(width: 120, height: 68)
-                .overlay(
-                    Image(systemName: "play.fill")
-                        .foregroundColor(.secondary)
-                )
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text("New video from creator")
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
+    // MARK: - Tab Navigation
+    private var tabNavigation: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(SubscriptionsViewModel.SubscriptionTab.allCases, id: \.self) { tab in
+                    tabButton(for: tab)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+        }
+        .background(AppTheme.Colors.background)
+    }
+    
+    private func tabButton(for tab: SubscriptionsViewModel.SubscriptionTab) -> some View {
+        Button(action: {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                viewModel.selectedTab = tab
+            }
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 14, weight: .medium))
                 
-                Text(item.ownerUid)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                Text(item.createdAt, style: .relative)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Text(tab.rawValue)
+                    .font(.system(size: 15, weight: .semibold))
+            }
+            .foregroundColor(viewModel.selectedTab == tab ? .white : AppTheme.Colors.textPrimary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                Capsule()
+                    .fill(viewModel.selectedTab == tab ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    // MARK: - Toolbar
+    private var toolbarButtons: some View {
+        HStack(spacing: 16) {
+            // Filter button
+            Button(action: { showFilterSheet = true }) {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
             }
             
-            Spacer()
-            
-            if !item.read {
-                Circle()
-                    .fill(.blue)
-                    .frame(width: 8, height: 8)
+            // Sort button
+            Button(action: { showSortSheet = true }) {
+                Image(systemName: "arrow.up.arrow.down.circle")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
             }
         }
-        .padding(.vertical, 4)
+    }
+    
+    // MARK: - Feed Tab
+    private var feedTab: some View {
+        ScrollView {
+            LazyVStack(spacing: 16) {
+                ForEach(viewModel.filteredVideos) { video in
+                    SubscriptionVideoCard(video: video)
+                        .onTapGesture {
+                            NotificationCenter.default.post(
+                                name: NSNotification.Name("NavigateToVideo"),
+                                object: video.id
+                            )
+                        }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+        }
+    }
+    
+    // MARK: - Channels Tab
+    private var channelsTab: some View {
+        ScrollView {
+            LazyVStack(spacing: 16) {
+                ForEach(viewModel.subscribedChannels) { channel in
+                    SubscribedChannelCard(
+                        channel: channel,
+                        notificationLevel: viewModel.notificationSettings[channel.id] ?? .all,
+                        onUnsubscribe: {
+                            if let userId = authManager.currentUser?.id {
+                                Task {
+                                    await viewModel.unsubscribe(from: channel.id, userId: userId)
+                                }
+                            }
+                        },
+                        onNotificationChange: { level in
+                            Task {
+                                await viewModel.updateNotificationLevel(channelId: channel.id, level: level)
+                            }
+                        }
+                    )
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+        }
+    }
+    
+    // MARK: - Empty State
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "play.square.stack")
+                .font(.system(size: 60, weight: .thin))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+            
+            Text("No Subscriptions Yet")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+            
+            Text("Subscribe to your favorite creators to see their latest videos here.")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppTheme.Colors.background)
+    }
+    
+    // MARK: - Loading View
+    private var loadingView: some View {
+        VStack {
+            ProgressView()
+                .scaleEffect(1.2)
+            
+            Text("Loading subscriptions...")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .padding(.top, 12)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppTheme.Colors.background)
+    }
+    
+    // MARK: - Filter Sheet
+    private var filterSheet: some View {
+        NavigationStack {
+            List {
+                ForEach(SubscriptionsViewModel.FilterOption.allCases, id: \.self) { option in
+                    Button(action: {
+                        viewModel.filterOption = option
+                        showFilterSheet = false
+                    }) {
+                        HStack {
+                            Image(systemName: option.icon)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(viewModel.filterOption == option ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                                .frame(width: 24)
+                            
+                            Text(option.rawValue)
+                                .font(.system(size: 16, weight: .regular))
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                            
+                            Spacer()
+                            
+                            if viewModel.filterOption == option {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                            }
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .navigationTitle("Filter")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        showFilterSheet = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.height(300)])
+    }
+    
+    // MARK: - Sort Sheet
+    private var sortSheet: some View {
+        NavigationStack {
+            List {
+                ForEach(SubscriptionsViewModel.SortOption.allCases, id: \.self) { option in
+                    Button(action: {
+                        viewModel.sortOption = option
+                        showSortSheet = false
+                    }) {
+                        HStack {
+                            Image(systemName: option.icon)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(viewModel.sortOption == option ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                                .frame(width: 24)
+                            
+                            Text(option.rawValue)
+                                .font(.system(size: 16, weight: .regular))
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                            
+                            Spacer()
+                            
+                            if viewModel.sortOption == option {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                            }
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .navigationTitle("Sort By")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        showSortSheet = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.height(320)])
     }
 }
 

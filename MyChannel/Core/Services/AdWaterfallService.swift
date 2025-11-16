@@ -6,17 +6,16 @@ import GoogleMobileAds
 import FirebaseFirestore
 #endif
 
-struct AdRequest: Codable {
+// ✅ Renamed to avoid conflict with AdModels.AdRequest
+struct WaterfallAdRequest: Codable {
     let requestId: String
     let videoId: String
     let userId: String?
-    let placement: AdPlacement
+    let placement: AdPlacement  // ✅ Use shared AdPlacement from AdModels
     let targeting: AdTargeting
     let timestamp: Date
     
-    enum AdPlacement: String, Codable {
-        case preroll, midroll, postroll, display, native
-    }
+    // ✅ Removed nested AdPlacement enum - using shared one from AdModels
     
     struct AdTargeting: Codable {
         let age: Int?
@@ -66,7 +65,7 @@ final class AdWaterfallService: ObservableObject {
     
     private var waterfallConfig: WaterfallConfig = WaterfallConfig.defaultConfig
     
-    func requestAd(for request: AdRequest) async -> AdResponse? {
+    func requestAd(for request: WaterfallAdRequest) async -> AdResponse? {
         // Try sources in order of priority/eCPM
         let sources = waterfallConfig.sources.sorted { $0.priority < $1.priority }
         
@@ -82,7 +81,7 @@ final class AdWaterfallService: ObservableObject {
         return createHouseAd(for: request)
     }
     
-    private func tryAdSource(_ source: WaterfallSource, request: AdRequest) async -> AdResponse? {
+    private func tryAdSource(_ source: WaterfallSource, request: WaterfallAdRequest) async -> AdResponse? {
         switch source.type {
         case .direct:
             return await requestDirectAd(request: request)
@@ -97,7 +96,7 @@ final class AdWaterfallService: ObservableObject {
         }
     }
     
-    private func requestDirectAd(request: AdRequest) async -> AdResponse? {
+    private func requestDirectAd(request: WaterfallAdRequest) async -> AdResponse? {
         // Request from direct ad partnerships
         do {
             guard let url = URL(string: "\(AppConfig.API.adsBaseURL)/ads/direct") else { return nil }
@@ -116,7 +115,7 @@ final class AdWaterfallService: ObservableObject {
         return nil
     }
     
-    private func requestAdMobAd(request: AdRequest) async -> AdResponse? {
+    private func requestAdMobAd(request: WaterfallAdRequest) async -> AdResponse? {
         #if canImport(GoogleMobileAds)
         return await withCheckedContinuation { continuation in
             // Configure AdMob request
@@ -163,7 +162,7 @@ final class AdWaterfallService: ObservableObject {
         #endif
     }
     
-    private func requestAdManagerAd(request: AdRequest) async -> AdResponse? {
+    private func requestAdManagerAd(request: WaterfallAdRequest) async -> AdResponse? {
         // Google Ad Manager integration
         do {
             guard let url = URL(string: "https://pubads.g.doubleclick.net/gampad/ads") else { return nil }
@@ -198,7 +197,7 @@ final class AdWaterfallService: ObservableObject {
         return nil
     }
     
-    private func requestOpenRTBAd(request: AdRequest) async -> AdResponse? {
+    private func requestOpenRTBAd(request: WaterfallAdRequest) async -> AdResponse? {
         // OpenRTB 2.5 request
         do {
             guard let url = URL(string: "\(AppConfig.API.adsBaseURL)/ads/openrtb") else { return nil }
@@ -264,7 +263,7 @@ final class AdWaterfallService: ObservableObject {
         return nil
     }
     
-    private func createHouseAd(for request: AdRequest) -> AdResponse {
+    private func createHouseAd(for request: WaterfallAdRequest) -> AdResponse {
         let houseAds = [
             "https://storage.googleapis.com/mychannel-ads/house/download_app.mp4",
             "https://storage.googleapis.com/mychannel-ads/house/premium_signup.mp4",
@@ -285,7 +284,7 @@ final class AdWaterfallService: ObservableObject {
         )
     }
     
-    private func logAdFill(request: AdRequest, response: AdResponse) async {
+    private func logAdFill(request: WaterfallAdRequest, response: AdResponse) async {
         #if canImport(FirebaseFirestore)
         do {
             try await db.collection("ad_analytics").document().setData([
@@ -301,7 +300,7 @@ final class AdWaterfallService: ObservableObject {
         #endif
     }
     
-    private func buildCustomParams(request: AdRequest) -> String {
+    private func buildCustomParams(request: WaterfallAdRequest) -> String {
         var params: [String] = []
         params.append("vid=\(request.videoId)")
         if let age = request.targeting.age { params.append("age=\(age)") }

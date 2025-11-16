@@ -85,9 +85,12 @@ final class AdvancedSearchEngine: ObservableObject {
             let correction = await correctTypos(query: query)
             if correction.original != correction.corrected {
                 suggestions.append(SearchSuggestion(
-                    type: .queryCompletion,
+                    id: UUID().uuidString,
                     text: correction.corrected,
-                    highlightRange: nil
+                    subtitle: "Did you mean?",
+                    icon: "text.magnifyingglass",
+                    isAIGenerated: true,
+                    score: 0.95
                 ))
             }
         }
@@ -415,9 +418,12 @@ final class AdvancedSearchEngine: ObservableObject {
                 let category = data["category"] as? String
                 
                 suggestions.append(SearchSuggestion(
-                    type: .queryCompletion,
+                    id: UUID().uuidString,
                     text: query,
-                    highlightRange: 0..<prefix.count
+                    subtitle: nil,
+                    icon: "magnifyingglass",
+                    isAIGenerated: false,
+                    score: 0.8
                 ))
             }
         } catch { }
@@ -435,9 +441,12 @@ final class AdvancedSearchEngine: ObservableObject {
             
             suggestions = fallbackCompletions.map { completion in
                 SearchSuggestion(
-                    type: .queryCompletion,
+                    id: UUID().uuidString,
                     text: completion,
-                    highlightRange: 0..<prefix.count
+                    subtitle: nil,
+                    icon: "magnifyingglass",
+                    isAIGenerated: false,
+                    score: 0.7
                 )
             }
         }
@@ -462,9 +471,12 @@ final class AdvancedSearchEngine: ObservableObject {
                 // Check if trending query is related to input query
                 if isQueryRelated(trendingQuery, to: query) {
                     return SearchSuggestion(
-                        type: .trendingSearch,
+                        id: UUID().uuidString,
                         text: trendingQuery,
-                        highlightRange: nil
+                        subtitle: "Trending",
+                        icon: "flame.fill",
+                        isAIGenerated: false,
+                        score: 0.85
                     )
                 }
                 return nil
@@ -484,9 +496,12 @@ final class AdvancedSearchEngine: ObservableObject {
         
         for category in preferredCategories.prefix(3) {
             suggestions.append(SearchSuggestion(
-                type: .relatedSearch,
+                id: UUID().uuidString,
                 text: "\(query) \(category)",
-                highlightRange: nil
+                subtitle: "Related",
+                icon: "link",
+                isAIGenerated: false,
+                score: 0.75
             ))
         }
         

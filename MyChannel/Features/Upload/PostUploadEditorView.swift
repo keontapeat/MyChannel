@@ -174,7 +174,7 @@ struct PostUploadEditorView: View {
             }
             
             HStack(spacing: 12) {
-                QuickActionButton(
+                PostUploadQuickActionButton(
                     title: "Share",
                     subtitle: "Send to friends",
                     icon: "square.and.arrow.up",
@@ -184,7 +184,7 @@ struct PostUploadEditorView: View {
                     shareVideo()
                 }
                 
-                QuickActionButton(
+                PostUploadQuickActionButton(
                     title: "Download",
                     subtitle: "Save locally",
                     icon: "arrow.down.circle.fill",
@@ -296,7 +296,10 @@ struct PostUploadEditorView: View {
                 title: "University Content",
                 subtitle: "Tag this video for certificate-eligible learning",
                 icon: "checkmark.seal.fill",
-                isOn: $viewModel.isUniversityContent
+                isOn: Binding(
+                    get: { viewModel.isUniversityContent },
+                    set: { viewModel.isUniversityContent = $0 }
+                )
             )
             
             // Show career path selection if enabled
@@ -335,9 +338,9 @@ struct PostUploadEditorView: View {
                             ForEach([UniversityVideo.DifficultyLevel.beginner, .intermediate, .advanced, .expert], id: \.self) { level in
                                 DifficultyLevelButton(
                                     level: level,
-                                    isSelected: viewModel.selectedDifficultyLevel == level
+                                    isSelected: viewModel.difficultyLevel == level
                                 ) {
-                                    viewModel.selectedDifficultyLevel = level
+                                    viewModel.difficultyLevel = level
                                 }
                             }
                         }
@@ -382,7 +385,7 @@ struct PostUploadEditorView: View {
                         // Display added tags
                         if !viewModel.universitySkillTags.isEmpty {
                             FlowLayout(spacing: 8) {
-                                ForEach(viewModel.universitySkillTags, id: \.self) { tag in
+                                ForEach(Array(viewModel.universitySkillTags).sorted(), id: \.self) { tag in
                                     HStack(spacing: 6) {
                                         Text(tag)
                                             .font(.system(size: 13, weight: .medium))
@@ -551,6 +554,13 @@ class PostUploadEditorViewModel: ObservableObject {
     @Published var ageRestricted: Bool
     @Published var thumbnail: UIImage?
     
+    // University content
+    @Published var isUniversityContent: Bool = false
+    @Published var selectedCareerPaths: Set<String> = []
+    @Published var difficultyLevel: UniversityVideo.DifficultyLevel = .beginner
+    @Published var universitySkillTags: Set<String> = []
+    @Published var newSkillTag: String = ""
+    
     @Published var hasChanges = false
     @Published var errorMessage: String?
     
@@ -580,6 +590,29 @@ class PostUploadEditorViewModel: ObservableObject {
                 self.hasChanges = true
             }
         }
+    }
+    
+    func toggleCareerPath(_ careerPathId: String) {
+        if selectedCareerPaths.contains(careerPathId) {
+            selectedCareerPaths.remove(careerPathId)
+        } else {
+            selectedCareerPaths.insert(careerPathId)
+        }
+        hasChanges = true
+    }
+    
+    func addSkillTag() {
+        let trimmedTag = newSkillTag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTag.isEmpty else { return }
+        
+        universitySkillTags.insert(trimmedTag)
+        newSkillTag = ""
+        hasChanges = true
+    }
+    
+    func removeSkillTag(_ tag: String) {
+        universitySkillTags.remove(tag)
+        hasChanges = true
     }
     
     func saveChanges() async {
@@ -678,6 +711,74 @@ class PostUploadEditorViewModel: ObservableObject {
 }
 
 // Int.abbreviated extension is defined in FlicksChallengesViewModel.swift
+
+// MARK: - Career Path Pill Button
+struct CareerPathPillButton: View {
+    let careerPath: CareerPath
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Text(careerPath.name)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+                .cornerRadius(20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(isSelected ? Color.clear : AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
+                )
+        }
+    }
+}
+
+// MARK: - Difficulty Level Button
+struct DifficultyLevelButton: View {
+    let level: UniversityVideo.DifficultyLevel
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Text(levelIcon)
+                    .font(.system(size: 20))
+                Text(level.rawValue.capitalized)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(isSelected ? levelColor : AppTheme.Colors.surface)
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Color.clear : AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
+            )
+        }
+    }
+    
+    private var levelIcon: String {
+        switch level {
+        case .beginner: return "🌱"
+        case .intermediate: return "🔥"
+        case .advanced: return "⚡"
+        case .expert: return "👑"
+        }
+    }
+    
+    private var levelColor: Color {
+        switch level {
+        case .beginner: return .green
+        case .intermediate: return .orange
+        case .advanced: return .red
+        case .expert: return .purple
+        }
+    }
+}
 
 #Preview {
     PostUploadEditorView(video: Video.sampleVideos[0])

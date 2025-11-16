@@ -381,6 +381,7 @@ enum VertexAIError: LocalizedError {
     case noResponseText
     case apiError(Int, String)
     case networkError(Error)
+    case invalidEndpoint // ✅ Added for Vertex AI agents
     
     var errorDescription: String? {
         switch self {
@@ -394,6 +395,8 @@ enum VertexAIError: LocalizedError {
             return "Vertex AI error (\(code)): \(message)"
         case .networkError(let error):
             return "Network error: \(error.localizedDescription)"
+        case .invalidEndpoint:
+            return "Invalid Vertex AI endpoint"
         }
     }
 }

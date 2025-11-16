@@ -37,11 +37,13 @@ class ProVideoEditor: ObservableObject {
     @Published var clips: [VideoClip] = []
     
     private var videoAsset: AVAsset?
+    private var videoURL: URL?
     private var existingVideo: Video?
     private var timeObserver: Any?
     
     func loadVideo(url: URL, existing: Video?) {
         self.existingVideo = existing
+        self.videoURL = url
         
         videoAsset = AVAsset(url: url)
         player = AVPlayer(url: url)
@@ -110,8 +112,19 @@ class ProVideoEditor: ObservableObject {
     // MARK: - Editing Operations
     
     func splitAtCurrentTime() {
-        let clip1 = VideoClip(id: UUID().uuidString, start: 0, end: currentTime)
-        let clip2 = VideoClip(id: UUID().uuidString, start: currentTime, end: duration)
+        guard let url = videoURL else { return }
+        let clip1 = VideoClip(
+            id: UUID().uuidString,
+            url: url,
+            duration: currentTime,
+            startTime: 0
+        )
+        let clip2 = VideoClip(
+            id: UUID().uuidString,
+            url: url,
+            duration: duration - currentTime,
+            startTime: currentTime
+        )
         clips.append(contentsOf: [clip1, clip2])
         print("✂️ Split video at \(currentTime)s")
     }
@@ -225,12 +238,6 @@ class ProVideoEditor: ObservableObject {
             }
         }
     }
-}
-
-struct VideoClip: Identifiable {
-    let id: String
-    let start: TimeInterval
-    let end: TimeInterval
 }
 
 // MARK: - Firestore Extension for Video URL Updates

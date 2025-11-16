@@ -610,7 +610,7 @@ struct AdvertiserQuickActionButton: View {
 }
 
 struct CampaignRow: View {
-    let campaign: AdCampaign
+    let campaign: AdvertiserCampaign
     
     var body: some View {
         HStack {
@@ -639,7 +639,7 @@ struct CampaignRow: View {
 }
 
 struct CampaignDetailCard: View {
-    let campaign: AdCampaign
+    let campaign: AdvertiserCampaign
     let viewModel: AdvertiserViewModel
     
     var body: some View {

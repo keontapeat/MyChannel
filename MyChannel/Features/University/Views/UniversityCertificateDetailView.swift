@@ -55,7 +55,7 @@ struct UniversityCertificateDetailView: View {
         }
         .sheet(isPresented: $showShareSheet) {
             if let image = certificateImage {
-                ShareSheet(items: [image])
+                CertificateShareSheet(items: [image])
             }
         }
     }
@@ -142,7 +142,7 @@ struct UniversityCertificateDetailView: View {
                     
                     statBadge(
                         icon: "play.rectangle.fill",
-                        value: "\(progress.videosCompleted)",
+                        value: "\(progress.videosWatched)",
                         label: "Videos"
                     )
                     
@@ -161,7 +161,7 @@ struct UniversityCertificateDetailView: View {
                     HStack(spacing: 40) {
                         // Date
                         VStack(spacing: 4) {
-                            Text(progress.certificateEarnedAt?.formatted(date: .abbreviated, time: .omitted) ?? "")
+                            Text(progress.certificateEarnedDate?.formatted(date: .abbreviated, time: .omitted) ?? "")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(AppTheme.Colors.textPrimary)
                             
@@ -224,8 +224,8 @@ struct UniversityCertificateDetailView: View {
             VStack(spacing: 12) {
                 infoRow(icon: "person.fill", label: "Recipient", value: userName)
                 infoRow(icon: "briefcase.fill", label: "Career Path", value: careerPath.name)
-                infoRow(icon: "calendar.circle.fill", label: "Earned On", value: progress.certificateEarnedAt?.formatted(date: .long, time: .omitted) ?? "")
-                infoRow(icon: "checkmark.seal.fill", label: "Certificate ID", value: progress.certificateId ?? "N/A")
+                infoRow(icon: "calendar.circle.fill", label: "Earned On", value: progress.certificateEarnedDate?.formatted(date: .long, time: .omitted) ?? "")
+                infoRow(icon: "checkmark.seal.fill", label: "Certificate ID", value: progress.id)
                 infoRow(icon: "chart.line.uptrend.xyaxis", label: "AI Verification", value: "\(progress.averageAIScore)% Score")
             }
         }
@@ -366,7 +366,7 @@ struct UniversityCertificateDetailView: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                     
-                    Text("mychannel.live/verify/\(progress.certificateId ?? "xxxxx")")
+                    Text("mychannel.live/verify/\(progress.id)")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(careerPath.color)
                         .padding(.horizontal, 16)
@@ -406,7 +406,7 @@ struct UniversityCertificateDetailView: View {
 }
 
 // MARK: - Share Sheet
-struct ShareSheet: UIViewControllerRepresentable {
+struct CertificateShareSheet: UIViewControllerRepresentable {
     let items: [Any]
     
     func makeUIViewController(context: Context) -> UIActivityViewController {
@@ -421,43 +421,43 @@ struct ShareSheet: UIViewControllerRepresentable {
 #Preview("iOS Development Certificate") {
     NavigationView {
         UniversityCertificateDetailView(
-            careerPath: CareerPath.iosDevelopment,
+            careerPath: CareerPath.allCareerPaths.first { $0.id == "ios-development" }!,
             progress: CareerPathProgress(
                 id: "1",
                 userId: "user1",
                 careerPathId: "ios-development",
                 totalHours: 120,
-                videosCompleted: 45,
-                videosInProgress: 5,
-                totalVideos: 50,
-                averageAIScore: 92,
+                videosWatched: 45,
+                videoIds: ["vid1", "vid2", "vid3"],
+                lastWatchedAt: Date(),
+                certificateProgress: 0.92,
                 certificateEarned: true,
-                certificateId: "CERT-IOS-2025-001",
-                certificateEarnedAt: Date(),
-                lastActiveAt: Date()
+                certificateEarnedDate: Date(),
+                averageAIScore: 92,
+                skillsCovered: ["swift basics", "swiftui", "app architecture"]
             ),
             userName: "Keonta Peat"
         )
     }
 }
 
-#Preview("Business Analytics Certificate") {
+#Preview("Accounting Certificate") {
     NavigationView {
         UniversityCertificateDetailView(
-            careerPath: CareerPath.businessAnalytics,
+            careerPath: CareerPath.allCareerPaths.first { $0.id == "accounting" }!,
             progress: CareerPathProgress(
                 id: "2",
                 userId: "user1",
-                careerPathId: "business-analytics",
-                totalHours: 85,
-                videosCompleted: 32,
-                videosInProgress: 3,
-                totalVideos: 35,
-                averageAIScore: 88,
+                careerPathId: "accounting",
+                totalHours: 250,
+                videosWatched: 300,
+                videoIds: Array(repeating: "vid", count: 300),
+                lastWatchedAt: Date().addingTimeInterval(-86400 * 7),
+                certificateProgress: 1.0,
                 certificateEarned: true,
-                certificateId: "CERT-BIZ-2025-002",
-                certificateEarnedAt: Date().addingTimeInterval(-86400 * 7),
-                lastActiveAt: Date()
+                certificateEarnedDate: Date().addingTimeInterval(-86400 * 7),
+                averageAIScore: 88,
+                skillsCovered: ["accounting basics", "financial statements", "tax preparation"]
             ),
             userName: "Keonta Peat"
         )

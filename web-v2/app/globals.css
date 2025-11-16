@@ -1,0 +1,509 @@
+@import "tailwindcss";
+
+/* 🔥 YOUTUBE-LEVEL PROFESSIONAL THEME SYSTEM 🔥 */
+
+/* YouTube's Exact Color Palette */
+:root {
+  /* Primary Red - YouTube Brand */
+  --color-primary: 255 0 0;
+  --color-primary-hover: 204 0 0;
+  
+  /* Light Mode (Default) - Pure & Professional */
+  --color-background: 255 255 255;        /* Pure white */
+  --color-surface: 249 249 249;           /* Subtle gray */
+  --color-surface-hover: 245 245 245;     /* Hover state */
+  --color-border: 229 229 229;            /* Barely visible borders */
+  
+  --color-text-primary: 15 15 15;         /* True black (high contrast) */
+  --color-text-secondary: 96 96 96;       /* Medium gray */
+  --color-text-tertiary: 136 136 136;     /* Light gray */
+  
+  /* Semantic Colors */
+  --color-success: 46 125 50;
+  --color-warning: 255 152 0;
+  --color-error: 211 47 47;
+  
+  /* Video Player */
+  --color-player-bg: 0 0 0;
+  --color-player-controls: 255 255 255;
+  
+  /* Professional Spacing System (4px base) */
+  --spacing-1: 0.25rem;   /* 4px */
+  --spacing-2: 0.5rem;    /* 8px */
+  --spacing-3: 0.75rem;   /* 12px */
+  --spacing-4: 1rem;      /* 16px */
+  --spacing-5: 1.25rem;   /* 20px */
+  --spacing-6: 1.5rem;    /* 24px */
+  --spacing-8: 2rem;      /* 32px */
+  --spacing-10: 2.5rem;   /* 40px */
+  --spacing-12: 3rem;     /* 48px */
+  
+  /* Border Radius (YouTube Style) */
+  --radius-sm: 0.375rem;  /* 6px */
+  --radius-md: 0.5rem;    /* 8px */
+  --radius-lg: 0.75rem;   /* 12px */
+  --radius-xl: 1rem;      /* 16px */
+  --radius-full: 9999px;  /* Pills */
+  
+  /* Z-index Layers */
+  --z-modal: 1000;
+  --z-dropdown: 100;
+  --z-sidebar: 50;
+  --z-header: 40;
+  --z-mini-player: 999;
+}
+
+/* Dark Mode - Professional Black */
+.dark,
+[data-theme="dark"] {
+  --color-background: 15 15 15;           /* True black */
+  --color-surface: 33 33 33;              /* Charcoal */
+  --color-surface-hover: 40 40 40;        /* Lighter charcoal */
+  --color-border: 48 48 48;               /* Dark gray border */
+  
+  --color-text-primary: 255 255 255;      /* Pure white */
+  --color-text-secondary: 170 170 170;    /* Light gray */
+  --color-text-tertiary: 136 136 136;     /* Medium gray */
+}
+
+@theme inline {
+  /* Colors */
+  --color-primary: rgb(var(--color-primary));
+  --color-primary-hover: rgb(var(--color-primary-hover));
+  --color-background: rgb(var(--color-background));
+  --color-surface: rgb(var(--color-surface));
+  --color-surface-hover: rgb(var(--color-surface-hover));
+  --color-border: rgb(var(--color-border));
+  --color-text-primary: rgb(var(--color-text-primary));
+  --color-text-secondary: rgb(var(--color-text-secondary));
+  --color-text-tertiary: rgb(var(--color-text-tertiary));
+  --color-success: rgb(var(--color-success));
+  --color-warning: rgb(var(--color-warning));
+  --color-error: rgb(var(--color-error));
+  
+  /* YouTube Professional Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  
+  /* Font Sizes (YouTube System) */
+  --font-size-xs: 0.6875rem;   /* 11px - tiny labels */
+  --font-size-sm: 0.75rem;     /* 12px - captions, metadata */
+  --font-size-base: 0.875rem;  /* 14px - body text */
+  --font-size-md: 1rem;        /* 16px - titles */
+  --font-size-lg: 1.125rem;    /* 18px - headings */
+  --font-size-xl: 1.25rem;     /* 20px - large headings */
+  
+  /* Line Heights */
+  --line-height-tight: 1.2;    /* Titles */
+  --line-height-snug: 1.375;   /* Compact text */
+  --line-height-normal: 1.5;   /* Body text */
+  --line-height-relaxed: 1.625; /* Spacious */
+}
+
+/* Base Styles - YouTube Professional */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: rgb(var(--color-background));
+  color: rgb(var(--color-text-primary));
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+  overflow-x: hidden;
+  font-feature-settings: "kern" 1, "liga" 1;
+  -webkit-font-feature-settings: "kern" 1, "liga" 1;
+  text-rendering: optimizeLegibility;
+}
+
+/* Professional Scrollbar (YouTube Style) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Hide Scrollbar Utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Focus Styles (Accessibility) */
+*:focus-visible {
+  outline: 2px solid rgb(var(--color-primary));
+  outline-offset: 2px;
+}
+
+/* Screen Reader Only (Accessibility) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.sr-only:focus,
+.focus\:not-sr-only:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* Selection */
+::selection {
+  background: rgba(var(--color-primary), 0.2);
+  color: rgb(var(--color-text-primary));
+}
+
+/* Video.js Overrides */
+.video-js {
+  font-family: var(--font-sans);
+}
+
+.vjs-big-play-button {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+  border: none !important;
+  border-radius: 50% !important;
+}
+
+.vjs-big-play-button:hover {
+  background-color: rgb(var(--color-primary)) !important;
+}
+
+/* 🔥 YOUTUBE PREMIUM ANIMATIONS & EFFECTS 🔥 */
+
+/* Smooth Transitions */
+.transition-all {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.transition-fast {
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.transition-slow {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Premium Video Card Hover Effects */
+.video-card {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.video-card:hover {
+  transform: translateY(-2px);
+}
+
+.video-card-thumbnail {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.video-card:hover .video-card-thumbnail {
+  transform: scale(1.05);
+}
+
+/* Button Press Effect */
+.btn-press:active {
+  transform: scale(0.98);
+}
+
+/* Card Lift Effect */
+.card-lift {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.dark .card-lift:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Shimmer Loading Animation */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.skeleton {
+  animation: shimmer 2s infinite linear;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.04) 0%,
+    rgba(0, 0, 0, 0.08) 50%,
+    rgba(0, 0, 0, 0.04) 100%
+  );
+  background-size: 1000px 100%;
+}
+
+.dark .skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  background-size: 1000px 100%;
+}
+
+/* Fade In Animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out forwards;
+}
+
+/* Fade In Up Animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  opacity: 0;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  opacity: 0;
+}
+
+/* Stagger Delays */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+
+/* Pulse Animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Glassmorphism Effect */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.dark .glass-effect {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Premium Shadow Levels */
+.shadow-sm-yt {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.shadow-md-yt {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.shadow-lg-yt {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.shadow-xl-yt {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.dark .shadow-sm-yt {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.dark .shadow-md-yt {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.dark .shadow-lg-yt {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.dark .shadow-xl-yt {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+/* YouTube-Style Buttons */
+.btn-youtube {
+  background: rgb(var(--color-primary));
+  color: white;
+  padding: 0.625rem 1rem;
+  border-radius: var(--radius-full);
+  font-weight: 500;
+  font-size: var(--font-size-base);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-youtube:hover {
+  background: rgb(var(--color-primary-hover));
+}
+
+.btn-youtube:active {
+  transform: scale(0.98);
+}
+
+.btn-youtube-secondary {
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text-primary));
+  padding: 0.625rem 1rem;
+  border-radius: var(--radius-full);
+  font-weight: 500;
+  font-size: var(--font-size-base);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-youtube-secondary:hover {
+  background: rgb(var(--color-surface-hover));
+}
+
+.btn-youtube-secondary:active {
+  transform: scale(0.98);
+}
+
+/* YouTube-Style Card */
+.card-youtube {
+  background: rgb(var(--color-surface));
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.card-youtube:hover {
+  background: rgb(var(--color-surface-hover));
+}
+
+/* Hover Scale Effect */
+.hover-scale {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-scale:hover {
+  transform: scale(1.02);
+}
+
+/* Smooth Page Transitions */
+.page-transition {
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+/* Tooltip Fade In */
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tooltip-enter {
+  animation: tooltipFadeIn 0.15s ease-in-out forwards;
+  animation-delay: 0.1s;
+  opacity: 0;
+}
+
+/* Premium Button Hover with Shine */
+.btn-premium {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-premium::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.btn-premium:hover::before {
+  left: 100%;
+}

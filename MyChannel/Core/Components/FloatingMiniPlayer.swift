@@ -11,6 +11,7 @@ import AVFoundation
 
 struct FloatingMiniPlayer: View {
     @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
+    @EnvironmentObject private var appState: AppState // 🔥 NUCLEAR FIX #2: Access user preferences
     @GestureState private var dragState = CGSize.zero  // For YouTube-style swipe down gesture
     @State private var dragOffset: CGFloat = 0  // YouTube-style swipe down offset
     
@@ -56,14 +57,16 @@ struct FloatingMiniPlayer: View {
                         .opacity(0)
                         .allowsHitTesting(false)
                         .onAppear {
-                            // 🔥 AUTO-START PiP when mini player appears
-                            if AVPictureInPictureController.isPictureInPictureSupported() {
+                            // 🔥 NUCLEAR FIX #2: Only auto-start PiP if user has enabled it
+                            if AVPictureInPictureController.isPictureInPictureSupported() && appState.autoPiPEnabled {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                     if !globalPlayer.isPiPActive {
                                         globalPlayer.isPiPActive = true
-                                        print("📺 [FloatingMiniPlayer] Auto-starting system PiP")
+                                        print("📺 [FloatingMiniPlayer] Auto-starting system PiP (user opted in)")
                                     }
                                 }
+                            } else if !appState.autoPiPEnabled {
+                                print("ℹ️ [FloatingMiniPlayer] Auto-PiP disabled by user preference")
                             }
                         }
                     }

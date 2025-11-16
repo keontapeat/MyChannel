@@ -241,24 +241,24 @@ final class MatchVerificationService: ObservableObject {
         print("💰 [MatchVerification] Payout: $\(winnerPayout) (fee: $\(platformFee))")
         
         // Step 1: Release escrow to winner
-        try await escrowService.releaseToWinner(
+        try await escrowService.releaseFunds(
             matchId: matchId,
             winnerId: winnerId,
+            loserId: loserId,
             amount: winnerPayout
         )
         
         // Step 2: Update winner's wallet
-        try await walletService.addFunds(
+        try await walletService.depositFunds(
             userId: winnerId,
             amount: winnerPayout,
-            source: .matchWin,
-            matchId: matchId
+            paymentMethodId: "match_win_\(matchId)"
         )
         
         // Step 3: Update match status
         try await updateMatchStatus(
             matchId: matchId,
-            status: .complete,
+            status: .completed,
             winnerId: winnerId
         )
         
@@ -266,7 +266,7 @@ final class MatchVerificationService: ObservableObject {
         let verification = MatchVerification(
             id: matchId,
             matchId: matchId,
-            status: .verified,
+            status: .completed,
             winnerId: winnerId,
             submissions: [submission1.id, submission2.id],
             autoApproved: autoApproved,
@@ -287,7 +287,7 @@ final class MatchVerificationService: ObservableObject {
         )
         
         return VerificationResult(
-            status: .verified,
+            status: .completed,
             winnerId: winnerId,
             confidence: verification.confidence,
             requiresReview: false
@@ -364,30 +364,38 @@ final class MatchVerificationService: ObservableObject {
         // Get match
         let match = try await getMatch(matchId: matchId)
         
+        // Calculate loserId (opponent of winner)
+        let loserId: String
+        if match.challengerId == winnerId {
+            loserId = match.opponentId
+        } else {
+            loserId = match.challengerId
+        }
+        
         // Calculate payout
         let totalWager = match.wagerAmount * 2
         let platformFee = totalWager * 0.1
         let winnerPayout = totalWager - platformFee
         
         // Release escrow
-        try await escrowService.releaseToWinner(
+        try await escrowService.releaseFunds(
             matchId: matchId,
             winnerId: winnerId,
+            loserId: loserId,
             amount: winnerPayout
         )
         
         // Update wallet
-        try await walletService.addFunds(
+        try await walletService.depositFunds(
             userId: winnerId,
             amount: winnerPayout,
-            source: .matchWin,
-            matchId: matchId
+            paymentMethodId: "match_win_\(matchId)"
         )
         
         // Update match status
         try await updateMatchStatus(
             matchId: matchId,
-            status: .complete,
+            status: .completed,
             winnerId: winnerId
         )
         
@@ -524,10 +532,21 @@ final class MatchVerificationService: ObservableObject {
             id: matchId,
             challengerId: "player1",
             opponentId: "player2",
+            matchType: .headToHead,
             wagerAmount: 100.0,
-            status: .inProgress,
             category: .gaming,
-            createdAt: Date()
+            rules: VersusMatch.MatchRules(
+                duration: 3600,
+                category: .gaming,
+                winCondition: .mostViews
+            ),
+            status: .live,
+            winnerId: nil,
+            createdAt: Date(),
+            scheduledDate: Date(),
+            startedAt: Date(),
+            completedAt: nil,
+            finalStats: nil
         )
     }
     
@@ -626,7 +645,7 @@ struct MatchVerification {
     let reviewNote: String?
 }
 
-enum MatchStatus: String {
+enum VerificationMatchStatus: String {
     case pending = "pending"
     case inProgress = "in_progress"
     case verified = "verified"
@@ -670,21 +689,5 @@ enum VerificationError: LocalizedError {
     }
 }
 
-// MARK: - Mock VersusMatch (TODO: Remove when VersusMatchService integrated)
-
-struct VersusMatch {
-    let id: String
-    let challengerId: String
-    let opponentId: String
-    let wagerAmount: Double
-    let status: MatchStatus
-    let category: VSMatchCategory
-    let createdAt: Date
-}
-
-enum VSMatchCategory: String {
-    case gaming = "gaming"
-    case views = "views"
-    case likes = "likes"
-}
+// MARK: - Mock removed - using real VersusMatch from VersusMatchModels.swift
 

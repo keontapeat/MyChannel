@@ -468,7 +468,7 @@ struct FacebookParityStoryCreatorView: View {
         }
     }
     
-    private func applySelectedEffect(_ effect: AREffect) {
+    private func applySelectedEffect(_ effect: FacebookAREffect) {
         // Apply AR effect
         facebookEngine.currentEffect = effect
     }
@@ -718,9 +718,9 @@ struct FacebookFilterPickerView: View {
 }
 
 struct FacebookEffectPickerView: View {
-    let effects: [AREffect]
-    @Binding var selectedEffect: AREffect?
-    let onEffectSelected: (AREffect) -> Void
+    let effects: [FacebookAREffect]
+    @Binding var selectedEffect: FacebookAREffect?
+    let onEffectSelected: (FacebookAREffect) -> Void
     
     var body: some View {
         Text("Effect Picker - \(effects.count) effects available")

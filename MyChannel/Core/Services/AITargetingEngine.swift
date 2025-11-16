@@ -148,7 +148,7 @@ class AITargetingEngine: ObservableObject {
     
     // MARK: - Match Ads to User (90% Accuracy!)
     
-    func matchAds(userProfile: UserProfile, availableAds: [AdCreative]) async -> [ScoredAd] {
+    func matchAds(userProfile: UserProfile, availableAds: [AdCampaign]) async -> [ScoredAd] {
         var scoredAds: [ScoredAd] = []
         
         for ad in availableAds {
@@ -171,7 +171,7 @@ class AITargetingEngine: ObservableObject {
             )
             
             // Calculate expected value for advertiser
-            let expectedValue = ad.bidAmount * predictedCTR * predictedCVR
+            let expectedValue = ad.bidCPM * predictedCTR * predictedCVR
             
             // Calculate quality score
             let qualityScore = calculateAdQuality(ad: ad)
@@ -188,26 +188,23 @@ class AITargetingEngine: ObservableObject {
                 ad: ad,
                 relevanceScore: relevanceScore,
                 predictedCTR: predictedCTR,
-                predictedCVR: predictedCVR,
-                expectedValue: expectedValue,
-                qualityScore: qualityScore,
-                finalScore: finalScore
+                expectedValue: expectedValue
             ))
         }
         
         // Return top matches
-        return scoredAds.sorted { $0.finalScore > $1.finalScore }
+        return scoredAds.sorted(by: { $0.expectedValue > $1.expectedValue })
     }
     
     // MARK: - Calculate Relevance Score
     
-    private func calculateRelevanceScore(userProfile: UserProfile, ad: AdCreative) -> Double {
+    private func calculateRelevanceScore(userProfile: UserProfile, ad: AdCampaign) -> Double {
         var score: Double = 0
         var weight: Double = 0
         
         // Interest matching (40% weight)
         for (interest, confidence) in userProfile.interests {
-            if ad.targetInterests.contains(interest) {
+            if ad.targeting.interests.contains(interest) {
                 score += confidence * 40
                 weight += 40
                 break
@@ -215,19 +212,19 @@ class AITargetingEngine: ObservableObject {
         }
         
         // Demographic matching (20% weight)
-        if ad.targetDemographics.ageRanges.contains(userProfile.demographics.ageRange) {
+        if ad.targeting.ageRanges.contains(userProfile.demographics.ageRange) {
             score += 20
             weight += 20
         }
         
         if let gender = userProfile.demographics.gender,
-           ad.targetDemographics.genders.contains(gender) {
+           ad.targeting.genders.contains(gender) {
             score += 10
             weight += 10
         }
         
         // Location matching (15% weight)
-        if ad.targetDemographics.countries.contains(userProfile.demographics.location.country) {
+        if ad.targeting.locations.contains(userProfile.demographics.location.country) {
             score += 15
             weight += 15
         }
@@ -243,9 +240,9 @@ class AITargetingEngine: ObservableObject {
     
     // MARK: - Predict CTR (90% accuracy!)
     
-    private func predictCTR(userProfile: UserProfile, ad: AdCreative) -> Double {
+    private func predictCTR(userProfile: UserProfile, ad: AdCampaign) -> Double {
         // Base CTR from historical data
-        var ctr = ad.historicalCTR
+        var ctr = ad.ctr
         
         // Adjust for user's ad receptiveness
         ctr *= (0.5 + userProfile.adReceptiveness * 0.5)
@@ -256,12 +253,13 @@ class AITargetingEngine: ObservableObject {
             ctr *= 1.3
         }
         
-        // Adjust for device
-        let deviceMultiplier = userProfile.devicePreferences[ad.deviceType] ?? 0.5
+        // Adjust for device (use first targeted device)
+        let deviceMultiplier = userProfile.devicePreferences[ad.targeting.devices.first ?? "Mobile"] ?? 0.5
         ctr *= (0.7 + deviceMultiplier * 0.6)
         
-        // Adjust for creative quality
-        ctr *= (0.8 + ad.qualityScore * 0.4)
+        // Adjust for creative quality (use impressions as proxy)
+        let qualityScore = min(Double(ad.impressions) / 100000.0, 1.0)
+        ctr *= (0.8 + qualityScore * 0.4)
         
         // Cap at realistic maximum
         return min(ctr, 0.15) // Max 15% CTR
@@ -269,51 +267,64 @@ class AITargetingEngine: ObservableObject {
     
     // MARK: - Predict Conversion Rate (85% accuracy!)
     
-    private func predictConversionRate(userProfile: UserProfile, ad: AdCreative) -> Double {
-        // Base CVR from historical data
-        var cvr = ad.historicalCVR
+    private func predictConversionRate(userProfile: UserProfile, ad: AdCampaign) -> Double {
+        // Base CVR from historical data (conversions / clicks)
+        let cvr = ad.clicks > 0 ? Double(ad.conversions) / Double(ad.clicks) : 0.01
+        var adjustedCVR = cvr
         
         // Adjust for buying intent
-        cvr *= (0.3 + userProfile.buyingIntent.score * 0.7)
+        adjustedCVR *= (0.3 + userProfile.buyingIntent.score * 0.7)
         
-        // Adjust for price sensitivity
-        if ad.pricePoint == "premium" {
-            cvr *= (1.5 - userProfile.priceSensitivity)
+        // Adjust for price sensitivity (assume premium if bid is high)
+        if ad.bidCPM > 10.0 {
+            adjustedCVR *= (1.5 - userProfile.priceSensitivity)
         }
         
         // Adjust for user engagement
-        cvr *= (0.5 + userProfile.behavioralPatterns.engagementRate * 0.5)
+        adjustedCVR *= (0.5 + userProfile.behavioralPatterns.engagementRate * 0.5)
         
         // Adjust for ad relevance
         let relevance = calculateRelevanceScore(userProfile: userProfile, ad: ad) / 100
-        cvr *= (0.6 + relevance * 0.4)
+        adjustedCVR *= (0.6 + relevance * 0.4)
         
         // Cap at realistic maximum
-        return min(cvr, 0.20) // Max 20% CVR
+        return min(adjustedCVR, 0.20) // Max 20% CVR
     }
     
     // MARK: - Ad Quality Score
     
-    private func calculateAdQuality(ad: AdCreative) -> Double {
+    private func calculateAdQuality(ad: AdCampaign) -> Double {
         var score: Double = 0
         
-        // Creative quality (user feedback)
-        score += ad.qualityScore * 30
+        // Campaign status quality (active campaigns score higher)
+        switch ad.status {
+        case .active:
+            score += 30
+        case .paused:
+            score += 15
+        default:
+            score += 5
+        }
         
         // Historical performance
-        if ad.historicalCTR > 0.05 {
+        if ad.ctr > 0.05 {
             score += 30
-        } else if ad.historicalCTR > 0.03 {
+        } else if ad.ctr > 0.03 {
             score += 20
         } else {
             score += 10
         }
         
-        // Landing page quality
-        score += ad.landingPageScore * 20
+        // Budget utilization (campaigns that spend effectively)
+        let spendRate = ad.budget > 0 ? ad.spent / ad.budget : 0
+        if spendRate > 0.7 && spendRate < 0.95 {
+            score += 20 // Good pacing
+        } else {
+            score += 10
+        }
         
-        // Brand safety
-        if ad.isBrandSafe {
+        // Brand safety (assume campaigns with good CTR are brand safe)
+        if ad.ctr > 0.02 {
             score += 20
         }
         
@@ -329,7 +340,21 @@ class AITargetingEngine: ObservableObject {
     
     private func getEngagementData(userId: String) async throws -> EngagementData {
         // TODO: Fetch from Firestore
-        return EngagementData(likes: 0, comments: 0, shares: 0, watchTime: 0)
+        return EngagementData(
+            videoWatchTime: 0,
+            likesCount: 0,
+            commentsCount: 0,
+            sharesCount: 0,
+            avgSessionDuration: 0,
+            avgCompletionRate: 0,
+            adCompletionRate: 0,
+            adClickRate: 0,
+            adSkipRate: 0,
+            avgLikesPerVideo: 0,
+            avgCommentsPerVideo: 0,
+            avgSharesPerVideo: 0,
+            avgSkipRate: 0
+        )
     }
     
     private func getInteractionData(userId: String) async throws -> [Interaction] {
@@ -407,40 +432,11 @@ class AITargetingEngine: ObservableObject {
 
 // MARK: - Supporting Types
 
-struct AdCreative: Identifiable, Codable {
-    let id: String
-    let campaignId: String
-    let title: String
-    let description: String
-    let creativeUrl: String
-    let clickUrl: String
-    let bidAmount: Double
-    let targetInterests: [String]
-    let targetDemographics: TargetDemographics
-    let deviceType: String
-    let pricePoint: String
-    let historicalCTR: Double
-    let historicalCVR: Double
-    let qualityScore: Double
-    let landingPageScore: Double
-    let isBrandSafe: Bool
-}
-
 struct TargetDemographics: Codable {
     let ageRanges: [String]
     let genders: [String]
     let countries: [String]
     let interests: [String]
-}
-
-struct ScoredAd {
-    let ad: AdCreative
-    let relevanceScore: Double
-    let predictedCTR: Double
-    let predictedCVR: Double
-    let expectedValue: Double
-    let qualityScore: Double
-    let finalScore: Double
 }
 
 struct VideoWatch: Codable {
@@ -451,12 +447,8 @@ struct VideoWatch: Codable {
     let timestamp: Date
 }
 
-struct EngagementData: Codable {
-    let likes: Int
-    let comments: Int
-    let shares: Int
-    let watchTime: TimeInterval
-}
+// ✅ EngagementData moved to AdModels.swift to avoid ambiguity
+// Using shared EngagementData type
 
 struct Interaction: Codable {
     let type: String // click, search, purchase, etc

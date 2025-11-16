@@ -235,7 +235,7 @@ struct OnePersonStudioView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 ForEach(StudioTool.allCases) { tool in
-                    ToolButton(
+                    StudioToolButton(
                         title: tool.rawValue,
                         icon: tool.icon,
                         isSelected: selectedTool == tool
@@ -709,7 +709,7 @@ struct OnePersonStudioView: View {
 
 // MARK: - Supporting Views
 
-struct ToolButton: View {
+struct StudioToolButton: View {
     let title: String
     let icon: String
     let isSelected: Bool

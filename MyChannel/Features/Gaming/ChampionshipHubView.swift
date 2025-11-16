@@ -21,7 +21,7 @@ struct ChampionshipHubView: View {
                 
                 // 3D Tournament Bracket (if active tournament)
                 if let tournament = tournamentService.activeTournaments.first {
-                    TournamentBracket3DView(tournament: tournament)
+                    TournamentBracket3DView(tournament: tournament.toBracket3DTournament())
                 } else if !tournamentService.upcomingTournaments.isEmpty,
                           let upcoming = tournamentService.upcomingTournaments.first {
                     // Show upcoming tournament
@@ -33,9 +33,15 @@ struct ChampionshipHubView: View {
                             
                             Spacer()
                             
-                            Text("Starts \(upcoming.startDate.formatted(date: .abbreviated, time: .shortened))")
-                                .font(.system(size: 13))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            if let startDate = upcoming.startDate {
+                                Text("Starts \(startDate.formatted(date: .abbreviated, time: .shortened))")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            } else {
+                                Text("Date TBD")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            }
                         }
                         
                         Text(upcoming.name)

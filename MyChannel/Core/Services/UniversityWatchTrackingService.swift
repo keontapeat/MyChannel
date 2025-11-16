@@ -109,7 +109,7 @@ final class UniversityWatchTrackingService: ObservableObject {
             
             // Update AI score average
             if let aiScore = aiScore {
-                let totalScore = progress.averageAIScore * (progress.videosWatched - 1) + aiScore
+                let totalScore = Double(progress.averageAIScore * (progress.videosWatched - 1) + aiScore)
                 progress.averageAIScore = Int(totalScore / Double(progress.videosWatched))
             }
             

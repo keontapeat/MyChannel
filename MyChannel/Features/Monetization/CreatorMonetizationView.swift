@@ -898,7 +898,8 @@ class CreatorMonetizationViewModel: ObservableObject {
             let date = calendar.date(byAdding: .day, value: -daysAgo, to: today)!
             return EarningsDataPoint(
                 date: date,
-                amount: Double.random(in: 50...500)
+                amount: Double.random(in: 50...500),
+                source: nil
             )
         }.reversed()
     }
@@ -969,18 +970,8 @@ class CreatorMonetizationViewModel: ObservableObject {
     }
 }
 
-enum TimePeriod {
-    case week, month, quarter, year
-}
-
 enum PayoutMethod {
     case bank, paypal, stripe
-}
-
-struct EarningsDataPoint: Identifiable {
-    let id = UUID()
-    let date: Date
-    let amount: Double
 }
 
 struct VideoEarnings: Identifiable {

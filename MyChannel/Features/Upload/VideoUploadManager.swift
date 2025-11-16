@@ -58,6 +58,10 @@ class VideoUploadManager: ObservableObject {
     @Published var pendingCaptions: [(url: URL, lang: String)] = []
     @Published var pendingDubs: [(url: URL, lang: String)] = []
     
+    // 🔥 NUCLEAR FIX #1: Upload cancellation support
+    private var uploadTask: Task<Video, Error>?
+    @Published var isCancelling: Bool = false
+    
     // MARK: - Prepare from URL (Grid picker or Camera)
     func prepareVideo(from url: URL) async {
         self.videoURL = url
@@ -162,19 +166,38 @@ class VideoUploadManager: ObservableObject {
         isUploading = true
         uploadProgress = 0.0
         uploadError = nil
+        isCancelling = false
+        
+        // 🔥 NUCLEAR FIX #1: Create cancellable upload task
+        uploadTask = Task {
+            do {
+                let metadata = LocalUploadVideoMetadata(
+                    title: title,
+                    description: description,
+                    tags: Array(selectedTags),
+                    category: selectedCategory,
+                    isPublic: isPublic,
+                    thumbnailData: thumbnail?.jpegData(compressionQuality: 0.8),
+                    monetizationEnabled: monetizationEnabled
+                )
+                
+                let video = try await uploadVideoWithProgress(videoData, metadata: metadata)
+                
+                // 🔥 Only set uploadedVideo if not cancelled
+                if !Task.isCancelled {
+                    return video
+                } else {
+                    throw CancellationError()
+                }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                throw error
+            }
+        }
         
         do {
-            let metadata = LocalUploadVideoMetadata(
-                title: title,
-                description: description,
-                tags: Array(selectedTags),
-                category: selectedCategory,
-                isPublic: isPublic,
-                thumbnailData: thumbnail?.jpegData(compressionQuality: 0.8),
-                monetizationEnabled: monetizationEnabled
-            )
-            
-            uploadedVideo = try await uploadVideoWithProgress(videoData, metadata: metadata)
+            uploadedVideo = try await uploadTask?.value
             if let uploadedVideo {
                 // 🔥 SAVE TO FIRESTORE: Ensure video is saved to Firestore for profile display
                 // 🔥 FIX: Ensure viewCount is initialized to 0 in Firestore
@@ -274,11 +297,38 @@ class VideoUploadManager: ObservableObject {
             }
             cleanupTempFiles()
             resetForm()
+        } catch is CancellationError {
+            // 🔥 NUCLEAR FIX #1: Handle cancellation gracefully
+            uploadError = "Upload cancelled by user"
+            print("🚫 [VideoUploadManager] Upload cancelled by user")
         } catch {
             uploadError = error.localizedDescription
         }
         
         isUploading = false
+        isCancelling = false
+    }
+    
+    // 🔥 NUCLEAR FIX #1: Cancel upload functionality
+    func cancelUpload() {
+        guard isUploading, !isCancelling else {
+            print("⚠️ [VideoUploadManager] Cannot cancel - not uploading or already cancelling")
+            return
+        }
+        
+        print("🚫 [VideoUploadManager] Cancelling upload...")
+        isCancelling = true
+        uploadTask?.cancel()
+        
+        // Reset state
+        isUploading = false
+        uploadProgress = 0.0
+        uploadError = "Upload cancelled by user"
+        
+        // Haptic feedback
+        HapticManager.shared.notification(type: .warning)
+        
+        print("✅ [VideoUploadManager] Upload cancellation complete")
     }
 
     // MARK: - Attachments API

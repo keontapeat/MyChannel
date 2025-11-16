@@ -541,17 +541,35 @@ class FraudDetectionAI: ObservableObject {
             fraudsCaught += 1
         }
         
+        // Determine risk level based on fraud score
+        let riskLevel: FraudLevel
+        if mlScore > 0.7 {
+            riskLevel = .high
+        } else if mlScore > 0.4 {
+            riskLevel = .medium
+        } else {
+            riskLevel = .low
+        }
+        
+        // Convert FraudIndicators to String array
+        let fraudIndicators = [
+            FraudIndicator(name: "Behavior", score: behaviorScore, weight: 0.4),
+            FraudIndicator(name: "Device", score: deviceScore, weight: 0.3),
+            FraudIndicator(name: "Engagement", score: engagementScore, weight: 0.3)
+        ]
+        let indicatorStrings = fraudIndicators.map { "\($0.name): \(String(format: "%.2f", $0.score))" }
+        
         return FraudAnalysis(
             userId: activity.userId,
+            riskScore: mlScore,
             fraudScore: mlScore,
+            riskLevel: riskLevel,
+            level: riskLevel,
+            indicators: indicatorStrings,
+            primaryReason: isFraud ? "High fraud score detected" : "Normal activity",
+            recommendedAction: isFraud ? "Ban user immediately" : "Allow activity",
             isFraud: isFraud,
-            indicators: [
-                FraudIndicator(name: "Behavior", score: behaviorScore, weight: 0.4),
-                FraudIndicator(name: "Device", score: deviceScore, weight: 0.3),
-                FraudIndicator(name: "Engagement", score: engagementScore, weight: 0.3)
-            ],
-            action: isFraud ? .ban : .allow,
-            confidence: 0.999,
+            action: isFraud ? "ban" : "allow",
             detectedAt: Date()
         )
     }
@@ -1023,16 +1041,6 @@ struct UserActivity {
     let watchTimeZero: Bool
     let noInteraction: Bool
     let impossibleActions: Bool
-}
-
-struct FraudAnalysis {
-    let userId: String
-    let fraudScore: Double
-    let isFraud: Bool
-    let indicators: [FraudIndicator]
-    let action: FraudAction
-    let confidence: Double
-    let detectedAt: Date
 }
 
 struct FraudIndicator {

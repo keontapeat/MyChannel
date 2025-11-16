@@ -9,7 +9,7 @@ import SwiftUI
 import AVKit
 
 // MARK: - ScaleButtonStyle
-struct ScaleButtonStyle: ButtonStyle {
+struct MiniPlayerScaleButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
@@ -92,7 +92,7 @@ struct MiniPlayerControlView: View {
                                         .font(.system(size: 14))
                                         .foregroundColor(.primary)
                                 }
-                                .buttonStyle(ScaleButtonStyle())
+                                .buttonStyle(MiniPlayerScaleButtonStyle())
                                 
                                 // Close Button
                                 Button(action: {
@@ -104,7 +104,7 @@ struct MiniPlayerControlView: View {
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.secondary)
                                 }
-                                .buttonStyle(ScaleButtonStyle())
+                                .buttonStyle(MiniPlayerScaleButtonStyle())
                             }
                         }
                         .padding(.horizontal, 12)

@@ -267,25 +267,25 @@ final class ChannelBoostAGI: ObservableObject {
         // Analyze user psychology
         let psychology = await analyzeUserPsychology(user)
         
-        var steps: [OnboardingStep] = []
+        var steps: [ChannelBoostOnboardingStep] = []
         
         // Customize based on psychology
         if psychology.techSavvy {
             steps = [
-                OnboardingStep(title: "Quick Start", duration: 30, skippable: true),
-                OnboardingStep(title: "Advanced Features", duration: 60, skippable: false)
+                ChannelBoostOnboardingStep(title: "Quick Start", duration: 30, skippable: true),
+                ChannelBoostOnboardingStep(title: "Advanced Features", duration: 60, skippable: false)
             ]
         } else if psychology.needsGuidance {
             steps = [
-                OnboardingStep(title: "Welcome!", duration: 45, skippable: false),
-                OnboardingStep(title: "Create Your Profile", duration: 60, skippable: false),
-                OnboardingStep(title: "Upload First Video", duration: 120, skippable: false),
-                OnboardingStep(title: "Grow Your Channel", duration: 90, skippable: true)
+                ChannelBoostOnboardingStep(title: "Welcome!", duration: 45, skippable: false),
+                ChannelBoostOnboardingStep(title: "Create Your Profile", duration: 60, skippable: false),
+                ChannelBoostOnboardingStep(title: "Upload First Video", duration: 120, skippable: false),
+                ChannelBoostOnboardingStep(title: "Grow Your Channel", duration: 90, skippable: true)
             ]
         } else {
             steps = [
-                OnboardingStep(title: "Welcome", duration: 30, skippable: true),
-                OnboardingStep(title: "Get Started", duration: 60, skippable: false)
+                ChannelBoostOnboardingStep(title: "Welcome", duration: 30, skippable: true),
+                ChannelBoostOnboardingStep(title: "Get Started", duration: 60, skippable: false)
             ]
         }
         
@@ -420,12 +420,12 @@ struct UserPsychology {
 }
 
 struct OnboardingFlow {
-    let steps: [OnboardingStep]
+    let steps: [ChannelBoostOnboardingStep]
     let estimatedTime: Int // seconds
     let personalizationScore: Double
 }
 
-struct OnboardingStep {
+struct ChannelBoostOnboardingStep {
     let title: String
     let duration: Int // seconds
     let skippable: Bool

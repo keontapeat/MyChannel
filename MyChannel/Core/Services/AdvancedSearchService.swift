@@ -12,7 +12,7 @@ import FirebaseFirestore
 class AdvancedSearchService: ObservableObject {
     
     @Published var searchResults: [SearchResult] = []
-    @Published var searchSuggestions: [SearchSuggestion] = []
+    @Published var searchSuggestions: [AdvancedSearchSuggestion] = []
     @Published var isSearching = false
     @Published var searchAnalytics = SearchAnalytics()
     @Published var popularSearches: [String] = []
@@ -121,7 +121,7 @@ class AdvancedSearchService: ObservableObject {
     }
     
     /// Real-time search suggestions with auto-complete
-    func getSearchSuggestions(for query: String, userId: String? = nil) async -> [SearchSuggestion] {
+    func getSearchSuggestions(for query: String, userId: String? = nil) async -> [AdvancedSearchSuggestion] {
         guard query.count >= 2 else { return [] }
         
         let suggestions = await autoCompleteService.generateSuggestions(
@@ -138,7 +138,7 @@ class AdvancedSearchService: ObservableObject {
     }
     
     /// Trending and popular searches
-    func getTrendingSearches(limit: Int = 10) async -> [TrendingSearch] {
+    func getTrendingSearches(limit: Int = 10) async -> [AdvancedTrendingSearch] {
         return await autoCompleteService.getTrendingSearches(limit: limit)
     }
     
@@ -806,9 +806,9 @@ class AutoCompleteService {
         query: String,
         userId: String?,
         maxSuggestions: Int
-    ) async -> [SearchSuggestion] {
+    ) async -> [AdvancedSearchSuggestion] {
         
-        var suggestions: [SearchSuggestion] = []
+        var suggestions: [AdvancedSearchSuggestion] = []
         
         // Query completion suggestions
         let completions = [
@@ -820,7 +820,7 @@ class AutoCompleteService {
         ].prefix(maxSuggestions / 2)
         
         for completion in completions {
-            suggestions.append(SearchSuggestion(
+            suggestions.append(AdvancedSearchSuggestion(
                 type: .queryCompletion,
                 text: completion,
                 highlightRange: 0..<query.count
@@ -836,7 +836,7 @@ class AutoCompleteService {
         ].prefix(maxSuggestions - suggestions.count)
         
         for relatedQuery in related {
-            suggestions.append(SearchSuggestion(
+            suggestions.append(AdvancedSearchSuggestion(
                 type: .relatedSearch,
                 text: relatedQuery,
                 highlightRange: nil
@@ -846,13 +846,13 @@ class AutoCompleteService {
         return suggestions
     }
     
-    func getTrendingSearches(limit: Int) async -> [TrendingSearch] {
+    func getTrendingSearches(limit: Int) async -> [AdvancedTrendingSearch] {
         return [
-            TrendingSearch(query: "funny cats", trend: .rising, changePercentage: 120),
-            TrendingSearch(query: "cooking tutorial", trend: .stable, changePercentage: 5),
-            TrendingSearch(query: "new music", trend: .rising, changePercentage: 80),
-            TrendingSearch(query: "gaming", trend: .falling, changePercentage: -15),
-            TrendingSearch(query: "tech review", trend: .rising, changePercentage: 45)
+            AdvancedTrendingSearch(query: "funny cats", trend: .rising, changePercentage: 120),
+            AdvancedTrendingSearch(query: "cooking tutorial", trend: .stable, changePercentage: 5),
+            AdvancedTrendingSearch(query: "new music", trend: .rising, changePercentage: 80),
+            AdvancedTrendingSearch(query: "gaming", trend: .falling, changePercentage: -15),
+            AdvancedTrendingSearch(query: "tech review", trend: .rising, changePercentage: 45)
         ].prefix(limit).map { $0 }
     }
 }
@@ -1025,7 +1025,7 @@ struct ProcessedQuery {
     let searchTerms: String
 }
 
-struct SearchSuggestion: Identifiable {
+struct AdvancedSearchSuggestion: Identifiable {
     let id = UUID().uuidString
     let type: SuggestionType
     let text: String
@@ -1038,7 +1038,7 @@ struct SearchSuggestion: Identifiable {
     }
 }
 
-struct TrendingSearch: Identifiable {
+struct AdvancedTrendingSearch: Identifiable {
     let id = UUID().uuidString
     let query: String
     let trend: TrendDirection

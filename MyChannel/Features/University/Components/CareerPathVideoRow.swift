@@ -15,27 +15,58 @@ struct CareerPathVideoRow: View {
     let onVideoTap: (UniversityVideo) -> Void
     
     @State private var scrollOffset: CGFloat = 0
+    @State private var visibleCardIndices: Set<Int> = []
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
             rowHeader
             
-            // Horizontal Scrolling Videos
+            // 🔥 NUCLEAR: Horizontal Scrolling with Lazy Loading & Prefetching
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(videos) { video in
-                        VideoCard(video: video, careerPathColor: careerPath.color)
+                LazyHStack(spacing: 16) {
+                    ForEach(Array(videos.enumerated()), id: \.element.id) { index, video in
+                        CareerPathVideoCard(video: video, careerPathColor: careerPath.color)
                             .onTapGesture {
                                 HapticManager.shared.impact(style: .light)
                                 onVideoTap(video)
                             }
+                            .onAppear {
+                                // 🔥 PREFETCH: Prefetch next 3 video thumbnails
+                                prefetchNextVideos(currentIndex: index)
+                                visibleCardIndices.insert(index)
+                            }
+                            .onDisappear {
+                                visibleCardIndices.remove(index)
+                            }
+                            // 🔥 ANIMATION: Staggered appearance
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .opacity
+                            ))
+                            .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.03), value: visibleCardIndices.contains(index))
                     }
                 }
                 .padding(.horizontal, 20)
             }
         }
         .padding(.vertical, 12)
+        // 🔥 ACCESSIBILITY: Announce row content
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(careerPath.name) video row")
+        .accessibilityHint("Swipe left or right to browse \(videos.count) videos")
+    }
+    
+    // MARK: - Image Prefetching
+    
+    private func prefetchNextVideos(currentIndex: Int) {
+        let nextIndices = (currentIndex + 1)...(currentIndex + 3)
+        let nextURLs = nextIndices.compactMap { index in
+            videos.indices.contains(index) ? videos[index].thumbnailURL : nil
+        }
+        
+        let urls = nextURLs.compactMap { URL(string: $0) }
+        ImagePrefetcher.shared.prefetch(urls: urls)
     }
     
     // MARK: - Row Header
@@ -114,12 +145,16 @@ struct CareerPathVideoRow: View {
 
 // MARK: - Video Card
 
-struct VideoCard: View {
+struct CareerPathVideoCard: View {
     let video: UniversityVideo
     let careerPathColor: Color
     
     private let cardWidth: CGFloat = 280
     private let cardHeight: CGFloat = 180
+    
+    @State private var prefetchedImage: UIImage?
+    @State private var isPressed = false
+    @Environment(\.sizeCategory) var sizeCategory
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -137,7 +172,50 @@ struct VideoCard: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
+        .shadow(
+            color: .black.opacity(isPressed ? 0.12 : 0.08),
+            radius: isPressed ? 16 : 12,
+            x: 0,
+            y: isPressed ? 6 : 4
+        )
+        .scaleEffect(isPressed ? 0.97 : 1.0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+        .onAppear {
+            // Prefetch next images for smooth scrolling
+            // Note: Image prefetching is handled by prefetchNextVideos in the parent view
+        }
+        // 🔥 ACCESSIBILITY: Comprehensive video card labels
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(videoAccessibilityLabel)
+        .accessibilityHint("Double tap to watch video")
+        .accessibilityAddTraits(.isButton)
+    }
+    
+    // MARK: - Accessibility
+    
+    private var videoAccessibilityLabel: String {
+        var label = video.title
+        label += ", Duration \(formatDuration(video.duration))"
+        label += ", by \(video.creatorName)"
+        
+        if video.completed {
+            label += ", Completed"
+        } else if video.watchProgress > 0 {
+            label += ", \(Int(video.watchProgress * 100))% watched"
+        }
+        
+        if let aiScore = video.aiVerificationScore, aiScore >= 70 {
+            label += ", AI verified score \(aiScore)"
+        }
+        
+        label += ", Difficulty: \(video.difficultyLevel.rawValue)"
+        
+        return label
     }
     
     private var thumbnailSection: some View {

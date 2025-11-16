@@ -57,6 +57,10 @@ struct Video: Identifiable, Codable, Hashable {
     var universityDifficultyLevel: UniversityVideo.DifficultyLevel?  // Difficulty level
     var universityCertificateEligible: Bool?  // Eligible for certificate tracking
     
+    // ✅ Additional properties for Vertex AI agents
+    var isTrending: Bool?  // For PlacementOptimizationAgent
+    var hasCopyrightStrike: Bool?  // For PlacementOptimizationAgent
+    
     // MARK: - Custom Coding Keys
     private enum CodingKeys: String, CodingKey {
         case id, title, description, thumbnailURL, videoURL, duration
@@ -301,9 +305,6 @@ struct Video: Identifiable, Codable, Hashable {
         return chapters
     }
     
-    var isTrending: Bool {
-        viewCount > 100_000 && Date().timeIntervalSince(createdAt) < 7 * 24 * 60 * 60 // High views in last week
-    }
     
     var isShort: Bool {
         duration <= 60 // Videos 60 seconds or less are considered shorts
@@ -577,6 +578,15 @@ enum VideoCategory: String, Codable, CaseIterable, CustomStringConvertible {
     case entertainment = "entertainment"
     case cartoons = "cartoons"
     case adultAnimation = "adult_animation" // For Robot Chicken type content
+    // ✅ Added missing cases for RTB compatibility
+    case howTo = "how_to"
+    case scienceTech = "science_tech"
+    case food = "food"
+    case fashion = "fashion"
+    case autos = "autos"
+    case peopleBlogs = "people_blogs"
+    case nonprofits = "nonprofits"
+    case shopping = "shopping"  // ✅ Also needed for AdTargetingAGI
     case other = "other"
     
     var description: String {
@@ -610,6 +620,15 @@ enum VideoCategory: String, Codable, CaseIterable, CustomStringConvertible {
         case .entertainment: return "Entertainment"
         case .cartoons: return "Cartoons"
         case .adultAnimation: return "Adult Animation"
+        // ✅ New categories
+        case .howTo: return "How-To & Style"
+        case .scienceTech: return "Science & Technology"
+        case .food: return "Food & Drink"
+        case .fashion: return "Fashion & Style"
+        case .autos: return "Autos & Vehicles"
+        case .peopleBlogs: return "People & Blogs"
+        case .nonprofits: return "Nonprofits & Activism"
+        case .shopping: return "Shopping"
         case .other: return "Other"
         }
     }
@@ -641,6 +660,14 @@ enum VideoCategory: String, Codable, CaseIterable, CustomStringConvertible {
         case .entertainment: return "sparkles"
         case .cartoons: return "scribble.variable"
         case .adultAnimation: return "moon.stars.fill"
+        case .howTo: return "hand.raised"
+        case .scienceTech: return "atom"
+        case .food: return "fork.knife"
+        case .fashion: return "tshirt"
+        case .autos: return "car"
+        case .peopleBlogs: return "person.2"
+        case .nonprofits: return "heart.circle"
+        case .shopping: return "cart"
         case .other: return "ellipsis"
         }
     }
@@ -667,6 +694,14 @@ enum VideoCategory: String, Codable, CaseIterable, CustomStringConvertible {
         case .entertainment: return .purple
         case .cartoons: return .yellow
         case .adultAnimation: return .black
+        case .howTo: return .blue
+        case .scienceTech: return .cyan
+        case .food: return .orange
+        case .fashion: return .pink
+        case .autos: return .gray
+        case .peopleBlogs: return .indigo
+        case .nonprofits: return .green
+        case .shopping: return .red
         case .other: return .secondary
         }
     }

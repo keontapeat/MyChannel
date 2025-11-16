@@ -14,8 +14,8 @@ final class GamingEsportsViewModel: ObservableObject {
     // MARK: - Published Properties
     
     // Tournaments
-    @Published var featuredTournament: Tournament?
-    @Published var activeTournaments: [Tournament] = []
+    @Published var featuredTournament: EsportsTournament?
+    @Published var activeTournaments: [EsportsTournament] = []
     @Published var hasLiveTournaments = false
     
     // VS Matches
@@ -73,7 +73,7 @@ final class GamingEsportsViewModel: ObservableObject {
     
     private func loadTournaments() async {
         // Load featured tournament
-        featuredTournament = Tournament(
+        featuredTournament = EsportsTournament(
             id: "spring-championship",
             name: "Spring Championship",
             gameName: "Multi-Game",
@@ -88,7 +88,7 @@ final class GamingEsportsViewModel: ObservableObject {
         
         // Load active tournaments
         activeTournaments = [
-            Tournament(
+            EsportsTournament(
                 id: "pro-league",
                 name: "Pro League Finals",
                 gameName: "Fortnite",
@@ -100,7 +100,7 @@ final class GamingEsportsViewModel: ObservableObject {
                 startDate: Date().addingTimeInterval(60 * 60 * 125), // 5d 3h
                 isLive: false
             ),
-            Tournament(
+            EsportsTournament(
                 id: "masters",
                 name: "Masters Tournament",
                 gameName: "Valorant",
@@ -112,7 +112,7 @@ final class GamingEsportsViewModel: ObservableObject {
                 startDate: Date().addingTimeInterval(-60 * 60 * 2), // Started 2h ago
                 isLive: true
             ),
-            Tournament(
+            EsportsTournament(
                 id: "pro-league-val",
                 name: "Pro League Finals",
                 gameName: "Valorant",

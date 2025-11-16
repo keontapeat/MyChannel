@@ -44,6 +44,13 @@ class AppState: ObservableObject {
     @Published var autoPlayEnabled = true
     @Published var notificationsEnabled = true
     
+    // 🔥 NUCLEAR FIX #2: User opt-in for auto-PiP
+    @Published var autoPiPEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(autoPiPEnabled, forKey: "autoPiPEnabled")
+        }
+    }
+    
     private var cancellables = Set<AnyCancellable>()
     private var firestoreListeners: Any?
     
@@ -51,6 +58,9 @@ class AppState: ObservableObject {
     static let shared = AppState()
 
     public init() {
+        // 🔥 NUCLEAR FIX #2: Load autoPiPEnabled from UserDefaults (default: true)
+        self.autoPiPEnabled = UserDefaults.standard.object(forKey: "autoPiPEnabled") as? Bool ?? true
+        
         setupObservers()
         // Seed from AuthenticationManager at launch so UI reflects signed-in user immediately
         if let authUser = AuthenticationManager.shared.currentUser {

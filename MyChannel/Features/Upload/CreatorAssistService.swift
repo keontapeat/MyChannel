@@ -31,7 +31,9 @@ struct CreatorAssistService {
             return "\(minutes) Minutes in an Unforgettable City"
         case .comedy:
             return "\(minutes) Minutes of Laughs You Needed Today"
-        case .entertainment, .movies, .tvShows, .anime, .documentaries, .shorts, .news, .lifestyle, .beauty, .diy, .pets, .art, .sports, .cartoons, .adultAnimation, .kids, .mukbang, .other:
+        case .entertainment, .movies, .tvShows, .anime, .documentaries, .shorts, .news, .lifestyle, .beauty, .diy, .pets, .art, .sports, .cartoons, .adultAnimation, .kids, .mukbang:
+            return "\(minutes)-Minute Must-Watch"
+        case .howTo, .scienceTech, .food, .fashion, .autos, .peopleBlogs, .nonprofits, .shopping, .other:
             return "\(minutes)-Minute Must-Watch"
         }
     }

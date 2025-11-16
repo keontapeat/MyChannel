@@ -22,7 +22,7 @@ final class TournamentBracketViewModel: ObservableObject {
 final class LiveMatchViewModel: ObservableObject {
     @Published var spectatorCount: Int = 0
     @Published var gameFeedEvents: [GameFeedEvent] = []
-    @Published var chatMessages: [ChatMessage] = []
+    @Published var chatMessages: [TournamentChatMessage] = []
     @Published var chatInput: String = ""
     
     func loadMatch(_ match: BracketMatch) async {
@@ -36,7 +36,7 @@ final class LiveMatchViewModel: ObservableObject {
                 text: "\(match.team1.name) scored first blood!",
                 time: Date().addingTimeInterval(-120),
                 iconName: "star.fill",
-                color: Color(hex: "#FFD700")
+                color: Color(hex: "#FFD700") ?? .yellow
             ),
             GameFeedEvent(
                 id: "2",
@@ -63,29 +63,33 @@ final class LiveMatchViewModel: ObservableObject {
         
         // Load chat
         chatMessages = [
-            ChatMessage(
+            TournamentChatMessage(
                 id: "1",
                 username: "ProGamer_2024",
-                text: "This is intense! 🔥",
-                time: Date().addingTimeInterval(-180)
+                message: "This is intense! 🔥",
+                isUser: false,
+                timestamp: Date().addingTimeInterval(-180)
             ),
-            ChatMessage(
+            TournamentChatMessage(
                 id: "2",
                 username: "ElitePlayer",
-                text: "Who y'all got winning?",
-                time: Date().addingTimeInterval(-150)
+                message: "Who y'all got winning?",
+                isUser: false,
+                timestamp: Date().addingTimeInterval(-150)
             ),
-            ChatMessage(
+            TournamentChatMessage(
                 id: "3",
                 username: "SkillMaster",
-                text: "Team 1 got this easy",
-                time: Date().addingTimeInterval(-120)
+                message: "Team 1 got this easy",
+                isUser: false,
+                timestamp: Date().addingTimeInterval(-120)
             ),
-            ChatMessage(
+            TournamentChatMessage(
                 id: "4",
                 username: "ChampionX",
-                text: "Let's go!!! 💪",
-                time: Date().addingTimeInterval(-90)
+                message: "Let's go!!! 💪",
+                isUser: false,
+                timestamp: Date().addingTimeInterval(-90)
             ),
         ]
     }
@@ -93,11 +97,12 @@ final class LiveMatchViewModel: ObservableObject {
     func sendMessage() async {
         guard !chatInput.isEmpty else { return }
         
-        let message = ChatMessage(
+        let message = TournamentChatMessage(
             id: UUID().uuidString,
             username: "You",
-            text: chatInput,
-            time: Date()
+            message: chatInput,
+            isUser: true,
+            timestamp: Date()
         )
         
         chatMessages.append(message)

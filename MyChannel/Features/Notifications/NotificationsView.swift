@@ -22,45 +22,56 @@ struct NotificationsView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Filter tabs
+                // YouTube-style filter tabs with bottom border indicators
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
+                    HStack(spacing: 12) {
                         ForEach(NotificationFilter.allCases, id: \.self) { filter in
-                            Button(filter.displayName) {
+                            Button(action: {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                     selectedFilter = filter
                                 }
+                            }) {
+                                VStack(spacing: 0) {
+                                    Text(filter.displayName)
+                                        .font(.system(size: 15, weight: selectedFilter == filter ? .semibold : .regular))
+                                        .foregroundColor(
+                                            selectedFilter == filter ? AppTheme.Colors.textPrimary : AppTheme.Colors.textSecondary
+                                        )
+                                        .padding(.horizontal, 16)
+                                        .frame(height: 48)
+                                    
+                                    // Bottom border indicator
+                                    Rectangle()
+                                        .fill(AppTheme.Colors.primary)
+                                        .frame(height: 2)
+                                        .scaleEffect(x: selectedFilter == filter ? 1.0 : 0.0, y: 1.0, anchor: .center)
+                                }
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(
-                                selectedFilter == filter ? AppTheme.Colors.primary : AppTheme.Colors.surface
-                            )
-                            .foregroundColor(
-                                selectedFilter == filter ? .white : AppTheme.Colors.textPrimary
-                            )
-                            .cornerRadius(AppTheme.CornerRadius.md)
+                            .buttonStyle(PlainButtonStyle())
                         }
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, 20)
                 }
-                .padding(.vertical)
+                .frame(height: 50)
+                .background(AppTheme.Colors.background)
+                
+                Divider()
+                    .background(AppTheme.Colors.divider.opacity(0.1))
                 
                 // Notifications list
                 if filteredNotifications.isEmpty {
                     NotificationsEmptyState()
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 0) {
+                        LazyVStack(spacing: 12) {
                             ForEach(filteredNotifications) { notification in
                                 NotificationCard(notification: notification) {
                                     // Handle notification tap
                                 }
-                                .padding(.horizontal)
-                                .padding(.vertical, 4)
                             }
                         }
-                        .padding(.vertical)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
                     }
                 }
                 
@@ -74,7 +85,7 @@ struct NotificationsView: View {
                     Button("Mark all read") {
                         markAllAsRead()
                     }
-                    .font(AppTheme.Typography.subheadline)
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppTheme.Colors.primary)
                 }
             }
@@ -100,32 +111,31 @@ struct NotificationCard: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
-                // Notification icon
+                // Notification icon - neutral gray background
                 ZStack {
                     Circle()
-                        .fill(notification.type.color.opacity(0.2))
+                        .fill(AppTheme.Colors.surface)
                         .frame(width: 44, height: 44)
                     
                     Image(systemName: notification.type.iconName)
-                        .font(.system(size: 18))
-                        .foregroundColor(notification.type.color)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
                 }
                 
                 // Notification content
                 VStack(alignment: .leading, spacing: 4) {
                     Text(notification.title)
-                        .font(AppTheme.Typography.subheadline)
-                        .fontWeight(notification.isRead ? .medium : .semibold)
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                         .lineLimit(2)
                     
                     Text(notification.message)
-                        .font(AppTheme.Typography.caption)
+                        .font(.system(size: 14, weight: .regular))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                         .lineLimit(3)
                     
                     Text(notification.timestamp.timeAgoDisplay)
-                        .font(AppTheme.Typography.caption2)
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textTertiary)
                 }
                 
@@ -138,11 +148,15 @@ struct NotificationCard: View {
                         .frame(width: 8, height: 8)
                 }
             }
-            .padding()
+            .padding(16)
             .background(
-                notification.isRead ? AppTheme.Colors.background : AppTheme.Colors.surface
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppTheme.Colors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+                    )
             )
-            .cornerRadius(AppTheme.CornerRadius.md)
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -212,17 +226,6 @@ struct NotificationItem: Identifiable {
             case .upload: return "arrow.up.circle.fill"
             case .live: return "dot.radiowaves.left.and.right"
             case .system: return "gear"
-            }
-        }
-        
-        var color: Color {
-            switch self {
-            case .like: return AppTheme.Colors.primary
-            case .comment: return AppTheme.Colors.secondary
-            case .follow: return AppTheme.Colors.accent
-            case .upload: return AppTheme.Colors.success
-            case .live: return AppTheme.Colors.primary
-            case .system: return AppTheme.Colors.textSecondary
             }
         }
     }

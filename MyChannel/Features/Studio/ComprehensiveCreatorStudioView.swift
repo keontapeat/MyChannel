@@ -43,7 +43,7 @@ struct ComprehensiveCreatorStudioView: View {
         var icon: String {
             switch self {
             case .dashboard: return "chart.bar.xaxis"
-            case .aiStudio: return "brain.head.profile"
+            case .aiStudio: return "lightbulb"
             case .content: return "play.rectangle"
             case .analytics: return "chart.line.uptrend.xyaxis"
             case .earnings: return "dollarsign.circle"
@@ -308,52 +308,91 @@ struct ComprehensiveCreatorStudioView: View {
 struct StudioDashboardView: View {
     @StateObject private var analyticsService = AdvancedAnalyticsService.shared
     @StateObject private var predictiveEngine = PredictiveAnalyticsEngine.shared
+    @State private var selectedMetric: AnalyticsMetric = .views
+    @State private var recentVideos: [Video] = []
+    @State private var latestComments: [StudioComment] = []
+    
+    enum AnalyticsMetric: String, CaseIterable {
+        case views = "Views"
+        case watchTime = "Watch Time"
+        case subscribers = "Subscribers"
+    }
     
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 24) {
-                // Quick Stats Row
-                quickStatsSection
+            LazyVStack(spacing: 20) {
+                // Channel Analytics Summary
+                channelAnalyticsSummary
                 
-                // AI Insights Section
-                aiInsightsSection
+                // Recent Videos
+                recentVideosSection
                 
-                // Recent Performance
-                recentPerformanceSection
+                // Latest Comments
+                latestCommentsSection
                 
-                // Viral Predictions
-                viralPredictionsSection
+                // Analytics Graph
+                analyticsGraphSection
                 
-                // Revenue Forecast
-                revenueForecastSection
+                // Studio Insights
+                studioInsightsSection
+                
+                // Revenue Overview
+                revenueOverviewSection
                 
                 // Quick Actions
                 quickActionsSection
-                
-                // Recent Activity
-                recentActivitySection
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 20)
         }
         .navigationTitle("Dashboard")
         .navigationBarTitleDisplayMode(.large)
+        .task {
+            await loadDashboardData()
+        }
     }
     
-    private var quickStatsSection: some View {
-        // 🔥 MOBILE-FIRST: Horizontal scroll for better mobile experience
+    private func loadDashboardData() async {
+        // Load recent videos and comments
+        // This would fetch from VideoFirestoreService and CommentService
+    }
+    
+    private var channelAnalyticsSummary: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 16) {
-                StudioStatCard(title: "Views", value: formatNumber(analyticsService.channelAnalytics?.totalViews ?? 0), change: "+0.0%", isPositive: true)
-                    .frame(width: 140)
-                StudioStatCard(title: "Subscribers", value: formatNumber(analyticsService.channelAnalytics?.totalSubscribers ?? 0), change: "+0", isPositive: true)
-                    .frame(width: 140)
-                StudioStatCard(title: "Revenue", value: "$\(String(format: "%.0f", analyticsService.channelAnalytics?.totalRevenue ?? 0.0))", change: "+0.0%", isPositive: true)
-                    .frame(width: 140)
-                StudioStatCard(title: "Watch Time", value: "0.0K hrs", change: "+0.0%", isPositive: true)
-                    .frame(width: 140)
+            HStack(spacing: 12) {
+                StudioStatCard(
+                    title: "Views",
+                    value: formatNumber(analyticsService.channelAnalytics?.totalViews ?? 0),
+                    change: "+12.5%",
+                    isPositive: true
+                )
+                .frame(width: 160)
+                
+                StudioStatCard(
+                    title: "Subscribers",
+                    value: formatNumber(analyticsService.channelAnalytics?.totalSubscribers ?? 0),
+                    change: "+8.3%",
+                    isPositive: true
+                )
+                .frame(width: 160)
+                
+                StudioStatCard(
+                    title: "Watch Time",
+                    value: "2.4K hrs",
+                    change: "+15.2%",
+                    isPositive: true
+                )
+                .frame(width: 160)
+                
+                StudioStatCard(
+                    title: "Revenue",
+                    value: "$\(String(format: "%.0f", analyticsService.channelAnalytics?.totalRevenue ?? 0.0))",
+                    change: "+18.7%",
+                    isPositive: true
+                )
+                .frame(width: 160)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
         }
     }
     
@@ -367,183 +406,234 @@ struct StudioDashboardView: View {
         }
     }
     
-    private var aiInsightsSection: some View {
+    private var recentVideosSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Image(systemName: "brain.head.profile")
-                    .foregroundColor(.purple)
-                Text("AI Insights")
-                    .font(.system(size: 20, weight: .semibold))
+                Text("Recent Videos")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
                 Spacer()
-                Button("View All") {}
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.primary)
+                Button(action: {}) {
+                    Text("View All")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.primary)
+                }
             }
             
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
-                InsightCard(
-                    icon: "target",
-                    title: "Optimal Upload Time",
-                    value: "2:00 PM EST",
-                    subtitle: "78% audience active",
-                    color: .blue
-                )
-                
-                InsightCard(
-                    icon: "chart.line.uptrend.xyaxis",
-                    title: "Viral Potential",
-                    value: "87%",
-                    subtitle: "Next video prediction",
-                    color: .green
-                )
-                
-                InsightCard(
-                    icon: "dollarsign.circle",
-                    title: "Revenue Forecast",
-                    value: "$15.2K",
-                    subtitle: "Next 30 days",
-                    color: .orange
-                )
-                
-                InsightCard(
-                    icon: "person.2.fill",
-                    title: "Growth Rate",
-                    value: "+24%",
-                    subtitle: "Subscriber velocity",
-                    color: .purple
-                )
+            if recentVideos.isEmpty {
+                Text("No recent videos")
+                    .font(.system(size: 15))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 40)
+            } else {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
+                    ForEach(recentVideos.prefix(6)) { video in
+                        RecentVideoCard(video: video)
+                    }
+                }
             }
         }
         .padding(16)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.Colors.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+        )
+        .cornerRadius(12)
     }
     
-    private var recentPerformanceSection: some View {
+    private var latestCommentsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Recent Performance")
-                    .font(.system(size: 20, weight: .semibold))
+                Text("Latest Comments")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
                 Spacer()
-                Button("View Analytics") {}
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.primary)
+                Button(action: {}) {
+                    Text("View All")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.primary)
+                }
             }
             
-            // Chart placeholder
+            if latestComments.isEmpty {
+                Text("No recent comments")
+                    .font(.system(size: 15))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 40)
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(latestComments.prefix(5)) { comment in
+                        StudioCommentCard(comment: comment)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(AppTheme.Colors.surface)
+        .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial)
+                .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+        )
+        .cornerRadius(12)
+    }
+    
+    private var analyticsGraphSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Channel Performance")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                Spacer()
+                Picker("Metric", selection: $selectedMetric) {
+                    ForEach(AnalyticsMetric.allCases, id: \.self) { metric in
+                        Text(metric.rawValue).tag(metric)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 200)
+            }
+            
+            // Placeholder for chart
+            RoundedRectangle(cornerRadius: 8)
+                .fill(AppTheme.Colors.background)
                 .frame(height: 200)
                 .overlay(
-                    VStack {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                            .font(.system(size: 40))
+                    VStack(spacing: 8) {
+                        Image(systemName: "chart.xyaxis.line")
+                            .font(.system(size: 32))
                             .foregroundColor(AppTheme.Colors.textSecondary)
-                        Text("Views over time chart")
-                            .font(.system(size: 16, weight: .medium))
+                        Text("Analytics graph will display here")
+                            .font(.system(size: 14))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                     }
                 )
         }
         .padding(16)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.Colors.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+        )
+        .cornerRadius(12)
     }
     
-    private var viralPredictionsSection: some View {
+    private var studioInsightsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Image(systemName: "sparkles")
-                    .foregroundColor(.yellow)
-                Text("Viral Predictions")
-                    .font(.system(size: 20, weight: .semibold))
+                Image(systemName: "lightbulb")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                Text("Studio Insights")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
                 Spacer()
             }
             
-            ForEach(predictiveEngine.viralPredictions.prefix(3)) { prediction in
-                ViralPredictionCard(prediction: prediction)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
+                InsightCard(
+                    icon: "clock",
+                    title: "Best Upload Time",
+                    value: "2:00 PM EST",
+                    subtitle: "78% audience active"
+                )
+                
+                InsightCard(
+                    icon: "chart.line.uptrend.xyaxis",
+                    title: "Growth Trend",
+                    value: "+24%",
+                    subtitle: "Last 30 days"
+                )
+                
+                InsightCard(
+                    icon: "eye",
+                    title: "Avg. View Duration",
+                    value: "8:42",
+                    subtitle: "12% above average"
+                )
+                
+                InsightCard(
+                    icon: "person.2",
+                    title: "Engagement Rate",
+                    value: "6.8%",
+                    subtitle: "High engagement"
+                )
             }
         }
         .padding(16)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.Colors.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+        )
+        .cornerRadius(12)
     }
     
-    private var revenueForecastSection: some View {
+    private var revenueOverviewSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Image(systemName: "chart.bar.fill")
-                    .foregroundColor(.green)
-                Text("Revenue Forecast")
-                    .font(.system(size: 20, weight: .semibold))
+                Text("Revenue")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
                 Spacer()
-                Button("View Details") {}
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.primary)
+                Button(action: {}) {
+                    Text("View Details")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.primary)
+                }
             }
             
             HStack(spacing: 20) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Next 30 Days")
-                        .font(.system(size: 14, weight: .medium))
+                    Text("Estimated Revenue")
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textSecondary)
-                    Text("$15,240")
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                    Text("$\(String(format: "%.2f", analyticsService.estimatedRevenue))")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
                         .foregroundColor(.green)
-                    Text("+18.3% vs last month")
-                        .font(.system(size: 12))
-                        .foregroundColor(.green)
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 11, weight: .medium))
+                        Text("+18.7% vs last month")
+                            .font(.system(size: 12))
+                    }
+                    .foregroundColor(.green)
                 }
                 
                 Spacer()
-                
-                VStack(alignment: .trailing, spacing: 8) {
-                    Text("Confidence")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                    Text("92%")
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.primary)
-                    Text("High accuracy")
-                        .font(.system(size: 12))
-                        .foregroundColor(AppTheme.Colors.primary)
-                }
             }
         }
         .padding(16)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.Colors.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+        )
+        .cornerRadius(12)
     }
     
     private var quickActionsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Quick Actions")
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
             
-            // 🔥 MOBILE-RESPONSIVE: 2 columns for better mobile experience
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
-                QuickActionButton(title: "Upload Video", subtitle: "Create new content", icon: "plus", color: .blue) {}
-                QuickActionButton(title: "Go Live", subtitle: "Start streaming", icon: "dot.radiowaves.left.and.right", color: .red) {}
-                QuickActionButton(title: "Create Thumbnail", subtitle: "Design thumbnails", icon: "photo.on.rectangle.angled", color: .orange) {}
-                QuickActionButton(title: "Schedule Premiere", subtitle: "Plan releases", icon: "calendar.badge.plus", color: .green) {}
-                QuickActionButton(title: "Community Post", subtitle: "Engage audience", icon: "person.3", color: .pink) {}
-                QuickActionButton(title: "Analytics", subtitle: "View insights", icon: "chart.bar", color: .indigo) {}
+            VStack(spacing: 8) {
+                StudioStudioQuickActionButton(title: "Upload Video", icon: "arrow.up.circle") {}
+                StudioStudioQuickActionButton(title: "Go Live", icon: "dot.radiowaves.left.and.right") {}
+                StudioStudioQuickActionButton(title: "Create Post", icon: "square.and.pencil") {}
+                StudioStudioQuickActionButton(title: "View Analytics", icon: "chart.xyaxis.line") {}
             }
         }
         .padding(16)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-    }
-    
-    private var recentActivitySection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Recent Activity")
-                .font(.system(size: 20, weight: .semibold))
-            
-            VStack(spacing: 12) {
-                ActivityRow(icon: "eye", title: "Video reached 100K views", subtitle: "AI Productivity Tips", time: "2 hours ago")
-                ActivityRow(icon: "person.badge.plus", title: "New subscriber milestone", subtitle: "850K subscribers", time: "4 hours ago")
-                ActivityRow(icon: "message", title: "New comments to review", subtitle: "12 comments", time: "6 hours ago")
-                ActivityRow(icon: "dollarsign.circle", title: "Revenue update", subtitle: "$1,240 earned today", time: "1 day ago")
-            }
-        }
-        .padding(16)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.Colors.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+        )
+        .cornerRadius(12)
     }
 }
 
@@ -558,25 +648,29 @@ struct StudioStatCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundColor(AppTheme.Colors.textSecondary)
-                .lineLimit(1)
             
             Text(value)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundColor(AppTheme.Colors.textPrimary)
             
             HStack(spacing: 4) {
                 Image(systemName: isPositive ? "arrow.up" : "arrow.down")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 11, weight: .medium))
                 Text(change)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 12, weight: .medium))
             }
             .foregroundColor(isPositive ? .green : .red)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.Colors.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+        )
+        .cornerRadius(12)
     }
 }
 
@@ -585,15 +679,18 @@ struct InsightCard: View {
     let title: String
     let value: String
     let subtitle: String
-    let color: Color
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            // Icon with neutral background
+            ZStack {
+                Circle()
+                    .fill(AppTheme.Colors.surface)
+                    .frame(width: 44, height: 44)
+                
                 Image(systemName: icon)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(color)
-                Spacer()
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
             }
             
             VStack(alignment: .leading, spacing: 4) {
@@ -612,78 +709,159 @@ struct InsightCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.Colors.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+        )
+        .cornerRadius(12)
     }
 }
 
-struct ViralPredictionCard: View {
-    let prediction: PredictiveViralPrediction
+// MARK: - Recent Video Card
+
+struct RecentVideoCard: View {
+    let video: Video
     
     var body: some View {
-        HStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 8) {
+            // Thumbnail
+            AsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                image
+                    .resizable()
+                    .aspectRatio(16/9, contentMode: .fill)
+            } placeholder: {
+                Rectangle()
+                    .fill(AppTheme.Colors.background)
+            }
+            .frame(height: 60)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            
             VStack(alignment: .leading, spacing: 4) {
-                Text("Video ID: \(prediction.videoId)")
-                    .font(.system(size: 14, weight: .semibold))
-                    .lineLimit(1)
+                Text(video.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .lineLimit(2)
                 
-                Text("\(Int(prediction.viralProbability * 100))% viral probability")
-                    .font(.system(size: 12))
-                    .foregroundColor(.green)
+                Text("\(video.formattedViewCount) views")
+                    .font(.system(size: 11))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+        }
+    }
+}
+
+// MARK: - Studio Comment Model & Card
+
+struct StudioComment: Identifiable {
+    let id: String
+    let username: String
+    let userAvatarURL: String
+    let text: String
+    let videoTitle: String
+    let timestamp: Date
+    
+    var timeAgo: String {
+        let seconds = Int(Date().timeIntervalSince(timestamp))
+        if seconds < 60 { return "\(seconds)s ago" }
+        if seconds < 3600 { return "\(seconds / 60)m ago" }
+        if seconds < 86400 { return "\(seconds / 3600)h ago" }
+        return "\(seconds / 86400)d ago"
+    }
+}
+
+struct StudioCommentCard: View {
+    let comment: StudioComment
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            // User avatar
+            AsyncImage(url: URL(string: comment.userAvatarURL)) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } placeholder: {
+                Circle()
+                    .fill(AppTheme.Colors.background)
+            }
+            .frame(width: 32, height: 32)
+            .clipShape(Circle())
+            
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text(comment.username)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    
+                    Text("•")
+                        .font(.system(size: 13))
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                    
+                    Text(comment.timeAgo)
+                        .font(.system(size: 12))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
                 
-                Text("\(prediction.predictedViews.formatted()) predicted views")
+                Text(comment.text)
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .lineLimit(3)
+                
+                Text("on \(comment.videoTitle)")
                     .font(.system(size: 12))
                     .foregroundColor(AppTheme.Colors.textSecondary)
+                    .lineLimit(1)
             }
             
             Spacer()
             
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("\(Int(prediction.confidence * 100))%")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.primary)
-                
-                Text("Confidence")
-                    .font(.system(size: 10, weight: .medium))
+            Button(action: {}) {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textSecondary)
             }
         }
-        .padding(16)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding(12)
+        .background(AppTheme.Colors.background)
+        .cornerRadius(8)
     }
 }
 
+// MARK: - Studio Quick Action Button
 
-struct ActivityRow: View {
-    let icon: String
+struct StudioStudioQuickActionButton: View {
     let title: String
-    let subtitle: String
-    let time: String
+    let icon: String
+    let action: () -> Void
     
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(AppTheme.Colors.primary)
-                .frame(width: 24, height: 24)
-                .background(AppTheme.Colors.primary.opacity(0.1), in: Circle())
-            
-            VStack(alignment: .leading, spacing: 2) {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .frame(width: 24)
+                
                 Text(title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textPrimary)
                 
-                Text(subtitle)
-                    .font(.system(size: 12))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textTertiary)
             }
-            
-            Spacer()
-            
-            Text(time)
-                .font(.system(size: 11))
-                .foregroundColor(AppTheme.Colors.textSecondary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(AppTheme.Colors.background)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+            )
+            .cornerRadius(10)
         }
-        .padding(.vertical, 4)
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
@@ -1026,18 +1204,19 @@ struct MonetizationStudioView: View {
                             }) {
                                 VStack(spacing: 6) {
                                     Image(systemName: tab.icon)
-                                        .font(.system(size: 20, weight: selectedTab == tab ? .semibold : .regular))
+                                        .font(.system(size: 18, weight: .medium))
+                                        .foregroundColor(selectedTab == tab ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
                                     Text(tab.rawValue)
                                         .font(.system(size: 12, weight: selectedTab == tab ? .semibold : .regular))
+                                        .foregroundColor(selectedTab == tab ? AppTheme.Colors.textPrimary : AppTheme.Colors.textSecondary)
                                 }
-                                .foregroundColor(selectedTab == tab ? .white : AppTheme.Colors.textSecondary)
                                 .frame(minWidth: 90)
                                 .padding(.vertical, 12)
                                 .padding(.horizontal, 8)
-                                .background(
-                                    selectedTab == tab ? 
-                                    AppTheme.Colors.primary : 
-                                    Color(.systemGray6)
+                                .background(AppTheme.Colors.surface)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(selectedTab == tab ? AppTheme.Colors.primary : AppTheme.Colors.divider.opacity(0.1), lineWidth: selectedTab == tab ? 2 : 1)
                                 )
                                 .cornerRadius(12)
                             }
@@ -1140,38 +1319,38 @@ struct MonetizationOverviewView: View {
                         .padding(.horizontal)
                     
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
-                        QuickActionButton(
+                        StudioQuickActionButton(
                             title: "Enable Ads",
                             subtitle: "Start earning from video ads",
                             icon: "play.rectangle.fill",
-                            color: .red
+                            color: Color.red
                         ) {
                             // Enable ads action
                         }
                         
-                        QuickActionButton(
+                        StudioQuickActionButton(
                             title: "Set Up Memberships",
                             subtitle: "Create membership tiers",
                             icon: "person.badge.plus.fill",
-                            color: .purple
+                            color: Color.purple
                         ) {
                             // Set up memberships action
                         }
                         
-                        QuickActionButton(
+                        StudioQuickActionButton(
                             title: "Add Merchandise",
                             subtitle: "Sell your products",
                             icon: "bag.fill",
-                            color: .orange
+                            color: Color.orange
                         ) {
                             // Add merchandise action
                         }
                         
-                        QuickActionButton(
+                        StudioQuickActionButton(
                             title: "Super Chat",
                             subtitle: "Enable donations",
                             icon: "heart.fill",
-                            color: .pink
+                            color: Color.pink
                         ) {
                             // Enable super chat action
                         }
@@ -1326,39 +1505,6 @@ struct RevenueCard: View {
     }
 }
 
-struct QuickActionButton: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    let color: Color
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: icon)
-                        .foregroundColor(color)
-                        .font(.title2)
-                    Spacer()
-                }
-                
-                Text(title)
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.leading)
-            }
-            .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
 
 // MARK: - Settings Models
 struct AdSettings: Equatable {
@@ -1486,8 +1632,9 @@ struct MembershipMonetizationView: View {
                 
                 // Revenue Share Info
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("💰 Revenue Share")
-                        .font(.system(size: 18, weight: .bold))
+                    Text("Revenue Share")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
                     
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
@@ -1511,18 +1658,16 @@ struct MembershipMonetizationView: View {
                         }
                     }
                     
-                    Text("🔥 Way better than YouTube's 70/30 split!")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.orange)
+                    Text("Better revenue share than YouTube's 70/30 split")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.green)
                         .padding(.top, 8)
                 }
                 .padding()
-                .background(
-                    LinearGradient(colors: [.green.opacity(0.1), .blue.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                )
+                .background(AppTheme.Colors.surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.green.opacity(0.3), lineWidth: 2)
+                        .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
                 )
                 .cornerRadius(16)
             }
@@ -1664,8 +1809,9 @@ struct MerchandiseMonetizationView: View {
                 
                 // Integration Info
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("🛍️ Powered by MyChannel Merch")
-                        .font(.system(size: 18, weight: .bold))
+                    Text("Powered by MyChannel Merch")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
                     
                     Text("We handle everything:")
                         .font(.system(size: 14))
@@ -1680,12 +1826,10 @@ struct MerchandiseMonetizationView: View {
                     .padding(.top, 8)
                 }
                 .padding()
-                .background(
-                    LinearGradient(colors: [.orange.opacity(0.1), .pink.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                )
+                .background(AppTheme.Colors.surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.orange.opacity(0.3), lineWidth: 2)
+                        .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
                 )
                 .cornerRadius(16)
             }
@@ -1872,18 +2016,16 @@ struct DonationMonetizationView: View {
                         }
                     }
                     
-                    Text("💪 Best revenue share in the industry!")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.pink)
+                    Text("Best revenue share in the industry")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.green)
                         .padding(.top, 8)
                 }
                 .padding()
-                .background(
-                    LinearGradient(colors: [.pink.opacity(0.1), .purple.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                )
+                .background(AppTheme.Colors.surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.pink.opacity(0.3), lineWidth: 2)
+                        .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
                 )
                 .cornerRadius(16)
             }
@@ -1994,12 +2136,10 @@ struct RevenueAnalyticsView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
-                .background(
-                    LinearGradient(colors: [.green.opacity(0.1), .blue.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                )
+                .background(AppTheme.Colors.surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.green.opacity(0.3), lineWidth: 2)
+                        .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
                 )
                 .cornerRadius(16)
                 .padding(.horizontal)
@@ -2082,12 +2222,10 @@ struct RevenueAnalyticsView: View {
                     .padding(.top, 8)
                 }
                 .padding()
-                .background(
-                    LinearGradient(colors: [.blue.opacity(0.1), .purple.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                )
+                .background(AppTheme.Colors.surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.blue.opacity(0.3), lineWidth: 2)
+                        .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
                 )
                 .cornerRadius(16)
             }
@@ -2335,6 +2473,52 @@ extension ComprehensiveCreatorStudioView {
     }
 }
 
+// MARK: - StudioQuickActionButton Component
+
+struct StudioQuickActionButton: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let color: Color
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: icon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(color)
+                    Spacer()
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .multilineTextAlignment(.leading)
+                    
+                    Text(subtitle)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppTheme.Colors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(color.opacity(0.2), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
 
 #Preview {
     ComprehensiveCreatorStudioView()

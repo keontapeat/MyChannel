@@ -696,11 +696,12 @@ struct PricingRecommendation: Codable {
 }
 
 struct AdPlacementRecommendation: Codable {
-    let placements: [AdPlacement]
+    let placements: [AdPlacementTiming]  // ✅ Renamed to avoid conflict
     let estimatedRevenue: Double
 }
 
-struct AdPlacement: Codable {
+// ✅ Renamed from AdPlacement to AdPlacementTiming
+struct AdPlacementTiming: Codable {
     let timestamp: TimeInterval
     let type: String
     let duration: TimeInterval

@@ -34,7 +34,7 @@ class AdvertiserViewModel: ObservableObject {
     @Published var conversionPercentage: Double = 0
     
     // Data
-    @Published var campaigns: [AdCampaign] = []
+    @Published var campaigns: [AdvertiserCampaign] = []
     @Published var performanceData: [PerformanceDataPoint] = []
     @Published var aiInsights: [String] = []
     @Published var topCreatives: [Creative] = []
@@ -80,12 +80,13 @@ class AdvertiserViewModel: ObservableObject {
     
     private func loadCampaigns() async {
         campaigns = [
-            AdCampaign(
+            AdvertiserCampaign(
                 id: "1",
                 name: "Summer Sale 2025",
                 status: .active,
                 budget: 10000,
                 spent: 3456.78,
+                totalSpend: 3456.78,
                 impressions: 250000,
                 clicks: 12500,
                 conversions: 1250,
@@ -93,12 +94,13 @@ class AdvertiserViewModel: ObservableObject {
                 startDate: Date(),
                 endDate: Date().addingTimeInterval(30*24*60*60)
             ),
-            AdCampaign(
+            AdvertiserCampaign(
                 id: "2",
                 name: "Brand Awareness Campaign",
                 status: .active,
                 budget: 5000,
                 spent: 4123.45,
+                totalSpend: 4123.45,
                 impressions: 180000,
                 clicks: 9000,
                 conversions: 450,
@@ -106,12 +108,13 @@ class AdvertiserViewModel: ObservableObject {
                 startDate: Date(),
                 endDate: Date().addingTimeInterval(60*24*60*60)
             ),
-            AdCampaign(
+            AdvertiserCampaign(
                 id: "3",
                 name: "Product Launch",
                 status: .paused,
                 budget: 15000,
                 spent: 8234.56,
+                totalSpend: 8234.56,
                 impressions: 350000,
                 clicks: 17500,
                 conversions: 2100,
@@ -312,25 +315,20 @@ class AdvertiserViewModel: ObservableObject {
 
 // MARK: - Models
 
-struct AdCampaign: Identifiable, Codable {
+// ✅ Renamed to AdvertiserCampaign to avoid conflict with AdModels.AdCampaign
+struct AdvertiserCampaign: Identifiable, Codable {
     let id: String
     let name: String
     let status: CampaignStatus
     let budget: Double
     let spent: Double
+    let totalSpend: Double  // ✅ Added for Vertex AI compatibility
     let impressions: Int
     let clicks: Int
     let conversions: Int
     let ctr: Double
     let startDate: Date
     let endDate: Date
-}
-
-enum CampaignStatus: String, Codable {
-    case active = "Active"
-    case paused = "Paused"
-    case completed = "Completed"
-    case draft = "Draft"
 }
 
 struct PerformanceDataPoint: Identifiable {
@@ -352,17 +350,7 @@ struct Creative: Identifiable, Codable {
     let status: CreativeStatus
 }
 
-enum CreativeType: String, Codable {
-    case video = "Video"
-    case image = "Image"
-    case carousel = "Carousel"
-}
-
-enum CreativeStatus: String, Codable {
-    case pending = "Pending"
-    case approved = "Approved"
-    case rejected = "Rejected"
-}
+// ✅ CreativeType and CreativeStatus are now defined in AdModels.swift
 
 struct PaymentMethod: Identifiable {
     let id: String

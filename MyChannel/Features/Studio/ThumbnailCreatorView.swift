@@ -621,7 +621,7 @@ struct ThumbnailCreatorView: View {
         VStack(spacing: 24) {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
                 ForEach(ThumbnailTemplate.allTemplates) { template in
-                    TemplateCard(template: template) {
+                    ThumbnailTemplateCard(template: template) {
                         viewModel.applyTemplate(template)
                     }
                 }
@@ -939,7 +939,7 @@ struct FilterButton: View {
     }
 }
 
-struct TemplateCard: View {
+struct ThumbnailTemplateCard: View {
     let template: ThumbnailTemplate
     let action: () -> Void
     
@@ -1043,7 +1043,7 @@ struct ThumbnailTemplateLibraryView: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
                     ForEach(ThumbnailTemplate.allTemplates) { template in
-                        TemplateCard(template: template) {
+                        ThumbnailTemplateCard(template: template) {
                             viewModel.applyTemplate(template)
                             dismiss()
                         }

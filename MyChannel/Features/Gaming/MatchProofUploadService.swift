@@ -142,12 +142,12 @@ final class MatchProofUploadService: ObservableObject {
         
         // Compress image
         guard let imageData = image.jpegData(compressionQuality: 0.8) else {
-            throw UploadError.imageCompressionFailed
+            throw MatchProofUploadError.imageCompressionFailed
         }
         
         // Validate size
         if imageData.count > 10_000_000 { // 10MB max
-            throw UploadError.screenshotTooLarge
+            throw MatchProofUploadError.screenshotTooLarge
         }
         
         // Create storage reference
@@ -226,20 +226,20 @@ final class MatchProofUploadService: ObservableObject {
     private func validateVideo(url: URL) throws {
         // Check file exists
         guard FileManager.default.fileExists(atPath: url.path) else {
-            throw UploadError.fileNotFound
+            throw MatchProofUploadError.fileNotFound
         }
         
         // Check format
         let fileExtension = url.pathExtension.lowercased()
         guard allowedVideoFormats.contains(fileExtension) else {
-            throw UploadError.invalidFormat
+            throw MatchProofUploadError.invalidFormat
         }
         
         // Check file size
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
         if let fileSize = attributes[.size] as? Int64 {
             if fileSize > maxVideoSize {
-                throw UploadError.fileTooLarge
+                throw MatchProofUploadError.fileTooLarge
             }
             print("📏 [MatchProofUpload] Video size: \(ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file))")
         }
@@ -248,7 +248,7 @@ final class MatchProofUploadService: ObservableObject {
         let asset = AVAsset(url: url)
         let duration = asset.duration.seconds
         if duration > maxVideoDuration {
-            throw UploadError.videoTooLong
+            throw MatchProofUploadError.videoTooLong
         }
         
         print("⏱️ [MatchProofUpload] Video duration: \(Int(duration))s")
@@ -301,7 +301,7 @@ final class MatchProofUploadService: ObservableObject {
 
 // MARK: - Upload Error
 
-enum UploadError: LocalizedError {
+enum MatchProofUploadError: LocalizedError {
     case fileNotFound
     case invalidFormat
     case fileTooLarge

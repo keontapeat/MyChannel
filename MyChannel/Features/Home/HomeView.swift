@@ -197,7 +197,7 @@ struct HomeView: View {
             loadUserStories()
         }
         .sheet(isPresented: $presentStoryCreator) {
-            CreateStoryView { _ in
+            UltimateStoryCreatorView { story in
                 // Dismiss and refresh from authoritative source to avoid duplicates
                 presentStoryCreator = false
                 Task { await loadUserStories() }

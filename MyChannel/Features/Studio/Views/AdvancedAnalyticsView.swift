@@ -383,7 +383,7 @@ struct AdvancedAnalyticsView: View {
                     .foregroundColor(AppTheme.Colors.textSecondary)
                     .padding()
             } else {
-                ForEach(predictiveEngine.viralPredictions.prefix(3)) { prediction in
+                ForEach(predictiveEngine.viralPredictions.prefix(3), id: \.id) { prediction in
                     ViralPredictionCard(prediction: prediction)
                 }
             }
@@ -624,6 +624,95 @@ struct TrafficSourceRow: View {
                 }
             }
             .frame(height: 6)
+        }
+    }
+}
+
+// MARK: - ViralPredictionCard Component
+
+struct ViralPredictionCard: View {
+    let prediction: PredictiveViralPrediction
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Viral Potential")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Spacer()
+                
+                Text("\(Int(prediction.viralProbability * 100))%")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(colorForProbability(prediction.viralProbability))
+            }
+            
+            // Probability bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(AppTheme.Colors.divider.opacity(0.2))
+                        .frame(height: 6)
+                        .cornerRadius(3)
+                    
+                    Rectangle()
+                        .fill(colorForProbability(prediction.viralProbability))
+                        .frame(width: geometry.size.width * CGFloat(prediction.viralProbability), height: 6)
+                        .cornerRadius(3)
+                }
+            }
+            .frame(height: 6)
+            
+            // Predicted views
+            HStack {
+                Image(systemName: "eye.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                
+                Text("Predicted: \(formatViews(prediction.predictedViews)) views")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+            
+            // Confidence
+            HStack {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(.green)
+                
+                Text("\(Int(prediction.confidence * 100))% confidence")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AppTheme.Colors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(colorForProbability(prediction.viralProbability).opacity(0.3), lineWidth: 1)
+                )
+        )
+    }
+    
+    private func colorForProbability(_ probability: Double) -> Color {
+        switch probability {
+        case 0..<0.3: return .red
+        case 0.3..<0.5: return .orange
+        case 0.5..<0.7: return .yellow
+        case 0.7..<0.85: return .green
+        default: return Color(red: 0.2, green: 0.8, blue: 0.3)
+        }
+    }
+    
+    private func formatViews(_ views: Int) -> String {
+        if views >= 1_000_000 {
+            return String(format: "%.1fM", Double(views) / 1_000_000.0)
+        } else if views >= 1_000 {
+            return String(format: "%.1fK", Double(views) / 1_000.0)
+        } else {
+            return "\(views)"
         }
     }
 }

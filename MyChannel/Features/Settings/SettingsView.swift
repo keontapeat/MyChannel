@@ -792,34 +792,7 @@ struct QualitySettingsView: View {
     }
 }
 
-struct PlaybackSettingsView: View {
-    @AppStorage("autoplay") private var autoplay = true
-    @AppStorage("playbackSpeed") private var playbackSpeed = "Normal"
-    
-    var body: some View {
-        Form {
-            Section {
-                Toggle("Autoplay", isOn: $autoplay)
-            } footer: {
-                Text("Automatically play next video")
-            }
-            
-            Section {
-                Picker("Playback speed", selection: $playbackSpeed) {
-                    Text("0.25x").tag("0.25x")
-                    Text("0.5x").tag("0.5x")
-                    Text("0.75x").tag("0.75x")
-                    Text("Normal").tag("Normal")
-                    Text("1.25x").tag("1.25x")
-                    Text("1.5x").tag("1.5x")
-                    Text("2x").tag("2x")
-                }
-            }
-        }
-        .navigationTitle("Playback")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
+// Note: PlaybackSettingsView is defined in Features/Settings/PlaybackSettingsView.swift
 
 struct BackgroundDownloadsView: View {
     @StateObject private var storeKit = StoreKitService.shared

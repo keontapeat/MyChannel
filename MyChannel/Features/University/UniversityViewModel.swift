@@ -12,6 +12,9 @@ import Combine
 
 @MainActor
 class UniversityViewModel: ObservableObject {
+    // 🔥 LOADING STATE: Track loading for shimmer effects
+    @Published var isLoading = false
+    
     // ⚡ PERFORMANCE: Combine related progress metrics into single state
     @Published var progress: UserProgress = .empty
     
@@ -85,6 +88,9 @@ class UniversityViewModel: ObservableObject {
     private let seedDataService = UniversitySeedDataService.shared
     
     func loadUserProgress() async {
+        isLoading = true
+        defer { isLoading = false }
+        
         print("🎓 [UniversityVM] Loading user progress...")
         
         // Get current user
@@ -100,37 +106,28 @@ class UniversityViewModel: ObservableObject {
             print("⚠️ [UniversityVM] Failed to seed data: \(error)")
         }
         
-        // 🔥 NEW: Load Career Path Progress
+        // 🔥 NEW: Load Career Path Progress with Cache
         do {
+            // Try cache first for instant loading
+            let cachedProgress = await loadProgressFromCache(userId: userId)
+            if !cachedProgress.isEmpty {
+                await updateProgressUI(progressList: cachedProgress)
+                print("✅ [UniversityVM] Loaded from cache: \(cachedProgress.count) paths")
+            }
+            
+            // Then fetch fresh data
             let progressList = try await watchTrackingService.fetchUserProgress(userId: userId)
             
-            await MainActor.run {
-                // Calculate totals
-                totalUniversityHours = progressList.map(\.totalHours).reduce(0, +)
-                certificatesEarned = progressList.filter(\.certificateEarned).count
-                activeCareerPathsCount = progressList.count
-                
-                // Calculate average AI score
-                if !progressList.isEmpty {
-                    let totalScore = progressList.map(\.averageAIScore).reduce(0, +)
-                    averageAIScore = totalScore / progressList.count
-                } else {
-                    averageAIScore = 0
-                }
-                
-                // Build career paths progress list
-                careerPathsProgress = progressList.compactMap { progress in
-                    guard let careerPath = CareerPath.getCareerPath(byId: progress.careerPathId) else {
-                        return nil
-                    }
-                    return (careerPath, progress)
-                }
-                
-                print("✅ [UniversityVM] Loaded \(progressList.count) career paths")
-                print("   Total Hours: \(Int(totalUniversityHours))")
-                print("   Certificates: \(certificatesEarned)")
-                print("   Average AI Score: \(averageAIScore)")
-            }
+            // Cache fresh data
+            await cacheProgressData(progressList, userId: userId)
+            
+            // Update UI with fresh data
+            await updateProgressUI(progressList: progressList)
+            
+            print("✅ [UniversityVM] Loaded \(progressList.count) career paths")
+            print("   Total Hours: \(Int(totalUniversityHours))")
+            print("   Certificates: \(certificatesEarned)")
+            print("   Average AI Score: \(averageAIScore)")
             
             // Load Continue Learning Videos
             await loadContinueLearningVideos(userId: userId)
@@ -665,31 +662,55 @@ class UniversityViewModel: ObservableObject {
     private func loadCareerPathVideos(userId: String) async {
         // Load videos for each active career path
         // For now, use mock data
-        let mockCareerPathVideos: [(careerPath: CareerPath, progress: CareerPathProgress, videos: [UniversityVideo])] = careerPathsProgress.map { (careerPath, progress) in
-            let mockVideos = (0..<10).map { index in
-                UniversityVideo(
-                    id: "\(careerPath.id)_\(index)",
-                    videoId: "vid\(index)",
-                    title: "\(careerPath.name): Lesson \(index + 1)",
-                    thumbnailURL: "https://picsum.photos/400/\(225 + index)",
-                    duration: TimeInterval(1200 + index * 300),
-                    creatorId: "creator\(index)",
-                    creatorName: "Expert Teacher \(index + 1)",
-                    creatorAvatarURL: "https://picsum.photos/\(100 + index)/100",
-                    careerPaths: [careerPath.id],
-                    skillTags: Array(careerPath.skillTags.prefix(3)),
-                    difficultyLevel: [.beginner, .intermediate, .advanced, .expert].randomElement() ?? .intermediate,
+        var mockCareerPathVideos: [(careerPath: CareerPath, progress: CareerPathProgress, videos: [UniversityVideo])] = []
+        
+        for (careerPath, progress) in careerPathsProgress {
+            var mockVideos: [UniversityVideo] = []
+            
+            for index in 0..<10 {
+                let globalIndex = index
+                let videoId = "vid\(globalIndex)"
+                let videoTitle = "\(careerPath.name): Lesson \(globalIndex + 1)"
+                let thumbnailURL = "https://picsum.photos/400/\(225 + globalIndex)"
+                let duration = TimeInterval(1200 + globalIndex * 300)
+                let creatorId = "creator\(globalIndex)"
+                let creatorName = "Expert Teacher \(globalIndex + 1)"
+                let creatorAvatarURL = "https://picsum.photos/\(100 + globalIndex)/100"
+                let careerPathsArray = [careerPath.id]
+                let skillTagsArray = Array(careerPath.skillTags.prefix(3))
+                let difficultyLevels: [UniversityVideo.DifficultyLevel] = [.beginner, .intermediate, .advanced, .expert]
+                let difficultyLevel = difficultyLevels.randomElement() ?? .intermediate
+                let aiCategorizationScore = Double.random(in: 0.8...0.99)
+                let watchProgress = globalIndex < 3 ? Double.random(in: 0.1...0.7) : 0.0
+                let lastWatchedAt = globalIndex < 3 ? Date().addingTimeInterval(-Double(globalIndex) * 3600) : nil
+                let aiVerificationScore = Int.random(in: 75...95)
+                let completed = globalIndex < 2
+                
+                let video = UniversityVideo(
+                    id: "\(careerPath.id)_\(globalIndex)",
+                    videoId: videoId,
+                    title: videoTitle,
+                    thumbnailURL: thumbnailURL,
+                    duration: duration,
+                    creatorId: creatorId,
+                    creatorName: creatorName,
+                    creatorAvatarURL: creatorAvatarURL,
+                    careerPaths: careerPathsArray,
+                    skillTags: skillTagsArray,
+                    difficultyLevel: difficultyLevel,
                     isUniversityContent: true,
                     certificateEligible: true,
-                    aiCategorizationScore: Double.random(in: 0.8...0.99),
-                    watchProgress: index < 3 ? Double.random(in: 0.1...0.7) : 0.0,
-                    lastWatchedAt: index < 3 ? Date().addingTimeInterval(-Double(index) * 3600) : nil,
-                    aiVerificationScore: Int.random(in: 75...95),
-                    completed: index < 2
+                    aiCategorizationScore: aiCategorizationScore,
+                    watchProgress: watchProgress,
+                    lastWatchedAt: lastWatchedAt,
+                    aiVerificationScore: aiVerificationScore,
+                    completed: completed
                 )
+                
+                mockVideos.append(video)
             }
             
-            return (careerPath: careerPath, progress: progress, videos: mockVideos)
+            mockCareerPathVideos.append((careerPath: careerPath, progress: progress, videos: mockVideos))
         }
         
         await MainActor.run {
@@ -717,6 +738,49 @@ class UniversityViewModel: ObservableObject {
         print("   Progress: \(progress.progressPercentage)%")
         
         // TODO: Navigate to CareerPathDetailView
+    }
+    
+    // MARK: - 🔥 CACHING METHODS
+    
+    private func loadProgressFromCache(userId: String) async -> [CareerPathProgress] {
+        // Try to load all career paths progress from cache
+        let allCareerPaths = CareerPath.allCareerPaths
+        let cachedProgress = allCareerPaths.compactMap { path in
+            UniversityCacheService.shared.getCachedProgress(userId: userId, careerPathId: path.id)
+        }
+        return cachedProgress
+    }
+    
+    private func cacheProgressData(_ progressList: [CareerPathProgress], userId: String) async {
+        for progress in progressList {
+            UniversityCacheService.shared.cacheProgress(progress)
+        }
+        print("💾 [UniversityVM] Cached \(progressList.count) progress items")
+    }
+    
+    private func updateProgressUI(progressList: [CareerPathProgress]) async {
+        await MainActor.run {
+            // Calculate totals
+            totalUniversityHours = progressList.map(\.totalHours).reduce(0, +)
+            certificatesEarned = progressList.filter(\.certificateEarned).count
+            activeCareerPathsCount = progressList.count
+            
+            // Calculate average AI score
+            if !progressList.isEmpty {
+                let totalScore = progressList.map(\.averageAIScore).reduce(0, +)
+                averageAIScore = totalScore / progressList.count
+            } else {
+                averageAIScore = 0
+            }
+            
+            // Build career paths progress list
+            careerPathsProgress = progressList.compactMap { progress in
+                guard let careerPath = CareerPath.getCareerPath(byId: progress.careerPathId) else {
+                    return nil
+                }
+                return (careerPath, progress)
+            }
+        }
     }
 }
 

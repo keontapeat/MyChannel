@@ -9,9 +9,9 @@
 import SwiftUI
 
 struct TournamentBracket3DView: View {
-    let tournament: BracketTournament
+    let tournament: Bracket3DTournament
     @State private var rotationAngle: Double = 0
-    @State private var selectedMatch: BracketMatch? = nil
+    @State private var selectedMatch: Bracket3DMatch? = nil
     @State private var isExpanded: Bool = false
     
     var body: some View {
@@ -265,7 +265,7 @@ struct TournamentBracket3DView: View {
     // MARK: - 🔥 REALISTIC BRACKET ROUND (NBA-STYLE)
     
     @ViewBuilder
-    private func bracketRound(round: BracketRound, roundNumber: Int, depth: Int) -> some View {
+    private func bracketRound(round: Bracket3DRound, roundNumber: Int, depth: Int) -> some View {
         VStack(spacing: 16) {
             // 🔥 POLISHED ROUND HEADER
             VStack(spacing: 6) {
@@ -385,7 +385,7 @@ struct TournamentBracket3DView: View {
     // MARK: - 🔥 REALISTIC 3D MATCH CARD (NBA-STYLE)
     
     @ViewBuilder
-    private func matchCard3D(match: BracketMatch, depth: Int) -> some View {
+    private func matchCard3D(match: Bracket3DMatch, depth: Int) -> some View {
         Button(action: {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                 selectedMatch = match
@@ -553,7 +553,7 @@ struct TournamentBracket3DView: View {
     // MARK: - 🔥 REALISTIC TEAM CARD
     
     @ViewBuilder
-    private func realisticTeamCard(team: BracketTeam, isWinner: Bool, isTop: Bool, match: BracketMatch) -> some View {
+    private func realisticTeamCard(team: Bracket3DTeam, isWinner: Bool, isTop: Bool, match: Bracket3DMatch) -> some View {
         HStack(spacing: 12) {
             // 🔥 REALISTIC TEAM AVATAR (NBA-style)
             ZStack {
@@ -686,30 +686,30 @@ struct TournamentBracket3DView: View {
 
 // MARK: - Bracket Tournament Models
 
-struct BracketTournament: Identifiable {
+struct Bracket3DTournament: Identifiable {
     let id: String
     let name: String
-    let rounds: [BracketRound]
+    let rounds: [Bracket3DRound]
     let startDate: Date
     let endDate: Date
     let prizePool: Double
 }
 
-struct BracketRound: Identifiable {
+struct Bracket3DRound: Identifiable {
     let id: String
-    let matches: [BracketMatch]
+    let matches: [Bracket3DMatch]
     let roundName: String
 }
 
-struct BracketMatch: Identifiable {
+struct Bracket3DMatch: Identifiable {
     let id: String
-    var team1: BracketTeam
-    var team2: BracketTeam
+    var team1: Bracket3DTeam
+    var team2: Bracket3DTeam
     let winner: String?
     let isCompleted: Bool
     let scheduledDate: Date?
     
-    init(id: String, team1: BracketTeam, team2: BracketTeam, winner: String?, isCompleted: Bool, scheduledDate: Date?, score1: Int? = nil, score2: Int? = nil) {
+    init(id: String, team1: Bracket3DTeam, team2: Bracket3DTeam, winner: String?, isCompleted: Bool, scheduledDate: Date?, score1: Int? = nil, score2: Int? = nil) {
         self.id = id
         var t1 = team1
         var t2 = team2
@@ -723,7 +723,7 @@ struct BracketMatch: Identifiable {
     }
 }
 
-struct BracketTeam: Identifiable {
+struct Bracket3DTeam: Identifiable {
     let id: String
     let name: String
     var score: Int?
@@ -731,40 +731,40 @@ struct BracketTeam: Identifiable {
 
 // MARK: - Preview Data
 
-extension BracketTournament {
-    static let sample = BracketTournament(
+extension Bracket3DTournament {
+    static let sample = Bracket3DTournament(
         id: "1",
         name: "MyChannel Championship Finals",
         rounds: [
-            BracketRound(
+            Bracket3DRound(
                 id: "r1",
                 matches: [
-                    BracketMatch(id: "m1", team1: BracketTeam(id: "t1", name: "Thunder Squad"), team2: BracketTeam(id: "t2", name: "Fire Hawks"), winner: "t1", isCompleted: true, scheduledDate: nil, score1: 127, score2: 98),
-                    BracketMatch(id: "m2", team1: BracketTeam(id: "t3", name: "Storm Riders"), team2: BracketTeam(id: "t4", name: "Ice Breakers"), winner: "t3", isCompleted: true, scheduledDate: nil, score1: 115, score2: 102),
-                    BracketMatch(id: "m3", team1: BracketTeam(id: "t5", name: "Dragon Force"), team2: BracketTeam(id: "t6", name: "Phoenix Rising"), winner: "t5", isCompleted: true, scheduledDate: nil, score1: 108, score2: 94),
-                    BracketMatch(id: "m4", team1: BracketTeam(id: "t7", name: "Shadow Warriors"), team2: BracketTeam(id: "t8", name: "Lightning Strike"), winner: "t7", isCompleted: true, scheduledDate: nil, score1: 132, score2: 89)
+                    Bracket3DMatch(id: "m1", team1: Bracket3DTeam(id: "t1", name: "Thunder Squad"), team2: Bracket3DTeam(id: "t2", name: "Fire Hawks"), winner: "t1", isCompleted: true, scheduledDate: nil, score1: 127, score2: 98),
+                    Bracket3DMatch(id: "m2", team1: Bracket3DTeam(id: "t3", name: "Storm Riders"), team2: Bracket3DTeam(id: "t4", name: "Ice Breakers"), winner: "t3", isCompleted: true, scheduledDate: nil, score1: 115, score2: 102),
+                    Bracket3DMatch(id: "m3", team1: Bracket3DTeam(id: "t5", name: "Dragon Force"), team2: Bracket3DTeam(id: "t6", name: "Phoenix Rising"), winner: "t5", isCompleted: true, scheduledDate: nil, score1: 108, score2: 94),
+                    Bracket3DMatch(id: "m4", team1: Bracket3DTeam(id: "t7", name: "Shadow Warriors"), team2: Bracket3DTeam(id: "t8", name: "Lightning Strike"), winner: "t7", isCompleted: true, scheduledDate: nil, score1: 132, score2: 89)
                 ],
                 roundName: "Quarterfinals"
             ),
-            BracketRound(
+            Bracket3DRound(
                 id: "r2",
                 matches: [
-                    BracketMatch(id: "m5", team1: BracketTeam(id: "t1", name: "Thunder Squad"), team2: BracketTeam(id: "t3", name: "Storm Riders"), winner: "t1", isCompleted: true, scheduledDate: nil, score1: 121, score2: 109),
-                    BracketMatch(id: "m6", team1: BracketTeam(id: "t5", name: "Dragon Force"), team2: BracketTeam(id: "t7", name: "Shadow Warriors"), winner: nil, isCompleted: false, scheduledDate: Date().addingTimeInterval(86400), score1: nil, score2: nil)
+                    Bracket3DMatch(id: "m5", team1: Bracket3DTeam(id: "t1", name: "Thunder Squad"), team2: Bracket3DTeam(id: "t3", name: "Storm Riders"), winner: "t1", isCompleted: true, scheduledDate: nil, score1: 121, score2: 109),
+                    Bracket3DMatch(id: "m6", team1: Bracket3DTeam(id: "t5", name: "Dragon Force"), team2: Bracket3DTeam(id: "t7", name: "Shadow Warriors"), winner: nil, isCompleted: false, scheduledDate: Date().addingTimeInterval(86400), score1: nil, score2: nil)
                 ],
                 roundName: "Semifinals"
             ),
-            BracketRound(
+            Bracket3DRound(
                 id: "r3",
                 matches: [
-                    BracketMatch(id: "m7", team1: BracketTeam(id: "t1", name: "Thunder Squad"), team2: BracketTeam(id: "t5", name: "Dragon Force"), winner: nil, isCompleted: false, scheduledDate: Date().addingTimeInterval(172800), score1: nil, score2: nil)
+                    Bracket3DMatch(id: "m7", team1: Bracket3DTeam(id: "t1", name: "Thunder Squad"), team2: Bracket3DTeam(id: "t5", name: "Dragon Force"), winner: nil, isCompleted: false, scheduledDate: Date().addingTimeInterval(172800), score1: nil, score2: nil)
                 ],
                 roundName: "Finals"
             ),
-            BracketRound(
+            Bracket3DRound(
                 id: "r4",
                 matches: [
-                    BracketMatch(id: "m8", team1: BracketTeam(id: "t1", name: "Thunder Squad"), team2: BracketTeam(id: "t9", name: "TBD"), winner: nil, isCompleted: false, scheduledDate: Date().addingTimeInterval(259200), score1: nil, score2: nil)
+                    Bracket3DMatch(id: "m8", team1: Bracket3DTeam(id: "t1", name: "Thunder Squad"), team2: Bracket3DTeam(id: "t9", name: "TBD"), winner: nil, isCompleted: false, scheduledDate: Date().addingTimeInterval(259200), score1: nil, score2: nil)
                 ],
                 roundName: "Championship"
             )

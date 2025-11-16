@@ -1101,6 +1101,42 @@ struct UploadView: View {
             }
             .padding(.horizontal, 32)
             
+            // 🔥 NUCLEAR FIX #1: Cancel button
+            if !uploadManager.isCancelling {
+                Button(action: {
+                    uploadManager.cancelUpload()
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Cancel Upload")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundColor(.red)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.red.opacity(0.1))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                    )
+                }
+                .padding(.top, 20)
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .red))
+                        .scaleEffect(0.8)
+                    Text("Cancelling...")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.red)
+                }
+                .padding(.top, 20)
+            }
+            
             if let error = uploadManager.uploadError {
                 VStack(spacing: 16) {
                     Text("Upload Failed").font(.system(size: 20, weight: .semibold)).foregroundColor(.red)
@@ -2117,10 +2153,53 @@ struct ThumbnailSelectionView: View {
             .padding(.horizontal, 20)
         }
         .sheet(isPresented: $showingImagePicker) {
-            ImagePicker { image in
-                customThumbnails.append(image)
-                selectedIndex = customThumbnails.count // Select the newly added thumbnail
+            ImagePickerWrapper { image in
+                if let image = image {
+                    customThumbnails.append(image)
+                    selectedIndex = customThumbnails.count // Select the newly added thumbnail
+                }
             }
+        }
+    }
+}
+
+// MARK: - ImagePicker Wrapper
+struct ImagePickerWrapper: UIViewControllerRepresentable {
+    let onImageSelected: (UIImage?) -> Void
+    @Environment(\.dismiss) private var dismiss
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        picker.sourceType = .photoLibrary
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: ImagePickerWrapper
+        
+        init(_ parent: ImagePickerWrapper) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let image = info[.originalImage] as? UIImage {
+                parent.onImageSelected(image)
+            } else {
+                parent.onImageSelected(nil)
+            }
+            parent.dismiss()
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.onImageSelected(nil)
+            parent.dismiss()
         }
     }
 }
@@ -2164,44 +2243,6 @@ struct ThumbnailOption: View {
             }
         }
         .buttonStyle(.plain)
-    }
-}
-
-struct ImagePicker: UIViewControllerRepresentable {
-    let onImageSelected: (UIImage) -> Void
-    @Environment(\.dismiss) private var dismiss
-    
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.delegate = context.coordinator
-        picker.sourceType = .photoLibrary
-        picker.allowsEditing = true
-        return picker
-    }
-    
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: ImagePicker
-        
-        init(_ parent: ImagePicker) {
-            self.parent = parent
-        }
-        
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let image = info[.editedImage] as? UIImage ?? info[.originalImage] as? UIImage {
-                parent.onImageSelected(image)
-            }
-            parent.dismiss()
-        }
-        
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
-        }
     }
 }
 

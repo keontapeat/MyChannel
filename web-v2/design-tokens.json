@@ -1,0 +1,321 @@
+{
+  "colors": {
+    "primary": {
+      "value": "#0ea5a3",
+      "description": "Primary brand color - emerald/teal"
+    },
+    "primaryHover": {
+      "value": "#0d9488",
+      "description": "Primary hover state"
+    },
+    "accent": {
+      "value": "#ff0044",
+      "description": "Accent color for CTAs and highlights"
+    },
+    "background": {
+      "light": {
+        "value": "#ffffff",
+        "description": "Light mode background"
+      },
+      "dark": {
+        "value": "#0f0f0f",
+        "description": "Dark mode background"
+      }
+    },
+    "surface": {
+      "light": {
+        "value": "#f9f9f9",
+        "description": "Light mode surface/card background"
+      },
+      "dark": {
+        "value": "#212121",
+        "description": "Dark mode surface/card background"
+      }
+    },
+    "text": {
+      "primary": {
+        "light": {
+          "value": "#0f0f0f",
+          "description": "Primary text color (light mode)"
+        },
+        "dark": {
+          "value": "#ffffff",
+          "description": "Primary text color (dark mode)"
+        }
+      },
+      "secondary": {
+        "light": {
+          "value": "#606060",
+          "description": "Secondary text color (light mode)"
+        },
+        "dark": {
+          "value": "#aaaaaa",
+          "description": "Secondary text color (dark mode)"
+        }
+      },
+      "tertiary": {
+        "light": {
+          "value": "#888888",
+          "description": "Tertiary text color (light mode)"
+        },
+        "dark": {
+          "value": "#888888",
+          "description": "Tertiary text color (dark mode)"
+        }
+      }
+    },
+    "border": {
+      "light": {
+        "value": "#e5e5e5",
+        "description": "Border color (light mode)"
+      },
+      "dark": {
+        "value": "#303030",
+        "description": "Border color (dark mode)"
+      }
+    },
+    "success": {
+      "value": "#2e7d32",
+      "description": "Success state color"
+    },
+    "warning": {
+      "value": "#ff9800",
+      "description": "Warning state color"
+    },
+    "error": {
+      "value": "#d32f2f",
+      "description": "Error state color"
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "sans": {
+        "value": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+        "description": "Primary sans-serif font stack"
+      },
+      "display": {
+        "value": "'Playfair Display', serif",
+        "description": "Display font for headlines"
+      },
+      "mono": {
+        "value": "'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace",
+        "description": "Monospace font for code"
+      }
+    },
+    "fontSize": {
+      "xs": {
+        "value": "0.6875rem",
+        "description": "11px - Tiny labels"
+      },
+      "sm": {
+        "value": "0.75rem",
+        "description": "12px - Captions, metadata"
+      },
+      "base": {
+        "value": "0.875rem",
+        "description": "14px - Body text"
+      },
+      "md": {
+        "value": "1rem",
+        "description": "16px - Titles"
+      },
+      "lg": {
+        "value": "1.125rem",
+        "description": "18px - Headings"
+      },
+      "xl": {
+        "value": "1.25rem",
+        "description": "20px - Large headings"
+      },
+      "2xl": {
+        "value": "1.5rem",
+        "description": "24px - Section headings"
+      },
+      "3xl": {
+        "value": "1.875rem",
+        "description": "30px - Hero headings"
+      },
+      "4xl": {
+        "value": "2.25rem",
+        "description": "36px - Large hero headings"
+      }
+    },
+    "fontWeight": {
+      "regular": {
+        "value": "400",
+        "description": "Regular weight"
+      },
+      "medium": {
+        "value": "500",
+        "description": "Medium weight"
+      },
+      "semibold": {
+        "value": "600",
+        "description": "Semibold weight"
+      },
+      "bold": {
+        "value": "700",
+        "description": "Bold weight"
+      }
+    },
+    "lineHeight": {
+      "tight": {
+        "value": "1.2",
+        "description": "Tight line height for titles"
+      },
+      "snug": {
+        "value": "1.375",
+        "description": "Snug line height for compact text"
+      },
+      "normal": {
+        "value": "1.5",
+        "description": "Normal line height for body text"
+      },
+      "relaxed": {
+        "value": "1.625",
+        "description": "Relaxed line height for spacious text"
+      }
+    }
+  },
+  "spacing": {
+    "xs": {
+      "value": "0.25rem",
+      "description": "4px"
+    },
+    "sm": {
+      "value": "0.5rem",
+      "description": "8px"
+    },
+    "md": {
+      "value": "1rem",
+      "description": "16px"
+    },
+    "lg": {
+      "value": "1.5rem",
+      "description": "24px"
+    },
+    "xl": {
+      "value": "2rem",
+      "description": "32px"
+    },
+    "2xl": {
+      "value": "3rem",
+      "description": "48px"
+    },
+    "3xl": {
+      "value": "4rem",
+      "description": "64px"
+    }
+  },
+  "borderRadius": {
+    "sm": {
+      "value": "0.375rem",
+      "description": "6px"
+    },
+    "md": {
+      "value": "0.5rem",
+      "description": "8px"
+    },
+    "lg": {
+      "value": "0.75rem",
+      "description": "12px"
+    },
+    "xl": {
+      "value": "1rem",
+      "description": "16px"
+    },
+    "full": {
+      "value": "9999px",
+      "description": "Full rounded (pills)"
+    }
+  },
+  "breakpoints": {
+    "mobile": {
+      "value": "375px",
+      "description": "Mobile breakpoint"
+    },
+    "tablet": {
+      "value": "768px",
+      "description": "Tablet breakpoint"
+    },
+    "desktop": {
+      "value": "1024px",
+      "description": "Desktop breakpoint"
+    },
+    "wide": {
+      "value": "1440px",
+      "description": "Wide desktop breakpoint"
+    }
+  },
+  "shadows": {
+    "sm": {
+      "value": "0 1px 2px rgba(0, 0, 0, 0.05)",
+      "description": "Small shadow"
+    },
+    "md": {
+      "value": "0 2px 8px rgba(0, 0, 0, 0.08)",
+      "description": "Medium shadow"
+    },
+    "lg": {
+      "value": "0 4px 12px rgba(0, 0, 0, 0.12)",
+      "description": "Large shadow"
+    },
+    "xl": {
+      "value": "0 8px 24px rgba(0, 0, 0, 0.15)",
+      "description": "Extra large shadow"
+    }
+  },
+  "zIndex": {
+    "dropdown": {
+      "value": "100",
+      "description": "Dropdown menus"
+    },
+    "sidebar": {
+      "value": "50",
+      "description": "Sidebar"
+    },
+    "header": {
+      "value": "40",
+      "description": "Header"
+    },
+    "modal": {
+      "value": "1000",
+      "description": "Modals"
+    },
+    "miniPlayer": {
+      "value": "999",
+      "description": "Mini player"
+    }
+  },
+  "animations": {
+    "duration": {
+      "fast": {
+        "value": "150ms",
+        "description": "Fast animations"
+      },
+      "normal": {
+        "value": "200ms",
+        "description": "Normal animations"
+      },
+      "slow": {
+        "value": "300ms",
+        "description": "Slow animations"
+      }
+    },
+    "easing": {
+      "easeInOut": {
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "description": "Standard easing"
+      },
+      "easeOut": {
+        "value": "cubic-bezier(0, 0, 0.2, 1)",
+        "description": "Ease out"
+      },
+      "easeIn": {
+        "value": "cubic-bezier(0.4, 0, 1, 1)",
+        "description": "Ease in"
+      }
+    }
+  }
+}
+

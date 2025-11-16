@@ -28,6 +28,8 @@ struct CreateCampaignView: View {
                             objectiveStep
                         case .audience:
                             audienceStep
+                        case .targeting:
+                            audienceStep
                         case .budget:
                             budgetStep
                         case .creative:
@@ -59,19 +61,20 @@ struct CreateCampaignView: View {
         VStack(spacing: 12) {
             HStack {
                 ForEach(CampaignStep.allCases.indices, id: \.self) { index in
+                    let step = CampaignStep.allCases[index]
                     Circle()
-                        .fill(index <= campaignBuilder.currentStep.rawValue ? Color.blue : Color.gray.opacity(0.3))
+                        .fill(campaignBuilder.currentStep.number >= step.number ? Color.blue : Color.gray.opacity(0.3))
                         .frame(width: 12, height: 12)
                     
                     if index < CampaignStep.allCases.count - 1 {
                         Rectangle()
-                            .fill(index < campaignBuilder.currentStep.rawValue ? Color.blue : Color.gray.opacity(0.3))
+                            .fill(campaignBuilder.currentStep.number > step.number ? Color.blue : Color.gray.opacity(0.3))
                             .frame(height: 2)
                     }
                 }
             }
             
-            Text("Step \(campaignBuilder.currentStep.rawValue + 1) of \(CampaignStep.allCases.count): \(campaignBuilder.currentStep.title)")
+            Text("Step \(campaignBuilder.currentStep.number) of \(CampaignStep.allCases.count): \(campaignBuilder.currentStep.title)")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }
@@ -852,6 +855,8 @@ class CampaignBuilderViewModel: ObservableObject {
             return objective != nil && !campaignName.isEmpty
         case .audience:
             return true
+        case .targeting:
+            return true
         case .budget:
             return budget >= 50
         case .creative:
@@ -877,15 +882,17 @@ class CampaignBuilderViewModel: ObservableObject {
     }
     
     func nextStep() {
-        if let nextStep = CampaignStep(rawValue: currentStep.rawValue + 1) {
-            currentStep = nextStep
-        }
+        let allSteps = CampaignStep.allCases
+        guard let currentIndex = allSteps.firstIndex(of: currentStep),
+              currentIndex < allSteps.count - 1 else { return }
+        currentStep = allSteps[currentIndex + 1]
     }
     
     func previousStep() {
-        if let prevStep = CampaignStep(rawValue: currentStep.rawValue - 1) {
-            currentStep = prevStep
-        }
+        let allSteps = CampaignStep.allCases
+        guard let currentIndex = allSteps.firstIndex(of: currentStep),
+              currentIndex > 0 else { return }
+        currentStep = allSteps[currentIndex - 1]
     }
     
     func launchCampaign() {
@@ -894,47 +901,8 @@ class CampaignBuilderViewModel: ObservableObject {
     }
 }
 
-enum CampaignStep: Int, CaseIterable {
-    case objective = 0
-    case audience = 1
-    case budget = 2
-    case creative = 3
-    case review = 4
-    
-    var title: String {
-        switch self {
-        case .objective: return "Objective"
-        case .audience: return "Audience"
-        case .budget: return "Budget"
-        case .creative: return "Creative"
-        case .review: return "Review"
-        }
-    }
-}
-
-enum CampaignObjective {
-    case awareness
-    case traffic
-    case conversions
-    case videoViews
-    
-    var title: String {
-        switch self {
-        case .awareness: return "Brand Awareness"
-        case .traffic: return "Traffic"
-        case .conversions: return "Conversions"
-        case .videoViews: return "Video Views"
-        }
-    }
-}
-
 enum BudgetType {
     case daily
     case lifetime
-}
-
-enum BidStrategy {
-    case automatic
-    case manual
 }
 

@@ -118,7 +118,7 @@ struct MatchResultSubmissionView: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(match.team1.name + " vs " + match.team2.name)
+                    Text(match.team1.name + " vs " + (match.team2?.name ?? "TBD"))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                     
@@ -410,7 +410,7 @@ struct MatchResultSubmissionView: View {
                     )
                 }
                 .sheet(isPresented: $showingImagePicker) {
-                    ImagePicker(image: $selectedScreenshot)
+                    ImagePicker(selectedImage: $selectedScreenshot)
                 }
             }
         }
@@ -653,7 +653,7 @@ struct MatchResultSubmissionView: View {
             Image(systemName: icon)
                 .font(.system(size: 18, weight: .medium))
                 .foregroundColor(completed ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
-                .symbolEffect(.pulse, isActive: icon.contains("arrow"))
+                .animation(icon.contains("arrow") ? .easeInOut.repeatForever(autoreverses: true) : .default, value: completed)
             
             Text(text)
                 .font(.system(size: 15, weight: completed ? .semibold : .regular))
@@ -881,37 +881,4 @@ struct VideoPicker: UIViewControllerRepresentable {
 }
 
 // MARK: - Image Picker
-
-struct ImagePicker: UIViewControllerRepresentable {
-    @Binding var image: UIImage?
-    @Environment(\.dismiss) private var dismiss
-    
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.delegate = context.coordinator
-        picker.sourceType = .photoLibrary
-        return picker
-    }
-    
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: ImagePicker
-        
-        init(_ parent: ImagePicker) {
-            self.parent = parent
-        }
-        
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let image = info[.originalImage] as? UIImage {
-                parent.image = image
-            }
-            parent.dismiss()
-        }
-    }
-}
 

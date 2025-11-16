@@ -18,12 +18,12 @@ class FacebookParityStoryEngine: ObservableObject {
     
     // MARK: - Published Properties
     @Published var availableFilters: [StoryFilter] = []
-    @Published var availableEffects: [AREffect] = []
+    @Published var availableEffects: [FacebookAREffect] = []
     @Published var availableFrames: [StoryFrame] = []
-    @Published var availableTemplates: [StoryTemplate] = []
+    @Published var availableTemplates: [FacebookStoryTemplate] = []
     @Published var isProcessingAR = false
     @Published var currentFilter: StoryFilter?
-    @Published var currentEffect: AREffect?
+    @Published var currentEffect: FacebookAREffect?
     
     // Facebook-specific features
     @Published var boomerangMode = false
@@ -85,34 +85,34 @@ class FacebookParityStoryEngine: ObservableObject {
     private func loadAREffects() {
         availableEffects = [
             // Face effects
-            AREffect(id: "beauty", name: "Beauty", category: .face, type: .faceFilter),
-            AREffect(id: "smooth_skin", name: "Smooth Skin", category: .face, type: .faceFilter),
-            AREffect(id: "bright_eyes", name: "Bright Eyes", category: .face, type: .faceFilter),
-            AREffect(id: "white_teeth", name: "White Teeth", category: .face, type: .faceFilter),
+            FacebookAREffect(id: "beauty", name: "Beauty", category: .face, type: .faceFilter),
+            FacebookAREffect(id: "smooth_skin", name: "Smooth Skin", category: .face, type: .faceFilter),
+            FacebookAREffect(id: "bright_eyes", name: "Bright Eyes", category: .face, type: .faceFilter),
+            FacebookAREffect(id: "white_teeth", name: "White Teeth", category: .face, type: .faceFilter),
             
             // Animal filters
-            AREffect(id: "dog_ears", name: "Dog Ears", category: .animal, type: .faceFilter),
-            AREffect(id: "cat_whiskers", name: "Cat Whiskers", category: .animal, type: .faceFilter),
-            AREffect(id: "bunny_nose", name: "Bunny Nose", category: .animal, type: .faceFilter),
-            AREffect(id: "lion_mane", name: "Lion Mane", category: .animal, type: .faceFilter),
+            FacebookAREffect(id: "dog_ears", name: "Dog Ears", category: .animal, type: .faceFilter),
+            FacebookAREffect(id: "cat_whiskers", name: "Cat Whiskers", category: .animal, type: .faceFilter),
+            FacebookAREffect(id: "bunny_nose", name: "Bunny Nose", category: .animal, type: .faceFilter),
+            FacebookAREffect(id: "lion_mane", name: "Lion Mane", category: .animal, type: .faceFilter),
             
             // Makeup effects
-            AREffect(id: "lipstick_red", name: "Red Lipstick", category: .makeup, type: .faceFilter),
-            AREffect(id: "eyeshadow_blue", name: "Blue Eyeshadow", category: .makeup, type: .faceFilter),
-            AREffect(id: "blush_pink", name: "Pink Blush", category: .makeup, type: .faceFilter),
-            AREffect(id: "eyeliner_black", name: "Black Eyeliner", category: .makeup, type: .faceFilter),
+            FacebookAREffect(id: "lipstick_red", name: "Red Lipstick", category: .makeup, type: .faceFilter),
+            FacebookAREffect(id: "eyeshadow_blue", name: "Blue Eyeshadow", category: .makeup, type: .faceFilter),
+            FacebookAREffect(id: "blush_pink", name: "Pink Blush", category: .makeup, type: .faceFilter),
+            FacebookAREffect(id: "eyeliner_black", name: "Black Eyeliner", category: .makeup, type: .faceFilter),
             
             // World effects
-            AREffect(id: "falling_snow", name: "Falling Snow", category: .world, type: .worldEffect),
-            AREffect(id: "floating_hearts", name: "Floating Hearts", category: .world, type: .worldEffect),
-            AREffect(id: "rainbow_trail", name: "Rainbow Trail", category: .world, type: .worldEffect),
-            AREffect(id: "sparkles", name: "Sparkles", category: .world, type: .worldEffect),
+            FacebookAREffect(id: "falling_snow", name: "Falling Snow", category: .world, type: .worldEffect),
+            FacebookAREffect(id: "floating_hearts", name: "Floating Hearts", category: .world, type: .worldEffect),
+            FacebookAREffect(id: "rainbow_trail", name: "Rainbow Trail", category: .world, type: .worldEffect),
+            FacebookAREffect(id: "sparkles", name: "Sparkles", category: .world, type: .worldEffect),
             
             // Interactive effects
-            AREffect(id: "face_swap", name: "Face Swap", category: .interactive, type: .faceFilter),
-            AREffect(id: "age_filter", name: "Age Filter", category: .interactive, type: .faceFilter),
-            AREffect(id: "gender_swap", name: "Gender Swap", category: .interactive, type: .faceFilter),
-            AREffect(id: "voice_changer", name: "Voice Changer", category: .interactive, type: .audioEffect)
+            FacebookAREffect(id: "face_swap", name: "Face Swap", category: .interactive, type: .faceFilter),
+            FacebookAREffect(id: "age_filter", name: "Age Filter", category: .interactive, type: .faceFilter),
+            FacebookAREffect(id: "gender_swap", name: "Gender Swap", category: .interactive, type: .faceFilter),
+            FacebookAREffect(id: "voice_changer", name: "Voice Changer", category: .interactive, type: .audioEffect)
         ]
     }
     
@@ -131,14 +131,14 @@ class FacebookParityStoryEngine: ObservableObject {
     
     private func loadTemplates() {
         availableTemplates = [
-            StoryTemplate(id: "before_after", name: "Before & After", layout: .split),
-            StoryTemplate(id: "collage_2", name: "2-Photo Collage", layout: .grid2x1),
-            StoryTemplate(id: "collage_4", name: "4-Photo Collage", layout: .grid2x2),
-            StoryTemplate(id: "timeline", name: "Timeline", layout: .vertical),
-            StoryTemplate(id: "comparison", name: "Comparison", layout: .sideBySide),
-            StoryTemplate(id: "magazine", name: "Magazine", layout: .magazine),
-            StoryTemplate(id: "scrapbook", name: "Scrapbook", layout: .scrapbook),
-            StoryTemplate(id: "mood_board", name: "Mood Board", layout: .moodBoard)
+            FacebookStoryTemplate(id: "before_after", name: "Before & After", layout: .split),
+            FacebookStoryTemplate(id: "collage_2", name: "2-Photo Collage", layout: .grid2x1),
+            FacebookStoryTemplate(id: "collage_4", name: "4-Photo Collage", layout: .grid2x2),
+            FacebookStoryTemplate(id: "timeline", name: "Timeline", layout: .vertical),
+            FacebookStoryTemplate(id: "comparison", name: "Comparison", layout: .sideBySide),
+            FacebookStoryTemplate(id: "magazine", name: "Magazine", layout: .magazine),
+            FacebookStoryTemplate(id: "scrapbook", name: "Scrapbook", layout: .scrapbook),
+            FacebookStoryTemplate(id: "mood_board", name: "Mood Board", layout: .moodBoard)
         ]
     }
     
@@ -152,7 +152,7 @@ class FacebookParityStoryEngine: ObservableObject {
         let composition = AVMutableComposition()
         
         guard let videoTrack = asset.tracks(withMediaType: .video).first else {
-            throw StoryError.invalidVideo
+            throw StoryError.invalidVideo("Invalid video format or content")
         }
         
         let compositionTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)
@@ -177,7 +177,7 @@ class FacebookParityStoryEngine: ObservableObject {
         if exporter?.status == .completed {
             return outputURL
         } else {
-            throw StoryError.exportFailed
+            throw StoryError.exportFailed("Failed to export story")
         }
     }
     
@@ -189,7 +189,7 @@ class FacebookParityStoryEngine: ObservableObject {
         let videoComposition = AVMutableVideoComposition()
         
         guard let videoTrack = asset.tracks(withMediaType: .video).first else {
-            throw StoryError.invalidVideo
+            throw StoryError.invalidVideo("Invalid video format or content")
         }
         
         let compositionTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)
@@ -224,7 +224,7 @@ class FacebookParityStoryEngine: ObservableObject {
         if exporter?.status == .completed {
             return outputURL
         } else {
-            throw StoryError.exportFailed
+            throw StoryError.exportFailed("Failed to export story")
         }
     }
     
@@ -387,7 +387,7 @@ class FacebookParityStoryEngine: ObservableObject {
         
         // Add video track
         guard let videoTrack = videoAsset.tracks(withMediaType: .video).first else {
-            throw StoryError.invalidVideo
+            throw StoryError.invalidVideo("Invalid video format or content")
         }
         
         let compositionVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)
@@ -427,7 +427,7 @@ class FacebookParityStoryEngine: ObservableObject {
         if exporter?.status == .completed {
             return outputURL
         } else {
-            throw StoryError.exportFailed
+            throw StoryError.exportFailed("Failed to export story")
         }
     }
     
@@ -655,7 +655,7 @@ struct StoryFilter: Identifiable, Codable {
     }
 }
 
-struct AREffect: Identifiable, Codable {
+struct FacebookAREffect: Identifiable, Codable {
     let id: String
     let name: String
     let category: EffectCategory
@@ -692,7 +692,7 @@ struct StoryFrame: Identifiable, Codable {
     }
 }
 
-struct StoryTemplate: Identifiable, Codable {
+struct FacebookStoryTemplate: Identifiable, Codable {
     let id: String
     let name: String
     let layout: TemplateLayout
@@ -714,13 +714,6 @@ enum LayoutMode: String, CaseIterable {
     case collage = "Collage"
     case grid = "Grid"
     case split = "Split"
-}
-
-enum StoryError: Error {
-    case invalidVideo
-    case exportFailed
-    case filterNotFound
-    case effectNotFound
 }
 
 // MARK: - Facebook Parity Extensions
@@ -816,7 +809,7 @@ extension FacebookParityStoryEngine {
     
     private func resizeImageToFacebookSpecs(_ imageURL: URL) async throws -> URL {
         guard let image = UIImage(contentsOfFile: imageURL.path) else {
-            throw StoryError.invalidVideo
+            throw StoryError.invalidVideo("Invalid video format or content")
         }
         
         // Resize to 1080x1920 (9:16 aspect ratio)
@@ -829,7 +822,7 @@ extension FacebookParityStoryEngine {
             try jpegData.write(to: outputURL)
             return outputURL
         } else {
-            throw StoryError.exportFailed
+            throw StoryError.exportFailed("Failed to export story")
         }
     }
     
@@ -839,7 +832,7 @@ extension FacebookParityStoryEngine {
         let videoComposition = AVMutableVideoComposition()
         
         guard let videoTrack = asset.tracks(withMediaType: .video).first else {
-            throw StoryError.invalidVideo
+            throw StoryError.invalidVideo("Invalid video format or content")
         }
         
         let compositionTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)
@@ -886,7 +879,7 @@ extension FacebookParityStoryEngine {
         if exporter?.status == .completed {
             return outputURL
         } else {
-            throw StoryError.exportFailed
+            throw StoryError.exportFailed("Failed to export story")
         }
     }
 }

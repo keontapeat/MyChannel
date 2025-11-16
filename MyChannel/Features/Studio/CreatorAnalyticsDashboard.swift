@@ -683,3 +683,4 @@ struct TrendRow: View {
 }
 
 
+

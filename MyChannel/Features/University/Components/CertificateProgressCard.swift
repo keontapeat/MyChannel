@@ -14,10 +14,16 @@ struct CertificateProgressCard: View {
     let onTap: () -> Void
     
     @State private var animateProgress = false
+    @State private var isPressed = false
+    @State private var isHovered = false
+    @Environment(\.sizeCategory) var sizeCategory
     
     var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 16) {
+        Button(action: {
+            HapticManager.shared.impact(style: .medium)
+            onTap()
+        }) {
+            VStack(spacing: dynamicSpacing) {
                 // Progress Ring
                 progressRingSection
                 
@@ -27,7 +33,7 @@ struct CertificateProgressCard: View {
                 // Progress Stats
                 progressStatsSection
             }
-            .padding(20)
+            .padding(dynamicPadding)
             .background(
                 ZStack {
                     // Background gradient
@@ -48,13 +54,68 @@ struct CertificateProgressCard: View {
                         .stroke(careerPath.color.opacity(0.2), lineWidth: 1.5)
                 }
             )
-            .shadow(color: careerPath.color.opacity(0.1), radius: 16, x: 0, y: 8)
+            .shadow(
+                color: careerPath.color.opacity(isHovered ? 0.2 : 0.1),
+                radius: isHovered ? 20 : 16,
+                x: 0,
+                y: isHovered ? 10 : 8
+            )
         }
         .buttonStyle(PlainButtonStyle())
+        .scaleEffect(isPressed ? 0.95 : (isHovered ? 1.03 : 1.0))
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isHovered)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+        .onHover { hovering in
+            isHovered = hovering
+        }
         .onAppear {
             withAnimation(.spring(response: 1.2, dampingFraction: 0.7).delay(0.1)) {
                 animateProgress = true
             }
+        }
+        // 🔥 ACCESSIBILITY: Comprehensive VoiceOver support
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityCardLabel)
+        .accessibilityHint("Double tap to view full career path details and certificate requirements")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityValue(accessibilityProgressValue)
+    }
+    
+    // MARK: - Dynamic Sizing for Accessibility
+    
+    private var dynamicSpacing: CGFloat {
+        sizeCategory.isAccessibilityCategory ? 20 : 16
+    }
+    
+    private var dynamicPadding: CGFloat {
+        sizeCategory.isAccessibilityCategory ? 24 : 20
+    }
+    
+    private var ringSize: CGFloat {
+        sizeCategory.isAccessibilityCategory ? 140 : 120
+    }
+    
+    // MARK: - Accessibility Labels
+    
+    private var accessibilityCardLabel: String {
+        "\(careerPath.name) certificate progress"
+    }
+    
+    private var accessibilityProgressValue: String {
+        let progressText = "\(progress.progressPercentage)% complete"
+        let videosText = "\(progress.videosWatched) videos watched"
+        let hoursText = "\(Int(progress.totalHours)) hours completed"
+        let scoreText = "AI score \(progress.averageAIScore)"
+        
+        if progress.certificateEarned {
+            return "Certificate earned. \(videosText), \(hoursText), \(scoreText)"
+        } else {
+            return "\(progressText), \(progress.videosRemaining) videos remaining. \(videosText), \(hoursText), \(scoreText)"
         }
     }
     
@@ -62,48 +123,29 @@ struct CertificateProgressCard: View {
     
     private var progressRingSection: some View {
         ZStack {
-            // Background Circle
-            Circle()
-                .stroke(careerPath.color.opacity(0.15), lineWidth: 12)
-                .frame(width: 120, height: 120)
+            // 🔥 NEW: Use AnimatedProgressRing component with spring animations
+            AnimatedProgressRing(
+                progress: progress.certificateProgress,
+                lineWidth: 12,
+                primaryColor: careerPath.color,
+                label: "",
+                showPercentage: false
+            )
+            .frame(width: ringSize, height: ringSize)
             
-            // Progress Circle
-            Circle()
-                .trim(from: 0, to: animateProgress ? progress.certificateProgress : 0)
-                .stroke(
-                    careerPath.color,
-                    style: StrokeStyle(lineWidth: 12, lineCap: .round)
-                )
-                .frame(width: 120, height: 120)
-                .rotationEffect(.degrees(-90))
-                .animation(.spring(response: 1.5, dampingFraction: 0.7), value: animateProgress)
-            
-            // Inner Content
-            VStack(spacing: 4) {
+            // Inner Content with Career Icon
+            VStack(spacing: sizeCategory.isAccessibilityCategory ? 6 : 4) {
                 // Career Icon
                 Image(systemName: careerPath.icon)
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(.system(size: ringSize * 0.23, weight: .semibold))
                     .foregroundColor(careerPath.color)
                 
                 // Percentage
                 Text("\(progress.progressPercentage)%")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: ringSize * 0.17, weight: .bold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
             }
-            
-            // Pulse animation when near completion (>80%)
-            if progress.certificateProgress >= 0.8 {
-                Circle()
-                    .stroke(careerPath.color.opacity(0.3), lineWidth: 2)
-                    .frame(width: 140, height: 140)
-                    .scaleEffect(animateProgress ? 1.15 : 1.0)
-                    .opacity(animateProgress ? 0 : 0.6)
-                    .animation(
-                        .easeInOut(duration: 1.5)
-                        .repeatForever(autoreverses: false),
-                        value: animateProgress
-                    )
-            }
+            .accessibilityHidden(true) // Progress announced at card level
         }
     }
     
@@ -115,7 +157,9 @@ struct CertificateProgressCard: View {
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(AppTheme.Colors.textPrimary)
                 .multilineTextAlignment(.center)
-                .lineLimit(2)
+                .lineLimit(sizeCategory.isAccessibilityCategory ? nil : 2)
+                .minimumScaleFactor(0.8)
+                .accessibilityAddTraits(.isHeader)
             
             if progress.certificateEarned {
                 HStack(spacing: 6) {
@@ -125,6 +169,8 @@ struct CertificateProgressCard: View {
                         .font(.system(size: 13, weight: .bold))
                 }
                 .foregroundColor(.green)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Certificate earned")
             } else {
                 Text("\(progress.videosRemaining) videos to certificate")
                     .font(.system(size: 13, weight: .medium))
@@ -304,6 +350,20 @@ struct CompactCertificateProgress: View {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(careerPath.color.opacity(0.2), lineWidth: 1)
         )
+    }
+}
+
+// MARK: - ContentSizeCategory Extension
+
+extension ContentSizeCategory {
+    var isAccessibilityCategory: Bool {
+        switch self {
+        case .accessibilityMedium, .accessibilityLarge, .accessibilityExtraLarge,
+             .accessibilityExtraExtraLarge, .accessibilityExtraExtraExtraLarge:
+            return true
+        default:
+            return false
+        }
     }
 }
 

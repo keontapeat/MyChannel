@@ -122,18 +122,19 @@ class TournamentService: ObservableObject {
                 let score2 = matchData["score2"] as? Int
                 let scheduledDate = (matchData["scheduledDate"] as? Timestamp)?.dateValue()
                 
-                let team1 = BracketTeam(id: team1Id, name: team1Name, score: score1)
-                let team2 = BracketTeam(id: team2Id, name: team2Name, score: score2)
+            let team1 = BracketTeam(id: team1Id, name: team1Name)
+            let team2 = team2Id.isEmpty ? nil : BracketTeam(id: team2Id, name: team2Name)
+                
+                let winnerTeam: BracketTeam? = winnerId != nil ? BracketTeam(id: winnerId!, name: winnerId == team1Id ? team1Name : team2Name) : nil
                 
                 let match = BracketMatch(
                     id: matchId,
                     team1: team1,
                     team2: team2,
-                    winner: winnerId,
-                    isCompleted: isCompleted,
-                    scheduledDate: scheduledDate,
                     score1: score1,
-                    score2: score2
+                    score2: score2,
+                    winner: winnerTeam,
+                    isLive: !isCompleted
                 )
                 
                 matches.append(match)
@@ -141,8 +142,8 @@ class TournamentService: ObservableObject {
             
             let round = BracketRound(
                 id: roundDoc.documentID,
-                matches: matches,
-                roundName: roundName
+                name: roundName,
+                matches: matches
             )
             
             rounds.append(round)
@@ -156,10 +157,10 @@ class TournamentService: ObservableObject {
         return BracketTournament(
             id: tournamentId,
             name: name,
+            prizePool: prizePool,
+            totalPlayers: 0, // TODO: Calculate from rounds
             rounds: rounds,
-            startDate: startDate,
-            endDate: endDate,
-            prizePool: prizePool
+            startDate: startDate
         )
     }
     #endif
@@ -194,19 +195,19 @@ class TournamentService: ObservableObject {
         for (index, round) in rounds.enumerated() {
             let roundData: [String: Any] = [
                 "roundNumber": index + 1,
-                "roundName": round.roundName,
+                "roundName": round.name,
                 "matches": round.matches.map { (match: BracketMatch) -> [String: Any] in
                     [
                         "matchId": match.id,
                         "team1Id": match.team1.id,
                         "team1Name": match.team1.name,
-                        "team2Id": match.team2.id,
-                        "team2Name": match.team2.name,
-                        "winnerId": match.winner ?? NSNull(),
-                        "isCompleted": match.isCompleted,
-                        "score1": match.team1.score ?? NSNull(),
-                        "score2": match.team2.score ?? NSNull(),
-                        "scheduledDate": match.scheduledDate != nil ? Timestamp(date: match.scheduledDate!) : NSNull()
+                    "team2Id": match.team2?.id ?? "",
+                    "team2Name": match.team2?.name ?? "",
+                    "winnerId": match.winner?.id ?? NSNull(),
+                    "isCompleted": match.winner != nil,
+                    "score1": match.score1 ?? NSNull(),
+                    "score2": match.score2 ?? NSNull(),
+                    "scheduledDate": NSNull()
                     ]
                 }
             ]
@@ -340,18 +341,17 @@ class TournamentService: ObservableObject {
         
         var round1Matches: [BracketMatch] = []
         for i in stride(from: 0, to: currentParticipants.count, by: 2) {
-            let team1 = BracketTeam(id: currentParticipants[i], name: currentNames[i], score: nil)
-            let team2 = BracketTeam(id: currentParticipants[i + 1], name: currentNames[i + 1], score: nil)
+            let team1 = BracketTeam(id: currentParticipants[i], name: currentNames[i])
+            let team2 = BracketTeam(id: currentParticipants[i + 1], name: currentNames[i + 1])
             
             let match = BracketMatch(
                 id: UUID().uuidString,
                 team1: team1,
                 team2: team2,
-                winner: nil,
-                isCompleted: false,
-                scheduledDate: Date().addingTimeInterval(Double(i) * 3600), // Stagger matches
                 score1: nil,
-                score2: nil
+                score2: nil,
+                winner: nil,
+                isLive: true
             )
             
             round1Matches.append(match)
@@ -359,8 +359,8 @@ class TournamentService: ObservableObject {
         
         rounds.append(BracketRound(
             id: "r1",
-            matches: round1Matches,
-            roundName: "Round 1"
+            name: "Round 1",
+            matches: round1Matches
         ))
         
         // Create placeholder rounds
@@ -371,13 +371,12 @@ class TournamentService: ObservableObject {
             for _ in 0..<matchesInRound {
                 let match = BracketMatch(
                     id: UUID().uuidString,
-                    team1: BracketTeam(id: "TBD", name: "TBD", score: nil),
-                    team2: BracketTeam(id: "TBD", name: "TBD", score: nil),
-                    winner: nil,
-                    isCompleted: false,
-                    scheduledDate: nil,
+                    team1: BracketTeam(id: "TBD", name: "TBD"),
+                    team2: BracketTeam(id: "TBD", name: "TBD"),
                     score1: nil,
-                    score2: nil
+                    score2: nil,
+                    winner: nil,
+                    isLive: false
                 )
                 roundMatches.append(match)
             }
@@ -386,8 +385,8 @@ class TournamentService: ObservableObject {
             
             rounds.append(BracketRound(
                 id: "r\(roundNum)",
-                matches: roundMatches,
-                roundName: roundName
+                name: roundName,
+                matches: roundMatches
             ))
         }
         
@@ -396,10 +395,10 @@ class TournamentService: ObservableObject {
     
     private func createEmptyRounds() -> [BracketRound] {
         return [
-            BracketRound(id: "r1", matches: [], roundName: "Round 1"),
-            BracketRound(id: "r2", matches: [], roundName: "Round 2"),
-            BracketRound(id: "r3", matches: [], roundName: "Semi-Finals"),
-            BracketRound(id: "r4", matches: [], roundName: "Finals")
+            BracketRound(id: "r1", name: "Round 1", matches: []),
+            BracketRound(id: "r2", name: "Round 2", matches: []),
+            BracketRound(id: "r3", name: "Semi-Finals", matches: []),
+            BracketRound(id: "r4", name: "Finals", matches: [])
         ]
     }
 }

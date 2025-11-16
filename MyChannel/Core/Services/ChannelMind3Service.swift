@@ -454,7 +454,8 @@ final class ChannelMind3Service: ObservableObject {
         let name: String
     }
     
-    struct AdCampaign {
+    // ✅ Renamed to ChannelMindCampaign to avoid conflict with AdModels.AdCampaign
+    struct ChannelMindCampaign {
         let id: String
         let name: String
         let bid: Double

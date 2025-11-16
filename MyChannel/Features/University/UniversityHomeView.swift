@@ -12,6 +12,9 @@ struct UniversityHomeView: View {
     @StateObject private var viewModel = UniversityViewModel()
     @EnvironmentObject private var appState: AppState
     @State private var selectedTab: UniversityTab = .dashboard
+    @State private var isInitialLoad = true
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.sizeCategory) var sizeCategory
     
     enum UniversityTab: String, CaseIterable, Identifiable {
         case dashboard = "Dashboard"
@@ -28,6 +31,16 @@ struct UniversityHomeView: View {
             case .achievements: return "trophy.fill"
             }
         }
+        
+        // 🔥 ACCESSIBILITY: Descriptive labels
+        var accessibilityLabel: String {
+            switch self {
+            case .dashboard: return "Dashboard, View your learning progress and active career paths"
+            case .learn: return "Learn, Browse and discover new learning content"
+            case .certificates: return "Certificates, View earned and available certificates"
+            case .achievements: return "Achievements, View badges, milestones, and leaderboard"
+            }
+        }
     }
     
     var body: some View {
@@ -40,33 +53,79 @@ struct UniversityHomeView: View {
                     // Tab Selector
                     tabSelector
                     
-                    // Content
-                    ScrollView {
-                        VStack(spacing: 24) {
-                            switch selectedTab {
-                            case .dashboard:
-                                dashboardContent
-                            case .learn:
-                                learnContent
-                            case .certificates:
-                                certificatesContent
-                            case .achievements:
-                                achievementsContent
+                    // Content with Loading State
+                    if viewModel.isLoading && isInitialLoad {
+                        // 🔥 SHIMMER: Show loading state
+                        ScrollView {
+                            VStack(spacing: 24) {
+                                HeroCardSkeleton()
+                                
+                                ForEach(0..<2) { _ in
+                                    CareerPathRowSkeleton()
+                                }
                             }
+                            .padding(.vertical, 24)
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 24)
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 24) {
+                                switch selectedTab {
+                                case .dashboard:
+                                    dashboardContent
+                                case .learn:
+                                    learnContent
+                                case .certificates:
+                                    certificatesContent
+                                case .achievements:
+                                    achievementsContent
+                                }
+                            }
+                            .padding(.vertical, 24)
+                        }
+                        .refreshable {
+                            await refreshContent()
+                        }
                     }
                 }
             }
             .navigationTitle("MyChannel University")
             .navigationBarTitleDisplayMode(.inline)
+            // 🔥 ACCESSIBILITY: Navigation title for VoiceOver
+            .accessibilityLabel("MyChannel University, AI-verified learning and certificates")
         }
         .onAppear {
-            Task {
-                await viewModel.loadUserProgress()
+            if isInitialLoad {
+                Task {
+                    await viewModel.loadUserProgress()
+                    isInitialLoad = false
+                    
+                    // 🔥 ACCESSIBILITY: Announce content loaded
+                    announceContentLoaded()
+                }
             }
         }
+    }
+    
+    // MARK: - Refresh Content
+    
+    private func refreshContent() async {
+        await viewModel.loadUserProgress()
+        
+        // 🔥 ACCESSIBILITY: Announce refresh complete
+        UIAccessibility.post(notification: .announcement, argument: "Content refreshed")
+    }
+    
+    // MARK: - Accessibility Announcements
+    
+    private func announceContentLoaded() {
+        let hoursText = "\(Int(viewModel.totalUniversityHours)) hours of learning completed"
+        let certificatesText = viewModel.certificatesEarned == 1 ? "1 certificate earned" : "\(viewModel.certificatesEarned) certificates earned"
+        let pathsText = "\(viewModel.activeCareerPathsCount) active career paths"
+        
+        UIAccessibility.post(
+            notification: .announcement,
+            argument: "University dashboard loaded. \(hoursText), \(certificatesText), \(pathsText)"
+        )
     }
     
     // MARK: - Tab Selector

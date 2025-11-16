@@ -154,7 +154,7 @@ struct CareerPathProgress: Identifiable, Codable {
 // MARK: - University Video
 
 /// Extended video model with career path tags and AI verification
-struct UniversityVideo: Identifiable, Codable {
+struct UniversityVideo: Identifiable, Codable, Equatable, Hashable {
     let id: String
     let videoId: String // Original video ID
     let title: String

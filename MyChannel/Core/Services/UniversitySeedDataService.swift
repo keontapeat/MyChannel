@@ -110,7 +110,7 @@ final class UniversitySeedDataService: ObservableObject {
         watchHistory: [(videoId: String, title: String, duration: Double, watchTime: Double)]
     ) async throws {
         // Categorize videos into career paths
-        let videosData = watchHistory.map { (videoId: $0.videoId, title: $0.title, description: "", tags: [], category: nil) }
+        let videosData = watchHistory.map { (videoId: $0.videoId, title: $0.title, description: "", tags: [] as [String], category: nil as String?) }
         
         let categorizations = try await AICareerCategorizationService.shared.categorizeVideos(videosData)
         

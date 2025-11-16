@@ -178,7 +178,7 @@ struct GamingEsportsView: View {
         }
     }
     
-    private func featuredTournamentCard(tournament: Tournament) -> some View {
+    private func featuredTournamentCard(tournament: EsportsTournament) -> some View {
         VStack(spacing: 0) {
             // Background Image
             ZStack {
@@ -246,7 +246,7 @@ struct GamingEsportsView: View {
                             .frame(height: 52)
                             .background(
                                 LinearGradient(
-                                    colors: [Color(hex: "#DC143C"), Color(hex: "#8B0000")],
+                                    colors: [Color(hex: "#DC143C") ?? .red, Color(hex: "#8B0000") ?? Color(red: 0.55, green: 0, blue: 0)],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -263,7 +263,7 @@ struct GamingEsportsView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(LinearGradient(
-                        colors: [Color(hex: "#FFD700").opacity(0.5), Color(hex: "#DC143C").opacity(0.5)],
+                        colors: [(Color(hex: "#FFD700") ?? .yellow).opacity(0.5), (Color(hex: "#DC143C") ?? .red).opacity(0.5)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ), lineWidth: 2)
@@ -271,7 +271,7 @@ struct GamingEsportsView: View {
         }
     }
     
-    private func tournamentCard(tournament: Tournament) -> some View {
+    private func tournamentCard(tournament: EsportsTournament) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 // Game Icon
@@ -429,188 +429,211 @@ struct GamingEsportsView: View {
     
     private func vsMatchCard(match: VSMatch) -> some View {
         VStack(spacing: 16) {
-            // Match Header with Status Badge
-            HStack {
-                Text(match.category)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                
-                Spacer()
-                
-                // Verification Status Badge
-                if match.verificationStatus == .verified {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.green)
-                        
-                        Text("VERIFIED")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.green)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(Color.green.opacity(0.1))
-                    )
-                } else if match.verificationStatus == .pending {
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.orange)
-                        
-                        Text("PENDING")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.orange)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(Color.orange.opacity(0.1))
-                    )
-                } else if match.verificationStatus == .disputed {
-                    HStack(spacing: 4) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.red)
-                        
-                        Text("DISPUTED")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.red)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(Color.red.opacity(0.1))
-                    )
-                }
-                
-                Text(match.formattedWager)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(Color(hex: "#FFD700"))
-            }
-            
-            // Competitors
-            HStack(spacing: 12) {
-                // Player 1
-                VStack(spacing: 8) {
-                    Circle()
-                        .fill(AppTheme.Colors.surface)
-                        .frame(width: 60, height: 60)
-                        .overlay(
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 24, weight: .medium))
-                                .foregroundColor(AppTheme.Colors.textPrimary)
-                        )
-                    
-                    Text(match.challenger.displayName)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                }
-                .frame(maxWidth: .infinity)
-                
-                // VS
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.Colors.surface)
-                        .frame(width: 44, height: 44)
-                    
-                    Text("VS")
-                        .font(.system(size: 14, weight: .black))
-                        .foregroundColor(AppTheme.Colors.primary)
-                }
-                
-                // Player 2
-                if let opponent = match.opponent {
-                    VStack(spacing: 8) {
-                        Circle()
-                            .fill(AppTheme.Colors.surface)
-                            .frame(width: 60, height: 60)
-                            .overlay(
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 24, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                            )
-                        
-                        Text(opponent.displayName)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                    }
-                    .frame(maxWidth: .infinity)
-                } else {
-                    VStack(spacing: 8) {
-                        Circle()
-                            .fill(AppTheme.Colors.surface)
-                            .frame(width: 60, height: 60)
-                            .overlay(
-                                Image(systemName: "person.badge.plus")
-                                    .font(.system(size: 24, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                            )
-                        
-                        Text("Waiting")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-            
-            // Action Buttons
-            if match.needsProofSubmission {
-                // Submit Result Button
-                NavigationLink(destination: MatchResultSubmissionView(match: BracketMatch(
-                    id: match.id,
-                    team1: BracketTeam(id: match.challenger.id, name: match.challenger.displayName, logoURL: nil, seed: 1),
-                    team2: BracketTeam(id: match.opponent?.id ?? "", name: match.opponent?.displayName ?? "Opponent", logoURL: nil, seed: 2),
-                    winnerId: nil,
-                    startTime: match.createdAt,
-                    status: "in_progress"
-                ))) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "video.badge.plus")
-                            .font(.system(size: 16, weight: .semibold))
-                        
-                        Text("SUBMIT RESULT")
-                            .font(.system(size: 14, weight: .bold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(AppTheme.Colors.primary)
-                    .cornerRadius(10)
-                }
-            } else {
-                Button(action: {
-                    // Accept/View match
-                }) {
-                    Text(match.opponent == nil ? "ACCEPT CHALLENGE" : "VIEW MATCH")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .background(AppTheme.Colors.primary)
-                        .cornerRadius(10)
-                }
-            }
+            matchHeader(match: match)
+            competitorsSection(match: match)
+            actionButtons(match: match)
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(AppTheme.Colors.surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(
-                            match.verificationStatus == .verified ? Color.green.opacity(0.3) :
-                            match.verificationStatus == .disputed ? Color.red.opacity(0.3) :
-                            AppTheme.Colors.divider.opacity(0.1),
-                            lineWidth: 1
-                        )
+        .background(cardBackground(match: match))
+    }
+    
+    private func matchHeader(match: VSMatch) -> some View {
+        HStack {
+            Text(match.category)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+            
+            Spacer()
+            
+            verificationStatusBadge(status: match.verificationStatus)
+            
+            Text(match.formattedWager)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(Color(hex: "#FFD700") ?? .yellow)
+        }
+    }
+    
+    private func verificationStatusBadge(status: MatchVerificationStatus) -> some View {
+        Group {
+            if status == .verified {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.green)
+                    
+                    Text("VERIFIED")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.green)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(Color.green.opacity(0.1))
                 )
+            } else if status == .pending {
+                HStack(spacing: 4) {
+                    Image(systemName: "clock.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.orange)
+                    
+                    Text("PENDING")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.orange)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(Color.orange.opacity(0.1))
+                )
+            } else if status == .disputed {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.red)
+                    
+                    Text("DISPUTED")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.red)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(Color.red.opacity(0.1))
+                )
+            }
+        }
+    }
+    
+    private func competitorsSection(match: VSMatch) -> some View {
+        HStack(spacing: 12) {
+            playerView(name: match.challenger.displayName)
+            
+            ZStack {
+                Circle()
+                    .fill(AppTheme.Colors.surface)
+                    .frame(width: 44, height: 44)
+                
+                Text("VS")
+                    .font(.system(size: 14, weight: .black))
+                    .foregroundColor(AppTheme.Colors.primary)
+            }
+            
+            if let opponent = match.opponent {
+                playerView(name: opponent.displayName)
+            } else {
+                waitingPlayerView
+            }
+        }
+    }
+    
+    private func playerView(name: String) -> some View {
+        VStack(spacing: 8) {
+            Circle()
+                .fill(AppTheme.Colors.surface)
+                .frame(width: 60, height: 60)
+                .overlay(
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                )
+            
+            Text(name)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+    
+    private var waitingPlayerView: some View {
+        VStack(spacing: 8) {
+            Circle()
+                .fill(AppTheme.Colors.surface)
+                .frame(width: 60, height: 60)
+                .overlay(
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                )
+            
+            Text("Waiting")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+    
+    private func actionButtons(match: VSMatch) -> some View {
+        Group {
+            if match.needsProofSubmission {
+                submitResultButton(match: match)
+            } else {
+                acceptOrViewButton(match: match)
+            }
+        }
+    }
+    
+    private func submitResultButton(match: VSMatch) -> some View {
+        let team1 = BracketTeam(id: match.challenger.id, name: match.challenger.displayName)
+        let team2: BracketTeam? = match.opponent.map { BracketTeam(id: $0.id, name: $0.displayName) }
+        
+        let bracketMatch = BracketMatch(
+            id: match.id,
+            team1: team1,
+            team2: team2,
+            score1: nil,
+            score2: nil,
+            winner: nil,
+            isLive: true
         )
+        
+        return NavigationLink(destination: MatchResultSubmissionView(match: bracketMatch)) {
+            HStack(spacing: 8) {
+                Image(systemName: "video.badge.plus")
+                    .font(.system(size: 16, weight: .semibold))
+                
+                Text("SUBMIT RESULT")
+                    .font(.system(size: 14, weight: .bold))
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(AppTheme.Colors.primary)
+            .cornerRadius(10)
+        }
+    }
+    
+    private func acceptOrViewButton(match: VSMatch) -> some View {
+        Button(action: {
+            // Accept/View match
+        }) {
+            Text(match.opponent == nil ? "ACCEPT CHALLENGE" : "VIEW MATCH")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(AppTheme.Colors.primary)
+                .cornerRadius(10)
+        }
+    }
+    
+    private func cardBackground(match: VSMatch) -> some View {
+        let borderColor: Color = {
+            switch match.verificationStatus {
+            case .verified: return Color.green.opacity(0.3)
+            case .disputed: return Color.red.opacity(0.3)
+            default: return AppTheme.Colors.divider.opacity(0.1)
+            }
+        }()
+        
+        return RoundedRectangle(cornerRadius: 12)
+            .fill(AppTheme.Colors.surface)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(borderColor, lineWidth: 1)
+            )
     }
     
     // MARK: - Leaderboard Content
@@ -690,9 +713,9 @@ struct GamingEsportsView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: rank == 1 ? [Color(hex: "#FFD700"), Color(hex: "#FFA500")] :
-                                    rank == 2 ? [Color(hex: "#C0C0C0"), Color(hex: "#A8A8A8")] :
-                                    [Color(hex: "#CD7F32"), Color(hex: "#8B4513")],
+                            colors: rank == 1 ? [Color(hex: "#FFD700") ?? .yellow, Color(hex: "#FFA500") ?? .orange] :
+                                    rank == 2 ? [Color(hex: "#C0C0C0") ?? .gray, Color(hex: "#A8A8A8") ?? .gray] :
+                                    [Color(hex: "#CD7F32") ?? .brown, Color(hex: "#8B4513") ?? .brown],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -733,9 +756,9 @@ struct GamingEsportsView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(
-                            rank == 1 ? Color(hex: "#FFD700").opacity(0.5) :
-                            rank == 2 ? Color(hex: "#C0C0C0").opacity(0.5) :
-                            Color(hex: "#CD7F32").opacity(0.5),
+                            (rank == 1 ? (Color(hex: "#FFD700") ?? .yellow).opacity(0.5) :
+                             rank == 2 ? (Color(hex: "#C0C0C0") ?? .gray).opacity(0.5) :
+                             (Color(hex: "#CD7F32") ?? .brown).opacity(0.5)),
                             lineWidth: 2
                         )
                 )
@@ -896,7 +919,7 @@ struct GamingEsportsView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(
                             LinearGradient(
-                                colors: [Color(hex: "#FFD700").opacity(0.3), Color(hex: "#DC143C").opacity(0.3)],
+                                colors: [(Color(hex: "#FFD700") ?? .yellow).opacity(0.3), (Color(hex: "#DC143C") ?? .red).opacity(0.3)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
@@ -911,7 +934,7 @@ struct GamingEsportsView: View {
             GridItem(.flexible()),
             GridItem(.flexible())
         ], spacing: 12) {
-            statCard(title: "Tournaments Won", value: "\(viewModel.tournamentsWon)", icon: "trophy.fill", color: Color(hex: "#FFD700"))
+            statCard(title: "Tournaments Won", value: "\(viewModel.tournamentsWon)", icon: "trophy.fill", color: Color(hex: "#FFD700") ?? .yellow)
             statCard(title: "VS Wins", value: "\(viewModel.vsWins)", icon: "flag.checkered", color: AppTheme.Colors.primary)
             statCard(title: "Win Rate", value: "\(viewModel.winRate)%", icon: "chart.line.uptrend.xyaxis", color: Color.green)
             statCard(title: "Total Matches", value: "\(viewModel.totalMatches)", icon: "gamecontroller.fill", color: Color.blue)
@@ -1036,7 +1059,7 @@ enum LeaderboardPeriod: String, CaseIterable, Identifiable {
     }
 }
 
-struct Tournament: Identifiable {
+struct EsportsTournament: Identifiable {
     let id: String
     let name: String
     let gameName: String
@@ -1137,33 +1160,7 @@ struct EarningsTransaction: Identifiable {
     }
 }
 
-// Color extension for hex
-extension Color {
-    init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let a, r, g, b: UInt64
-        switch hex.count {
-        case 3:
-            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6:
-            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8:
-            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default:
-            (a, r, g, b) = (255, 0, 0, 0)
-        }
-        
-        self.init(
-            .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue: Double(b) / 255,
-            opacity: Double(a) / 255
-        )
-    }
-}
+// Color extension removed - use Color+Hex.swift file instead
 
 #Preview {
     GamingEsportsView()

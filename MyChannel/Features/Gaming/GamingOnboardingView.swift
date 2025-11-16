@@ -74,7 +74,7 @@ struct GamingOnboardingView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "#FFD700"), Color(hex: "#FFA500")],
+                                colors: [Color(hex: "#FFD700") ?? .yellow, Color(hex: "#FFA500") ?? .orange],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -434,7 +434,7 @@ struct GamingOnboardingView: View {
                     title: "Balance",
                     value: "$\(viewModel.selectedAmount)",
                     icon: "dollarsign.circle.fill",
-                    color: Color(hex: "#FFD700")
+                    color: Color(hex: "#FFD700") ?? .yellow
                 )
                 
                 statCard(
@@ -464,7 +464,7 @@ struct GamingOnboardingView: View {
                 .frame(height: 54)
                 .background(
                     LinearGradient(
-                        colors: [Color(hex: "#DC143C"), Color(hex: "#8B0000")],
+                        colors: [Color(hex: "#DC143C") ?? .red, Color(hex: "#8B0000") ?? Color(red: 0.55, green: 0, blue: 0)],
                         startPoint: .leading,
                         endPoint: .trailing
                     )

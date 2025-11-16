@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct PrizePoolBreakdownView: View {
-    let tournament: Tournament
+    let tournament: EsportsTournament
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -51,9 +51,9 @@ struct PrizePoolBreakdownView: View {
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(AppTheme.Colors.textSecondary)
             
-            Text(tournament.formattedPrizePool)
+            Text("$\(Int(tournament.prizePool).formatted())")
                 .font(.system(size: 48, weight: .black))
-                .foregroundColor(Color(hex: "#FFD700"))
+                .foregroundColor(Color(hex: "#FFD700") ?? .yellow)
             
             HStack(spacing: 20) {
                 VStack(spacing: 4) {
@@ -98,7 +98,7 @@ struct PrizePoolBreakdownView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(
                             LinearGradient(
-                                colors: [Color(hex: "#FFD700").opacity(0.3), Color(hex: "#DC143C").opacity(0.3)],
+                                colors: [(Color(hex: "#FFD700") ?? .yellow).opacity(0.3), (Color(hex: "#DC143C") ?? .red).opacity(0.3)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
@@ -203,14 +203,14 @@ struct PrizePoolBreakdownView: View {
 
 #Preview {
     PrizePoolBreakdownView(
-        tournament: Tournament(
+        tournament: EsportsTournament(
             id: "spring-championship",
             name: "Spring Championship",
             gameName: "Fortnite",
             prizePool: 50_000,
-            entryFee: 50,
+            entryFee: 10.0,
             format: "Single Elimination",
-            currentPlayers: 248,
+            currentPlayers: 128,
             maxPlayers: 256,
             startDate: Date().addingTimeInterval(60 * 60 * 38),
             isLive: false

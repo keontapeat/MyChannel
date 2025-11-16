@@ -246,18 +246,18 @@ struct TournamentBracketView: View {
         HStack(spacing: 10) {
             // Profile
             Circle()
-                .fill(isWinner ? Color(hex: "#FFD700").opacity(0.1) : AppTheme.Colors.surface)
+                .fill(isWinner ? (Color(hex: "#FFD700") ?? .yellow).opacity(0.1) : AppTheme.Colors.surface)
                 .frame(width: 32, height: 32)
                 .overlay(
                     Image(systemName: "person.fill")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(isWinner ? Color(hex: "#FFD700") : AppTheme.Colors.textPrimary)
+                        .foregroundColor(isWinner ? (Color(hex: "#FFD700") ?? .yellow) : AppTheme.Colors.textPrimary)
                 )
             
             // Name
             Text(team.name)
                 .font(.system(size: 13, weight: isWinner ? .bold : .semibold))
-                .foregroundColor(isWinner ? Color(hex: "#FFD700") : AppTheme.Colors.textPrimary)
+                .foregroundColor(isWinner ? (Color(hex: "#FFD700") ?? .yellow) : AppTheme.Colors.textPrimary)
                 .lineLimit(1)
             
             Spacer()
@@ -266,7 +266,7 @@ struct TournamentBracketView: View {
             if let score = score {
                 Text("\(score)")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(isWinner ? Color(hex: "#FFD700") : AppTheme.Colors.textPrimary)
+                    .foregroundColor(isWinner ? (Color(hex: "#FFD700") ?? .yellow) : AppTheme.Colors.textPrimary)
             } else if isLive {
                 ProgressView()
                     .scaleEffect(0.7)
@@ -276,14 +276,14 @@ struct TournamentBracketView: View {
             if isWinner {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(Color(hex: "#FFD700"))
+                    .foregroundColor(Color(hex: "#FFD700") ?? .yellow)
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(isWinner ? Color(hex: "#FFD700").opacity(0.05) : Color.clear)
+                .fill(isWinner ? (Color(hex: "#FFD700") ?? .yellow).opacity(0.05) : Color.clear)
         )
     }
 }
@@ -551,7 +551,7 @@ struct LiveMatchSpectatorView: View {
         }
     }
     
-    private func chatMessageRow(message: ChatMessage) -> some View {
+    private func chatMessageRow(message: TournamentChatMessage) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Circle()
                 .fill(AppTheme.Colors.surface)
@@ -593,10 +593,26 @@ struct BracketTournament: Identifiable {
     let prizePool: Double
     let totalPlayers: Int
     let rounds: [BracketRound]
+    let startDate: Date?
     
     var formattedPrizePool: String {
         "$\(Int(prizePool).formatted())"
     }
+    
+    static let sample = BracketTournament(
+        id: "sample-tournament",
+        name: "Sample Championship",
+        prizePool: 50_000,
+        totalPlayers: 256,
+        rounds: [
+            BracketRound(
+                id: "round-1",
+                name: "Round 1",
+                matches: []
+            )
+        ],
+        startDate: Date()
+    )
 }
 
 struct BracketRound: Identifiable {
@@ -620,6 +636,46 @@ struct BracketTeam: Identifiable {
     let name: String
 }
 
+// MARK: - Conversion Extension
+
+extension BracketTournament {
+    func toBracket3DTournament() -> Bracket3DTournament {
+        Bracket3DTournament(
+            id: id,
+            name: name,
+            rounds: rounds.map { round in
+                Bracket3DRound(
+                    id: round.id,
+                    matches: round.matches.map { match in
+                        Bracket3DMatch(
+                            id: match.id,
+                            team1: Bracket3DTeam(
+                                id: match.team1.id,
+                                name: match.team1.name,
+                                score: match.score1
+                            ),
+                            team2: Bracket3DTeam(
+                                id: match.team2?.id ?? "",
+                                name: match.team2?.name ?? "TBD",
+                                score: match.score2
+                            ),
+                            winner: match.winner?.id,
+                            isCompleted: match.winner != nil,
+                            scheduledDate: nil,
+                            score1: match.score1,
+                            score2: match.score2
+                        )
+                    },
+                    roundName: round.name
+                )
+            },
+            startDate: Date(),
+            endDate: Date().addingTimeInterval(604800),
+            prizePool: prizePool
+        )
+    }
+}
+
 struct GameFeedEvent: Identifiable {
     let id: String
     let text: String
@@ -634,16 +690,25 @@ struct GameFeedEvent: Identifiable {
     }
 }
 
-struct ChatMessage: Identifiable {
+struct TournamentChatMessage: Identifiable {
     let id: String
     let username: String
-    let text: String
-    let time: Date
+    let message: String
+    let isUser: Bool
+    let timestamp: Date
     
     var formattedTime: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
-        return formatter.string(from: time)
+        return formatter.string(from: timestamp)
+    }
+    
+    var text: String {
+        message
+    }
+    
+    var time: Date {
+        timestamp
     }
 }
 
@@ -654,7 +719,8 @@ struct ChatMessage: Identifiable {
             name: "Spring Championship",
             prizePool: 50_000,
             totalPlayers: 256,
-            rounds: []
+            rounds: [],
+            startDate: Date()
         )
     )
 }

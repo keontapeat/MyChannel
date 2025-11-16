@@ -1,0 +1,139 @@
+🤖 AI MODES QUICK REFERENCE - SAVE TO PHONE 📱
+
+═══════════════════════════════════════════════════════
+
+🚀 AUTOPILOT MODE
+Complete everything automatically, no questions
+"ACTIVATE AUTOPILOT MODE"
+
+🔥 NUCLEAR MODE  
+Maximum performance, smallest bundle, fastest
+"NUCLEAR MODE"
+
+🎨 DESIGN MODE
+Pixel-perfect UI, match Figma exactly
+"DESIGN MODE"
+
+♿ ACCESSIBILITY MODE
+WCAG AA compliance, screen readers, keyboard nav
+"ACCESSIBILITY MODE"
+
+🧪 TEST MODE
+Comprehensive tests, unit + E2E + integration
+"TEST MODE"
+
+🚀 DEPLOY MODE
+Production build, optimize, deploy scripts
+"DEPLOY MODE"
+
+📚 DOC MODE
+Generate docs, API reference, guides
+"DOC MODE"
+
+🔍 AUDIT MODE
+Code review, performance, security audit
+"AUDIT MODE"
+
+🐛 DEBUG MODE
+Find/fix bugs, error handling, logging
+"DEBUG MODE"
+
+⚡ PERFORMANCE MODE
+Optimize speed, bundle size, Lighthouse 100
+"PERFORMANCE MODE"
+
+🔒 SECURITY MODE
+Security hardening, validation, CSP
+"SECURITY MODE"
+
+📱 MOBILE MODE
+Mobile-first, touch targets, responsive
+"MOBILE MODE"
+
+🎯 FEATURE MODE
+Build complete feature, tests + docs included
+"FEATURE MODE"
+
+🔄 REFACTOR MODE
+Clean code, modernize, remove tech debt
+"REFACTOR MODE"
+
+🌐 SEO MODE
+Meta tags, structured data, sitemaps
+"SEO MODE"
+
+🎬 VIDEO MODE
+Video player, streaming, playback optimization
+"VIDEO MODE"
+
+💰 MONETIZATION MODE
+Payments, subscriptions, ads, revenue
+"MONETIZATION MODE"
+
+🤖 AI MODE
+ML features, recommendations, personalization
+"AI MODE"
+
+🎨 ANIMATION MODE
+Smooth animations, transitions, micro-interactions
+"ANIMATION MODE"
+
+📊 ANALYTICS MODE
+Tracking, events, dashboards, insights
+"ANALYTICS MODE"
+
+🔐 AUTH MODE
+Authentication, OAuth, user management
+"AUTH MODE"
+
+🗄️ DATABASE MODE
+Query optimization, caching, indexes
+"DATABASE MODE"
+
+🌍 I18N MODE
+Multi-language, translations, localization
+"I18N MODE"
+
+🎯 COMPLIANCE MODE
+GDPR, privacy, legal compliance
+"COMPLIANCE MODE"
+
+🚨 EMERGENCY MODE
+Critical fixes, hotfixes, urgent issues
+"EMERGENCY MODE"
+
+📦 MIGRATION MODE
+Upgrade dependencies, migrate code
+"MIGRATION MODE"
+
+🎓 LEARNING MODE
+Explain code, teach concepts, examples
+"LEARNING MODE"
+
+🔄 SYNC MODE
+Sync iOS/Web, feature parity, consistency
+"SYNC MODE"
+
+═══════════════════════════════════════════════════════
+
+💡 PRO TIPS:
+
+• Combine modes: "AUTOPILOT + NUCLEAR MODE"
+• Add intensity: "🔥🔥🔥" for maximum
+• Add urgency: "NOW" for immediate
+• Examples:
+  - "AUTOPILOT MODE🔥🔥🔥"
+  - "NUCLEAR MODE NOW"
+  - "DESIGN MODE - make VideoCard perfect"
+
+═══════════════════════════════════════════════════════
+
+MOST USED:
+1. AUTOPILOT MODE - Complete everything
+2. NUCLEAR MODE - Maximum performance  
+3. DESIGN MODE - Pixel-perfect UI
+4. TEST MODE - Comprehensive testing
+5. DEPLOY MODE - Ship to production
+
+═══════════════════════════════════════════════════════
+

@@ -39,7 +39,7 @@ final class UniversityRecommendationEngine: ObservableObject {
         print("🤖 [Recommendations] Generating recommendations for career path: \(careerPathId)")
         
         // 1. Get user's current progress
-        let progress = try await UniversityWatchTrackingService.shared.getCareerPathProgress(
+        let progress = try await UniversityWatchTrackingService.shared.fetchCareerPathProgress(
             userId: userId,
             careerPathId: careerPathId
         )
@@ -62,9 +62,14 @@ final class UniversityRecommendationEngine: ObservableObject {
         
         // 6. Sort by score and return top N
         let recommendations = scoredVideos
-            .sorted { $0.recommendationScore > $1.recommendationScore }
             .prefix(limit)
-            .map { VideoRecommendation(video: $0, score: $0.recommendationScore, reason: $0.recommendationReason) }
+            .map { videoWithScore in
+                VideoRecommendation(
+                    video: videoWithScore.video,
+                    score: videoWithScore.score,
+                    reason: videoWithScore.reason
+                )
+            }
         
         print("✅ [Recommendations] Generated \(recommendations.count) recommendations")
         
@@ -81,10 +86,10 @@ final class UniversityRecommendationEngine: ObservableObject {
         var allRecommendations: [VideoRecommendation] = []
         
         // Get top recommendation from each active career path
-        for (careerPath, progress) in allProgress {
+        for progress in allProgress {
             let recommendations = try await getRecommendedVideos(
                 userId: userId,
-                careerPathId: careerPath.id,
+                careerPathId: progress.careerPathId,
                 limit: 2 // Get top 2 from each path
             )
             allRecommendations.append(contentsOf: recommendations)
@@ -100,7 +105,7 @@ final class UniversityRecommendationEngine: ObservableObject {
         
         // Get user's current career paths
         let currentProgress = try await UniversityWatchTrackingService.shared.fetchUserProgress(userId: userId)
-        let currentPathIds = currentProgress.map { $0.0.id }
+        let currentPathIds = currentProgress.map { $0.careerPathId }
         
         // Get all available career paths
         let allPaths = CareerPath.allCareerPaths
@@ -126,7 +131,7 @@ final class UniversityRecommendationEngine: ObservableObject {
                 careerPath: path,
                 relevanceScore: score,
                 reason: reason,
-                estimatedTimeToComplete: path.estimatedHours
+                estimatedTimeToComplete: Int(path.certificateRequirement.minimumHours)
             ))
         }
         
@@ -138,17 +143,17 @@ final class UniversityRecommendationEngine: ObservableObject {
     
     private func scoreVideos(
         _ videos: [UniversityVideo],
-        userProgress: (CareerPath, CareerPathProgress)?,
+        userProgress: CareerPathProgress?,
         watchedVideoIds: Set<String>
     ) -> [ScoredVideo] {
-        guard let (_, progress) = userProgress else {
+        guard let progress = userProgress else {
             // No progress yet - recommend beginner videos
             return videos.map { video in
                 let score = video.difficultyLevel == .beginner ? 0.9 : 0.5
                 return ScoredVideo(
                     video: video,
-                    recommendationScore: score,
-                    recommendationReason: "Great starting point for beginners"
+                    score: score,
+                    reason: "Great starting point for beginners"
                 )
             }
         }
@@ -172,10 +177,10 @@ final class UniversityRecommendationEngine: ObservableObject {
             }
             
             // 2. AI Quality Score (30% weight)
-            let qualityScore = Double(video.aiVerificationScore) / 100.0
+            let qualityScore = Double(video.aiVerificationScore ?? 70) / 100.0
             score += qualityScore * 0.3
             
-            if video.aiVerificationScore >= 90 {
+            if (video.aiVerificationScore ?? 0) >= 90 {
                 reasons.append("High-quality educational content")
             }
             
@@ -193,8 +198,8 @@ final class UniversityRecommendationEngine: ObservableObject {
             
             return ScoredVideo(
                 video: video,
-                recommendationScore: min(score, 1.0),
-                recommendationReason: reason
+                score: min(score, 1.0),
+                reason: reason
             )
         }
     }
@@ -236,12 +241,13 @@ final class UniversityRecommendationEngine: ObservableObject {
     
     private func calculateCareerPathRelevanceScore(
         careerPath: CareerPath,
-        userProgress: [(CareerPath, CareerPathProgress)]
+        userProgress: [CareerPathProgress]
     ) -> Double {
         // Calculate based on skill overlap with user's existing paths
         var overlapScore = 0.0
         
-        for (existingPath, _) in userProgress {
+        for progress in userProgress {
+            guard let existingPath = CareerPath.getCareerPath(byId: progress.careerPathId) else { continue }
             let commonSkills = Set(careerPath.skillTags).intersection(Set(existingPath.skillTags))
             let overlapRatio = Double(commonSkills.count) / Double(careerPath.skillTags.count)
             overlapScore = max(overlapScore, overlapRatio)
@@ -252,12 +258,13 @@ final class UniversityRecommendationEngine: ObservableObject {
     
     private func generateCareerPathRecommendationReason(
         careerPath: CareerPath,
-        userProgress: [(CareerPath, CareerPathProgress)]
+        userProgress: [CareerPathProgress]
     ) -> String {
         // Find most related existing path
         var bestOverlap = (path: "", count: 0)
         
-        for (existingPath, _) in userProgress {
+        for progress in userProgress {
+            guard let existingPath = CareerPath.getCareerPath(byId: progress.careerPathId) else { continue }
             let commonSkills = Set(careerPath.skillTags).intersection(Set(existingPath.skillTags))
             if commonSkills.count > bestOverlap.count {
                 bestOverlap = (existingPath.name, commonSkills.count)
@@ -308,8 +315,8 @@ struct CareerPathRecommendation: Identifiable {
 /// Internal: Video with scoring data
 private struct ScoredVideo {
     let video: UniversityVideo
-    let recommendationScore: Double
-    let recommendationReason: String
+    let score: Double
+    let reason: String
     
     var id: String { video.id }
 }
