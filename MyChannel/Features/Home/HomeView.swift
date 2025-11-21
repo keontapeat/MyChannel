@@ -80,6 +80,9 @@ struct HomeView: View {
     @State private var showingQuickProfile = false
     @State private var showingSettings = false
     @State private var showingSwitchProfile = false
+    
+    // 🔥 Thermonuclear Featured Manager
+    @State private var showingFeaturedManager = false
 
     @State private var featuredContent: [Video] = []
     @State private var heroVideoIndex: Int = 0
@@ -98,6 +101,13 @@ struct HomeView: View {
         #else
         return false
         #endif
+    }
+    
+    // Check if current user is admin/owner
+    private var isAdmin: Bool {
+        guard let email = appState.currentUser?.email else { return false }
+        return email.lowercased() == "keontapeat@mychannel.live" || 
+               email.lowercased() == "keontapeat@gmail.com"
     }
 
     var body: some View {
@@ -186,6 +196,8 @@ struct HomeView: View {
                 )
                 .allowsHitTesting(true)
                 .zIndex(1)
+                
+                // Featured manager removed - use Profile > Settings > Featured Videos instead
             }
         }
         .onAppear {
@@ -222,6 +234,10 @@ struct HomeView: View {
             ProfileSwitcherView()
                 .environmentObject(appState)
                 .environmentObject(AuthenticationManager.shared)
+        }
+        .sheet(isPresented: $showingFeaturedManager) {
+            ThermonuclearFeaturedManager()
+                .environmentObject(appState)
         }
         // Auto-scroll removed: hero section only changes on manual swipe
         .onReceive(NotificationCenter.default.publisher(for: .storiesDidChange)) { _ in
@@ -672,6 +688,28 @@ struct HomeView: View {
 
         return [v1, v2]
     }
+    
+    // MARK: - ULTRA-THERMONUCLEAR FAB 🔥💥😤
+    private var thermonuclearFAB: some View {
+        VStack {
+            Spacer()
+            
+            HStack {
+                Spacer()
+                
+                Button {
+                    HapticManager.shared.impact(style: .heavy)
+                    showingFeaturedManager = true
+                } label: {
+                    UltraThermonuclearFABContent()
+                }
+                .padding(.trailing, 20)
+                .padding(.bottom, 100) // Above tab bar
+            }
+        }
+        .allowsHitTesting(true)
+        .zIndex(999)
+    }
 }
 
 // MARK: - Minimal Navigation Header (static, slightly larger)
@@ -853,7 +891,16 @@ struct MinimalHeroSection: View {
     let onAddToList: (Video) -> Void
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @EnvironmentObject private var appState: AppState
+    @State private var showingFeaturedManager = false
+    
     private var isCompact: Bool { horizontalSizeClass == .compact }
+    
+    private var isAdmin: Bool {
+        guard let email = appState.currentUser?.email else { return false }
+        return email.lowercased() == "keontapeat@mychannel.live" || 
+               email.lowercased() == "keontapeat@gmail.com"
+    }
 
     var body: some View {
         if !featuredContent.isEmpty {
@@ -866,8 +913,36 @@ struct MinimalHeroSection: View {
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.primary)
                         .tracking(1)
+                    
+                    Spacer()
+                    
+                    // 🔥 QUICK EDIT BUTTON (Admin Only)
+                    if isAdmin {
+                        Button {
+                            HapticManager.shared.impact(style: .light)
+                            showingFeaturedManager = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "pencil.circle.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                Text("Edit")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(AppTheme.Colors.primary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(AppTheme.Colors.primary.opacity(0.1))
+                            )
+                        }
+                    }
                 }
                 .padding(.horizontal, 20)
+                .sheet(isPresented: $showingFeaturedManager) {
+                    ThermonuclearFeaturedManager()
+                        .environmentObject(appState)
+                }
 
                 TabView(selection: $selectedIndex) {
                     ForEach(Array(featuredContent.enumerated()), id: \.offset) { index, vid in
@@ -2750,6 +2825,113 @@ struct ForYouSection: View {
         await MainActor.run {
             forYouVideos = feed
             isLoading = false
+        }
+    }
+}
+
+// MARK: - Ultra-Thermonuclear FAB Content 🔥💥
+struct UltraThermonuclearFABContent: View {
+    @State private var isPulsing = false
+    @State private var rotationAngle: Double = 0
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            // 🔥 PULSING STAR ICON
+            ZStack {
+                // Outer glow pulse
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [.yellow.opacity(0.6), .orange.opacity(0.3), .clear],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 40
+                        )
+                    )
+                    .frame(width: 80, height: 80)
+                    .scaleEffect(isPulsing ? 1.3 : 1.0)
+                    .opacity(isPulsing ? 0.0 : 1.0)
+                
+                // Main button
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [.yellow, .orange, .red],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 56, height: 56)
+                    .shadow(color: .yellow.opacity(0.6), radius: 20, x: 0, y: 4)
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.8), .clear],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 2
+                            )
+                    )
+                
+                // Rotating sparkles
+                ForEach(0..<4) { index in
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .offset(x: 20)
+                        .rotationEffect(.degrees(Double(index) * 90 + rotationAngle))
+                }
+                
+                // Star icon
+                Image(systemName: "star.fill")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white)
+                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                    .scaleEffect(isPulsing ? 1.1 : 1.0)
+            }
+            
+            // Text
+            Text("Manage Featured")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(.white)
+                .padding(.trailing, 16)
+                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+        }
+        .padding(.leading, 4)
+        .background(
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [.yellow, .orange],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .shadow(color: .yellow.opacity(0.5), radius: 20, x: 0, y: 4)
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white.opacity(0.6), .clear],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1.5
+                        )
+                )
+        )
+        .onAppear {
+            // Continuous pulse animation
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                isPulsing = true
+            }
+            
+            // Continuous rotation for sparkles
+            withAnimation(.linear(duration: 3.0).repeatForever(autoreverses: false)) {
+                rotationAngle = 360
+            }
         }
     }
 }

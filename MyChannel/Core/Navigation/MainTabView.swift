@@ -121,13 +121,14 @@ struct MainTabView: View {
                         .onAppear {
                             print("📺 [MainTabView] VideoDetailView appeared from mini player")
                             
-                            // 🔥 CRITICAL: Ensure fullscreen state is set IMMEDIATELY
-                            // This prevents mini player from showing
+                            // 🔥 CRITICAL: Ensure fullscreen state is set IMMEDIATELY and isTransitioning is still true
+                            // This prevents mini player, PiP, and any other UI from showing
                             globalPlayer.showingFullscreen = true
                             globalPlayer.shouldShowMiniPlayer = false
                             globalPlayer.isMiniplayer = false
+                            // Keep isTransitioning true until player is ready
                             
-                            print("✅ [MainTabView] Fullscreen state set - showingFullscreen: \(globalPlayer.showingFullscreen), shouldShowMiniPlayer: \(globalPlayer.shouldShowMiniPlayer)")
+                            print("✅ [MainTabView] Fullscreen state set - showingFullscreen: \(globalPlayer.showingFullscreen), shouldShowMiniPlayer: \(globalPlayer.shouldShowMiniPlayer), isTransitioning: \(globalPlayer.isTransitioning)")
                             
                             // 🔥 FIX: Ensure player is properly set up BEFORE view appears
                             // This prevents white screen flash
@@ -158,15 +159,10 @@ struct MainTabView: View {
                             print("📺 [MainTabView] VideoDetailView disappeared")
                             
                             // 🔥 FIX: Only restore mini player if user is actually dismissing (not going to fullscreen)
-                            // Check if we're still in fullscreen mode - if so, don't restore mini player
                             if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen {
-                                // User dismissed fullscreen - restore mini player
                                 globalPlayer.showingFullscreen = false
                                 globalPlayer.shouldShowMiniPlayer = true
                                 globalPlayer.isMiniplayer = true
-                                print("✅ [MainTabView] Restored mini player - video: \(globalPlayer.currentVideo?.title ?? "unknown")")
-                            } else if globalPlayer.showingFullscreen {
-                                print("📺 [MainTabView] Still in fullscreen - NOT restoring mini player")
                             }
                         }
                 }
@@ -274,17 +270,33 @@ struct MainTabView: View {
             }
         }
         // 🔥 AUTO PiP: Start Picture-in-Picture when app goes to background
+        // 🔥 FIX: Close mini-player when app is fully backgrounded (not just inactive)
         .onChange(of: scenePhase) { newPhase in
-            if newPhase == .background || newPhase == .inactive {
-                // Auto-start PiP if video is playing and mini player is visible
+            if newPhase == .background {
+                // 🔥 FIX: Close mini-player when app goes to background
+                // This prevents mini-player from persisting when app is reopened
                 if globalPlayer.shouldShowMiniPlayer,
-                   globalPlayer.currentVideo != nil,
-                   let player = globalPlayer.player,
-                   player.rate > 0 {
-                    // Ensure PiP is set up and start it
-                    Task { @MainActor in
-                        await globalPlayer.startPiPWhenBackgrounding()
+                   globalPlayer.currentVideo != nil {
+                    // If video is playing, try PiP first
+                    if let player = globalPlayer.player, player.rate > 0 {
+                        // Try to start PiP
+                        Task { @MainActor in
+                            await globalPlayer.startPiPWhenBackgrounding()
+                        }
+                    } else {
+                        // Video is paused - just close mini-player
+                        globalPlayer.closePlayer()
+                        print("🔄 [MainTabView] App backgrounded with paused video - closing mini-player")
                     }
+                }
+            } else if newPhase == .active {
+                // 🔥 FIX: When app becomes active, only restore mini-player if PiP was active
+                if globalPlayer.isPiPActive {
+                    print("🔄 [MainTabView] App became active - restoring from PiP")
+                } else if globalPlayer.shouldShowMiniPlayer {
+                    // Mini-player was showing but no PiP - clear it
+                    print("🔄 [MainTabView] App became active - clearing stale mini-player state")
+                    globalPlayer.shouldShowMiniPlayer = false
                 }
             }
         }
@@ -314,8 +326,8 @@ struct MainTabView: View {
                         if !globalPlayer.shouldShowMiniPlayer && !globalPlayer.showingFullscreen {
                             GlobalNowPlayingBar()
                         }
-                        // Always keep tab bar reserve; add mini-player reserve to prevent jumps
-                        Color.clear.frame(height: tabBarReservedBottomInset + (globalPlayer.shouldShowMiniPlayer ? 96 : 0))
+                        // Always keep tab bar reserve (no extra space for PiP)
+                        Color.clear.frame(height: tabBarReservedBottomInset)
                     }
                 }
             // 🔥 FIX: Tab bar properly positioned at bottom
@@ -338,24 +350,13 @@ struct MainTabView: View {
             .zIndex(999)  // Tab bar below mini player
             .allowsHitTesting(true)
             
-            // 🔥 FIX: Mini player ABOVE tab bar with higher z-index
-            // 🔥 FIX: Don't require player != nil - mini player can show thumbnail while player loads
+            // 🔥 FIX: Show VISIBLE mini player (not PiP-only)
             if globalPlayer.shouldShowMiniPlayer,
                !globalPlayer.showingFullscreen,
+               !globalPlayer.isTransitioning,
                globalPlayer.currentVideo != nil {
                 SafeFloatingMiniPlayer()
                     .environmentObject(globalPlayer)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .ignoresSafeArea()
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(2000)
-                    .animation(.easeInOut(duration: 0.25), value: globalPlayer.shouldShowMiniPlayer)
-                    .onAppear {
-                        print("✅ [MainTabView] Mini player appeared - shouldShow: \(globalPlayer.shouldShowMiniPlayer), isMini: \(globalPlayer.isMiniplayer), player exists: \(globalPlayer.player != nil)")
-                    }
-                    .onDisappear {
-                        print("⚠️ [MainTabView] Mini player disappeared - shouldShow: \(globalPlayer.shouldShowMiniPlayer), isMini: \(globalPlayer.isMiniplayer)")
-                    }
             }
         }
         .ignoresSafeArea(.keyboard)
@@ -377,6 +378,20 @@ struct MainTabView: View {
         guard !isInitialized else { return }
         
         do {
+            // 🔥 CRITICAL FIX: Clear all mini-player state on app launch
+            // This prevents stale mini-player from showing
+            print("🔄 [MainTabView] setupInitialState - Clearing stale mini-player state")
+            globalPlayer.shouldShowMiniPlayer = false
+            globalPlayer.isMiniplayer = false
+            globalPlayer.showingFullscreen = false
+            globalPlayer.isTransitioning = false
+            
+            // 🔥 CRITICAL FIX: If there's a video but no active player, clear the video too
+            if globalPlayer.currentVideo != nil && globalPlayer.player == nil {
+                print("⚠️ [MainTabView] Found stale video with no player - clearing")
+                globalPlayer.currentVideo = nil
+            }
+            
             // Initialize notification badges safely
             notificationBadges = [
                 .home: 0,
@@ -507,7 +522,7 @@ struct SafeContentView: View {
             case .flicks:
                 // Embed Flicks inside the tab with embedded flag on
                 ErrorBoundary {
-                    FlicksView(isEmbeddedInTab: true)
+                    NuclearFlicksView()
                 } fallback: {
                     if #available(iOS 17.0, *) {
                         return AnyView(

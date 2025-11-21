@@ -61,6 +61,7 @@ class GlobalVideoPlayerManager: ObservableObject {
     @Published var isPiPActive = false
     @Published var isPlayerReady = false // 🔥 CRITICAL: Track when player is ready to prevent error UI
     @Published private(set) var fullscreenRequestToken = UUID()
+    @Published var hasActivePlaybackSession = false  // 🔥 NUCLEAR: Only true when actively playing a video
     
     // 🔥 YOUTUBE PARITY: Video Queue for Up Next
     @Published var videoQueue: [Video] = []
@@ -104,10 +105,50 @@ class GlobalVideoPlayerManager: ObservableObject {
         playerManager?.player
     }
     
+    var hasActivePlayerItem: Bool {
+        playerManager?.player?.currentItem != nil
+    }
+    
     private init() {
+        // 🔥🔥🔥 NUCLEAR INIT: Clear EVERY SINGLE piece of state
+        print("🔥🔥🔥 [GlobalPlayer] NUCLEAR INIT starting...")
+        
+        // Clear video state
+        self.currentVideo = nil
+        self.videoQueue = []
+        self.queueIndex = 0
+        
+        // Clear playback state
+        self.isPlaying = false
+        self.currentProgress = 0.0
+        self.currentTime = 0
+        self.duration = 0
+        
+        // Clear mini-player state (CRITICAL)
+        self.shouldShowMiniPlayer = false  // 🔥 NEVER show on init
+        self.isMiniplayer = false
+        self.showingFullscreen = false
+        self.miniplayerOffset = 0
+        self.isTransitioning = false
+        
+        // Clear PiP state
+        self.isPiPActive = false
+        
+        // Clear session state
+        self.hasActivePlaybackSession = false
+        self.isPlayerReady = false
+        self.pausedByFlicks = false
+        
+        // Setup managers
         setupPlayerManager()
         configureAudioSession()
         setupViewTracking()
+        
+        print("✅ [GlobalPlayer] NUCLEAR INIT complete - EVERY state cleared")
+        print("   currentVideo: \(currentVideo == nil ? "nil" : "NOT NIL")")
+        print("   shouldShowMiniPlayer: \(shouldShowMiniPlayer)")
+        print("   isPlayerReady: \(isPlayerReady)")
+        print("   hasActivePlaybackSession: \(hasActivePlaybackSession)")
     }
     
     // MARK: - Real-time View Tracking
@@ -558,14 +599,12 @@ class GlobalVideoPlayerManager: ObservableObject {
         
         // 🔥 ANIMATION FIX: Prevent multiple calls from triggering multiple animations
         guard !shouldShowMiniPlayer || isTransitioning else {
-            print("⚠️ [GlobalVideoPlayerManager] Mini player already showing - skipping duplicate minimize")
+            print("⚠️ Mini player already showing - skipping duplicate minimize")
             return
         }
         
         print("🔄 [GlobalVideoPlayerManager] Minimizing to mini player")
         
-        // 🔥 APPLE BEST PRACTICE: Set state synchronously on MainActor
-        // This ensures state is set before any view updates
         Task { @MainActor in
             // 🔥 ANIMATION FIX: Set transition flag FIRST to prevent animation from triggering
             isTransitioning = true
@@ -577,30 +616,13 @@ class GlobalVideoPlayerManager: ObservableObject {
             isMiniplayer = true
             shouldShowMiniPlayer = true
             
-            print("✅ [GlobalVideoPlayerManager] Mini player state SET - shouldShow: \(shouldShowMiniPlayer), isMini: \(isMiniplayer)")
-            
-            // 🔥 APPLE BEST PRACTICE: Ensure player state is synced
-            if let player = player {
-                // Sync play state from actual player
-                let actualIsPlaying = player.timeControlStatus == .playing
-                if isPlaying != actualIsPlaying {
-                    isPlaying = actualIsPlaying
-                    print("🔄 [GlobalVideoPlayerManager] Synced play state: \(actualIsPlaying)")
-                }
-                
-                // Ensure player continues if it should be playing
-                if isPlaying && player.rate == 0 {
-                    print("▶️ [GlobalVideoPlayerManager] Resuming playback in mini player")
-                    player.play()
-                }
-            }
-            
             // Mark transition complete after animation duration
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 guard let self = self, !self.isCleanedUp else { return }
                 self.isTransitioning = false
-                print("✅ [GlobalVideoPlayerManager] Mini player transition complete")
             }
+            
+            print("✅ [GlobalVideoPlayerManager] Mini player state updated - shouldShow: \(shouldShowMiniPlayer), isMini: \(isMiniplayer)")
         }
         
         HapticManager.shared.impact(style: .medium)
@@ -616,12 +638,15 @@ class GlobalVideoPlayerManager: ObservableObject {
         print("🔄 [GlobalVideoPlayerManager] Video: \(video.title)")
         print("🔄 [GlobalVideoPlayerManager] Player exists: \(player != nil)")
         
+        // 🔥 CRITICAL: Set isTransitioning FIRST to block ALL UI from showing
+        // This prevents mini player, PiP, and any other UI from appearing
+        isTransitioning = true
+        
         // 🔥 CRITICAL: Hide mini player IMMEDIATELY before doing anything else
-        // Set state synchronously to ensure mini player disappears instantly
+        // Set ALL state synchronously to ensure mini player disappears instantly
         showingFullscreen = true
         isMiniplayer = false
         shouldShowMiniPlayer = false
-        isTransitioning = true
         
         print("✅ [GlobalPlayer] State set IMMEDIATELY - showingFullscreen: \(showingFullscreen), shouldShowMiniPlayer: \(shouldShowMiniPlayer)")
         
@@ -696,6 +721,8 @@ class GlobalVideoPlayerManager: ObservableObject {
     func closePlayer() {
         guard !isCleanedUp else { return }
         
+        print("🔥 [GlobalPlayer] closePlayer() called")
+        
         // 🔥 Stop PiP if active
         if isPiPActive {
             togglePictureInPicture()
@@ -708,14 +735,59 @@ class GlobalVideoPlayerManager: ObservableObject {
         
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             playerManager?.pause()
+            playerManager?.player?.replaceCurrentItem(with: nil)  // 🔥 FIX: Clear player item
             currentVideo = nil
             isMiniplayer = false
             showingFullscreen = false
             shouldShowMiniPlayer = false
             miniplayerOffset = 0
+            isPlayerReady = false  // 🔥 FIX: Mark player as not ready
+            isPlaying = false
+            hasActivePlaybackSession = false
         }
         
+        print("✅ [GlobalPlayer] closePlayer() complete - shouldShowMiniPlayer: \(shouldShowMiniPlayer), currentVideo: \(currentVideo == nil ? "nil" : "NOT NIL")")
+        
         HapticManager.shared.impact(style: .light)
+    }
+    
+    // 🔥🔥🔥 NUCLEAR RESET: Call this to completely reset player state
+    func nuclearReset() {
+        print("🔥🔥🔥 [GlobalPlayer] NUCLEAR RESET called - obliterating ALL state")
+        
+        // Stop any active tracking
+        Task {
+            await endViewTracking()
+        }
+        
+        // Stop PiP
+        if isPiPActive {
+            togglePictureInPicture()
+        }
+        
+        // Destroy player
+        playerManager?.pause()
+        playerManager?.player?.replaceCurrentItem(with: nil)
+        
+        // Clear ALL state synchronously
+        currentVideo = nil
+        videoQueue = []
+        queueIndex = 0
+        isPlaying = false
+        currentProgress = 0.0
+        currentTime = 0
+        duration = 0
+        shouldShowMiniPlayer = false
+        isMiniplayer = false
+        showingFullscreen = false
+        miniplayerOffset = 0
+        isTransitioning = false
+        isPiPActive = false
+        hasActivePlaybackSession = false
+        isPlayerReady = false
+        pausedByFlicks = false
+        
+        print("✅ [GlobalPlayer] NUCLEAR RESET complete - ALL state obliterated")
     }
     
     // MARK: - Navigation Handling for Mini Player

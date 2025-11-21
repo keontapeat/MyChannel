@@ -1151,15 +1151,14 @@ struct VideoDetailView: View {
             playerControlsTimer?.invalidate()
             controlsHideTimer?.invalidate()
             if !isYouTube {
+                // 🔥 FIX: Only show mini player if NOT going to fullscreen
+                if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen {
+                    globalPlayer.minimizePlayer()
+                }
+                
                 if !(globalPlayer.isMiniplayer || globalPlayer.showingFullscreen),
                    globalPlayer.currentVideo?.id != video.id {
                     playerManager.performCleanup()
-                }
-                // 🔥 FIX: Only show mini player if NOT going to fullscreen AND not transitioning
-                // If user tapped full-screen button, they want fullscreen, not mini player
-                if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen && !globalPlayer.isTransitioning {
-                    globalPlayer.minimizePlayer()
-                    globalPlayer.ensurePlayerAttached()
                 }
             }
         }
@@ -1445,24 +1444,28 @@ struct VideoDetailView: View {
     }
 
     private func triggerMiniPlayerOrPiP() {
-        print("📺 [VideoDetailView] Mini player button tapped")
+        print("📺 [VideoDetailView] PiP button tapped")
         print("📺 [VideoDetailView] PiP supported: \(AVPictureInPictureController.isPictureInPictureSupported())")
         print("📺 [VideoDetailView] Current PiP state: \(isPiPActive)")
         print("📺 [VideoDetailView] Current video: \(video.id)")
         print("📺 [VideoDetailView] Player exists: \(playerManager.player != nil)")
         
-        // 🔥 FIX: Always show in-app mini player first, then optionally start PiP
-        // This ensures the mini player appears even if PiP fails or isn't supported
-        minimizeToMiniPlayer()
-        
-        // Then try to start system PiP if supported (but don't require it)
+        // 🔥 PiP ONLY: Start Picture-in-Picture directly
         if AVPictureInPictureController.isPictureInPictureSupported() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                if !self.isPiPActive {
-                    print("📺 [VideoDetailView] Starting system PiP after mini player")
-                    self.isPiPActive = true
+            // Toggle PiP state
+            isPiPActive.toggle()
+            print("📺 [VideoDetailView] Toggling PiP: \(isPiPActive)")
+            
+            // If starting PiP, dismiss the view after a short delay
+            if isPiPActive {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    self.dismiss()
                 }
             }
+        } else {
+            print("⚠️ [VideoDetailView] PiP not supported on this device")
+            // Just dismiss without PiP
+            dismiss()
         }
     }
     

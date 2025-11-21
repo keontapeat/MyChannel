@@ -1,50 +1,158 @@
 rules_version = '2';
+
+// 🔥 FIREBASE STORAGE SECURITY RULES
+// Controls access to videos, thumbnails, profile images, etc.
+
 service firebase.storage {
   match /b/{bucket}/o {
-    function isSignedIn() { return request.auth != null; }
-    function uid() { return isSignedIn() ? request.auth.uid : null; }
-
-    // User avatars/banners (direct file storage)
-    match /user-avatars/{file} {
-      allow read: if true;
-      // Allow write if user is authenticated and filename matches their UID
-      allow write: if isSignedIn() && file.matches('.*' + uid() + '.*');
+    
+    // 📺 VIDEOS - Anyone can read, authenticated users can upload
+    match /videos/{userId}/{videoId} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
     }
-    match /user-banners/{file} {
-      allow read: if true;
-      // Allow write if user is authenticated and filename matches their UID
-      allow write: if isSignedIn() && file.matches('.*' + uid() + '.*');
+    
+    // 🖼️ THUMBNAILS - Anyone can read, authenticated users can upload
+    match /thumbnails/{userId}/{filename} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
     }
-
-    // Video assets
-    match /videos/{channelId}/{videoId}/{rest=**} {
-      // HLS segments should be served via CDN signed URLs; allow read for now (can be tightened with token-based rules + CDN)
-      allow read: if true;
-      allow write: if isSignedIn() && uid() == firestore.get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+    
+    // 👤 PROFILE IMAGES - Anyone can read, authenticated users can upload
+    match /profile_images/{userId}/{filename} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
     }
-
-    // Thumbnails
-    match /thumbnails/{channelId}/{videoId}/{file} {
-      allow read: if true;
-      allow write: if isSignedIn() && uid() == firestore.get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+    
+    // 🎨 BANNER IMAGES - Anyone can read, authenticated users can upload
+    match /banner_images/{userId}/{filename} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
     }
-
-    // Captions (store as /captions/{videoId}/{lang}/{filename})
-    match /captions/{videoId}/{lang}/{file} {
-      allow read: if true;
-      allow write: if isSignedIn() && uid() == firestore.get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+    
+    // 🎬 BANNER VIDEOS - Anyone can read, authenticated users can upload
+    match /banner_videos/{userId}/{filename} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
     }
-
-    // Dubs (store as /dubs/{videoId}/{lang}/{filename})
-    match /dubs/{videoId}/{lang}/{file} {
-      allow read: if true;
-      allow write: if isSignedIn() && uid() == firestore.get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+    
+    // 🎭 FLICKS - Anyone can read, authenticated users can upload
+    match /flicks/{userId}/{flickId} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
     }
-
-    // Playlist thumbnails (store per-playlist folder)
-    match /playlist-thumbs/{playlistId}/{file} {
-      allow read: if true;
-      allow write: if isSignedIn() && uid() == firestore.get(/databases/(default)/documents/playlists/$(playlistId)).data.ownerUid;
+    
+    // 🎬 STORIES - Anyone can read, authenticated users can upload (24h expiry)
+    match /stories/{userId}/{storyId} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
     }
+    
+    // 📺 LIVE STREAM THUMBNAILS - Anyone can read, streamers can upload
+    match /live_thumbnails/{userId}/{filename} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
+    }
+    
+    // 🎮 VS MATCH PROOF - Participants can upload proof of wins
+    match /vs_match_proof/{matchId}/{userId}/{filename} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null && request.auth.uid == userId;  // Participant only
+      allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
+    }
+    
+    // 📄 DOCUMENTS (ID verification for KYC) - Private, owner only
+    match /documents/{userId}/{filename} {
+      allow read: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow write: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
+    }
+    
+    // 🎵 AUDIO FILES - Anyone can read, authenticated users can upload
+    match /audio/{userId}/{filename} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
+    }
+    
+    // 📦 TEMPORARY UPLOADS - Short-lived, owner only
+    match /temp_uploads/{userId}/{filename} {
+      allow read: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow write: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
+    }
+    
+    // 🎓 UNIVERSITY CONTENT - Public read, admin write
+    match /university/{path=**} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null && 
+                      (request.auth.token.email == 'keontapeat@mychannel.live' ||
+                       request.auth.token.email == 'keontapeat@gmail.com');  // Admin only
+    }
+    
+    // 🏆 TOURNAMENT ASSETS - Public read, admin write
+    match /tournaments/{path=**} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null;  // Authenticated write
+    }
+    
+    // 📊 ANALYTICS EXPORTS - Owner only
+    match /analytics_exports/{userId}/{filename} {
+      allow read: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow write: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
+    }
+    
+    // 🎨 CUSTOM THUMBNAILS - Anyone can read, creator can upload
+    match /custom_thumbnails/{userId}/{filename} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
+    }
+    
+    // 📝 SUBTITLES/CAPTIONS - Anyone can read, uploader can write
+    match /subtitles/{videoId}/{filename} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null;  // Any authenticated user can contribute
+      allow delete: if request.auth != null;  // Authenticated users
+    }
+    
+    // 🎬 VIDEO CHAPTERS THUMBNAILS - Public read, authenticated write
+    match /chapter_thumbnails/{videoId}/{filename} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null;  // Authenticated write
+    }
+    
+    // 💰 PAYMENT RECEIPTS - Owner only
+    match /receipts/{userId}/{filename} {
+      allow read: if request.auth != null && request.auth.uid == userId;  // Owner only
+      allow write: if request.auth != null && request.auth.uid == userId;  // Owner only
+    }
+    
+    // 🚨 REPORTED CONTENT (for moderation) - Admins only
+    match /reported_content/{reportId}/{filename} {
+      allow read: if request.auth != null && isAdmin();  // Admins only
+      allow write: if request.auth != null;  // Anyone can report
+    }
+    
+    // 🎯 DEFAULT - Deny all for security
+    match /{allPaths=**} {
+      allow read, write: if false;  // Explicit deny for uncovered paths
+    }
+  }
+  
+  // HELPER FUNCTIONS
+  function isAdmin() {
+    return request.auth != null && 
+           (request.auth.token.email == 'keontapeat@mychannel.live' ||
+            request.auth.token.email == 'keontapeat@gmail.com');
   }
 }
