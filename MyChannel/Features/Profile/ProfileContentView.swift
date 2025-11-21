@@ -211,7 +211,7 @@ struct ProfileVideosView: View {
     private var videosBody: some View {
         if layoutMode == .grid2 {
             LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(displayVideos, id: \.id) { video in
+                ForEach(Array(displayVideos.enumerated()), id: \.element.id) { index, video in
                     ProfileVideoCard(video: video, ownerId: user.id)
                         .id(video.id) // ⚡ PERFORMANCE: Explicit ID for better diffing
                         .onTapGesture {
@@ -219,14 +219,19 @@ struct ProfileVideosView: View {
                             NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
                         }
                         .onAppear {
-                            // ⚡ PERFORMANCE: Prefetch next page when near bottom
-                            if video == displayVideos.suffix(3).first {
+                            // 🔥 THERMONUCLEAR: Prefetch when 6 from bottom (was 3)
+                            if index >= displayVideos.count - 6 {
                                 Task {
                                     if !isLoadingMore {
                                         await onLoadMore?()
                                     }
                                 }
                             }
+                            
+                            // 🔥 THERMONUCLEAR: Prefetch next 12 thumbnails
+                            let prefetchRange = (index + 1)..<min(displayVideos.count, index + 13)
+                            let urls = prefetchRange.compactMap { URL(string: displayVideos[$0].thumbnailURL) }
+                            ImagePrefetcher.shared.prefetch(urls: urls)
                         }
                 }
                 // ⚡ PERFORMANCE: "Load More" button for pagination
@@ -245,7 +250,7 @@ struct ProfileVideosView: View {
         } else {
             // Single video view: one full-width 16:9 card per row
             LazyVStack(spacing: 12) {
-                ForEach(displayVideos, id: \.id) { video in
+                ForEach(Array(displayVideos.enumerated()), id: \.element.id) { index, video in
                     FullWidthVideoCard(video: video, ownerId: user.id)
                         .id(video.id) // ⚡ PERFORMANCE: Explicit ID for better diffing
                         .onTapGesture {
@@ -254,14 +259,19 @@ struct ProfileVideosView: View {
                         }
                         .padding(.horizontal, 16)
                         .onAppear {
-                            // ⚡ PERFORMANCE: Prefetch next page when near bottom
-                            if video == displayVideos.suffix(3).first {
+                            // 🔥 THERMONUCLEAR: Prefetch when 6 from bottom (was 3)
+                            if index >= displayVideos.count - 6 {
                                 Task {
                                     if !isLoadingMore {
                                         await onLoadMore?()
                                     }
                                 }
                             }
+                            
+                            // 🔥 THERMONUCLEAR: Prefetch next 12 thumbnails
+                            let prefetchRange = (index + 1)..<min(displayVideos.count, index + 13)
+                            let urls = prefetchRange.compactMap { URL(string: displayVideos[$0].thumbnailURL) }
+                            ImagePrefetcher.shared.prefetch(urls: urls)
                         }
                 }
                 // ⚡ PERFORMANCE: "Load More" button for pagination

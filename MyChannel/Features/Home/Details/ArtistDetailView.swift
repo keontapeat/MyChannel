@@ -135,9 +135,15 @@ struct ArtistDetailView: View {
         case .videos:
             if showGrid {
                 LazyVGrid(columns: gridColumns, spacing: 14) {
-                    ForEach(filteredAndSorted) { video in
+                    ForEach(Array(filteredAndSorted.enumerated()), id: \.element.id) { index, video in
                         ArtistGridCard(video: video) {
                             selectedVideo = video
+                        }
+                        .onAppear {
+                            // 🔥 THERMONUCLEAR: Prefetch next 12 thumbnails
+                            let prefetchRange = (index + 1)..<min(filteredAndSorted.count, index + 13)
+                            let urls = prefetchRange.compactMap { URL(string: filteredAndSorted[$0].thumbnailURL) }
+                            ImagePrefetcher.shared.prefetch(urls: urls)
                         }
                     }
                 }
@@ -146,9 +152,15 @@ struct ArtistDetailView: View {
                 .animation(.spring(response: 0.4, dampingFraction: 0.9), value: filteredAndSorted.count)
             } else {
                 LazyVStack(spacing: 14) {
-                    ForEach(filteredAndSorted) { video in
+                    ForEach(Array(filteredAndSorted.enumerated()), id: \.element.id) { index, video in
                         ArtistVideoRow(video: video) {
                             selectedVideo = video
+                        }
+                        .onAppear {
+                            // 🔥 THERMONUCLEAR: Prefetch next 12 thumbnails
+                            let prefetchRange = (index + 1)..<min(filteredAndSorted.count, index + 13)
+                            let urls = prefetchRange.compactMap { URL(string: filteredAndSorted[$0].thumbnailURL) }
+                            ImagePrefetcher.shared.prefetch(urls: urls)
                         }
                     }
                 }

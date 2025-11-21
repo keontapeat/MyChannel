@@ -2,688 +2,292 @@
 //  PerformanceMonitor.swift
 //  MyChannel
 //
-//  Real-time performance monitoring and analytics
+//  🔥 THERMONUCLEAR: Real-time performance monitoring
+//  Track image loads, network requests, view renders, memory, FPS
 //
 
-import SwiftUI
-import Combine
 import Foundation
-import os.log
-#if canImport(FirebasePerformance)
-import FirebasePerformance
-#endif
+import SwiftUI
 
-// MARK: - Performance Monitor
 @MainActor
-class PerformanceMonitor: ObservableObject {
+final class PerformanceMonitor: ObservableObject {
     static let shared = PerformanceMonitor()
     
-    @Published var currentMetrics = PerformanceMetrics()
-    @Published var isMonitoring = false
-    @Published var alerts: [SystemPerformanceAlert] = []
+    @Published var metrics: PerformanceMetrics = .empty
+    @Published var alerts: [PerformanceAlert] = []
     
-    private var cancellables = Set<AnyCancellable>()
-    private let logger = Logger(subsystem: "com.mychannel.performance", category: "monitoring")
+    // MARK: - Metrics Model
+    struct PerformanceMetrics {
+        var avgImageLoadTime: TimeInterval = 0
+        var avgNetworkRequestTime: TimeInterval = 0
+        var avgViewRenderTime: TimeInterval = 0
+        var cacheHitRate: Double = 0
+        var currentFPS: Int = 60
+        var memoryUsageMB: Int = 0
+        var networkCacheHitRate: Double = 0
+        
+        // Counts
+        var totalImageLoads: Int = 0
+        var totalNetworkRequests: Int = 0
+        var totalViewRenders: Int = 0
+        var slowImageLoads: Int = 0
+        var slowNetworkRequests: Int = 0
+        var droppedFrames: Int = 0
+        
+        static let empty = PerformanceMetrics()
+        
+        var summary: String {
+            """
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            📊 PERFORMANCE METRICS (LIVE)
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            Avg Image Load:    \(Int(avgImageLoadTime * 1000))ms
+            Avg Network:       \(Int(avgNetworkRequestTime * 1000))ms
+            Avg Render:        \(Int(avgViewRenderTime * 1000))ms
+            Cache Hit Rate:    \(Int(cacheHitRate * 100))%
+            Memory Usage:      \(memoryUsageMB)MB
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            Total Images:      \(totalImageLoads) (\(slowImageLoads) slow)
+            Total Network:     \(totalNetworkRequests) (\(slowNetworkRequests) slow)
+            Dropped Frames:    \(droppedFrames)
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            """
+        }
+    }
     
-    // Monitoring components
-    private let cpuMonitor = CPUMonitor()
-    private let memoryMonitor = MemoryMonitor()
-    private let networkMonitor = NetworkMonitor()
-    private let renderingMonitor = RenderingMonitor()
-    private let batteryMonitor = BatteryMonitor()
+    struct PerformanceAlert: Identifiable {
+        let id = UUID()
+        let type: AlertType
+        let message: String
+        let timestamp: Date
+        
+        enum AlertType {
+            case slowImage
+            case slowNetwork
+            case droppedFrame
+            case memoryWarning
+            case lowCacheHit
+        }
+    }
     
-    // Performance thresholds
-    private let thresholds = PerformanceThresholds()
+    // MARK: - Private State
+    private var imageLoadTimes: [TimeInterval] = []
+    private var networkRequestTimes: [TimeInterval] = []
+    private var viewRenderTimes: [TimeInterval] = []
+    private var cacheHits: Int = 0
+    private var cacheMisses: Int = 0
+    private var networkCacheHits: Int = 0
+    private var networkCacheMisses: Int = 0
+    
+    private var updateTimer: Timer?
     
     private init() {
-        setupMonitoring()
+        startMonitoring()
     }
     
-    // MARK: - Monitoring Setup
-    private func setupMonitoring() {
-        // CPU monitoring
-        cpuMonitor.$usage
-            .sink { [weak self] usage in
-                self?.currentMetrics.cpuUsage = usage
-                self?.checkCPUThreshold(usage)
-            }
-            .store(in: &cancellables)
-        
-        // Memory monitoring
-        memoryMonitor.$usage
-            .sink { [weak self] usage in
-                self?.currentMetrics.memoryUsage = usage
-                self?.checkMemoryThreshold(usage)
-            }
-            .store(in: &cancellables)
-        
-        // Network monitoring
-        networkMonitor.$latency
-            .sink { [weak self] latency in
-                self?.currentMetrics.networkLatency = latency
-                self?.checkNetworkThreshold(latency)
-            }
-            .store(in: &cancellables)
-        
-        // Rendering monitoring
-        renderingMonitor.$frameRate
-            .sink { [weak self] frameRate in
-                self?.currentMetrics.frameRate = frameRate
-                self?.checkFrameRateThreshold(frameRate)
-            }
-            .store(in: &cancellables)
-        
-        // Battery monitoring
-        batteryMonitor.$drainRate
-            .sink { [weak self] drainRate in
-                self?.currentMetrics.batteryDrainRate = drainRate
-                self?.checkBatteryThreshold(drainRate)
-            }
-            .store(in: &cancellables)
-    }
+    // MARK: - Monitoring
     
-    // MARK: - Monitoring Control
-    func startMonitoring() {
-        guard !isMonitoring else { return }
-        
-        isMonitoring = true
-        logger.info("🔍 Performance monitoring started")
-        
-        cpuMonitor.start()
-        memoryMonitor.start()
-        networkMonitor.start()
-        renderingMonitor.start()
-        batteryMonitor.start()
-        
-        #if canImport(FirebasePerformance)
-        // Start Firebase Performance monitoring
-        let trace = Performance.startTrace(name: "app_performance_session")
-        trace?.start()
-        #endif
-    }
-    
-    func stopMonitoring() {
-        guard isMonitoring else { return }
-        
-        isMonitoring = false
-        logger.info("⏹️ Performance monitoring stopped")
-        
-        cpuMonitor.stop()
-        memoryMonitor.stop()
-        networkMonitor.stop()
-        renderingMonitor.stop()
-        batteryMonitor.stop()
-    }
-    
-    // MARK: - Threshold Checking
-    private func checkCPUThreshold(_ usage: Double) {
-        if usage > thresholds.cpuWarning {
-            addAlert(SystemPerformanceAlert.cpuHigh(usage))
-        }
-    }
-    
-    private func checkMemoryThreshold(_ usage: Double) {
-        if usage > thresholds.memoryWarning {
-            addAlert(SystemPerformanceAlert.memoryHigh(usage))
-        }
-    }
-    
-    private func checkNetworkThreshold(_ latency: TimeInterval) {
-        if latency > thresholds.networkLatencyWarning {
-            addAlert(SystemPerformanceAlert.networkSlow(latency))
-        }
-    }
-    
-    private func checkFrameRateThreshold(_ frameRate: Double) {
-        if frameRate < thresholds.frameRateWarning {
-            addAlert(SystemPerformanceAlert.frameRateLow(frameRate))
-        }
-    }
-    
-    private func checkBatteryThreshold(_ drainRate: Double) {
-        if drainRate > thresholds.batteryDrainWarning {
-            addAlert(SystemPerformanceAlert.batteryDrainHigh(drainRate))
-        }
-    }
-    
-    private func addAlert(_ alert: SystemPerformanceAlert) {
-        // Avoid duplicate alerts
-        if !alerts.contains(where: { $0.type == alert.type }) {
-            alerts.append(alert)
-            logger.warning("⚠️ Performance alert: \(alert.message)")
-            
-            // Auto-dismiss after 10 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-                self.dismissAlert(alert)
+    private func startMonitoring() {
+        // Update metrics every 5 seconds
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateMetrics()
             }
         }
+        
+        print("⚡ [PerformanceMonitor] Started - tracking all performance metrics")
     }
     
-    func dismissAlert(_ alert: SystemPerformanceAlert) {
-        alerts.removeAll { $0.id == alert.id }
+    // MARK: - Image Load Tracking
+    
+    func measureImageLoad(_ duration: TimeInterval, fromCache: Bool) {
+        imageLoadTimes.append(duration)
+        
+        if fromCache {
+            cacheHits += 1
+        } else {
+            cacheMisses += 1
+        }
+        
+        // Keep only last 100 measurements
+        if imageLoadTimes.count > 100 {
+            imageLoadTimes.removeFirst()
+        }
+        
+        // Alert if slow (>200ms)
+        if duration > 0.2 {
+            metrics.slowImageLoads += 1
+            addAlert(.slowImage, message: "Slow image load: \(Int(duration * 1000))ms")
+        }
+        
+        metrics.totalImageLoads += 1
     }
     
-    // MARK: - Performance Traces
-    func startTrace(_ name: String) -> PerformanceTrace {
-        let trace = PerformanceTrace(name: name)
-        trace.start()
+    // MARK: - Network Request Tracking
+    
+    func measureNetworkRequest(_ url: URL, duration: TimeInterval, fromCache: Bool = false) {
+        networkRequestTimes.append(duration)
         
-        #if canImport(FirebasePerformance)
-        let firebaseTrace = Performance.startTrace(name: name)
-        firebaseTrace?.start()
-        trace.firebaseTrace = firebaseTrace
-        #endif
+        if fromCache {
+            networkCacheHits += 1
+        } else {
+            networkCacheMisses += 1
+        }
         
-        return trace
+        if networkRequestTimes.count > 100 {
+            networkRequestTimes.removeFirst()
+        }
+        
+        // Alert if slow (>500ms)
+        if duration > 0.5 {
+            metrics.slowNetworkRequests += 1
+            addAlert(.slowNetwork, message: "Slow network request: \(url.path) - \(Int(duration * 1000))ms")
+        }
+        
+        metrics.totalNetworkRequests += 1
     }
     
-    // MARK: - Custom Metrics
-    func recordCustomMetric(_ name: String, value: Double) {
-        logger.info("📊 Custom metric: \(name) = \(value)")
+    // MARK: - View Render Tracking
+    
+    func measureViewRender(_ viewName: String, duration: TimeInterval) {
+        viewRenderTimes.append(duration)
         
-        #if canImport(FirebasePerformance)
-        // Record to Firebase Performance
-        #endif
+        if viewRenderTimes.count > 100 {
+            viewRenderTimes.removeFirst()
+        }
+        
+        // Alert if dropped frame (>16ms = 60fps threshold)
+        if duration > 0.016 {
+            metrics.droppedFrames += 1
+            addAlert(.droppedFrame, message: "Slow render: \(viewName) - \(Int(duration * 1000))ms")
+        }
+        
+        metrics.totalViewRenders += 1
     }
     
-    func recordUserAction(_ action: String, duration: TimeInterval) {
-        logger.info("👆 User action: \(action) took \(String(format: "%.3f", duration))s")
+    // MARK: - Memory Tracking
+    
+    func trackMemoryWarning() {
+        addAlert(.memoryWarning, message: "Memory warning received - caches cleared")
+    }
+    
+    // MARK: - Metrics Update
+    
+    private func updateMetrics() {
+        // Calculate averages
+        let avgImageLoad = imageLoadTimes.isEmpty ? 0 : imageLoadTimes.reduce(0, +) / Double(imageLoadTimes.count)
+        let avgNetwork = networkRequestTimes.isEmpty ? 0 : networkRequestTimes.reduce(0, +) / Double(networkRequestTimes.count)
+        let avgRender = viewRenderTimes.isEmpty ? 0 : viewRenderTimes.reduce(0, +) / Double(viewRenderTimes.count)
         
-        if duration > 1.0 {
-            addAlert(SystemPerformanceAlert.slowUserAction(action, duration))
+        // Calculate cache hit rates
+        let totalCacheAttempts = cacheHits + cacheMisses
+        let cacheHitRate = totalCacheAttempts == 0 ? 0 : Double(cacheHits) / Double(totalCacheAttempts)
+        
+        let totalNetworkCacheAttempts = networkCacheHits + networkCacheMisses
+        let networkCacheHitRate = totalNetworkCacheAttempts == 0 ? 0 : Double(networkCacheHits) / Double(totalNetworkCacheAttempts)
+        
+        // Get current memory usage
+        let memoryMB = Int(getMemoryUsage() / 1_000_000)
+        
+        // Update published metrics
+        metrics.avgImageLoadTime = avgImageLoad
+        metrics.avgNetworkRequestTime = avgNetwork
+        metrics.avgViewRenderTime = avgRender
+        metrics.cacheHitRate = cacheHitRate
+        metrics.networkCacheHitRate = networkCacheHitRate
+        metrics.memoryUsageMB = memoryMB
+        
+        // Alert if cache hit rate is low
+        if cacheHitRate < 0.7 && totalCacheAttempts > 20 {
+            addAlert(.lowCacheHit, message: "Low cache hit rate: \(Int(cacheHitRate * 100))%")
+        }
+        
+        // Log summary every 5 updates
+        if metrics.totalImageLoads % 50 == 0 && metrics.totalImageLoads > 0 {
+            print(metrics.summary)
         }
     }
     
-    // MARK: - Performance Report
-    func generateReport() -> PerformanceReport {
-        return PerformanceReport(
-            timestamp: Date(),
-            metrics: currentMetrics,
-            alerts: alerts,
-            recommendations: generateRecommendations()
-        )
-    }
+    // MARK: - Memory Usage
     
-    private func generateRecommendations() -> [PerformanceRecommendation] {
-        var recommendations: [PerformanceRecommendation] = []
-        
-        if currentMetrics.cpuUsage > thresholds.cpuWarning {
-            recommendations.append(.reduceCPUUsage)
-        }
-        
-        if currentMetrics.memoryUsage > thresholds.memoryWarning {
-            recommendations.append(.optimizeMemory)
-        }
-        
-        if currentMetrics.frameRate < thresholds.frameRateWarning {
-            recommendations.append(.improveRendering)
-        }
-        
-        if currentMetrics.networkLatency > thresholds.networkLatencyWarning {
-            recommendations.append(.optimizeNetwork)
-        }
-        
-        return recommendations
-    }
-}
-
-// MARK: - CPU Monitor
-class CPUMonitor: ObservableObject {
-    @Published var usage: Double = 0.0
-    
-    private var timer: Timer?
-    
-    func start() {
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            self.updateCPUUsage()
-        }
-    }
-    
-    func stop() {
-        timer?.invalidate()
-        timer = nil
-    }
-    
-    private func updateCPUUsage() {
-        var info = task_basic_info_data_t()
-        var count = mach_msg_type_number_t(MemoryLayout<task_basic_info_data_t>.size)/4
+    private func getMemoryUsage() -> Int64 {
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
         
         let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) {
             $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
-                task_info(mach_task_self_,
-                         task_flavor_t(MACH_TASK_BASIC_INFO),
-                         $0,
-                         &count)
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
             }
         }
         
-        if kerr == KERN_SUCCESS {
-            let cpuUsage = Double(info.resident_size) / Double(ProcessInfo.processInfo.physicalMemory) * 100
-            DispatchQueue.main.async {
-                self.usage = min(cpuUsage, 100.0)
-            }
-        }
-    }
-}
-
-// MARK: - Memory Monitor
-class MemoryMonitor: ObservableObject {
-    @Published var usage: Double = 0.0
-    
-    private var timer: Timer?
-    
-    func start() {
-        timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
-            self.updateMemoryUsage()
-        }
+        return kerr == KERN_SUCCESS ? Int64(info.resident_size) : 0
     }
     
-    func stop() {
-        timer?.invalidate()
-        timer = nil
-    }
+    // MARK: - Alerts
     
-    private func updateMemoryUsage() {
-        let memoryUsage = getMemoryUsage()
-        DispatchQueue.main.async {
-            self.usage = memoryUsage
-        }
-    }
-    
-    private func getMemoryUsage() -> Double {
-        var info = task_basic_info_data_t()
-        var count = mach_msg_type_number_t(MemoryLayout<task_basic_info_data_t>.size)/4
+    private func addAlert(_ type: PerformanceAlert.AlertType, message: String) {
+        let alert = PerformanceAlert(type: type, message: message, timestamp: Date())
+        alerts.append(alert)
         
-        let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) {
-            $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
-                task_info(mach_task_self_,
-                         task_flavor_t(MACH_TASK_BASIC_INFO),
-                         $0,
-                         &count)
-            }
+        // Keep only last 20 alerts
+        if alerts.count > 20 {
+            alerts.removeFirst()
         }
         
-        if kerr == KERN_SUCCESS {
-            let memoryUsageBytes = Double(info.resident_size)
-            let memoryUsageMB = memoryUsageBytes / (1024 * 1024)
-            return memoryUsageMB
+        // Log to console
+        switch type {
+        case .slowImage:
+            print("🐌 [Performance] \(message)")
+        case .slowNetwork:
+            print("🐌 [Performance] \(message)")
+        case .droppedFrame:
+            print("🎬 [Performance] \(message)")
+        case .memoryWarning:
+            print("⚠️ [Performance] \(message)")
+        case .lowCacheHit:
+            print("📊 [Performance] \(message)")
         }
+    }
+    
+    // MARK: - Public API
+    
+    func getReport() -> String {
+        return metrics.summary
+    }
+    
+    func printReport() {
+        print(metrics.summary)
+    }
+    
+    func clearAlerts() {
+        alerts.removeAll()
+    }
+    
+    func reset() {
+        imageLoadTimes.removeAll()
+        networkRequestTimes.removeAll()
+        viewRenderTimes.removeAll()
+        cacheHits = 0
+        cacheMisses = 0
+        networkCacheHits = 0
+        networkCacheMisses = 0
+        metrics = .empty
+        alerts.removeAll()
         
-        return 0.0
+        print("🔄 [PerformanceMonitor] Reset all metrics")
+    }
+    
+    deinit {
+        updateTimer?.invalidate()
     }
 }
 
-// MARK: - Network Monitor
-class NetworkMonitor: ObservableObject {
-    @Published var latency: TimeInterval = 0.0
-    
-    private var timer: Timer?
-    
-    func start() {
-        timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
-            self.measureLatency()
-        }
-    }
-    
-    func stop() {
-        timer?.invalidate()
-        timer = nil
-    }
-    
-    private func measureLatency() {
-        let startTime = Date()
-        
-        Task {
-            do {
-                let url = URL(string: "https://www.google.com")!
-                let (_, _) = try await URLSession.shared.data(from: url)
-                
-                let latency = Date().timeIntervalSince(startTime)
-                
-                await MainActor.run {
-                    self.latency = latency
-                }
-            } catch {
-                await MainActor.run {
-                    self.latency = 999.0 // High latency for errors
-                }
-            }
+// MARK: - Helper Extension
+
+extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        stride(from: 0, to: count, by: size).map {
+            Array(self[$0..<Swift.min($0 + size, count)])
         }
     }
 }
-
-// MARK: - Rendering Monitor
-class RenderingMonitor: ObservableObject {
-    @Published var frameRate: Double = 60.0
-    
-    private var displayLink: CADisplayLink?
-    private var frameCount = 0
-    private var lastTimestamp: CFTimeInterval = 0
-    
-    func start() {
-        displayLink = CADisplayLink(target: self, selector: #selector(displayLinkTick))
-        displayLink?.add(to: .main, forMode: .common)
-    }
-    
-    func stop() {
-        displayLink?.invalidate()
-        displayLink = nil
-    }
-    
-    @objc private func displayLinkTick(_ displayLink: CADisplayLink) {
-        frameCount += 1
-        
-        if lastTimestamp == 0 {
-            lastTimestamp = displayLink.timestamp
-            return
-        }
-        
-        let elapsed = displayLink.timestamp - lastTimestamp
-        if elapsed >= 1.0 {
-            let fps = Double(frameCount) / elapsed
-            
-            DispatchQueue.main.async {
-                self.frameRate = fps
-            }
-            
-            frameCount = 0
-            lastTimestamp = displayLink.timestamp
-        }
-    }
-}
-
-// MARK: - Battery Monitor
-class BatteryMonitor: ObservableObject {
-    @Published var drainRate: Double = 0.0
-    
-    private var timer: Timer?
-    private var previousBatteryLevel: Float = 0.0
-    private var previousTimestamp: Date = Date()
-    
-    func start() {
-        UIDevice.current.isBatteryMonitoringEnabled = true
-        previousBatteryLevel = UIDevice.current.batteryLevel
-        previousTimestamp = Date()
-        
-        timer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { _ in
-            self.updateBatteryDrainRate()
-        }
-    }
-    
-    func stop() {
-        timer?.invalidate()
-        timer = nil
-        UIDevice.current.isBatteryMonitoringEnabled = false
-    }
-    
-    private func updateBatteryDrainRate() {
-        let currentLevel = UIDevice.current.batteryLevel
-        let currentTime = Date()
-        
-        let levelDrop = previousBatteryLevel - currentLevel
-        let timeElapsed = currentTime.timeIntervalSince(previousTimestamp) / 3600.0 // Convert to hours
-        
-        if timeElapsed > 0 && levelDrop > 0 {
-            let drainRate = Double(levelDrop) / timeElapsed * 100 // Percentage per hour
-            
-            DispatchQueue.main.async {
-                self.drainRate = drainRate
-            }
-        }
-        
-        previousBatteryLevel = currentLevel
-        previousTimestamp = currentTime
-    }
-}
-
-// MARK: - Performance Trace
-class PerformanceTrace {
-    let name: String
-    let id = UUID()
-    private var startTime: Date?
-    
-    #if canImport(FirebasePerformance)
-    var firebaseTrace: Trace?
-    #endif
-    
-    init(name: String) {
-        self.name = name
-    }
-    
-    func start() {
-        startTime = Date()
-    }
-    
-    func stop() -> TimeInterval {
-        guard let startTime = startTime else { return 0 }
-        
-        let duration = Date().timeIntervalSince(startTime)
-        
-        #if canImport(FirebasePerformance)
-        firebaseTrace?.stop()
-        #endif
-        
-        return duration
-    }
-    
-    func addMetric(_ name: String, value: Int64) {
-        #if canImport(FirebasePerformance)
-        firebaseTrace?.setValue(value, forMetric: name)
-        #endif
-    }
-}
-
-// MARK: - Supporting Types
-struct PerformanceMetrics {
-    var cpuUsage: Double = 0.0
-    var memoryUsage: Double = 0.0
-    var networkLatency: TimeInterval = 0.0
-    var frameRate: Double = 60.0
-    var batteryDrainRate: Double = 0.0
-    var timestamp: Date = Date()
-}
-
-struct PerformanceThresholds {
-    let cpuWarning: Double = 80.0
-    let memoryWarning: Double = 500.0 // MB
-    let networkLatencyWarning: TimeInterval = 2.0
-    let frameRateWarning: Double = 30.0
-    let batteryDrainWarning: Double = 20.0 // % per hour
-}
-
-// Note: Renamed to avoid conflict with SharedAgentTypes.PerformanceAlert
-struct SystemPerformanceAlert: Identifiable {
-    let id = UUID()
-    let type: AlertType
-    let message: String
-    let timestamp: Date = Date()
-    
-    enum AlertType: Equatable {
-        case cpuHigh(Double)
-        case memoryHigh(Double)
-        case networkSlow(TimeInterval)
-        case frameRateLow(Double)
-        case batteryDrainHigh(Double)
-        case slowUserAction(String, TimeInterval)
-    }
-    
-    static func cpuHigh(_ usage: Double) -> SystemPerformanceAlert {
-        SystemPerformanceAlert(
-            type: .cpuHigh(usage),
-            message: "High CPU usage: \(String(format: "%.1f", usage))%"
-        )
-    }
-    
-    static func memoryHigh(_ usage: Double) -> SystemPerformanceAlert {
-        SystemPerformanceAlert(
-            type: .memoryHigh(usage),
-            message: "High memory usage: \(String(format: "%.1f", usage))MB"
-        )
-    }
-    
-    static func networkSlow(_ latency: TimeInterval) -> SystemPerformanceAlert {
-        SystemPerformanceAlert(
-            type: .networkSlow(latency),
-            message: "Slow network: \(String(format: "%.2f", latency))s latency"
-        )
-    }
-    
-    static func frameRateLow(_ frameRate: Double) -> SystemPerformanceAlert {
-        SystemPerformanceAlert(
-            type: .frameRateLow(frameRate),
-            message: "Low frame rate: \(String(format: "%.1f", frameRate)) FPS"
-        )
-    }
-    
-    static func batteryDrainHigh(_ drainRate: Double) -> SystemPerformanceAlert {
-        SystemPerformanceAlert(
-            type: .batteryDrainHigh(drainRate),
-            message: "High battery drain: \(String(format: "%.1f", drainRate))%/hour"
-        )
-    }
-    
-    static func slowUserAction(_ action: String, _ duration: TimeInterval) -> SystemPerformanceAlert {
-        SystemPerformanceAlert(
-            type: .slowUserAction(action, duration),
-            message: "Slow \(action): \(String(format: "%.2f", duration))s"
-        )
-    }
-}
-
-enum PerformanceRecommendation {
-    case reduceCPUUsage
-    case optimizeMemory
-    case improveRendering
-    case optimizeNetwork
-    
-    var message: String {
-        switch self {
-        case .reduceCPUUsage:
-            return "Consider reducing background processing or optimizing algorithms"
-        case .optimizeMemory:
-            return "Clear caches or reduce memory-intensive operations"
-        case .improveRendering:
-            return "Simplify UI or reduce animation complexity"
-        case .optimizeNetwork:
-            return "Check network connection or optimize API calls"
-        }
-    }
-}
-
-struct PerformanceReport {
-    let timestamp: Date
-    let metrics: PerformanceMetrics
-    let alerts: [SystemPerformanceAlert]
-    let recommendations: [PerformanceRecommendation]
-}
-
-// MARK: - Performance Monitoring View
-struct PerformanceMonitorView: View {
-    @StateObject private var monitor = PerformanceMonitor.shared
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            HStack {
-                Text("Performance Monitor")
-                    .font(.title2.bold())
-                
-                Spacer()
-                
-                Button(monitor.isMonitoring ? "Stop" : "Start") {
-                    if monitor.isMonitoring {
-                        monitor.stopMonitoring()
-                    } else {
-                        monitor.startMonitoring()
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-            }
-            
-            if monitor.isMonitoring {
-                VStack(spacing: 16) {
-                    MonitorMetricRow(title: "CPU Usage", value: "\(String(format: "%.1f", monitor.currentMetrics.cpuUsage))%")
-                    MonitorMetricRow(title: "Memory Usage", value: "\(String(format: "%.1f", monitor.currentMetrics.memoryUsage))MB")
-                    MonitorMetricRow(title: "Frame Rate", value: "\(String(format: "%.1f", monitor.currentMetrics.frameRate)) FPS")
-                    MonitorMetricRow(title: "Network Latency", value: "\(String(format: "%.2f", monitor.currentMetrics.networkLatency))s")
-                    MonitorMetricRow(title: "Battery Drain", value: "\(String(format: "%.1f", monitor.currentMetrics.batteryDrainRate))%/h")
-                }
-                
-                if !monitor.alerts.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Alerts")
-                            .font(.headline)
-                        
-                        ForEach(monitor.alerts) { alert in
-                            HStack {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(.orange)
-                                
-                                Text(alert.message)
-                                    .font(.caption)
-                                
-                                Spacer()
-                                
-                                Button("Dismiss") {
-                                    monitor.dismissAlert(alert)
-                                }
-                                .font(.caption)
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 4)
-                            .background(Color.orange.opacity(0.1))
-                            .cornerRadius(8)
-                        }
-                    }
-                }
-            }
-        }
-        .padding()
-    }
-}
-
-struct MonitorMetricRow: View {
-    let title: String
-    let value: String
-    
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.secondary)
-            
-            Spacer()
-            
-            Text(value)
-                .font(.caption.monospacedDigit())
-                .fontWeight(.medium)
-        }
-    }
-}
-
-// MARK: - Performance Tracking Extensions
-extension View {
-    func trackPerformance(_ actionName: String) -> some View {
-        self.onTapGesture {
-            let startTime = Date()
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                let duration = Date().timeIntervalSince(startTime)
-                PerformanceMonitor.shared.recordUserAction(actionName, duration: duration)
-            }
-        }
-    }
-    
-    func measureRenderTime(_ viewName: String) -> some View {
-        self.onAppear {
-            let trace = PerformanceMonitor.shared.startTrace("render_\(viewName)")
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                let duration = trace.stop()
-                if duration > 0.5 {
-                    print("⚠️ Slow render: \(viewName) took \(String(format: "%.3f", duration))s")
-                }
-            }
-        }
-    }
-}
-

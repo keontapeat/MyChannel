@@ -88,6 +88,10 @@ class GlobalVideoPlayerManager: ObservableObject {
     // 🔥 YOUTUBE PARITY: Picture-in-Picture support
     private var pipController: AVPictureInPictureController?
     
+    // 🔥 THERMONUCLEAR: Video pre-loading for instant next video
+    private var preloadedAsset: AVURLAsset?
+    private var preloadTask: Task<Void, Never>?
+    
     var upNextVideo: Video? {
         guard queueIndex + 1 < videoQueue.count else { return nil }
         return videoQueue[queueIndex + 1]
@@ -546,6 +550,9 @@ class GlobalVideoPlayerManager: ObservableObject {
         isMiniplayer = !showFullscreen
         shouldShowMiniPlayer = !showFullscreen
         
+        // 🔥 THERMONUCLEAR: Pre-load next video for instant playback
+        preloadNextVideo()
+        
         // 🔥 REAL-TIME VIEW TRACKING: Start tracking this view
         Task {
             await startViewTracking(for: video)
@@ -567,12 +574,63 @@ class GlobalVideoPlayerManager: ObservableObject {
         let nextVideo = videoQueue[queueIndex]
         currentVideo = nextVideo
         
-        stopImmediately()
-        playerManager?.setupPlayer(with: nextVideo)
-        playerManager?.requestAutoPlay()
+        // 🔥 THERMONUCLEAR: Use pre-loaded asset if available (INSTANT START!)
+        if let preloadedAsset = preloadedAsset {
+            let playerItem = AVPlayerItem(asset: preloadedAsset)
+            playerItem.preferredForwardBufferDuration = 10.0  // 10s buffer
+            playerManager?.player?.replaceCurrentItem(with: playerItem)
+            playerManager?.play()
+            print("⚡ [GlobalVideoPlayerManager] Playing next video from pre-loaded asset (INSTANT!)")
+            
+            // Clear pre-loaded asset
+            self.preloadedAsset = nil
+        } else {
+            // Fallback to regular setup
+            stopImmediately()
+            playerManager?.setupPlayer(with: nextVideo)
+            playerManager?.requestAutoPlay()
+            print("▶️ [GlobalVideoPlayerManager] Playing next video: \(nextVideo.title)")
+        }
+        
+        // Pre-load the NEXT next video
+        preloadNextVideo()
         
         HapticManager.shared.impact(style: .medium)
-        print("▶️ [GlobalVideoPlayerManager] Playing next video: \(nextVideo.title)")
+    }
+    
+    // 🔥 THERMONUCLEAR: Pre-load next video in queue for instant playback
+    private func preloadNextVideo() {
+        guard hasNextVideo else {
+            preloadedAsset = nil
+            preloadTask?.cancel()
+            return
+        }
+        
+        let nextVideo = videoQueue[queueIndex + 1]
+        
+        // Cancel previous preload
+        preloadTask?.cancel()
+        
+        preloadTask = Task { [weak self] in
+            guard let self = self else { return }
+            guard let url = URL(string: nextVideo.videoURL) else { return }
+            
+            print("🔄 [GlobalVideoPlayerManager] Pre-loading next video: \(nextVideo.title)")
+            
+            let asset = AVURLAsset(url: url)
+            asset.resourceLoader.preloadsEligibleContentKeys = true
+            
+            // Pre-load tracks and duration (warms up the cache)
+            _ = try? await asset.load(.tracks)
+            _ = try? await asset.load(.duration)
+            _ = try? await asset.load(.isPlayable)
+            
+            await MainActor.run { [weak self] in
+                guard let self = self, !self.isCleanedUp else { return }
+                self.preloadedAsset = asset
+                print("✅ [GlobalVideoPlayerManager] Pre-loaded next video: \(nextVideo.title) - READY FOR INSTANT START!")
+            }
+        }
     }
     
     // 🔥 YOUTUBE PARITY: Navigate to previous video in queue
