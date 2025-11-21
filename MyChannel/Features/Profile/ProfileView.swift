@@ -25,6 +25,13 @@ struct ProfileView: View {
     @State private var watchHistory: [Video] = []
     @State private var isIncognito: Bool = false
     
+    // Video Management
+    @State private var isManagingVideos = false
+    @State private var selectedVideoIDs: Set<String> = []
+    @State private var isBulkDeletingVideos = false
+    @State private var showBulkDeleteConfirmation = false
+    @State private var bulkDeleteErrorMessage: String?
+    
     // ⚡ PERFORMANCE: Pagination state
     @State private var isLoadingMoreVideos = false
     @State private var hasMoreVideos = true
@@ -54,6 +61,23 @@ struct ProfileView: View {
         } else {
             return User.defaultUser
         }
+    }
+    
+    private var isViewingOwnProfile: Bool {
+        currentUser.id == user.id
+    }
+    
+    private var videoManagementContext: VideoManagementContext? {
+        guard isViewingOwnProfile else { return nil }
+        return VideoManagementContext(
+            isManaging: $isManagingVideos,
+            selectedIDs: $selectedVideoIDs,
+            onToggleSelection: { toggleVideoSelection($0) },
+            onSetSelections: { setVideoSelections($0) },
+            onDeleteSelected: { showBulkDeleteConfirmation = true },
+            onExit: { exitVideoManagementMode() },
+            isDeleting: isBulkDeletingVideos
+        )
     }
 
     var body: some View {
@@ -180,6 +204,30 @@ struct ProfileView: View {
         )) {
             EmptyView()
         }
+        .onChange(of: userVideos) { _ in
+            pruneSelectedVideoIDs()
+        }
+        .onChange(of: isManagingVideos) { isManaging in
+            if !isManaging {
+                selectedVideoIDs.removeAll()
+            }
+        }
+        .alert("Delete selected videos?", isPresented: $showBulkDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                deleteSelectedVideos()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This will permanently delete \(selectedVideoIDs.count) video\(selectedVideoIDs.count == 1 ? "" : "s"). This action cannot be undone.")
+        }
+        .alert("Couldn't delete videos", isPresented: Binding(
+            get: { bulkDeleteErrorMessage != nil },
+            set: { if !$0 { bulkDeleteErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(bulkDeleteErrorMessage ?? "")
+        }
     }
 
     // MARK: - Main Profile Content
@@ -211,7 +259,9 @@ struct ProfileView: View {
                         videos: userVideos,
                         onLoadMore: { await loadMoreVideos() },
                         hasMoreVideos: hasMoreVideos,
-                        isLoadingMore: isLoadingMoreVideos
+                        isLoadingMore: isLoadingMoreVideos,
+                        isOwnProfile: isViewingOwnProfile,
+                        videoManagementContext: videoManagementContext
                     )
                 
                 // Quick Actions and Links
@@ -748,6 +798,62 @@ struct ProfileView: View {
             await MainActor.run { hasMoreVideos = false }
         }
         #endif
+    }
+    
+    private func toggleVideoSelection(_ videoId: String) {
+        if selectedVideoIDs.contains(videoId) {
+            selectedVideoIDs.remove(videoId)
+        } else {
+            selectedVideoIDs.insert(videoId)
+        }
+    }
+    
+    private func setVideoSelections(_ ids: [String]) {
+        let availableIDs = Set(userVideos.map { $0.id })
+        selectedVideoIDs = Set(ids.filter { availableIDs.contains($0) })
+    }
+    
+    private func pruneSelectedVideoIDs() {
+        guard !selectedVideoIDs.isEmpty else { return }
+        let availableIDs = Set(userVideos.map { $0.id })
+        selectedVideoIDs = Set(selectedVideoIDs.filter { availableIDs.contains($0) })
+    }
+    
+    private func exitVideoManagementMode() {
+        isManagingVideos = false
+        selectedVideoIDs.removeAll()
+    }
+    
+    private func deleteSelectedVideos() {
+        let idsToDelete = selectedVideoIDs
+        guard !idsToDelete.isEmpty else { return }
+        showBulkDeleteConfirmation = false
+        isBulkDeletingVideos = true
+        
+        Task {
+            do {
+                for id in idsToDelete {
+                    try await VideoFirestoreService.shared.deleteVideo(videoId: id)
+                    try? await DatabaseService.shared.deleteVideo(id: id)
+                    PinnedVideosStore.shared.unpin(id, for: user.id)
+                    await MainActor.run {
+                        userVideos.removeAll { $0.id == id }
+                    }
+                }
+                
+                await MainActor.run {
+                    selectedVideoIDs.removeAll()
+                    isManagingVideos = false
+                    isBulkDeletingVideos = false
+                    recalculateUserStats(propagateGlobalState: true)
+                }
+            } catch {
+                await MainActor.run {
+                    isBulkDeletingVideos = false
+                    bulkDeleteErrorMessage = error.localizedDescription
+                }
+            }
+        }
     }
     
     // MARK: - Profile Content with Tabs

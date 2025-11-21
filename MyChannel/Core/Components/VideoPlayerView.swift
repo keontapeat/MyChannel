@@ -96,7 +96,7 @@ struct VideoPlayerView: View {
                     print("👑 Premium user - no ads")
                     playerManager.setupPlayer(with: video)
                     playerManager.play()
-                    globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: true)
+                    await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: true)
                     return
                 }
                 
@@ -106,7 +106,7 @@ struct VideoPlayerView: View {
                     print("🎬 Your own video - skipping ads, playing instantly!")
                     playerManager.setupPlayer(with: video)
                     playerManager.play()
-                    globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: true)
+                    await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: true)
                     return
                 }
                 
@@ -156,7 +156,7 @@ struct VideoPlayerView: View {
                         adTimeRemaining = max(0, ad.duration)
                         canSkipAd = ad.duration >= 5
                         startAdTimer()
-                        globalPlayer.adoptExternalPlayerManager(playerManager, video: adVideo, showFullscreen: true)
+                        await globalPlayer.adoptExternalPlayerManager(playerManager, video: adVideo, showFullscreen: true)
                         return
                     }
                 }
@@ -167,7 +167,7 @@ struct VideoPlayerView: View {
                     print("🎬 Skipping fallback VAST ads - your video!")
                     playerManager.setupPlayer(with: video)
                     playerManager.play()
-                    globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: true)
+                    await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: true)
                     return
                 }
                 
@@ -205,7 +205,7 @@ struct VideoPlayerView: View {
                         currentAd = nil
                         canSkipAd = false
                     }
-                    globalPlayer.adoptExternalPlayerManager(playerManager, video: adVideo, showFullscreen: true)
+                    await globalPlayer.adoptExternalPlayerManager(playerManager, video: adVideo, showFullscreen: true)
                     return
                 } else {
                     print("❌ No ads available - playing video directly")
@@ -214,7 +214,7 @@ struct VideoPlayerView: View {
                 print("🎬 Setting up main video playback")
                 playerManager.setupPlayer(with: video)
                 playerManager.play()
-                globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: true)
+                await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: true)
             }
         }
         .onDisappear { stopAdTimer() }
@@ -276,7 +276,7 @@ extension VideoPlayerView {
             adTimeRemaining = max(0, ad.duration)
             canSkipAd = ad.duration >= 5
             startAdTimer()
-            globalPlayer.adoptExternalPlayerManager(playerManager, video: adVideo, showFullscreen: true)
+            await globalPlayer.adoptExternalPlayerManager(playerManager, video: adVideo, showFullscreen: true)
             return
         }
         
@@ -302,7 +302,7 @@ extension VideoPlayerView {
                 currentAd = nil
                 canSkipAd = false
             }
-            globalPlayer.adoptExternalPlayerManager(playerManager, video: adVideo, showFullscreen: true)
+            await globalPlayer.adoptExternalPlayerManager(playerManager, video: adVideo, showFullscreen: true)
         }
     }
 }

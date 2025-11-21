@@ -297,7 +297,9 @@ struct VideoDetailView: View {
                     if value.translation.height > 60 {
                         presentFullscreenPlayer()
                     } else if value.translation.height < -60 {
-                        minimizeToMiniPlayer()
+                        Task {
+                            await minimizeToMiniPlayer()
+                        }
                     }
                 }
         )
@@ -865,12 +867,12 @@ struct VideoDetailView: View {
         .navigationBarHidden(true)
         // Hidden PiP host view to drive system PiP
         .overlay(
+            // 🔥 DISABLED: Native PiP Container (we use custom YouTube-style mini-player instead)
+            // PlayerPiPContainerView causes the ugly iOS native PiP to show
+            // We want the YouTube-style floating mini-player that we built in FloatingMiniPlayer.swift
             Group {
-                if let p = playerManager.player {
-                    PlayerPiPContainerView(player: p, isPictureInPictureActive: $isPiPActive)
-                        .frame(width: 0, height: 0)
-                        .hidden()
-                }
+                // Native PiP completely disabled
+                EmptyView()
             }
         )
         // When user returns from fullscreen by dismissing, ensure state is consistent
@@ -966,11 +968,16 @@ struct VideoDetailView: View {
                 .presentationDetents([.large])
         }
         .onChange(of: isPiPActive) { isActive in
-            globalPlayer.isPiPActive = isActive
-            if isActive {
-                globalPlayer.shouldShowMiniPlayer = false
-                globalPlayer.isMiniplayer = false
-            }
+            // 🔥 DISABLE NATIVE PiP: We want custom YouTube-style mini-player instead
+            // Native PiP is ugly and not YouTube parity
+            // Never hide our custom mini-player
+            globalPlayer.isPiPActive = false  // Always keep PiP disabled
+            
+            // Don't hide the custom mini-player
+            // if isActive {
+            //     globalPlayer.shouldShowMiniPlayer = false
+            //     globalPlayer.isMiniplayer = false
+            // }
         }
         .overlay(alignment: .topTrailing) {
             // Video Cards Overlay (YouTube-style)
@@ -1150,10 +1157,24 @@ struct VideoDetailView: View {
             print("🎬 VideoDetailView disappearing")
             playerControlsTimer?.invalidate()
             controlsHideTimer?.invalidate()
+            
+            // 🔥 YOUTUBE PARITY: When you back out of a video, it should drop into the mini player
+            // just like YouTube – even if you never used the swipe-up gesture.
             if !isYouTube {
-                // 🔥 FIX: Only show mini player if NOT going to fullscreen
-                if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen {
-                    globalPlayer.minimizePlayer()
+                // Only try to show mini player if we're not actively going fullscreen
+                if !globalPlayer.showingFullscreen {
+                    Task {
+                        // If the global player hasn't adopted this VideoDetailView's player yet,
+                        // wire it up now so the mini player has a video + AVPlayer to show.
+                        if globalPlayer.currentVideo == nil {
+                            print("🔄 [VideoDetailView] Adopting player manager for mini player on disappear")
+                            await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
+                        }
+                        
+                        if globalPlayer.currentVideo != nil {
+                            globalPlayer.minimizePlayer()
+                        }
+                    }
                 }
                 
                 if !(globalPlayer.isMiniplayer || globalPlayer.showingFullscreen),
@@ -1350,12 +1371,14 @@ struct VideoDetailView: View {
     // MARK: - Gesture Actions
     private func presentFullscreenPlayer() {
         // Hand off the existing manager to the global one and present a true fullscreen overlay
-        globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: true)
+        Task {
+            await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: true)
+        }
         showingFullscreenOverlay = true
     }
 
     @MainActor
-    private func minimizeToMiniPlayer() {
+    private func minimizeToMiniPlayer() async {
         print("🔄 [VideoDetailView] Minimizing to mini player")
         print("📊 [VideoDetailView] Current state - shouldShow: \(globalPlayer.shouldShowMiniPlayer), isMini: \(globalPlayer.isMiniplayer), fullscreen: \(globalPlayer.showingFullscreen)")
         print("📊 [VideoDetailView] Player manager exists: \(playerManager != nil)")
@@ -1365,7 +1388,7 @@ struct VideoDetailView: View {
         // 🔥 FIX: Ensure player continues playing and mini player stays visible
         // Set state BEFORE dismissing to prevent race conditions
         let wasPlaying = playerManager.isPlaying
-        globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
+        await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
         enforceMiniPlayerStateIfNeeded(wasPlaying: wasPlaying, reason: "Initial minimize state")
         
         // 🔥 CRITICAL: Ensure player is playing AFTER adoption
@@ -1414,9 +1437,10 @@ struct VideoDetailView: View {
             return
         }
         
-        globalPlayer.shouldShowMiniPlayer = true
-        globalPlayer.isMiniplayer = true
-        globalPlayer.showingFullscreen = false
+        // 🔥 FIX: Call globalPlayer.minimizePlayer() instead of directly setting state
+        // This ensures the mini-player state is properly synchronized
+        print("🔄 [VideoDetailView] Enforcing mini player state via globalPlayer.minimizePlayer() (\(reason))")
+        globalPlayer.minimizePlayer()
         
         resumeMiniPlayerPlaybackIfNeeded(wasPlaying: wasPlaying, reason: reason)
         print("✅ [VideoDetailView] Mini player state confirmed (\(reason))")
@@ -1443,29 +1467,21 @@ struct VideoDetailView: View {
         }
     }
 
+    // 🔥 YOUTUBE PARITY: Minimize to custom mini-player (NO NATIVE PiP!)
     private func triggerMiniPlayerOrPiP() {
-        print("📺 [VideoDetailView] PiP button tapped")
-        print("📺 [VideoDetailView] PiP supported: \(AVPictureInPictureController.isPictureInPictureSupported())")
-        print("📺 [VideoDetailView] Current PiP state: \(isPiPActive)")
-        print("📺 [VideoDetailView] Current video: \(video.id)")
-        print("📺 [VideoDetailView] Player exists: \(playerManager.player != nil)")
+        print("🔽 [VideoDetailView] Mini-player button tapped")
+        print("   Current video: \(video.id)")
+        print("   Player exists: \(playerManager.player != nil)")
+        print("   Is playing: \(playerManager.isPlaying)")
         
-        // 🔥 PiP ONLY: Start Picture-in-Picture directly
-        if AVPictureInPictureController.isPictureInPictureSupported() {
-            // Toggle PiP state
-            isPiPActive.toggle()
-            print("📺 [VideoDetailView] Toggling PiP: \(isPiPActive)")
-            
-            // If starting PiP, dismiss the view after a short delay
-            if isPiPActive {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    self.dismiss()
-                }
-            }
-        } else {
-            print("⚠️ [VideoDetailView] PiP not supported on this device")
-            // Just dismiss without PiP
-            dismiss()
+        // 🔥 FIX: Always use custom YouTube-style mini-player, NEVER native PiP
+        // Native PiP is the ugly iOS one you see at the bottom
+        // Custom mini-player is the YouTube-style floating one we built
+        
+        Task {
+            // Minimize to custom YouTube-style mini-player
+            await minimizeToMiniPlayer()
+            print("✅ [VideoDetailView] Minimized to custom YouTube-style mini-player")
         }
     }
     

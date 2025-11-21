@@ -7,6 +7,17 @@
 
 import SwiftUI
 
+// MARK: - Video Management Context
+struct VideoManagementContext {
+    let isManaging: Binding<Bool>
+    let selectedIDs: Binding<Set<String>>
+    let onToggleSelection: (String) -> Void
+    let onSetSelections: ([String]) -> Void
+    let onDeleteSelected: () -> Void
+    let onExit: () -> Void
+    let isDeleting: Bool
+}
+
 // MARK: - Safe Profile Content View
 struct SafeProfileContentView: View {
     let selectedTab: ProfileTab
@@ -15,6 +26,8 @@ struct SafeProfileContentView: View {
     var onLoadMore: (() async -> Void)? = nil // ⚡ PERFORMANCE: Pagination callback
     var hasMoreVideos: Bool = false // ⚡ PERFORMANCE: Pagination state
     var isLoadingMore: Bool = false // ⚡ PERFORMANCE: Loading state
+    var isOwnProfile: Bool = false
+    var videoManagementContext: VideoManagementContext? = nil
     
     var body: some View {
         SafeViewWrapper {
@@ -24,7 +37,9 @@ struct SafeProfileContentView: View {
                 videos: videos,
                 onLoadMore: onLoadMore,
                 hasMoreVideos: hasMoreVideos,
-                isLoadingMore: isLoadingMore
+                isLoadingMore: isLoadingMore,
+                isOwnProfile: isOwnProfile,
+                videoManagementContext: videoManagementContext
             )
         } fallback: {
             ProfileContentFallback(selectedTab: selectedTab)
@@ -40,6 +55,8 @@ struct ProfileContentView: View {
     var onLoadMore: (() async -> Void)? = nil // ⚡ PERFORMANCE: Pagination callback
     var hasMoreVideos: Bool = false // ⚡ PERFORMANCE: Pagination state
     var isLoadingMore: Bool = false // ⚡ PERFORMANCE: Loading state
+    let isOwnProfile: Bool
+    var videoManagementContext: VideoManagementContext? = nil
     
     var body: some View {
         LazyVStack(spacing: 0) {
@@ -48,9 +65,11 @@ struct ProfileContentView: View {
                 ProfileVideosView(
                     videos: videos,
                     user: user,
+                    isOwnProfile: isOwnProfile,
                     onLoadMore: onLoadMore,
                     hasMoreVideos: hasMoreVideos,
-                    isLoadingMore: isLoadingMore
+                    isLoadingMore: isLoadingMore,
+                    managementContext: videoManagementContext
                 )
             case .shorts:
                 ProfileShortsView(videos: videos, user: user)
@@ -70,9 +89,11 @@ struct ProfileContentView: View {
 struct ProfileVideosView: View {
     let videos: [Video]
     let user: User
+    let isOwnProfile: Bool
     var onLoadMore: (() async -> Void)? = nil // ⚡ PERFORMANCE: Pagination callback
     var hasMoreVideos: Bool = false // ⚡ PERFORMANCE: Pagination state
     var isLoadingMore: Bool = false // ⚡ PERFORMANCE: Loading state
+    var managementContext: VideoManagementContext? = nil
     
     @State private var layoutMode: VideoLayoutMode = .list1
     @State private var sortMode: SortMode = .newest
@@ -81,6 +102,11 @@ struct ProfileVideosView: View {
         GridItem(.flexible(), spacing: 8),
         GridItem(.flexible(), spacing: 8)
     ]
+    
+    private var isManagementActive: Bool {
+        guard isOwnProfile, let managementContext else { return false }
+        return managementContext.isManaging.wrappedValue
+    }
     
     var body: some View {
         VStack(spacing: 16) {
@@ -130,12 +156,41 @@ struct ProfileVideosView: View {
                 .padding(.bottom, 8)
             }
             
-            HStack {
+            HStack(spacing: 12) {
                 Text("Videos")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                 
                 Spacer()
+                
+                if let management = managementContext, isOwnProfile {
+                    Button {
+                        HapticManager.shared.impact(style: .light)
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            if management.isManaging.wrappedValue {
+                                management.onExit()
+                            } else {
+                                management.isManaging.wrappedValue = true
+                            }
+                        }
+                    } label: {
+                        Text(management.isManaging.wrappedValue ? "Done" : "Manage")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(management.isManaging.wrappedValue ? AppTheme.Colors.textPrimary : .white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .fill(management.isManaging.wrappedValue ? AppTheme.Colors.surface : AppTheme.Colors.primary)
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(AppTheme.Colors.divider.opacity(management.isManaging.wrappedValue ? 0.4 : 0), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(management.isManaging.wrappedValue ? "Exit video management" : "Manage videos")
+                }
                 
                 HStack(spacing: 8) {
                     ForEach(VideoLayoutMode.allCases, id: \.self) { mode in
@@ -180,6 +235,29 @@ struct ProfileVideosView: View {
             }
             .padding(.horizontal, 16)
             
+            if isManagementActive, let management = managementContext {
+                let selectedCount = management.selectedIDs.wrappedValue.count
+                let totalCount = displayVideos.count
+                VideoManagementToolbar(
+                    selectedCount: selectedCount,
+                    totalVisibleCount: totalCount,
+                    isAllSelected: totalCount > 0 && selectedCount >= totalCount,
+                    isDeleting: management.isDeleting,
+                    onSelectOrClearAll: {
+                        if totalCount > 0 && selectedCount >= totalCount {
+                            management.onSetSelections([])
+                        } else {
+                            management.onSetSelections(displayVideos.map { $0.id })
+                        }
+                    },
+                    onDelete: {
+                        management.onDeleteSelected()
+                    }
+                )
+                .padding(.horizontal, 16)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            
             videosBody
                 .id(layoutMode) // force a rebuild when switching modes
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -207,16 +285,31 @@ struct ProfileVideosView: View {
         }
     }
     
+    private func openVideo(_ video: Video) {
+        HapticManager.shared.impact(style: .light)
+        NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
+    }
+    
     @ViewBuilder
     private var videosBody: some View {
         if layoutMode == .grid2 {
             LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(Array(displayVideos.enumerated()), id: \.element.id) { index, video in
-                    ProfileVideoCard(video: video, ownerId: user.id)
+                    let isSelected = managementContext?.selectedIDs.wrappedValue.contains(video.id) ?? false
+                    ProfileVideoCard(
+                        video: video,
+                        ownerId: user.id,
+                        isInManagementMode: isManagementActive,
+                        isSelectedInManagement: isSelected
+                    )
                         .id(video.id) // ⚡ PERFORMANCE: Explicit ID for better diffing
+                        .contentShape(Rectangle())
                         .onTapGesture {
-                            HapticManager.shared.impact(style: .light)
-                            NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
+                            if isManagementActive {
+                                managementContext?.onToggleSelection(video.id)
+                            } else {
+                                openVideo(video)
+                            }
                         }
                         .onAppear {
                             // 🔥 THERMONUCLEAR: Prefetch when 6 from bottom (was 3)
@@ -251,12 +344,17 @@ struct ProfileVideosView: View {
             // Single video view: one full-width 16:9 card per row
             LazyVStack(spacing: 12) {
                 ForEach(Array(displayVideos.enumerated()), id: \.element.id) { index, video in
-                    FullWidthVideoCard(video: video, ownerId: user.id)
+                    let isSelected = managementContext?.selectedIDs.wrappedValue.contains(video.id) ?? false
+                    FullWidthVideoCard(
+                        video: video,
+                        ownerId: user.id,
+                        isInManagementMode: isManagementActive,
+                        isSelectedInManagement: isSelected,
+                        onTapOverride: isManagementActive ? {
+                            managementContext?.onToggleSelection(video.id)
+                        } : nil
+                    )
                         .id(video.id) // ⚡ PERFORMANCE: Explicit ID for better diffing
-                        .onTapGesture {
-                            HapticManager.shared.impact(style: .light)
-                            NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
-                        }
                         .padding(.horizontal, 16)
                         .onAppear {
                             // 🔥 THERMONUCLEAR: Prefetch when 6 from bottom (was 3)
@@ -300,6 +398,8 @@ private enum SortMode: String, CaseIterable {
 struct ProfileVideoCard: View {
     let video: Video
     var ownerId: String? = nil
+    var isInManagementMode: Bool = false
+    var isSelectedInManagement: Bool = false
     @EnvironmentObject private var appState: AppState
     @State private var showOptions = false
     @State private var isSubscribedLocal = false
@@ -328,24 +428,31 @@ struct ProfileVideoCard: View {
                     .padding(6),
                 alignment: .bottomTrailing
             )
-            .overlay(
-                Button {
-                    HapticManager.shared.impact(style: .light)
-                    isSubscribedLocal = appState.isSubscribedTo(video.creator.id)
-                    isWatchLaterLocal = appState.isVideoInWatchLater(video.id)
-                    showOptions = true
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(8)
-                        .background(Color.black.opacity(0.55))
-                        .clipShape(Circle())
+            .overlay(alignment: .topTrailing) {
+                if !isInManagementMode {
+                    Button {
+                        HapticManager.shared.impact(style: .light)
+                        isSubscribedLocal = appState.isSubscribedTo(video.creator.id)
+                        isWatchLaterLocal = appState.isVideoInWatchLater(video.id)
+                        showOptions = true
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(8)
+                            .background(Color.black.opacity(0.55))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(6)
                 }
-                .buttonStyle(.plain)
-                .padding(6),
-                alignment: .topTrailing
-            )
+            }
+            .overlay(alignment: .topLeading) {
+                if isInManagementMode {
+                    SelectionBadge(isSelected: isSelectedInManagement)
+                        .padding(8)
+                }
+            }
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(video.title)
@@ -1008,6 +1115,103 @@ private enum VideoLayoutMode: String, CaseIterable {
     }
 }
 
+private struct VideoManagementToolbar: View {
+    let selectedCount: Int
+    let totalVisibleCount: Int
+    let isAllSelected: Bool
+    let isDeleting: Bool
+    let onSelectOrClearAll: () -> Void
+    let onDelete: () -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Text("\(selectedCount) selected")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Spacer()
+                
+                Button {
+                    onSelectOrClearAll()
+                } label: {
+                    Text(isAllSelected ? "Clear All" : "Select All")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(AppTheme.Colors.surface)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(totalVisibleCount == 0)
+                .opacity(totalVisibleCount == 0 ? 0.5 : 1)
+            }
+            
+            Button {
+                if !isDeleting && selectedCount > 0 {
+                    onDelete()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    if isDeleting {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: "trash.fill")
+                        Text("Delete Selected")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .foregroundColor(.white)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(selectedCount == 0 ? Color.red.opacity(0.4) : Color.red)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(selectedCount == 0 || isDeleting)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(AppTheme.Colors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
+                )
+        )
+    }
+}
+
+private struct SelectionBadge: View {
+    let isSelected: Bool
+    
+    var body: some View {
+        Circle()
+            .strokeBorder(.white.opacity(0.9), lineWidth: 2)
+            .background(
+                Circle()
+                    .fill(isSelected ? AppTheme.Colors.primary : Color.black.opacity(0.45))
+            )
+            .frame(width: 26, height: 26)
+            .overlay(
+                Image(systemName: isSelected ? "checkmark" : "circle")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+            )
+            .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 1)
+    }
+}
+
 private struct StockVideoBannersCarousel: View {
     let banners: [StockVideoBanner]
     @State private var current: Int = 0
@@ -1090,6 +1294,9 @@ private struct StockVideoBanner: Identifiable {
 private struct FullWidthVideoCard: View {
     let video: Video
     var ownerId: String? = nil
+    var isInManagementMode: Bool = false
+    var isSelectedInManagement: Bool = false
+    var onTapOverride: (() -> Void)? = nil
     @EnvironmentObject private var appState: AppState
     @State private var showOptions = false
     @State private var isSubscribedLocal = false
@@ -1145,24 +1352,37 @@ private struct FullWidthVideoCard: View {
             Spacer()
             
             // Three-dot menu
-            Button {
-                HapticManager.shared.impact(style: .light)
-                isSubscribedLocal = appState.isSubscribedTo(video.creator.id)
-                isWatchLaterLocal = appState.isVideoInWatchLater(video.id)
-                showOptions = true
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(AppTheme.Colors.textSecondary)
-                    .padding(8)
+            if !isInManagementMode {
+                Button {
+                    HapticManager.shared.impact(style: .light)
+                    isSubscribedLocal = appState.isSubscribedTo(video.creator.id)
+                    isWatchLaterLocal = appState.isVideoInWatchLater(video.id)
+                    showOptions = true
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                        .padding(8)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+        }
+        .overlay(alignment: .topLeading) {
+            if isInManagementMode {
+                SelectionBadge(isSelected: isSelectedInManagement)
+                    .padding(.top, 4)
+                    .padding(.leading, 4)
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(video.title)
+        .contentShape(Rectangle())
         .onTapGesture {
-            HapticManager.shared.impact(style: .light)
-            NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
+            if let onTapOverride {
+                onTapOverride()
+            } else {
+                defaultTap()
+            }
         }
         .sheet(isPresented: $showOptions) {
             VideoMoreOptionsSheet(
@@ -1178,6 +1398,11 @@ private struct FullWidthVideoCard: View {
             }
         }
         .drawingGroup() // ⚡ PERFORMANCE: Flatten view hierarchy for smoother scrolling
+    }
+    
+    private func defaultTap() {
+        HapticManager.shared.impact(style: .light)
+        NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
     }
 }
 
@@ -1265,7 +1490,8 @@ struct ReactiveViewCountText: View {
     ScrollView {
         ProfileVideosView(
             videos: Array(Video.sampleVideos.prefix(8)),
-            user: User.sampleUsers.first ?? .defaultUser
+            user: User.sampleUsers.first ?? .defaultUser,
+            isOwnProfile: true
         )
     }
     .background(AppTheme.Colors.background)

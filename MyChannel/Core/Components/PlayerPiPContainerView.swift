@@ -2,60 +2,30 @@
 //  PlayerPiPContainerView.swift
 //  MyChannel
 //
-//  AVPlayerLayer-backed view that enables Picture-in-Picture.
+//  🔥 DISABLED: Native iOS Picture-in-Picture
+//  We use custom YouTube-style mini-player instead (FloatingMiniPlayer.swift)
+//  Native PiP is ugly and not YouTube parity - this file is kept for backwards compatibility only
 //
 
 import SwiftUI
 import AVKit
 
-struct PlayerPiPContainerView: UIViewRepresentable {
+// 🔥 DISABLED: This view is now a no-op to prevent native PiP
+struct PlayerPiPContainerView: View {
     let player: AVPlayer
     @Binding var isPictureInPictureActive: Bool
-
-    func makeUIView(context: Context) -> PlayerLayerView {
-        let view = PlayerLayerView()
-        view.playerLayer.player = player
-        if AVPictureInPictureController.isPictureInPictureSupported() {
-            context.coordinator.pipController = AVPictureInPictureController(playerLayer: view.playerLayer)
-            context.coordinator.pipController?.delegate = context.coordinator
-        }
-        return view
+    
+    var body: some View {
+        // 🔥 NATIVE PiP COMPLETELY DISABLED
+        // Return EmptyView to prevent any PiP UI from appearing
+        // Custom YouTube-style mini-player is used instead (FloatingMiniPlayer.swift)
+        EmptyView()
+            .onAppear {
+                // Force PiP to always be disabled
+                isPictureInPictureActive = false
+                print("🚫 [PlayerPiPContainerView] Native PiP disabled - using custom mini-player")
+            }
     }
-
-    func updateUIView(_ uiView: PlayerLayerView, context: Context) {
-        uiView.playerLayer.player = player
-        // 🔥 CRITICAL: Setup PiP controller if not already set
-        if context.coordinator.pipController == nil && AVPictureInPictureController.isPictureInPictureSupported() {
-            context.coordinator.pipController = AVPictureInPictureController(playerLayer: uiView.playerLayer)
-            context.coordinator.pipController?.delegate = context.coordinator
-            context.coordinator.pipController?.canStartPictureInPictureAutomaticallyFromInline = true
-            print("✅ [PlayerPiPContainerView] PiP controller created")
-        }
-        
-        // Start/stop PiP based on binding
-        if isPictureInPictureActive {
-            context.coordinator.startPiP()
-        } else {
-            context.coordinator.stopPiP()
-        }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(isActive: $isPictureInPictureActive) }
-
-    final class Coordinator: NSObject, AVPictureInPictureControllerDelegate {
-        var pipController: AVPictureInPictureController?
-        @Binding var isActive: Bool
-        init(isActive: Binding<Bool>) { _isActive = isActive }
-        func startPiP() { if pipController?.isPictureInPictureActive == false { pipController?.startPictureInPicture() } }
-        func stopPiP() { if pipController?.isPictureInPictureActive == true { pipController?.stopPictureInPicture() } }
-        func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) { isActive = true }
-        func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) { isActive = false }
-    }
-}
-
-final class PlayerLayerView: UIView {
-    override class var layerClass: AnyClass { AVPlayerLayer.self }
-    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
 }
 
 

@@ -606,6 +606,13 @@ class VideoPlayerManager: ObservableObject {
         seek(to: progress)
     }
     
+    func seekToTime(_ time: TimeInterval) {
+        guard !isCleanedUp else { return }
+        let clampedTime = max(0, min(time, duration))
+        let progress = duration > 0 ? clampedTime / duration : 0
+        seek(to: progress)
+    }
+    
     func setPlaybackRate(_ rate: Float) {
         guard !isCleanedUp else { return }
         player?.rate = rate

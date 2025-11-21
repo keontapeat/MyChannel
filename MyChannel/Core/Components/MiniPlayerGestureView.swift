@@ -20,6 +20,7 @@ struct MiniPlayerGestureView: View {
             .fill(Color.clear)
             .contentShape(Rectangle())
             .onTapGesture {
+                print("📺 [MiniPlayerGestureView] onTap triggered")
                 onTap()
             }
             .gesture(
@@ -27,6 +28,7 @@ struct MiniPlayerGestureView: View {
                     .onChanged { value in
                         if !isDragging {
                             isDragging = true
+                                print("📺 [MiniPlayerGestureView] drag started, translation=\(value.translation)")
                         }
                         dragOffset = value.translation
                     }
@@ -38,9 +40,11 @@ struct MiniPlayerGestureView: View {
                         if abs(value.translation.height) > abs(value.translation.width) {
                             if value.translation.height < -50 {
                                 // Swipe up
+                                    print("📺 [MiniPlayerGestureView] onSwipeUp triggered, translation=\(value.translation)")
                                 onSwipeUp()
                             } else if value.translation.height > 50 {
                                 // Swipe down
+                                    print("📺 [MiniPlayerGestureView] onSwipeDown triggered, translation=\(value.translation)")
                                 onSwipeDown()
                             }
                         }

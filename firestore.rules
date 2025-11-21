@@ -3,6 +3,14 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // ========================================
+    // 🚫 NATIVE iOS PiP - PERMANENTLY DISABLED
+    // ========================================
+    // NOTE: Native iOS Picture-in-Picture is COMPLETELY DISABLED
+    // We use custom YouTube-style mini-player (FloatingMiniPlayer.swift)
+    // Firestore rules don't affect PiP, but this is documented here for clarity
+    // See .cursorrules for full PiP disable rules
+    
+    // ========================================
     // 🔥 THERMONUCLEAR PERFORMANCE HELPERS
     // ========================================
     

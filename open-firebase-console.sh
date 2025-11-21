@@ -65,3 +65,5 @@ else
     echo "Manual: Copy contents of firestore.rules file"
 fi
 
+
+

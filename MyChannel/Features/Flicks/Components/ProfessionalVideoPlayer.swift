@@ -243,7 +243,9 @@ struct ProfessionalVideoPlayer: View {
     }
 
     private func adoptGlobalManager() {
-        globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
+        Task {
+            await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
+        }
         globalPlayer.shouldShowMiniPlayer = false
     }
 

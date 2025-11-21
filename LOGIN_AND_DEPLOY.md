@@ -74,3 +74,5 @@ Then refresh the Indexes page in Firebase Console - you'll see the new index!
 
 **CHOOSE YOUR METHOD AND DO IT NOW!** 🔥💪
 
+
+

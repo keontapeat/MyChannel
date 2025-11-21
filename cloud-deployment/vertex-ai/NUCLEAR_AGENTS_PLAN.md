@@ -174,3 +174,5 @@ cd /Users/keonta/Documents/MyChannel/cloud-deployment/vertex-ai
 
 
 
+
+

@@ -39,6 +39,50 @@ final class MusicCatalogService: ObservableObject {
     static let shared = MusicCatalogService()
     private init() {}
     
+    private let appleRSSBaseURL = "https://rss.applemarketingtools.com/api/v2"
+    private let spotlightSeeds: [String] = [
+        "Sabrina Carpenter Espresso",
+        "Sabrina Carpenter Please Please Please",
+        "Post Malone Morgan Wallen I Had Some Help",
+        "Kendrick Lamar Not Like Us",
+        "Taylor Swift Fortnight",
+        "Tommy Richman Million Dollar Baby",
+        "Chappell Roan Good Luck Babe",
+        "Benson Boone Beautiful Things",
+        "Billie Eilish Birds of a Feather",
+        "Hozier Too Sweet",
+        "Teddy Swims Lose Control",
+        "Zach Bryan Pink Skies"
+    ]
+    private let artistSeeds: [String] = [
+        "Taylor Swift",
+        "Beyoncé",
+        "Bad Bunny",
+        "Olivia Rodrigo",
+        "Drake",
+        "Billie Eilish",
+        "Peso Pluma",
+        "Morgan Wallen",
+        "Karol G",
+        "SZA"
+    ]
+    private let albumSeeds: [String] = [
+        "The Tortured Poets Department",
+        "Cowboy Carter",
+        "HIT ME HARD AND SOFT",
+        "SOS",
+        "Stick Season",
+        "GUTS",
+        "ENDLESS SUMMER VACATION",
+        "For All The Dogs",
+        "Vultures",
+        "Eternal Sunshine"
+    ]
+    
+    private var spotlightCache: [CatalogSong] = []
+    private var artistCache: [CatalogArtist] = []
+    private var albumCache: [CatalogAlbum] = []
+    
     // MARK: - Public API
     func searchSongs(term: String, limit: Int = 50, country: String = "US") async throws -> [CatalogSong] {
         let q = term.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? term
@@ -47,9 +91,10 @@ final class MusicCatalogService: ObservableObject {
     }
     
     func topSongs(limit: Int = 50, country: String = "US") async throws -> [CatalogSong] {
-        // Basic feed via search with empty term sorted by popularity is not supported directly; use a common query
-        // Use a broad genre term to get popular items quickly
-        return try await searchSongs(term: "top songs", limit: limit, country: country)
+        if let chart = try? await fetchAppleMusicChart(limit: limit, country: country), !chart.isEmpty {
+            return chart
+        }
+        return try await searchSongs(term: "top hits", limit: limit, country: country)
     }
     
     func genreSongs(_ genreKeyword: String, limit: Int = 50, country: String = "US") async throws -> [CatalogSong] {
@@ -94,6 +139,42 @@ final class MusicCatalogService: ObservableObject {
         return try await fetchSongs(from: urlString)
     }
     
+    func curatedSpotlightSongs() async -> [CatalogSong] {
+        if !spotlightCache.isEmpty { return spotlightCache }
+        var collected: [CatalogSong] = []
+        for seed in spotlightSeeds {
+            if let song = try? await searchSongs(term: seed, limit: 1).first {
+                collected.append(song)
+            }
+        }
+        spotlightCache = dedupeSongs(collected)
+        return spotlightCache
+    }
+    
+    func curatedArtists() async -> [CatalogArtist] {
+        if !artistCache.isEmpty { return artistCache }
+        var collected: [CatalogArtist] = []
+        for seed in artistSeeds {
+            if let artist = try? await searchArtists(term: seed, limit: 1).first {
+                collected.append(artist)
+            }
+        }
+        artistCache = dedupeArtists(collected)
+        return artistCache
+    }
+    
+    func curatedAlbums() async -> [CatalogAlbum] {
+        if !albumCache.isEmpty { return albumCache }
+        var collected: [CatalogAlbum] = []
+        for seed in albumSeeds {
+            if let album = try? await searchAlbums(term: seed, limit: 1).first {
+                collected.append(album)
+            }
+        }
+        albumCache = dedupeAlbums(collected)
+        return albumCache
+    }
+    
     // MARK: - Internal
     private func fetchSongs(from urlString: String) async throws -> [CatalogSong] {
         guard let url = URL(string: urlString) else { return [] }
@@ -119,6 +200,60 @@ final class MusicCatalogService: ObservableObject {
         guard let url else { return nil }
         return url.replacingOccurrences(of: "100x100bb", with: "600x600bb")
     }
+    
+    private func fetchAppleMusicChart(limit: Int, country: String) async throws -> [CatalogSong] {
+        let normalizedLimit = min(max(limit, 10), 100)
+        let urlString = "\(appleRSSBaseURL)/\(country.lowercased())/music/most-played/\(normalizedLimit)/songs.json"
+        guard let url = URL(string: urlString) else { return [] }
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let http = response as? HTTPURLResponse, 200...299 ~= http.statusCode else { return [] }
+        let decoded = try JSONDecoder().decode(AppleMusicRSSResponse.self, from: data)
+        return decoded.feed.results.prefix(limit).map { item in
+            CatalogSong(
+                id: Int(item.id) ?? item.id.hashValue,
+                title: item.name,
+                artist: item.artistName,
+                artworkUrl: upgradedArtwork(from: item.artworkUrl100),
+                previewUrl: item.previewUrl,
+                trackViewUrl: item.url,
+                collectionName: item.albumName,
+                primaryGenreName: item.genreName
+            )
+        }
+    }
+    
+    private func dedupeSongs(_ songs: [CatalogSong]) -> [CatalogSong] {
+        var seen: Set<Int> = []
+        var result: [CatalogSong] = []
+        for song in songs {
+            if seen.insert(song.id).inserted {
+                result.append(song)
+            }
+        }
+        return result
+    }
+    
+    private func dedupeArtists(_ artists: [CatalogArtist]) -> [CatalogArtist] {
+        var seen: Set<Int> = []
+        var result: [CatalogArtist] = []
+        for artist in artists {
+            if seen.insert(artist.id).inserted {
+                result.append(artist)
+            }
+        }
+        return result
+    }
+    
+    private func dedupeAlbums(_ albums: [CatalogAlbum]) -> [CatalogAlbum] {
+        var seen: Set<Int> = []
+        var result: [CatalogAlbum] = []
+        for album in albums {
+            if seen.insert(album.id).inserted {
+                result.append(album)
+            }
+        }
+        return result
+    }
 }
 
 // MARK: - iTunes Search Models
@@ -140,6 +275,37 @@ private struct iTunesTrack: Codable {
     let collectionViewUrl: String?
     let primaryGenreName: String?
     let artistLinkUrl: String?
+}
+
+// MARK: - Apple Music RSS
+private struct AppleMusicRSSResponse: Codable {
+    let feed: AppleMusicRSSFeed
+}
+
+private struct AppleMusicRSSFeed: Codable {
+    let results: [AppleMusicRSSResult]
+}
+
+private struct AppleMusicRSSResult: Codable {
+    let id: String
+    let name: String
+    let artistName: String
+    let url: String
+    let albumName: String?
+    let artworkUrl100: String
+    let genres: [AppleMusicGenre]?
+    let previews: [AppleMusicPreview]?
+    
+    var previewUrl: String? { previews?.first?.url }
+    var genreName: String? { genres?.first?.name }
+}
+
+private struct AppleMusicGenre: Codable {
+    let name: String
+}
+
+private struct AppleMusicPreview: Codable {
+    let url: String
 }
 
 

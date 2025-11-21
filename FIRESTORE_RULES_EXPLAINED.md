@@ -429,3 +429,5 @@ firebase deploy --only firestore:rules
 
 **That's it! Your entire platform is now SECURE!** 🎉🔥
 
+
+

@@ -351,6 +351,25 @@ struct ProfileSettingsView: View {
                     .padding(.vertical, 4)
                 }
                 
+                NavigationLink(destination: OwnerVerificationDashboardView()) {
+                    HStack {
+                        SettingsIcon(systemName: "checkmark.seal", color: AppTheme.Colors.verificationBlue)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Verification Dashboard")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppTheme.Colors.textPrimary)
+                            Text("Approve blue checks for top creators")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(AppTheme.Colors.textSecondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                
                 // Legacy Manager (hidden unless needed)
                 NavigationLink(destination: OwnerFeaturedManagerView()) {
                     HStack {

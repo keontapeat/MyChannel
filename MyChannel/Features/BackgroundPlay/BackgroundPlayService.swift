@@ -35,6 +35,14 @@ class BackgroundPlayService: ObservableObject {
         case stopped, playing, paused, buffering
     }
     
+    var isActive: Bool {
+        backgroundPlaybackState == .playing || backgroundPlaybackState == .paused || player != nil
+    }
+    
+    var currentPlaybackTime: TimeInterval {
+        player?.currentTime().seconds ?? 0
+    }
+    
     private init() {
         audioSession = AVAudioSession.sharedInstance()
         remoteCommandCenter = MPRemoteCommandCenter.shared()
@@ -103,13 +111,15 @@ class BackgroundPlayService: ObservableObject {
     
     /// Stop background playback
     func stopBackgroundPlay() {
-        player?.pause()
-        player = nil
-        
-        if let timeObserver = timeObserver {
-            player?.removeTimeObserver(timeObserver)
-            self.timeObserver = nil
+        if let player = player {
+            player.pause()
+            if let timeObserver = timeObserver {
+                player.removeTimeObserver(timeObserver)
+            }
         }
+        
+        timeObserver = nil
+        player = nil
         
         backgroundPlaybackState = .stopped
         currentlyPlayingInBackground = nil
@@ -151,7 +161,10 @@ class BackgroundPlayService: ObservableObject {
     // MARK: - Private Setup Methods
     
     private func setupBackgroundPlayback() {
-        // Load saved preference
+        // Load saved preference and default to enabled if never set (YouTube parity)
+        if UserDefaults.standard.object(forKey: "backgroundPlayEnabled") == nil {
+            UserDefaults.standard.set(true, forKey: "backgroundPlayEnabled")
+        }
         isBackgroundPlayEnabled = UserDefaults.standard.bool(forKey: "backgroundPlayEnabled")
         
         // Monitor app state changes

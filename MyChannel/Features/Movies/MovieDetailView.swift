@@ -588,7 +588,9 @@ struct MovieDetailView: View {
             let vm = VideoPlayerManager()
             vm.setupPlayer(with: directVideo)
             vm.play() // autoplay before adopting so global state reflects Playing
-            GlobalVideoPlayerManager.shared.adoptExternalPlayerManager(vm, video: directVideo, showFullscreen: true)
+            Task {
+                await GlobalVideoPlayerManager.shared.adoptExternalPlayerManager(vm, video: directVideo, showFullscreen: true)
+            }
             showPlayer = true
         } else {
             // Prefer in-app trailer playback

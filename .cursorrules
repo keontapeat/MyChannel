@@ -431,12 +431,125 @@ let count = await RealtimeViewTracker.shared.getViewCount(for: videoId)
 
 ### Video Player
 - Use `GlobalVideoPlayerManager.shared` for centralized playback
-- Support Picture-in-Picture (PiP)
-- Mini player for background playback
+- ❌ **NATIVE iOS PiP IS COMPLETELY DISABLED** - Use custom YouTube-style mini-player ONLY
+- ✅ Custom YouTube-style mini-player for background playback (`FloatingMiniPlayer.swift`)
 - Quality selection (240p - 4K)
 - Playback speed control
 - Chapters support
 - Subtitles/captions
+
+### 🚫 NATIVE iOS PiP - PERMANENTLY DISABLED
+
+**CRITICAL:** Native iOS Picture-in-Picture is **COMPLETELY DISABLED** across the entire app. We use a custom YouTube-style floating mini-player instead.
+
+#### Why Native PiP is Disabled
+1. **Not YouTube Parity**: Native PiP looks ugly and doesn't match YouTube's UX
+2. **Poor UX**: System PiP UI is not customizable and looks out of place
+3. **Custom is Better**: Our `FloatingMiniPlayer.swift` provides superior YouTube-style experience
+
+#### Rules for Native PiP
+- ❌ **NEVER use `PlayerPiPContainerView`** - It's disabled (returns `EmptyView`)
+- ❌ **NEVER use `AVPictureInPictureController`** - Completely banned
+- ❌ **NEVER call `startPictureInPicture()`** or `stopPictureInPicture()`
+- ❌ **NEVER set `isPiPActive = true`** anywhere in the code
+- ❌ **NEVER import `AVKit`** for PiP functionality
+- ❌ **NEVER enable `canStartPictureInPictureAutomaticallyFromInline`**
+- ❌ **NEVER auto-start PiP** when app backgrounds
+- ✅ **ALWAYS use `FloatingMiniPlayer.swift`** for mini-player functionality
+- ✅ **ALWAYS call `globalPlayer.minimizePlayer()`** to show custom mini-player
+- ✅ **ALWAYS ensure `shouldShowMiniPlayer = true`** for YouTube-style mini-player
+
+#### Custom YouTube-Style Mini-Player Only
+```swift
+// ✅ CORRECT: Use custom YouTube-style mini-player
+// When user backs out of video
+func onDisappear() {
+    if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen {
+        globalPlayer.minimizePlayer()  // Shows custom FloatingMiniPlayer
+    }
+}
+
+// ❌ WRONG: Native PiP (BANNED!)
+if AVPictureInPictureController.isPictureInPictureSupported() {
+    pipController.startPictureInPicture()  // NEVER DO THIS!
+}
+
+// ❌ WRONG: PlayerPiPContainerView (DISABLED!)
+PlayerPiPContainerView(player: player, isPictureInPictureActive: $isPiPActive)
+// This now returns EmptyView() and sets isPiPActive = false
+
+// ✅ CORRECT: FloatingMiniPlayer (Custom YouTube-style)
+FloatingMiniPlayer()  // This is what appears when video minimizes
+    .zIndex(9999)  // Above everything
+```
+
+#### Disabled Files
+- `PlayerPiPContainerView.swift` - Converted to no-op (returns `EmptyView`)
+- All `AVPictureInPictureController` references - Removed or disabled
+- Auto-PiP on background logic - Completely removed
+
+#### YouTube-Style Mini-Player Features
+- ✅ Appears at **bottom of screen** (above tab bar)
+- ✅ Shows **live video preview** (not static thumbnail)
+- ✅ Has **play/pause button**
+- ✅ Has **close button** (X)
+- ✅ Shows **video title** and **creator name**
+- ✅ **Tap to expand** back to fullscreen
+- ✅ **Smooth slide-up animation** from bottom
+- ✅ **Persists across app** (home, flicks, search, etc.)
+- ✅ **Works on all views** via `MainTabView` overlay
+
+#### Implementation Pattern
+```swift
+// GlobalVideoPlayerManager.swift
+func minimizePlayer() {
+    showingFullscreen = false
+    isMiniplayer = true
+    shouldShowMiniPlayer = true  // Triggers FloatingMiniPlayer to appear
+    isTransitioning = true
+    
+    Task { @MainActor in
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        isTransitioning = false
+    }
+}
+
+// VideoDetailView.swift - onDisappear
+.onDisappear {
+    if !isYouTube {
+        if !globalPlayer.showingFullscreen {
+            Task {
+                if globalPlayer.currentVideo == nil {
+                    await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
+                }
+                if globalPlayer.currentVideo != nil {
+                    globalPlayer.minimizePlayer()  // Shows custom mini-player
+                }
+            }
+        }
+    }
+}
+
+// FloatingMiniPlayer.swift - Rendering condition
+if let video = globalPlayer.currentVideo,
+   !globalPlayer.showingFullscreen,
+   globalPlayer.shouldShowMiniPlayer,
+   !globalPlayer.isTransitioning,
+   !globalPlayer.isCleanedUp {
+    // Show custom YouTube-style mini-player
+    youtubeStyleMiniPlayer(video: video, geometry: geometry)
+}
+```
+
+#### Testing Native PiP is Disabled
+1. Play any video in fullscreen
+2. Back out (swipe down or tap back)
+3. ✅ **Custom YouTube-style mini-player appears** at bottom
+4. ❌ **Native iOS PiP NEVER appears** (system PiP UI)
+5. Background the app → ✅ Custom mini-player persists
+6. Foreground the app → ✅ Custom mini-player still visible
+
+**IF YOU SEE NATIVE iOS PiP ANYWHERE, IT'S A BUG - FIX IMMEDIATELY!** 🚨
 
 ### Video Upload Flow
 1. `UploadView`: Select video file

@@ -20,6 +20,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         case location, website, socialLinks
         case followerCount, followingCount, joinDate
         case totalViews, totalEarnings, membershipTiers
+        case verificationBadge
     }
     let id: String
     let username: String
@@ -50,6 +51,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
     let totalViews: Int?
     let totalEarnings: Double?
     let membershipTiers: [MembershipTier]?
+    let verificationBadge: VerificationBadge?
     
     init(
         id: String = UUID().uuidString,
@@ -75,7 +77,8 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         membershipTiers: [MembershipTier]? = nil,
         bannerVideoURL: String? = nil,
         bannerVideoMuted: Bool? = nil,
-        bannerVideoContentMode: UserBannerContentMode? = nil
+        bannerVideoContentMode: UserBannerContentMode? = nil,
+        verificationBadge: VerificationBadge? = nil
     ) {
         self.id = id
         self.username = username
@@ -101,6 +104,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         self.totalViews = totalViews
         self.totalEarnings = totalEarnings
         self.membershipTiers = membershipTiers
+        self.verificationBadge = verificationBadge
     }
     
     /// Return a copy of the user with updated stats while preserving immutable identity fields.
@@ -192,6 +196,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         totalViews = try container.decodeIfPresent(Int.self, forKey: .totalViews)
         totalEarnings = try container.decodeIfPresent(Double.self, forKey: .totalEarnings)
         membershipTiers = try container.decodeIfPresent([MembershipTier].self, forKey: .membershipTiers)
+        verificationBadge = try container.decodeIfPresent(VerificationBadge.self, forKey: .verificationBadge)
     }
     
     // MARK: - Custom Encoding
@@ -222,6 +227,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         try container.encodeIfPresent(totalViews, forKey: .totalViews)
         try container.encodeIfPresent(totalEarnings, forKey: .totalEarnings)
         try container.encodeIfPresent(membershipTiers, forKey: .membershipTiers)
+        try container.encodeIfPresent(verificationBadge, forKey: .verificationBadge)
     }
 }
 
@@ -347,12 +353,53 @@ extension User {
     
     /// 🔥 YOUTUBE PARITY: Show verification badge if verified OR if owner
     var shouldShowVerificationBadge: Bool {
-        isVerified || isOwner
+        isVerified || verificationBadge?.status == .verified || isOwner
     }
     
     /// Get effective verification status (verified OR owner)
     var effectiveIsVerified: Bool {
-        isVerified || isOwner
+        isVerified || verificationBadge?.status == .verified || isOwner
+    }
+    
+    var verificationStatus: VerificationStatus {
+        if isOwner { return .verified }
+        return verificationBadge?.status ?? (isVerified ? .verified : .notEligible)
+    }
+}
+
+// MARK: - Verification Helpers
+extension User {
+    func replacingVerification(
+        isVerified: Bool,
+        badge: VerificationBadge?
+    ) -> User {
+        User(
+            id: id,
+            username: username,
+            displayName: displayName,
+            email: email,
+            profileImageURL: profileImageURL,
+            bannerImageURL: bannerImageURL,
+            bio: bio,
+            subscriberCount: subscriberCount,
+            videoCount: videoCount,
+            isVerified: isVerified,
+            isCreator: isCreator,
+            createdAt: createdAt,
+            location: location,
+            website: website,
+            socialLinks: socialLinks,
+            followerCount: followerCount,
+            followingCount: followingCount,
+            joinDate: joinDate,
+            totalViews: totalViews,
+            totalEarnings: totalEarnings,
+            membershipTiers: membershipTiers,
+            bannerVideoURL: bannerVideoURL,
+            bannerVideoMuted: bannerVideoMuted,
+            bannerVideoContentMode: bannerVideoContentMode,
+            verificationBadge: badge
+        )
     }
 }
 

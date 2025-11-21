@@ -13,6 +13,7 @@ struct ImmersiveFullscreenPlayerView: View {
     let onExitFullscreen: () -> Void
 
     @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
+    @Environment(\.dismiss) private var dismiss  // 🔥 ADD: For minimizing to mini-player
     @State private var showControls = true
     @State private var dragOffset: CGFloat = 0
     @State private var isPiPActive: Bool = false
@@ -25,7 +26,10 @@ struct ImmersiveFullscreenPlayerView: View {
             // Reuse the global player's AVPlayer (already adopted from caller)
             if let player = globalPlayer.player {
                 ZStack {
-                    PlayerPiPContainerView(player: player, isPictureInPictureActive: $isPiPActive)
+                    // 🚫 NATIVE PiP DISABLED: Use standard VideoPlayer instead
+                    // Old: PlayerPiPContainerView (causes ugly native PiP)
+                    // New: VideoPlayer (works with custom mini-player)
+                    VideoPlayer(player: player)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     // Tap to toggle controls
                         .contentShape(Rectangle())
@@ -252,11 +256,14 @@ struct ImmersiveFullscreenPlayerView: View {
                         
                         Spacer()
                         
-                        // Fullscreen toggle (to exit)
+                        // 🚫 NATIVE PiP DISABLED: Minimize to custom mini-player instead
                         Button {
-                            isPiPActive.toggle()
+                            // ❌ OLD: isPiPActive.toggle() (native PiP - DISABLED)
+                            // ✅ NEW: Minimize to custom YouTube-style mini-player
+                            globalPlayer.minimizePlayer()
+                            dismiss()
                         } label: {
-                            Image(systemName: isPiPActive ? "pip.exit" : "pip.enter")
+                            Image(systemName: "pip.enter")  // Always show minimize icon
                                 .font(.system(size: 20, weight: .medium))
                                 .foregroundColor(.white)
                                 .frame(width: 44, height: 44)

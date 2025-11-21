@@ -9,6 +9,12 @@ import SwiftUI
 import AVFoundation
 import Photos
 import Combine
+#if canImport(FirebaseCore)
+import FirebaseCore
+#endif
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 // MARK: - Ultimate Story ViewModel
 @MainActor
@@ -54,6 +60,7 @@ class UltimateStoryViewModel: ObservableObject {
     
     private var cancellables = Set<AnyCancellable>()
     private let storyService = StoryService.shared
+    private let parityEngine = FacebookParityStoryEngine.shared
     
     // MARK: - Computed Properties
     var hasMedia: Bool {
@@ -67,6 +74,21 @@ class UltimateStoryViewModel: ObservableObject {
         // Apply AI enhancements if enabled
         if aiEnhanceEnabled {
             await applyAIEnhancements()
+        }
+    }
+
+    func processCapturedVideo(at url: URL, focusPoint: CGPoint = CGPoint(x: 0.5, y: 0.5), mode: RecordingMode) async throws -> URL {
+        switch mode {
+        case .boomerang:
+            return try await parityEngine.applyBoomerang(to: url)
+        case .superzoom:
+            return try await parityEngine.applySuperzoom(to: url, focusPoint: focusPoint)
+        case .slowMotion:
+            return try await parityEngine.applySlowMotion(to: url, rate: 0.5)
+        case .timeWarp:
+            return try await parityEngine.applyTimeWarp(to: url)
+        default:
+            return url
         }
     }
     
@@ -577,6 +599,32 @@ enum RecordingMode: String, CaseIterable, Identifiable {
         case .timeWarp: return .orange
         }
     }
+    
+    var processingMessage: String? {
+        switch self {
+        case .boomerang:
+            return "Creating Boomerang..."
+        case .superzoom:
+            return "Applying Superzoom..."
+        case .slowMotion:
+            return "Building slow motion..."
+        case .timeWarp:
+            return "Applying time warp..."
+        default:
+            return nil
+        }
+    }
+    
+    var autoRecordDuration: TimeInterval? {
+        switch self {
+        case .boomerang:
+            return 1.2
+        case .superzoom:
+            return 3.0
+        default:
+            return nil
+        }
+    }
 }
 
 // MARK: - Editing Tool
@@ -610,8 +658,141 @@ class StoryService {
     static let shared = StoryService()
     
     func saveStory(_ story: Story) async throws {
-        // TODO: Save to Firestore
-        print("✅ Story saved: \(story.id)")
+        #if canImport(FirebaseFirestore)
+        guard FirebaseApp.app() != nil else {
+            throw StoryError.processingFailed("Firebase is not configured")
+        }
+        
+        let db = Firestore.firestore()
+        let storiesRef = db.collection("stories").document(story.id)
+        
+        var data: [String: Any] = [
+            "id": story.id,
+            "creatorId": story.creatorId,
+            "mediaURL": story.mediaURL,
+            "mediaType": story.mediaType.rawValue,
+            "duration": story.duration,
+            "viewCount": story.viewCount,
+            "isViewed": story.isViewed,
+            "isLive": story.isLive,
+            "createdAt": Timestamp(date: story.createdAt),
+            "expiresAt": Timestamp(date: story.expiresAt)
+        ]
+        
+        if let caption = story.caption { data["caption"] = caption }
+        if let text = story.text { data["text"] = text }
+        if let backgroundColor = story.backgroundColor { data["backgroundColor"] = backgroundColor }
+        if let textColor = story.textColor { data["textColor"] = textColor }
+        if let thumbnail = story.thumbnail { data["thumbnail"] = thumbnail }
+        if let music = story.music {
+            data["music"] = [
+                "id": music.id,
+                "title": music.title,
+                "artist": music.artist,
+                "previewURL": music.previewURL,
+                "duration": music.duration,
+                "startTime": music.startTime
+            ]
+        }
+        
+        data["content"] = story.content.map { content in
+            var contentData: [String: Any] = [
+                "id": content.id,
+                "url": content.url,
+                "type": content.type.rawValue,
+                "duration": content.duration
+            ]
+            if let text = content.text { contentData["text"] = text }
+            if let backgroundColor = content.backgroundColor { contentData["backgroundColor"] = backgroundColor }
+            return contentData
+        }
+        
+        data["stickers"] = story.stickers.map { sticker in
+            var stickerData: [String: Any] = [
+                "id": sticker.id,
+                "type": sticker.type.rawValue,
+                "x": sticker.x,
+                "y": sticker.y,
+                "scale": sticker.scale,
+                "rotation": sticker.rotation
+            ]
+            
+            stickerData["data"] = serializeStickerData(sticker.data)
+            return stickerData
+        }
+        
+        data["polls"] = story.polls.map { poll in
+            [
+                "id": poll.id,
+                "question": poll.question,
+                "options": poll.options.map { option in
+                    [
+                        "id": option.id,
+                        "text": option.text,
+                        "voteCount": option.voteCount,
+                        "color": option.color
+                    ]
+                },
+                "x": poll.x,
+                "y": poll.y,
+                "expiresAt": Timestamp(date: poll.expiresAt)
+            ]
+        }
+        
+        data["links"] = story.links.map { link in
+            var linkData: [String: Any] = [
+                "id": link.id,
+                "url": link.url,
+                "title": link.title,
+                "x": link.x,
+                "y": link.y
+            ]
+            if let description = link.description { linkData["description"] = description }
+            if let imageURL = link.imageURL { linkData["imageURL"] = imageURL }
+            return linkData
+        }
+        
+        try await storiesRef.setData(data)
+        
+        let collectionRef = db.collection("story-collections").document(story.creatorId)
+        try await collectionRef.setData([
+            "creatorId": story.creatorId,
+            "latestStoryId": story.id,
+            "updatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
+        #else
+        print("⚠️ Firestore not available - skipping save for story \(story.id)")
+        #endif
     }
+    
+    #if canImport(FirebaseFirestore)
+    private func serializeStickerData(_ data: StickerData) -> [String: Any] {
+        switch data {
+        case .emoji(let value):
+            return ["kind": "emoji", "value": value]
+        case .gif(let value):
+            return ["kind": "gif", "value": value]
+        case .location(let name, let lat, let lng):
+            return ["kind": "location", "name": name, "lat": lat, "lng": lng]
+        case .mention(let user):
+            return ["kind": "mention", "userId": user.id, "username": user.username]
+        case .hashtag(let hashtag):
+            return ["kind": "hashtag", "value": hashtag]
+        case .time(let date):
+            return ["kind": "time", "value": Timestamp(date: date)]
+        case .weather(let condition, let temperature):
+            return ["kind": "weather", "condition": condition, "temperature": temperature]
+        case .poll(let question, let options, let votes):
+            return [
+                "kind": "poll",
+                "question": question,
+                "options": options,
+                "votes": votes
+            ]
+        case .countdown(let title, let endTime):
+            return ["kind": "countdown", "title": title, "endTime": Timestamp(date: endTime)]
+        }
+    }
+    #endif
 }
 

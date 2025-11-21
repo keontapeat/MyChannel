@@ -79,6 +79,30 @@ final class UserFirestoreService: ObservableObject {
             userData["bannerVideoContentMode"] = bannerVideoContentMode.rawValue
         }
         
+        // Verification meta
+        if let badge = user.verificationBadge {
+            userData["verificationStatus"] = badge.status.rawValue
+            userData["verificationMilestone"] = badge.milestone.rawValue
+            userData["verificationAutoApproved"] = badge.autoApproved
+            userData["verificationAwardedBy"] = badge.awardedBy
+            userData["verificationReason"] = badge.reason
+            if let awardedAt = badge.awardedAt {
+                userData["verificationAwardedAt"] = Timestamp(date: awardedAt)
+            }
+            userData["verificationProgress"] = [
+                "subscriberCount": badge.progress.subscriberCount,
+                "subscriberGoal": badge.progress.subscriberGoal,
+                "totalViews": badge.progress.totalViews,
+                "totalViewsGoal": badge.progress.totalViewsGoal,
+                "videoCount": badge.progress.videoCount,
+                "videoGoal": badge.progress.videoGoal,
+                "accountAgeDays": badge.progress.accountAgeDays,
+                "accountAgeGoal": badge.progress.accountAgeGoal
+            ]
+        } else {
+            userData["verificationStatus"] = user.isVerified ? VerificationStatus.verified.rawValue : VerificationStatus.notEligible.rawValue
+        }
+        
         try await ref.setData(userData, merge: true)
         
         print("✅ User profile saved to Firestore with banner video: \(user.bannerVideoURL ?? "nil")")
@@ -100,6 +124,8 @@ final class UserFirestoreService: ObservableObject {
         if let modeString = data["bannerVideoContentMode"] as? String {
             contentMode = UserBannerContentMode(rawValue: modeString)
         }
+        
+        let verificationBadge = Self.makeVerificationBadge(from: data)
         
         let user = User(
             id: id,
@@ -126,7 +152,8 @@ final class UserFirestoreService: ObservableObject {
             membershipTiers: nil, // TODO: Parse membership tiers if needed
             bannerVideoURL: data["bannerVideoURL"] as? String,
             bannerVideoMuted: data["bannerVideoMuted"] as? Bool,
-            bannerVideoContentMode: contentMode
+            bannerVideoContentMode: contentMode,
+            verificationBadge: verificationBadge
         )
         
         print("✅ User profile loaded from Firestore with banner video: \(user.bannerVideoURL ?? "nil")")
@@ -145,4 +172,45 @@ final class UserFirestoreService: ObservableObject {
         #endif
     }
 }
+
+#if canImport(FirebaseFirestore)
+private extension UserFirestoreService {
+    static func makeVerificationBadge(from data: [String: Any]) -> VerificationBadge? {
+        guard let statusRaw = data["verificationStatus"] as? String,
+              let status = VerificationStatus(rawValue: statusRaw) else {
+            return nil
+        }
+        
+        let milestoneRaw = data["verificationMilestone"] as? String ?? VerificationMilestone.manual.rawValue
+        let milestone = VerificationMilestone(rawValue: milestoneRaw) ?? .manual
+        let progressData = data["verificationProgress"] as? [String: Any] ?? [:]
+        
+        let progress = VerificationProgressSnapshot(
+            subscriberCount: progressData["subscriberCount"] as? Int ?? (data["subscriberCount"] as? Int ?? 0),
+            subscriberGoal: progressData["subscriberGoal"] as? Int ?? AppConfig.Verification.subscriberMilestone,
+            totalViews: progressData["totalViews"] as? Int ?? (data["totalViews"] as? Int ?? 0),
+            totalViewsGoal: progressData["totalViewsGoal"] as? Int ?? AppConfig.Verification.totalViewsMilestone,
+            videoCount: progressData["videoCount"] as? Int ?? (data["videoCount"] as? Int ?? 0),
+            videoGoal: progressData["videoGoal"] as? Int ?? AppConfig.Verification.minimumVideoCount,
+            accountAgeDays: progressData["accountAgeDays"] as? Int ?? 0,
+            accountAgeGoal: progressData["accountAgeGoal"] as? Int ?? AppConfig.Verification.minimumAccountAgeDays
+        )
+        
+        let awardedAt = (data["verificationAwardedAt"] as? Timestamp)?.dateValue()
+        let awardedBy = data["verificationAwardedBy"] as? String
+        let reason = data["verificationReason"] as? String
+        let autoApproved = data["verificationAutoApproved"] as? Bool ?? false
+        
+        return VerificationBadge(
+            status: status,
+            milestone: milestone,
+            autoApproved: autoApproved,
+            awardedAt: awardedAt,
+            awardedBy: awardedBy,
+            reason: reason,
+            progress: progress
+        )
+    }
+}
+#endif
 

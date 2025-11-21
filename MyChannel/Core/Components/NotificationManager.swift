@@ -78,6 +78,17 @@ class NotificationManager: ObservableObject {
         ))
     }
     
+    func showWarning(_ message: String) {
+        showInAppNotification(InAppNotification(
+            type: .warning,
+            title: "Heads up",
+            message: message,
+            duration: 3.0,
+            actionTitle: nil,
+            onAction: nil
+        ))
+    }
+    
     func showInfo(_ message: String) {
         showInAppNotification(InAppNotification(
             type: .info,

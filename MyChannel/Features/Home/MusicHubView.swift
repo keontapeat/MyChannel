@@ -337,10 +337,30 @@ struct MusicHubView: View {
     
     private func load() async {
         loading = true
-        if let t = try? await MusicCatalogService.shared.topSongs(limit: 30) { trending = t }
+        
+        async let curatedSongsTask = MusicCatalogService.shared.curatedSpotlightSongs()
+        async let curatedArtistsTask = MusicCatalogService.shared.curatedArtists()
+        async let curatedAlbumsTask = MusicCatalogService.shared.curatedAlbums()
+        
+        let top = (try? await MusicCatalogService.shared.topSongs(limit: 40)) ?? []
+        let curatedSongs = await curatedSongsTask
+        let editorialArtists = await curatedArtistsTask
+        let editorialAlbums = await curatedAlbumsTask
+        
+        if !top.isEmpty { trending = top }
+        if !editorialArtists.isEmpty { artists = editorialArtists }
+        if !editorialAlbums.isEmpty { albums = editorialAlbums }
+        
         let city = appState.currentUser?.location ?? ""
-        if !city.isEmpty, let loc = try? await MusicCatalogService.shared.searchSongs(term: city, limit: 30) { local = loc }
-        await loadForYou()
+        if !city.isEmpty, let loc = try? await MusicCatalogService.shared.searchSongs(term: city, limit: 30) {
+            local = loc
+        }
+        if local.isEmpty {
+            let fallback = !curatedSongs.isEmpty ? curatedSongs : top
+            local = Array(fallback.prefix(8))
+        }
+        
+        await loadForYou(curatedFallback: !curatedSongs.isEmpty ? curatedSongs : top)
         loading = false
     }
     
@@ -348,19 +368,42 @@ struct MusicHubView: View {
         let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard term.count >= 2 else { return }
         if let res = try? await MusicCatalogService.shared.searchSongs(term: term, limit: 40) { trending = res }
-        if let ars = try? await MusicCatalogService.shared.searchArtists(term: term, limit: 30) { artists = ars }
-        if let als = try? await MusicCatalogService.shared.searchAlbums(term: term, limit: 30) { albums = als }
+        if let ars = try? await MusicCatalogService.shared.searchArtists(term: term, limit: 30), !ars.isEmpty {
+            artists = ars
+        } else if artists.isEmpty {
+            let curated = await MusicCatalogService.shared.curatedArtists()
+            if !curated.isEmpty { artists = curated }
+        }
+        if let als = try? await MusicCatalogService.shared.searchAlbums(term: term, limit: 30), !als.isEmpty {
+            albums = als
+        } else if albums.isEmpty {
+            let curated = await MusicCatalogService.shared.curatedAlbums()
+            if !curated.isEmpty { albums = curated }
+        }
         if !term.isEmpty { saveRecentQuery(term) }
     }
 
-    private func loadForYou() async {
+    private func loadForYou(curatedFallback: [CatalogSong]) async {
         var seeds: [String] = []
         if let city = appState.currentUser?.location, !city.isEmpty { seeds.append(city) }
         seeds.append(contentsOf: recentQueries.suffix(3))
         let term = seeds.joined(separator: " ")
-        guard !term.isEmpty else { forYou = Array(trending.prefix(10)); return }
+        guard !term.isEmpty else {
+            if !curatedFallback.isEmpty {
+                forYou = Array(curatedFallback.prefix(12))
+            } else {
+                forYou = Array(trending.prefix(12))
+            }
+            return
+        }
         if let res = try? await MusicCatalogService.shared.searchSongs(term: term, limit: 20) {
-            forYou = res
+            if res.isEmpty {
+                forYou = !curatedFallback.isEmpty ? Array(curatedFallback.prefix(12)) : Array(trending.prefix(12))
+            } else {
+                forYou = res
+            }
+        } else {
+            forYou = !curatedFallback.isEmpty ? Array(curatedFallback.prefix(12)) : Array(trending.prefix(12))
         }
     }
 

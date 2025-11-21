@@ -22,6 +22,7 @@ struct UltimateStoryCreatorView: View {
     @State private var showingEffects = false
     @State private var isDraggingElement = false
     @State private var selectedElement: EditableElement?
+    @State private var modeRecordingTask: Task<Void, Never>?
     
     var onStoryCreated: (Story) -> Void
     
@@ -239,13 +240,21 @@ struct UltimateStoryCreatorView: View {
                         recordingDuration: cameraEngine.recordingDuration,
                         mode: viewModel.recordingMode,
                         onTap: {
-                            capturePhoto()
+                            handleCaptureTap()
                         },
                         onLongPressStart: {
-                            startRecording()
+                            guard viewModel.recordingMode == .normal else { return }
+                            modeRecordingTask?.cancel()
+                            modeRecordingTask = Task {
+                                await startRecording()
+                            }
                         },
                         onLongPressEnd: {
-                            stopRecording()
+                            guard viewModel.recordingMode == .normal else { return }
+                            modeRecordingTask?.cancel()
+                            modeRecordingTask = Task {
+                                await stopRecording()
+                            }
                         }
                     )
                 } else {
@@ -341,6 +350,8 @@ struct UltimateStoryCreatorView: View {
     
     private func cleanup() {
         cameraEngine.stopSession()
+        modeRecordingTask?.cancel()
+        modeRecordingTask = nil
     }
     
     private func capturePhoto() {
@@ -353,21 +364,15 @@ struct UltimateStoryCreatorView: View {
         }
     }
     
-    private func startRecording() {
+    private func startRecording() async {
         HapticManager.shared.impact(style: .medium)
-        
-        Task {
-            await cameraEngine.startRecording()
-        }
+        await cameraEngine.startRecording()
     }
     
-    private func stopRecording() {
+    private func stopRecording() async {
         HapticManager.shared.impact(style: .light)
-        
-        Task {
-            if let videoURL = await cameraEngine.stopRecording() {
-                await viewModel.setMedia(.video(videoURL))
-            }
+        if let videoURL = await cameraEngine.stopRecording() {
+            await processCapturedVideo(at: videoURL)
         }
     }
     
@@ -391,6 +396,109 @@ struct UltimateStoryCreatorView: View {
             // For now, just dismiss
         }
         dismiss()
+    }
+    
+    private func handleCaptureTap() {
+        switch viewModel.recordingMode {
+        case .normal:
+            capturePhoto()
+        case .boomerang:
+            modeRecordingTask?.cancel()
+            modeRecordingTask = Task {
+                await recordBoomerangClip()
+            }
+        case .superzoom:
+            toggleSuperzoomRecording()
+        case .handsFree, .slowMotion, .timeWarp:
+            toggleHandsFreeRecording()
+        }
+    }
+    
+    private func toggleHandsFreeRecording() {
+        modeRecordingTask?.cancel()
+        modeRecordingTask = Task {
+            if cameraEngine.isRecording {
+                await stopRecording()
+            } else {
+                await startRecording()
+                if let duration = viewModel.recordingMode.autoRecordDuration {
+                    try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+                    if cameraEngine.isRecording {
+                        await stopRecording()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func toggleSuperzoomRecording() {
+        modeRecordingTask?.cancel()
+        modeRecordingTask = Task {
+            if cameraEngine.isRecording {
+                await stopRecording()
+            } else {
+                await recordSuperzoomClip()
+            }
+        }
+    }
+    
+    private func recordBoomerangClip() async {
+        await startRecording()
+        let duration = viewModel.recordingMode.autoRecordDuration ?? 1.2
+        try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+        if cameraEngine.isRecording {
+            await stopRecording()
+        }
+    }
+    
+    private func recordSuperzoomClip() async {
+        await startRecording()
+        await animateSuperzoom(duration: viewModel.recordingMode.autoRecordDuration ?? 3.0)
+        if cameraEngine.isRecording {
+            await stopRecording()
+        }
+        await MainActor.run {
+            cameraEngine.zoom(to: 1.0)
+        }
+    }
+    
+    private func animateSuperzoom(duration: TimeInterval) async {
+        let steps = max(1, Int(duration * 10))
+        for step in 0...steps {
+            let progress = Double(step) / Double(steps)
+            let zoom = 1.0 + progress * 2.0
+            await MainActor.run {
+                cameraEngine.zoom(to: CGFloat(zoom))
+            }
+            try? await Task.sleep(nanoseconds: UInt64((duration / Double(steps)) * 1_000_000_000))
+        }
+    }
+    
+    private func processCapturedVideo(at url: URL) async {
+        if let message = viewModel.recordingMode.processingMessage {
+            await MainActor.run {
+                viewModel.processingMessage = message
+                viewModel.isProcessing = true
+            }
+        }
+        
+        do {
+            let processedURL = try await viewModel.processCapturedVideo(
+                at: url,
+                focusPoint: cameraEngine.focusPoint ?? CGPoint(x: 0.5, y: 0.5),
+                mode: viewModel.recordingMode
+            )
+            await viewModel.setMedia(.video(processedURL))
+        } catch {
+            print("🚨 Failed to process video: \(error)")
+            await viewModel.setMedia(.video(url))
+        }
+        
+        await MainActor.run {
+            viewModel.isProcessing = false
+            viewModel.processingMessage = ""
+            cameraEngine.zoom(to: 1.0)
+        }
     }
     
     private func mediaPreview(_ media: CapturedMedia) -> some View {

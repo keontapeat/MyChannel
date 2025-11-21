@@ -142,7 +142,7 @@ struct HomeView: View {
                             selectedIndex: $heroVideoIndex,
                             showLiveHeroPreviewInPreviews: true,
                             onPlayVideo: { video in
-                                route = .video(video)
+                                GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: false)
                             },
                             onAddToList: toggleWatchLater
                         )
@@ -150,12 +150,12 @@ struct HomeView: View {
 
                         // 🔥 AI-POWERED RECOMMENDATIONS (NEW!)
                         AIRecommendationsSection { video in
-                            route = .video(video)
+                            GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: false)
                         }
                         .padding(.bottom, 24)
                         
                         MinimalContentSections(
-                            onPlayVideo: { video in route = .video(video) },
+                            onPlayVideo: { video in GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: false) },
                             onSelectMovie: { movie in route = .movie(movie) },
                             onSeeAllFreeMovies: { route = .allMovies },
                             onSeeAllLiveTV: { route = .allLiveTV },
@@ -1528,7 +1528,7 @@ struct MinimalContentSections: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: 16) {
                             ForEach(Video.sampleVideos.prefix(5)) { video in
-                                MinimalVideoCard(video: video, action: { onPlayVideo(video) })
+                                MinimalVideoCard(video: video, action: { GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: false) })
                             }
                         }
                         .padding(.horizontal, 20)
@@ -2741,7 +2741,7 @@ struct ForYouSection: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: 16) {
                             ForEach(forYouVideos.prefix(8)) { video in
-                                MinimalVideoCard(video: video, action: { onPlayVideo(video) })
+                                MinimalVideoCard(video: video, action: { GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: false) })
                                     .optimizeUIPerformance()
                             }
                         }

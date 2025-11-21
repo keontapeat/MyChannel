@@ -9,38 +9,17 @@ import SwiftUI
 import AVFoundation
 import AVKit
 import Combine
+import UIKit
 
-// 🔥 TRUE PiP: Delegate for Picture-in-Picture events
-class PiPDelegate: NSObject, AVPictureInPictureControllerDelegate {
-    weak var manager: GlobalVideoPlayerManager?
-    
-    init(manager: GlobalVideoPlayerManager) {
-        self.manager = manager
-        super.init()
-    }
-    
-    func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        Task { @MainActor in
-            manager?.isPiPActive = true
-            print("📺 [PiPDelegate] PiP started")
-        }
-    }
-    
-    func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        Task { @MainActor in
-            manager?.isPiPActive = false
-            print("📺 [PiPDelegate] PiP stopped")
-        }
-    }
-    
-    func pictureInPictureControllerWillStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        print("📺 [PiPDelegate] PiP will start")
-    }
-    
-    func pictureInPictureControllerWillStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        print("📺 [PiPDelegate] PiP will stop")
-    }
-}
+// 🚫 NATIVE PiP DELEGATE REMOVED
+// We don't use native iOS Picture-in-Picture anymore
+// Our custom YouTube-style FloatingMiniPlayer.swift provides a superior experience:
+// - Free-floating (can be dragged anywhere)
+// - Resizable (pinch to resize)
+// - Swipe to dismiss
+// - Tap to expand to fullscreen
+// - Always-on controls (play/pause, close)
+// This is what users expect from YouTube/modern video apps
 
 @MainActor
 class GlobalVideoPlayerManager: ObservableObject {
@@ -69,10 +48,13 @@ class GlobalVideoPlayerManager: ObservableObject {
     
     // 🔥 REAL-TIME VIEW TRACKING: AI monitoring integration
     private let viewTracker = RealtimeViewTracker.shared
+    private let backgroundPlayService = BackgroundPlayService.shared
     private var currentViewSessionId: String?
     private var heartbeatTimer: Timer?
     
     private var playerManager: VideoPlayerManager?
+    private var backgroundObserver: NSObjectProtocol?
+    private var foregroundObserver: NSObjectProtocol?
     
     // 🔥 FIX: Expose playerManager for VideoDetailView to use when expanding from mini player
     var exposedPlayerManager: VideoPlayerManager? {
@@ -84,9 +66,12 @@ class GlobalVideoPlayerManager: ObservableObject {
     private var playerItemStatusObserver: NSKeyValueObservation? // 🔥 CRITICAL: Store playerItem status observer
     internal(set) var isCleanedUp = false // 🔥 FIX: Make accessible to FloatingMiniPlayer
     private var wasPlayingBeforeFlicks = false
+    private var wasPlayingBeforeBackground = false
+    private var usingBackgroundAudioBridge = false
+    private var backgroundPlayTask: Task<Void, Never>?
     
-    // 🔥 YOUTUBE PARITY: Picture-in-Picture support
-    private var pipController: AVPictureInPictureController?
+    // 🚫 NATIVE PiP REMOVED: We use custom YouTube-style FloatingMiniPlayer instead
+    // No pipController needed - our custom mini player is superior!
     
     // 🔥 THERMONUCLEAR: Video pre-loading for instant next video
     private var preloadedAsset: AVURLAsset?
@@ -147,6 +132,7 @@ class GlobalVideoPlayerManager: ObservableObject {
         setupPlayerManager()
         configureAudioSession()
         setupViewTracking()
+        observeAppLifecycle()
         
         print("✅ [GlobalPlayer] NUCLEAR INIT complete - EVERY state cleared")
         print("   currentVideo: \(currentVideo == nil ? "nil" : "NOT NIL")")
@@ -203,6 +189,95 @@ class GlobalVideoPlayerManager: ObservableObject {
         print("👋 [GlobalPlayer] Ended view tracking")
     }
     
+    private func handleAppDidEnterBackground() {
+        print("🎧 [GlobalPlayer] App entered background - maintaining custom mini player")
+        guard let video = currentVideo else { return }
+        
+        // Ensure audio session stays active for background playback
+        configureAudioSession()
+        
+        wasPlayingBeforeBackground = isPlaying
+        
+        // Keep mini player state so it reappears instantly on return
+        if !showingFullscreen {
+            shouldShowMiniPlayer = true
+            isMiniplayer = true
+        }
+        
+        guard wasPlayingBeforeBackground else {
+            playerManager?.pause()
+            return
+        }
+        
+        handoffToBackgroundAudio(with: video)
+    }
+    
+    private func handleAppWillEnterForeground() {
+        print("🎧 [GlobalPlayer] App entering foreground - restoring mini player state")
+        guard currentVideo != nil else { return }
+        
+        if !showingFullscreen {
+            shouldShowMiniPlayer = true
+            isMiniplayer = true
+        }
+        
+        restoreFromBackgroundAudioIfNeeded()
+    }
+    
+    private func handoffToBackgroundAudio(with video: Video) {
+        guard !usingBackgroundAudioBridge else { return }
+        backgroundPlayTask?.cancel()
+        
+        backgroundPlayTask = Task { [weak self] in
+            guard let self = self else { return }
+            
+            guard self.backgroundPlayService.isBackgroundPlayEnabled else {
+                if self.wasPlayingBeforeBackground {
+                    self.playerManager?.play()
+                }
+                return
+            }
+            
+            self.playerManager?.pause()
+            
+            do {
+                try await self.backgroundPlayService.startBackgroundPlay(for: video, at: self.currentTime)
+                self.usingBackgroundAudioBridge = true
+                print("🎧 [GlobalPlayer] Background audio bridge active")
+            } catch {
+                self.usingBackgroundAudioBridge = false
+                print("⚠️ [GlobalPlayer] Background audio handoff failed: \(error.localizedDescription)")
+                if self.wasPlayingBeforeBackground {
+                    self.playerManager?.play()
+                }
+            }
+        }
+    }
+    
+    private func restoreFromBackgroundAudioIfNeeded() {
+        backgroundPlayTask?.cancel()
+        
+        if usingBackgroundAudioBridge {
+            let resumeTime = backgroundPlayService.currentPlaybackTime
+            backgroundPlayService.stopBackgroundPlay()
+            usingBackgroundAudioBridge = false
+            
+            if resumeTime.isFinite {
+                playerManager?.seekToTime(resumeTime)
+            }
+            
+            if wasPlayingBeforeBackground {
+                playerManager?.play()
+            } else {
+                playerManager?.pause()
+            }
+        } else if wasPlayingBeforeBackground, let player = player, player.timeControlStatus != .playing {
+            player.play()
+        }
+        
+        wasPlayingBeforeBackground = false
+    }
+    
     // 🔥 YOUTUBE PARITY: Configure audio session for background playback
     private func configureAudioSession() {
         do {
@@ -215,50 +290,59 @@ class GlobalVideoPlayerManager: ObservableObject {
         }
     }
     
-    // 🔥 TRUE PiP: Setup Picture-in-Picture controller with delegate
+    private func observeAppLifecycle() {
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleAppDidEnterBackground()
+            }
+        }
+        
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleAppWillEnterForeground()
+            }
+        }
+    }
+    
+    // 🚫 NATIVE PiP DISABLED: We use custom YouTube-style mini player instead
+    // Native iOS PiP is disabled because we have a better custom implementation
+    // that matches YouTube's free-floating, resizable, draggable mini player
     func setupPictureInPicture(for playerLayer: AVPlayerLayer) {
-        guard AVPictureInPictureController.isPictureInPictureSupported() else {
-            print("⚠️ [GlobalVideoPlayerManager] PiP not supported on this device")
-            return
-        }
-        
-        pipController = AVPictureInPictureController(playerLayer: playerLayer)
-        pipController?.delegate = PiPDelegate(manager: self)
-        pipController?.canStartPictureInPictureAutomaticallyFromInline = true
-        print("✅ [GlobalVideoPlayerManager] PiP controller configured with auto-start")
+        // ❌ DISABLED: Native PiP not used
+        // We use FloatingMiniPlayer.swift instead (YouTube-style)
+        print("ℹ️ [GlobalVideoPlayerManager] Native PiP disabled - using custom YouTube-style mini player")
     }
     
-    // 🔥 TRUE PiP: Toggle Picture-in-Picture mode
+    // 🚫 NATIVE PiP DISABLED: Toggle does nothing (custom mini player handles this)
     func togglePictureInPicture() {
-        guard let pipController = pipController else {
-            print("⚠️ [GlobalVideoPlayerManager] PiP controller not configured")
-            return
-        }
-        
-        if pipController.isPictureInPictureActive {
-            pipController.stopPictureInPicture()
-            print("📺 [GlobalVideoPlayerManager] Stopping PiP")
-        } else {
-            pipController.startPictureInPicture()
-            print("📺 [GlobalVideoPlayerManager] Starting PiP")
-        }
-        HapticManager.shared.impact(style: .medium)
+        // ❌ DISABLED: Native PiP not used
+        // Our custom FloatingMiniPlayer.swift provides a superior experience
+        print("ℹ️ [GlobalVideoPlayerManager] Native PiP disabled - use custom mini player instead")
     }
     
-    // 🔥 AUTO PiP: Start Picture-in-Picture when app goes to background
+    // 🚫 NATIVE PiP DISABLED: Auto PiP does nothing (custom mini player handles backgrounding)
     func startPiPWhenBackgrounding() async {
-        guard shouldShowMiniPlayer,
-              currentVideo != nil,
-              let player = player,
-              player.rate > 0 else { return }
-        if isPiPActive { return }
-        
-        print("📺 [GlobalVideoPlayerManager] Auto-starting PiP while backgrounding")
-        isPiPActive = true
+        // ❌ DISABLED: Native PiP not used
+        // Custom mini player remains visible when app backgrounds
+        print("ℹ️ [GlobalVideoPlayerManager] Native PiP disabled - custom mini player active")
     }
     
     deinit {
         print("🗑️ GlobalVideoPlayerManager deinit called")
+        if let backgroundObserver {
+            NotificationCenter.default.removeObserver(backgroundObserver)
+        }
+        if let foregroundObserver {
+            NotificationCenter.default.removeObserver(foregroundObserver)
+        }
         // Perform non-MainActor cleanup here
         cleanupSync()
     }
@@ -467,14 +551,14 @@ class GlobalVideoPlayerManager: ObservableObject {
     /// interrupting playback or losing position.
     func adoptExternalPlayerManager(_ externalManager: VideoPlayerManager,
                                     video: Video,
-                                    showFullscreen: Bool) {
+                                    showFullscreen: Bool) async {
         guard !isCleanedUp else { return }
 
         print("🔄 [GlobalPlayer] Adopting external player manager for: \(video.title)")
         print("🔄 [GlobalPlayer] showFullscreen: \(showFullscreen)")
 
         // 🔥 APPLE BEST PRACTICE: Adopt player synchronously on MainActor
-        Task { @MainActor in
+        // Task { @MainActor in // 🔥 REMOVED: This Task caused a race condition
             // Point our manager to the external one and wire observers
             playerManager = externalManager
             setupObservers()
@@ -516,7 +600,7 @@ class GlobalVideoPlayerManager: ObservableObject {
             }
             
             print("✅ [GlobalPlayer] Mini player state: shouldShow=\(shouldShowMiniPlayer), isMini=\(isMiniplayer), fullscreen=\(showingFullscreen), isPlaying=\(isPlaying)")
-        }
+        // } // 🔥 REMOVED
     }
 
     // MARK: - Video Management
@@ -652,35 +736,38 @@ class GlobalVideoPlayerManager: ObservableObject {
         print("◀️ [GlobalVideoPlayerManager] Playing previous video: \(previousVideo.title)")
     }
     
+    // 🔥 YOUTUBE PARITY: Minimize to mini player (when backing out of fullscreen)
     func minimizePlayer() {
-        guard currentVideo != nil, !isCleanedUp else { return }
-        
-        // 🔥 ANIMATION FIX: Prevent multiple calls from triggering multiple animations
-        guard !shouldShowMiniPlayer || isTransitioning else {
-            print("⚠️ Mini player already showing - skipping duplicate minimize")
-            return
+        guard currentVideo != nil, !isCleanedUp else { 
+            print("⚠️ [GlobalPlayer] Cannot minimize - no video or cleaned up")
+            return 
         }
         
-        print("🔄 [GlobalVideoPlayerManager] Minimizing to mini player")
+        print("🔽 [GlobalPlayer] minimizePlayer() called")
+        print("   Current state: shouldShow=\(shouldShowMiniPlayer), isMini=\(isMiniplayer), fullscreen=\(showingFullscreen)")
         
+        // 🔥 FIX: Remove the guard that was blocking mini-player from appearing!
+        // The old guard prevented the mini-player from showing when it should
+        
+        print("🔄 [GlobalPlayer] Setting mini-player state synchronously...")
+        
+        // 🔥 CRITICAL: Set ALL states synchronously to prevent race conditions
+        // Don't use Task {} - set state IMMEDIATELY on MainActor
+        showingFullscreen = false
+        isMiniplayer = true
+        shouldShowMiniPlayer = true
+        isTransitioning = true  // Block UI interference during animation
+        
+        print("✅ [GlobalPlayer] Mini-player state set:")
+        print("   shouldShowMiniPlayer: \(shouldShowMiniPlayer)")
+        print("   isMiniplayer: \(isMiniplayer)")
+        print("   showingFullscreen: \(showingFullscreen)")
+        
+        // 🔥 FIX: Clear transition flag after animation completes
         Task { @MainActor in
-            // 🔥 ANIMATION FIX: Set transition flag FIRST to prevent animation from triggering
-            isTransitioning = true
-            
-            // Small delay to ensure transition flag is set before showing mini player
-            try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
-            
-            showingFullscreen = false
-            isMiniplayer = true
-            shouldShowMiniPlayer = true
-            
-            // Mark transition complete after animation duration
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                guard let self = self, !self.isCleanedUp else { return }
-                self.isTransitioning = false
-            }
-            
-            print("✅ [GlobalVideoPlayerManager] Mini player state updated - shouldShow: \(shouldShowMiniPlayer), isMini: \(isMiniplayer)")
+            try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+            isTransitioning = false
+            print("✅ [GlobalPlayer] Transition complete - mini-player fully visible")
         }
         
         HapticManager.shared.impact(style: .medium)
@@ -688,13 +775,13 @@ class GlobalVideoPlayerManager: ObservableObject {
     
     func expandPlayer() {
         guard let video = currentVideo, !isCleanedUp else {
-            print("⚠️ [GlobalPlayer] Cannot expand - no video or cleaned up")
+            print("⚠️ [GlobalPlayer] expandPlayer() early return - no video or cleaned up. currentVideo=\(String(describing: currentVideo?.title)), isCleanedUp=\(isCleanedUp)")
             return
         }
         
-        print("🔄 [GlobalVideoPlayerManager] Expanding from mini player to fullscreen")
-        print("🔄 [GlobalVideoPlayerManager] Video: \(video.title)")
-        print("🔄 [GlobalVideoPlayerManager] Player exists: \(player != nil)")
+        print("🔄 [GlobalVideoPlayerManager] expandPlayer() called from mini player")
+        print("   video=\(video.title)")
+        print("   state BEFORE expand → showingFullscreen=\(showingFullscreen), shouldShowMiniPlayer=\(shouldShowMiniPlayer), isMiniplayer=\(isMiniplayer), isTransitioning=\(isTransitioning), isPlayerReady=\(isPlayerReady), playerExists=\(player != nil)")
         
         // 🔥 CRITICAL: Set isTransitioning FIRST to block ALL UI from showing
         // This prevents mini player, PiP, and any other UI from appearing
@@ -706,20 +793,20 @@ class GlobalVideoPlayerManager: ObservableObject {
         isMiniplayer = false
         shouldShowMiniPlayer = false
         
-        print("✅ [GlobalPlayer] State set IMMEDIATELY - showingFullscreen: \(showingFullscreen), shouldShowMiniPlayer: \(shouldShowMiniPlayer)")
+        print("✅ [GlobalPlayer] State set IMMEDIATELY in expandPlayer()")
+        print("   state AFTER expand (pre-player-check) → showingFullscreen=\(showingFullscreen), shouldShowMiniPlayer=\(shouldShowMiniPlayer), isMiniplayer=\(isMiniplayer), isTransitioning=\(isTransitioning)")
         
-        // 🔥 Exit PiP mode if active
-        if isPiPActive {
-            togglePictureInPicture()
-        }
+        // 🚫 NATIVE PiP REMOVED: No need to exit PiP mode (we use custom mini player)
+        // Custom FloatingMiniPlayer automatically hides when showingFullscreen = true
         
         // 🔥 FIX: Ensure player is ready before presenting
         guard let player = player else {
-            print("🚨 [GlobalPlayer] No player available - setting up new player")
+            print("🚨 [GlobalPlayer] expandPlayer(): player == nil, setting up new player for \(video.title)")
             setupPlayerManager()
             playerManager?.setupPlayer(with: video)
             // Wait a bit for player to be ready
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                print("🔁 [GlobalPlayer] Retrying presentFullscreenVideo() after creating player")
                 self?.presentFullscreenVideo()
             }
             return
@@ -727,9 +814,10 @@ class GlobalVideoPlayerManager: ObservableObject {
         
         // 🔥 FIX: Ensure player is attached and ready
         if player.currentItem == nil {
-            print("⚠️ [GlobalPlayer] Player has no current item - setting up")
+            print("⚠️ [GlobalPlayer] expandPlayer(): player.currentItem == nil, setting up for \(video.title)")
             playerManager?.setupPlayer(with: video)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                print("🔁 [GlobalPlayer] Retrying presentFullscreenVideo() after setting up currentItem")
                 self?.presentFullscreenVideo()
             }
             return
@@ -781,10 +869,8 @@ class GlobalVideoPlayerManager: ObservableObject {
         
         print("🔥 [GlobalPlayer] closePlayer() called")
         
-        // 🔥 Stop PiP if active
-        if isPiPActive {
-            togglePictureInPicture()
-        }
+        // 🚫 NATIVE PiP REMOVED: No need to stop PiP (we use custom mini player)
+        // Custom FloatingMiniPlayer automatically disappears when currentVideo = nil
         
         // 🔥 REAL-TIME VIEW TRACKING: End view session
         Task {
@@ -818,10 +904,8 @@ class GlobalVideoPlayerManager: ObservableObject {
             await endViewTracking()
         }
         
-        // Stop PiP
-        if isPiPActive {
-            togglePictureInPicture()
-        }
+        // 🚫 NATIVE PiP REMOVED: No need to stop PiP (we use custom mini player)
+        // Custom FloatingMiniPlayer automatically disappears on reset
         
         // Destroy player
         playerManager?.pause()

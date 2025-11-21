@@ -76,63 +76,37 @@ struct ThermonuclearFeaturedManager: View {
         }
     }
     
-    // MARK: - Thermonuclear Header 🔥
+    // MARK: - Header
     private var thermonuclearHeader: some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [.yellow, .orange, .red],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 48, height: 48)
-                    
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.white)
-                }
+                Circle()
+                    .fill(AppTheme.Colors.surface.opacity(0.6))
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Image(systemName: "star.circle.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.primary)
+                    )
                 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Featured Videos")
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(size: 22, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                     
-                    Text("Max 3 videos • Shown on Home")
+                    Text("Pin up to 3 flagship videos on your Home feed")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                 }
-                
                 Spacer()
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
+            
+            Text("Keep this reel fresh with your premium drops. Viewers see it first thing on Home.")
+                .font(.system(size: 13, weight: .regular))
+                .foregroundColor(AppTheme.Colors.textSecondary)
         }
-        .background(AppTheme.Colors.surface)
-    }
-    
-    // MARK: - Stats Bar
-    private var statsBar: some View {
-        HStack(spacing: 0) {
-            statItem(value: "\(manager.featuredVideos.count)", label: "FEATURED", icon: "star.fill", color: .yellow)
-            
-            Divider()
-                .frame(height: 40)
-                .background(AppTheme.Colors.divider)
-            
-            statItem(value: "\(3 - manager.featuredVideos.count)", label: "AVAILABLE", icon: "plus.circle.fill", color: .green)
-            
-            Divider()
-                .frame(height: 40)
-                .background(AppTheme.Colors.divider)
-            
-            statItem(value: manager.totalViews, label: "VIEWS", icon: "eye.fill", color: .blue)
-        }
-        .frame(height: 80)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
         .background(AppTheme.Colors.surface)
         .overlay(
             Rectangle()
@@ -142,24 +116,72 @@ struct ThermonuclearFeaturedManager: View {
         )
     }
     
-    private func statItem(value: String, label: String, icon: String, color: Color) -> some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(color)
+    // MARK: - Stats Bar
+    private var statsBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                statCard(
+                    title: "Featured",
+                    value: "\(manager.featuredVideos.count)/3",
+                    subtitle: "Live on Home",
+                    icon: "star.fill"
+                )
                 
-                Text(value)
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+                statCard(
+                    title: "Slots Open",
+                    value: "\(max(0, 3 - manager.featuredVideos.count))",
+                    subtitle: "Ready to pin",
+                    icon: "plus.circle"
+                )
+                
+                statCard(
+                    title: "Views",
+                    value: manager.totalViews,
+                    subtitle: "From featured reel",
+                    icon: "eye.fill"
+                )
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+        }
+        .background(AppTheme.Colors.background)
+    }
+    
+    private func statCard(title: String, value: String, subtitle: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(AppTheme.Colors.surface.opacity(0.7))
+                    .frame(width: 32, height: 32)
+                    .overlay(
+                        Image(systemName: icon)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                    )
+                
+                Text(title.uppercased())
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
             }
             
-            Text(label)
-                .font(.system(size: 11, weight: .semibold))
+            Text(value)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+            
+            Text(subtitle)
+                .font(.system(size: 12, weight: .regular))
                 .foregroundColor(AppTheme.Colors.textSecondary)
-                .tracking(0.5)
         }
-        .frame(maxWidth: .infinity)
+        .padding(16)
+        .frame(width: 180, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AppTheme.Colors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1)
+                )
+        )
     }
     
     // MARK: - Featured Videos List (DRAG TO REORDER! 🔥)
@@ -212,64 +234,52 @@ struct ThermonuclearFeaturedManager: View {
     
     // MARK: - Empty State
     private var emptyStateView: some View {
-        VStack(spacing: 20) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.yellow.opacity(0.3), .orange.opacity(0.3)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 120, height: 120)
-                
-                Image(systemName: "star.fill")
-                    .font(.system(size: 56, weight: .bold))
-                    .foregroundColor(.yellow)
-            }
+        VStack(spacing: 24) {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(AppTheme.Colors.surface)
+                .frame(width: 120, height: 120)
+                .overlay(
+                    Image(systemName: "sparkles.rectangle.stack.fill")
+                        .font(.system(size: 36, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1)
+                )
             
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
                 Text("No Featured Videos Yet")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
                 
-                Text("Tap the + button to add up to 3 videos\nto feature on your Home feed")
-                    .font(.system(size: 15, weight: .medium))
+                Text("Pin up to three marquee videos so your audience sees them first.")
+                    .font(.system(size: 15, weight: .regular))
                     .foregroundColor(AppTheme.Colors.textSecondary)
                     .multilineTextAlignment(.center)
-                    .lineSpacing(4)
+                    .padding(.horizontal, 40)
             }
-            .padding(.horizontal, 32)
             
             Button {
                 showingVideoSelector = true
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 17, weight: .semibold))
                     Text("Add First Video")
                         .font(.system(size: 16, weight: .semibold))
                 }
                 .foregroundColor(.white)
                 .padding(.horizontal, 24)
-                .padding(.vertical, 14)
+                .padding(.vertical, 12)
                 .background(
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [.yellow, .orange],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
+                    Capsule(style: .continuous)
+                        .fill(AppTheme.Colors.primary)
                 )
-                .shadow(color: .yellow.opacity(0.4), radius: 12, x: 0, y: 4)
             }
-            .padding(.top, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 60)
+        .padding(.top, 80)
     }
     
     // MARK: - Loading View
@@ -408,32 +418,24 @@ struct FeaturedVideoRow: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(
-                        LinearGradient(
-                            colors: [.red, .red.opacity(0.8)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(Color.red.opacity(0.9))
             )
             
             // Main content
             HStack(spacing: 12) {
                 // Position badge
                 ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [.yellow, .orange],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(AppTheme.Colors.surface.opacity(0.9))
+                        .frame(width: 36, height: 36)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1)
                         )
-                        .frame(width: 32, height: 32)
                     
                     Text("\(position)")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.white)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
                 }
                 
                 // Thumbnail with drag indicator
@@ -456,7 +458,7 @@ struct FeaturedVideoRow: View {
                         .padding(6)
                         .background(
                             Circle()
-                                .fill(Color.black.opacity(0.5))
+                                .fill(Color.black.opacity(0.45))
                         )
                         .padding(4)
                 }
@@ -466,7 +468,7 @@ struct FeaturedVideoRow: View {
                     HStack(spacing: 6) {
                         Image(systemName: "star.fill")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.yellow)
+                            .foregroundColor(AppTheme.Colors.primary)
                         
                         Text(video.title)
                             .font(.system(size: 15, weight: .semibold))
@@ -504,7 +506,7 @@ struct FeaturedVideoRow: View {
                     } else {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 28, weight: .medium))
-                            .foregroundColor(.red)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
                     }
                 }
                 .disabled(isRemoving)
@@ -515,16 +517,8 @@ struct FeaturedVideoRow: View {
                     .fill(AppTheme.Colors.surface)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [.yellow.opacity(0.5), .orange.opacity(0.5)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 2
-                            )
+                            .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1)
                     )
-                    .shadow(color: .yellow.opacity(0.2), radius: 8, x: 0, y: 2)
             )
             .offset(x: offset)
             .gesture(

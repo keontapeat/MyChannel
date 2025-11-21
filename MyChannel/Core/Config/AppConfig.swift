@@ -163,6 +163,20 @@ struct AppConfig {
         static let backgroundTaskTimeout: TimeInterval = 30.0
     }
     
+    // MARK: - Verification Configuration
+    struct Verification {
+        /// Minimum subscribers required for automatic eligibility
+        static let subscriberMilestone: Int = 100_000
+        /// Minimum lifetime views required if subscriber milestone is not met
+        static let totalViewsMilestone: Int = 5_000_000
+        /// Minimum published videos required to unlock manual review
+        static let minimumVideoCount: Int = 50
+        /// Minimum account age (days) before a badge can be awarded
+        static let minimumAccountAgeDays: Int = 30
+        /// Enable automatic eligibility checks when stats update
+        static let enableAutoEligibility: Bool = true
+    }
+    
     // MARK: - UI Configuration
     struct UI {
         static let animationDuration: TimeInterval = 0.3

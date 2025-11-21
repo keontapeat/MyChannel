@@ -251,3 +251,5 @@ cd /Users/keonta/Documents/MyChannel && firebase deploy --only firestore:rules
 
 **Deploy these rules and your mini player will work perfectly! 🚀🔥**
 
+
+

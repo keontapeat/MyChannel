@@ -49,19 +49,19 @@ struct MainTabView: View {
             } else {
                 mainContent
                     .environmentObject(globalPlayer)
-                    .overlay(alignment: .topLeading) {
-                        if let player = globalPlayer.player {
-                            PlayerPiPContainerView(
-                                player: player,
-                                isPictureInPictureActive: Binding(
-                                    get: { globalPlayer.isPiPActive },
-                                    set: { globalPlayer.isPiPActive = $0 }
-                                )
-                            )
-                            .frame(width: 0, height: 0)
-                            .hidden()
-                        }
-                    }
+                    // 🔥 DISABLED: Native PiP Container (we use custom YouTube-style mini-player instead)
+                    // PlayerPiPContainerView causes the ugly iOS native PiP to show
+                    // We want the YouTube-style floating mini-player that we built in FloatingMiniPlayer.swift
+            }
+            
+            // 🔥 YOUTUBE PARITY: Mini player floats OVER everything (not just tab bar area)
+            // This allows it to be visible on channel pages, search, profile, etc.
+            if globalPlayer.shouldShowMiniPlayer,
+               globalPlayer.currentVideo != nil,
+               !globalPlayer.showingFullscreen {
+                FloatingMiniPlayer()
+                    .environmentObject(appState)
+                    .zIndex(100_000)  // Above EVERYTHING
             }
         }
         .onAppear {
@@ -97,17 +97,26 @@ struct MainTabView: View {
         .onChange(of: globalPlayer.fullscreenRequestToken) { _ in
             // Additional safety: always honor fullscreen requests from the mini player,
             // even if a notification is missed.
-            guard globalPlayer.showingFullscreen else { return }
+            print("📺 [MainTabView] fullscreenRequestToken changed")
+            print("   state → showingFullscreen=\(globalPlayer.showingFullscreen), shouldShowMiniPlayer=\(globalPlayer.shouldShowMiniPlayer), currentVideo=\(String(describing: globalPlayer.currentVideo?.title))")
+            guard globalPlayer.showingFullscreen else {
+                print("📺 [MainTabView] fullscreenRequestToken change ignored because showingFullscreen == false")
+                return
+            }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
                 presentMiniPlayerDetail = true
+                print("📺 [MainTabView] presentMiniPlayerDetail set to true via fullscreenRequestToken")
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .scrollToTopProfile)) { _ in
             // Handle scroll to top for profile
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PresentVideoDetailFromMiniPlayer"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PresentVideoDetailFromMiniPlayer"))) { notification in
+            print("📺 [MainTabView] Received PresentVideoDetailFromMiniPlayer notification: \(notification.userInfo ?? [:])")
+            print("   state BEFORE fullScreenCover → showingFullscreen=\(globalPlayer.showingFullscreen), shouldShowMiniPlayer=\(globalPlayer.shouldShowMiniPlayer), isMiniplayer=\(globalPlayer.isMiniplayer), isTransitioning=\(globalPlayer.isTransitioning), currentVideo=\(String(describing: globalPlayer.currentVideo?.title))")
             withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
                 presentMiniPlayerDetail = true
+                print("📺 [MainTabView] presentMiniPlayerDetail set to true via notification")
             }
         }
         // Present video detail only when triggered by mini player event
@@ -273,31 +282,14 @@ struct MainTabView: View {
         // 🔥 FIX: Close mini-player when app is fully backgrounded (not just inactive)
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .background {
-                // 🔥 FIX: Close mini-player when app goes to background
-                // This prevents mini-player from persisting when app is reopened
-                if globalPlayer.shouldShowMiniPlayer,
-                   globalPlayer.currentVideo != nil {
-                    // If video is playing, try PiP first
-                    if let player = globalPlayer.player, player.rate > 0 {
-                        // Try to start PiP
-                        Task { @MainActor in
-                            await globalPlayer.startPiPWhenBackgrounding()
-                        }
-                    } else {
-                        // Video is paused - just close mini-player
-                        globalPlayer.closePlayer()
-                        print("🔄 [MainTabView] App backgrounded with paused video - closing mini-player")
-                    }
-                }
+                // 🔥 DISABLED: NO AUTO-PiP! Keep custom mini-player only
+                // Native PiP is ugly and not YouTube parity
+                // The custom YouTube-style mini-player stays even when app is backgrounded
+                print("🔄 [MainTabView] App backgrounded - custom mini-player persists (no auto-PiP)")
             } else if newPhase == .active {
-                // 🔥 FIX: When app becomes active, only restore mini-player if PiP was active
-                if globalPlayer.isPiPActive {
-                    print("🔄 [MainTabView] App became active - restoring from PiP")
-                } else if globalPlayer.shouldShowMiniPlayer {
-                    // Mini-player was showing but no PiP - clear it
-                    print("🔄 [MainTabView] App became active - clearing stale mini-player state")
-                    globalPlayer.shouldShowMiniPlayer = false
-                }
+                // 🔥 YOUTUBE PARITY: Custom mini-player persists when app returns
+                // Just like YouTube - the mini-player stays exactly where you left it
+                print("🔄 [MainTabView] App became active - custom mini-player still visible")
             }
         }
     }
@@ -349,15 +341,6 @@ struct MainTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .zIndex(999)  // Tab bar below mini player
             .allowsHitTesting(true)
-            
-            // 🔥 FIX: Show VISIBLE mini player (not PiP-only)
-            if globalPlayer.shouldShowMiniPlayer,
-               !globalPlayer.showingFullscreen,
-               !globalPlayer.isTransitioning,
-               globalPlayer.currentVideo != nil {
-                SafeFloatingMiniPlayer()
-                    .environmentObject(globalPlayer)
-            }
         }
         .ignoresSafeArea(.keyboard)
         .fullScreenCover(isPresented: $showingUpload) {

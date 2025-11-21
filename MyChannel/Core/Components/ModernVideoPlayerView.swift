@@ -38,8 +38,10 @@ struct ModernVideoPlayerView: View {
                 
                 // Video Player
                 if let player = playerViewModel.player {
-                    // PiP-capable container wraps the player layer
-                    PlayerPiPContainerView(player: player, isPictureInPictureActive: $playerViewModel.isPiPActive)
+                    // 🚫 NATIVE PiP DISABLED: Use custom YouTube-style mini-player instead
+                    // Old: PlayerPiPContainerView (DISABLED - causes ugly native PiP)
+                    // New: VideoPlayer (SwiftUI standard, works with custom mini-player)
+                    VideoPlayer(player: player)
                         .aspectRatio(16/9, contentMode: .fit)
                         .clipped()
                         .onTapGesture {
@@ -283,12 +285,20 @@ struct ModernVideoPlayerView: View {
     }
     
     private func handleMinimize() {
-        // 🔥 PiP ONLY: Start Picture-in-Picture
-        if AVPictureInPictureController.isPictureInPictureSupported() {
-            globalPlayer.currentVideo = video
-            globalPlayer.player?.replaceCurrentItem(with: playerViewModel.player?.currentItem)
-            globalPlayer.togglePictureInPicture()
-        }
+        // 🚫 NATIVE PiP DISABLED: Use custom YouTube-style mini-player instead
+        // Native PiP is ugly and not YouTube parity
+        // This file is NOT USED but disabled anyway for safety
+        
+        // ❌ OLD (DISABLED): Native PiP
+        // if AVPictureInPictureController.isPictureInPictureSupported() {
+        //     globalPlayer.currentVideo = video
+        //     globalPlayer.player?.replaceCurrentItem(with: playerViewModel.player?.currentItem)
+        //     globalPlayer.togglePictureInPicture()
+        // }
+        
+        // ✅ NEW: Custom YouTube-style mini-player
+        globalPlayer.currentVideo = video
+        globalPlayer.minimizePlayer()
         dismiss()
     }
     
@@ -843,9 +853,12 @@ class VideoPlayerViewModel: ObservableObject {
         cancellables.removeAll()
     }
 
-    // MARK: - PiP
+    // MARK: - PiP (DISABLED)
     func togglePiP() {
-        isPiPActive.toggle()
+        // 🚫 NATIVE PiP DISABLED: Use custom YouTube-style mini-player instead
+        // ❌ OLD: isPiPActive.toggle()
+        // ✅ NEW: Minimize to custom mini-player
+        GlobalVideoPlayerManager.shared.minimizePlayer()
     }
 }
 

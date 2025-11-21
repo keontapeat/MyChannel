@@ -211,7 +211,15 @@ final class PerformanceMonitor: ObservableObject {
     // MARK: - Memory Usage
     
     private func getMemoryUsage() -> Int64 {
-        var info = mach_task_basic_info()
+        var info = mach_task_basic_info(
+            virtual_size: 0,
+            resident_size: 0,
+            resident_size_max: 0,
+            user_time: time_value_t(seconds: 0, microseconds: 0),
+            system_time: time_value_t(seconds: 0, microseconds: 0),
+            policy: 0,
+            suspend_count: 0
+        )
         var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
         
         let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) {

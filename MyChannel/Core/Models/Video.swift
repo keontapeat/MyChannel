@@ -265,9 +265,18 @@ struct Video: Identifiable, Codable, Hashable {
     }
     
     var timeAgo: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: createdAt, relativeTo: Date())
+        // 🔥 REAL-TIME ANALYTICS: Always show a sane, human-friendly "time ago"
+        // Avoid weird strings like "in 0s" when server timestamps are slightly in the future
+        let now = Date()
+        
+        // If createdAt is somehow in the future (clock skew / server timestamp),
+        // treat it as "Just now" instead of "in 0s"
+        if createdAt > now {
+            return "Just now"
+        }
+        
+        // Use our optimized helper for consistent, YouTube-style strings
+        return createdAt.timeAgoDisplay
     }
     
     var uploadTimeAgo: String {

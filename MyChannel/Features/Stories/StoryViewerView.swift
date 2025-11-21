@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AVKit
+import AVFoundation
 import UIKit
 
 struct StoryViewerView: View {
@@ -26,6 +27,7 @@ struct StoryViewerView: View {
     @State private var viewerCount: Int = 0
     @State private var hasLiked: Bool = false
     @State private var showingProfile: Bool = false
+    @State private var showingReport: Bool = false
     @State private var hapticFeedback = UIImpactFeedbackGenerator(style: .light)
 
     @Environment(\.scenePhase) private var scenePhase
@@ -147,7 +149,8 @@ struct StoryViewerView: View {
                             }
                             hapticFeedback.impactOccurred()
                         },
-                        onShare: { hapticFeedback.impactOccurred() }
+                        onShare: { hapticFeedback.impactOccurred() },
+                        onReport: { showingReport = true }
                     )
                 }
                 .padding(.horizontal, 16)
@@ -234,6 +237,11 @@ struct StoryViewerView: View {
         }
         .onDisappear {
             stopStoryTimer()
+            
+            // Stop view tracking
+            Task {
+                await StoryViewTracker.shared.stopTracking()
+            }
         }
         .onChange(of: scenePhase) { newPhase in
             switch newPhase {
@@ -251,6 +259,13 @@ struct StoryViewerView: View {
                 }
             )
             .presentationDetents([.height(200)])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingReport) {
+            ReportStoryView(story: currentStory) {
+                showingReport = false
+            }
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingProfile) {
@@ -349,10 +364,15 @@ struct StoryViewerView: View {
     // MARK: - Private Methods
 
     private func simulateViewerCount() {
-        viewerCount = Int.random(in: 50...2000)
-        Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
-            let change = Int.random(in: -5...15)
-            viewerCount = max(1, viewerCount + change)
+        // Start real-time view tracking
+        Task {
+            await StoryViewTracker.shared.startTracking(storyId: currentStory.id)
+        }
+        
+        // Update viewer count from tracker (live updates)
+        // Note: No [weak self] needed - StoryViewerView is a struct (value type)
+        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            viewerCount = StoryViewTracker.shared.viewerCount
         }
     }
 
@@ -578,30 +598,11 @@ struct EnhancedStoryContentView: View {
             }
 
         case .video:
-            ZStack {
-                LinearGradient(
-                    colors: [AppTheme.Colors.primary.opacity(0.6), AppTheme.Colors.secondary.opacity(0.6)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-
-                VStack(spacing: 20) {
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 80))
-                        .foregroundColor(.white)
-                        .shadow(radius: 4)
-
-                    Text("Video Story")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-
-                    Text("Tap to play")
-                        .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.8))
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            StoryVideoPlayer(
+                url: URL(string: content.url) ?? URL(string: "about:blank")!,
+                isPaused: isPaused,
+                geometry: geometry
+            )
 
         case .text:
             ZStack {
@@ -867,6 +868,7 @@ struct EnhancedStoryFooterView: View {
     let onReply: () -> Void
     let onLike: () -> Void
     let onShare: () -> Void
+    let onReport: () -> Void
 
     var body: some View {
         HStack(spacing: 16) {
@@ -934,6 +936,35 @@ struct EnhancedStoryFooterView: View {
                     .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
                 }
                 .buttonStyle(PlainButtonStyle())
+                
+                Menu {
+                    Button(action: onReport) {
+                        Label("Report Story", systemImage: "flag")
+                    }
+                    
+                    Button(action: {}) {
+                        Label("Not Interested", systemImage: "eye.slash")
+                    }
+                    
+                    Button(action: {}) {
+                        Label("Mute This Account", systemImage: "speaker.slash")
+                    }
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(.black.opacity(0.4))
+                            .frame(width: 48, height: 48)
+                            .overlay(
+                                Circle()
+                                    .stroke(.white.opacity(0.3), lineWidth: 1)
+                            )
+
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                }
             }
         }
     }
@@ -999,6 +1030,84 @@ struct StoryReplyView: View {
         .onAppear {
             isTextFieldFocused = true
         }
+    }
+}
+
+// MARK: - Story Video Player View
+struct StoryVideoPlayer: View {
+    let url: URL
+    let isPaused: Bool
+    let geometry: GeometryProxy
+    
+    @State private var player: AVPlayer?
+    @State private var isLoading: Bool = true
+    
+    var body: some View {
+        ZStack {
+            if let player = player {
+                VideoPlayer(player: player)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onAppear {
+                        player.play()
+                    }
+                    .onChange(of: isPaused) { newValue in
+                        if newValue {
+                            player.pause()
+                        } else {
+                            player.play()
+                        }
+                    }
+            } else {
+                // Loading state
+                ZStack {
+                    LinearGradient(
+                        colors: [AppTheme.Colors.primary.opacity(0.6), AppTheme.Colors.secondary.opacity(0.6)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    
+                    VStack(spacing: 20) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(1.5)
+                        
+                        Text("Loading video...")
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .onAppear {
+            setupPlayer()
+        }
+        .onDisappear {
+            cleanup()
+        }
+    }
+    
+    private func setupPlayer() {
+        let playerItem = AVPlayerItem(url: url)
+        player = AVPlayer(playerItem: playerItem)
+        player?.automaticallyWaitsToMinimizeStalling = true
+        
+        // Auto-loop video
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: playerItem,
+            queue: .main
+        ) { [weak player] _ in
+            player?.seek(to: .zero)
+            if !isPaused {
+                player?.play()
+            }
+        }
+    }
+    
+    private func cleanup() {
+        player?.pause()
+        player = nil
     }
 }
 

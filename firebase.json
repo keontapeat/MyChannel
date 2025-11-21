@@ -9,6 +9,21 @@
   "database": {
     "rules": "database.rules.json"
   },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "python-functions",
+      "runtime": "python312"
+    },
+    {
+      "source": "firebase/functions",
+      "codebase": "story-functions",
+      "predeploy": [
+        "npm --prefix firebase/functions run build"
+      ],
+      "runtime": "nodejs20"
+    }
+  ],
   "hosting": {
     "public": "public",
     "ignore": [

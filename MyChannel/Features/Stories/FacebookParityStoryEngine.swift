@@ -168,13 +168,15 @@ class FacebookParityStoryEngine: ObservableObject {
         
         // Export
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent("boomerang_\(UUID().uuidString).mp4")
-        let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
-        exporter?.outputURL = outputURL
-        exporter?.outputFileType = .mp4
+        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+            throw StoryError.processingFailed("Unable to create export session")
+        }
+        exporter.outputURL = outputURL
+        exporter.outputFileType = .mp4
         
-        await exporter?.export()
+        try await exporter.export()
         
-        if exporter?.status == .completed {
+        if exporter.status == .completed {
             return outputURL
         } else {
             throw StoryError.exportFailed("Failed to export story")
@@ -214,14 +216,97 @@ class FacebookParityStoryEngine: ObservableObject {
         
         // Export with superzoom
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent("superzoom_\(UUID().uuidString).mp4")
-        let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
-        exporter?.outputURL = outputURL
-        exporter?.outputFileType = .mp4
-        exporter?.videoComposition = videoComposition
+        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+            throw StoryError.processingFailed("Unable to create export session")
+        }
+        exporter.outputURL = outputURL
+        exporter.outputFileType = .mp4
+        exporter.videoComposition = videoComposition
         
-        await exporter?.export()
+        try await exporter.export()
         
-        if exporter?.status == .completed {
+        if exporter.status == .completed {
+            return outputURL
+        } else {
+            throw StoryError.exportFailed("Failed to export story")
+        }
+    }
+    
+    func applySlowMotion(to video: URL, rate: Double) async throws -> URL {
+        print("🐢 Applying slow motion...")
+        
+        let asset = AVAsset(url: video)
+        let composition = AVMutableComposition()
+        
+        guard let videoTrack = asset.tracks(withMediaType: .video).first else {
+            throw StoryError.invalidVideo("Invalid video format or content")
+        }
+        
+        let compVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)
+        try compVideoTrack?.insertTimeRange(CMTimeRange(start: .zero, duration: asset.duration), of: videoTrack, at: .zero)
+        
+        var compAudioTrack: AVMutableCompositionTrack?
+        if let audioTrack = asset.tracks(withMediaType: .audio).first {
+            compAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+            try compAudioTrack?.insertTimeRange(CMTimeRange(start: .zero, duration: asset.duration), of: audioTrack, at: .zero)
+        }
+        
+        let scaledDuration = CMTimeMultiplyByFloat64(asset.duration, multiplier: 1.0 / rate)
+        let originalRange = CMTimeRange(start: .zero, duration: asset.duration)
+        compVideoTrack?.scaleTimeRange(originalRange, toDuration: scaledDuration)
+        compAudioTrack?.scaleTimeRange(originalRange, toDuration: scaledDuration)
+        
+        let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent("slowmo_\(UUID().uuidString).mp4")
+        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+            throw StoryError.processingFailed("Unable to create export session")
+        }
+        exporter.outputURL = outputURL
+        exporter.outputFileType = .mp4
+        
+        try await exporter.export()
+        
+        if exporter.status == .completed {
+            return outputURL
+        } else {
+            throw StoryError.exportFailed("Failed to export story")
+        }
+    }
+    
+    func applyTimeWarp(to video: URL) async throws -> URL {
+        print("⚡ Applying time warp...")
+        
+        let asset = AVAsset(url: video)
+        let composition = AVMutableComposition()
+        
+        guard let videoTrack = asset.tracks(withMediaType: .video).first else {
+            throw StoryError.invalidVideo("Invalid video format or content")
+        }
+        
+        let compVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)
+        try compVideoTrack?.insertTimeRange(CMTimeRange(start: .zero, duration: asset.duration), of: videoTrack, at: .zero)
+        
+        var compAudioTrack: AVMutableCompositionTrack?
+        if let audioTrack = asset.tracks(withMediaType: .audio).first {
+            compAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+            try compAudioTrack?.insertTimeRange(CMTimeRange(start: .zero, duration: asset.duration), of: audioTrack, at: .zero)
+        }
+        
+        let fastRate: Double = 1.5
+        let scaledDuration = CMTimeMultiplyByFloat64(asset.duration, multiplier: 1.0 / fastRate)
+        let originalRange = CMTimeRange(start: .zero, duration: asset.duration)
+        compVideoTrack?.scaleTimeRange(originalRange, toDuration: scaledDuration)
+        compAudioTrack?.scaleTimeRange(originalRange, toDuration: scaledDuration)
+        
+        let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent("timewarp_\(UUID().uuidString).mp4")
+        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+            throw StoryError.processingFailed("Unable to create export session")
+        }
+        exporter.outputURL = outputURL
+        exporter.outputFileType = .mp4
+        
+        try await exporter.export()
+        
+        if exporter.status == .completed {
             return outputURL
         } else {
             throw StoryError.exportFailed("Failed to export story")
@@ -422,7 +507,7 @@ class FacebookParityStoryEngine: ObservableObject {
         exporter?.outputURL = outputURL
         exporter?.outputFileType = .mp4
         
-        await exporter?.export()
+        try await exporter?.export()
         
         if exporter?.status == .completed {
             return outputURL
@@ -434,8 +519,119 @@ class FacebookParityStoryEngine: ObservableObject {
     // MARK: - Private Helper Methods
     
     private func reverseVideo(_ asset: AVAsset) async throws -> AVAsset {
-        // Implementation for reversing video for Boomerang effect
-        return asset // Simplified for now
+        guard let videoTrack = asset.tracks(withMediaType: .video).first else {
+            throw StoryError.invalidVideo("Unable to reverse video")
+        }
+        
+        let reader = try AVAssetReader(asset: asset)
+        let readerOutputSettings: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA)
+        ]
+        let readerOutput = AVAssetReaderTrackOutput(track: videoTrack, outputSettings: readerOutputSettings)
+        guard reader.canAdd(readerOutput) else {
+            throw StoryError.processingFailed("Unable to configure reader")
+        }
+        reader.add(readerOutput)
+        guard reader.startReading() else {
+            throw StoryError.processingFailed("Unable to read video frames")
+        }
+        
+        var frames: [CVPixelBuffer] = []
+        while let sample = readerOutput.copyNextSampleBuffer(),
+              let buffer = CMSampleBufferGetImageBuffer(sample),
+              let copy = copyPixelBuffer(buffer) {
+            frames.append(copy)
+        }
+        reader.cancelReading()
+        
+        guard !frames.isEmpty else {
+            throw StoryError.processingFailed("No frames to reverse")
+        }
+        
+        let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent("reverse_\(UUID().uuidString).mp4")
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            try FileManager.default.removeItem(at: outputURL)
+        }
+        
+        let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
+        let videoSettings: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: videoTrack.naturalSize.width,
+            AVVideoHeightKey: videoTrack.naturalSize.height
+        ]
+        let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+        writerInput.transform = videoTrack.preferredTransform
+        writerInput.expectsMediaDataInRealTime = false
+        
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: writerInput,
+            sourcePixelBufferAttributes: [
+                kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
+                kCVPixelBufferWidthKey as String: videoTrack.naturalSize.width,
+                kCVPixelBufferHeightKey as String: videoTrack.naturalSize.height
+            ]
+        )
+        
+        guard writer.canAdd(writerInput) else {
+            throw StoryError.processingFailed("Unable to configure writer")
+        }
+        writer.add(writerInput)
+        
+        guard writer.startWriting() else {
+            throw StoryError.processingFailed("Failed to start writer: \(writer.error?.localizedDescription ?? "unknown error")")
+        }
+        writer.startSession(atSourceTime: .zero)
+        
+        let fps = videoTrack.nominalFrameRate > 0 ? videoTrack.nominalFrameRate : 30
+        let frameDuration = CMTime(value: 1, timescale: CMTimeScale(fps))
+        var presentationTime = CMTime.zero
+        
+        for frame in frames.reversed() {
+            while !writerInput.isReadyForMoreMediaData {
+                try await Task.sleep(nanoseconds: 5_000_000)
+            }
+            adaptor.append(frame, withPresentationTime: presentationTime)
+            presentationTime = CMTimeAdd(presentationTime, frameDuration)
+        }
+        
+        writerInput.markAsFinished()
+        await withCheckedContinuation { continuation in
+            writer.finishWriting {
+                continuation.resume()
+            }
+        }
+        
+        if writer.status == .completed {
+            return AVAsset(url: outputURL)
+        } else {
+            throw StoryError.processingFailed("Failed to reverse video: \(writer.error?.localizedDescription ?? "unknown error")")
+        }
+    }
+    
+    private func copyPixelBuffer(_ buffer: CVPixelBuffer) -> CVPixelBuffer? {
+        let width = CVPixelBufferGetWidth(buffer)
+        let height = CVPixelBufferGetHeight(buffer)
+        let pixelFormat = CVPixelBufferGetPixelFormatType(buffer)
+        
+        var copy: CVPixelBuffer?
+        guard CVPixelBufferCreate(kCFAllocatorDefault, width, height, pixelFormat, nil, &copy) == kCVReturnSuccess,
+              let newBuffer = copy else {
+            return nil
+        }
+        
+        CVPixelBufferLockBaseAddress(buffer, .readOnly)
+        CVPixelBufferLockBaseAddress(newBuffer, [])
+        
+        if let src = CVPixelBufferGetBaseAddress(buffer),
+           let dst = CVPixelBufferGetBaseAddress(newBuffer) {
+            let bytesPerRow = CVPixelBufferGetBytesPerRow(buffer)
+            memcpy(dst, src, bytesPerRow * height)
+        }
+        
+        CVPixelBufferUnlockBaseAddress(newBuffer, [])
+        CVPixelBufferUnlockBaseAddress(buffer, .readOnly)
+        
+        return newBuffer
     }
     
     private func createCollageLayout(images: [UIImage], in canvasSize: CGSize, context: UIGraphicsImageRendererContext) {

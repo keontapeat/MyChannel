@@ -27,6 +27,7 @@ struct AppTheme {
         static let error = Color(hex: "EF4444") ?? Color.red
         // ADD: secondary background for chips, tags, elevated containers
         static let backgroundSecondary = Color(hex: "F2F3F5") ?? Color(white: 0.95)
+        static let verificationBlue = Color(hex: "1DA1F2") ?? Color.blue
         static let gradient = LinearGradient(
             colors: [primary, secondary],
             startPoint: .topLeading,
