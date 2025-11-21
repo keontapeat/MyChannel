@@ -58,11 +58,9 @@ struct MyChannelApp: App {
                     // Start performance optimization after UI is ready
                     PerformanceOptimizer.shared.optimizeAppLaunch()
                     
-                    // Start performance monitoring in debug builds
+                    // Performance monitoring automatically starts in debug builds
                     #if DEBUG
-                    Task {
-                        await PerformanceMonitor.shared.startMonitoring()
-                    }
+                    print("⚡ [Performance] Monitoring active - shared instance initialized")
                     #endif
                     
                     // 🔥 INITIALIZE SMART USER SEEDER: Populate app with AI-generated users

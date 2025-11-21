@@ -101,11 +101,60 @@ service cloud.firestore {
       allow update, delete: if isCreator(resource.data.creatorId) || isAdmin();
     }
     
-    // Stories - 🔥 OPTIMIZED
+    // Stories - 🔥 OPTIMIZED with comprehensive validation
     match /stories/{storyId} {
+      // Public read (like Instagram)
       allow read: if true;
-      allow create: if isSignedIn() && isValidSize(request.resource.data, 30);
-      allow update, delete: if isCreator(resource.data.creatorId) || isAdmin();
+      
+      // Create with validation
+      allow create: if isSignedIn() && 
+                       isValidSize(request.resource.data, 30) &&
+                       request.resource.data.creatorId == request.auth.uid &&
+                       request.resource.data.expiresAt > request.time;
+      
+      // Update (owner only)
+      allow update: if isCreator(resource.data.creatorId) || isAdmin();
+      
+      // Delete (owner or expired)
+      allow delete: if isCreator(resource.data.creatorId) || 
+                       isAdmin() ||
+                       resource.data.expiresAt < request.time;
+    }
+    
+    // Story views tracking - 🔥 OPTIMIZED
+    match /story_views/{storyId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    
+    // Story analytics (creator only) - 🔥 SECURE
+    match /story_analytics/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    // Story reports (abuse) - 🔥 SECURE
+    match /story_reports/{reportId} {
+      allow read: if isSignedIn() && 
+                     (request.auth.uid == resource.data.reporterId || isAdmin());
+      allow create: if isSignedIn() &&
+                       request.resource.data.reporterId == request.auth.uid;
+      allow update: if isAdmin();
+    }
+    
+    // Story highlights - 🔥 OPTIMIZED
+    match /story_highlights/{userId}/{highlightId} {
+      allow read: if true;  // Public
+      allow create, update, delete: if isOwner(userId);
+    }
+    
+    // Close friends lists - 🔥 PRIVATE
+    match /close_friends/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // Viewed stories tracking - 🔥 PRIVATE
+    match /users/{userId}/viewed_stories/{storyId} {
+      allow read, write: if isOwner(userId);
     }
     
     // ========================================
