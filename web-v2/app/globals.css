@@ -1,322 +1,264 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* 🔥 YOUTUBE-LEVEL PROFESSIONAL THEME SYSTEM 🔥 */
+/* 🔥 YOUTUBE-LEVEL BEAUTIFUL UI THEME 🔥 */
 
-/* YouTube's Exact Color Palette */
-:root {
-  /* Primary Red - YouTube Brand */
-  --color-primary: 255 0 0;
-  --color-primary-hover: 204 0 0;
-  
-  /* Light Mode (Default) - Pure & Professional */
-  --color-background: 255 255 255;        /* Pure white */
-  --color-surface: 249 249 249;           /* Subtle gray */
-  --color-surface-hover: 245 245 245;     /* Hover state */
-  --color-border: 229 229 229;            /* Barely visible borders */
-  
-  --color-text-primary: 15 15 15;         /* True black (high contrast) */
-  --color-text-secondary: 96 96 96;       /* Medium gray */
-  --color-text-tertiary: 136 136 136;     /* Light gray */
-  
-  /* Semantic Colors */
-  --color-success: 46 125 50;
-  --color-warning: 255 152 0;
-  --color-error: 211 47 47;
-  
-  /* Video Player */
-  --color-player-bg: 0 0 0;
-  --color-player-controls: 255 255 255;
-  
-  /* Professional Spacing System (4px base) */
-  --spacing-1: 0.25rem;   /* 4px */
-  --spacing-2: 0.5rem;    /* 8px */
-  --spacing-3: 0.75rem;   /* 12px */
-  --spacing-4: 1rem;      /* 16px */
-  --spacing-5: 1.25rem;   /* 20px */
-  --spacing-6: 1.5rem;    /* 24px */
-  --spacing-8: 2rem;      /* 32px */
-  --spacing-10: 2.5rem;   /* 40px */
-  --spacing-12: 3rem;     /* 48px */
-  
-  /* Border Radius (YouTube Style) */
-  --radius-sm: 0.375rem;  /* 6px */
-  --radius-md: 0.5rem;    /* 8px */
-  --radius-lg: 0.75rem;   /* 12px */
-  --radius-xl: 1rem;      /* 16px */
-  --radius-full: 9999px;  /* Pills */
-  
-  /* Z-index Layers */
-  --z-modal: 1000;
-  --z-dropdown: 100;
-  --z-sidebar: 50;
-  --z-header: 40;
-  --z-mini-player: 999;
-}
-
-/* Dark Mode - Professional Black */
-.dark,
-[data-theme="dark"] {
-  --color-background: 15 15 15;           /* True black */
-  --color-surface: 33 33 33;              /* Charcoal */
-  --color-surface-hover: 40 40 40;        /* Lighter charcoal */
-  --color-border: 48 48 48;               /* Dark gray border */
-  
-  --color-text-primary: 255 255 255;      /* Pure white */
-  --color-text-secondary: 170 170 170;    /* Light gray */
-  --color-text-tertiary: 136 136 136;     /* Medium gray */
-}
-
-@theme inline {
-  /* Colors */
-  --color-primary: rgb(var(--color-primary));
-  --color-primary-hover: rgb(var(--color-primary-hover));
-  --color-background: rgb(var(--color-background));
-  --color-surface: rgb(var(--color-surface));
-  --color-surface-hover: rgb(var(--color-surface-hover));
-  --color-border: rgb(var(--color-border));
-  --color-text-primary: rgb(var(--color-text-primary));
-  --color-text-secondary: rgb(var(--color-text-secondary));
-  --color-text-tertiary: rgb(var(--color-text-tertiary));
-  --color-success: rgb(var(--color-success));
-  --color-warning: rgb(var(--color-warning));
-  --color-error: rgb(var(--color-error));
-  
-  /* YouTube Professional Typography */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
-  
-  /* Font Sizes (YouTube System) */
-  --font-size-xs: 0.6875rem;   /* 11px - tiny labels */
-  --font-size-sm: 0.75rem;     /* 12px - captions, metadata */
-  --font-size-base: 0.875rem;  /* 14px - body text */
-  --font-size-md: 1rem;        /* 16px - titles */
-  --font-size-lg: 1.125rem;    /* 18px - headings */
-  --font-size-xl: 1.25rem;     /* 20px - large headings */
-  
-  /* Line Heights */
-  --line-height-tight: 1.2;    /* Titles */
-  --line-height-snug: 1.375;   /* Compact text */
-  --line-height-normal: 1.5;   /* Body text */
-  --line-height-relaxed: 1.625; /* Spacious */
-}
-
-/* Base Styles - YouTube Professional */
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  scroll-behavior: smooth;
-}
-
-body {
-  background: rgb(var(--color-background));
-  color: rgb(var(--color-text-primary));
-  font-family: var(--font-sans);
-  font-size: var(--font-size-base);
-  line-height: var(--line-height-normal);
-  overflow-x: hidden;
-  font-feature-settings: "kern" 1, "liga" 1;
-  -webkit-font-feature-settings: "kern" 1, "liga" 1;
-  text-rendering: optimizeLegibility;
-}
-
-/* Professional Scrollbar (YouTube Style) */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
-  border-radius: 4px;
-  transition: background 0.2s ease;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.25);
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
-}
-
-/* Hide Scrollbar Utility */
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-
-/* Focus Styles (Accessibility) */
-*:focus-visible {
-  outline: 2px solid rgb(var(--color-primary));
-  outline-offset: 2px;
-}
-
-/* Screen Reader Only (Accessibility) */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
-}
-
-.sr-only:focus,
-.focus\:not-sr-only:focus {
-  position: static;
-  width: auto;
-  height: auto;
-  padding: inherit;
-  margin: inherit;
-  overflow: visible;
-  clip: auto;
-  white-space: normal;
-}
-
-/* Selection */
-::selection {
-  background: rgba(var(--color-primary), 0.2);
-  color: rgb(var(--color-text-primary));
-}
-
-/* Video.js Overrides */
-.video-js {
-  font-family: var(--font-sans);
-}
-
-.vjs-big-play-button {
-  background-color: rgba(0, 0, 0, 0.7) !important;
-  border: none !important;
-  border-radius: 50% !important;
-}
-
-.vjs-big-play-button:hover {
-  background-color: rgb(var(--color-primary)) !important;
-}
-
-/* 🔥 YOUTUBE PREMIUM ANIMATIONS & EFFECTS 🔥 */
-
-/* Smooth Transitions */
-.transition-all {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.transition-fast {
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.transition-slow {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Premium Video Card Hover Effects */
-.video-card {
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.video-card:hover {
-  transform: translateY(-2px);
-}
-
-.video-card-thumbnail {
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.video-card:hover .video-card-thumbnail {
-  transform: scale(1.05);
-}
-
-/* Button Press Effect */
-.btn-press:active {
-  transform: scale(0.98);
-}
-
-/* Card Lift Effect */
-.card-lift {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.card-lift:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-.dark .card-lift:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-/* Shimmer Loading Animation */
-@keyframes shimmer {
-  0% {
-    background-position: -1000px 0;
+@layer base {
+  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     LIGHT MODE (YouTube Premium Style)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+  :root {
+    /* Primary Colors */
+    --color-primary: 255 0 0;           /* YouTube Red */
+    --color-primary-hover: 204 0 0;     /* Darker red on hover */
+    
+    /* Backgrounds */
+    --color-background: 255 255 255;    /* Pure white */
+    --color-surface: 249 249 249;       /* Light gray surface */
+    --color-surface-hover: 245 245 245; /* Hover state */
+    --color-elevated: 255 255 255;      /* Elevated cards */
+    
+    /* Text */
+    --color-text-primary: 15 15 15;     /* Almost black */
+    --color-text-secondary: 96 96 96;   /* Medium gray */
+    --color-text-tertiary: 144 144 144; /* Light gray */
+    --color-text-disabled: 170 170 170; /* Disabled gray */
+    
+    /* Borders & Dividers */
+    --color-border: 229 229 229;        /* Light border */
+    --color-divider: 0 0 0;             /* Black divider (with opacity) */
+    
+    /* Functional Colors */
+    --color-success: 15 157 88;         /* Green */
+    --color-warning: 255 179 0;         /* Yellow */
+    --color-error: 255 0 0;             /* Red */
+    --color-info: 0 122 255;            /* Blue */
+    
+    /* Video Player */
+    --color-player-bg: 0 0 0;           /* Black */
+    --color-player-controls: 255 255 255; /* White */
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
   }
-  100% {
-    background-position: 1000px 0;
+
+  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     DARK MODE (YouTube Dark Premium)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+  .dark {
+    /* Backgrounds */
+    --color-background: 15 15 15;       /* Almost black */
+    --color-surface: 33 33 33;          /* Dark gray surface */
+    --color-surface-hover: 48 48 48;    /* Lighter on hover */
+    --color-elevated: 42 42 42;         /* Elevated cards */
+    
+    /* Text */
+    --color-text-primary: 255 255 255;  /* White */
+    --color-text-secondary: 170 170 170; /* Light gray */
+    --color-text-tertiary: 136 136 136;  /* Medium gray */
+    --color-text-disabled: 96 96 96;     /* Disabled */
+    
+    /* Borders */
+    --color-border: 63 63 63;           /* Dark border */
+    --color-divider: 255 255 255;       /* White divider (with opacity) */
+    
+    /* Shadows (darker for dark mode) */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6), 0 4px 6px -4px rgb(0 0 0 / 0.5);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.7), 0 8px 10px -6px rgb(0 0 0 / 0.6);
+  }
+
+  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     BASE STYLES (YouTube Typography)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-[rgb(var(--color-background))] text-[rgb(var(--color-text-primary))];
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     SCROLLBAR STYLING (YouTube Style)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--color-border));
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--color-text-tertiary));
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 
-.skeleton {
-  animation: shimmer 2s infinite linear;
-  background: linear-gradient(
-    90deg,
-    rgba(0, 0, 0, 0.04) 0%,
-    rgba(0, 0, 0, 0.08) 50%,
-    rgba(0, 0, 0, 0.04) 100%
-  );
-  background-size: 1000px 100%;
+@layer utilities {
+  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     CUSTOM UTILITIES (YouTube Components)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+  
+  /* YouTube-style Card */
+  .youtube-card {
+    @apply bg-[rgb(var(--color-surface))] rounded-xl border border-[rgb(var(--color-border))]/10;
+    @apply hover:bg-[rgb(var(--color-surface-hover))] transition-all duration-200;
+  }
+
+  /* YouTube-style Button */
+  .youtube-button {
+    @apply px-4 py-2 rounded-full font-medium transition-all duration-200;
+    @apply hover:bg-[rgb(var(--color-surface-hover))];
+  }
+
+  .youtube-button-primary {
+    @apply bg-[rgb(var(--color-primary))] text-white;
+    @apply hover:bg-[rgb(var(--color-primary-hover))];
+  }
+
+  /* YouTube-style Input */
+  .youtube-input {
+    @apply bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))];
+    @apply rounded-full px-4 py-2.5 text-[15px];
+    @apply focus:outline-none focus:border-[rgb(var(--color-primary))] focus:ring-1 focus:ring-[rgb(var(--color-primary))];
+    @apply placeholder:text-[rgb(var(--color-text-tertiary))];
+    @apply transition-all duration-200;
+  }
+
+  /* YouTube-style Chip/Tag */
+  .youtube-chip {
+    @apply px-3 py-1.5 rounded-full text-sm font-medium;
+    @apply bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text-primary))];
+    @apply hover:bg-[rgb(var(--color-surface-hover))];
+    @apply transition-all duration-200 cursor-pointer;
+  }
+
+  .youtube-chip-active {
+    @apply bg-[rgb(var(--color-text-primary))] text-[rgb(var(--color-background))];
+    @apply hover:bg-[rgb(var(--color-text-primary))]/90;
+  }
+
+  /* Skeleton Loading (YouTube Style) */
+  .skeleton {
+    @apply animate-pulse bg-gradient-to-r;
+    @apply from-[rgb(var(--color-surface))] via-[rgb(var(--color-surface-hover))] to-[rgb(var(--color-surface))];
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  /* Hover Scale Effect (YouTube Cards) */
+  .hover-scale {
+    @apply transition-transform duration-200;
+  }
+
+  .hover-scale:hover {
+    @apply scale-[1.02];
+  }
+
+  /* YouTube-style Divider */
+  .youtube-divider {
+    @apply h-px bg-[rgb(var(--color-divider))]/10;
+  }
+
+  /* Glassmorphism (Premium Feel) */
+  .glass {
+    @apply bg-[rgb(var(--color-surface))]/80 backdrop-blur-md;
+    @apply border border-[rgb(var(--color-border))]/20;
+  }
+
+  /* YouTube-style Shadow */
+  .youtube-shadow {
+    box-shadow: var(--shadow-md);
+  }
+
+  .youtube-shadow-lg {
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* Premium Gradient Text */
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-[rgb(var(--color-primary))] to-pink-500;
+  }
+
+  /* Smooth Transitions */
+  .smooth {
+    @apply transition-all duration-300 ease-in-out;
+  }
+
+  /* Focus Visible (Accessibility) */
+  .focus-visible-youtube {
+    @apply focus-visible:outline-none focus-visible:ring-2;
+    @apply focus-visible:ring-[rgb(var(--color-primary))] focus-visible:ring-offset-2;
+    @apply focus-visible:ring-offset-[rgb(var(--color-background))];
+  }
+
+  /* Line Clamp Utilities */
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 }
 
-.dark .skeleton {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.05) 0%,
-    rgba(255, 255, 255, 0.1) 50%,
-    rgba(255, 255, 255, 0.05) 100%
-  );
-  background-size: 1000px 100%;
-}
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   YOUTUBE-STYLE ANIMATIONS
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-/* Fade In Animation */
 @keyframes fadeIn {
   from {
     opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.fade-in {
-  animation: fadeIn 0.3s ease-in-out forwards;
-}
-
-/* Fade In Up Animation */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -324,24 +266,231 @@ body {
   }
 }
 
-.fade-in-up {
-  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  opacity: 0;
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
-.animate-fade-in-up {
-  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  opacity: 0;
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-/* Stagger Delays */
-.stagger-1 { animation-delay: 0.05s; }
-.stagger-2 { animation-delay: 0.1s; }
-.stagger-3 { animation-delay: 0.15s; }
-.stagger-4 { animation-delay: 0.2s; }
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
 
-/* Pulse Animation */
-@keyframes pulse {
+.animate-slideInRight {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.2s ease-out;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   VIDEO CARD HOVER EFFECTS (YouTube Premium)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.video-card-container {
+  @apply transition-all duration-300;
+}
+
+.video-card-container:hover .video-thumbnail {
+  @apply scale-105;
+}
+
+.video-card-container:hover .video-title {
+  @apply text-[rgb(var(--color-primary))];
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   GRADIENT BACKGROUNDS (Premium Feel)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.hero-gradient {
+  background: linear-gradient(
+    135deg,
+    rgb(var(--color-background)) 0%,
+    rgb(var(--color-surface)) 50%,
+    rgb(var(--color-background)) 100%
+  );
+}
+
+.premium-gradient {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 0, 0, 0.1) 0%,
+    rgba(255, 100, 100, 0.05) 50%,
+    rgba(255, 0, 0, 0.1) 100%
+  );
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   IMPROVED SKELETON LOADING
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.skeleton-youtube {
+  @apply relative overflow-hidden;
+  @apply bg-[rgb(var(--color-surface))];
+}
+
+.skeleton-youtube::after {
+  content: '';
+  @apply absolute inset-0;
+  @apply bg-gradient-to-r from-transparent via-white/10 to-transparent;
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   TYPOGRAPHY (YouTube System Fonts)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+h1, h2, h3, h4, h5, h6 {
+  @apply font-semibold text-[rgb(var(--color-text-primary))];
+}
+
+.text-display {
+  @apply text-3xl font-bold;
+}
+
+.text-headline {
+  @apply text-xl font-semibold;
+}
+
+.text-title {
+  @apply text-base font-medium;
+}
+
+.text-body {
+  @apply text-sm font-normal;
+}
+
+.text-caption {
+  @apply text-xs font-normal text-[rgb(var(--color-text-secondary))];
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   BUTTON STYLES (YouTube Premium)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.btn-youtube {
+  @apply px-4 py-2 rounded-full font-medium text-sm;
+  @apply transition-all duration-200;
+  @apply focus-visible-youtube;
+}
+
+.btn-primary {
+  @apply bg-[rgb(var(--color-primary))] text-white;
+  @apply hover:bg-[rgb(var(--color-primary-hover))];
+  @apply active:scale-95;
+}
+
+.btn-secondary {
+  @apply bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text-primary))];
+  @apply hover:bg-[rgb(var(--color-surface-hover))];
+  @apply border border-[rgb(var(--color-border))];
+}
+
+.btn-ghost {
+  @apply bg-transparent text-[rgb(var(--color-text-primary))];
+  @apply hover:bg-[rgb(var(--color-surface-hover))];
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   VIDEO PLAYER OVERLAY (YouTube Style)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.player-overlay {
+  @apply absolute inset-0 bg-gradient-to-t;
+  @apply from-black/80 via-transparent to-transparent;
+  @apply opacity-0 hover:opacity-100 transition-opacity duration-300;
+}
+
+.player-controls {
+  @apply absolute bottom-0 left-0 right-0 p-4;
+  @apply flex items-center gap-4;
+  @apply text-white;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   RESPONSIVE GRID (YouTube Premium Layout)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.video-grid-youtube {
+  @apply grid gap-x-4 gap-y-10;
+  @apply grid-cols-1;
+  @apply sm:grid-cols-2;
+  @apply md:grid-cols-3;
+  @apply lg:grid-cols-4;
+  @apply xl:grid-cols-5;
+  @apply 2xl:grid-cols-6;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   NAVIGATION (YouTube Style)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.nav-link-youtube {
+  @apply flex items-center gap-3 px-4 py-2.5 rounded-xl;
+  @apply text-[rgb(var(--color-text-primary))] font-medium text-sm;
+  @apply hover:bg-[rgb(var(--color-surface-hover))];
+  @apply transition-all duration-200;
+}
+
+.nav-link-active {
+  @apply bg-[rgb(var(--color-surface-hover))];
+  @apply font-semibold;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   PREMIUM EFFECTS
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(255, 0, 0, 0.3);
+}
+
+.glow-red-strong {
+  box-shadow: 0 0 30px rgba(255, 0, 0, 0.5);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   LIVE BADGE (YouTube Live Style)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.live-badge {
+  @apply px-2 py-1 rounded bg-red-600 text-white text-xs font-bold uppercase;
+  @apply flex items-center gap-1.5;
+}
+
+.live-dot {
+  @apply w-2 h-2 rounded-full bg-white;
+  animation: pulse-live 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-live {
   0%, 100% {
     opacity: 1;
   }
@@ -350,160 +499,205 @@ body {
   }
 }
 
-.pulse {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   VERIFIED BADGE (YouTube Style)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.verified-badge {
+  @apply inline-flex items-center justify-center;
+  @apply w-4 h-4 rounded-full;
+  @apply bg-[rgb(var(--color-text-secondary))];
 }
 
-/* Glassmorphism Effect */
-.glass-effect {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   RESPONSIVE TYPOGRAPHY
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+@media (max-width: 640px) {
+  .text-display {
+    @apply text-2xl;
+  }
+  
+  .text-headline {
+    @apply text-lg;
+  }
 }
 
-.dark .glass-effect {
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   PERFORMANCE OPTIMIZATIONS
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* GPU Acceleration for Smooth Animations */
+.gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform;
 }
 
-/* Premium Shadow Levels */
-.shadow-sm-yt {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+/* Optimize Image Rendering */
+img {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
 }
 
-.shadow-md-yt {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+/* Lazy Loading Support */
+.lazy-load {
+  content-visibility: auto;
+  contain-intrinsic-size: 200px;
 }
 
-.shadow-lg-yt {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   YOUTUBE-STYLE CARD COMPONENTS
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.video-card-youtube {
+  @apply cursor-pointer group;
 }
 
-.shadow-xl-yt {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+.video-thumbnail-container {
+  @apply relative aspect-video rounded-xl overflow-hidden mb-3;
+  @apply bg-[rgb(var(--color-surface))];
 }
 
-.dark .shadow-sm-yt {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+.video-thumbnail-image {
+  @apply w-full h-full object-cover;
+  @apply transition-transform duration-300 group-hover:scale-105;
 }
 
-.dark .shadow-md-yt {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+.video-duration-badge {
+  @apply absolute bottom-2 right-2;
+  @apply px-1.5 py-0.5 rounded bg-black/90 backdrop-blur-sm;
+  @apply text-white text-xs font-semibold;
 }
 
-.dark .shadow-lg-yt {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+.video-metadata-container {
+  @apply flex gap-3;
 }
 
-.dark .shadow-xl-yt {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+.channel-avatar {
+  @apply w-10 h-10 rounded-full flex-shrink-0;
+  @apply hover:opacity-80 transition-opacity cursor-pointer;
 }
 
-/* YouTube-Style Buttons */
-.btn-youtube {
-  background: rgb(var(--color-primary));
-  color: white;
-  padding: 0.625rem 1rem;
-  border-radius: var(--radius-full);
-  font-weight: 500;
-  font-size: var(--font-size-base);
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
+.video-info {
+  @apply flex-1 min-w-0;
 }
 
-.btn-youtube:hover {
-  background: rgb(var(--color-primary-hover));
+.video-title-youtube {
+  @apply font-medium text-[rgb(var(--color-text-primary))];
+  @apply line-clamp-2 mb-1 text-[15px] leading-tight;
+  @apply group-hover:text-[rgb(var(--color-primary))] transition-colors;
 }
 
-.btn-youtube:active {
-  transform: scale(0.98);
+.channel-name-youtube {
+  @apply flex items-center gap-1;
+  @apply text-[rgb(var(--color-text-secondary))] text-sm;
+  @apply hover:text-[rgb(var(--color-text-primary))] transition-colors;
 }
 
-.btn-youtube-secondary {
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text-primary));
-  padding: 0.625rem 1rem;
-  border-radius: var(--radius-full);
-  font-weight: 500;
-  font-size: var(--font-size-base);
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
+.video-stats-youtube {
+  @apply text-[rgb(var(--color-text-secondary))] text-sm;
 }
 
-.btn-youtube-secondary:hover {
-  background: rgb(var(--color-surface-hover));
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   HEADER STYLES (YouTube Premium)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.header-youtube {
+  @apply sticky top-0 z-50;
+  @apply bg-[rgb(var(--color-background))]/95 backdrop-blur-md;
+  @apply border-b border-[rgb(var(--color-border))]/10;
 }
 
-.btn-youtube-secondary:active {
-  transform: scale(0.98);
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   SIDEBAR STYLES (YouTube Layout)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.sidebar-youtube {
+  @apply fixed left-0 top-16 bottom-0;
+  @apply w-60 bg-[rgb(var(--color-background))];
+  @apply border-r border-[rgb(var(--color-border))]/10;
+  @apply overflow-y-auto;
 }
 
-/* YouTube-Style Card */
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   PERFORMANCE: Reduce Layout Shifts
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* Reserve space for thumbnails (16:9 ratio) */
+.thumbnail-placeholder {
+  aspect-ratio: 16 / 9;
+}
+
+/* Reserve space for avatar */
+.avatar-placeholder {
+  width: 40px;
+  height: 40px;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ACCESSIBILITY IMPROVEMENTS
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  :root {
+    --color-border: 0 0 0;
+    --color-text-secondary: 50 50 50;
+  }
+  
+  .dark {
+    --color-border: 255 255 255;
+    --color-text-secondary: 200 200 200;
+  }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   PRINT STYLES (Clean Print Layout)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    @apply bg-white text-black;
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   UTILITY CLASSES
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.container-youtube {
+  @apply max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8;
+}
+
+.section-youtube {
+  @apply py-8 md:py-12;
+}
+
 .card-youtube {
-  background: rgb(var(--color-surface));
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  transition: all 0.2s ease;
+  @apply bg-[rgb(var(--color-surface))] rounded-xl;
+  @apply border border-[rgb(var(--color-border))]/10;
+  @apply p-6 hover:border-[rgb(var(--color-border))]/20;
+  @apply transition-all duration-200;
 }
 
-.card-youtube:hover {
-  background: rgb(var(--color-surface-hover));
-}
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   PERFORMANCE: Content Visibility
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-/* Hover Scale Effect */
-.hover-scale {
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.hover-scale:hover {
-  transform: scale(1.02);
-}
-
-/* Smooth Page Transitions */
-.page-transition {
-  animation: fadeIn 0.2s ease-in-out;
-}
-
-/* Tooltip Fade In */
-@keyframes tooltipFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.tooltip-enter {
-  animation: tooltipFadeIn 0.15s ease-in-out forwards;
-  animation-delay: 0.1s;
-  opacity: 0;
-}
-
-/* Premium Button Hover with Shine */
-.btn-premium {
-  position: relative;
-  overflow: hidden;
-}
-
-.btn-premium::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.5s;
-}
-
-.btn-premium:hover::before {
-  left: 100%;
+.offscreen {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 500px;
 }
