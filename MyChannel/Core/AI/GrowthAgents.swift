@@ -616,6 +616,12 @@ final class ThumbnailABTestingAgent: ObservableObject {
     }
     
     private func determineWinner(test: ThumbnailTest) -> String {
+        // 🔥 FIX: Check if thumbnails array is not empty
+        guard !test.thumbnails.isEmpty else {
+            print("⚠️ [ThumbnailABTesting] No thumbnails to determine winner")
+            return ""
+        }
+        
         // Calculate CTR for each thumbnail
         var bestThumbnail = test.thumbnails[0]
         var bestCTR = 0.0

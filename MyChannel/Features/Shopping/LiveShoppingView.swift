@@ -18,36 +18,29 @@ struct LiveShoppingView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                AppTheme.Colors.background
-                    .ignoresSafeArea()
-                
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Hero Banner
-                        shoppingHero
-                        
-                        // Live Shopping Shows
-                        liveShowsSection
-                        
-                        // Featured Products
-                        featuredProductsSection
-                        
-                        // Shop by Category
-                        categoriesSection
-                        
-                        // Creator Shops
-                        creatorShopsSection
-                        
-                        // Flash Sales
-                        flashSalesSection
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 24)
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Live Shopping Shows
+                    liveShowsSection
+                    
+                    // Featured Products
+                    featuredProductsSection
+                    
+                    // Shop by Category
+                    categoriesSection
+                    
+                    // Creator Shops
+                    creatorShopsSection
+                    
+                    // Flash Sales
+                    flashSalesSection
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 24)
             }
+            .background(AppTheme.Colors.background)
             .navigationTitle("Live Shopping")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
         }
         .sheet(item: $selectedProduct) { product in
             ProductDetailSheet(product: product, showARTryOn: $showARTryOn, showCheckout: $showCheckout)
@@ -62,60 +55,6 @@ struct LiveShoppingView: View {
                 await viewModel.loadLiveShops()
             }
         }
-    }
-    
-    // MARK: - Hero Banner
-    private var shoppingHero: some View {
-        ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 24)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.4, green: 0.2, blue: 0.9),
-                            Color(red: 0.8, green: 0.2, blue: 0.6)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(height: 200)
-            
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 10) {
-                    Image(systemName: "cart.fill")
-                        .font(.system(size: 28, weight: .bold))
-                    Text("Live Shopping")
-                        .font(.system(size: 26, weight: .bold))
-                }
-                .foregroundColor(.white)
-                
-                Text("Shop live with your favorite creators")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white.opacity(0.95))
-                
-                HStack(spacing: 16) {
-                    featureBadge(icon: "camera.fill", text: "AR Try-On")
-                    featureBadge(icon: "bolt.fill", text: "Instant Buy")
-                    featureBadge(icon: "percent", text: "Flash Sales")
-                }
-            }
-            .padding(24)
-        }
-        .shadow(color: .black.opacity(0.2), radius: 20, x: 0, y: 10)
-    }
-    
-    private func featureBadge(icon: String, text: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .bold))
-            Text(text)
-                .font(.system(size: 12, weight: .semibold))
-        }
-        .foregroundColor(.white)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color.white.opacity(0.2))
-        .clipShape(Capsule())
     }
     
     // MARK: - Live Shows
@@ -170,18 +109,14 @@ struct LiveShoppingView: View {
         }
     }
     
-    // MARK: - Categories
+    // MARK: - Categories (YouTube-style: sleek, neutral colors)
     private var categoriesSection: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Shop by Category")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Spacer()
-            }
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Shop by Category")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
             
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 16) {
                 ForEach(ShoppingCategory.allCases) { category in
                     CategoryButton(category: category) {
                         // Navigate to category

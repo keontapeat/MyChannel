@@ -3,19 +3,19 @@
 import ProfilePageClient from './ProfilePageClient';
 
 interface ProfilePageProps {
-  params: {
+  params: Promise<{
     username: string;
-  };
+  }>;
 }
 
-// Required for static export
-export const dynamic = 'force-static';
-
-export async function generateStaticParams(): Promise<{ username: string }[]> {
-  return [];
+export async function generateStaticParams() {
+  // Generate one fallback page for static export
+  // All other pages will be handled client-side via 404.html fallback
+  return [{ username: '_fallback' }];
 }
 
-export default function ProfilePage({ params }: ProfilePageProps) {
+export default async function ProfilePage(props: ProfilePageProps) {
+  const params = await props.params;
   return <ProfilePageClient username={params.username} />;
 }
 

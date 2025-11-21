@@ -283,10 +283,12 @@ struct ModernVideoPlayerView: View {
     }
     
     private func handleMinimize() {
-        // Set up global player for mini player
-        globalPlayer.currentVideo = video
-        globalPlayer.player?.replaceCurrentItem(with: playerViewModel.player?.currentItem)
-        globalPlayer.minimizePlayer()
+        // 🔥 PiP ONLY: Start Picture-in-Picture
+        if AVPictureInPictureController.isPictureInPictureSupported() {
+            globalPlayer.currentVideo = video
+            globalPlayer.player?.replaceCurrentItem(with: playerViewModel.player?.currentItem)
+            globalPlayer.togglePictureInPicture()
+        }
         dismiss()
     }
     

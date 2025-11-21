@@ -313,18 +313,63 @@ struct ProfileSettingsView: View {
     private var ownerFeaturedSection: some View {
         Section {
             if isOwner {
+                // 🔥 THERMONUCLEAR Featured Manager
+                NavigationLink(destination: ThermonuclearFeaturedManager()) {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.yellow, .orange, .red],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 32, height: 32)
+                            
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Featured Videos")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppTheme.Colors.textPrimary)
+                            
+                            Text("Easy add/remove • Max 3 videos")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(AppTheme.Colors.textSecondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                
+                // Legacy Manager (hidden unless needed)
                 NavigationLink(destination: OwnerFeaturedManagerView()) {
                     HStack {
-                        SettingsIcon(systemName: "star.fill", color: .yellow)
-                        Text("Manage Featured (Owner)")
+                        SettingsIcon(systemName: "folder.fill", color: .gray)
+                        Text("Legacy Featured Manager")
                             .font(.system(size: 16))
-                            .foregroundStyle(AppTheme.Colors.textPrimary)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
                         Spacer()
                     }
                 }
             }
         } header: {
             if isOwner { Text("Owner Tools") }
+        } footer: {
+            if isOwner {
+                Text("Manage which videos appear in the featured carousel on your Home feed")
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+            }
         }
     }
 

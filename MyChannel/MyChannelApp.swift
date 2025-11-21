@@ -14,6 +14,7 @@ import UserNotifications
 @main
 struct MyChannelApp: App {
     @UIApplicationDelegateAdaptor(FirebaseAppDelegate.self) var firebaseDelegate
+    @Environment(\.scenePhase) private var scenePhase
 
     @StateObject private var authManager: AuthenticationManager = AuthenticationManager.shared
     @StateObject private var appState: AppState = AppState()
@@ -45,6 +46,11 @@ struct MyChannelApp: App {
                 .environmentObject(appState)
                 .onAppear {
                     print("📱 App appeared with MC logo splash!")
+                    
+                    // 🔥🔥🔥 NUCLEAR FIX: Reset ALL player state on app launch
+                    // This GUARANTEES mini-player never persists across sessions
+                    GlobalVideoPlayerManager.shared.nuclearReset()
+                    print("✅ NUCLEAR RESET complete on app launch")
                     
                     // 🏥 Start MyChannel Doctor 24/7 monitoring
                     MyChannelDoctorService.shared.startMonitoring()
@@ -84,6 +90,12 @@ struct MyChannelApp: App {
                 }
                 .onChange(of: authManager.isAuthenticated) { isAuth in
                     if !isAuth { appState.clearUser() }
+                }
+                .onChange(of: scenePhase) { newPhase in
+                    if newPhase == .background || newPhase == .inactive {
+                        print("🛑 [MyChannelApp] ScenePhase changed to \(newPhase) - forcing nuclear reset")
+                        GlobalVideoPlayerManager.shared.nuclearReset()
+                    }
                 }
                 .onOpenURL { url in
                     #if canImport(GoogleSignIn)

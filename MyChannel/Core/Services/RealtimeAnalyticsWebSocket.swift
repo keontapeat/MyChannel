@@ -34,7 +34,8 @@ class RealtimeAnalyticsWebSocket: ObservableObject {
         
         // Build WebSocket URL
         guard let url = buildWebSocketURL(creatorId: creatorId) else {
-            print("🚨 Invalid WebSocket URL")
+            print("⚠️ [WebSocket] WebSocket URL not configured - using Firestore listeners instead")
+            // This is expected in development - Firestore listeners will handle updates
             return
         }
         

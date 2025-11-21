@@ -54,9 +54,21 @@ class ImagePrefetcher {
     }
     
     /// Prefetch multiple images (prioritized)
+    /// 🔥 THERMONUCLEAR: Prefetch 12 images ahead (4x more aggressive)
     func prefetch(urls: [URL], priority: Int = 0) {
-        for url in urls.prefix(maxConcurrentPrefetches) {
+        // Prefetch first 12 URLs for ultra-fast scrolling
+        for url in urls.prefix(12) {
             prefetch(url: url)
+        }
+    }
+    
+    /// 🔥 NEW: Prefetch viewport + next screen worth of images
+    func prefetchViewport(urls: [URL], visibleRange: Range<Int>) {
+        // Prefetch visible + next 24 items (2 screens ahead)
+        let prefetchRange = visibleRange.lowerBound..<min(urls.count, visibleRange.upperBound + 24)
+        for index in prefetchRange {
+            guard index < urls.count else { break }
+            prefetch(url: urls[index])
         }
     }
     

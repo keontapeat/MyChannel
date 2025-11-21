@@ -1,72 +1,4 @@
 {
-  "hosting": {
-    "site": "mychannel-ca26d",
-    "public": ".",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      ".git/**",
-      "**/.git/**",
-      "**/node_modules/**",
-      "MyChannel.xcodeproj/**",
-      "MyChannel/**",
-      "snapshots/**",
-      "what should i use u recomend/**"
-    ],
-    "rewrites": [
-      { "source": "/api/tmdb_popular", "run": { "serviceId": "tmdb-popular", "region": "us-central1" } },
-      { "source": "/api/tmdb_free_ads", "run": { "serviceId": "tmdb-free-ads", "region": "us-central1" } },
-      { "source": "/api/tmdb_trending", "run": { "serviceId": "tmdb-trending", "region": "us-central1" } },
-      { "source": "/api/tmdb_details", "run": { "serviceId": "tmdb-details", "region": "us-central1" } },
-      { "source": "/api/ai_rank", "run": { "serviceId": "ai-rank", "region": "us-central1" } },
-      { "source": "/api/recaptcha_verify", "function": { "functionId": "recaptcha_verify", "region": "us-central1" } },
-      { "source": "/v1/uploads/**", "run": { "serviceId": "mychannel-upload", "region": "us-central1" } },
-      { "source": "/v1/events/**", "run": { "serviceId": "mychannel-events", "region": "us-central1" } },
-      { "source": "/v1/feed/**", "run": { "serviceId": "mychannel-content", "region": "us-central1" } },
-      { "source": "/", "destination": "/index.html" },
-      { "source": "**", "destination": "/index.html" }
-    ],
-    "headers": [
-      {
-        "source": "**/*.@(js|css)",
-        "headers": [ { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" } ]
-      },
-      {
-        "source": "**/*.@(png|jpg|jpeg|gif|svg|webp|ico)",
-        "headers": [ { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" } ]
-      },
-      {
-        "source": "**/*.@(woff|woff2|ttf|otf)",
-        "headers": [ { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" } ]
-      },
-      {
-        "source": "**/*.@(mp4|mov|webm|m3u8|mpd|ts)",
-        "headers": [ { "key": "Cache-Control", "value": "public, max-age=86400" } ]
-      },
-      {
-        "source": "/manifest.json",
-        "headers": [ { "key": "Cache-Control", "value": "public, max-age=86400" } ]
-      },
-      {
-        "source": "/site.webmanifest",
-        "headers": [ { "key": "Cache-Control", "value": "public, max-age=86400" } ]
-      },
-      {
-        "source": "**/*.html",
-        "headers": [
-          { "key": "Cache-Control", "value": "no-store, max-age=0" },
-          { "key": "Link", "value": "<https://fonts.googleapis.com>; rel=preconnect, <https://fonts.gstatic.com>; rel=preconnect; crossorigin, <https://image.tmdb.org>; rel=dns-prefetch" }
-        ]
-      },
-      {
-        "source": "/sw.js",
-        "headers": [ { "key": "Cache-Control", "value": "no-store, max-age=0" } ]
-      }
-    ],
-    "redirects": [
-      { "source": "/flicks", "destination": "/flicks.html", "type": 301 }
-    ]
-  },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
@@ -74,22 +6,15 @@
   "storage": {
     "rules": "storage.rules"
   },
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "ignore": [
-        "venv",
-        ".git",
-        "firebase-debug.log",
-        "firebase-debug.*.log",
-        "*.local"
-      ],
-      "runtime": "python312",
-      "maxInstances": 1,
-      "concurrency": 80,
-      "cpu": 0.25,
-      "invoker": "private"
-    }
-  ]
+  "database": {
+    "rules": "database.rules.json"
+  },
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
 }

@@ -1,11 +1,11 @@
 import WatchPageClient from './WatchPageClient';
 
-export const dynamic = 'force-static';
-
 export async function generateStaticParams() {
-  return []; // Empty for client-side routing with static export
+  // Generate one fallback page for static export
+  return [{ id: '_fallback' }];
 }
 
-export default function WatchPage({ params }: { params: { id: string } }) {
+export default async function WatchPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return <WatchPageClient videoId={params.id} />;
 }

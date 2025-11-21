@@ -1,7 +1,14 @@
 import SwiftUI
 import UIKit
 
-fileprivate let appAsyncImageCache = NSCache<NSString, UIImage>()
+// 🔥 THERMONUCLEAR: Massive cache for instant image loads
+fileprivate let appAsyncImageCache: NSCache<NSString, UIImage> = {
+    let cache = NSCache<NSString, UIImage>()
+    cache.totalCostLimit = 100_000_000  // 100MB (was unlimited - now enforced!)
+    cache.countLimit = 200  // 200 images max
+    print("⚡ [AppAsyncImage] Cache initialized: 100MB, 200 images")
+    return cache
+}()
 
 struct AppAsyncImage<Content: View, Placeholder: View>: View {
     let url: URL?

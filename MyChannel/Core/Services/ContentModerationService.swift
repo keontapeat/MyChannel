@@ -40,13 +40,52 @@ class ContentModerationService: ObservableObject {
         isProcessing = true
         defer { isProcessing = false }
         
-        // Simulate content analysis
+        var violations: [PolicyViolation] = []
+        var maxConfidence: Double = 0.0
+        
+        // 1. Scan title and description for profanity
+        let titleDesc = metadata.title + " " + metadata.description
+        let textResult = EnhancedContentModeration.shared.scanText(titleDesc)
+        
+        if !textResult.isClean {
+            for violation in textResult.violations {
+                violations.append(PolicyViolation(
+                    type: .spam,
+                    description: violation,
+                    severity: textResult.confidence > 0.7 ? .high : .medium
+                ))
+            }
+            maxConfidence = max(maxConfidence, textResult.confidence)
+        }
+        
+        // 2. Scan tags for inappropriate content
+        let tags = metadata.tags
+        for tag in tags {
+            let tagResult = EnhancedContentModeration.shared.scanText(tag)
+            if !tagResult.isClean {
+                for violation in tagResult.violations {
+                    violations.append(PolicyViolation(
+                        type: .spam,
+                        description: violation,
+                        severity: tagResult.confidence > 0.7 ? .high : .medium
+                    ))
+                }
+                maxConfidence = max(maxConfidence, tagResult.confidence)
+            }
+        }
+        
+        // 3. TODO: Integrate Google Cloud Vision API for video frame analysis
+        // For now, basic text-based moderation is active
+        
+        let hasHighSeverity = violations.contains { $0.severity == .high }
+        let hasMediumOrHigh = violations.contains { $0.severity == .medium || $0.severity == .high }
+        
         let result = ContentModerationResult(
             type: .content,
-            confidence: 0.1,
-            violations: [],
-            requiresAction: false,
-            requiresHumanReview: false
+            confidence: maxConfidence,
+            violations: violations,
+            requiresAction: hasHighSeverity,
+            requiresHumanReview: hasMediumOrHigh
         )
         
         return result
@@ -59,14 +98,39 @@ class ContentModerationService: ObservableObject {
         userId: String
     ) async throws -> CommentModerationResult {
         
-        // Simulate comment analysis
+        // Real text analysis
+        let textResult = EnhancedContentModeration.shared.scanText(content)
+        
+        // Calculate toxicity score (based on violations found)
+        let toxicityScore: Double
+        if textResult.violations.contains(where: { $0.contains("Hate speech") || $0.contains("Violent threat") }) {
+            toxicityScore = 0.9
+        } else if textResult.violations.contains(where: { $0.contains("Profanity") }) {
+            toxicityScore = 0.6
+        } else {
+            toxicityScore = 0.1
+        }
+        
+        // Calculate spam score
+        let hasSpam = textResult.violations.contains(where: { $0.contains("Spam") })
+        let spamScore: Double = hasSpam ? 0.9 : 0.1
+        
+        // Check for language violations
+        let hasExplicit = textResult.violations.contains(where: { $0.contains("Explicit content") })
+        let hasProfanity = textResult.violations.contains(where: { $0.contains("Profanity") })
+        let languageViolation = hasExplicit || hasProfanity
+        
+        // Determine action
+        let requiresAction = toxicityScore > 0.7 || spamScore > 0.8
+        let suggestedAction: CommentModerationAction = requiresAction ? .remove : .none
+        
         let result = CommentModerationResult(
             commentId: commentId,
-            toxicityScore: 0.1,
-            spamScore: 0.1,
-            languageViolation: false,
-            requiresAction: false,
-            suggestedAction: .none
+            toxicityScore: toxicityScore,
+            spamScore: spamScore,
+            languageViolation: languageViolation,
+            requiresAction: requiresAction,
+            suggestedAction: suggestedAction
         )
         
         return result

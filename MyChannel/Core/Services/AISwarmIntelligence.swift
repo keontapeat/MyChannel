@@ -156,11 +156,25 @@ final class AISwarmIntelligence: ObservableObject {
         }
         
         // Find winner
-        guard let winner = votes.max(by: { $0.value < $1.value }) else {
-            return Consensus(winner: proposals[0], score: 0.5)
+        guard let winner = votes.max(by: { $0.value < $1.value }),
+              let winningProposal = proposals.first(where: { $0.id == winner.key }) else {
+            // 🔥 FIX: Safe fallback if no winner found or proposals empty
+            guard let firstProposal = proposals.first else {
+                print("⚠️ [AISwarm] No proposals to reach consensus")
+                return Consensus(
+                    winner: AgentProposal(
+                        id: "",
+                        agentId: "",
+                        solution: "",
+                        confidence: 0.0,
+                        reasoning: [],
+                        critiques: []
+                    ),
+                    score: 0.0
+                )
+            }
+            return Consensus(winner: firstProposal, score: 0.5)
         }
-        
-        let winningProposal = proposals.first { $0.id == winner.key }!
         let consensusScore = winner.value
         
         return Consensus(winner: winningProposal, score: consensusScore)

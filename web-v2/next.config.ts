@@ -48,7 +48,6 @@ const nextConfig: NextConfig = {
   /* Performance optimizations */
   experimental: {
     optimizeCss: true,
-    missingSuspenseWithCSRBailout: false,
   },
   
   /* Turbopack config */

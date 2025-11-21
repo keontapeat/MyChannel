@@ -4,3 +4,5 @@ cp "/Users/keonta/Documents/MyChannel/MyChannel/Assets.xcassets/AppIcon.appicons
 echo "✅ Logo copied!"
 
 
+
+

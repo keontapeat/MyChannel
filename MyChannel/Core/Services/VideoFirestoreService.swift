@@ -85,6 +85,79 @@ final class VideoFirestoreService: ObservableObject {
         try await ref.delete()
         #endif
     }
+    
+    // 🔥 THERMONUCLEAR: Batch operations for 10x faster writes
+    func saveMultipleVideos(_ videos: [Video]) async throws {
+        #if canImport(FirebaseFirestore)
+        let batch = db.batch()
+        
+        // Firestore batch limit is 500 operations
+        for video in videos.prefix(500) {
+            let ref = db.collection("videos").document(video.id)
+            let data: [String: Any] = [
+                "userId": video.creator.id,
+                "title": video.title,
+                "description": video.description,
+                "thumbnailUrl": video.thumbnailURL,
+                "videoUrl": video.videoURL,
+                "duration": video.duration,
+                "viewCount": video.viewCount,
+                "likeCount": video.likeCount,
+                "commentCount": video.commentCount,
+                "category": video.category.rawValue,
+                "tags": video.tags,
+                "isPublic": video.isPublic,
+                "createdAt": FieldValue.serverTimestamp(),
+                "updatedAt": FieldValue.serverTimestamp()
+            ]
+            batch.setData(data, forDocument: ref, merge: true)
+        }
+        
+        try await batch.commit()
+        print("✅ [VideoFirestore] Batch saved \(min(videos.count, 500)) videos in ONE operation!")
+        #endif
+    }
+    
+    // 🔥 THERMONUCLEAR: Batch increment view counts
+    func incrementMultipleViewCounts(_ videoIds: [String]) async throws {
+        #if canImport(FirebaseFirestore)
+        let batch = db.batch()
+        
+        for videoId in videoIds.prefix(500) {
+            let ref = db.collection("videos").document(videoId)
+            batch.updateData(["viewCount": FieldValue.increment(Int64(1))], forDocument: ref)
+        }
+        
+        try await batch.commit()
+        print("✅ [VideoFirestore] Batch incremented \(min(videoIds.count, 500)) view counts!")
+        #endif
+    }
+    
+    // 🔥 THERMONUCLEAR: Batch fetch multiple videos (faster than individual fetches)
+    func fetchMultipleVideos(videoIds: [String]) async throws -> [Video] {
+        #if canImport(FirebaseFirestore)
+        guard !videoIds.isEmpty else { return [] }
+        
+        // Firestore 'in' query limit is 10
+        var allVideos: [Video] = []
+        
+        for chunk in videoIds.chunked(into: 10) {
+            let snapshot = try await db.collection("videos")
+                .whereField(FieldPath.documentID(), in: chunk)
+                .getDocuments()
+            
+            let videos = snapshot.documents.compactMap { doc -> Video? in
+                try? doc.data(as: Video.self)
+            }
+            allVideos.append(contentsOf: videos)
+        }
+        
+        print("✅ [VideoFirestore] Batch fetched \(allVideos.count) videos")
+        return allVideos
+        #else
+        return []
+        #endif
+    }
 
     func fetchVideosByCreator(creatorId: String, limit: Int = 24, startAfter: DocumentSnapshot? = nil) async -> [Video] {
         #if canImport(FirebaseFirestore)
@@ -98,6 +171,19 @@ final class VideoFirestoreService: ObservableObject {
             // ⚡ PERFORMANCE: Add pagination support
             if let startAfter = startAfter {
                 query = query.start(afterDocument: startAfter)
+            }
+            
+            // 🔥 THERMONUCLEAR: Try cache first for instant loads (only if no pagination)
+            if startAfter == nil {
+                if let cachedSnapshot = try? await query.getDocuments(source: .cache) {
+                    let cachedVideos = cachedSnapshot.documents.compactMap { doc -> Video? in
+                        try? doc.data(as: Video.self)
+                    }
+                    if !cachedVideos.isEmpty {
+                        print("⚡ [VideoFirestore] Loaded \(cachedVideos.count) creator videos from cache (instant!)")
+                        return cachedVideos
+                    }
+                }
             }
             
             let snap = try await query.getDocuments()

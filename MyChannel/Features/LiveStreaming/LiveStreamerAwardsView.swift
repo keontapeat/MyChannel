@@ -44,8 +44,8 @@ struct LiveStreamerAwardsView: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
         }
         .background(AppTheme.Colors.background)
-        .navigationTitle("🏆 Streamer Awards")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Streamer Awards")
+        .navigationBarTitleDisplayMode(.large)
         .fullScreenCover(isPresented: $showLiveStream) {
             LiveCeremonyStreamView(
                 streamURL: "https://example.com/live-stream",

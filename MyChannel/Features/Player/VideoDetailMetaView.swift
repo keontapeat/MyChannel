@@ -192,6 +192,9 @@ struct VideoDetailMetaView: View {
                 ) {
                     performLikeAction()
                 }
+                .accessibilityLabel(isLiked ? "Unlike" : "Like")
+                .accessibilityHint("Double tap to \(isLiked ? "remove your like" : "like this video")")
+                .accessibilityValue("\(video.likeCount) likes")
                 
                 // Dislike Button
                 VideoMetaActionButton(
@@ -202,6 +205,8 @@ struct VideoDetailMetaView: View {
                 ) {
                     performDislikeAction()
                 }
+                .accessibilityLabel(isDisliked ? "Remove dislike" : "Dislike")
+                .accessibilityHint("Double tap to \(isDisliked ? "remove your dislike" : "dislike this video")")
                 
                 // Share Button with Pulse Effect
                 VideoMetaActionButton(
@@ -211,6 +216,8 @@ struct VideoDetailMetaView: View {
                 ) {
                     performShareAction()
                 }
+                .accessibilityLabel("Share video")
+                .accessibilityHint("Double tap to share this video with others")
 
                 // Tip Button - Real Payment Processing
                 if video.monetization?.donationEnabled == true {
@@ -403,6 +410,9 @@ struct VideoDetailMetaView: View {
                     }
                 )
                 .scaleEffect(subscribeButtonScale)
+                .accessibilityLabel(isSubscribed ? "Unsubscribe" : "Subscribe")
+                .accessibilityHint("Double tap to \(isSubscribed ? "unsubscribe from" : "subscribe to") \(video.creator.displayName)")
+                .accessibilityValue("\(video.creator.subscriberCount) subscribers")
                 .overlay(
                     RoundedRectangle(cornerRadius: 22)
                         .stroke(isSubscribed ? AppTheme.Colors.surface : Color.clear, lineWidth: 1)

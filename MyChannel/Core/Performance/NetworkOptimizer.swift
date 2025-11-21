@@ -31,13 +31,15 @@ class NetworkOptimizer: ObservableObject {
     private let imageRequestCache = NSCache<NSString, NetworkCachedResponse>()
     
     private init() {
-        // Configure URL cache for better performance
+        // 🔥 THERMONUCLEAR: 2x bigger cache for instant network responses
         urlCache = URLCache(
-            memoryCapacity: 50 * 1024 * 1024,    // 50MB memory
-            diskCapacity: 200 * 1024 * 1024,     // 200MB disk
+            memoryCapacity: 100 * 1024 * 1024,    // 100MB memory (was 50MB)
+            diskCapacity: 500 * 1024 * 1024,      // 500MB disk (was 200MB)
             diskPath: "MyChannelCache"
         )
         URLCache.shared = urlCache
+        
+        print("⚡ [NetworkOptimizer] Cache initialized: 100MB memory, 500MB disk")
         
         setupNetworkMonitoring()
         configureRequestQueue()

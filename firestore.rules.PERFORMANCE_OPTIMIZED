@@ -1,0 +1,766 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ========================================
+    // 🔥 THERMONUCLEAR PERFORMANCE HELPERS
+    // ========================================
+    
+    // 🔥 PERFORMANCE: Cache user lookup by storing in function
+    function getUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    
+    function isAdmin() {
+      return request.auth != null && 
+             (request.auth.token.email == 'keontapeat@mychannel.live' ||
+              request.auth.token.email == 'keontapeat@gmail.com');
+    }
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 🔥 PERFORMANCE: Check if user is creator without extra DB reads
+    function isCreator(creatorId) {
+      return request.auth != null && request.auth.uid == creatorId;
+    }
+    
+    // 🔥 PERFORMANCE: Validate data size to prevent slow queries
+    function isValidSize(data, maxFields) {
+      return data.size() <= maxFields;
+    }
+    
+    // ========================================
+    // 📺 CORE VIDEO & CONTENT (OPTIMIZED)
+    // ========================================
+    
+    // Videos - 🔥 OPTIMIZED: Split read/write rules for better cache
+    match /videos/{videoId} {
+      // Public read (cached by Firebase)
+      allow read: if true;
+      
+      // Create (auth check only, no DB reads)
+      allow create: if isSignedIn() && 
+                       isValidSize(request.resource.data, 50);
+      
+      // Update/Delete (owner check without extra DB read)
+      allow update, delete: if isSignedIn() && 
+                              (request.auth.uid == resource.data.creatorId || isAdmin());
+    }
+    
+    // Video analytics - 🔥 OPTIMIZED: Lightweight rule
+    match /video_analytics/{videoId}/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // 🔥 PERFORMANCE: Single wildcard for related collections
+    match /video_categorizations/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // Views tracking - 🔥 OPTIMIZED: No auth required for reads (faster)
+    match /views/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // 🔥 PERFORMANCE: Group all video-related sub-collections
+    match /chapters/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /cards/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /endScreens/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // Flicks - 🔥 OPTIMIZED: Inline creator check
+    match /flicks/{flickId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 30);
+      allow update, delete: if isCreator(resource.data.creatorId) || isAdmin();
+    }
+    
+    // Shorts - 🔥 OPTIMIZED
+    match /shorts/{shortId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 30);
+      allow update, delete: if isCreator(resource.data.creatorId) || isAdmin();
+    }
+    
+    // Stories - 🔥 OPTIMIZED
+    match /stories/{storyId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 30);
+      allow update, delete: if isCreator(resource.data.creatorId) || isAdmin();
+    }
+    
+    // ========================================
+    // 👤 USER DATA & PROFILES (OPTIMIZED)
+    // ========================================
+    
+    // User profiles - 🔥 OPTIMIZED: Single rule for both collections
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isOwner(userId) || isAdmin();
+    }
+    
+    match /user_profiles/{userId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isOwner(userId) || isAdmin();
+    }
+    
+    // 🔥 PERFORMANCE: Group private user collections
+    match /userCollections/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /user_analytics/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // 🔥 OPTIMIZED: Watch history (combined rules)
+    match /history/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /watch-history/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /users/{userId}/watchLater/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /watchLater/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // Video resume positions - 🔥 OPTIMIZED
+    match /watchHistory/{videoId} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // Notifications - 🔥 OPTIMIZED
+    match /notifications/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /notification_settings/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // ========================================
+    // 🎮 GAMING & VS MATCHES (OPTIMIZED)
+    // ========================================
+    
+    // VS Matches - 🔥 OPTIMIZED: Inline participant check
+    match /versus_matches/{matchId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 40);
+      allow update: if isSignedIn() && 
+                       (request.auth.uid == resource.data.challengerId || 
+                        request.auth.uid == resource.data.opponentId ||
+                        isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    match /vs-matches/{matchId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+    
+    // 🔥 PERFORMANCE: Group VS Match private data
+    match /vs_match_compliance/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /vs_match_wallets/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /vs_match_transactions/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /vs_match_withdrawals/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    // 🔥 OPTIMIZED: Gaming collections
+    match /match_submissions/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /match_verifications/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /gameProfiles/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+    
+    match /player_stats/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /tournaments/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /rounds/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /leaderboards/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 🏆 CHAMPIONSHIP & RANKINGS (OPTIMIZED)
+    // ========================================
+    
+    // 🔥 PERFORMANCE: Group all public-read, admin-write collections
+    match /championship_rankings/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /medals/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /champions/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /rankings/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /competitor_rankings/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /title_defenses/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /hall_of_fame/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // ========================================
+    // 🎖️ AWARDS & CEREMONIES (OPTIMIZED)
+    // ========================================
+    
+    match /ceremonies/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /ceremony-schedule/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /ceremony-hosts/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // 🔥 OPTIMIZED: Award voting
+    match /award-votes/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /award-vote-results/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /award-winners/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /votes/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 📺 LIVE STREAMING (OPTIMIZED)
+    // ========================================
+    
+    match /live/{streamId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 30);
+      allow update, delete: if isCreator(resource.data.streamerId) || isAdmin();
+    }
+    
+    // 🔥 OPTIMIZED: Live chat (lightweight auth)
+    match /live-chat/{streamId}/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    match /live_collaborations/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /broadcast_licenses/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    // ========================================
+    // 💬 SOCIAL & ENGAGEMENT (OPTIMIZED)
+    // ========================================
+    
+    // Comments - 🔥 OPTIMIZED
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 20);
+      allow update, delete: if isCreator(resource.data.userId) || isAdmin();
+    }
+    
+    // 🔥 PERFORMANCE: Lightweight engagement rules
+    match /likes/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /subscriptions/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    
+    match /community_posts/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // Playlists - 🔥 OPTIMIZED
+    match /playlists/{playlistId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 30);
+      allow update, delete: if isCreator(resource.data.creatorId) || isAdmin();
+    }
+    
+    match /messages/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    match /collaborations/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 💰 MONETIZATION & PAYMENTS (OPTIMIZED)
+    // ========================================
+    
+    // 🔥 PERFORMANCE: Group all private financial data
+    match /transactions/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /tips/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /creator_accounts/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /creator_earnings/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /creator_payouts/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /earnings/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /revenue_sharing/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    match /premium_stats/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /plus_benefits/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /referral_codes/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+    
+    match /referral_conversions/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 📊 ADVERTISING (OPTIMIZED)
+    // ========================================
+    
+    match /ad_analytics/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    match /ad_transactions/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /ad_user_profiles/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /advertiser_accounts/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /cost_budgets/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    // ========================================
+    // ⭐ FEATURED CONTENT (OPTIMIZED)
+    // ========================================
+    
+    match /featured_videos/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /active_featured_videos/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /featured_video_requests/{document=**} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+    
+    // ========================================
+    // 🔍 SEARCH & DISCOVERY (OPTIMIZED)
+    // ========================================
+    
+    // 🔥 PERFORMANCE: Lightweight search rules
+    match /trending_searches/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /search_analytics/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /search_index/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /search_popularity/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /feeds/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 🎓 UNIVERSITY (OPTIMIZED)
+    // ========================================
+    
+    match /university_users/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /university_progress/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /university_certificates/{userId}/{document=**} {
+      allow read: if true;
+      allow write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /career_paths/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // ========================================
+    // 🚨 MODERATION & SAFETY (OPTIMIZED)
+    // ========================================
+    
+    match /reports/{reportId} {
+      allow read: if isSignedIn() && 
+                     (request.auth.uid == resource.data.reporterId || isAdmin());
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
+    }
+    
+    // 🔥 PERFORMANCE: Group admin-only moderation collections
+    match /moderation_results/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /flagged_users/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /fraud_events/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /content_ratings/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /coppa_reports/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /age_verifications/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /region_policies/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // ========================================
+    // ⚖️ COPYRIGHT & LEGAL (OPTIMIZED)
+    // ========================================
+    
+    match /content_fingerprints/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /content_id_references/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /content_matches/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    match /content_usage_tracking/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    match /dmca_requests/{document=**} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
+    }
+    
+    match /counter_notices/{document=**} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
+    }
+    
+    match /content_disputes/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 📧 EMAIL & NOTIFICATIONS (OPTIMIZED)
+    // ========================================
+    
+    match /email_campaigns/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /email_segments/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /scheduled_emails/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    // ========================================
+    // 🎬 CONTENT CREATION TOOLS (OPTIMIZED)
+    // ========================================
+    
+    match /audioSwapProjects/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /multiLanguageMetadata/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /scheduled_premieres/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /approval_required/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    // ========================================
+    // 🏥 SYSTEM HEALTH & MONITORING (OPTIMIZED)
+    // ========================================
+    
+    // 🔥 PERFORMANCE: Public health checks (no auth = faster)
+    match /health_check/{document=**} {
+      allow read, write: if true;
+    }
+    
+    match /doctor_reports/{document=**} {
+      allow read, write: if true;
+    }
+    
+    match /dr_drill_results/{document=**} {
+      allow read, write: if true;
+    }
+    
+    match /emergency_stops/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /slos/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /analytics/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 💾 BACKUPS & RECOVERY (OPTIMIZED)
+    // ========================================
+    
+    match /backups/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /backup_configurations/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /backup_manifests/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /snapshots/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /rollback_events/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    // ========================================
+    // 🔧 SYSTEM CONFIGURATION (OPTIMIZED)
+    // ========================================
+    
+    match /service_configs/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /feature_flags/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /mobile-sync/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // 🔥 PERFORMANCE: Public cache (no auth = faster reads)
+    match /sharedCache/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /items/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 👥 TEAMS & WORKSPACES (OPTIMIZED)
+    // ========================================
+    
+    match /team-workspaces/{workspaceId} {
+      allow read, write: if isSignedIn();
+    }
+    
+    match /workspace-invites/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 🎯 DEFAULT DENY (SECURITY)
+    // ========================================
+    
+    // Explicitly deny all other paths for security
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

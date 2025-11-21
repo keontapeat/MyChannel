@@ -5,15 +5,13 @@ import LiveChat from '@/components/live/LiveChat';
 import LiveInfo from '@/components/live/LiveInfo';
 import type { Metadata } from 'next';
 
-// Generate static params for export
-export const dynamic = 'force-static';
-
-export async function generateStaticParams(): Promise<{ id: string }[]> {
-  return [];
+export async function generateStaticParams() {
+  // Generate one fallback page for static export
+  return [{ id: '_fallback' }];
 }
 
 interface LiveStreamPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 // Mock function - replace with actual data fetching
@@ -45,7 +43,8 @@ async function getLiveStreamData(id: string) {
   };
 }
 
-export async function generateMetadata({ params }: LiveStreamPageProps): Promise<Metadata> {
+export async function generateMetadata(props: LiveStreamPageProps): Promise<Metadata> {
+  const params = await props.params;
   const stream = await getLiveStreamData(params.id);
 
   return {
@@ -60,7 +59,8 @@ export async function generateMetadata({ params }: LiveStreamPageProps): Promise
   };
 }
 
-export default async function LiveStreamPage({ params }: LiveStreamPageProps) {
+export default async function LiveStreamPage(props: LiveStreamPageProps) {
+  const params = await props.params;
   const stream = await getLiveStreamData(params.id);
 
   return (

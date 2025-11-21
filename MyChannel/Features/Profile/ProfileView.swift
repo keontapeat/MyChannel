@@ -410,7 +410,7 @@ struct ProfileView: View {
                                 icon: "gamecontroller.fill",
                                 title: "Gaming & Esports",
                                 subtitle: "Tournaments & competitions",
-                                destination: GamingView()
+                                destination: GamingEsportsView()
                             )
                             
                             // 3. Championship Hub
@@ -461,14 +461,12 @@ struct ProfileView: View {
                     }
                     .padding(.bottom, 120)
                     
-                    // History Section
-                    if !watchHistory.isEmpty {
-                        ProfileHistorySection(
-                            title: "History",
-                            videos: watchHistory
-                        ) {
-                            NotificationCenter.default.post(name: .openFullHistory, object: nil)
-                        }
+                    // History Section - ALWAYS SHOW
+                    ProfileHistorySection(
+                        title: "History",
+                        videos: watchHistory
+                    ) {
+                        NotificationCenter.default.post(name: .openFullHistory, object: nil)
                     }
                     
                     // AI Content Factory Link - TEMPORARILY HIDDEN
@@ -850,18 +848,10 @@ struct ProfileView: View {
                     .padding(.bottom, 24)
                 } header: {
                     // Absolutely flush, pinned tabs
-                    // ProfileTabNavigation(
-                    //     selectedTab: $selectedTab,
-                    //     user: user,
-                    //     scrollOffset: scrollOffset
-                    // )
-                    Text("Tab Navigation")
-                    .background(.ultraThinMaterial)
-                    .overlay(
-                        Rectangle()
-                            .fill(AppTheme.Colors.textSecondary.opacity(0.08))
-                            .frame(height: 0.5),
-                        alignment: .bottom
+                    ProfileTabNavigation(
+                        selectedTab: $selectedTab,
+                        user: user,
+                        scrollOffset: scrollOffset
                     )
                 }
             }
@@ -1013,44 +1003,65 @@ private struct ProfileHistorySection: View {
 
                 Spacer()
 
-                Button(action: onViewAll) {
-                    Text("View all")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 14)
-                        .background(
-                            Capsule()
-                                .fill(AppTheme.Colors.backgroundSecondary.opacity(0.6))
-                        )
+                if !videos.isEmpty {
+                    Button(action: onViewAll) {
+                        Text("View all")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 14)
+                            .background(
+                                Capsule()
+                                    .fill(AppTheme.Colors.backgroundSecondary.opacity(0.6))
+                            )
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 14) {
-                    ForEach(videos) { video in
-                        HistoryVideoCard(video: video)
-                            .frame(width: 280)
-                            .transition(.opacity.combined(with: .scale))
-                    }
+            if videos.isEmpty {
+                // Empty state
+                VStack(spacing: 12) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 40))
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                    
+                    Text("No watch history yet")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    
+                    Text("Videos you watch will appear here")
+                        .font(.system(size: 14))
+                        .foregroundColor(AppTheme.Colors.textTertiary)
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 6)
-            }
-            .mask(
-                LinearGradient(
-                    gradient: Gradient(stops: [
-                        .init(color: .clear, location: 0.0),
-                        .init(color: .black, location: 0.04),
-                        .init(color: .black, location: 0.96),
-                        .init(color: .clear, location: 1.0)
-                    ]),
-                    startPoint: .leading,
-                    endPoint: .trailing
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 14) {
+                        ForEach(videos) { video in
+                            HistoryVideoCard(video: video)
+                                .frame(width: 280)
+                                .transition(.opacity.combined(with: .scale))
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 6)
+                }
+                .mask(
+                    LinearGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: .clear, location: 0.0),
+                            .init(color: .black, location: 0.04),
+                            .init(color: .black, location: 0.96),
+                            .init(color: .clear, location: 1.0)
+                        ]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
                 )
-            )
+            }
         }
         .onAppear {
             if !appear {

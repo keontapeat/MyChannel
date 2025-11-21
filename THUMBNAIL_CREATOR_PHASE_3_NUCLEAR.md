@@ -759,3 +759,5 @@ getTextDirection('ar'); // 'rtl'
 **YOUTUBE, CANVA, ADOBE - THEY CAN'T COMPETE! 😤💪**
 
 
+
+

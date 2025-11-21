@@ -19,48 +19,6 @@ struct ChampionshipHubView: View {
                 // Header
                 headerSection
                 
-                // 3D Tournament Bracket (if active tournament)
-                if let tournament = tournamentService.activeTournaments.first {
-                    TournamentBracket3DView(tournament: tournament.toBracket3DTournament())
-                } else if !tournamentService.upcomingTournaments.isEmpty,
-                          let upcoming = tournamentService.upcomingTournaments.first {
-                    // Show upcoming tournament
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Upcoming Tournament")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(AppTheme.Colors.textPrimary)
-                            
-                            Spacer()
-                            
-                            if let startDate = upcoming.startDate {
-                                Text("Starts \(startDate.formatted(date: .abbreviated, time: .shortened))")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                            } else {
-                                Text("Date TBD")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                            }
-                        }
-                        
-                        Text(upcoming.name)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                        
-                        HStack {
-                            Label("$\(Int(upcoming.prizePool)) Prize Pool", systemImage: "dollarsign.circle.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppTheme.Colors.primary)
-                            
-                            Spacer()
-                        }
-                    }
-                    .padding(16)
-                    .background(AppTheme.Colors.surface)
-                    .cornerRadius(16)
-                }
-                
                 // All Medals
                 medalsGrid
                 
@@ -74,13 +32,10 @@ struct ChampionshipHubView: View {
             .padding(.vertical, 24)
         }
         .background(AppTheme.Colors.background)
-        .navigationTitle("🏆 Championships")
-        .navigationBarTitleDisplayMode(.inline)
-        .refreshable {
-            await tournamentService.fetchActiveTournaments()
-        }
+        .navigationTitle("Championships")
+        .navigationBarTitleDisplayMode(.large)
         .onAppear {
-            tournamentService.loadActiveTournaments()
+            // Load data if needed
         }
     }
     

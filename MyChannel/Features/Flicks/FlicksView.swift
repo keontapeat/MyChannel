@@ -132,10 +132,11 @@ struct FlicksView: View {
         }
     }
 
-    // MARK: - Fullscreen feed
+    // MARK: - Fullscreen feed (NUCLEAR YOUTUBE SHORTS KILLER 🔥)
     private var feed: some View {
         GeometryReader { geo in
             ZStack {
+                // 🔥 MAIN FEED: Vertical scroll with snap
                 TabView(selection: $currentIndex) {
                     ForEach(videos.indices, id: \.self) { index in
                         ZStack {
@@ -182,38 +183,97 @@ struct FlicksView: View {
                     previousIndex = new
                 }
 
-                HStack(spacing: 12) {
-                    Spacer()
-                    Button {
-                        flicksMuted.toggle()
-                        HapticManager.shared.impact(style: .light)
-                    } label: {
-                        ZStack {
-                            Circle().fill(Color.black.opacity(0.35))
-                            Image(systemName: flicksMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                                .foregroundColor(.white)
-                                .font(.system(size: 14, weight: .semibold))
+                // 🔥 TOP RIGHT: Glassmorphic mute button (Web-style upgraded)
+                VStack {
+                    HStack(spacing: 12) {
+                        Spacer()
+                        Button {
+                            flicksMuted.toggle()
+                            HapticManager.shared.impact(style: .light)
+                        } label: {
+                            ZStack {
+                                // Glassmorphic background (web-style)
+                                Circle()
+                                    .fill(.ultraThinMaterial)
+                                    .background(Color.white.opacity(0.1))
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                    )
+                                
+                                Image(systemName: flicksMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                                    .foregroundColor(.white)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .shadow(color: .black.opacity(0.3), radius: 4)
+                            }
+                            .frame(width: 44, height: 44)
                         }
-                        .frame(width: 36, height: 36)
+                        .buttonStyle(ScaleButtonStyle())
                     }
-                    .buttonStyle(ScaleButtonStyle())
+                    .padding(.top, 44)
+                    .padding(.trailing, 16)
+                    
+                    Spacer()
                 }
-                .padding(.top, 44)
-                .padding(.trailing, 16)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .allowsHitTesting(true)
 
+                // 🔥 SCROLL INDICATOR: Right side dots (Web-style upgraded)
+                VStack(spacing: 8) {
+                    ForEach(videos.indices, id: \.self) { index in
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                currentIndex = index
+                            }
+                            HapticManager.shared.selection()
+                        } label: {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(index == currentIndex ? Color.white : Color.white.opacity(0.4))
+                                .frame(width: index == currentIndex ? 4 : 2, height: index == currentIndex ? 24 : 8)
+                                .shadow(color: .black.opacity(0.4), radius: 3, x: -1, y: 0)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: currentIndex)
+                    }
+                }
+                .padding(.trailing, 12)
+                .padding(.vertical, 20)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+
+                // 🔥 LIKE BURST: Double-tap heart animation
                 Group {
                     if showLikeBurst {
                         Image(systemName: "heart.fill")
-                            .font(.system(size: 96, weight: .bold))
+                            .font(.system(size: 120, weight: .bold))
                             .foregroundColor(.white)
+                            .shadow(color: Color.red.opacity(0.6), radius: 20)
                             .shadow(color: .black.opacity(0.4), radius: 8)
                             .transition(.scale.combined(with: .opacity))
                             .id(likeBurstID)
                     }
                 }
                 .animation(.spring(response: 0.35, dampingFraction: 0.65), value: showLikeBurst)
+                
+                // 🔥 SWIPE INDICATORS: Subtle up/down arrows
+                VStack {
+                    if currentIndex > 0 {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.4))
+                            .padding(.top, 60)
+                    }
+                    
+                    Spacer()
+                    
+                    if currentIndex < videos.count - 1 {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.4))
+                            .padding(.bottom, 20)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
             }
             .highPriorityGesture(
                 TapGesture(count: 2).onEnded {
@@ -223,6 +283,22 @@ struct FlicksView: View {
                     }
                 }
             )
+        }
+        // 🔥 SHEETS: Comments, Share, Profile (slide up from bottom)
+        .sheet(item: $commentsVideo) { video in
+            FlicksCommentsSheet(video: video)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $shareVideo) { video in
+            FlicksShareSheet(video: video)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $selectedCreator) { creator in
+            FlicksCreatorProfileView(creator: creator)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 

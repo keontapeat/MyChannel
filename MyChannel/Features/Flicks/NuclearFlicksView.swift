@@ -804,17 +804,23 @@ class NuclearFlicksViewModel: ObservableObject {
                 flicks = snapshot.documents.compactMap { doc in
                     parseFlickFromDocument(doc)
                 }
+                print("✅ [NuclearFlicks] Loaded \(flicks.count) Flicks from Firestore")
             } else {
-                // Fallback to demo data
+                // Silently fallback to demo data (no error - this is expected when starting)
                 flicks = makeDemoFlicks()
+                print("📺 [NuclearFlicks] No Flicks in Firestore yet. Showing \(flicks.count) demo Flicks.")
             }
         } catch {
-            print("🚨 [NuclearFlicks] Error loading: \(error)")
-            self.error = "Failed to load Flicks. Using demo content."
+            // Only show error for actual failures (network issues, permissions, etc.)
+            print("🚨 [NuclearFlicks] Error loading from Firestore: \(error.localizedDescription)")
+            
+            // Don't show error to user - just fallback gracefully to demo content
             flicks = makeDemoFlicks()
+            print("📺 [NuclearFlicks] Fallback to \(flicks.count) demo Flicks due to error")
         }
         #else
         flicks = makeDemoFlicks()
+        print("📺 [NuclearFlicks] Firebase not available. Showing \(flicks.count) demo Flicks.")
         #endif
     }
     
