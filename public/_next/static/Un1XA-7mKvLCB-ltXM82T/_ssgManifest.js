@@ -1,0 +1,1 @@
+self.__SSG_MANIFEST=new Set(["\u002Flive\u002F[id]","\u002Fprofile\u002F[username]","\u002Fwatch\u002F[id]"]);self.__SSG_MANIFEST_CB&&self.__SSG_MANIFEST_CB()

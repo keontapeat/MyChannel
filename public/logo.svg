@@ -1,0 +1,7 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Red rounded square background -->
+  <rect width="1024" height="1024" rx="180" fill="#EF4444"/>
+  
+  <!-- MC Text - Bold and centered -->
+  <text x="512" y="720" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="560" font-weight="900" fill="white" text-anchor="middle" dominant-baseline="middle">MC</text>
+</svg>
