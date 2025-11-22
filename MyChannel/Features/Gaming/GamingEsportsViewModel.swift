@@ -7,6 +7,9 @@
 
 import Foundation
 import SwiftUI
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 @MainActor
 final class GamingEsportsViewModel: ObservableObject {
@@ -40,8 +43,14 @@ final class GamingEsportsViewModel: ObservableObject {
     
     // MARK: - Services
     
+    private let tournamentService = EsportsTournamentService.shared
     private let vsMatchService = VersusMatchService.shared
     private let walletService = VSMatchWalletService.shared
+    private let userService = UserFirestoreService.shared
+    #if canImport(FirebaseFirestore)
+    private let db = Firestore.firestore()
+    #endif
+    private var userCache: [String: User] = [:]
     
     // MARK: - Formatted Properties
     
@@ -57,6 +66,10 @@ final class GamingEsportsViewModel: ObservableObject {
         "$\(Int(pendingBalance).formatted())"
     }
     
+    private var currentUserId: String? {
+        AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id
+    }
+    
     // MARK: - Data Loading
     
     func loadData() async {
@@ -66,28 +79,251 @@ final class GamingEsportsViewModel: ObservableObject {
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.loadTournaments() }
             group.addTask { await self.loadVSMatches() }
-            group.addTask { await self.loadLeaderboard() }
+            let period = self.selectedPeriod
+            group.addTask { await self.loadLeaderboard(for: period) }
             group.addTask { await self.loadEarnings() }
         }
     }
     
     private func loadTournaments() async {
-        // Load featured tournament
-        featuredTournament = EsportsTournament(
-            id: "spring-championship",
-            name: "Spring Championship",
-            gameName: "Multi-Game",
-            prizePool: 50_000,
-            entryFee: 50,
-            format: "Single Elimination",
-            currentPlayers: 248,
-            maxPlayers: 256,
-            startDate: Date().addingTimeInterval(60 * 60 * 38), // 2d 14h from now
-            isLive: false
-        )
+        do {
+            let tournaments = try await tournamentService.fetchActiveTournaments()
+            activeTournaments = tournaments
+            featuredTournament = try await tournamentService.fetchFeaturedTournament() ?? tournaments.first
+            hasLiveTournaments = tournaments.contains { $0.isLive }
+        } catch {
+            print("⚠️ Failed to load tournaments: \(error)")
+            let samples = Self.sampleTournaments()
+            activeTournaments = samples.list
+            featuredTournament = samples.featured
+            hasLiveTournaments = samples.list.contains { $0.isLive }
+        }
+    }
+    
+    private func loadVSMatches() async {
+        do {
+            let matches = try await vsMatchService.fetchActiveMatches()
+            let limited = matches.prefix(6)
+            var prepared: [VSMatch] = []
+            
+            for match in limited {
+                let challenger = await loadUser(id: match.challengerId)
+                let opponent: User? = match.opponentId.isEmpty ? nil : await loadUser(id: match.opponentId)
+                
+                let uiMatch = VSMatch(
+                    id: match.id,
+                    challenger: challenger,
+                    opponent: opponent,
+                    category: match.category.rawValue,
+                    wagerAmount: match.wagerAmount,
+                    createdAt: match.createdAt,
+                    verificationStatus: mapStatus(match.status),
+                    needsProofSubmission: match.status == .completed && match.finalStats == nil
+                )
+                
+                prepared.append(uiMatch)
+            }
+            
+            activeMatches = prepared
+        } catch {
+            print("⚠️ Failed to load VS matches: \(error)")
+            activeMatches = Self.sampleMatches()
+        }
+    }
+    
+    func refreshLeaderboard(for period: LeaderboardPeriod) async {
+        await loadLeaderboard(for: period)
+    }
+    
+    private func loadLeaderboard(for period: LeaderboardPeriod) async {
+        #if canImport(FirebaseFirestore)
+        do {
+            let documentId = leaderboardDocumentId(for: period)
+            var snapshot = try await db.collection("leaderboards")
+                .document(documentId)
+                .collection("rankings")
+                .order(by: "rank", descending: false)
+                .limit(to: 25)
+                .getDocuments()
+            
+            // Fallback to global all-time rankings if the period is empty
+            if snapshot.documents.isEmpty && documentId != "global" {
+                snapshot = try await db.collection("leaderboards")
+                    .document("global")
+                    .collection("rankings")
+                    .order(by: "rank", descending: false)
+                    .limit(to: 25)
+                    .getDocuments()
+            }
+            
+            let users: [LeaderboardUser] = await snapshot.documents.asyncMap { doc in
+                let data = doc.data()
+                let wins = data["wins"] as? Int ?? 0
+                let losses = data["losses"] as? Int ?? 0
+                let matches = data["totalMatches"] as? Int ?? (wins + losses)
+                let earnings = data["totalEarnings"] as? Double ?? 0
+                let user = await self.loadUser(id: doc.documentID)
+                
+                return LeaderboardUser(
+                    id: doc.documentID,
+                    displayName: user.displayName.isEmpty ? user.username : user.displayName,
+                    totalEarnings: earnings,
+                    wins: wins,
+                    matches: matches
+                )
+            }
+            
+            leaderboardUsers = users.isEmpty ? Self.sampleLeaderboard() : users
+        } catch {
+            print("⚠️ Failed to load leaderboard: \(error)")
+            leaderboardUsers = Self.sampleLeaderboard()
+        }
+        #else
+        leaderboardUsers = Self.sampleLeaderboard()
+        #endif
+    }
+    
+    private func loadEarnings() async {
+        guard let userId = currentUserId else {
+            applyEarningsFallback()
+            return
+        }
         
-        // Load active tournaments
-        activeTournaments = [
+        do {
+            let summary = try await walletService.fetchWalletSummary(userId: userId)
+            totalEarnings = summary.totalEarnings
+            availableBalance = summary.availableBalance
+            pendingBalance = summary.pendingBalance
+        } catch {
+            print("⚠️ Failed to fetch wallet summary: \(error)")
+            applyEarningsFallback()
+        }
+        
+        await loadPlayerStats(userId: userId)
+        await loadTransactions(userId: userId)
+    }
+    
+    private func loadPlayerStats(userId: String) async {
+        #if canImport(FirebaseFirestore)
+        do {
+            let doc = try await db.collection("player_stats").document(userId).getDocument()
+            let data = doc.data() ?? [:]
+            
+            tournamentsWon = data["tournamentsWon"] as? Int
+                ?? data["championships"] as? Int
+                ?? tournamentsWon
+            vsWins = data["wins"] as? Int ?? 0
+            let losses = data["losses"] as? Int ?? 0
+            totalMatches = data["totalMatches"] as? Int ?? (vsWins + losses)
+            winRate = totalMatches > 0 ? Int((Double(vsWins) / Double(totalMatches)) * 100) : 0
+        } catch {
+            print("⚠️ Failed to load player stats: \(error)")
+        }
+        #endif
+    }
+    
+    private func loadTransactions(userId: String) async {
+        do {
+            let transactions = try await walletService.getTransactionHistory(userId: userId, limit: 20)
+            recentTransactions = transactions.map(convertTransaction)
+        } catch {
+            print("⚠️ Failed to load transactions: \(error)")
+            if recentTransactions.isEmpty {
+                recentTransactions = Self.sampleTransactions()
+            }
+        }
+    }
+    
+    private func loadUser(id: String) async -> User {
+        if let cached = userCache[id] {
+            return cached
+        }
+        
+        if let current = AuthenticationManager.shared.currentUser, current.id == id {
+            userCache[id] = current
+            return current
+        }
+        
+        if let appStateUser = AppState.shared.currentUser, appStateUser.id == id {
+            userCache[id] = appStateUser
+            return appStateUser
+        }
+        
+        if let remote = try? await userService.fetchUser(id: id) {
+            userCache[id] = remote
+            return remote
+        }
+        
+        let placeholder = User(
+            id: id,
+            username: "player-\(id.prefix(6))",
+            displayName: "Player \(id.prefix(4))",
+            email: "\(id)@mychannel.live"
+        )
+        userCache[id] = placeholder
+        return placeholder
+    }
+    
+    private func convertTransaction(_ transaction: VSMatchTransaction) -> EarningsTransaction {
+        EarningsTransaction(
+            id: transaction.id,
+            description: transaction.description.isEmpty ? defaultDescription(for: transaction.type) : transaction.description,
+            amount: transaction.amount,
+            date: transaction.createdAt,
+            type: EarningsTransaction.TransactionType(vsType: transaction.type)
+        )
+    }
+    
+    private func mapStatus(_ status: VersusMatch.Status) -> MatchVerificationStatus {
+        switch status {
+        case .completed:
+            return .verified
+        case .disputed:
+            return .disputed
+        case .pending:
+            return .pending
+        case .accepted, .live:
+            return .verified
+        default:
+            return .none
+        }
+    }
+    
+    private func applyEarningsFallback() {
+        if totalEarnings == 0 {
+            totalEarnings = 12_450
+            availableBalance = 8_230
+            pendingBalance = 4_220
+        }
+    }
+    
+    private func leaderboardDocumentId(for period: LeaderboardPeriod) -> String {
+        switch period {
+        case .daily: return "global-daily"
+        case .weekly: return "global-weekly"
+        case .monthly: return "global-monthly"
+        case .allTime: return "global"
+        }
+    }
+}
+
+// MARK: - Sample Helpers
+
+private extension GamingEsportsViewModel {
+    static func sampleTournaments() -> (list: [EsportsTournament], featured: EsportsTournament) {
+        let tournaments = [
+            EsportsTournament(
+                id: "spring-championship",
+                name: "Spring Championship",
+                gameName: "Multi-Game",
+                prizePool: 50_000,
+                entryFee: 50,
+                format: "Single Elimination",
+                currentPlayers: 248,
+                maxPlayers: 256,
+                startDate: Date().addingTimeInterval(60 * 60 * 38),
+                isLive: false
+            ),
             EsportsTournament(
                 id: "pro-league",
                 name: "Pro League Finals",
@@ -97,7 +333,7 @@ final class GamingEsportsViewModel: ObservableObject {
                 format: "Single Elimination",
                 currentPlayers: 32,
                 maxPlayers: 128,
-                startDate: Date().addingTimeInterval(60 * 60 * 125), // 5d 3h
+                startDate: Date().addingTimeInterval(60 * 60 * 125),
                 isLive: false
             ),
             EsportsTournament(
@@ -109,29 +345,16 @@ final class GamingEsportsViewModel: ObservableObject {
                 format: "Double Elimination",
                 currentPlayers: 256,
                 maxPlayers: 256,
-                startDate: Date().addingTimeInterval(-60 * 60 * 2), // Started 2h ago
+                startDate: Date().addingTimeInterval(-60 * 60 * 2),
                 isLive: true
-            ),
-            EsportsTournament(
-                id: "pro-league-val",
-                name: "Pro League Finals",
-                gameName: "Valorant",
-                prizePool: 75_000,
-                entryFee: 100,
-                format: "Single Elimination",
-                currentPlayers: 64,
-                maxPlayers: 128,
-                startDate: Date().addingTimeInterval(60 * 60 * 72), // 3d
-                isLive: false
-            ),
+            )
         ]
         
-        hasLiveTournaments = activeTournaments.contains { $0.isLive }
+        return (tournaments, tournaments[0])
     }
     
-    private func loadVSMatches() async {
-        // Load active matches
-        activeMatches = [
+    static func sampleMatches() -> [VSMatch] {
+        [
             VSMatch(
                 id: "match-1",
                 challenger: User.sampleUsers[0],
@@ -147,82 +370,81 @@ final class GamingEsportsViewModel: ObservableObject {
                 category: "Likes Battle",
                 wagerAmount: 250,
                 createdAt: Date().addingTimeInterval(-60 * 30)
-            ),
-            VSMatch(
-                id: "match-3",
-                challenger: User.sampleUsers[3],
-                opponent: nil,
-                category: "Dance Battle",
-                wagerAmount: 50,
-                createdAt: Date().addingTimeInterval(-60 * 5)
-            ),
+            )
         ]
     }
     
-    private func loadLeaderboard() async {
-        // Load leaderboard users
-        leaderboardUsers = [
+    static func sampleLeaderboard() -> [LeaderboardUser] {
+        [
             LeaderboardUser(id: "1", displayName: "ProGamer_2024", totalEarnings: 125_000, wins: 45, matches: 52),
             LeaderboardUser(id: "2", displayName: "ElitePlayer", totalEarnings: 98_500, wins: 38, matches: 48),
             LeaderboardUser(id: "3", displayName: "ChampionX", totalEarnings: 87_200, wins: 35, matches: 45),
             LeaderboardUser(id: "4", displayName: "SkillMaster", totalEarnings: 72_100, wins: 32, matches: 42),
-            LeaderboardUser(id: "5", displayName: "TopTier", totalEarnings: 65_400, wins: 28, matches: 38),
-            LeaderboardUser(id: "6", displayName: "ProKing", totalEarnings: 58_900, wins: 25, matches: 35),
-            LeaderboardUser(id: "7", displayName: "EliteForce", totalEarnings: 52_300, wins: 23, matches: 32),
-            LeaderboardUser(id: "8", displayName: "Champion", totalEarnings: 47_800, wins: 21, matches: 30),
-            LeaderboardUser(id: "9", displayName: "GamerPro", totalEarnings: 43_200, wins: 19, matches: 28),
-            LeaderboardUser(id: "10", displayName: "SkillZ", totalEarnings: 38_500, wins: 17, matches: 25),
+            LeaderboardUser(id: "5", displayName: "TopTier", totalEarnings: 65_400, wins: 28, matches: 38)
         ]
     }
     
-    private func loadEarnings() async {
-        // Load user earnings
-        totalEarnings = 12_450
-        availableBalance = 8_230
-        pendingBalance = 4_220
-        tournamentsWon = 8
-        vsWins = 23
-        totalMatches = 35
-        winRate = 66
-        
-        // Load recent transactions
-        recentTransactions = [
+    static func sampleTransactions() -> [EarningsTransaction] {
+        [
             EarningsTransaction(
-                id: "1",
+                id: "sample-1",
                 description: "Tournament Win - Spring Finals",
                 amount: 2_500,
                 date: Date().addingTimeInterval(-60 * 60 * 2),
                 type: .win
             ),
             EarningsTransaction(
-                id: "2",
+                id: "sample-2",
                 description: "VS Match Win vs ProGamer",
                 amount: 500,
                 date: Date().addingTimeInterval(-60 * 60 * 5),
                 type: .win
-            ),
-            EarningsTransaction(
-                id: "3",
-                description: "Withdrawal to Bank",
-                amount: 1_000,
-                date: Date().addingTimeInterval(-60 * 60 * 24),
-                type: .withdrawal
-            ),
-            EarningsTransaction(
-                id: "4",
-                description: "Deposit",
-                amount: 500,
-                date: Date().addingTimeInterval(-60 * 60 * 48),
-                type: .deposit
-            ),
-            EarningsTransaction(
-                id: "5",
-                description: "VS Match Loss vs ElitePlayer",
-                amount: 250,
-                date: Date().addingTimeInterval(-60 * 60 * 72),
-                type: .loss
-            ),
+            )
         ]
+    }
+    
+    func defaultDescription(for type: VSMatchTransactionType) -> String {
+        switch type {
+        case .deposit: return "Wallet Deposit"
+        case .withdrawal: return "Withdrawal"
+        case .win: return "Match Win"
+        case .wager: return "Match Wager"
+        case .refund: return "Refund"
+        case .fee: return "Platform Fee"
+        }
+    }
+}
+
+// MARK: - Async Helpers
+
+#if canImport(FirebaseFirestore)
+private extension Array where Element == QueryDocumentSnapshot {
+    func asyncMap<T>(_ transform: @escaping (QueryDocumentSnapshot) async -> T) async -> [T] {
+        var results: [T] = []
+        results.reserveCapacity(count)
+        
+        for document in self {
+            let value = await transform(document)
+            results.append(value)
+        }
+        
+        return results
+    }
+}
+#endif
+
+private extension EarningsTransaction.TransactionType {
+    init(vsType: VSMatchTransactionType) {
+        switch vsType {
+        case .deposit, .refund:
+            self = .deposit
+        case .win:
+            self = .win
+        case .withdrawal:
+            self = .withdrawal
+        case .wager, .fee:
+            self = .loss
+        }
     }
 }
 

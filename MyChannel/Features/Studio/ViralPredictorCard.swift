@@ -146,7 +146,7 @@ struct ViralPredictorCard: View {
             } else {
                 // Empty state
                 VStack(spacing: 12) {
-                    Image(systemName: "wand.and.stars")
+                    Image(systemName: "cpu")
                         .font(.system(size: 40))
                         .foregroundColor(AppTheme.Colors.textTertiary)
                     

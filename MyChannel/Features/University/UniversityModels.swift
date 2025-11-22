@@ -31,7 +31,7 @@ enum SubjectCategory: String, CaseIterable, Identifiable, Codable {
         case .creative: return "paintbrush.fill"
         case .science: return "atom"
         case .health: return "heart.fill"
-        case .lifestyle: return "sparkles"
+        case .lifestyle: return "star.fill"
         case .education: return "book.fill"
         case .trades: return "hammer.fill"
         case .language: return "globe"

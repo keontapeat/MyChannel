@@ -239,7 +239,7 @@ struct ThermonuclearFeaturedManager: View {
                 .fill(AppTheme.Colors.surface)
                 .frame(width: 120, height: 120)
                 .overlay(
-                    Image(systemName: "sparkles.rectangle.stack.fill")
+                    Image(systemName: "rectangle.stack.fill")
                         .font(.system(size: 36, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                 )

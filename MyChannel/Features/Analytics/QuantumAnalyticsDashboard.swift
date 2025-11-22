@@ -293,7 +293,7 @@ struct QuantumAnalyticsDashboard: View {
                     }
                 }) {
                     HStack(spacing: 12) {
-                        Image(systemName: "wand.and.stars")
+                        Image(systemName: "cpu")
                         Text("Analyze 1000 Parallel Universes")
                             .font(.system(size: 16, weight: .semibold))
                     }

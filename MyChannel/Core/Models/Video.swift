@@ -27,6 +27,7 @@ struct Video: Identifiable, Codable, Hashable {
     var category: VideoCategory
     var tags: [String]
     var isPublic: Bool
+    var visibility: VisibilityStatus = .public
     var quality: [VideoQuality]
     var aspectRatio: AspectRatio
     var isLiveStream: Bool
@@ -66,7 +67,7 @@ struct Video: Identifiable, Codable, Hashable {
         case id, title, description, thumbnailURL, videoURL, duration
         case viewCount, likeCount, dislikeCount, commentCount
         case createdAt, updatedAt, creatorId, creator, category
-        case tags, isPublic, quality, aspectRatio, isLiveStream
+        case tags, isPublic, visibility, quality, aspectRatio, isLiveStream
         case scheduledAt, contentSource, externalID, contentRating
         case language, subtitles, isVerified, monetization, isSponsored, chapters
     }
@@ -96,6 +97,13 @@ struct Video: Identifiable, Codable, Hashable {
         category = try container.decode(VideoCategory.self, forKey: .category)
         tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
         isPublic = try container.decodeIfPresent(Bool.self, forKey: .isPublic) ?? true
+        if let visibilityRaw = try container.decodeIfPresent(String.self, forKey: .visibility),
+           let parsedVisibility = VisibilityStatus(rawValue: visibilityRaw.lowercased()) {
+            visibility = parsedVisibility
+            isPublic = parsedVisibility == .public
+        } else {
+            visibility = isPublic ? .public : .private
+        }
         quality = try container.decodeIfPresent([VideoQuality].self, forKey: .quality) ?? [.quality720p]
         aspectRatio = try container.decodeIfPresent(AspectRatio.self, forKey: .aspectRatio) ?? .landscape
         isLiveStream = try container.decodeIfPresent(Bool.self, forKey: .isLiveStream) ?? false
@@ -133,6 +141,7 @@ struct Video: Identifiable, Codable, Hashable {
         try container.encode(category, forKey: .category)
         try container.encode(tags, forKey: .tags)
         try container.encode(isPublic, forKey: .isPublic)
+        try container.encode(visibility.rawValue, forKey: .visibility)
         try container.encode(quality, forKey: .quality)
         try container.encode(aspectRatio, forKey: .aspectRatio)
         try container.encode(isLiveStream, forKey: .isLiveStream)
@@ -169,6 +178,7 @@ struct Video: Identifiable, Codable, Hashable {
         category: VideoCategory,
         tags: [String] = [],
         isPublic: Bool = true,
+        visibility: VisibilityStatus? = nil,
         quality: [VideoQuality] = [.quality720p],
         aspectRatio: AspectRatio = .landscape,
         isLiveStream: Bool = false,
@@ -199,7 +209,13 @@ struct Video: Identifiable, Codable, Hashable {
         self.creator = creator
         self.category = category
         self.tags = tags
-        self.isPublic = isPublic
+        if let visibility = visibility {
+            self.visibility = visibility
+            self.isPublic = visibility == .public
+        } else {
+            self.visibility = isPublic ? .public : .private
+            self.isPublic = isPublic
+        }
         self.quality = quality
         self.aspectRatio = aspectRatio
         self.isLiveStream = isLiveStream
@@ -349,6 +365,28 @@ struct Video: Identifiable, Codable, Hashable {
         }
     }
     
+    enum VisibilityStatus: String, Codable, CaseIterable {
+        case `public` = "public"
+        case unlisted = "unlisted"
+        case `private` = "private"
+        
+        var displayName: String {
+            switch self {
+            case .public: return "Public"
+            case .unlisted: return "Unlisted"
+            case .private: return "Private"
+            }
+        }
+        
+        var iconName: String {
+            switch self {
+            case .public: return "globe"
+            case .unlisted: return "link"
+            case .private: return "lock.fill"
+            }
+        }
+    }
+    
     // MARK: - Content Source
     enum ContentSource: String, Codable, CaseIterable {
         case userUploaded = "user_uploaded"
@@ -396,13 +434,13 @@ struct Video: Identifiable, Codable, Hashable {
             case .userUploaded: return "person.crop.circle"
             case .tmdb: return "tv"
             case .omdb: return "film"
-            case .jikan, .anilist: return "sparkles.tv"
+            case .jikan, .anilist: return "play.tv.fill"
             case .archive: return "archivebox"
             case .youtube: return "play.rectangle"
             case .vimeo: return "v.circle"
             case .twitch: return "gamecontroller"
             case .dailymotion: return "play.circle"
-            case .crunchyroll: return "sparkles.tv"
+            case .crunchyroll: return "play.tv.fill"
             case .funimation: return "tv.and.hifispeaker.fill"
             case .adultswim: return "moon.stars.fill"
             case .pbsKids: return "graduationcap.fill"
@@ -646,7 +684,7 @@ enum VideoCategory: String, Codable, CaseIterable, CustomStringConvertible {
         switch self {
         case .movies: return "tv"
         case .tvShows: return "tv.and.hifispeaker.fill"
-        case .anime: return "sparkles.tv"
+        case .anime: return "play.tv.fill"
         case .kids: return "face.smiling.inverse" // 🎯 KID-FRIENDLY ICON
         case .mukbang: return "fork.knife"
         case .documentaries: return "doc.on.doc"
@@ -666,7 +704,7 @@ enum VideoCategory: String, Codable, CaseIterable, CustomStringConvertible {
         case .diy: return "hammer"
         case .pets: return "pawprint"
         case .art: return "paintbrush.pointed"
-        case .entertainment: return "sparkles"
+        case .entertainment: return "star.fill"
         case .cartoons: return "scribble.variable"
         case .adultAnimation: return "moon.stars.fill"
         case .howTo: return "hand.raised"

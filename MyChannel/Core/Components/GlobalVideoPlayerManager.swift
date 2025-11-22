@@ -11,15 +11,10 @@ import AVKit
 import Combine
 import UIKit
 
-// 🚫 NATIVE PiP DELEGATE REMOVED
-// We don't use native iOS Picture-in-Picture anymore
-// Our custom YouTube-style FloatingMiniPlayer.swift provides a superior experience:
-// - Free-floating (can be dragged anywhere)
-// - Resizable (pinch to resize)
-// - Swipe to dismiss
-// - Tap to expand to fullscreen
-// - Always-on controls (play/pause, close)
-// This is what users expect from YouTube/modern video apps
+// Native iOS PiP + custom mini-player combo
+// - When app is in foreground we show our YouTube-style floating mini-player
+// - When user leaves the app we hand playback to the system Picture-in-Picture bubble
+//   so it behaves exactly like YouTube on iOS
 
 @MainActor
 class GlobalVideoPlayerManager: ObservableObject {
@@ -49,6 +44,9 @@ class GlobalVideoPlayerManager: ObservableObject {
     // 🔥 REAL-TIME VIEW TRACKING: AI monitoring integration
     private let viewTracker = RealtimeViewTracker.shared
     private let backgroundPlayService = BackgroundPlayService.shared
+    private let appState = AppState.shared
+    private weak var pipPlayerLayer: AVPlayerLayer?
+    private var pipController: AVPictureInPictureController?
     private var currentViewSessionId: String?
     private var heartbeatTimer: Timer?
     
@@ -69,9 +67,6 @@ class GlobalVideoPlayerManager: ObservableObject {
     private var wasPlayingBeforeBackground = false
     private var usingBackgroundAudioBridge = false
     private var backgroundPlayTask: Task<Void, Never>?
-    
-    // 🚫 NATIVE PiP REMOVED: We use custom YouTube-style FloatingMiniPlayer instead
-    // No pipController needed - our custom mini player is superior!
     
     // 🔥 THERMONUCLEAR: Video pre-loading for instant next video
     private var preloadedAsset: AVURLAsset?
@@ -209,12 +204,18 @@ class GlobalVideoPlayerManager: ObservableObject {
             return
         }
         
+        if startPiPWhenBackgrounding() {
+            print("🎬 [GlobalPlayer] Started native PiP while app backgrounded")
+            return
+        }
+        
         handoffToBackgroundAudio(with: video)
     }
     
     private func handleAppWillEnterForeground() {
         print("🎧 [GlobalPlayer] App entering foreground - restoring mini player state")
         guard currentVideo != nil else { return }
+        if isPiPActive { return }
         
         if !showingFullscreen {
             shouldShowMiniPlayer = true
@@ -256,6 +257,10 @@ class GlobalVideoPlayerManager: ObservableObject {
     
     private func restoreFromBackgroundAudioIfNeeded() {
         backgroundPlayTask?.cancel()
+        
+        if isPiPActive {
+            return
+        }
         
         if usingBackgroundAudioBridge {
             let resumeTime = backgroundPlayService.currentPlaybackTime
@@ -312,27 +317,79 @@ class GlobalVideoPlayerManager: ObservableObject {
         }
     }
     
-    // 🚫 NATIVE PiP DISABLED: We use custom YouTube-style mini player instead
-    // Native iOS PiP is disabled because we have a better custom implementation
-    // that matches YouTube's free-floating, resizable, draggable mini player
-    func setupPictureInPicture(for playerLayer: AVPlayerLayer) {
-        // ❌ DISABLED: Native PiP not used
-        // We use FloatingMiniPlayer.swift instead (YouTube-style)
-        print("ℹ️ [GlobalVideoPlayerManager] Native PiP disabled - using custom YouTube-style mini player")
+    // MARK: - Native Picture-in-Picture
+    func setupPictureInPicture(for playerLayer: AVPlayerLayer, controller: AVPictureInPictureController) {
+        pipPlayerLayer = playerLayer
+        pipController = controller
+        print("🎬 [GlobalPlayer] PiP controller registered")
     }
     
-    // 🚫 NATIVE PiP DISABLED: Toggle does nothing (custom mini player handles this)
-    func togglePictureInPicture() {
-        // ❌ DISABLED: Native PiP not used
-        // Our custom FloatingMiniPlayer.swift provides a superior experience
-        print("ℹ️ [GlobalVideoPlayerManager] Native PiP disabled - use custom mini player instead")
+    func clearPictureInPicture(controller: AVPictureInPictureController) {
+        if pipController === controller {
+            pipController = nil
+            pipPlayerLayer = nil
+            print("🧹 [GlobalPlayer] PiP controller cleared")
+        }
     }
     
-    // 🚫 NATIVE PiP DISABLED: Auto PiP does nothing (custom mini player handles backgrounding)
-    func startPiPWhenBackgrounding() async {
-        // ❌ DISABLED: Native PiP not used
-        // Custom mini player remains visible when app backgrounds
-        print("ℹ️ [GlobalVideoPlayerManager] Native PiP disabled - custom mini player active")
+    func handlePiPStateChange(isActive: Bool) {
+        isPiPActive = isActive
+        if isActive {
+            shouldShowMiniPlayer = false
+            isMiniplayer = false
+            print("📺 [GlobalPlayer] PiP active - hiding custom mini player")
+        } else {
+            handlePiPDidStopFromSystem()
+        }
+    }
+    
+    func handlePiPDidStopFromSystem() {
+        isPiPActive = false
+        if currentVideo != nil && !showingFullscreen {
+            shouldShowMiniPlayer = true
+            isMiniplayer = true
+            print("📺 [GlobalPlayer] PiP stopped - restoring custom mini player")
+        }
+    }
+    
+    @discardableResult
+    func togglePictureInPicture() -> Bool {
+        guard let pipController else {
+            print("⚠️ [GlobalPlayer] No PiP controller available")
+            return false
+        }
+        
+        if pipController.isPictureInPictureActive {
+            pipController.stopPictureInPicture()
+            return true
+        } else if pipController.isPictureInPicturePossible {
+            pipController.startPictureInPicture()
+            return true
+        }
+        
+        print("⚠️ [GlobalPlayer] PiP controller exists but cannot start")
+        return false
+    }
+    
+    @discardableResult
+    func startPictureInPictureIfPossible() -> Bool {
+        guard let pipController else { return false }
+        guard pipController.isPictureInPicturePossible else { return false }
+        if !pipController.isPictureInPictureActive {
+            pipController.startPictureInPicture()
+        }
+        return true
+    }
+    
+    @discardableResult
+    func startPiPWhenBackgrounding() -> Bool {
+        guard appState.autoPiPEnabled else { return false }
+        return startPictureInPictureIfPossible()
+    }
+    
+    func stopPictureInPictureIfActive() {
+        guard let pipController, pipController.isPictureInPictureActive else { return }
+        pipController.stopPictureInPicture()
     }
     
     deinit {
@@ -365,6 +422,10 @@ class GlobalVideoPlayerManager: ObservableObject {
         isCleanedUp = true
         
         print("🧹 Cleaning up GlobalVideoPlayerManager")
+        
+        stopPictureInPictureIfActive()
+        pipController = nil
+        pipPlayerLayer = nil
         
         // 🔥 APPLE BEST PRACTICE: Invalidate KVO observers before cleanup
         timeControlObserver?.invalidate()
@@ -869,8 +930,7 @@ class GlobalVideoPlayerManager: ObservableObject {
         
         print("🔥 [GlobalPlayer] closePlayer() called")
         
-        // 🚫 NATIVE PiP REMOVED: No need to stop PiP (we use custom mini player)
-        // Custom FloatingMiniPlayer automatically disappears when currentVideo = nil
+        stopPictureInPictureIfActive()
         
         // 🔥 REAL-TIME VIEW TRACKING: End view session
         Task {
@@ -904,8 +964,7 @@ class GlobalVideoPlayerManager: ObservableObject {
             await endViewTracking()
         }
         
-        // 🚫 NATIVE PiP REMOVED: No need to stop PiP (we use custom mini player)
-        // Custom FloatingMiniPlayer automatically disappears on reset
+        stopPictureInPictureIfActive()
         
         // Destroy player
         playerManager?.pause()

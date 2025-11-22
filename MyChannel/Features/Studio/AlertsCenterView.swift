@@ -29,7 +29,7 @@ struct AlertsCenterView: View {
                 }
             }
             Section("Milestones") {
-                milestoneRow(title: "10K views today", icon: "sparkles")
+                milestoneRow(title: "10K views today", icon: "star.fill")
                 milestoneRow(title: "+1K subscribers this week", icon: "person.2.fill")
             }
         }

@@ -7,13 +7,57 @@
 
 import SwiftUI
 
+enum VideoBulkAction: CaseIterable {
+    case edit
+    case visibility
+    case playlist
+    case download
+    case share
+    case delete
+    
+    var title: String {
+        switch self {
+        case .edit: return "Edit"
+        case .visibility: return "Visibility"
+        case .playlist: return "Playlist"
+        case .download: return "Download"
+        case .share: return "Share"
+        case .delete: return "Delete"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .edit: return "pencil"
+        case .visibility: return "eye"
+        case .playlist: return "text.badge.plus"
+        case .download: return "arrow.down.circle"
+        case .share: return "square.and.arrow.up"
+        case .delete: return "trash.fill"
+        }
+    }
+    
+    var tint: Color {
+        switch self {
+        case .edit, .visibility, .playlist, .download, .share:
+            return AppTheme.Colors.textPrimary
+        case .delete:
+            return AppTheme.Colors.error
+        }
+    }
+    
+    var isDestructive: Bool {
+        self == .delete
+    }
+}
+
 // MARK: - Video Management Context
 struct VideoManagementContext {
     let isManaging: Binding<Bool>
     let selectedIDs: Binding<Set<String>>
     let onToggleSelection: (String) -> Void
     let onSetSelections: ([String]) -> Void
-    let onDeleteSelected: () -> Void
+    let onAction: (VideoBulkAction) -> Void
     let onExit: () -> Void
     let isDeleting: Bool
 }
@@ -98,6 +142,9 @@ struct ProfileVideosView: View {
     @State private var layoutMode: VideoLayoutMode = .list1
     @State private var sortMode: SortMode = .newest
     @State private var pinnedIds: [String] = []
+    @State private var searchText: String = ""
+    @State private var visibilityFilter: VideoVisibilityFilter = .all
+    @State private var typeFilter: VideoTypeFilter = .all
     private let columns = [
         GridItem(.flexible(), spacing: 8),
         GridItem(.flexible(), spacing: 8)
@@ -114,6 +161,14 @@ struct ProfileVideosView: View {
                 PinnedVideosCarousel(videos: pinnedVideos)
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
+                
+                HStack {
+                    Text("Pinned")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
             } else if videos.isEmpty && AuthenticationManager.shared.currentUser?.id == user.id {
                 // Clean empty state - single placeholder
                 VStack(spacing: 20) {
@@ -235,9 +290,26 @@ struct ProfileVideosView: View {
             }
             .padding(.horizontal, 16)
             
+            VideoFilterBar(
+                searchText: $searchText,
+                visibilityFilter: $visibilityFilter,
+                typeFilter: $typeFilter
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 4)
+            
+            HStack {
+                Text("All videos")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 4)
+            
             if isManagementActive, let management = managementContext {
                 let selectedCount = management.selectedIDs.wrappedValue.count
-                let totalCount = displayVideos.count
+                let totalCount = filteredVideos.count
                 VideoManagementToolbar(
                     selectedCount: selectedCount,
                     totalVisibleCount: totalCount,
@@ -247,11 +319,14 @@ struct ProfileVideosView: View {
                         if totalCount > 0 && selectedCount >= totalCount {
                             management.onSetSelections([])
                         } else {
-                            management.onSetSelections(displayVideos.map { $0.id })
+                            management.onSetSelections(filteredVideoIDs)
                         }
                     },
                     onDelete: {
-                        management.onDeleteSelected()
+                        management.onAction(.delete)
+                    },
+                    onAction: { action in
+                        management.onAction(action)
                     }
                 )
                 .padding(.horizontal, 16)
@@ -269,20 +344,35 @@ struct ProfileVideosView: View {
         .task { pinnedIds = PinnedVideosStore.shared.getPinned(for: user.id) }
     }
     
-    private var pinnedVideos: [Video] {
-        let set = Set(pinnedIds)
-        return videos.filter { set.contains($0.id) }
+    private var filteredVideos: [Video] {
+        videos.filter { video in
+            matchesSearch(video) && matchesVisibilityFilter(video) && matchesTypeFilter(video)
+        }
     }
     
-    private var displayVideos: [Video] {
+    private var pinnedVideos: [Video] {
+        let set = Set(pinnedIds)
+        return filteredVideos.filter { set.contains($0.id) }
+    }
+    
+    private var sortedVideos: [Video] {
         switch sortMode {
         case .newest:
-            return videos.sorted { $0.createdAt > $1.createdAt }
+            return filteredVideos.sorted { $0.createdAt > $1.createdAt }
         case .popular:
-            return videos.sorted { $0.viewCount > $1.viewCount }
+            return filteredVideos.sorted { $0.viewCount > $1.viewCount }
         case .oldest:
-            return videos.sorted { $0.createdAt < $1.createdAt }
+            return filteredVideos.sorted { $0.createdAt < $1.createdAt }
         }
+    }
+    
+    private var unpinnedSortedVideos: [Video] {
+        let pinnedSet = Set(pinnedVideos.map { $0.id })
+        return sortedVideos.filter { !pinnedSet.contains($0.id) }
+    }
+    
+    private var filteredVideoIDs: [String] {
+        filteredVideos.map { $0.id }
     }
     
     private func openVideo(_ video: Video) {
@@ -290,11 +380,46 @@ struct ProfileVideosView: View {
         NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
     }
     
+    private func matchesSearch(_ video: Video) -> Bool {
+        guard !searchText.isEmpty else { return true }
+        let query = searchText.lowercased()
+        return video.title.lowercased().contains(query) ||
+            video.description.lowercased().contains(query)
+    }
+    
+    private func matchesVisibilityFilter(_ video: Video) -> Bool {
+        switch visibilityFilter {
+        case .all:
+            return true
+        case .publicOnly:
+            return video.visibility == .public && video.scheduledAt == nil
+        case .unlisted:
+            return video.visibility == .unlisted
+        case .privateOnly:
+            return video.visibility == .private
+        case .scheduled:
+            return video.scheduledAt != nil
+        }
+    }
+    
+    private func matchesTypeFilter(_ video: Video) -> Bool {
+        switch typeFilter {
+        case .all:
+            return true
+        case .shorts:
+            return video.duration <= 60
+        case .longForm:
+            return video.duration > 60
+        case .live:
+            return video.isLiveStream
+        }
+    }
+    
     @ViewBuilder
     private var videosBody: some View {
         if layoutMode == .grid2 {
             LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(Array(displayVideos.enumerated()), id: \.element.id) { index, video in
+                ForEach(Array(unpinnedSortedVideos.enumerated()), id: \.element.id) { index, video in
                     let isSelected = managementContext?.selectedIDs.wrappedValue.contains(video.id) ?? false
                     ProfileVideoCard(
                         video: video,
@@ -313,7 +438,7 @@ struct ProfileVideosView: View {
                         }
                         .onAppear {
                             // 🔥 THERMONUCLEAR: Prefetch when 6 from bottom (was 3)
-                            if index >= displayVideos.count - 6 {
+                            if index >= unpinnedSortedVideos.count - 6 {
                                 Task {
                                     if !isLoadingMore {
                                         await onLoadMore?()
@@ -322,8 +447,8 @@ struct ProfileVideosView: View {
                             }
                             
                             // 🔥 THERMONUCLEAR: Prefetch next 12 thumbnails
-                            let prefetchRange = (index + 1)..<min(displayVideos.count, index + 13)
-                            let urls = prefetchRange.compactMap { URL(string: displayVideos[$0].thumbnailURL) }
+                            let prefetchRange = (index + 1)..<min(unpinnedSortedVideos.count, index + 13)
+                            let urls = prefetchRange.compactMap { URL(string: unpinnedSortedVideos[$0].thumbnailURL) }
                             ImagePrefetcher.shared.prefetch(urls: urls)
                         }
                 }
@@ -343,7 +468,7 @@ struct ProfileVideosView: View {
         } else {
             // Single video view: one full-width 16:9 card per row
             LazyVStack(spacing: 12) {
-                ForEach(Array(displayVideos.enumerated()), id: \.element.id) { index, video in
+                ForEach(Array(unpinnedSortedVideos.enumerated()), id: \.element.id) { index, video in
                     let isSelected = managementContext?.selectedIDs.wrappedValue.contains(video.id) ?? false
                     FullWidthVideoCard(
                         video: video,
@@ -358,7 +483,7 @@ struct ProfileVideosView: View {
                         .padding(.horizontal, 16)
                         .onAppear {
                             // 🔥 THERMONUCLEAR: Prefetch when 6 from bottom (was 3)
-                            if index >= displayVideos.count - 6 {
+                            if index >= unpinnedSortedVideos.count - 6 {
                                 Task {
                                     if !isLoadingMore {
                                         await onLoadMore?()
@@ -367,8 +492,8 @@ struct ProfileVideosView: View {
                             }
                             
                             // 🔥 THERMONUCLEAR: Prefetch next 12 thumbnails
-                            let prefetchRange = (index + 1)..<min(displayVideos.count, index + 13)
-                            let urls = prefetchRange.compactMap { URL(string: displayVideos[$0].thumbnailURL) }
+                            let prefetchRange = (index + 1)..<min(unpinnedSortedVideos.count, index + 13)
+                            let urls = prefetchRange.compactMap { URL(string: unpinnedSortedVideos[$0].thumbnailURL) }
                             ImagePrefetcher.shared.prefetch(urls: urls)
                         }
                 }
@@ -1122,6 +1247,7 @@ private struct VideoManagementToolbar: View {
     let isDeleting: Bool
     let onSelectOrClearAll: () -> Void
     let onDelete: () -> Void
+    let onAction: (VideoBulkAction) -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1152,6 +1278,21 @@ private struct VideoManagementToolbar: View {
                 .buttonStyle(.plain)
                 .disabled(totalVisibleCount == 0)
                 .opacity(totalVisibleCount == 0 ? 0.5 : 1)
+            }
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(VideoBulkAction.allCases.filter { $0 != .delete }, id: \.self) { action in
+                        ProfileBulkActionButton(
+                            action: action,
+                            isEnabled: selectedCount > 0 && !isDeleting,
+                            onTap: {
+                                onAction(action)
+                            }
+                        )
+                    }
+                }
+                .padding(.vertical, 4)
             }
             
             Button {
@@ -1212,6 +1353,43 @@ private struct SelectionBadge: View {
     }
 }
 
+private struct ProfileBulkActionButton: View {
+    let action: VideoBulkAction
+    let isEnabled: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button {
+            guard isEnabled else { return }
+            HapticManager.shared.impact(style: .light)
+            onTap()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: action.icon)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(action.title)
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundColor(action.isDestructive ? .white : action.tint)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
+            .background(
+                Capsule()
+                    .fill(action.isDestructive
+                          ? (isEnabled ? action.tint : action.tint.opacity(0.4))
+                          : AppTheme.Colors.backgroundSecondary.opacity(isEnabled ? 1 : 0.7))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(action.isDestructive ? Color.clear : AppTheme.Colors.divider.opacity(isEnabled ? 0.5 : 0.2), lineWidth: action.isDestructive ? 0 : 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.5)
+    }
+}
+
 private struct StockVideoBannersCarousel: View {
     let banners: [StockVideoBanner]
     @State private var current: Int = 0
@@ -1257,6 +1435,149 @@ private struct StockVideoBannersCarousel: View {
         }
         .tabViewStyle(.page(indexDisplayMode: .automatic))
         .frame(height: 150)
+    }
+}
+
+struct VideoFilterBar: View {
+    @Binding var searchText: String
+    @Binding var visibilityFilter: VideoVisibilityFilter
+    @Binding var typeFilter: VideoTypeFilter
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(AppTheme.Colors.textTertiary)
+                TextField("Search videos...", text: $searchText)
+                    .textInputAutocapitalization(.never)
+                    .disableAutocorrection(true)
+                    .font(.system(size: 15))
+                
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                        HapticManager.shared.impact(style: .light)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppTheme.Colors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
+                    )
+            )
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(VideoVisibilityFilter.allCases, id: \.self) { filter in
+                        ProfileFilterChip(
+                            title: filter.title,
+                            isSelected: visibilityFilter == filter,
+                            icon: filter.icon
+                        ) {
+                            visibilityFilter = filter
+                            HapticManager.shared.impact(style: .light)
+                        }
+                    }
+                    
+                    ForEach(VideoTypeFilter.allCases, id: \.self) { filter in
+                        ProfileFilterChip(
+                            title: filter.title,
+                            isSelected: typeFilter == filter,
+                            icon: filter.icon
+                        ) {
+                            typeFilter = filter
+                            HapticManager.shared.impact(style: .light)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct ProfileFilterChip: View {
+    let title: String
+    let isSelected: Bool
+    var icon: String? = nil
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+            .background(
+                Capsule()
+                    .fill(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+            )
+            .overlay(
+                Capsule()
+                    .stroke(AppTheme.Colors.divider.opacity(isSelected ? 0 : 0.3), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+enum VideoVisibilityFilter: CaseIterable {
+    case all, publicOnly, unlisted, privateOnly, scheduled
+    
+    var title: String {
+        switch self {
+        case .all: return "All"
+        case .publicOnly: return "Public"
+        case .unlisted: return "Unlisted"
+        case .privateOnly: return "Private"
+        case .scheduled: return "Scheduled"
+        }
+    }
+    
+    var icon: String? {
+        switch self {
+        case .all: return "line.3.horizontal.decrease.circle"
+        case .publicOnly: return "globe"
+        case .unlisted: return "link"
+        case .privateOnly: return "lock.fill"
+        case .scheduled: return "calendar"
+        }
+    }
+}
+
+enum VideoTypeFilter: CaseIterable {
+    case all, shorts, longForm, live
+    
+    var title: String {
+        switch self {
+        case .all: return "Type"
+        case .shorts: return "Shorts"
+        case .longForm: return "Long"
+        case .live: return "Live"
+        }
+    }
+    
+    var icon: String? {
+        switch self {
+        case .all: return "star.fill"
+        case .shorts: return "play.rectangle.on.rectangle"
+        case .longForm: return "rectangle.stack"
+        case .live: return "dot.radiowaves.left.and.right"
+        }
     }
 }
 

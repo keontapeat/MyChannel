@@ -47,7 +47,7 @@ struct AIToolsPanel: View {
                 VStack(spacing: 16) {
                     // Auto Enhance
                     AIToolCard(
-                        icon: "wand.and.stars",
+                        icon: "cpu",
                         title: "Auto Enhance",
                         description: "AI-powered color correction & optimization",
                         gradient: [.purple, .pink]

@@ -35,7 +35,7 @@ struct VotingResultsView: View {
         AwardCategory(id: "best-clutch", name: "Best Clutch Plays", icon: "target", color: .red),
         AwardCategory(id: "most-creative", name: "Most Creative Content", icon: "lightbulb.fill", color: .orange),
         AwardCategory(id: "best-production", name: "Best Production Quality", icon: "tv.fill", color: .purple),
-        AwardCategory(id: "breakout-star", name: "Breakout Star", icon: "sparkles", color: .yellow),
+        AwardCategory(id: "breakout-star", name: "Breakout Star", icon: "star.fill", color: .yellow),
         AwardCategory(id: "best-duo", name: "Best Duo/Team", icon: "person.2.fill", color: .cyan),
         AwardCategory(id: "best-collab", name: "Best Collaboration", icon: "link", color: .blue),
         AwardCategory(id: "most-entertaining", name: "Most Entertaining", icon: "face.smiling.fill", color: .orange),

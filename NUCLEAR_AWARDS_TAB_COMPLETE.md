@@ -16,7 +16,7 @@ The Streamer Awards tab has been completely redesigned with a premium awards sho
 **Features**:
 - Full-width gold-to-black gradient backdrop (Oscars-inspired)
 - Live ceremony countdown with days/hours/minutes
-- Animated sparkle particles (subtle gold effects)
+- Animated starlight particles (subtle gold effects)
 - "LIVE NOW" indicator with pulsing animation
 - CTA buttons: "Watch Live" and "Cast Your Vote"
 - Responsive to ceremony status (live/upcoming)
@@ -151,7 +151,7 @@ Color.awardBackground // Adapts to light/dark mode
 - Lazy loading with `LazyVGrid`
 - Staggered animations to reduce simultaneous renders
 - Optimized gradient rendering
-- Efficient particle systems (sparkles, confetti)
+- Efficient particle systems (starlight trails, confetti)
 
 ### Memory Management
 - Proper state management with `@State` and `@StateObject`
@@ -235,7 +235,7 @@ Color.awardBackground // Adapts to light/dark mode
 
 1. **User opens Awards tab**
    - Cinematic hero section animates in
-   - Sparkles float across gold gradient
+   - Starlight trails float across gold gradient
    - Countdown shows time to ceremony
 
 2. **User scrolls down**

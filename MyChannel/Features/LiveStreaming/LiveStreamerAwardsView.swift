@@ -99,7 +99,7 @@ struct LiveStreamerAwardsView: View {
                                 .yearly,
                                 .allTime
                             ], id: \.rawValue) { timeframe in
-                                FilterChip(
+                                AwardsFilterChip(
                                     title: timeframe.rawValue,
                                     isSelected: selectedTimeframe == timeframe
                                 ) {
@@ -114,7 +114,7 @@ struct LiveStreamerAwardsView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
                             ForEach(LiveStreamerAwardsSystem.LeaderboardCategory.allCases, id: \.rawValue) { category in
-                                FilterChip(
+                                AwardsFilterChip(
                                     title: category.rawValue,
                                     isSelected: selectedCategory == category
                                 ) {
@@ -632,7 +632,7 @@ struct AwardsTabButton: View {
     }
 }
 
-struct FilterChip: View {
+struct AwardsFilterChip: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void

@@ -136,7 +136,7 @@ struct AICoCreatorView: View {
             
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
                 quickActionCard(
-                    icon: "wand.and.stars",
+                    icon: "cpu",
                     title: "Generate Script",
                     subtitle: "AI writes your video script",
                     color: .purple,
@@ -291,7 +291,7 @@ struct AICoCreatorView: View {
                             ProgressView()
                                 .scaleEffect(0.8)
                         } else {
-                            Image(systemName: "wand.and.stars")
+                            Image(systemName: "cpu")
                         }
                         
                         Text(aiService.isGenerating ? "Generating..." : "Generate Script")

@@ -157,7 +157,7 @@ struct OnePersonStudioView: View {
             case .environments: return "photo.on.rectangle"
             case .animation: return "figure.walk.motion"
             case .audio: return "waveform"
-            case .effects: return "sparkles"
+            case .effects: return "star.fill"
             case .editing: return "film"
             case .export: return "square.and.arrow.up"
             }
@@ -316,7 +316,7 @@ struct OnePersonStudioView: View {
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 12) {
-                SimpleStudioStatCard(title: "Generations", value: "\(selfImproving.totalGenerations)", icon: "sparkles")
+                SimpleStudioStatCard(title: "Generations", value: "\(selfImproving.totalGenerations)", icon: "star.fill")
                 SimpleStudioStatCard(title: "Success Rate", value: "\(Int(selfImproving.successRate * 100))%", icon: "checkmark.circle")
                 SimpleStudioStatCard(title: "Avg Rating", value: String(format: "%.1f", selfImproving.averageUserRating), icon: "star.fill")
             }
@@ -358,7 +358,7 @@ struct OnePersonStudioView: View {
                 
                 QuickStartButton(
                     title: "Apply Effects",
-                    icon: "sparkles",
+                    icon: "star.fill",
                     color: .purple
                 ) {
                     selectedTool = .effects

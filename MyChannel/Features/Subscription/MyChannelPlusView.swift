@@ -148,7 +148,7 @@ struct MyChannelPlusView: View {
                 )
                 
                 benefitCard(
-                    icon: "sparkles",
+                    icon: "star.fill",
                     title: "Early Access",
                     description: "Try new features before everyone"
                 )
@@ -270,7 +270,7 @@ struct MyChannelPlusView: View {
                 featureRow(icon: "pip.fill", title: "Picture-in-picture", description: "Watch videos while using other apps")
                 Divider().padding(.leading, 50)
                 
-                featureRow(icon: "sparkles", title: "Early access features", description: "Try new features before everyone else")
+                featureRow(icon: "star.fill", title: "Early access features", description: "Try new features before everyone else")
                 Divider().padding(.leading, 50)
                 
                 featureRow(icon: "crown.fill", title: "Premium badge", description: "Show your support with a Plus+ badge")

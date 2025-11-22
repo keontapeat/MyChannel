@@ -50,6 +50,11 @@ struct GamingEsportsView: View {
         .task {
             await viewModel.loadData()
         }
+        .onChange(of: viewModel.selectedPeriod) { period in
+            Task {
+                await viewModel.refreshLeaderboard(for: period)
+            }
+        }
     }
     
     // MARK: - Header

@@ -428,7 +428,11 @@ let count = await RealtimeViewTracker.shared.getViewCount(for: videoId)
 
 ### Video Player
 - Use `GlobalVideoPlayerManager.shared` for centralized playback
-- Support Picture-in-Picture (PiP)
+- **Dual playback system (YouTube parity):**
+  - Custom FloatingMiniPlayer inside the app (drag, resize, swipe to dismiss)
+  - Native iOS Picture‑in‑Picture bubble when you leave the app (same behavior as YouTube)
+  - `AppState.autoPiPEnabled` controls whether PiP auto-starts on backgrounding
+  - Fallback to audio-only background play if PiP isn’t available on the device
 - Mini player for background playback
 - Quality selection (240p - 4K)
 - Playback speed control

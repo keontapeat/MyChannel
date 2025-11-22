@@ -20,7 +20,7 @@ struct AIRecommendationsSection: View {
             // Section header
             HStack {
                 HStack(spacing: 8) {
-                    Image(systemName: "wand.and.stars")
+                    Image(systemName: "cpu")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.primary)
                     
@@ -41,7 +41,7 @@ struct AIRecommendationsSection: View {
             if recommendedVideos.isEmpty && !isLoading {
                 // Empty state
                 VStack(spacing: 12) {
-                    Image(systemName: "sparkles")
+                    Image(systemName: "star.fill")
                         .font(.system(size: 40))
                         .foregroundColor(AppTheme.Colors.textTertiary)
                     

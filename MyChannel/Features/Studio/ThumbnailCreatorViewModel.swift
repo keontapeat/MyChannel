@@ -102,7 +102,7 @@ class ThumbnailCreatorViewModel: ObservableObject {
     
     // Available filters
     let filters: [ThumbnailFilter] = [
-        ThumbnailFilter(name: "Enhance", icon: "wand.and.stars"),
+        ThumbnailFilter(name: "Enhance", icon: "cpu"),
         ThumbnailFilter(name: "Brighten", icon: "sun.max"),
         ThumbnailFilter(name: "Contrast", icon: "circle.lefthalf.filled"),
         ThumbnailFilter(name: "Saturation", icon: "drop.fill"),

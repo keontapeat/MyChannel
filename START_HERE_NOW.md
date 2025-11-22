@@ -311,7 +311,7 @@ Button {
     }
 } label: {
     HStack {
-        Image(systemName: "sparkles")
+        Image(systemName: "star.fill")
         Text("AI Optimize")
     }
     .font(.system(size: 16, weight: .semibold))

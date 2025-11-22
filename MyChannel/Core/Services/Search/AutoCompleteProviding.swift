@@ -20,7 +20,7 @@ final class DefaultAutoCompleteService: AutoCompleteProviding {
         }
         let related = ["best " + query, query + " tips", "how to " + query, query + " guide"].prefix(maxSuggestions - suggestions.count)
         for relatedQuery in related {
-            suggestions.append(SearchSuggestion(id: UUID().uuidString, text: relatedQuery, subtitle: nil, icon: "sparkles", isAIGenerated: true, score: 0.9))
+            suggestions.append(SearchSuggestion(id: UUID().uuidString, text: relatedQuery, subtitle: nil, icon: "star.fill", isAIGenerated: true, score: 0.9))
         }
         return suggestions
     }

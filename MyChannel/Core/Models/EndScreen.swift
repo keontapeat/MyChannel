@@ -71,7 +71,7 @@ enum EndScreenElementType: String, Codable, CaseIterable {
         case .subscribe: return "bell.badge.fill"
         case .channel: return "person.crop.circle"
         case .link: return "link"
-        case .bestForViewer: return "sparkles"
+        case .bestForViewer: return "star.fill"
         }
     }
 }

@@ -176,7 +176,7 @@ struct CreateCampaignView: View {
                         AudienceTemplateCard(
                             title: "Fashion Lovers",
                             size: "1.8M users",
-                            icon: "sparkles"
+                            icon: "star.fill"
                         ) {
                             campaignBuilder.selectedAudienceTemplate = "fashion"
                         }

@@ -275,7 +275,7 @@ struct AdvancedAnalyticsView: View {
             
             VStack(spacing: 12) {
                 InsightRow(
-                    icon: "sparkles",
+                    icon: "star.fill",
                     title: "Best Upload Time",
                     description: "Your audience is most active on Tuesday at 2:00 PM EST",
                     color: .yellow
@@ -296,7 +296,7 @@ struct AdvancedAnalyticsView: View {
                 )
                 
                 InsightRow(
-                    icon: "wand.and.stars",
+                    icon: "cpu",
                     title: "Viral Potential",
                     description: "Your next video has 87% chance of going viral",
                     color: .purple

@@ -106,7 +106,7 @@ class FacebookParityStoryEngine: ObservableObject {
             FacebookAREffect(id: "falling_snow", name: "Falling Snow", category: .world, type: .worldEffect),
             FacebookAREffect(id: "floating_hearts", name: "Floating Hearts", category: .world, type: .worldEffect),
             FacebookAREffect(id: "rainbow_trail", name: "Rainbow Trail", category: .world, type: .worldEffect),
-            FacebookAREffect(id: "sparkles", name: "Sparkles", category: .world, type: .worldEffect),
+            FacebookAREffect(id: "star.fill", name: "Starlight", category: .world, type: .worldEffect),
             
             // Interactive effects
             FacebookAREffect(id: "face_swap", name: "Face Swap", category: .interactive, type: .faceFilter),

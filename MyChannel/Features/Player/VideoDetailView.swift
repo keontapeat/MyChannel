@@ -69,7 +69,6 @@ struct VideoDetailView: View {
     @State private var upNextTimer: Timer? = nil
     @State private var showingUpNextList = false
     @State private var videoToPresent: Video? = nil
-    @State private var isPiPActive = false
     @State private var showingSubtitlePicker = false
     @State private var isScrubbing = false
     @State private var scrubPreviewImage: UIImage? = nil
@@ -440,7 +439,9 @@ struct VideoDetailView: View {
         Button(action: { triggerMiniPlayerOrPiP() }) {
             ZStack {
                 Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                Image(systemName: "pip.enter").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
+                Image(systemName: globalPlayer.isPiPActive ? "pip.exit" : "pip.enter")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
             }
         }
         .buttonStyle(ScaleButtonStyle())
@@ -669,7 +670,7 @@ struct VideoDetailView: View {
             .buttonStyle(ScaleButtonStyle())
             
             Button(action: { triggerMiniPlayerOrPiP() }) {
-                Image(systemName: isPiPActive ? "pip.exit" : "pip.enter")
+                Image(systemName: globalPlayer.isPiPActive ? "pip.exit" : "pip.enter")
                     .font(.caption.weight(.semibold))
             }
             .buttonStyle(ScaleButtonStyle())
@@ -752,18 +753,14 @@ struct VideoDetailView: View {
     
     @ViewBuilder
     private func errorOverlay(message: String) -> some View {
-        ZStack {
-            // Background overlay
-            Color.black.opacity(0.8)
-                .ignoresSafeArea()
+        ZStack(alignment: .topTrailing) {
+            Color.black.opacity(0.9)
             
             VStack(spacing: 20) {
-                // Error icon
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 48, weight: .semibold))
                     .foregroundColor(.red)
                 
-                // Error message
                 VStack(spacing: 8) {
                     Text("Video Error")
                         .font(.system(size: 20, weight: .semibold))
@@ -776,26 +773,61 @@ struct VideoDetailView: View {
                         .padding(.horizontal, 32)
                 }
                 
-                // Retry button
-                Button(action: {
-                    // Retry loading video
-                    playerManager.hasError = false
-                    playerManager.errorMessage = nil
-                    playerManager.setupPlayer(with: video)
-                }) {
-                    Text("Retry")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 12)
-                        .background(
-                            Capsule()
-                                .fill(AppTheme.Colors.primary)
-                        )
+                HStack(spacing: 12) {
+                    Button(action: {
+                        playerManager.hasError = false
+                        playerManager.errorMessage = nil
+                        playerManager.setupPlayer(with: video)
+                    }) {
+                        Text("Retry")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(
+                                Capsule()
+                                    .fill(AppTheme.Colors.primary)
+                            )
+                    }
+                    
+                    Button(action: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                            globalPlayer.closePlayer()
+                            dismiss()
+                        }
+                    }) {
+                        Text("Close Video")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .background(
+                                Capsule()
+                                    .stroke(Color.white.opacity(0.7), lineWidth: 1)
+                            )
+                    }
                 }
             }
+            .padding(.top, 24)
+            
+            Button(action: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    globalPlayer.closePlayer()
+                    dismiss()
+                }
+            }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(12)
+                    .background(Color.black.opacity(0.6), in: Circle())
+            }
+            .padding(16)
+            .accessibilityLabel("Close video")
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
+        .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
+        .transition(.opacity)
         .zIndex(200)
     }
     
@@ -865,16 +897,6 @@ struct VideoDetailView: View {
             }
         }
         .navigationBarHidden(true)
-        // Hidden PiP host view to drive system PiP
-        .overlay(
-            // 🔥 DISABLED: Native PiP Container (we use custom YouTube-style mini-player instead)
-            // PlayerPiPContainerView causes the ugly iOS native PiP to show
-            // We want the YouTube-style floating mini-player that we built in FloatingMiniPlayer.swift
-            Group {
-                // Native PiP completely disabled
-                EmptyView()
-            }
-        )
         // When user returns from fullscreen by dismissing, ensure state is consistent
         .sheet(isPresented: $showingCommentComposer) {
             RealTimeCommentsView(video: video)
@@ -966,18 +988,6 @@ struct VideoDetailView: View {
         .sheet(isPresented: $showingCreatorProfile) {
             CreatorProfileSheet(creator: video.creator)
                 .presentationDetents([.large])
-        }
-        .onChange(of: isPiPActive) { isActive in
-            // 🔥 DISABLE NATIVE PiP: We want custom YouTube-style mini-player instead
-            // Native PiP is ugly and not YouTube parity
-            // Never hide our custom mini-player
-            globalPlayer.isPiPActive = false  // Always keep PiP disabled
-            
-            // Don't hide the custom mini-player
-            // if isActive {
-            //     globalPlayer.shouldShowMiniPlayer = false
-            //     globalPlayer.isMiniplayer = false
-            // }
         }
         .overlay(alignment: .topTrailing) {
             // Video Cards Overlay (YouTube-style)
@@ -1467,21 +1477,17 @@ struct VideoDetailView: View {
         }
     }
 
-    // 🔥 YOUTUBE PARITY: Minimize to custom mini-player (NO NATIVE PiP!)
     private func triggerMiniPlayerOrPiP() {
-        print("🔽 [VideoDetailView] Mini-player button tapped")
-        print("   Current video: \(video.id)")
-        print("   Player exists: \(playerManager.player != nil)")
-        print("   Is playing: \(playerManager.isPlaying)")
+        print("🔽 [VideoDetailView] Mini-player / PiP button tapped")
         
-        // 🔥 FIX: Always use custom YouTube-style mini-player, NEVER native PiP
-        // Native PiP is the ugly iOS one you see at the bottom
-        // Custom mini-player is the YouTube-style floating one we built
+        if globalPlayer.togglePictureInPicture() {
+            print("✅ [VideoDetailView] Toggled native PiP")
+            return
+        }
         
         Task {
-            // Minimize to custom YouTube-style mini-player
             await minimizeToMiniPlayer()
-            print("✅ [VideoDetailView] Minimized to custom YouTube-style mini-player")
+            print("✅ [VideoDetailView] Minimized to custom mini player fallback")
         }
     }
     

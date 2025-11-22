@@ -68,7 +68,8 @@ final class VideoFirestoreService: ObservableObject {
             "commentCount": video.commentCount,
             "category": video.category.rawValue,
             "tags": video.tags,
-            "isPublic": video.isPublic,
+            "isPublic": video.visibility == .public,
+            "visibility": video.visibility.rawValue,
             "createdAt": existingDoc?.data()?["createdAt"] ?? FieldValue.serverTimestamp(),  // Preserve original createdAt
             "updatedAt": FieldValue.serverTimestamp()
         ]
@@ -83,6 +84,17 @@ final class VideoFirestoreService: ObservableObject {
         #if canImport(FirebaseFirestore)
         let ref = db.collection("videos").document(videoId)
         try await ref.delete()
+        #endif
+    }
+    
+    func updateVideoVisibility(videoId: String, visibility: Video.VisibilityStatus) async throws {
+        #if canImport(FirebaseFirestore)
+        let ref = db.collection("videos").document(videoId)
+        try await ref.updateData([
+            "visibility": visibility.rawValue,
+            "isPublic": visibility == .public,
+            "updatedAt": FieldValue.serverTimestamp()
+        ])
         #endif
     }
     
@@ -221,6 +233,10 @@ final class VideoFirestoreService: ObservableObject {
                     print("  📊 View count sync: Firestore=\(viewCount), Tracker=\(trackerCount), Using=\(finalViewCount)")
                 }
                 
+                let storedIsPublic = (d["isPublic"] as? Bool) ?? true
+                let storedVisibilityRaw = (d["visibility"] as? String)?.lowercased()
+                let visibilityStatus = Video.VisibilityStatus(rawValue: storedVisibilityRaw ?? "") ?? (storedIsPublic ? .public : .private)
+                
                 let video = Video(
                     id: doc.documentID,
                     title: d["title"] as? String ?? "",
@@ -231,7 +247,10 @@ final class VideoFirestoreService: ObservableObject {
                     viewCount: finalViewCount, // 🔥 FIX: Use the synced count
                     likeCount: (d["likeCount"] as? Int) ?? 0,
                     creator: AppState.shared.currentUser ?? User.defaultUser,
-                    category: .entertainment
+                    category: .entertainment,
+                    tags: (d["tags"] as? [String]) ?? [],
+                    isPublic: storedIsPublic,
+                    visibility: visibilityStatus
                 )
                 videos.append(video)
             }
@@ -286,6 +305,10 @@ final class VideoFirestoreService: ObservableObject {
                 // Use the higher of the two (Firestore or tracker cache)
                 let finalViewCount = max(viewCount, trackerCount)
                 
+                let storedIsPublic = (d["isPublic"] as? Bool) ?? true
+                let storedVisibilityRaw = (d["visibility"] as? String)?.lowercased()
+                let visibilityStatus = Video.VisibilityStatus(rawValue: storedVisibilityRaw ?? "") ?? (storedIsPublic ? .public : .private)
+                
                 let video = Video(
                     id: doc.documentID,
                     title: d["title"] as? String ?? "",
@@ -296,7 +319,10 @@ final class VideoFirestoreService: ObservableObject {
                     viewCount: finalViewCount, // 🔥 FIX: Use the synced count
                     likeCount: (d["likeCount"] as? Int) ?? 0,
                     creator: AppState.shared.currentUser ?? User.defaultUser,
-                    category: .entertainment
+                    category: .entertainment,
+                    tags: (d["tags"] as? [String]) ?? [],
+                    isPublic: storedIsPublic,
+                    visibility: visibilityStatus
                 )
                 videos.append(video)
             }

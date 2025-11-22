@@ -1009,7 +1009,7 @@ struct PremieresManagementView: View {
                             text: "Your subscribers will get notifications when it starts"
                         )
                         TipRow(
-                            icon: "sparkles",
+                            icon: "star.fill",
                             text: "Use countdown timer to build anticipation"
                         )
                     }

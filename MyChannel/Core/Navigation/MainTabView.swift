@@ -49,19 +49,17 @@ struct MainTabView: View {
             } else {
                 mainContent
                     .environmentObject(globalPlayer)
-                    // 🔥 DISABLED: Native PiP Container (we use custom YouTube-style mini-player instead)
-                    // PlayerPiPContainerView causes the ugly iOS native PiP to show
-                    // We want the YouTube-style floating mini-player that we built in FloatingMiniPlayer.swift
-            }
-            
-            // 🔥 YOUTUBE PARITY: Mini player floats OVER everything (not just tab bar area)
-            // This allows it to be visible on channel pages, search, profile, etc.
-            if globalPlayer.shouldShowMiniPlayer,
-               globalPlayer.currentVideo != nil,
-               !globalPlayer.showingFullscreen {
-                FloatingMiniPlayer()
-                    .environmentObject(appState)
-                    .zIndex(100_000)  // Above EVERYTHING
+                    .overlay(
+                        PlayerPiPContainerView(
+                            player: globalPlayer.player,
+                            isPictureInPictureActive: Binding(
+                                get: { globalPlayer.isPiPActive },
+                                set: { globalPlayer.isPiPActive = $0 }
+                            )
+                        )
+                        .frame(width: 0, height: 0)
+                        .allowsHitTesting(false)
+                    )
             }
         }
         .onAppear {
@@ -278,18 +276,12 @@ struct MainTabView: View {
                 GlobalVideoPlayerManager.shared.resumeAfterLeavingFlicks()
             }
         }
-        // 🔥 AUTO PiP: Start Picture-in-Picture when app goes to background
-        // 🔥 FIX: Close mini-player when app is fully backgrounded (not just inactive)
+        // 🔥 AUTO PiP logging: GlobalVideoPlayerManager handles the transitions
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .background {
-                // 🔥 DISABLED: NO AUTO-PiP! Keep custom mini-player only
-                // Native PiP is ugly and not YouTube parity
-                // The custom YouTube-style mini-player stays even when app is backgrounded
-                print("🔄 [MainTabView] App backgrounded - custom mini-player persists (no auto-PiP)")
+                print("🎬 [MainTabView] Scene moved to background - Global player decides between PiP or audio fallback")
             } else if newPhase == .active {
-                // 🔥 YOUTUBE PARITY: Custom mini-player persists when app returns
-                // Just like YouTube - the mini-player stays exactly where you left it
-                print("🔄 [MainTabView] App became active - custom mini-player still visible")
+                print("🎬 [MainTabView] Scene became active - restoring inline player if needed")
             }
         }
     }

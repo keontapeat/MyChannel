@@ -252,7 +252,7 @@ struct CampaignCreatorView: View {
     
     private var aiSuggestionCard: some View {
         HStack(spacing: 12) {
-            Image(systemName: "sparkles")
+            Image(systemName: "star.fill")
                 .font(.system(size: 20))
                 .foregroundColor(.purple)
             

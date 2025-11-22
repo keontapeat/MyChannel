@@ -26,7 +26,7 @@ enum ShoppingCategory: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .fashion: return "tshirt.fill"
         case .tech: return "iphone"
-        case .beauty: return "sparkles"
+        case .beauty: return "drop.fill"
         case .home: return "house.fill"
         case .sports: return "sportscourt.fill"
         case .food: return "fork.knife"
@@ -37,14 +37,14 @@ enum ShoppingCategory: String, CaseIterable, Identifiable, Codable {
     
     var color: Color {
         switch self {
-        case .fashion: return .pink
-        case .tech: return .blue
-        case .beauty: return .purple
-        case .home: return .orange
-        case .sports: return .green
-        case .food: return .red
-        case .books: return .brown
-        case .art: return .indigo
+        case .fashion: return Color(hex: "F3F0FF") ?? AppTheme.Colors.backgroundSecondary
+        case .tech: return Color(hex: "EDF4FF") ?? AppTheme.Colors.backgroundSecondary
+        case .beauty: return Color(hex: "FDF2F8") ?? AppTheme.Colors.backgroundSecondary
+        case .home: return Color(hex: "F5F5F0") ?? AppTheme.Colors.backgroundSecondary
+        case .sports: return Color(hex: "EDF8F2") ?? AppTheme.Colors.backgroundSecondary
+        case .food: return Color(hex: "FFF5EB") ?? AppTheme.Colors.backgroundSecondary
+        case .books: return Color(hex: "F6EFE4") ?? AppTheme.Colors.backgroundSecondary
+        case .art: return Color(hex: "F7ECFF") ?? AppTheme.Colors.backgroundSecondary
         }
     }
 }

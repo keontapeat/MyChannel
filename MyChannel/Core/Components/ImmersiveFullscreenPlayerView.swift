@@ -16,7 +16,6 @@ struct ImmersiveFullscreenPlayerView: View {
     @Environment(\.dismiss) private var dismiss  // 🔥 ADD: For minimizing to mini-player
     @State private var showControls = true
     @State private var dragOffset: CGFloat = 0
-    @State private var isPiPActive: Bool = false
     @State private var showRoutePicker = false
 
     var body: some View {
@@ -26,9 +25,7 @@ struct ImmersiveFullscreenPlayerView: View {
             // Reuse the global player's AVPlayer (already adopted from caller)
             if let player = globalPlayer.player {
                 ZStack {
-                    // 🚫 NATIVE PiP DISABLED: Use standard VideoPlayer instead
-                    // Old: PlayerPiPContainerView (causes ugly native PiP)
-                    // New: VideoPlayer (works with custom mini-player)
+                    // Native VideoPlayer hosts the same AVPlayer used for PiP + mini-player
                     VideoPlayer(player: player)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     // Tap to toggle controls
@@ -256,14 +253,13 @@ struct ImmersiveFullscreenPlayerView: View {
                         
                         Spacer()
                         
-                        // 🚫 NATIVE PiP DISABLED: Minimize to custom mini-player instead
                         Button {
-                            // ❌ OLD: isPiPActive.toggle() (native PiP - DISABLED)
-                            // ✅ NEW: Minimize to custom YouTube-style mini-player
-                            globalPlayer.minimizePlayer()
-                            dismiss()
+                            if !globalPlayer.togglePictureInPicture() {
+                                globalPlayer.minimizePlayer()
+                                dismiss()
+                            }
                         } label: {
-                            Image(systemName: "pip.enter")  // Always show minimize icon
+                            Image(systemName: globalPlayer.isPiPActive ? "pip.exit" : "pip.enter")
                                 .font(.system(size: 20, weight: .medium))
                                 .foregroundColor(.white)
                                 .frame(width: 44, height: 44)

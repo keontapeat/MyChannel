@@ -525,7 +525,7 @@ struct AIAssistantButton: View {
         Button {
             showingChat = true
         } label: {
-            Image(systemName: "sparkles")
+            Image(systemName: "star.fill")
                 .font(.system(size: 20))
                 .foregroundColor(.white)
                 .padding()

@@ -106,7 +106,7 @@ class FanGiftingViewModel: ObservableObject {
                 price: 100,
                 category: "Premium",
                 color: .blue,
-                animation: "sparkle"
+                animation: "starlight"
             ),
             VirtualGift(
                 id: "5",

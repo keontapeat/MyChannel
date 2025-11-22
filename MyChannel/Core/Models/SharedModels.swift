@@ -71,8 +71,8 @@ enum VideoTransition: String, Codable, CaseIterable {
         case .fade: return "circle.lefthalf.filled"
         case .slide: return "arrow.right"
         case .zoom: return "plus.magnifyingglass"
-        case .wipe: return "wand.and.rays"
-        case .dissolve: return "sparkles"
+        case .wipe: return "sun.max"
+        case .dissolve: return "star.fill"
         }
     }
 }

@@ -159,10 +159,10 @@ struct CreatorMonetizationView: View {
                 viewModel.enableMonetization()
             } label: {
                 HStack {
-                    Image(systemName: "sparkles")
+                    Image(systemName: "star.fill")
                     Text("Enable Monetization")
                         .fontWeight(.bold)
-                    Image(systemName: "sparkles")
+                    Image(systemName: "star.fill")
                 }
                 .font(.headline)
                 .foregroundColor(.white)

@@ -287,7 +287,7 @@ struct MyChannelPlusBenefitsView: View {
                         )
                         .frame(width: 56, height: 56)
                     
-                    Image(systemName: "sparkles")
+                    Image(systemName: "star.fill")
                         .font(.system(size: 24, weight: .medium))
                         .foregroundColor(.white)
                 }

@@ -4,12 +4,11 @@
 
 import {
   Upload,
-  Wand2,
+  Cpu,
   Type,
   Palette,
   Scissors,
   Layers,
-  Sparkles,
   Download,
   Trash2,
   RotateCcw,
@@ -670,7 +669,7 @@ export default function ThumbnailCreatorPage() {
               </Link>
               <div>
                 <h1 className="text-xl font-black text-white flex items-center gap-2">
-                  <Sparkles size={20} className="text-yellow-400" />
+                  <Star size={20} className="text-yellow-400" />
                   Thumbnail Creator
                 </h1>
                 <p className="text-xs text-gray-400">Nuclear Universe Edition 🌌</p>
@@ -835,9 +834,9 @@ export default function ThumbnailCreatorPage() {
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-2">
               {[
                 { id: 'upload', label: 'Upload', icon: Upload, gradient: 'from-blue-600 to-cyan-600' },
-                { id: 'ai', label: 'AI', icon: Wand2, gradient: 'from-purple-600 to-pink-600' },
+                { id: 'ai', label: 'AI', icon: Cpu, gradient: 'from-purple-600 to-pink-600' },
                 { id: 'text', label: 'Text', icon: Type, gradient: 'from-orange-600 to-red-600' },
-                { id: 'stickers', label: 'Stickers', icon: Sparkles, gradient: 'from-yellow-600 to-orange-600' },
+                { id: 'stickers', label: 'Stickers', icon: Star, gradient: 'from-yellow-600 to-orange-600' },
                 { id: 'filters', label: 'Filters', icon: Filter, gradient: 'from-green-600 to-emerald-600' },
                 { id: 'templates', label: 'Templates', icon: Layers, gradient: 'from-indigo-600 to-purple-600' },
                 { id: 'abtest', label: 'A/B Test', icon: BarChart3, gradient: 'from-pink-600 to-rose-600' },
@@ -930,7 +929,7 @@ export default function ThumbnailCreatorPage() {
                 <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 rounded-2xl p-6 border border-purple-500/30">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl flex items-center justify-center">
-                      <Wand2 size={24} className="text-white" />
+                      <Cpu size={24} className="text-white" />
                     </div>
                     <div>
                       <h3 className="text-lg font-bold text-white">AI Thumbnail Generator</h3>
@@ -957,7 +956,7 @@ export default function ThumbnailCreatorPage() {
                       </>
                     ) : (
                       <>
-                        <Sparkles size={20} />
+                        <Star size={20} />
                         Generate Thumbnail
                       </>
                     )}
@@ -1260,7 +1259,7 @@ export default function ThumbnailCreatorPage() {
                       { icon: Target, color: 'text-red-400' },
                       { icon: TrendingUp, color: 'text-green-400' },
                       { icon: Eye, color: 'text-purple-400' },
-                      { icon: Sparkles, color: 'text-pink-400' },
+                      { icon: Star, color: 'text-pink-400' },
                     ].map((item, i) => (
                       <button
                         key={i}

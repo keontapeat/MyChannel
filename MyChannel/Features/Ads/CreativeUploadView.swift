@@ -145,7 +145,7 @@ struct CreativeUploadView: View {
                         .padding(12)
                 } else if let score = creative.aiScore {
                     HStack(spacing: 6) {
-                        Image(systemName: "sparkles")
+                        Image(systemName: "star.fill")
                         Text("Score: \(Int(score))/100")
                             .font(.system(size: 12, weight: .semibold))
                     }
@@ -228,7 +228,7 @@ struct CreativeUploadView: View {
     private func aiInsightsView(_ insights: AICreativeInsights) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: "sparkles")
+                Image(systemName: "star.fill")
                     .foregroundColor(.purple)
                 Text("AI Analysis")
                     .font(.system(size: 13, weight: .semibold))

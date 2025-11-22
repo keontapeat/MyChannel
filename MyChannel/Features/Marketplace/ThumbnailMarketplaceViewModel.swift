@@ -31,7 +31,7 @@ enum TemplateCategory: String, CaseIterable, Identifiable {
         case .tutorial: return "book.fill"
         case .vlog: return "video.fill"
         case .tech: return "cpu.fill"
-        case .lifestyle: return "sparkles"
+        case .lifestyle: return "star.fill"
         case .fitness: return "figure.run"
         case .cooking: return "fork.knife"
         case .music: return "music.note"

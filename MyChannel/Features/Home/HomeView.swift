@@ -2875,9 +2875,9 @@ struct UltraThermonuclearFABContent: View {
                             )
                     )
                 
-                // Rotating sparkles
+                // Rotating highlight particles
                 ForEach(0..<4) { index in
-                    Image(systemName: "sparkle")
+                    Image(systemName: "star")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundColor(.white)
                         .offset(x: 20)
@@ -2928,7 +2928,7 @@ struct UltraThermonuclearFABContent: View {
                 isPulsing = true
             }
             
-            // Continuous rotation for sparkles
+            // Continuous rotation for highlight particles
             withAnimation(.linear(duration: 3.0).repeatForever(autoreverses: false)) {
                 rotationAngle = 360
             }

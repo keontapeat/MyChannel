@@ -49,7 +49,7 @@ struct OwnerVerificationDashboardView: View {
                 title: "Eligible",
                 value: "\(viewModel.eligibleUsers.count)",
                 subtitle: "Ready for review",
-                icon: "sparkles",
+                icon: "star.fill",
                 color: AppTheme.Colors.primary
             )
         }

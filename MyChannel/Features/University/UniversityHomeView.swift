@@ -554,7 +554,7 @@ struct UniversityHomeView: View {
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
                 
-                Image(systemName: "sparkles")
+                Image(systemName: "star.fill")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.yellow)
                 

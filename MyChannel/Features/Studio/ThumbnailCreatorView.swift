@@ -26,7 +26,7 @@ struct ThumbnailCreatorView: View {
         var id: String { rawValue }
         var icon: String {
             switch self {
-            case .generate: return "wand.and.stars"
+            case .generate: return "cpu"
             case .edit: return "slider.horizontal.3"
             case .templates: return "square.grid.2x2"
             case .analyze: return "chart.line.uptrend.xyaxis"
@@ -217,7 +217,7 @@ struct ThumbnailCreatorView: View {
     
     private func viralScoreBadge(_ score: Int) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: score >= 80 ? "flame.fill" : score >= 60 ? "sparkles" : "chart.bar.fill")
+            Image(systemName: score >= 80 ? "flame.fill" : score >= 60 ? "star.fill" : "chart.bar.fill")
                 .font(.system(size: 16, weight: .bold))
             
             Text("Viral Score: \(score)/100")
@@ -303,7 +303,7 @@ struct ThumbnailCreatorView: View {
         HStack {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    Image(systemName: "wand.and.stars")
+                    Image(systemName: "cpu")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.primary)
                     
@@ -375,7 +375,7 @@ struct ThumbnailCreatorView: View {
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         .scaleEffect(0.9)
                 } else {
-                    Image(systemName: "sparkles")
+                    Image(systemName: "star.fill")
                         .font(.system(size: 18, weight: .bold))
                 }
                 

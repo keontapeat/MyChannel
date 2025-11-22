@@ -211,7 +211,7 @@ struct AGIDashboardView: View {
                 )
                 
                 systemRow(
-                    icon: "crystal.wand.2",
+                    icon: "cpu",
                     name: "Crystal Ball",
                     intelligence: crystalBall.accuracyRate * 100,
                     status: "Predicting",

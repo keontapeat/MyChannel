@@ -77,7 +77,7 @@ struct VideoRepurposerView: View {
             
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 10) {
-                    Image(systemName: "wand.and.stars")
+                    Image(systemName: "cpu")
                         .font(.system(size: 32, weight: .bold))
                     Text("AI Repurposer")
                         .font(.system(size: 28, weight: .bold))
@@ -355,7 +355,7 @@ struct GeneratedFlickCard: View {
                 
                 HStack(spacing: 10) {
                     HStack(spacing: 4) {
-                        Image(systemName: "sparkles")
+                        Image(systemName: "star.fill")
                             .font(.system(size: 11))
                         Text("\(flick.viralScore)")
                             .font(.system(size: 12, weight: .semibold))

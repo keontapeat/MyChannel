@@ -41,7 +41,7 @@ struct CeremonyCountdownHero: View {
     let onVote: () -> Void
     
     @State private var timeRemaining: TimeInterval = 0
-    @State private var sparkleOffset: CGFloat = 0
+    @State private var starlightOffset: CGFloat = 0
     
     var body: some View {
         ZStack {
@@ -57,7 +57,7 @@ struct CeremonyCountdownHero: View {
             )
             .accessibilityHidden(true)
             
-            // Subtle sparkle particles
+            // Subtle starlight particles
             GeometryReader { geometry in
                 ForEach(0..<20, id: \.self) { index in
                     Circle()
@@ -65,7 +65,7 @@ struct CeremonyCountdownHero: View {
                         .frame(width: 3, height: 3)
                         .offset(
                             x: CGFloat.random(in: 0...geometry.size.width),
-                            y: sparkleOffset + CGFloat(index * 30)
+                            y: starlightOffset + CGFloat(index * 30)
                         )
                         .opacity(Double.random(in: 0.2...0.6))
                 }
@@ -138,7 +138,7 @@ struct CeremonyCountdownHero: View {
         .cornerRadius(24)
         .padding(.horizontal, 16)
         .onAppear {
-            startSparkleAnimation()
+            startStarlightAnimation()
             updateTimeRemaining()
         }
     }
@@ -220,9 +220,9 @@ struct CeremonyCountdownHero: View {
         }
     }
     
-    private func startSparkleAnimation() {
+    private func startStarlightAnimation() {
         withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
-            sparkleOffset = -600
+            starlightOffset = -600
         }
     }
 }
@@ -693,7 +693,7 @@ struct LiveCeremonyStreamView: View {
     let streamURL: String
     let onDismiss: () -> Void
     
-    @State private var isPiPMode = false
+    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
     @State private var showChat = true
     @State private var reactions: [String] = []
     
@@ -740,9 +740,11 @@ struct LiveCeremonyStreamView: View {
                             
                             // PiP button
                             Button(action: {
-                                isPiPMode.toggle()
+                                if !globalPlayer.togglePictureInPicture() {
+                                    globalPlayer.minimizePlayer()
+                                }
                             }) {
-                                Image(systemName: "pip.enter")
+                                Image(systemName: globalPlayer.isPiPActive ? "pip.exit" : "pip.enter")
                                     .font(.system(size: 18))
                                     .foregroundColor(.white)
                                     .padding(12)

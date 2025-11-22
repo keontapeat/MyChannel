@@ -95,7 +95,7 @@ struct FanGiftingView: View {
                     .foregroundColor(.white.opacity(0.95))
                 
                 HStack(spacing: 14) {
-                    featureBadge(icon: "sparkles", text: "Animated")
+                    featureBadge(icon: "star.fill", text: "Animated")
                     featureBadge(icon: "dollarsign.circle.fill", text: "Real Money")
                     featureBadge(icon: "heart.fill", text: "Appreciation")
                 }

@@ -51,6 +51,28 @@ final class VSMatchWalletService: ObservableObject {
         #endif
     }
     
+    /// Fetch both available and pending balances plus lifetime earnings.
+    func fetchWalletSummary(userId: String) async throws -> WalletSummary {
+        #if canImport(FirebaseFirestore)
+        let doc = try await db.collection("vs_match_wallets").document(userId).getDocument()
+        let data = doc.data() ?? [:]
+        
+        let available = data["availableBalance"] as? Double ?? 0.0
+        let pending = data["pendingBalance"] as? Double ?? 0.0
+        let lifetime = data["lifetimeEarnings"] as? Double
+            ?? data["totalEarnings"] as? Double
+            ?? (available + pending)
+        
+        return WalletSummary(
+            availableBalance: available,
+            pendingBalance: pending,
+            totalEarnings: lifetime
+        )
+        #else
+        return WalletSummary(availableBalance: 0, pendingBalance: 0, totalEarnings: 0)
+        #endif
+    }
+    
     /// Update balance after transaction
     func updateBalance(userId: String, amount: Double, type: VSMatchTransactionType) async throws {
         #if canImport(FirebaseFirestore)
@@ -448,5 +470,11 @@ enum WalletError: LocalizedError {
             return "Transaction blocked for security: \(reason)"
         }
     }
+}
+
+struct WalletSummary {
+    let availableBalance: Double
+    let pendingBalance: Double
+    let totalEarnings: Double
 }
 

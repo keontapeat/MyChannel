@@ -229,36 +229,24 @@ struct TrendingView: View {
         } label: {
             Text(timeframe.displayName)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(selectedTimeframe == timeframe ? .white : AppTheme.Colors.textPrimary)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(timeframeButtonBackground(isSelected: selectedTimeframe == timeframe))
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-                .shadow(
-                    color: selectedTimeframe == timeframe ? AppTheme.Colors.primary.opacity(0.3) : Color.clear,
-                    radius: selectedTimeframe == timeframe ? 8 : 0,
-                    x: 0,
-                    y: 4
+                .foregroundColor(selectedTimeframe == timeframe ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 9)
+                .background(
+                    Capsule()
+                        .fill(selectedTimeframe == timeframe ? AppTheme.Colors.primary.opacity(0.12) : AppTheme.Colors.surface)
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            selectedTimeframe == timeframe
+                            ? AppTheme.Colors.primary.opacity(0.6)
+                            : AppTheme.Colors.divider.opacity(0.4),
+                            lineWidth: 1
+                        )
                 )
         }
         .buttonStyle(.plain)
-    }
-    
-    private func timeframeButtonBackground(isSelected: Bool) -> some View {
-        Group {
-            if isSelected {
-                LinearGradient(
-                    colors: [
-                        AppTheme.Colors.primary,
-                        AppTheme.Colors.primary.opacity(0.85)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            } else {
-                AppTheme.Colors.surface
-            }
-        }
     }
     
     // MARK: - Trending Videos List
@@ -353,255 +341,74 @@ struct PremiumTrendingVideoRow: View {
     let growthRate: Double
     
     @State private var isPressed = false
-    @State private var animatePulse = false
     
     var body: some View {
         Button {
             HapticManager.shared.impact(style: .medium)
             NotificationCenter.default.post(name: NSNotification.Name("OpenVideoDetail"), object: video)
         } label: {
-            HStack(spacing: 16) {
-                // Premium rank badge with gradient
-                ZStack {
-                    // Outer glow for top 3
-                    if rank <= 3 {
-                        Circle()
-                            .fill(rankGradient)
-                            .frame(width: 56, height: 56)
-                            .blur(radius: 8)
-                            .opacity(animatePulse ? 0.6 : 0.3)
-                            .animation(
-                                .easeInOut(duration: 1.5).repeatForever(autoreverses: true),
-                                value: animatePulse
-                            )
-                    }
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 16) {
+                    rankBadge
                     
-                    // Main rank badge
-                    ZStack {
-                        Circle()
-                            .fill(rankGradient)
-                            .frame(width: 48, height: 48)
+                    thumbnailView
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(video.title)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .lineLimit(2)
                         
-                        // Rank number
-                        Text("\(rank)")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
-                            .foregroundColor(rank <= 3 ? .white : AppTheme.Colors.textPrimary)
-                    }
-                    .shadow(color: rankShadowColor, radius: 8, x: 0, y: 4)
-                    
-                    // Top 3 crown icon
-                    if rank <= 3 {
-                        VStack {
-                            Image(systemName: rank == 1 ? "crown.fill" : rank == 2 ? "star.fill" : "flame.fill")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.white)
-                                .offset(y: -28)
-                        }
-                    }
-                }
-                .onAppear {
-                    if rank <= 3 {
-                        animatePulse = true
-                    }
-                }
-                
-                // Enhanced video thumbnail with trending overlay
-                ZStack(alignment: .topTrailing) {
-                    AsyncImage(url: URL(string: video.thumbnailURL)) { phase in
-                        switch phase {
-                        case .empty:
-                            ZStack {
-                                Rectangle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                AppTheme.Colors.surface.opacity(0.6),
-                                                AppTheme.Colors.surface.opacity(0.4)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                ProgressView()
-                                    .tint(AppTheme.Colors.primary)
+                        HStack(spacing: 6) {
+                            Text(video.creator.displayName)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            
+                            if video.creator.isVerified {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.primary)
                             }
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        case .failure:
-                            Rectangle()
-                                .fill(AppTheme.Colors.surface)
-                        @unknown default:
-                            Rectangle()
-                                .fill(AppTheme.Colors.surface)
                         }
-                    }
-                    .frame(width: 140, height: 80)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(
-                                rank <= 3 ? rankGradient : LinearGradient(
-                                    colors: [Color.clear],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: rank <= 3 ? 2 : 0
-                            )
-                    )
-                    .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
-                    
-                    // Trending indicator badge
-                    if rank <= 10 {
-                        HStack(spacing: 4) {
-                            Image(systemName: "flame.fill")
-                                .font(.system(size: 10, weight: .bold))
-                            Text("TRENDING")
-                                .font(.system(size: 8, weight: .bold, design: .rounded))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.red.opacity(0.9),
-                                            Color.orange.opacity(0.9)
-                                        ],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                        )
-                        .padding(6)
-                    }
-                }
-                
-                // Enhanced video info section
-                VStack(alignment: .leading, spacing: 8) {
-                    // Title
-                    Text(video.title)
-                        .font(.system(size: 16, weight: .semibold, design: .default))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                    
-                    // Creator with verified badge
-                    HStack(spacing: 6) {
-                        Text(video.creator.displayName)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
                         
-                        if video.creator.isVerified {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(AppTheme.Colors.primary)
+                        HStack(spacing: 6) {
+                            Text("\(video.formattedViewCount) views")
+                            dot
+                            Text(video.timeAgo)
+                            dot
+                            Text(video.formattedDuration)
                         }
-                    }
-                    
-                    // Metrics row with growth indicators
-                    HStack(spacing: 12) {
-                        // View count
-                        HStack(spacing: 4) {
-                            Image(systemName: "eye.fill")
-                                .font(.system(size: 10))
-                            Text(video.formattedViewCount)
-                                .font(.system(size: 12, weight: .medium))
-                        }
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                         
-                        // Position change indicator
-                        if positionChange != 0 {
-                            HStack(spacing: 3) {
-                                Image(systemName: positionChange > 0 ? "arrow.up" : "arrow.down")
-                                    .font(.system(size: 9, weight: .bold))
-                                Text("\(abs(positionChange))")
-                                    .font(.system(size: 11, weight: .bold))
+                        HStack(spacing: 8) {
+                            if rank <= 5 {
+                                trendingChip(label: rank == 1 ? "Currently #1" : "On fire")
                             }
-                            .foregroundColor(positionChange > 0 ? .green : .orange)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule()
-                                    .fill(
-                                        (positionChange > 0 ? Color.green : Color.orange)
-                                            .opacity(0.15)
-                                    )
-                            )
-                        }
-                        
-                        // Growth rate indicator
-                        if growthRate > 50 {
-                            HStack(spacing: 3) {
-                                Image(systemName: "chart.line.uptrend.xyaxis")
-                                    .font(.system(size: 9, weight: .bold))
-                                Text("\(Int(growthRate))%")
-                                    .font(.system(size: 11, weight: .bold))
+                            
+                            if positionChange != 0 {
+                                changeChip
                             }
-                            .foregroundColor(.green)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule()
-                                    .fill(Color.green.opacity(0.15))
-                            )
+                            
+                            if growthRate > 40 {
+                                growthChip
+                            }
                         }
-                        
-                        Spacer()
-                        
-                        // Time ago
-                        Text(video.timeAgo)
-                            .font(.system(size: 11))
-                            .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.7))
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                
-                Spacer()
             }
             .padding(16)
-            .background {
+            .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(
-                        isPressed
-                            ? AppTheme.Colors.surface.opacity(0.5)
-                            : AppTheme.Colors.surface
-                    )
-                    .shadow(
-                        color: rank <= 3 ? rankShadowColor.opacity(0.2) : .black.opacity(0.08),
-                        radius: rank <= 3 ? 12 : 8,
-                        x: 0,
-                        y: rank <= 3 ? 6 : 4
-                    )
-            }
+                    .fill(AppTheme.Colors.surface)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(
-                        rank <= 3
-                            ? LinearGradient(
-                                colors: [
-                                    rankGradientColor.opacity(0.3),
-                                    rankGradientColor.opacity(0.1)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                            : LinearGradient(
-                                colors: [
-                                    AppTheme.Colors.divider.opacity(0.3),
-                                    AppTheme.Colors.divider.opacity(0.1)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                        lineWidth: rank <= 3 ? 1.5 : 0.5
-                    )
+                    .stroke(AppTheme.Colors.divider.opacity(0.25), lineWidth: 1)
             )
-            .scaleEffect(isPressed ? 0.98 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
+            .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 6)
+            .scaleEffect(isPressed ? 0.985 : 1.0)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isPressed)
         }
         .buttonStyle(.plain)
         .simultaneousGesture(
@@ -617,68 +424,146 @@ struct PremiumTrendingVideoRow: View {
         )
     }
     
-    // MARK: - Premium Rank Badge Colors & Gradients
-    
-    private var rankGradient: LinearGradient {
-        switch rank {
-        case 1:
-            // Gold champion gradient
-            return LinearGradient(
-                colors: [
-                    Color(red: 1.0, green: 0.84, blue: 0.0), // Gold
-                    Color(red: 1.0, green: 0.75, blue: 0.0)  // Darker gold
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        case 2:
-            // Silver gradient
-            return LinearGradient(
-                colors: [
-                    Color(red: 0.75, green: 0.75, blue: 0.75), // Silver
-                    Color(red: 0.6, green: 0.6, blue: 0.6)       // Darker silver
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        case 3:
-            // Bronze gradient
-            return LinearGradient(
-                colors: [
-                    Color(red: 0.8, green: 0.5, blue: 0.2), // Bronze
-                    Color(red: 0.7, green: 0.4, blue: 0.15)  // Darker bronze
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        default:
-            // Premium gradient for other ranks
-            return LinearGradient(
-                colors: [
-                    AppTheme.Colors.primary,
-                    AppTheme.Colors.primary.opacity(0.8)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+    private var rankBadge: some View {
+        VStack(spacing: 6) {
+            Text("\(rank)")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(isTopThree ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
+                .frame(width: 34, height: 34)
+                .background(
+                    Circle()
+                        .fill(isTopThree ? AppTheme.Colors.primary.opacity(0.12) : AppTheme.Colors.surface.opacity(0.8))
+                )
+                .overlay(
+                    Circle()
+                        .stroke(
+                            isTopThree ? AppTheme.Colors.primary.opacity(0.6) : AppTheme.Colors.divider.opacity(0.6),
+                            lineWidth: 1
+                        )
+                )
+            
+            if let medal = medalLabel {
+                Text(medal)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
         }
     }
     
-    private var rankGradientColor: Color {
-        switch rank {
-        case 1: return Color(red: 1.0, green: 0.84, blue: 0.0)
-        case 2: return Color(red: 0.75, green: 0.75, blue: 0.75)
-        case 3: return Color(red: 0.8, green: 0.5, blue: 0.2)
-        default: return AppTheme.Colors.primary
+    private var thumbnailView: some View {
+        ZStack(alignment: .topLeading) {
+            AsyncImage(url: URL(string: video.thumbnailURL)) { phase in
+                switch phase {
+                case .empty:
+                    ZStack {
+                        Rectangle()
+                            .fill(AppTheme.Colors.surface.opacity(0.4))
+                        ProgressView()
+                            .tint(AppTheme.Colors.primary)
+                    }
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                case .failure:
+                    Rectangle()
+                        .fill(AppTheme.Colors.surface)
+                @unknown default:
+                    Rectangle()
+                        .fill(AppTheme.Colors.surface)
+                }
+            }
+            .frame(width: 160, height: 90)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            
+            if rank <= 10 {
+                HStack(spacing: 4) {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text("Trending")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundColor(AppTheme.Colors.primary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(AppTheme.Colors.primary.opacity(0.12))
+                )
+                .padding(8)
+            }
         }
     }
     
-    private var rankShadowColor: Color {
+    private var dot: some View {
+        Circle()
+            .fill(AppTheme.Colors.textSecondary.opacity(0.4))
+            .frame(width: 4, height: 4)
+    }
+    
+    private func trendingChip(label: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 10, weight: .semibold))
+            Text(label)
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .foregroundColor(AppTheme.Colors.primary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(AppTheme.Colors.primary.opacity(0.12))
+        )
+    }
+    
+    private var changeChip: some View {
+        let isGoingUp = positionChange > 0
+        let icon = isGoingUp ? "arrow.up.right" : "arrow.down.right"
+        let label = "\(abs(positionChange))"
+        let color = isGoingUp ? Color.green : Color.orange
+        
+        return HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+            Text(label)
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .foregroundColor(color)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(color.opacity(0.12))
+        )
+    }
+    
+    private var growthChip: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "chart.line.uptrend.xyaxis")
+                .font(.system(size: 10, weight: .semibold))
+            Text("\(Int(growthRate))%")
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .foregroundColor(.green)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(Color.green.opacity(0.12))
+        )
+    }
+    
+    private var isTopThree: Bool {
+        rank <= 3
+    }
+    
+    private var medalLabel: String? {
         switch rank {
-        case 1: return Color(red: 1.0, green: 0.84, blue: 0.0).opacity(0.6)
-        case 2: return Color(red: 0.75, green: 0.75, blue: 0.75).opacity(0.6)
-        case 3: return Color(red: 0.8, green: 0.5, blue: 0.2).opacity(0.6)
-        default: return AppTheme.Colors.primary.opacity(0.4)
+        case 1: return "Gold"
+        case 2: return "Silver"
+        case 3: return "Bronze"
+        default: return nil
         }
     }
 }

@@ -142,7 +142,7 @@ struct AICreatorStudioView: View {
                             ProgressView()
                                 .tint(.white)
                         } else {
-                            Image(systemName: "sparkles")
+                            Image(systemName: "star.fill")
                                 .font(.system(size: 14, weight: .semibold))
                         }
                         Text(isLoadingViral ? "Predicting..." : "Predict Viral Score")

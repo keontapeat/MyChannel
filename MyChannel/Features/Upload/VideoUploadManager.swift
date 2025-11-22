@@ -461,7 +461,8 @@ class VideoUploadManager: ObservableObject {
                 creator: creatorUser,
                 category: metadata.category,
                 tags: metadata.tags,
-                isPublic: metadata.isPublic,
+            isPublic: metadata.isPublic,
+            visibility: metadata.isPublic ? .public : .private,
                 // 🔥 FIX: Always enable monetization for testing
                 monetization: Video.MonetizationSettings(
                     isMonetized: true, // Always true for testing
@@ -577,6 +578,7 @@ class VideoUploadManager: ObservableObject {
             category: metadata.category,
             tags: metadata.tags,
             isPublic: metadata.isPublic,
+            visibility: metadata.isPublic ? .public : .private,
             monetization: Video.MonetizationSettings(
                 isMonetized: true, // Always true for testing
                 adBreaks: [

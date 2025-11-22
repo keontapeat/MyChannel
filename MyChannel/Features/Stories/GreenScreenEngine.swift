@@ -36,7 +36,7 @@ class GreenScreenEngine: ObservableObject {
         BackgroundOption(type: .image("beach"), name: "Beach", icon: "beach.umbrella"),
         BackgroundOption(type: .image("city"), name: "City", icon: "building.2"),
         BackgroundOption(type: .image("nature"), name: "Nature", icon: "tree"),
-        BackgroundOption(type: .image("space"), name: "Space", icon: "sparkles"),
+        BackgroundOption(type: .image("space"), name: "Space", icon: "star.fill"),
         BackgroundOption(type: .custom, name: "Custom", icon: "photo")
     ]
     

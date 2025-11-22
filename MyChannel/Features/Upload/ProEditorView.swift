@@ -307,7 +307,7 @@ struct ProEditorView: View {
                 
                 ProEditorTool(
                     title: "Effects",
-                    icon: "wand.and.stars",
+                    icon: "cpu",
                     isSelected: editor.selectedTool == .effects
                 ) {
                     editor.selectedTool = .effects

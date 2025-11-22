@@ -94,7 +94,7 @@ struct ThumbnailMarketplaceView: View {
             
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
-                    Image(systemName: "sparkles")
+                    Image(systemName: "star.fill")
                         .font(.system(size: 20, weight: .bold))
                     Text("Template Marketplace")
                         .font(.system(size: 24, weight: .bold))

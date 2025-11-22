@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
@@ -31,6 +32,14 @@ struct ProfileView: View {
     @State private var isBulkDeletingVideos = false
     @State private var showBulkDeleteConfirmation = false
     @State private var bulkDeleteErrorMessage: String?
+    @State private var showingBulkEditSheet = false
+    @State private var showingBulkVisibilitySheet = false
+    @State private var showingBulkPlaylistSheet = false
+    @State private var playlists: [Playlist] = []
+    @State private var isLoadingPlaylists = false
+    @State private var undoPayload: BulkUndoPayload?
+    @StateObject private var playlistService = PlaylistFirestoreService.shared
+    @StateObject private var toastManager = ToastManager()
     
     // ⚡ PERFORMANCE: Pagination state
     @State private var isLoadingMoreVideos = false
@@ -52,6 +61,9 @@ struct ProfileView: View {
     @State private var showingDownloads = false
     @State private var showingPremiumBenefits = false
     @State private var showingMyChannelPlus = false
+    
+    // Reserve enough space so scrollable content never hides behind the floating MainTabView
+    private let tabBarOverlaySafeAreaPadding: CGFloat = 180
 
     private var currentUser: User {
         if let appUser = appState.currentUser {
@@ -74,7 +86,7 @@ struct ProfileView: View {
             selectedIDs: $selectedVideoIDs,
             onToggleSelection: { toggleVideoSelection($0) },
             onSetSelections: { setVideoSelections($0) },
-            onDeleteSelected: { showBulkDeleteConfirmation = true },
+            onAction: { handleBulkAction($0) },
             onExit: { exitVideoManagementMode() },
             isDeleting: isBulkDeletingVideos
         )
@@ -227,6 +239,20 @@ struct ProfileView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(bulkDeleteErrorMessage ?? "")
+        }
+        .toast(toast: $toastManager.toast)
+        .overlay(alignment: .bottom) {
+            if let payload = undoPayload {
+                UndoSnackBar(
+                    message: payload.message,
+                    actionTitle: "Undo",
+                    onAction: { handleUndoAction(payload) },
+                    onDismiss: { undoPayload = nil }
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 80)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
     }
 
@@ -566,6 +592,11 @@ struct ProfileView: View {
                 .padding(.vertical)
             }
         }
+        // 🔥 FIX: Provide breathing room so History & bottom sections stay above the floating tab bar
+        .safeAreaInset(edge: .bottom) {
+            Color.clear
+                .frame(height: tabBarOverlaySafeAreaPadding)
+        }
         .ignoresSafeArea(edges: .top)
         .navigationBarHidden(true)
         .sheet(isPresented: $showingEditProfile) {
@@ -587,6 +618,30 @@ struct ProfileView: View {
         .fullScreenCover(isPresented: $showingMyChannelPlus) {
             NavigationStack {
                 MyChannelPlusView()
+            }
+        }
+        .sheet(isPresented: $showingBulkEditSheet) {
+            BulkEditSheet(
+                selectedVideoIds: Array(selectedVideoIDs),
+                videos: userVideos
+            ) {
+                loadProfileSafely()
+            }
+        }
+        .sheet(isPresented: $showingBulkVisibilitySheet) {
+            ProfileBulkVisibilitySheet(
+                selectedVideoIds: Array(selectedVideoIDs)
+            ) { visibility in
+                applyBulkVisibility(visibility)
+            }
+        }
+        .sheet(isPresented: $showingBulkPlaylistSheet) {
+            ProfileBulkPlaylistSheet(
+                playlists: playlists,
+                isLoading: isLoadingPlaylists,
+                selectedVideoIds: Array(selectedVideoIDs)
+            ) { playlistIDs in
+                applyBulkPlaylists(playlistIDs)
             }
         }
     }
@@ -829,6 +884,7 @@ struct ProfileView: View {
         guard !idsToDelete.isEmpty else { return }
         showBulkDeleteConfirmation = false
         isBulkDeletingVideos = true
+        let videosBeingDeleted = userVideos.filter { idsToDelete.contains($0.id) }
         
         Task {
             do {
@@ -846,6 +902,8 @@ struct ProfileView: View {
                     isManagingVideos = false
                     isBulkDeletingVideos = false
                     recalculateUserStats(propagateGlobalState: true)
+                    presentUndo(.init(action: .delete(videos: videosBeingDeleted)))
+                    toastManager.show("Deleted \(idsToDelete.count) video\(idsToDelete.count == 1 ? "" : "s")", type: .success)
                 }
             } catch {
                 await MainActor.run {
@@ -853,6 +911,139 @@ struct ProfileView: View {
                     bulkDeleteErrorMessage = error.localizedDescription
                 }
             }
+        }
+    }
+    
+    private func handleBulkAction(_ action: VideoBulkAction) {
+        guard !selectedVideoIDs.isEmpty else { return }
+        switch action {
+        case .delete:
+            showBulkDeleteConfirmation = true
+        case .edit:
+            showingBulkEditSheet = true
+        case .visibility:
+            showingBulkVisibilitySheet = true
+        case .playlist:
+            showingBulkPlaylistSheet = true
+            Task { await loadPlaylistsIfNeeded() }
+        case .download:
+            startBulkDownloads()
+        case .share:
+            shareSelectedVideos()
+        }
+    }
+    
+    private func applyBulkVisibility(_ visibility: Video.VisibilityStatus) {
+        guard !selectedVideoIDs.isEmpty else { return }
+        Task {
+            do {
+                for id in selectedVideoIDs {
+                    try await VideoFirestoreService.shared.updateVideoVisibility(videoId: id, visibility: visibility)
+                }
+                await MainActor.run {
+                    showingBulkVisibilitySheet = false
+                    toastManager.show("Visibility updated", type: .success)
+                    loadProfileSafely()
+                }
+            } catch {
+                await MainActor.run {
+                    bulkDeleteErrorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+    
+    private func applyBulkPlaylists(_ playlistIDs: Set<String>) {
+        guard !playlistIDs.isEmpty else { return }
+        Task {
+            do {
+                for playlistId in playlistIDs {
+                    for videoId in selectedVideoIDs {
+                        try await PlaylistFirestoreService.shared.addVideoToPlaylist(videoId: videoId, playlistId: playlistId)
+                    }
+                }
+                await MainActor.run {
+                    showingBulkPlaylistSheet = false
+                    toastManager.show("Added to \(playlistIDs.count) playlist\(playlistIDs.count == 1 ? "" : "s")", type: .success)
+                }
+            } catch {
+                await MainActor.run {
+                    bulkDeleteErrorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+    
+    private func presentUndo(_ payload: BulkUndoPayload) {
+        undoPayload = payload
+        Task {
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            await MainActor.run {
+                if undoPayload?.id == payload.id {
+                    undoPayload = nil
+                }
+            }
+        }
+    }
+    
+    private func handleUndoAction(_ payload: BulkUndoPayload) {
+        undoPayload = nil
+        switch payload.action {
+        case .delete(let videos):
+            Task {
+                for video in videos {
+                    try? await VideoFirestoreService.shared.saveVideo(video)
+                }
+                await MainActor.run {
+                    loadProfileSafely()
+                    toastManager.show("Restored \(videos.count) video\(videos.count == 1 ? "" : "s")", type: .success)
+                }
+            }
+        }
+    }
+    
+    private func startBulkDownloads() {
+        let videosToDownload = userVideos.filter { selectedVideoIDs.contains($0.id) }
+        guard !videosToDownload.isEmpty else { return }
+        
+        Task {
+            var successes = 0
+            for video in videosToDownload {
+                do {
+                    try await OfflineDownloadService.shared.downloadVideo(video)
+                    successes += 1
+                } catch {
+                    print("📥 [ProfileView] Failed to queue download for \(video.id): \(error)")
+                }
+            }
+            
+            await MainActor.run {
+                toastManager.show("Queued \(successes) download\(successes == 1 ? "" : "s")", type: .success)
+            }
+        }
+    }
+    
+    private func shareSelectedVideos() {
+        let links = userVideos
+            .filter { selectedVideoIDs.contains($0.id) }
+            .map { $0.link }
+        
+        guard !links.isEmpty else { return }
+#if canImport(UIKit)
+        UIPasteboard.general.string = links.joined(separator: "\n")
+#endif
+        toastManager.show("Copied \(links.count) link\(links.count == 1 ? "" : "s")", type: .info)
+    }
+    
+    private func loadPlaylistsIfNeeded() async {
+        guard !isLoadingPlaylists else { return }
+        isLoadingPlaylists = true
+        defer { isLoadingPlaylists = false }
+        
+        do {
+            playlists = try await playlistService.getPlaylists(for: currentUser.id)
+        } catch {
+            print("⚠️ [ProfileView] Failed to load playlists: \(error)")
         }
     }
     
@@ -1278,6 +1469,133 @@ struct ProfileSettingsWrapper: View {
     }
 }
 
+struct ProfileBulkVisibilitySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let selectedVideoIds: [String]
+    let onApply: (Video.VisibilityStatus) -> Void
+    
+    @State private var selectedVisibility: Video.VisibilityStatus = .public
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("\(selectedVideoIds.count) video\(selectedVideoIds.count == 1 ? "" : "s") selected")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                
+                Section("Visibility") {
+                    ForEach(Video.VisibilityStatus.allCases, id: \.self) { visibility in
+                        Button {
+                            selectedVisibility = visibility
+                        } label: {
+                            HStack {
+                                Image(systemName: visibility.iconName)
+                                Text(visibility.displayName)
+                                Spacer()
+                                if selectedVisibility == visibility {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(AppTheme.Colors.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                Section {
+                    Button("Apply") {
+                        onApply(selectedVisibility)
+                        dismiss()
+                    }
+                    .disabled(selectedVideoIds.isEmpty)
+                }
+            }
+            .navigationTitle("Change Visibility")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+struct ProfileBulkPlaylistSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let playlists: [Playlist]
+    let isLoading: Bool
+    let selectedVideoIds: [String]
+    let onApply: (Set<String>) -> Void
+    
+    @State private var selectedPlaylists: Set<String> = []
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("\(selectedVideoIds.count) video\(selectedVideoIds.count == 1 ? "" : "s") selected")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                
+                if isLoading {
+                    Section {
+                        ProgressView("Loading playlists…")
+                    }
+                } else if playlists.isEmpty {
+                    Section {
+                        Text("You haven't created any playlists yet.")
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                } else {
+                    Section("Add to Playlists") {
+                        ForEach(playlists, id: \.id) { playlist in
+                            Button {
+                                toggleSelection(for: playlist.id)
+                            } label: {
+                                HStack {
+                                    Image(systemName: selectedPlaylists.contains(playlist.id) ? "checkmark.square.fill" : "square")
+                                        .foregroundColor(selectedPlaylists.contains(playlist.id) ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                                    Text(playlist.title)
+                                    Spacer()
+                                    Text("\(playlist.videoCount) videos")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                Section {
+                    Button("Add to Selected Playlists") {
+                        onApply(selectedPlaylists)
+                        dismiss()
+                    }
+                    .disabled(selectedPlaylists.isEmpty || selectedVideoIds.isEmpty)
+                }
+            }
+            .navigationTitle("Add to Playlists")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+    
+    private func toggleSelection(for playlistId: String) {
+        if selectedPlaylists.contains(playlistId) {
+            selectedPlaylists.remove(playlistId)
+        } else {
+            selectedPlaylists.insert(playlistId)
+        }
+    }
+}
+
 // MARK: - Notifications used by the new sections
 
 extension Notification.Name {
@@ -1352,6 +1670,68 @@ extension Notification.Name {
 
 #Preview("Profile Settings Wrapper") {
     ProfileSettingsWrapper()
+}
+
+struct BulkUndoPayload: Identifiable, Equatable {
+    enum Action: Equatable {
+        case delete(videos: [Video])
+    }
+    
+    let id = UUID()
+    let action: Action
+    
+    var message: String {
+        switch action {
+        case .delete(let videos):
+            return "Deleted \(videos.count) video\(videos.count == 1 ? "" : "s")"
+        }
+    }
+}
+
+struct UndoSnackBar: View {
+    let message: String
+    let actionTitle: String
+    let onAction: () -> Void
+    let onDismiss: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(message)
+                    .font(.system(size: 15, weight: .semibold))
+                Text("Tap undo to restore.")
+                    .font(.system(size: 13))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+            
+            Spacer()
+            
+            Button(actionTitle) {
+                onAction()
+            }
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(AppTheme.Colors.primary)
+            .clipShape(Capsule())
+            
+            Button {
+                onDismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(AppTheme.Colors.surface)
+                .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: 10)
+        )
+        .padding(.bottom, 16)
+    }
 }
 
 // MARK: - YouTube-Style Feature Card Component

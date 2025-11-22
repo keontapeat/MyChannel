@@ -152,7 +152,7 @@ struct PostUploadEditorView: View {
                 PostUploadQuickActionButton(
                     title: "Pro Editor",
                     subtitle: "Advanced editing",
-                    icon: "wand.and.stars",
+                    icon: "cpu",
                     color: .purple
                 ) {
                     showProEditor = true

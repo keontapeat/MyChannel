@@ -93,7 +93,7 @@ struct AIContentAssistantView: View {
                 HStack(spacing: 14) {
                     featureBadge(icon: "chart.line.uptrend.xyaxis", text: "Viral Score")
                     featureBadge(icon: "lightbulb.fill", text: "Smart Tips")
-                    featureBadge(icon: "sparkles", text: "AI Powered")
+                    featureBadge(icon: "star.fill", text: "AI Powered")
                 }
             }
             .padding(24)

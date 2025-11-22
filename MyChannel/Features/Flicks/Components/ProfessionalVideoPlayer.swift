@@ -142,64 +142,260 @@ struct ProfessionalVideoPlayer: View {
     }
 
     private var minimalOverlay: some View {
-        VStack(spacing: 0) {
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.22)).frame(height: 3)
-                    Capsule()
-                        .fill(.white.opacity(0.5))
-                        .frame(width: max(6, CGFloat(playerManager.bufferedProgress) * proxy.size.width), height: 3)
-                    Capsule()
-                        .fill(.white)
-                        .frame(width: max(6, CGFloat(playerManager.currentProgress) * proxy.size.width), height: 3)
-                }
-                .padding(.horizontal, 22)
-                .padding(.top, 10)
+        GeometryReader { proxy in
+            let safeInsets = proxy.safeAreaInsets
+            VStack(spacing: 0) {
+                progressIndicator
+                    .padding(.top, max(12, safeInsets.top + 8))
+                    .padding(.horizontal, 28)
+
+                Spacer()
+
+                bottomOverlay(insets: safeInsets)
             }
-            .frame(height: 14)
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+    }
 
-            Spacer()
+    private var progressIndicator: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(.white.opacity(0.12))
+                    .frame(height: 3)
+                Capsule()
+                    .fill(.white.opacity(0.35))
+                    .frame(width: max(6, CGFloat(playerManager.bufferedProgress) * proxy.size.width), height: 3)
+                Capsule()
+                    .fill(.white)
+                    .frame(width: max(6, CGFloat(playerManager.currentProgress) * proxy.size.width), height: 3)
+            }
+        }
+        .frame(height: 14)
+    }
 
-            LinearGradient(colors: [.clear, .black.opacity(0.08), .black.opacity(0.25)], startPoint: .top, endPoint: .bottom)
-                .frame(height: 96)
-                .allowsHitTesting(false)
+    private func bottomOverlay(insets: EdgeInsets) -> some View {
+        ZStack(alignment: .bottom) {
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.2), .black.opacity(0.65)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 260 + insets.bottom)
+            .allowsHitTesting(false)
 
-            HStack(spacing: 12) {
-                Button(action: onProfileTap) {
+            HStack(alignment: .bottom, spacing: 20) {
+                detailCard
+                actionColumn
+            }
+            .padding(.horizontal, max(20, insets.leading + 18))
+            .padding(.bottom, max(24, insets.bottom + 18))
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var detailCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 12) {
+                Button(action: { onProfileTap(); revealOverlayTemporarily() }) {
                     AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
-                        Circle().fill(.white.opacity(0.25))
+                        Circle().fill(.white.opacity(0.2))
                     }
-                    .frame(width: 36, height: 36)
+                    .frame(width: 44, height: 44)
                     .clipShape(Circle())
-                    .overlay(Circle().stroke(.white.opacity(0.2), lineWidth: 1))
+                    .overlay(Circle().stroke(.white.opacity(0.25), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text("@\(video.creator.username)").font(.subheadline.weight(.semibold)).foregroundStyle(.white).lineLimit(1)
-                        if video.creator.shouldShowVerificationBadge { Image(systemName: "checkmark.seal.fill").font(.caption2).foregroundStyle(AppTheme.Colors.primary) }
+                        Text("@\(video.creator.username)")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        if video.creator.shouldShowVerificationBadge {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.caption2)
+                                .foregroundColor(AppTheme.Colors.primary)
+                        }
                     }
-                    Text(video.title).font(.callout.weight(.semibold)).foregroundStyle(.white.opacity(0.95)).lineLimit(2)
+                    Text(formatCount(subscriberCount) + " subscribers")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.8))
+                        .lineLimit(1)
                 }
 
                 Spacer()
 
-                HStack(spacing: 10) {
-                    glassIconButton(system: isLiked ? "heart.fill" : "heart", tint: isLiked ? .red : .white) { onLike(); HapticManager.shared.impact(style: .light); revealOverlayTemporarily() }
-                    glassIconButton(system: "bubble.right.fill", tint: .white) { onComment(); revealOverlayTemporarily() }
-                    glassIconButton(system: "arrowshape.turn.up.right.fill", tint: .white) { onShare(); revealOverlayTemporarily() }
-                    glassIconButton(system: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill", tint: .white) { toggleMute(); revealOverlayTemporarily() }
+                Button(action: { onFollow(); revealOverlayTemporarily() }) {
+                    Text(isFollowing ? "Following" : "Follow")
+                        .font(.system(size: 13, weight: .semibold))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(isFollowing ? Color.white.opacity(0.15) : AppTheme.Colors.primary)
+                        .foregroundColor(.white)
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(Color.white.opacity(0.25), lineWidth: 0.8)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text(video.title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.white)
+                .lineLimit(3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if !topTags.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(topTags, id: \.self) { tag in
+                        Text("#\(tag)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white.opacity(0.95))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.white.opacity(0.12), in: Capsule())
+                    }
                 }
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(.white.opacity(0.12), lineWidth: 0.6))
-            .padding(.horizontal, 16)
-            .padding(.bottom, 106)
+
+            HStack(spacing: 6) {
+                Image(systemName: "music.note")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.8))
+                Text("Original Audio · \(video.creator.displayName)")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+            }
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(.ultraThinMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var actionColumn: some View {
+        VStack(spacing: 18) {
+            metricButton(
+                systemName: isLiked ? "heart.fill" : "heart",
+                label: formatCount(displayedLikeCount),
+                iconTint: isLiked ? .red : .white
+            ) {
+                onLike()
+                HapticManager.shared.impact(style: .light)
+                revealOverlayTemporarily()
+            }
+
+            metricButton(
+                systemName: "bubble.right.fill",
+                label: formatCount(video.commentCount)
+            ) {
+                onComment()
+                revealOverlayTemporarily()
+            }
+
+            metricButton(
+                systemName: "arrowshape.turn.up.right.fill",
+                label: "Share"
+            ) {
+                onShare()
+                revealOverlayTemporarily()
+            }
+
+            metricButton(
+                systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                label: isMuted ? "Sound" : "Mute"
+            ) {
+                toggleMute()
+                revealOverlayTemporarily()
+            }
+
+            AsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                Circle().fill(Color.white.opacity(0.2))
+            }
+            .frame(width: 48, height: 48)
+            .clipShape(Circle())
+            .overlay(
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [.white.opacity(0.8), AppTheme.Colors.primary.opacity(0.9)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.2
+                    )
+            )
+            .rotationEffect(.degrees(-6))
+            .shadow(color: .black.opacity(0.35), radius: 6, x: 0, y: 4)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(.ultraThinMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 0.9)
+        )
+    }
+
+    private func metricButton(systemName: String, label: String, iconTint: Color = .white, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: systemName)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(iconTint)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(0.08))
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.15), lineWidth: 0.8)
+                    )
+                Text(label)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var displayedLikeCount: Int {
+        max(0, video.likeCount + (isLiked ? 1 : 0))
+    }
+
+    private var topTags: [String] {
+        Array(video.tags.prefix(3))
+    }
+
+    private func formatCount(_ value: Int) -> String {
+        switch Double(value) {
+        case let x where x >= 1_000_000:
+            return "\(String(format: "%.1f", x / 1_000_000))M"
+        case let x where x >= 1_000:
+            return "\(String(format: "%.1f", x / 1_000))K"
+        default:
+            return "\(value)"
         }
     }
 
@@ -216,18 +412,6 @@ struct ProfessionalVideoPlayer: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 120)
         }
-    }
-
-    private func glassIconButton(system: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: system)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 36, height: 36)
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay(Circle().stroke(.white.opacity(0.12), lineWidth: 0.6))
-        }
-        .buttonStyle(.plain)
     }
 
     private func setupPlayer() {

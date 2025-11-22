@@ -220,7 +220,7 @@ struct AIContentFactoryView: View {
     private var manualGenerationSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Image(systemName: "wand.and.stars")
+                Image(systemName: "cpu")
                     .foregroundColor(.blue)
                 Text("Manual Generation")
                     .font(.system(size: 20, weight: .semibold))
@@ -280,7 +280,7 @@ struct AIContentFactoryView: View {
                                 .scaleEffect(0.8)
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         } else {
-                            Image(systemName: "sparkles")
+                            Image(systemName: "star.fill")
                         }
                         
                         Text(aiEngine.isGenerating ? "Generating..." : "Generate Video")
@@ -535,7 +535,7 @@ struct GeneratedVideoCard: View {
                     
                     HStack {
                         HStack(spacing: 4) {
-                            Image(systemName: "sparkles")
+                            Image(systemName: "star.fill")
                                 .font(.system(size: 10))
                                 .foregroundColor(.green)
                             
@@ -628,7 +628,7 @@ struct GeneratedVideoDetailView: View {
                             .foregroundColor(.secondary)
                         
                         HStack {
-                            Label("Viral Score: \(Int(video.viralScore * 100))%", systemImage: "sparkles")
+                            Label("Viral Score: \(Int(video.viralScore * 100))%", systemImage: "star.fill")
                                 .foregroundColor(.green)
                             
                             Spacer()

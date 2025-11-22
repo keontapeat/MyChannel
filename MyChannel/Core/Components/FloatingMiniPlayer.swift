@@ -36,8 +36,8 @@ struct FloatingMiniPlayer: View {
                    !globalPlayer.isCleanedUp,
                    !globalPlayer.isTransitioning {
                     
-                    let miniPlayerWidth = min(geometry.size.width - 32, 360)
-                    let miniPlayerHeight: CGFloat = 94
+                    let miniPlayerWidth = min(geometry.size.width - 32, 420)
+                    let miniPlayerHeight = max(miniPlayerWidth * 9 / 16, 140)
                     
                     ZStack(alignment: .bottomTrailing) {
                         youtubeStyleMiniPlayer(
@@ -85,195 +85,101 @@ struct FloatingMiniPlayer: View {
         cardWidth: CGFloat,
         cardHeight: CGFloat
     ) -> some View {
-        // Layout constants tuned to feel like YouTube's mini player
-        let thumbnailCornerRadius: CGFloat = cardCornerRadius
         let title = video.title
         let creator = video.creator.displayName
-        
         let duration = max(globalPlayer.duration, 0.1)
         let progress = min(max(globalPlayer.currentTime / duration, 0), 1)
+        let progressTrackWidth = cardWidth - 36
+        let progressFillWidth = max(6, progressTrackWidth * CGFloat(progress))
+        let knobOffset = max(0, min(progressTrackWidth - 8, progressTrackWidth * CGFloat(progress) - 4))
         
-        ZStack(alignment: .bottom) {
-            // Video preview / thumbnail fallback
-            Group {
-                if let player = globalPlayer.player {
-                    VideoPlayer(player: player)
-                        .allowsHitTesting(false)
-                } else {
-                    AsyncImage(url: URL(string: video.thumbnailURL)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        case .failure:
-                            Color.black
-                        case .empty:
-                            ZStack {
-                                Color.black
-                                ProgressView()
-                                    .tint(.white)
-                            }
-                        @unknown default:
-                            Color.black
-                        }
-                    }
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: thumbnailCornerRadius))
-            
-            // Overlays (top controls, center controls, progress bar)
-            VStack(spacing: 0) {
-                // Top controls
-                ZStack {
+        ZStack {
+            videoSurface(for: video)
+                .frame(width: cardWidth, height: cardHeight)
+                .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
+                .overlay(
                     LinearGradient(
                         colors: [
                             Color.black.opacity(0.55),
-                            Color.black.opacity(0.0)
+                            Color.black.opacity(0.1),
+                            Color.black.opacity(0.65)
                         ],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(height: 56)
-                    .frame(maxWidth: .infinity)
-                    
-                    HStack {
-                        Button {
-                            globalPlayer.closePlayer()
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 32, height: 32)
-                                .background(Color.black.opacity(0.6))
-                                .clipShape(Circle())
-                        }
-                        
-                        Spacer()
-                        
-                        Button {
-                            globalPlayer.expandPlayer()
-                        } label: {
-                            Image(systemName: "rectangle.on.rectangle")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 32, height: 32)
-                                .background(Color.black.opacity(0.6))
-                                .clipShape(Circle())
-                        }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.top, 6)
-                }
-                
-                Spacer(minLength: 0)
-                
-                // Center controls
-                HStack(spacing: 24) {
-                    Button {
-                        globalPlayer.seekBackward()
-                    } label: {
-                        Image(systemName: "gobackward.10")
-                            .font(.system(size: 26, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 52, height: 52)
-                            .background(Color.black.opacity(0.55))
-                            .clipShape(Circle())
-                    }
-                    
-                    Button {
-                        if globalPlayer.isPlaying {
-                            globalPlayer.exposedPlayerManager?.pause()
-                        } else {
-                            globalPlayer.exposedPlayerManager?.play()
-                        }
-                    } label: {
-                        Image(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 30, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 58, height: 58)
-                            .background(Color.black.opacity(0.75))
-                            .clipShape(Circle())
-                    }
-                    
-                    Button {
-                        globalPlayer.seekForward()
-                    } label: {
-                        Image(systemName: "goforward.10")
-                            .font(.system(size: 26, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 52, height: 52)
-                            .background(Color.black.opacity(0.55))
-                            .clipShape(Circle())
-                    }
-                }
-                .padding(.bottom, 14)
-                
-                // Bottom metadata + scrubber
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(title)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.white)
-                                .lineLimit(1)
-                            
-                            Text(creator)
-                                .font(.system(size: 12, weight: .regular))
-                                .foregroundColor(.white.opacity(0.85))
-                                .lineLimit(1)
-                        }
-                        
-                        Spacer()
-                        
-                        Button {
-                            globalPlayer.expandPlayer()
-                        } label: {
-                            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color.black.opacity(0.45))
-                                .clipShape(Capsule())
-                        }
-                    }
-                    
-                    GeometryReader { proxy in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.white.opacity(0.45))
-                                .frame(height: 2)
-                            
-                            Capsule()
-                                .fill(Color.red)
-                                .frame(width: proxy.size.width * CGFloat(progress), height: 2)
-                        }
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { value in
-                                    let pct = min(max(Double(value.location.x / proxy.size.width), 0), 1)
-                                    globalPlayer.seek(to: pct)
-                                }
-                        )
-                    }
-                    .frame(height: 10)
-                }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 12)
-                .background(
-                    LinearGradient(
-                        colors: [Color.black.opacity(0.7), Color.black.opacity(0.0)],
-                        startPoint: .bottom,
-                        endPoint: .top
-                    )
+                    .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
                 )
+                .overlay(
+                    RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 0.8)
+                )
+            
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    controlButton(icon: "xmark") {
+                        globalPlayer.closePlayer()
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        
+                        Text(creator)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundColor(.white.opacity(0.85))
+                            .lineLimit(1)
+                    }
+                    
+                    Spacer(minLength: 0)
+                    
+                    controlButton(icon: "arrow.up.left.and.arrow.down.right") {
+                        globalPlayer.expandPlayer()
+                    }
+                }
+                .padding(.bottom, 18)
+                
+                Spacer()
+                
+                HStack(spacing: 20) {
+                    circleTransportButton(systemName: "gobackward.10") {
+                        globalPlayer.seekBackward()
+                    }
+                    
+                    circleTransportButton(systemName: globalPlayer.isPlaying ? "pause.fill" : "play.fill", size: 52) {
+                        globalPlayer.togglePlayPause()
+                    }
+                    
+                    circleTransportButton(systemName: "goforward.10") {
+                        globalPlayer.seekForward()
+                    }
+                }
+                
+                Spacer()
+                
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.35))
+                        .frame(height: 3)
+                    
+                    Capsule()
+                        .fill(Color.white)
+                        .frame(width: progressFillWidth, height: 3)
+                    
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 10, height: 10)
+                        .offset(x: knobOffset)
+                }
+                .padding(.top, 16)
             }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
         }
         .frame(width: cardWidth, height: cardHeight)
-        .clipShape(RoundedRectangle(cornerRadius: thumbnailCornerRadius, style: .continuous))
-        .shadow(color: Color.black.opacity(0.35), radius: 20, x: 0, y: 10)
+        .shadow(color: Color.black.opacity(0.25), radius: 18, x: 0, y: 10)
+        .contentShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
         .onTapGesture {
             globalPlayer.expandPlayer()
         }
@@ -369,6 +275,63 @@ extension FloatingMiniPlayer {
             width: min(max(proposed.width, maxHorizontalLeft), maxHorizontalRight),
             height: min(max(proposed.height, maxVerticalUp), maxVerticalDown)
         )
+    }
+}
+
+// MARK: - Private subviews
+private extension FloatingMiniPlayer {
+    @ViewBuilder
+    func videoSurface(for video: Video) -> some View {
+        Group {
+            if let player = globalPlayer.player {
+                VideoPlayer(player: player)
+                    .allowsHitTesting(false)
+            } else {
+                AsyncImage(url: URL(string: video.thumbnailURL)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    case .failure:
+                        Color.black
+                    case .empty:
+                        ZStack {
+                            Color.black
+                            ProgressView().tint(.white)
+                        }
+                    @unknown default:
+                        Color.black
+                    }
+                }
+            }
+        }
+        .background(Color.black)
+        .clipped()
+    }
+    
+    func controlButton(icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 34, height: 34)
+                .background(Color.white.opacity(0.2))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+    }
+    
+    func circleTransportButton(systemName: String, size: CGFloat = 44, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: size == 44 ? 18 : 20, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: size, height: size)
+                .background(Color.black.opacity(0.35))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

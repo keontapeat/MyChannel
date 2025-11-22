@@ -66,7 +66,7 @@ struct CopyrightManagementView: View {
                 .font(.system(size: 20, weight: .semibold))
             
             ProtectionToolCard(
-                icon: "wand.and.stars",
+                icon: "cpu",
                 title: "AI Content ID",
                 description: "Automatically detect your content across the platform",
                 action: "Enable"

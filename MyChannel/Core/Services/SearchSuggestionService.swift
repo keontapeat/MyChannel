@@ -186,7 +186,7 @@ class SearchSuggestionService: ObservableObject {
             //         id: UUID().uuidString,
             //         text: suggestion.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines),
             //         subtitle: "AI suggestion",
-            //         icon: "sparkles",
+            //         icon: "star.fill",
             //         isAIGenerated: true,
             //         score: 0.95
             //     )

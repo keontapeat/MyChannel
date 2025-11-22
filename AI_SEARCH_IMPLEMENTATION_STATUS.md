@@ -125,7 +125,7 @@ func search(query: String, filters: SearchFilters = SearchFilters(), userId: Str
 if let insights = searchService.aiInsights {
     VStack(alignment: .leading, spacing: 8) {
         HStack {
-            Image(systemName: "sparkles")
+            Image(systemName: "star.fill")
                 .foregroundColor(.purple)
             Text("AI Search Insights")
                 .font(.system(size: 14, weight: .semibold))
@@ -173,7 +173,7 @@ if let insights = searchService.aiInsights {
 if !searchService.aiSuggestions.isEmpty && searchText.count >= 2 {
     VStack(alignment: .leading, spacing: 12) {
         HStack {
-            Image(systemName: "sparkles")
+            Image(systemName: "star.fill")
                 .foregroundColor(.purple)
             Text("AI Suggestions")
                 .font(.system(size: 15, weight: .semibold))

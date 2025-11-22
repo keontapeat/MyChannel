@@ -124,7 +124,7 @@ struct UploadView: View {
             case .filters: return "camera.filters"
             case .music: return "music.note"
             case .text: return "text.bubble"
-            case .effects: return "wand.and.stars"
+            case .effects: return "cpu"
             case .speed: return "speedometer"
             }
         }
@@ -616,7 +616,7 @@ struct UploadView: View {
                         .foregroundColor(AppTheme.Colors.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    HStack(spacing: 16) {
+                    LazyVGrid(columns: videoInfoColumns, spacing: 12) {
                         infoChip("Duration", formattedDuration(uploadManager.videoDuration), "clock")
                         infoChip("Size", String(format: "%.1f MB", uploadManager.fileSizeMB), "externaldrive")
                         infoChip("Resolution", resolutionText(uploadManager.videoDimensions), "rectangle.on.rectangle")
@@ -702,7 +702,7 @@ struct UploadView: View {
                         EditingToolCard(
                             title: "Pro Editor",
                             subtitle: "Full editing suite",
-                            icon: "wand.and.stars",
+                            icon: "cpu",
                             color: .purple
                         ) {
                             // Launch Pro Editor
@@ -884,7 +884,7 @@ struct UploadView: View {
                                 HapticManager.shared.impact(style: .light)
                             }
                         } label: {
-                            Image(systemName: "sparkles")
+                            Image(systemName: "star.fill")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 12)
@@ -1406,6 +1406,12 @@ struct UploadView: View {
     }
     
     // MARK: - Helpers
+    private var videoInfoColumns: [GridItem] {
+        [
+            GridItem(.adaptive(minimum: 120), spacing: 12)
+        ]
+    }
+    
     private func formattedDuration(_ seconds: TimeInterval) -> String {
         let s = Int(seconds.rounded())
         let h = s / 3600
@@ -1425,18 +1431,43 @@ struct UploadView: View {
     }
     
     private func infoChip(_ title: String, _ value: String, _ icon: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon).foregroundColor(AppTheme.Colors.primary)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.caption).foregroundColor(AppTheme.Colors.textSecondary)
-                Text(value).font(.subheadline).fontWeight(.semibold).foregroundColor(AppTheme.Colors.textPrimary)
+        VStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(AppTheme.Colors.surface.opacity(0.8))
+                    .frame(width: 46, height: 46)
+                    .overlay(
+                        Circle()
+                            .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
+                    )
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.primary)
             }
-            Spacer()
+            
+            VStack(spacing: 4) {
+                Text(title.uppercased())
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .tracking(0.2)
+                Text(value)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+            }
         }
-        .padding(12)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1))
+        .frame(maxWidth: .infinity)
+        .frame(height: 140)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(AppTheme.Colors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(AppTheme.Colors.divider.opacity(0.25), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 4)
+        )
     }
 }
 
@@ -1451,7 +1482,7 @@ struct EditingToolCard: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 12) {
+            VStack(spacing: 16) {
                 ZStack {
                     Circle()
                         .fill(isPressed ? color.opacity(0.15) : AppTheme.Colors.cardBackground)
@@ -1475,12 +1506,15 @@ struct EditingToolCard: View {
                     Text(subtitle)
                         .font(.system(size: 12))
                         .foregroundColor(AppTheme.Colors.textSecondary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
                 }
+                Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
-            .padding(.horizontal, 12)
+            .frame(minHeight: 160, alignment: .top)
+            .padding(.vertical, 18)
+            .padding(.horizontal, 14)
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .fill(isPressed ? AppTheme.Colors.cardBackground.opacity(0.8) : AppTheme.Colors.surface)
@@ -1742,21 +1776,67 @@ struct ProfessionalPicker<T: CaseIterable & Hashable & RawRepresentable>: View w
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.system(size: 16, weight: .semibold)).foregroundColor(AppTheme.Colors.textPrimary)
-            HStack(spacing: 12) {
-                Image(systemName: icon).font(.system(size: 16)).foregroundColor(AppTheme.Colors.textTertiary).frame(width: 20)
-                Picker(title, selection: $selection) {
-                    ForEach(options, id: \.self) { option in
-                        Text(option.description).tag(option)
+            Text(title)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+            
+            Menu {
+                ForEach(options, id: \.self) { option in
+                    Button {
+                        selection = option
+                        HapticManager.shared.impact(style: .light)
+                    } label: {
+                        HStack {
+                            Text(option.description)
+                                .font(.system(size: 15, weight: .medium))
+                            Spacer()
+                            if option == selection {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 14, weight: .semibold))
+                            }
+                        }
                     }
                 }
-                .pickerStyle(.menu)
-                .tint(AppTheme.Colors.primary)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .frame(width: 32, height: 32)
+                        .background(
+                            Circle()
+                                .fill(AppTheme.Colors.surface.opacity(0.7))
+                        )
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Selected category")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        
+                        Text(selection.description)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                }
+                .padding(.vertical, 14)
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AppTheme.Colors.surface)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
+                )
             }
-            .padding(16)
-            .background(AppTheme.Colors.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1))
+            .contentShape(Rectangle())
         }
     }
 }

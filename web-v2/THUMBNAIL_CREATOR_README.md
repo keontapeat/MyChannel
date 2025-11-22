@@ -417,7 +417,7 @@ collaboration-locks/
 - Target (red)
 - TrendingUp (green)
 - Eye (purple)
-- Sparkles (pink)
+- Star accent (pink)
 
 ### ✅ **14. GRID OVERLAY**
 **Features:**

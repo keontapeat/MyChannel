@@ -259,7 +259,7 @@ enum PremiumTier: String, CaseIterable {
         case .none: return "play.circle"
         case .basic: return "star.circle.fill"
         case .pro: return "crown.fill"
-        case .ultimate: return "sparkles"
+        case .ultimate: return "star.fill"
         }
     }
 }

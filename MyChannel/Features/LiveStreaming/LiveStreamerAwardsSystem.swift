@@ -292,7 +292,7 @@ class LiveStreamerAwardsSystem: ObservableObject {
         // Viewer Milestones
         Achievement(title: "Growing", description: "Reach 100 concurrent viewers", icon: "eye.fill", rarity: .common, unlockedDate: nil, progress: nil, requirement: "100 concurrent viewers"),
         Achievement(title: "Rising Star", description: "Reach 1,000 concurrent viewers", icon: "star.fill", rarity: .rare, unlockedDate: nil, progress: nil, requirement: "1,000 concurrent viewers"),
-        Achievement(title: "Superstar", description: "Reach 10,000 concurrent viewers", icon: "sparkles", rarity: .epic, unlockedDate: nil, progress: nil, requirement: "10,000 concurrent viewers"),
+        Achievement(title: "Superstar", description: "Reach 10,000 concurrent viewers", icon: "star.fill", rarity: .epic, unlockedDate: nil, progress: nil, requirement: "10,000 concurrent viewers"),
         Achievement(title: "Mega Star", description: "Reach 100,000 concurrent viewers", icon: "crown.fill", rarity: .legendary, unlockedDate: nil, progress: nil, requirement: "100,000 concurrent viewers"),
         
         // Special

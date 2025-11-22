@@ -107,10 +107,10 @@ struct EffectCard: View {
     private func iconForCategory(_ category: AREffect.EffectCategory) -> String {
         switch category {
         case .filter: return "camera.filters"
-        case .beauty: return "sparkles"
+        case .beauty: return "star.fill"
         case .face: return "face.smiling"
         case .background: return "photo"
-        case .animated: return "wand.and.stars"
+        case .animated: return "cpu"
         }
     }
 }

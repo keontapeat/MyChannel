@@ -52,7 +52,7 @@ class EnhancedVideoService: ObservableObject {
             switch self {
             case .movies: return "tv"
             case .tvShows: return "tv.and.hifispeaker.fill"
-            case .anime: return "sparkles.tv"
+            case .anime: return "play.tv.fill"
             case .mukbang: return "fork.knife"
             case .documentaries: return "doc.on.doc"
             case .shorts: return "rectangle.portrait"

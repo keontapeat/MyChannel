@@ -177,7 +177,7 @@ struct CreatorRevenueDashboardView: View {
     private var aiInsightsCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Image(systemName: "sparkles")
+                Image(systemName: "star.fill")
                     .foregroundColor(.purple)
                 Text("AI Insights")
                     .font(.system(size: 18, weight: .semibold))

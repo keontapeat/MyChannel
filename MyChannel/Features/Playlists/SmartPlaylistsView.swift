@@ -98,7 +98,7 @@ struct SmartPlaylistsView: View {
                 
                 HStack(spacing: 14) {
                     featureBadge(icon: "brain.head.profile", text: "AI Powered")
-                    featureBadge(icon: "sparkles", text: "Auto-Updated")
+                    featureBadge(icon: "star.fill", text: "Auto-Updated")
                     featureBadge(icon: "infinity", text: "Endless")
                 }
             }
@@ -126,7 +126,7 @@ struct SmartPlaylistsView: View {
         VStack(spacing: 16) {
             HStack {
                 HStack(spacing: 8) {
-                    Image(systemName: "sparkles")
+                    Image(systemName: "star.fill")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.purple)
                     
@@ -290,7 +290,7 @@ struct AIPlaylistCard: View {
                     
                     // AI Badge
                     HStack(spacing: 4) {
-                        Image(systemName: "sparkles")
+                        Image(systemName: "star.fill")
                             .font(.system(size: 10, weight: .bold))
                         Text("AI")
                             .font(.system(size: 11, weight: .bold))

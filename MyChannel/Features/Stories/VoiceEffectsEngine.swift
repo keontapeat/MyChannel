@@ -44,7 +44,7 @@ class VoiceEffectsEngine: ObservableObject {
         VoiceEffectOption(effect: .megaphone, name: "Megaphone", icon: "megaphone"),
         VoiceEffectOption(effect: .telephone, name: "Telephone", icon: "phone"),
         VoiceEffectOption(effect: .underwater, name: "Underwater", icon: "drop.fill"),
-        VoiceEffectOption(effect: .alien, name: "Alien", icon: "sparkles")
+        VoiceEffectOption(effect: .alien, name: "Alien", icon: "star.fill")
     ]
     
     // MARK: - Initialization

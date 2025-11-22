@@ -87,3 +87,5 @@ struct VerificationBadge: Codable, Hashable {
     var progress: VerificationProgressSnapshot
 }
 
+
+

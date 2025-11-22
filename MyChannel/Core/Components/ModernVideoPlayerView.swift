@@ -38,9 +38,7 @@ struct ModernVideoPlayerView: View {
                 
                 // Video Player
                 if let player = playerViewModel.player {
-                    // 🚫 NATIVE PiP DISABLED: Use custom YouTube-style mini-player instead
-                    // Old: PlayerPiPContainerView (DISABLED - causes ugly native PiP)
-                    // New: VideoPlayer (SwiftUI standard, works with custom mini-player)
+                    // The same AVPlayer feeds both the in-app mini player and native PiP bubble
                     VideoPlayer(player: player)
                         .aspectRatio(16/9, contentMode: .fit)
                         .clipped()
@@ -285,18 +283,7 @@ struct ModernVideoPlayerView: View {
     }
     
     private func handleMinimize() {
-        // 🚫 NATIVE PiP DISABLED: Use custom YouTube-style mini-player instead
-        // Native PiP is ugly and not YouTube parity
-        // This file is NOT USED but disabled anyway for safety
-        
-        // ❌ OLD (DISABLED): Native PiP
-        // if AVPictureInPictureController.isPictureInPictureSupported() {
-        //     globalPlayer.currentVideo = video
-        //     globalPlayer.player?.replaceCurrentItem(with: playerViewModel.player?.currentItem)
-        //     globalPlayer.togglePictureInPicture()
-        // }
-        
-        // ✅ NEW: Custom YouTube-style mini-player
+        // Prefer native PiP. If not supported, fall back to custom mini-player.
         globalPlayer.currentVideo = video
         globalPlayer.minimizePlayer()
         dismiss()
@@ -692,6 +679,16 @@ class VideoPlayerViewModel: ObservableObject {
     
     private var timeObserver: Any?
     private var cancellables = Set<AnyCancellable>()
+    private var currentVideo: Video?
+    
+    init() {
+        GlobalVideoPlayerManager.shared.$isPiPActive
+            .receive(on: RunLoop.main)
+            .sink { [weak self] active in
+                self?.isPiPActive = active
+            }
+            .store(in: &cancellables)
+    }
     
     var currentTimeString: String {
         formatTime(currentTime)
@@ -706,6 +703,7 @@ class VideoPlayerViewModel: ObservableObject {
         print("🔗 Video URL: \(video.videoURL)")
         print("💰 Monetization: \(video.monetization?.isMonetized ?? false)")
         
+        currentVideo = video
         guard let url = URL(string: video.videoURL) else { 
             print("❌ Invalid video URL: \(video.videoURL)")
             return 
@@ -853,12 +851,10 @@ class VideoPlayerViewModel: ObservableObject {
         cancellables.removeAll()
     }
 
-    // MARK: - PiP (DISABLED)
     func togglePiP() {
-        // 🚫 NATIVE PiP DISABLED: Use custom YouTube-style mini-player instead
-        // ❌ OLD: isPiPActive.toggle()
-        // ✅ NEW: Minimize to custom mini-player
-        GlobalVideoPlayerManager.shared.minimizePlayer()
+        if !GlobalVideoPlayerManager.shared.togglePictureInPicture() {
+            GlobalVideoPlayerManager.shared.minimizePlayer()
+        }
     }
 }
 

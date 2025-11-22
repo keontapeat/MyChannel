@@ -138,7 +138,7 @@ struct CollabFinderView: View {
         VStack(spacing: 16) {
             HStack {
                 HStack(spacing: 8) {
-                    Image(systemName: "sparkles")
+                    Image(systemName: "star.fill")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.purple)
                     
