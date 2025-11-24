@@ -141,21 +141,19 @@ struct HomeView: View {
                             featuredContent: featuredContent,
                             selectedIndex: $heroVideoIndex,
                             showLiveHeroPreviewInPreviews: true,
-                            onPlayVideo: { video in
-                                GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: false)
-                            },
+                            onPlayVideo: openVideo,
                             onAddToList: toggleWatchLater
                         )
                         .padding(.bottom, 40)
 
                         // 🔥 AI-POWERED RECOMMENDATIONS (NEW!)
                         AIRecommendationsSection { video in
-                            GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: false)
+                            openVideo(video)
                         }
                         .padding(.bottom, 24)
                         
                         MinimalContentSections(
-                            onPlayVideo: { video in GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: false) },
+                            onPlayVideo: { video in openVideo(video) },
                             onSelectMovie: { movie in route = .movie(movie) },
                             onSeeAllFreeMovies: { route = .allMovies },
                             onSeeAllLiveTV: { route = .allLiveTV },
@@ -624,6 +622,10 @@ struct HomeView: View {
     private func toggleWatchLater(_ video: Video) {
         appState.toggleWatchLater(for: video.id)
         HapticManager.shared.impact(style: .light)
+    }
+
+    private func openVideo(_ video: Video) {
+        route = .video(video)
     }
 
     private func friendHeroVideos() -> [Video] {
@@ -1528,7 +1530,7 @@ struct MinimalContentSections: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: 16) {
                             ForEach(Video.sampleVideos.prefix(5)) { video in
-                                MinimalVideoCard(video: video, action: { GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: false) })
+                                MinimalVideoCard(video: video, action: { onPlayVideo(video) })
                             }
                         }
                         .padding(.horizontal, 20)
@@ -1684,13 +1686,7 @@ struct MinimalContentSections: View {
             )
             .padding(.horizontal, 20)
         }
-        // When mini player is showing, disable heavy animations in the feed to avoid jank
-        .transaction { tx in
-            if globalPlayer.shouldShowMiniPlayer { tx.disablesAnimations = true }
-        }
-        .onReceive(globalPlayer.$shouldShowMiniPlayer.removeDuplicates()) { isMini in
-            NotificationCenter.default.post(name: NSNotification.Name(isMini ? "LivePreviewsShouldPause" : "LivePreviewsShouldResume"), object: nil)
-        }
+        // Native PiP doesn't affect layout, so no need to disable animations
         .task {
             // ⚡ PERFORMANCE FIX: Load all in parallel instead of sequentially
             await withTaskGroup(of: Void.self) { group in
@@ -2609,21 +2605,35 @@ private struct TopMyChannelsSection: View {
     var onSelect: (String, String, Int, Int, [Video]) -> Void = { _,_,_,_,_ in }
 
     private struct ChannelRank: Identifiable {
-        let id = UUID()
+        let id: String          // creator id for stable identity
         let name: String
         let avatar: String
         let subscribers: Int
         let totalViews: Int
     }
 
+    private let fallbackAvatarPool: [String] = [
+        "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=320&h=320&fit=face",
+        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=320&h=320&fit=face",
+        "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?w=320&h=320&fit=face",
+        "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=320&h=320&fit=face",
+        "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=320&h=320&fit=face",
+        "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=320&h=320&fit=face",
+        "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=320&h=320&fit=face",
+        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=320&h=320&fit=face"
+    ]
+
     private var ranks: [ChannelRank] {
         let grouped = Dictionary(grouping: sourceVideos) { $0.creator.id }
         let items = grouped.values.compactMap { vids -> ChannelRank? in
             guard let first = vids.first else { return nil }
             let total = vids.reduce(0) { $0 + $1.viewCount }
+            let avatarURL = resolvedAvatarURL(for: first.creator)
+
             return ChannelRank(
+                id: first.creator.id,
                 name: first.creator.displayName,
-                avatar: first.creator.profileImageURL ?? "https://i.pravatar.cc/200?u=\(first.creator.id)",
+                avatar: avatarURL,
                 subscribers: first.creator.subscriberCount,
                 totalViews: total
             )
@@ -2632,6 +2642,18 @@ private struct TopMyChannelsSection: View {
             if $0.subscribers != $1.subscribers { return $0.subscribers > $1.subscribers }
             return $0.totalViews > $1.totalViews
         }.prefix(10).map { $0 }
+    }
+
+    private func resolvedAvatarURL(for creator: User) -> String {
+        let trimmed = (creator.profileImageURL ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+
+        // Deterministic fallback from curated pool
+        guard !fallbackAvatarPool.isEmpty else {
+            return "https://i.pravatar.cc/200?u=\(creator.id)"
+        }
+        let index = abs(creator.id.hashValue) % fallbackAvatarPool.count
+        return fallbackAvatarPool[index]
     }
 
     private func fmt(_ n: Int) -> String {
@@ -2649,9 +2671,9 @@ private struct TopMyChannelsSection: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    ForEach(Array(ranks.enumerated()), id: \.offset) { idx, c in
+                    ForEach(Array(ranks.enumerated()), id: \.element.id) { idx, c in
                         Button {
-                            let vids = sourceVideos.filter { $0.creator.displayName == c.name }
+                            let vids = sourceVideos.filter { $0.creator.id == c.id }
                             onSelect(c.name, c.avatar, c.subscribers, c.totalViews, vids)
                         } label: {
                             VStack(alignment: .center, spacing: 8) {
@@ -2661,24 +2683,9 @@ private struct TopMyChannelsSection: View {
                                             .stroke(AppTheme.Colors.primary, lineWidth: 3)
                                             .frame(width: 64, height: 64)
 
-                                        // 🔥 FIX: Better image loading with visible placeholder
-                                        CachedAsyncImage(url: URL(string: c.avatar)) { image in
-                                            image
-                                                .resizable()
-                                                .scaledToFill()
-                                        } placeholder: {
-                                            ZStack {
-                                                Circle()
-                                                    .fill(AppTheme.Colors.surface)
-                                                Image(systemName: "person.circle.fill")
-                                                    .resizable()
-                                                    .scaledToFit()
-                                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                                    .padding(8)
-                                            }
-                                        }
-                                        .frame(width: 58, height: 58)
-                                        .clipShape(Circle())
+                                        avatarView(for: c.avatar)
+                                            .frame(width: 58, height: 58)
+                                            .clipShape(Circle())
                                     }
 
                                     Text("#\(idx + 1)")
@@ -2714,6 +2721,38 @@ private struct TopMyChannelsSection: View {
             }
         }
     }
+
+    @ViewBuilder
+    private func avatarView(for urlString: String) -> some View {
+        let placeholder = ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AppTheme.Colors.surface,
+                            AppTheme.Colors.surface.opacity(0.85)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            Image(systemName: "person.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+        }
+
+        if let url = URL(string: urlString), !urlString.isEmpty {
+            AppAsyncImage(url: url) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                placeholder
+            }
+        } else {
+            placeholder
+        }
+    }
 }
 
 // MARK: - Preview
@@ -2741,7 +2780,7 @@ struct ForYouSection: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: 16) {
                             ForEach(forYouVideos.prefix(8)) { video in
-                                MinimalVideoCard(video: video, action: { GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: false) })
+                                MinimalVideoCard(video: video, action: { onPlayVideo(video) })
                                     .optimizeUIPerformance()
                             }
                         }

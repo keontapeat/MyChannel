@@ -1,0 +1,10 @@
+---
+alwaysApply: true
+---
+Performance requirements (non-negotiable):
+- Target 60fps (16ms per frame)
+- Image loading: <50ms cached, <200ms network
+- List scrolling: LazyVStack with pagination (24 items)
+- Memory: [weak self] in all async closures
+- Network: Request deduplication, batch operations
+- App launch: <400ms to first frame

@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyChannel - NVIDIA Inception Pitch Deck</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --nvidia-green: #76B900;
+            --nvidia-dark: #1A1A1A;
+            --primary: #FF0000;
+            --bg-dark: #0F0F0F;
+            --bg-card: #1A1A1A;
+            --text-primary: #FFFFFF;
+            --text-secondary: #AAAAAA;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+        
+        .slide {
+            min-height: 100vh;
+            padding: 60px 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            page-break-after: always;
+            border-bottom: 1px solid #333;
+        }
+        
+        .slide:last-child {
+            page-break-after: avoid;
+        }
+        
+        .slide-number {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        
+        h1 {
+            font-size: 56px;
+            font-weight: 800;
+            margin-bottom: 24px;
+            letter-spacing: -1px;
+        }
+        
+        h2 {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: var(--nvidia-green);
+        }
+        
+        h3 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+        
+        p {
+            font-size: 20px;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+        
+        .subtitle {
+            font-size: 28px;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+        
+        .highlight {
+            color: var(--nvidia-green);
+        }
+        
+        .red {
+            color: var(--primary);
+        }
+        
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-top: 40px;
+        }
+        
+        .grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 30px;
+            margin-top: 40px;
+        }
+        
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+            margin-top: 40px;
+        }
+        
+        .card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 32px;
+            border: 1px solid #333;
+        }
+        
+        .card-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        
+        .card h4 {
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        
+        .card p {
+            font-size: 16px;
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 40px 24px;
+        }
+        
+        .stat-number {
+            font-size: 56px;
+            font-weight: 800;
+            color: var(--nvidia-green);
+            line-height: 1;
+        }
+        
+        .stat-label {
+            font-size: 18px;
+            color: var(--text-secondary);
+            margin-top: 12px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 30px;
+        }
+        
+        th, td {
+            padding: 16px 20px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+        
+        th {
+            background: var(--bg-card);
+            font-weight: 600;
+            color: var(--nvidia-green);
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        td {
+            font-size: 16px;
+        }
+        
+        .check {
+            color: var(--nvidia-green);
+        }
+        
+        .x {
+            color: #FF4444;
+        }
+        
+        .logo-title {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary), #CC0000);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            font-weight: 800;
+        }
+        
+        .title-slide {
+            text-align: center;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .title-slide h1 {
+            font-size: 72px;
+            margin-bottom: 16px;
+        }
+        
+        .nvidia-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            background: var(--bg-card);
+            padding: 16px 32px;
+            border-radius: 100px;
+            margin-top: 40px;
+            border: 2px solid var(--nvidia-green);
+        }
+        
+        .nvidia-badge img {
+            height: 24px;
+        }
+        
+        .nvidia-badge span {
+            color: var(--nvidia-green);
+            font-weight: 600;
+            font-size: 18px;
+        }
+        
+        .timeline {
+            display: flex;
+            gap: 20px;
+            margin-top: 40px;
+        }
+        
+        .timeline-item {
+            flex: 1;
+            padding: 24px;
+            background: var(--bg-card);
+            border-radius: 12px;
+            border-left: 4px solid var(--nvidia-green);
+        }
+        
+        .timeline-item h4 {
+            color: var(--nvidia-green);
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+        
+        .timeline-item ul {
+            list-style: none;
+            font-size: 14px;
+        }
+        
+        .timeline-item li {
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+        
+        .diagram {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 40px;
+            margin-top: 40px;
+            text-align: center;
+        }
+        
+        .diagram-row {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .diagram-box {
+            background: #2A2A2A;
+            padding: 20px 30px;
+            border-radius: 12px;
+            font-weight: 600;
+            border: 1px solid #444;
+        }
+        
+        .diagram-arrow {
+            font-size: 24px;
+            color: var(--nvidia-green);
+        }
+        
+        .feature-list {
+            list-style: none;
+            margin-top: 24px;
+        }
+        
+        .feature-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+        
+        .feature-list .icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        
+        .cta-box {
+            background: linear-gradient(135deg, var(--nvidia-green), #5A9400);
+            border-radius: 16px;
+            padding: 48px;
+            text-align: center;
+            margin-top: 40px;
+        }
+        
+        .cta-box h3 {
+            color: white;
+            font-size: 32px;
+        }
+        
+        .cta-box p {
+            color: rgba(255,255,255,0.9);
+            font-size: 20px;
+        }
+        
+        .contact-info {
+            display: flex;
+            justify-content: center;
+            gap: 60px;
+            margin-top: 32px;
+        }
+        
+        .contact-item {
+            text-align: center;
+        }
+        
+        .contact-item .label {
+            font-size: 14px;
+            color: rgba(255,255,255,0.7);
+            margin-bottom: 4px;
+        }
+        
+        .contact-item .value {
+            font-size: 18px;
+            font-weight: 600;
+            color: white;
+        }
+        
+        @media print {
+            .slide {
+                page-break-after: always;
+                min-height: 100vh;
+            }
+            
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- SLIDE 1: Title -->
+<section class="slide title-slide">
+    <div class="logo">MC</div>
+    <h1>MyChannel</h1>
+    <p class="subtitle">The Future of Video Entertainment</p>
+    <p style="font-size: 24px; margin-top: 32px;">
+        <span class="red">YouTube</span> + 
+        <span style="color: #9146FF;">Twitch</span> + 
+        <span style="color: #00C853;">DraftKings</span> + 
+        <span style="color: #FFD700;">UFC</span>
+    </p>
+    <div class="nvidia-badge">
+        <span>🟢 NVIDIA Inception Program Application</span>
+    </div>
+    <p style="margin-top: 40px; font-size: 18px;">
+        Keonta Peat • Michigan, USA • mychannel.live
+    </p>
+</section>
+
+<!-- SLIDE 2: Problem -->
+<section class="slide">
+    <h2>The Problem</h2>
+    <h1>The Video Market is <span class="red">Fragmented</span></h1>
+    
+    <div class="grid-4">
+        <div class="card">
+            <div class="card-icon">📺</div>
+            <h4>YouTube</h4>
+            <p>Video hosting ✓</p>
+            <p class="red">No real money competitions ✗</p>
+        </div>
+        <div class="card">
+            <div class="card-icon">🎮</div>
+            <h4>Twitch</h4>
+            <p>Live streaming ✓</p>
+            <p class="red">No championship system ✗</p>
+        </div>
+        <div class="card">
+            <div class="card-icon">💰</div>
+            <h4>DraftKings</h4>
+            <p>Betting ✓</p>
+            <p class="red">No video content ✗</p>
+        </div>
+        <div class="card">
+            <div class="card-icon">🏆</div>
+            <h4>UFC</h4>
+            <p>Rankings ✓</p>
+            <p class="red">No creator economy ✗</p>
+        </div>
+    </div>
+    
+    <p style="font-size: 32px; margin-top: 60px; text-align: center;">
+        <strong class="highlight">$50B+ creator economy</strong> with no unified platform
+    </p>
+</section>
+
+<!-- SLIDE 3: Solution -->
+<section class="slide">
+    <h2>The Solution</h2>
+    <h1>One Platform. <span class="highlight">Everything.</span></h1>
+    
+    <div class="grid-3">
+        <div class="card">
+            <div class="card-icon">🎬</div>
+            <h4>Video Hosting</h4>
+            <p>4K/HDR video, Creator Studio, YouTube-level features</p>
+        </div>
+        <div class="card">
+            <div class="card-icon">📱</div>
+            <h4>Flicks (Shorts)</h4>
+            <p>TikTok-style vertical feed with AI discovery</p>
+        </div>
+        <div class="card">
+            <div class="card-icon">🔴</div>
+            <h4>Live Streaming</h4>
+            <p>Real-time streaming with chat & donations</p>
+        </div>
+        <div class="card">
+            <div class="card-icon">⚔️</div>
+            <h4>VS Matches</h4>
+            <p>Real money competitions ($1 - $100,000)</p>
+        </div>
+        <div class="card">
+            <div class="card-icon">🥇</div>
+            <h4>Championship Medals</h4>
+            <p>6 divisions: Bronze → Legend rankings</p>
+        </div>
+        <div class="card">
+            <div class="card-icon">🏅</div>
+            <h4>Streamer Awards</h4>
+            <p>26 categories, $50K grand prize</p>
+        </div>
+    </div>
+</section>
+
+<!-- SLIDE 4: Market -->
+<section class="slide">
+    <h2>Market Opportunity</h2>
+    <h1>TAM: <span class="highlight">$150B+</span></h1>
+    
+    <div class="grid-4">
+        <div class="card stat-card">
+            <div class="stat-number">$70B</div>
+            <div class="stat-label">Video Streaming</div>
+        </div>
+        <div class="card stat-card">
+            <div class="stat-number">$50B</div>
+            <div class="stat-label">Creator Economy</div>
+        </div>
+        <div class="card stat-card">
+            <div class="stat-number">$15B</div>
+            <div class="stat-label">Esports/Gaming</div>
+        </div>
+        <div class="card stat-card">
+            <div class="stat-number">$15B</div>
+            <div class="stat-label">Online Gaming</div>
+        </div>
+    </div>
+    
+    <div class="grid-3" style="margin-top: 40px;">
+        <div class="card">
+            <h4>🎮 3.2B</h4>
+            <p>Gamers globally</p>
+        </div>
+        <div class="card">
+            <h4>📱 50M+</h4>
+            <p>Active creators</p>
+        </div>
+        <div class="card">
+            <h4>💰 500M</h4>
+            <p>Competitive players</p>
+        </div>
+    </div>
+</section>
+
+<!-- SLIDE 5: AI Technology (NVIDIA Focus) -->
+<section class="slide">
+    <h2>AI Technology</h2>
+    <h1><span class="highlight">100 AI Agents</span> Powered by GPU</h1>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>AI Agent</th>
+                <th>Function</th>
+                <th>Revenue Impact</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>🎯 Subscription Pricing AI</td>
+                <td>Optimal price per user</td>
+                <td class="highlight">$10M-$30M/yr</td>
+            </tr>
+            <tr>
+                <td>📺 Ad Optimization AI</td>
+                <td>Smart ad placement timing</td>
+                <td class="highlight">$15M-$40M/yr</td>
+            </tr>
+            <tr>
+                <td>🛡️ Churn Prevention AI</td>
+                <td>7-30 day prediction</td>
+                <td class="highlight">$12M-$25M/yr</td>
+            </tr>
+            <tr>
+                <td>🚨 Fraud Detection AI</td>
+                <td>Real-time transaction analysis</td>
+                <td class="highlight">$10M-$20M/yr</td>
+            </tr>
+            <tr>
+                <td>📈 Viral Prediction AI</td>
+                <td>Promotion optimization</td>
+                <td class="highlight">$15M-$30M/yr</td>
+            </tr>
+            <tr>
+                <td>🎬 Recommendation V2</td>
+                <td>YouTube-level personalization</td>
+                <td class="highlight">$10M-$25M/yr</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <p style="margin-top: 40px; font-size: 24px; text-align: center;">
+        + <strong>94 more agents</strong> in development
+    </p>
+</section>
+
+<!-- SLIDE 6: Technical Architecture -->
+<section class="slide">
+    <h2>Technical Architecture</h2>
+    <h1>GPU-Accelerated <span class="highlight">Infrastructure</span></h1>
+    
+    <div class="diagram">
+        <div class="diagram-row">
+            <div class="diagram-box">📱 iOS App (Swift)</div>
+            <div class="diagram-box">🌐 Web App (Next.js)</div>
+            <div class="diagram-box">🤖 Android (Planned)</div>
+        </div>
+        <div class="diagram-arrow">↓</div>
+        <div class="diagram-row">
+            <div class="diagram-box">🔥 Firebase Backend</div>
+        </div>
+        <div class="diagram-arrow">↓</div>
+        <div class="diagram-row" style="background: linear-gradient(135deg, rgba(118,185,0,0.2), rgba(118,185,0,0.1)); padding: 30px; border-radius: 16px; border: 2px solid var(--nvidia-green);">
+            <div class="diagram-box" style="background: var(--nvidia-green); color: black;">
+                🟢 NVIDIA GPUs on Vertex AI
+            </div>
+        </div>
+        <div style="margin-top: 20px; display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;">
+            <span class="diagram-box" style="font-size: 14px;">Fraud Detection</span>
+            <span class="diagram-box" style="font-size: 14px;">Recommendations</span>
+            <span class="diagram-box" style="font-size: 14px;">Ad Optimization</span>
+            <span class="diagram-box" style="font-size: 14px;">Churn Prediction</span>
+            <span class="diagram-box" style="font-size: 14px;">+96 More</span>
+        </div>
+    </div>
+</section>
+
+<!-- SLIDE 7: Business Model -->
+<section class="slide">
+    <h2>Business Model</h2>
+    <h1>Multiple <span class="highlight">Revenue Streams</span></h1>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Revenue Stream</th>
+                <th>Model</th>
+                <th>Year 1 Projection</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>⚔️ VS Match Fees</td>
+                <td>10% of all wagers</td>
+                <td>$5M - $15M</td>
+            </tr>
+            <tr>
+                <td>⭐ Subscriptions</td>
+                <td>$9.99 - $29.99/mo</td>
+                <td>$3M - $8M</td>
+            </tr>
+            <tr>
+                <td>📺 Advertising</td>
+                <td>CPM-based</td>
+                <td>$2M - $6M</td>
+            </tr>
+            <tr>
+                <td>💎 Tips/Donations</td>
+                <td>20% platform fee</td>
+                <td>$1M - $3M</td>
+            </tr>
+            <tr>
+                <td>🎁 Premium Features</td>
+                <td>One-time purchases</td>
+                <td>$500K - $2M</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <div class="grid-3" style="margin-top: 40px;">
+        <div class="card stat-card">
+            <div class="stat-number">$2-5</div>
+            <div class="stat-label">Customer Acquisition Cost</div>
+        </div>
+        <div class="card stat-card">
+            <div class="stat-number">$50-150</div>
+            <div class="stat-label">Lifetime Value</div>
+        </div>
+        <div class="card stat-card">
+            <div class="stat-number">70-80%</div>
+            <div class="stat-label">Gross Margin</div>
+        </div>
+    </div>
+</section>
+
+<!-- SLIDE 8: Traction -->
+<section class="slide">
+    <h2>Traction</h2>
+    <h1>Built & <span class="highlight">Ready to Launch</span></h1>
+    
+    <div class="grid-2">
+        <div>
+            <h3>Product Development ✓</h3>
+            <ul class="feature-list">
+                <li><span class="icon">✅</span> iOS App: 100% complete</li>
+                <li><span class="icon">✅</span> Web App: Deployed at mychannel.live</li>
+                <li><span class="icon">✅</span> 16 ML Agents: Live on Vertex AI</li>
+                <li><span class="icon">✅</span> Firebase Backend: Fully operational</li>
+                <li><span class="icon">✅</span> Real Money System: Compliance-ready</li>
+            </ul>
+        </div>
+        <div>
+            <h3>Technical Scale</h3>
+            <div class="card stat-card">
+                <div class="stat-number">521+</div>
+                <div class="stat-label">Swift files (iOS)</div>
+            </div>
+            <div class="card stat-card" style="margin-top: 16px;">
+                <div class="stat-number">177+</div>
+                <div class="stat-label">Services & engines</div>
+            </div>
+            <div class="card stat-card" style="margin-top: 16px;">
+                <div class="stat-number">100</div>
+                <div class="stat-label">AI agents planned</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- SLIDE 9: Competitive Advantage -->
+<section class="slide">
+    <h2>Competitive Advantage</h2>
+    <h1>Why MyChannel <span class="highlight">Wins</span></h1>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Feature</th>
+                <th>YouTube</th>
+                <th>Twitch</th>
+                <th>TikTok</th>
+                <th style="background: var(--nvidia-green); color: black;">MyChannel</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Long-form video</td>
+                <td class="check">✓</td>
+                <td class="x">✗</td>
+                <td class="x">✗</td>
+                <td class="check">✓</td>
+            </tr>
+            <tr>
+                <td>Short-form video</td>
+                <td class="check">✓</td>
+                <td class="x">✗</td>
+                <td class="check">✓</td>
+                <td class="check">✓</td>
+            </tr>
+            <tr>
+                <td>Live streaming</td>
+                <td class="check">✓</td>
+                <td class="check">✓</td>
+                <td class="check">✓</td>
+                <td class="check">✓</td>
+            </tr>
+            <tr>
+                <td>Real money matches</td>
+                <td class="x">✗</td>
+                <td class="x">✗</td>
+                <td class="x">✗</td>
+                <td class="check" style="font-weight: bold;">✓</td>
+            </tr>
+            <tr>
+                <td>Championship system</td>
+                <td class="x">✗</td>
+                <td class="x">✗</td>
+                <td class="x">✗</td>
+                <td class="check" style="font-weight: bold;">✓</td>
+            </tr>
+            <tr>
+                <td>100 AI agents</td>
+                <td class="x">✗</td>
+                <td class="x">✗</td>
+                <td class="x">✗</td>
+                <td class="check" style="font-weight: bold;">✓</td>
+            </tr>
+        </tbody>
+    </table>
+</section>
+
+<!-- SLIDE 10: NVIDIA Ask -->
+<section class="slide">
+    <h2>NVIDIA Partnership</h2>
+    <h1>How <span class="highlight">Inception</span> Can Help</h1>
+    
+    <div class="grid-2">
+        <div>
+            <h3>What We Need</h3>
+            <ul class="feature-list">
+                <li><span class="icon">🖥️</span> <strong>GPU Credits:</strong> Scale 100 ML agents</li>
+                <li><span class="icon">🔧</span> <strong>Technical Support:</strong> Optimize inference</li>
+                <li><span class="icon">🚀</span> <strong>NVIDIA Triton:</strong> Deploy at scale</li>
+                <li><span class="icon">☁️</span> <strong>DGX Cloud:</strong> Train large models</li>
+                <li><span class="icon">🤝</span> <strong>Introductions:</strong> Gaming community</li>
+            </ul>
+        </div>
+        <div>
+            <h3>What NVIDIA Gets</h3>
+            <ul class="feature-list">
+                <li><span class="icon">🏆</span> <strong>Showcase Partner:</strong> AI-first video platform</li>
+                <li><span class="icon">📈</span> <strong>GPU Usage:</strong> 100 agents = significant compute</li>
+                <li><span class="icon">🎮</span> <strong>Gaming Ecosystem:</strong> Creator community access</li>
+                <li><span class="icon">📢</span> <strong>Marketing:</strong> NVIDIA featured in AI campaigns</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- SLIDE 11: Roadmap -->
+<section class="slide">
+    <h2>Roadmap</h2>
+    <h1>2025-2026 <span class="highlight">Execution Plan</span></h1>
+    
+    <div class="timeline">
+        <div class="timeline-item">
+            <h4>Q1 2025</h4>
+            <ul>
+                <li>✓ Complete iOS app</li>
+                <li>✓ Deploy 16 ML agents</li>
+                <li>→ TestFlight beta</li>
+                <li>→ NVIDIA Inception</li>
+            </ul>
+        </div>
+        <div class="timeline-item">
+            <h4>Q2 2025</h4>
+            <ul>
+                <li>App Store launch</li>
+                <li>Deploy 50 ML agents</li>
+                <li>First VS Matches</li>
+                <li>10K users</li>
+            </ul>
+        </div>
+        <div class="timeline-item">
+            <h4>Q3 2025</h4>
+            <ul>
+                <li>Android launch</li>
+                <li>Deploy 100 ML agents</li>
+                <li>Streamer Awards</li>
+                <li>50K users</li>
+            </ul>
+        </div>
+        <div class="timeline-item">
+            <h4>Q4 2025</h4>
+            <ul>
+                <li>Web feature parity</li>
+                <li>$1M ARR milestone</li>
+                <li>100K users</li>
+                <li>Seed round</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div class="grid-3" style="margin-top: 40px;">
+        <div class="card stat-card">
+            <div class="stat-number">$50M</div>
+            <div class="stat-label">2026 Revenue Target</div>
+        </div>
+        <div class="card stat-card">
+            <div class="stat-number">1M</div>
+            <div class="stat-label">2026 Users Target</div>
+        </div>
+        <div class="card stat-card">
+            <div class="stat-number">$5-10B</div>
+            <div class="stat-label">IPO Valuation (2028)</div>
+        </div>
+    </div>
+</section>
+
+<!-- SLIDE 12: Contact -->
+<section class="slide title-slide">
+    <h1>Let's Build Together</h1>
+    <p class="subtitle">The Future of Video Entertainment</p>
+    
+    <div class="cta-box">
+        <h3>Ready to Partner with NVIDIA</h3>
+        <p>100 AI agents • $150B+ market • First mover advantage</p>
+        
+        <div class="contact-info">
+            <div class="contact-item">
+                <div class="label">Email</div>
+                <div class="value">keontapeat@mychannel.live</div>
+            </div>
+            <div class="contact-item">
+                <div class="label">Website</div>
+                <div class="value">mychannel.live</div>
+            </div>
+            <div class="contact-item">
+                <div class="label">Location</div>
+                <div class="value">Michigan, USA</div>
+            </div>
+        </div>
+    </div>
+    
+    <p style="margin-top: 60px; font-size: 24px;">
+        <span class="highlight">Demo available</span> • TestFlight build ready • ML agents live
+    </p>
+</section>
+
+</body>
+</html>
+

@@ -20,7 +20,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         case location, website, socialLinks
         case followerCount, followingCount, joinDate
         case totalViews, totalEarnings, membershipTiers
-        case verificationBadge
+        case showWebsiteOnProfile, verificationBadge
     }
     let id: String
     let username: String
@@ -40,6 +40,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
     let createdAt: Date
     let location: String?
     let website: String?
+    let showWebsiteOnProfile: Bool?
     let socialLinks: [SocialLink]
     
     // Additional properties for compatibility
@@ -51,6 +52,8 @@ struct User: Identifiable, Codable, Equatable, Hashable {
     let totalViews: Int?
     let totalEarnings: Double?
     let membershipTiers: [MembershipTier]?
+    
+    // Verification badge
     let verificationBadge: VerificationBadge?
     
     init(
@@ -68,6 +71,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         createdAt: Date = Date(),
         location: String? = nil,
         website: String? = nil,
+        showWebsiteOnProfile: Bool? = nil,
         socialLinks: [SocialLink] = [],
         followerCount: Int? = nil,
         followingCount: Int = 0,
@@ -75,10 +79,10 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         totalViews: Int? = nil,
         totalEarnings: Double? = nil,
         membershipTiers: [MembershipTier]? = nil,
+        verificationBadge: VerificationBadge? = nil,
         bannerVideoURL: String? = nil,
         bannerVideoMuted: Bool? = nil,
-        bannerVideoContentMode: UserBannerContentMode? = nil,
-        verificationBadge: VerificationBadge? = nil
+        bannerVideoContentMode: UserBannerContentMode? = nil
     ) {
         self.id = id
         self.username = username
@@ -97,6 +101,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         self.createdAt = createdAt
         self.location = location
         self.website = website
+        self.showWebsiteOnProfile = showWebsiteOnProfile
         self.socialLinks = socialLinks
         self.followerCount = followerCount ?? subscriberCount
         self.followingCount = followingCount
@@ -105,43 +110,6 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         self.totalEarnings = totalEarnings
         self.membershipTiers = membershipTiers
         self.verificationBadge = verificationBadge
-    }
-    
-    /// Return a copy of the user with updated stats while preserving immutable identity fields.
-    func updating(
-        subscriberCount: Int? = nil,
-        videoCount: Int? = nil,
-        followerCount: Int? = nil,
-        followingCount: Int? = nil,
-        totalViews: Int? = nil,
-        totalEarnings: Double? = nil
-    ) -> User {
-        User(
-            id: id,
-            username: username,
-            displayName: displayName,
-            email: email,
-            profileImageURL: profileImageURL,
-            bannerImageURL: bannerImageURL,
-            bio: bio,
-            subscriberCount: subscriberCount ?? self.subscriberCount,
-            videoCount: videoCount ?? self.videoCount,
-            isVerified: isVerified,
-            isCreator: isCreator,
-            createdAt: createdAt,
-            location: location,
-            website: website,
-            socialLinks: socialLinks,
-            followerCount: followerCount ?? self.followerCount,
-            followingCount: followingCount ?? self.followingCount,
-            joinDate: joinDate,
-            totalViews: totalViews ?? self.totalViews,
-            totalEarnings: totalEarnings ?? self.totalEarnings,
-            membershipTiers: membershipTiers,
-            bannerVideoURL: bannerVideoURL,
-            bannerVideoMuted: bannerVideoMuted,
-            bannerVideoContentMode: bannerVideoContentMode
-        )
     }
     
     // MARK: - Equatable
@@ -182,6 +150,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         
         location = try container.decodeIfPresent(String.self, forKey: .location)
         website = try container.decodeIfPresent(String.self, forKey: .website)
+        showWebsiteOnProfile = try container.decodeIfPresent(Bool.self, forKey: .showWebsiteOnProfile)
         socialLinks = try container.decodeIfPresent([SocialLink].self, forKey: .socialLinks) ?? []
         followerCount = try container.decodeIfPresent(Int.self, forKey: .followerCount) ?? subscriberCount
         followingCount = try container.decodeIfPresent(Int.self, forKey: .followingCount) ?? 0
@@ -220,6 +189,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         try container.encode(createdAt.timeIntervalSince1970, forKey: .createdAt)
         try container.encodeIfPresent(location, forKey: .location)
         try container.encodeIfPresent(website, forKey: .website)
+        try container.encodeIfPresent(showWebsiteOnProfile, forKey: .showWebsiteOnProfile)
         try container.encode(socialLinks, forKey: .socialLinks)
         try container.encode(followerCount, forKey: .followerCount)
         try container.encode(followingCount, forKey: .followingCount)
@@ -353,52 +323,85 @@ extension User {
     
     /// 🔥 YOUTUBE PARITY: Show verification badge if verified OR if owner
     var shouldShowVerificationBadge: Bool {
-        isVerified || verificationBadge?.status == .verified || isOwner
+        isVerified || isOwner
     }
     
     /// Get effective verification status (verified OR owner)
     var effectiveIsVerified: Bool {
-        isVerified || verificationBadge?.status == .verified || isOwner
+        isVerified || isOwner
     }
     
-    var verificationStatus: VerificationStatus {
-        if isOwner { return .verified }
-        return verificationBadge?.status ?? (isVerified ? .verified : .notEligible)
-    }
-}
-
-// MARK: - Verification Helpers
-extension User {
-    func replacingVerification(
-        isVerified: Bool,
-        badge: VerificationBadge?
+    /// Create an updated copy of the user with new values
+    func updating(
+        videoCount: Int? = nil,
+        totalViews: Int? = nil,
+        subscriberCount: Int? = nil,
+        totalEarnings: Double? = nil
     ) -> User {
         User(
-            id: id,
-            username: username,
-            displayName: displayName,
-            email: email,
-            profileImageURL: profileImageURL,
-            bannerImageURL: bannerImageURL,
-            bio: bio,
-            subscriberCount: subscriberCount,
-            videoCount: videoCount,
+            id: self.id,
+            username: self.username,
+            displayName: self.displayName,
+            email: self.email,
+            profileImageURL: self.profileImageURL,
+            bannerImageURL: self.bannerImageURL,
+            bio: self.bio,
+            subscriberCount: subscriberCount ?? self.subscriberCount,
+            videoCount: videoCount ?? self.videoCount,
+            isVerified: self.isVerified,
+            isCreator: self.isCreator,
+            createdAt: self.createdAt,
+            location: self.location,
+            website: self.website,
+            showWebsiteOnProfile: self.showWebsiteOnProfile,
+            socialLinks: self.socialLinks,
+            followerCount: self.followerCount,
+            followingCount: self.followingCount,
+            joinDate: self.joinDate,
+            totalViews: totalViews ?? self.totalViews,
+            totalEarnings: totalEarnings ?? self.totalEarnings,
+            membershipTiers: self.membershipTiers,
+            verificationBadge: self.verificationBadge,
+            bannerVideoURL: self.bannerVideoURL,
+            bannerVideoMuted: self.bannerVideoMuted,
+            bannerVideoContentMode: self.bannerVideoContentMode
+        )
+    }
+    
+    /// Get verification status from badge
+    var verificationStatus: VerificationStatus {
+        verificationBadge?.status ?? (isVerified ? .verified : .notEligible)
+    }
+    
+    /// Create a copy with updated verification
+    func replacingVerification(isVerified: Bool, badge: VerificationBadge) -> User {
+        User(
+            id: self.id,
+            username: self.username,
+            displayName: self.displayName,
+            email: self.email,
+            profileImageURL: self.profileImageURL,
+            bannerImageURL: self.bannerImageURL,
+            bio: self.bio,
+            subscriberCount: self.subscriberCount,
+            videoCount: self.videoCount,
             isVerified: isVerified,
-            isCreator: isCreator,
-            createdAt: createdAt,
-            location: location,
-            website: website,
-            socialLinks: socialLinks,
-            followerCount: followerCount,
-            followingCount: followingCount,
-            joinDate: joinDate,
-            totalViews: totalViews,
-            totalEarnings: totalEarnings,
-            membershipTiers: membershipTiers,
-            bannerVideoURL: bannerVideoURL,
-            bannerVideoMuted: bannerVideoMuted,
-            bannerVideoContentMode: bannerVideoContentMode,
-            verificationBadge: badge
+            isCreator: self.isCreator,
+            createdAt: self.createdAt,
+            location: self.location,
+            website: self.website,
+            showWebsiteOnProfile: self.showWebsiteOnProfile,
+            socialLinks: self.socialLinks,
+            followerCount: self.followerCount,
+            followingCount: self.followingCount,
+            joinDate: self.joinDate,
+            totalViews: self.totalViews,
+            totalEarnings: self.totalEarnings,
+            membershipTiers: self.membershipTiers,
+            verificationBadge: badge,
+            bannerVideoURL: self.bannerVideoURL,
+            bannerVideoMuted: self.bannerVideoMuted,
+            bannerVideoContentMode: self.bannerVideoContentMode
         )
     }
 }

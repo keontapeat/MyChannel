@@ -361,22 +361,12 @@ struct UploadView: View {
             }
         }
         .onAppear {
-            // 🔥 FIX: Hide mini player when viewing upload page
-            // YouTube-style: mini player shouldn't show on profile/settings/upload pages
-            if globalPlayer.shouldShowMiniPlayer {
-                print("🎥 [UploadView] Hiding mini player on upload page")
-                globalPlayer.shouldShowMiniPlayer = false
-                globalPlayer.isMiniplayer = false
-            }
+            // Native PiP handles visibility automatically
+            print("🎥 [UploadView] Upload page appeared")
         }
         .onDisappear {
-            // 🔥 FIX: Restore mini player when leaving upload page (if video is still playing)
-            if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen {
-                print("🎥 [UploadView] Restoring mini player when leaving upload page")
-                globalPlayer.shouldShowMiniPlayer = true
-                globalPlayer.isMiniplayer = true
-                globalPlayer.ensurePlayerAttached()
-            }
+            // Native PiP persists automatically
+            print("🎥 [UploadView] Upload page disappeared")
         }
     }
     
@@ -1548,6 +1538,7 @@ struct EditingToolCard: View {
     }
 }
 
+// 🔥 NUCLEAR CREATION MODE BAR
 struct UploadCreationModeBar: View {
     @Binding var selected: UploadView.CreationMode
     let onTap: (UploadView.CreationMode) -> Void
@@ -1555,85 +1546,255 @@ struct UploadCreationModeBar: View {
     @Environment(\.horizontalSizeClass) private var hSizeClass
     @Environment(\.sizeCategory) private var sizeCategory
     @Namespace private var ns
+    @State private var isExpanded = false
     
     private var isPad: Bool { hSizeClass == .regular }
     private var isCompactWidth: Bool {
         UIScreen.main.bounds.width < 360
     }
     private var showLabels: Bool {
-        return isPad || (!isCompactWidth && sizeCategory <= .large)
+        return isPad || (!isCompactWidth && sizeCategory <= .large) || isExpanded
     }
     
     var body: some View {
-        HStack(spacing: 10) {
-            ForEach(UploadView.CreationMode.allCases) { mode in
-                ModeButton(
-                    ns: ns,
-                    mode: mode,
-                    isSelected: selected == mode,
-                    showLabels: showLabels,
-                    onTap: {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                            selected = mode
-                        }
-                        onTap(mode)
-                    }
-                )
+        VStack(spacing: 0) {
+            // 🔥 QUICK ACTIONS (when expanded)
+            if isExpanded {
+                quickActionsBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+            
+            // 🔥 MAIN MODE BAR
+            HStack(spacing: 8) {
+                ForEach(UploadView.CreationMode.allCases) { mode in
+                    NuclearModeButton(
+                        ns: ns,
+                        mode: mode,
+                        isSelected: selected == mode,
+                        showLabels: showLabels,
+                        isExpanded: isExpanded,
+                        onTap: {
+                            HapticManager.shared.impact(style: .medium)
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                selected = mode
+                            }
+                            onTap(mode)
+                        }
+                    )
+                }
+                
+                // 🔥 EXPAND/COLLAPSE BUTTON
+                Button {
+                    HapticManager.shared.impact(style: .light)
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.down" : "ellipsis")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.15),
+                                            Color.white.opacity(0.08)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        )
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background(
+                ZStack {
+                    // Glassmorphism effect
+                    RoundedRectangle(cornerRadius: 28)
+                        .fill(.ultraThinMaterial)
+                    
+                    // Animated gradient border
+                    RoundedRectangle(cornerRadius: 28)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    AppTheme.Colors.primary.opacity(0.5),
+                                    Color.purple.opacity(0.3),
+                                    AppTheme.Colors.primary.opacity(0.5)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            lineWidth: 1
+                        )
+                    
+                    // Subtle glow
+                    RoundedRectangle(cornerRadius: 28)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    AppTheme.Colors.primary.opacity(0.05),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                }
+                .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
+            )
         }
-        .padding(8)
-        .frame(maxWidth: .infinity)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.5)
-                )
-                .shadow(color: Color.black.opacity(0.12), radius: 16, x: 0, y: 8)
-        )
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: selected)
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isExpanded)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Creation mode")
     }
+    
+    // 🔥 QUICK ACTIONS BAR
+    private var quickActionsBar: some View {
+        HStack(spacing: 12) {
+            quickActionButton(icon: "camera.fill", title: "Camera", color: .blue) {
+                // Open camera
+            }
+            
+            quickActionButton(icon: "photo.on.rectangle", title: "Gallery", color: .green) {
+                // Open gallery
+            }
+            
+            quickActionButton(icon: "mic.fill", title: "Audio", color: .orange) {
+                // Record audio
+            }
+            
+            quickActionButton(icon: "text.bubble.fill", title: "Post", color: .purple) {
+                // Create post
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.black.opacity(0.5))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+        )
+        .padding(.bottom, 8)
+    }
+    
+    private func quickActionButton(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [color.opacity(0.8), color.opacity(0.6)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    )
+                
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
+            }
+        }
+        .buttonStyle(.plain)
+    }
 }
 
-private struct ModeButton: View {
+// 🔥 NUCLEAR MODE BUTTON
+private struct NuclearModeButton: View {
     let ns: Namespace.ID
     let mode: UploadView.CreationMode
     let isSelected: Bool
     let showLabels: Bool
+    let isExpanded: Bool
     let onTap: () -> Void
+    
+    @State private var isPressed = false
     
     var body: some View {
         Button(action: onTap) {
             ZStack {
+                // 🔥 ANIMATED BACKGROUND
                 if isSelected {
                     Capsule()
-                        .fill(Color.white)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    AppTheme.Colors.primary,
+                                    Color.purple
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                         .matchedGeometryEffect(id: "selector", in: ns)
-                        .frame(height: 36)
-                        .shadow(color: Color.black.opacity(0.10), radius: 10, x: 0, y: 5)
+                        .frame(height: 44)
+                        .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 12, x: 0, y: 6)
+                        .overlay(
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.3),
+                                            Color.clear
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .center
+                                    )
+                                )
+                        )
                 }
                 
-                HStack(spacing: 8) {
+                // 🔥 CONTENT
+                VStack(spacing: 4) {
                     Image(systemName: mode.icon)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: isExpanded ? 18 : 16, weight: .bold))
+                        .symbolRenderingMode(.hierarchical)
                     
                     if showLabels {
                         Text(mode.title)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 11, weight: .bold))
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
-                            .allowsTightening(true)
                     }
                 }
-                .padding(.horizontal, showLabels ? 12 : 10)
-                .frame(height: 36)
+                .padding(.horizontal, showLabels ? 14 : 12)
+                .frame(height: 44)
                 .frame(minWidth: showLabels ? 0 : 44)
-                .foregroundColor(isSelected ? .black : .white)
+                .foregroundColor(isSelected ? .white : .white.opacity(0.8))
+                .scaleEffect(isPressed ? 0.92 : 1.0)
             }
         }
         .buttonStyle(.plain)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !isPressed {
+                        isPressed = true
+                    }
+                }
+                .onEnded { _ in
+                    isPressed = false
+                }
+        )
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isExpanded)
         .accessibilityLabel(mode.title)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }

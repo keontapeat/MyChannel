@@ -184,7 +184,7 @@ struct NuclearFlicksView: View {
             
             // UI Overlay (show/hide with swipe)
             if showUI {
-                flickUIOverlay(flick: flick)
+                flickUIOverlay(flick: flick, geometry: geometry)
                     .transition(.opacity)
             }
             
@@ -251,7 +251,13 @@ struct NuclearFlicksView: View {
     }
     
     // MARK: - UI Overlay
-    private func flickUIOverlay(flick: NuclearFlick) -> some View {
+    @ViewBuilder
+    private func flickUIOverlay(flick: NuclearFlick, geometry: GeometryProxy) -> some View {
+        let bottomSafeArea = geometry.safeAreaInsets.bottom
+        let horizontalPadding: CGFloat = 24
+        let actionButtonTrailing: CGFloat = 20
+        let infoRightPadding: CGFloat = 120
+        
         VStack(spacing: 0) {
             Spacer()
             
@@ -342,20 +348,24 @@ struct NuclearFlicksView: View {
                         }
                     }
                 }
-                .padding(.leading, 20)
-                .padding(.trailing, 100)
+                .padding(.leading, horizontalPadding)
+                .padding(.trailing, infoRightPadding)
                 
                 Spacer()
             }
-            .padding(.bottom, 120) // Space for tab bar + safe area
+            .padding(.bottom, bottomSafeArea + 120) // Space for tab bar + safe area
         }
         .overlay(alignment: .bottomTrailing) {
-            actionButtons(flick: flick)
+            actionButtons(flick: flick, bottomSafeArea: bottomSafeArea, trailingPadding: actionButtonTrailing)
         }
     }
     
     // MARK: - Action Buttons (Glassmorphism)
-    private func actionButtons(flick: NuclearFlick) -> some View {
+    private func actionButtons(
+        flick: NuclearFlick,
+        bottomSafeArea: CGFloat,
+        trailingPadding: CGFloat
+    ) -> some View {
         VStack(spacing: 24) {
             // Like button
             actionButton(
@@ -414,8 +424,8 @@ struct NuclearFlicksView: View {
                 .rotationEffect(.degrees(viewModel.albumArtRotation))
             }
         }
-        .padding(.trailing, 16)
-        .padding(.bottom, 140)
+        .padding(.trailing, trailingPadding)
+        .padding(.bottom, bottomSafeArea + 120)
     }
     
     private func actionButton(icon: String, count: String, color: Color, scale: CGFloat = 1.0, action: @escaping () -> Void) -> some View {

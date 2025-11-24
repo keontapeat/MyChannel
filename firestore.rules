@@ -3,11 +3,15 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // ========================================
-    // 📺 PICTURE-IN-PICTURE (YOUTUBE PARITY)
+    // 📺 NATIVE iOS PiP ENABLED (YOUTUBE PARITY)
     // ========================================
-    // Native iOS PiP is ENABLED alongside our custom FloatingMiniPlayer.
-    // The app auto-starts PiP (if the user enabled it in Settings) when backgrounded.
-    // Firestore rules are unrelated, but we document it here so every engineer knows the expectation.
+    // Native iOS Picture-in-Picture (PiP) is ENABLED for YouTube-level experience.
+    // - Chevron down button minimizes to native PiP (not closes video)
+    // - PiP button in controls starts native iOS PiP
+    // - Works when swiping out to home screen
+    // - Tap PiP window to expand back to fullscreen
+    // - BackgroundPlayService keeps audio playing just like YouTube Premium.
+    // Firestore rules store per-user background play settings/preferences.
     
     // ========================================
     // 🔥 THERMONUCLEAR PERFORMANCE HELPERS
@@ -218,6 +222,11 @@ service cloud.firestore {
     }
     
     match /notification_settings/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // Background play + PiP settings
+    match /background_play_settings/{userId} {
       allow read, write: if isOwner(userId);
     }
     

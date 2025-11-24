@@ -150,10 +150,10 @@ final class UserFirestoreService: ObservableObject {
             totalViews: data["totalViews"] as? Int,
             totalEarnings: data["totalEarnings"] as? Double,
             membershipTiers: nil, // TODO: Parse membership tiers if needed
+            verificationBadge: verificationBadge,
             bannerVideoURL: data["bannerVideoURL"] as? String,
             bannerVideoMuted: data["bannerVideoMuted"] as? Bool,
-            bannerVideoContentMode: contentMode,
-            verificationBadge: verificationBadge
+            bannerVideoContentMode: contentMode
         )
         
         print("✅ User profile loaded from Firestore with banner video: \(user.bannerVideoURL ?? "nil")")

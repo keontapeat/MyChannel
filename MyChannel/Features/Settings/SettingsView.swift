@@ -80,22 +80,12 @@ struct SettingsView: View {
             }
         }
         .onAppear {
-            // 🔥 FIX: Hide mini player when viewing settings page
-            // YouTube-style: mini player shouldn't show on profile/settings/upload pages
-            if globalPlayer.shouldShowMiniPlayer {
-                print("🎥 [SettingsView] Hiding mini player on settings page")
-                globalPlayer.shouldShowMiniPlayer = false
-                globalPlayer.isMiniplayer = false
-            }
+            // Native PiP handles visibility automatically
+            print("🎥 [SettingsView] Settings page appeared")
         }
         .onDisappear {
-            // 🔥 FIX: Restore mini player when leaving settings page (if video is still playing)
-            if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen {
-                print("🎥 [SettingsView] Restoring mini player when leaving settings page")
-                globalPlayer.shouldShowMiniPlayer = true
-                globalPlayer.isMiniplayer = true
-                globalPlayer.ensurePlayerAttached()
-            }
+            // Native PiP persists automatically
+            print("🎥 [SettingsView] Settings page disappeared")
         }
     }
     

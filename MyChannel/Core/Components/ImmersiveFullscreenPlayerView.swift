@@ -23,12 +23,10 @@ struct ImmersiveFullscreenPlayerView: View {
             Color.black.ignoresSafeArea()
 
             // Reuse the global player's AVPlayer (already adopted from caller)
-            if let player = globalPlayer.player {
+            if globalPlayer.player != nil {
                 ZStack {
-                    // Native VideoPlayer hosts the same AVPlayer used for PiP + mini-player
-                    VideoPlayer(player: player)
+                    GlobalPlayerViewController()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // Tap to toggle controls
                         .contentShape(Rectangle())
                         .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() } }
                 }
@@ -46,8 +44,6 @@ struct ImmersiveFullscreenPlayerView: View {
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
                 globalPlayer.showingFullscreen = true
-                globalPlayer.shouldShowMiniPlayer = false
-                globalPlayer.isMiniplayer = false
             }
             // Ensure autoplay when presenting fullscreen using explicit play
             if let player = globalPlayer.player {
@@ -254,17 +250,18 @@ struct ImmersiveFullscreenPlayerView: View {
                         Spacer()
                         
                         Button {
-                            if !globalPlayer.togglePictureInPicture() {
-                                globalPlayer.minimizePlayer()
-                                dismiss()
-                            }
+                            // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP
+                            globalPlayer.registerLocalPlayer(video: video, player: globalPlayer.player)
+                            globalPlayer.startPiP()
+                            dismiss()
                         } label: {
-                            Image(systemName: globalPlayer.isPiPActive ? "pip.exit" : "pip.enter")
+                            Image(systemName: "pip.enter")
                                 .font(.system(size: 20, weight: .medium))
                                 .foregroundColor(.white)
                                 .frame(width: 44, height: 44)
                                 .contentShape(Circle())
                         }
+                        .accessibilityLabel("Minimize to mini player")
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 30)
@@ -292,12 +289,12 @@ struct ImmersiveFullscreenPlayerView: View {
     private var dragGesture: some Gesture {
         DragGesture(minimumDistance: 8)
             .onChanged { value in
-                // Only consider upward drag for dismiss-to-inline
-                dragOffset = min(0, value.translation.height)
+                // Only consider downward drag for dismiss-to-inline
+                dragOffset = max(0, value.translation.height)
             }
             .onEnded { value in
                 let momentum = value.verticalMomentum
-                let shouldDismiss = value.translation.height < -80 || momentum < -120
+                let shouldDismiss = value.translation.height > 80 || momentum > 120
                 withAnimation(.interactiveSpring(response: 0.45, dampingFraction: 0.85)) {
                     dragOffset = 0
                 }
@@ -306,9 +303,12 @@ struct ImmersiveFullscreenPlayerView: View {
     }
 
     private func dismissToInline() {
-        // Ensure playback stops completely when exiting fullscreen
-        globalPlayer.closePlayer()
+        globalPlayer.showingFullscreen = false
+        // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP
+        globalPlayer.registerLocalPlayer(video: video, player: globalPlayer.player)
+        globalPlayer.startPiP()
         onExitFullscreen()
+        dismiss()
     }
 }
 

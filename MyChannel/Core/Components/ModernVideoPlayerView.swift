@@ -176,10 +176,8 @@ struct ModernVideoPlayerView: View {
     }
     
     private func startPlaybackWithAds() {
-        // Ensure the global mini/fullscreen player is hidden so we don't get two players stacked
+        // Ensure the global player doesn't interfere
         globalPlayer.stopImmediately()
-        globalPlayer.shouldShowMiniPlayer = false
-        globalPlayer.isMiniplayer = false
         globalPlayer.showingFullscreen = false
         Task { @MainActor in
             if (try? await StoreKitService.shared.hasActiveSubscription()) == true {
@@ -283,9 +281,10 @@ struct ModernVideoPlayerView: View {
     }
     
     private func handleMinimize() {
-        // Prefer native PiP. If not supported, fall back to custom mini-player.
-        globalPlayer.currentVideo = video
-        globalPlayer.minimizePlayer()
+        // Start native iOS PiP
+        // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP
+        globalPlayer.registerLocalPlayer(video: video, player: playerViewModel.player)
+        globalPlayer.startPiP()
         dismiss()
     }
     
@@ -349,14 +348,19 @@ struct ModernPlayerControlsView: View {
                 Spacer()
                 
                 HStack(spacing: 12) {
-                    Button(action: onTogglePiP) {
-                        Image(systemName: viewModel.isPiPActive ? "pip.exit" : "pip.enter")
+                    Button(action: {
+                        // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP
+                        GlobalVideoPlayerManager.shared.registerLocalPlayer(video: video, player: viewModel.player)
+                        GlobalVideoPlayerManager.shared.startPiP()
+                    }) {
+                        Image(systemName: "pip.enter")
                             .font(.title3)
                             .foregroundColor(.white)
                             .padding(8)
                             .background(Color.black.opacity(0.3))
                             .clipShape(Circle())
                     }
+                    .accessibilityLabel("Minimize to mini player")
                     
                     Menu {
                         Button("Report") {}
@@ -662,7 +666,6 @@ struct ModernBrightnessIndicator: View {
 class VideoPlayerViewModel: ObservableObject {
     @Published var player: AVPlayer?
     @Published var isPlaying = false
-    @Published var isPiPActive = false
     @Published var currentTime: TimeInterval = 0
     @Published var duration: TimeInterval = 0
     @Published var currentProgress: Double = 0
@@ -682,12 +685,7 @@ class VideoPlayerViewModel: ObservableObject {
     private var currentVideo: Video?
     
     init() {
-        GlobalVideoPlayerManager.shared.$isPiPActive
-            .receive(on: RunLoop.main)
-            .sink { [weak self] active in
-                self?.isPiPActive = active
-            }
-            .store(in: &cancellables)
+        // Initialization
     }
     
     var currentTimeString: String {
@@ -852,9 +850,11 @@ class VideoPlayerViewModel: ObservableObject {
     }
 
     func togglePiP() {
-        if !GlobalVideoPlayerManager.shared.togglePictureInPicture() {
-            GlobalVideoPlayerManager.shared.minimizePlayer()
+        // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP
+        if let video = currentVideo {
+            GlobalVideoPlayerManager.shared.registerLocalPlayer(video: video, player: player)
         }
+        GlobalVideoPlayerManager.shared.startPiP()
     }
 }
 

@@ -432,7 +432,12 @@ let count = await RealtimeViewTracker.shared.getViewCount(for: videoId)
   - Custom FloatingMiniPlayer inside the app (drag, resize, swipe to dismiss)
   - Native iOS Picture‑in‑Picture bubble when you leave the app (same behavior as YouTube)
   - `AppState.autoPiPEnabled` controls whether PiP auto-starts on backgrounding
-  - Fallback to audio-only background play if PiP isn’t available on the device
+  - Fallback to audio-only background play via `BackgroundPlayService` if PiP isn’t available on the device
+- **Background playback is fully supported and required**:
+  - Configure `AVAudioSession` with `.playback` and keep it active when entering background
+  - When the user backgrounds the app, prefer starting PiP. If PiP isn’t available, hand off to `BackgroundPlayService` so audio continues
+  - Remote Command Center controls (play/pause/skip/seek) must remain functional
+  - Users can explicitly disable background play in Settings, otherwise keep audio active
 - Mini player for background playback
 - Quality selection (240p - 4K)
 - Playback speed control

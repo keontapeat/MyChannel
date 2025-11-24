@@ -147,6 +147,37 @@ struct ProfileHeaderView: View {
                             .opacity(opacityForFactor(0.25))
                             .transition(.opacity)
                     }
+                    
+                    // Website link (if enabled)
+                    if let website = user.website,
+                       !website.isEmpty,
+                       user.showWebsiteOnProfile == true {
+                        Link(destination: URL(string: website.hasPrefix("http") ? website : "https://\(website)") ?? URL(string: "https://mychannel.live")!) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "link.circle.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.95))
+                                
+                                Text(cleanWebsiteURL(website))
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.95))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .fill(.white.opacity(0.2))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(.white.opacity(0.4), lineWidth: 1)
+                                    )
+                            )
+                            .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                        }
+                        .opacity(opacityForFactor(0.25))
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .multilineTextAlignment(.center)
@@ -283,6 +314,17 @@ struct ProfileHeaderView: View {
     private func opacityForFactor(_ factor: CGFloat) -> Double {
         let value = max(0, min(1, 1 - factor * collapseProgress))
         return Double(value)
+    }
+    
+    private func cleanWebsiteURL(_ url: String) -> String {
+        var cleaned = url
+        cleaned = cleaned.replacingOccurrences(of: "https://", with: "")
+        cleaned = cleaned.replacingOccurrences(of: "http://", with: "")
+        cleaned = cleaned.replacingOccurrences(of: "www.", with: "")
+        if cleaned.hasSuffix("/") {
+            cleaned = String(cleaned.dropLast())
+        }
+        return cleaned
     }
 }
 

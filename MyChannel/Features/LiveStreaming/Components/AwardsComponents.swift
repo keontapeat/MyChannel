@@ -738,19 +738,19 @@ struct LiveCeremonyStreamView: View {
                             
                             Spacer()
                             
-                            // PiP button
+                            // Minimize to native PiP button
                             Button(action: {
-                                if !globalPlayer.togglePictureInPicture() {
-                                    globalPlayer.minimizePlayer()
-                                }
+                                globalPlayer.startPiP()
+                                onDismiss()
                             }) {
-                                Image(systemName: globalPlayer.isPiPActive ? "pip.exit" : "pip.enter")
+                                Image(systemName: "pip.enter")
                                     .font(.system(size: 18))
                                     .foregroundColor(.white)
                                     .padding(12)
                                     .background(Color.black.opacity(0.7))
                                     .clipShape(Circle())
                             }
+                            .accessibilityLabel("Minimize to mini player")
                             
                             // Close button
                             Button(action: onDismiss) {

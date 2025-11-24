@@ -21,6 +21,7 @@ struct EditProfileView: View {
     @State private var bio: String = ""
     @State private var location: String = ""
     @State private var website: String = ""
+    @State private var showWebsiteOnProfile: Bool = false
     @State private var selectedProfileImage: PhotosPickerItem?
     @State private var selectedBannerImage: PhotosPickerItem?
     @State private var selectedBannerVideo: PhotosPickerItem?
@@ -208,12 +209,20 @@ struct EditProfileView: View {
     
     // MARK: - Profile Images / Banner Section
     private var profileImagesSection: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 24) {
             // Banner Image
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Cover")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                    
+                    Text("Cover")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    
+                    Spacer()
+                }
                 
                 Picker("Cover Type", selection: $isVideoCover) {
                     Text("Photo").tag(false)
@@ -378,10 +387,18 @@ struct EditProfileView: View {
             }
             
             // Profile Image
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Profile Photo")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
+                    Image(systemName: "person.crop.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                    
+                    Text("Profile Photo")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    
+                    Spacer()
+                }
                 
                 HStack(spacing: 16) {
                     Button(action: {
@@ -472,20 +489,36 @@ struct EditProfileView: View {
     // MARK: - Form Fields Section
     private var formFieldsSection: some View {
         VStack(spacing: 24) {
-            HStack {
-                Text("Basic Information")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+            // Section header with progress
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Basic Information")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    
+                    Text("\(getFieldProgress())/5 fields completed")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
                 
                 Spacer()
                 
-                // Progress indicator
-                HStack(spacing: 4) {
-                    ForEach(0..<5) { index in
-                        Circle()
-                            .fill(getFieldProgress() > index ? AppTheme.Colors.primary : AppTheme.Colors.divider)
-                            .frame(width: 6, height: 6)
-                    }
+                // Circular progress indicator
+                ZStack {
+                    Circle()
+                        .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 3)
+                        .frame(width: 40, height: 40)
+                    
+                    Circle()
+                        .trim(from: 0, to: CGFloat(getFieldProgress()) / 5.0)
+                        .stroke(AppTheme.Colors.primary, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .frame(width: 40, height: 40)
+                        .rotationEffect(.degrees(-90))
+                        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: getFieldProgress())
+                    
+                    Text("\(Int((Double(getFieldProgress()) / 5.0) * 100))%")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.primary)
                 }
             }
             
@@ -520,13 +553,55 @@ struct EditProfileView: View {
                     placeholder: "Where are you located?"
                 )
                 
-                ModernTextField(
-                    title: "Website",
-                    text: $website,
-                    icon: "globe",
-                    placeholder: "https://yourwebsite.com",
-                    keyboardType: .URL
-                )
+                // Website field with visibility toggle
+                VStack(alignment: .leading, spacing: 12) {
+                    ModernTextField(
+                        title: "Website",
+                        text: $website,
+                        icon: "globe",
+                        placeholder: "https://yourwebsite.com",
+                        keyboardType: .URL
+                    )
+                    
+                    // Website visibility toggle
+                    if !website.isEmpty {
+                        HStack(spacing: 12) {
+                            Image(systemName: showWebsiteOnProfile ? "eye.fill" : "eye.slash.fill")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(showWebsiteOnProfile ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
+                                .frame(width: 22)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Show Website on Profile")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                
+                                Text("Display your website link on your profile header")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Toggle("", isOn: $showWebsiteOnProfile)
+                                .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.primary))
+                                .onChange(of: showWebsiteOnProfile) { _ in
+                                    hasUnsavedChanges = true
+                                    HapticManager.shared.impact(style: .light)
+                                }
+                        }
+                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(showWebsiteOnProfile ? AppTheme.Colors.primary.opacity(0.08) : AppTheme.Colors.surface)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(showWebsiteOnProfile ? AppTheme.Colors.primary.opacity(0.3) : AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
+                        )
+                        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showWebsiteOnProfile)
+                    }
+                }
             }
         }
     }
@@ -534,18 +609,28 @@ struct EditProfileView: View {
     // MARK: - Privacy Section
     private var privacySection: some View {
         VStack(spacing: 16) {
-            Text("Privacy & Visibility")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 10) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.primary)
+                
+                Text("Privacy & Visibility")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Spacer()
+            }
             
-            VStack(spacing: 12) {
+            VStack(spacing: 0) {
                 PrivacyToggleRow(
                     title: "Public Profile",
                     description: "Allow others to find and view your profile",
                     icon: "eye",
                     isOn: .constant(true)
                 )
+                
+                Divider()
+                    .padding(.leading, 56)
                 
                 PrivacyToggleRow(
                     title: "Show Online Status",
@@ -554,6 +639,9 @@ struct EditProfileView: View {
                     isOn: .constant(false)
                 )
                 
+                Divider()
+                    .padding(.leading, 56)
+                
                 PrivacyToggleRow(
                     title: "Allow Messages",
                     description: "Let other users send you direct messages",
@@ -561,6 +649,12 @@ struct EditProfileView: View {
                     isOn: .constant(true)
                 )
             }
+            .background(AppTheme.Colors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
+            )
         }
     }
     
@@ -580,6 +674,7 @@ struct EditProfileView: View {
                            bio != (user.bio ?? "") ||
                            location != (user.location ?? "") ||
                            website != (user.website ?? "") ||
+                           showWebsiteOnProfile != (user.showWebsiteOnProfile ?? false) ||
                            selectedProfileUIImage != nil ||
                            selectedBannerUIImage != nil ||
                            selectedDefaultBannerImageURL != nil ||
@@ -603,6 +698,7 @@ struct EditProfileView: View {
         bio = user.bio ?? ""
         location = user.location ?? ""
         website = user.website ?? ""
+        showWebsiteOnProfile = user.showWebsiteOnProfile ?? false
         isVideoCover = user.bannerVideoURL != nil
     }
     
@@ -692,6 +788,7 @@ struct EditProfileView: View {
                 createdAt: user.createdAt,
                 location: location.isEmpty ? nil : location,
                 website: website.isEmpty ? nil : website,
+                showWebsiteOnProfile: showWebsiteOnProfile,
                 socialLinks: user.socialLinks,
                 totalViews: user.totalViews,
                 totalEarnings: user.totalEarnings,
@@ -1021,14 +1118,19 @@ struct PrivacyToggleRow: View {
     
     var body: some View {
         HStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 20))
-                .foregroundColor(AppTheme.Colors.primary)
-                .frame(width: 24)
+            ZStack {
+                Circle()
+                    .fill(AppTheme.Colors.primary.opacity(0.1))
+                    .frame(width: 40, height: 40)
+                
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.primary)
+            }
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
                 
                 Text(description)
@@ -1043,12 +1145,6 @@ struct PrivacyToggleRow: View {
                 .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.primary))
         }
         .padding(16)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
-        )
     }
 }
 

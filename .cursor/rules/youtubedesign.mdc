@@ -1,0 +1,12 @@
+---
+alwaysApply: true
+---
+Design standards (must follow):
+- Use AppTheme colors ONLY (no random colors)
+- Spacing: 8/12/16/20/24pt (AppTheme constants)
+- Typography: System fonts with proper weights
+- Touch targets: Minimum 44pt, recommended 48pt
+- Animations: <400ms, spring or easeInOut
+- NO bright colors (pink, purple, orange)
+- NO cluttered layouts
+- Professional, sleek, modern (YouTube-level)

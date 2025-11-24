@@ -6,12 +6,6 @@
 	<string>$(AI_API_KEY)</string>
 	<key>ANTHROPIC_API_KEY</key>
 	<string>$(ANTHROPIC_API_KEY)</string>
-	<key>GOOGLE_CLOUD_API_KEY</key>
-	<string>$(GOOGLE_CLOUD_API_KEY)</string>
-	<key>GOOGLE_CLOUD_PROJECT_ID</key>
-	<string>$(GOOGLE_CLOUD_PROJECT_ID)</string>
-	<key>OPENAI_API_KEY</key>
-	<string>$(OPENAI_API_KEY)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -24,20 +18,18 @@
 			</array>
 		</dict>
 	</array>
-	<key>CFBundleVersion</key>
-	<string>2</string>
+	<key>CHANNELBOOST_BASE_URL</key>
+	<string>$(CHANNELBOOST_BASE_URL)</string>
+	<key>CHANNELBOOST_TOKEN</key>
+	<string>$(CHANNELBOOST_TOKEN)</string>
 	<key>GIDClientID</key>
 	<string>124515086975-mu4mm52mrsp5k7n760g1q57llasrte5t.apps.googleusercontent.com</string>
-	<key>TMDB_API_KEY</key>
-	<string>$(TMDB_API_KEY)</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>fetch</string>
-		<string>remote-notification</string>
-		<string>audio</string>
-	</array>
+	<key>GOOGLE_CLOUD_API_KEY</key>
+	<string>$(GOOGLE_CLOUD_API_KEY)</string>
+	<key>GOOGLE_CLOUD_PROJECT_ID</key>
+	<string>$(GOOGLE_CLOUD_PROJECT_ID)</string>
+	<key>OPENAI_API_KEY</key>
+	<string>$(OPENAI_API_KEY)</string>
 	<key>SKAdNetworkItems</key>
 	<array>
 		<dict>
@@ -53,29 +45,14 @@
 			<string>v9wttpbfk9.skadnetwork</string>
 		</dict>
 	</array>
-	<key>CHANNELBOOST_BASE_URL</key>
-	<string>$(CHANNELBOOST_BASE_URL)</string>
-	<key>CHANNELBOOST_TOKEN</key>
-	<string>$(CHANNELBOOST_TOKEN)</string>
-	
-	<!-- 📱 USAGE DESCRIPTIONS - Required by App Store -->
-	<key>NSCameraUsageDescription</key>
-	<string>MyChannel needs camera access to record videos for your channel and create amazing content</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>MyChannel needs microphone access to record audio for your videos and enable live streaming</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>MyChannel needs access to your photo library to upload videos, photos, and thumbnails</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>MyChannel needs permission to save videos and photos to your photo library</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>MyChannel uses your location to suggest nearby events and content (optional)</string>
-	<key>NSFaceIDUsageDescription</key>
-	<string>MyChannel uses Face ID to securely access your account</string>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>MyChannel respects your privacy. This helps us show you relevant content and improve your experience</string>
-	
-	<!-- 🔒 APP TRANSPORT SECURITY -->
-	<!-- 🔥 PRODUCTION: All connections use HTTPS with valid certificates -->
-	<!-- No exceptions needed - removed for App Store compliance -->
+	<key>TMDB_API_KEY</key>
+	<string>$(TMDB_API_KEY)</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+		<string>audio</string>
+		<string>processing</string>
+	</array>
 </dict>
 </plist>

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AVFoundation
 #if canImport(GoogleSignIn)
 import GoogleSignIn
 #endif
@@ -18,6 +19,7 @@ struct MyChannelApp: App {
 
     @StateObject private var authManager: AuthenticationManager = AuthenticationManager.shared
     @StateObject private var appState: AppState = AppState()
+    @StateObject private var globalPlayerManager: GlobalVideoPlayerManager = GlobalVideoPlayerManager.shared
     
     init() {
         print("🚀 MyChannelApp init started...")
@@ -25,6 +27,7 @@ struct MyChannelApp: App {
         // Configure Firebase as early as possible to avoid startup warnings
         FirebaseManager.shared.configureIfPossible()
         setupAppearance()
+        configureAudioSession()
         
         // 🔐 SECURITY: Migrate API keys from Info.plist to Keychain (App Store requirement)
         Task { @MainActor in
@@ -44,13 +47,9 @@ struct MyChannelApp: App {
             SplashContainer()
                 .environmentObject(authManager)
                 .environmentObject(appState)
+                .environmentObject(globalPlayerManager)
                 .onAppear {
                     print("📱 App appeared with MC logo splash!")
-                    
-                    // 🔥🔥🔥 NUCLEAR FIX: Reset ALL player state on app launch
-                    // This GUARANTEES mini-player never persists across sessions
-                    GlobalVideoPlayerManager.shared.nuclearReset()
-                    print("✅ NUCLEAR RESET complete on app launch")
                     
                     // 🏥 Start MyChannel Doctor 24/7 monitoring
                     MyChannelDoctorService.shared.startMonitoring()
@@ -90,10 +89,7 @@ struct MyChannelApp: App {
                     if !isAuth { appState.clearUser() }
                 }
                 .onChange(of: scenePhase) { newPhase in
-                    if newPhase == .background || newPhase == .inactive {
-                        print("🛑 [MyChannelApp] ScenePhase changed to \(newPhase) - forcing nuclear reset")
-                        GlobalVideoPlayerManager.shared.nuclearReset()
-                    }
+                    print("🎬 [MyChannelApp] ScenePhase changed to \(newPhase)")
                 }
                 .onOpenURL { url in
                     #if canImport(GoogleSignIn)
@@ -135,5 +131,16 @@ struct MyChannelApp: App {
         
         UITextField.appearance().tintColor = UIColor(AppTheme.Colors.primary)
         UITextView.appearance().tintColor = UIColor(AppTheme.Colors.primary)
+    }
+    
+    private func configureAudioSession() {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .moviePlayback, options: [.allowBluetooth, .allowAirPlay])
+            try session.setActive(true)
+            print("✅ [MyChannelApp] Audio session configured for background playback")
+        } catch {
+            print("⚠️ [MyChannelApp] Failed to configure audio session: \(error.localizedDescription)")
+        }
     }
 }

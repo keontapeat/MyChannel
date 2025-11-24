@@ -58,8 +58,9 @@ class AppState: ObservableObject {
     static let shared = AppState()
 
     public init() {
-        // 🔥 NUCLEAR FIX #2: Load autoPiPEnabled from UserDefaults (default: true)
-        self.autoPiPEnabled = UserDefaults.standard.object(forKey: "autoPiPEnabled") as? Bool ?? true
+        // 🔥 DISABLED: Native iOS PiP (use custom YouTube-style mini-player instead)
+        // Default to false to prevent native PiP from ever auto-starting
+        self.autoPiPEnabled = UserDefaults.standard.object(forKey: "autoPiPEnabled") as? Bool ?? false
         
         setupObservers()
         // Seed from AuthenticationManager at launch so UI reflects signed-in user immediately

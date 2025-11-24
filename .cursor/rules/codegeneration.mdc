@@ -1,0 +1,14 @@
+---
+alwaysApply: true
+---
+When generating code:
+1. Always use AppTheme constants (Colors, Typography, Spacing)
+2. Always implement [weak self] in async closures
+3. Always add accessibility labels
+4. Always support dark mode
+5. Always use LazyVStack for lists (10+ items)
+6. Always pre-compute expensive values
+7. Always include SwiftUI #Preview
+8. Always use @MainActor for ObservableObject
+9. Always implement proper deinit cleanup
+10. Always follow MVVM architecture

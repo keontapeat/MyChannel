@@ -430,7 +430,6 @@ struct ProfessionalVideoPlayer: View {
         Task {
             await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
         }
-        globalPlayer.shouldShowMiniPlayer = false
     }
 
     private func cleanupPlayback() {

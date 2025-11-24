@@ -102,31 +102,20 @@ struct ProfileView: View {
                 }
             } else if hasError {
                 profileErrorView
-            } else if isLoading {
-                profileLoadingView
             } else {
+                // ⚡ YOUTUBE-STYLE: Always show content immediately (no loading state)
                 profileContent
             }
         }
         .onAppear {
             loadProfileSafely()
             
-            // 🔥 FIX: Hide mini player when viewing your own profile page
-            // YouTube-style: mini player shouldn't show on profile/settings/upload pages
-            if globalPlayer.shouldShowMiniPlayer {
-                print("🎥 [ProfileView] Hiding mini player on profile page")
-                globalPlayer.shouldShowMiniPlayer = false
-                globalPlayer.isMiniplayer = false
-            }
+            // Native PiP handles visibility automatically
+            print("🎥 [ProfileView] Profile page appeared")
         }
         .onDisappear {
-            // 🔥 FIX: Restore mini player when leaving profile page (if video is still playing)
-            if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen {
-                print("🎥 [ProfileView] Restoring mini player when leaving profile page")
-                globalPlayer.shouldShowMiniPlayer = true
-                globalPlayer.isMiniplayer = true
-                globalPlayer.ensurePlayerAttached()
-            }
+            // Native PiP persists automatically
+            print("🎥 [ProfileView] Profile page disappeared")
         }
         .onChange(of: authManager.currentUser) { newUser in
             handleUserChange(newUser)
@@ -692,50 +681,53 @@ struct ProfileView: View {
     // MARK: - Helpers
 
     private func loadProfileSafely() {
-        isLoading = true
-        hasError = false
-        errorMessage = ""
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            user = currentUser
-            Task { @MainActor in
-                let creatorId = user.id
-                // ⚡ PERFORMANCE: Load only first page (24 videos) for faster initial load
-                do {
-                    let result = try await VideoFirestoreService.shared.fetchVideosByCreatorPaginated(
-                        creatorId: creatorId,
-                        limit: videosPerPage,
-                        lastDocument: nil
-                    )
-                    userVideos = result.videos
-                    lastVideoDocument = result.lastDocument
-                    hasMoreVideos = result.videos.count == videosPerPage
-                    
-                    // Check local storage as backup only if Firestore is empty
-                    if userVideos.isEmpty {
-                        if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: creatorId), !localVids.isEmpty {
-                            userVideos = Array(localVids.prefix(videosPerPage))
-                            hasMoreVideos = localVids.count > videosPerPage
-                        }
+        // ⚡ YOUTUBE-STYLE: Show content immediately, load data in background
+        // NO loading state - instant UI like YouTube
+        user = currentUser
+        
+        // Load data in background without blocking UI
+        Task { @MainActor in
+            let creatorId = user.id
+            
+            // ⚡ PERFORMANCE: Load only first page (24 videos) for faster initial load
+            do {
+                let result = try await VideoFirestoreService.shared.fetchVideosByCreatorPaginated(
+                    creatorId: creatorId,
+                    limit: videosPerPage,
+                    lastDocument: nil
+                )
+                userVideos = result.videos
+                lastVideoDocument = result.lastDocument
+                hasMoreVideos = result.videos.count == videosPerPage
+                
+                // Check local storage as backup only if Firestore is empty
+                if userVideos.isEmpty {
+                    if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: creatorId), !localVids.isEmpty {
+                        userVideos = Array(localVids.prefix(videosPerPage))
+                        hasMoreVideos = localVids.count > videosPerPage
                     }
-                } catch {
-                    print("🚨 [ProfileView] Error loading videos: \(error)")
-                    userVideos = []
-                    hasMoreVideos = false
                 }
-                
-                // 🔥 REAL-TIME STATS UPDATE
-                recalculateUserStats(propagateGlobalState: true)
-                
-                // Fetch watch history from Firestore
+            } catch {
+                print("🚨 [ProfileView] Error loading videos: \(error)")
+                userVideos = []
+                hasMoreVideos = false
+            }
+            
+            // 🔥 REAL-TIME STATS UPDATE
+            recalculateUserStats(propagateGlobalState: true)
+            
+            // Fetch watch history from Firestore in parallel
+            Task {
                 if let uid = authManager.currentUser?.id {
                     let historyVideos = await HistoryService.shared.fetch(userId: uid, limit: 20)
-                    watchHistory = historyVideos
+                    await MainActor.run {
+                        watchHistory = historyVideos
+                    }
                 } else {
-                    watchHistory = []
+                    await MainActor.run {
+                        watchHistory = []
+                    }
                 }
-                isLoading = false
-                hasError = false
             }
         }
     }

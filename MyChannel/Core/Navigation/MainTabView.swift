@@ -13,14 +13,13 @@ struct MainTabView: View {
     @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var appState: AppState
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
+    @EnvironmentObject private var globalPlayer: GlobalVideoPlayerManager
     @StateObject private var inbox = NotificationsInboxService.shared
     
     @State private var selectedTab: TabItem = .home
     @State private var previousTab: TabItem = .home
     @State private var showingUpload: Bool = false
     @State private var isInitialized: Bool = false
-    @State private var presentMiniPlayerDetail: Bool = false
     @State private var presentGlobalNowPlaying: Bool = false
     @State private var presentNotificationsInbox: Bool = false
     
@@ -48,18 +47,7 @@ struct MainTabView: View {
                 errorView
             } else {
                 mainContent
-                    .environmentObject(globalPlayer)
-                    .overlay(
-                        PlayerPiPContainerView(
-                            player: globalPlayer.player,
-                            isPictureInPictureActive: Binding(
-                                get: { globalPlayer.isPiPActive },
-                                set: { globalPlayer.isPiPActive = $0 }
-                            )
-                        )
-                        .frame(width: 0, height: 0)
-                        .allowsHitTesting(false)
-                    )
+                    // 🔥 Native iOS PiP ONLY: Custom mini player removed, using native PiP everywhere
             }
         }
         .onAppear {
@@ -92,100 +80,16 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowUpload"))) { _ in
             showingUpload = true
         }
-        .onChange(of: globalPlayer.fullscreenRequestToken) { _ in
-            // Additional safety: always honor fullscreen requests from the mini player,
-            // even if a notification is missed.
-            print("📺 [MainTabView] fullscreenRequestToken changed")
-            print("   state → showingFullscreen=\(globalPlayer.showingFullscreen), shouldShowMiniPlayer=\(globalPlayer.shouldShowMiniPlayer), currentVideo=\(String(describing: globalPlayer.currentVideo?.title))")
-            guard globalPlayer.showingFullscreen else {
-                print("📺 [MainTabView] fullscreenRequestToken change ignored because showingFullscreen == false")
-                return
-            }
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
-                presentMiniPlayerDetail = true
-                print("📺 [MainTabView] presentMiniPlayerDetail set to true via fullscreenRequestToken")
-            }
-        }
         .onReceive(NotificationCenter.default.publisher(for: .scrollToTopProfile)) { _ in
             // Handle scroll to top for profile
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PresentVideoDetailFromMiniPlayer"))) { notification in
-            print("📺 [MainTabView] Received PresentVideoDetailFromMiniPlayer notification: \(notification.userInfo ?? [:])")
-            print("   state BEFORE fullScreenCover → showingFullscreen=\(globalPlayer.showingFullscreen), shouldShowMiniPlayer=\(globalPlayer.shouldShowMiniPlayer), isMiniplayer=\(globalPlayer.isMiniplayer), isTransitioning=\(globalPlayer.isTransitioning), currentVideo=\(String(describing: globalPlayer.currentVideo?.title))")
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
-                presentMiniPlayerDetail = true
-                print("📺 [MainTabView] presentMiniPlayerDetail set to true via notification")
-            }
-        }
-        // Present video detail only when triggered by mini player event
-        .fullScreenCover(isPresented: $presentMiniPlayerDetail) {
-            if let video = globalPlayer.currentVideo {
-                ZStack {
-                    // 🔥 FIX: Black background to prevent white screen flash
-                    Color.black.ignoresSafeArea()
-                    
-                    VideoDetailView(video: video)
-                        .onAppear {
-                            print("📺 [MainTabView] VideoDetailView appeared from mini player")
-                            
-                            // 🔥 CRITICAL: Ensure fullscreen state is set IMMEDIATELY and isTransitioning is still true
-                            // This prevents mini player, PiP, and any other UI from showing
-                            globalPlayer.showingFullscreen = true
-                            globalPlayer.shouldShowMiniPlayer = false
-                            globalPlayer.isMiniplayer = false
-                            // Keep isTransitioning true until player is ready
-                            
-                            print("✅ [MainTabView] Fullscreen state set - showingFullscreen: \(globalPlayer.showingFullscreen), shouldShowMiniPlayer: \(globalPlayer.shouldShowMiniPlayer), isTransitioning: \(globalPlayer.isTransitioning)")
-                            
-                            // 🔥 FIX: Ensure player is properly set up BEFORE view appears
-                            // This prevents white screen flash
-                            if let player = globalPlayer.player {
-                                print("✅ [MainTabView] Player exists and is ready")
-                                
-                                // Ensure player is playing if it was playing before
-                                if globalPlayer.isPlaying && player.rate == 0 {
-                                    print("▶️ [MainTabView] Resuming playback")
-                                    player.play()
-                                }
-                            } else {
-                                print("⚠️ [MainTabView] Player is nil - setting up new player")
-                                // Player was lost - set it up again
-                                globalPlayer.exposedPlayerManager?.setupPlayer(with: video)
-                                
-                                // Wait for player to be ready
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                    if let player = globalPlayer.player {
-                                        if globalPlayer.isPlaying {
-                                            player.play()
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .onDisappear {
-                            print("📺 [MainTabView] VideoDetailView disappeared")
-                            
-                            // 🔥 FIX: Only restore mini player if user is actually dismissing (not going to fullscreen)
-                            if globalPlayer.currentVideo != nil && !globalPlayer.showingFullscreen {
-                                globalPlayer.showingFullscreen = false
-                                globalPlayer.shouldShowMiniPlayer = true
-                                globalPlayer.isMiniplayer = true
-                            }
-                        }
-                }
-            } else {
-                // 🔥 FIX: Fallback if video is nil (shouldn't happen, but prevent white screen)
-                Color.black.ignoresSafeArea()
-                    .overlay {
-                        ProgressView()
-                            .tint(.white)
-                    }
-                    .onAppear {
-                        print("⚠️ [MainTabView] No video available - dismissing")
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            presentMiniPlayerDetail = false
-                        }
-                    }
+        // 🔥 Native PiP: User tapped PiP window - expand to fullscreen
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PresentVideoDetail"))) { notification in
+            print("📺 [MainTabView] Received PresentVideoDetail - opening fullscreen")
+            if let video = notification.object as? Video {
+                historyVideoToOpen = video
+            } else if let video = globalPlayer.currentVideo {
+                historyVideoToOpen = video
             }
         }
         .ignoresSafeArea(.keyboard)
@@ -271,9 +175,9 @@ struct MainTabView: View {
         // Ensure mini-player pauses on Flicks, resumes otherwise (covers programmatic tab changes too)
         .onChange(of: selectedTab) { newTab in
             if newTab == .flicks {
-                GlobalVideoPlayerManager.shared.pauseForFlicksEngagement()
+                globalPlayer.pauseForFlicksEngagement()
             } else {
-                GlobalVideoPlayerManager.shared.resumeAfterLeavingFlicks()
+                globalPlayer.resumeAfterLeavingFlicks()
             }
         }
         // 🔥 AUTO PiP logging: GlobalVideoPlayerManager handles the transitions
@@ -296,7 +200,7 @@ struct MainTabView: View {
     
     @ViewBuilder
     private var mainContent: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             // Main Content
             SafeContentView(selectedTab: selectedTab)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -306,14 +210,15 @@ struct MainTabView: View {
                 .safeAreaInset(edge: .bottom) {
                     // Reserve space so scrollable content does not sit beneath the flush tab bar
                     VStack(spacing: 8) {
-                        // Hide weak mini player and audio bar when using the advanced inline player or video mini-player
-                        if !globalPlayer.shouldShowMiniPlayer && !globalPlayer.showingFullscreen {
+                        // Show audio bar when not in fullscreen (PiP doesn't affect layout)
+                        if !globalPlayer.showingFullscreen {
                             GlobalNowPlayingBar()
                         }
-                        // Always keep tab bar reserve (no extra space for PiP)
+                        // Reserve tab bar space (no mini player padding needed - native PiP floats)
                         Color.clear.frame(height: tabBarReservedBottomInset)
                     }
                 }
+            
             // 🔥 FIX: Tab bar properly positioned at bottom
             VStack {
                 Spacer()
@@ -331,7 +236,7 @@ struct MainTabView: View {
                 .padding(.bottom, 8)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .zIndex(999)  // Tab bar below mini player
+            .zIndex(1000)
             .allowsHitTesting(true)
         }
         .ignoresSafeArea(.keyboard)
@@ -353,13 +258,9 @@ struct MainTabView: View {
         guard !isInitialized else { return }
         
         do {
-            // 🔥 CRITICAL FIX: Clear all mini-player state on app launch
-            // This prevents stale mini-player from showing
-            print("🔄 [MainTabView] setupInitialState - Clearing stale mini-player state")
-            globalPlayer.shouldShowMiniPlayer = false
-            globalPlayer.isMiniplayer = false
+            // Clear fullscreen state on app launch
+            print("🔄 [MainTabView] setupInitialState - Clearing fullscreen state")
             globalPlayer.showingFullscreen = false
-            globalPlayer.isTransitioning = false
             
             // 🔥 CRITICAL FIX: If there's a video but no active player, clear the video too
             if globalPlayer.currentVideo != nil && globalPlayer.player == nil {
@@ -412,9 +313,9 @@ struct MainTabView: View {
 
             // Pause mini-player when entering Flicks; resume when leaving
             if targetTab == .flicks {
-                GlobalVideoPlayerManager.shared.pauseForFlicksEngagement()
+                globalPlayer.pauseForFlicksEngagement()
             } else {
-                GlobalVideoPlayerManager.shared.resumeAfterLeavingFlicks()
+                globalPlayer.resumeAfterLeavingFlicks()
             }
 
             // Switch tabs on the next runloop tick so the focus change doesn't eat the tap
@@ -670,16 +571,6 @@ struct SafeUploadView: View {
                     .background(AppTheme.Colors.background)
                 )
             }
-        }
-    }
-}
-
-struct SafeFloatingMiniPlayer: View {
-    var body: some View {
-        ErrorBoundary {
-            FloatingMiniPlayer()
-        } fallback: {
-            EmptyView()
         }
     }
 }

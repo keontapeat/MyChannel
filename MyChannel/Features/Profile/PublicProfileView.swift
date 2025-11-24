@@ -16,7 +16,6 @@ struct PublicProfileView: View {
     @State private var userVideos: [Video] = []
     @State private var watchHistory: [Video] = []
     @State private var scrollOffset: CGFloat = 0
-    @State private var isLoading: Bool = true
 
     init(user: User, prefetchedVideos: [Video] = []) {
         self.user = user
@@ -32,63 +31,58 @@ struct PublicProfileView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        Group {
-            if isLoading {
-                ProfileLoadingSkeleton()
-            } else {
-                ZStack(alignment: .topLeading) {
-                    VStack(spacing: 0) {
-                        // Profile Header
-                        ProfileHeaderView(
-                            user: editableUser,
-                            scrollOffset: scrollOffset,
-                            isFollowing: $isFollowing,
-                            showingEditProfile: $showingEditProfile,
-                            showingSettings: $showingSettings
-                        )
-                        
-                        // Profile Tabs - Scrollable
-                        ProfileTabNavigation(
-                            selectedTab: $selectedTab,
-                            user: editableUser,
-                            scrollOffset: scrollOffset
-                        )
-                        
-                        // Profile Content
-                        SafeProfileContentView(
-                            selectedTab: selectedTab,
-                            user: editableUser,
-                            videos: userVideos
-                        )
+        // ⚡ YOUTUBE-STYLE: Always show content immediately (no loading state)
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: 0) {
+                // Profile Header
+                ProfileHeaderView(
+                    user: editableUser,
+                    scrollOffset: scrollOffset,
+                    isFollowing: $isFollowing,
+                    showingEditProfile: $showingEditProfile,
+                    showingSettings: $showingSettings
+                )
+                
+                // Profile Tabs - Scrollable
+                ProfileTabNavigation(
+                    selectedTab: $selectedTab,
+                    user: editableUser,
+                    scrollOffset: scrollOffset
+                )
+                
+                // Profile Content
+                SafeProfileContentView(
+                    selectedTab: selectedTab,
+                    user: editableUser,
+                    videos: userVideos
+                )
+            }
+            .ignoresSafeArea(edges: .top)
+            
+            // Custom Back Button (overlaid on top)
+            VStack {
+                HStack {
+                    Button {
+                        HapticManager.shared.impact(style: .light)
+                        dismiss()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.title3.weight(.semibold))
+                            .foregroundColor(.white)
+                            .padding(12)
+                            .background(Circle().fill(.black.opacity(0.6)))
+                            .overlay(Circle().stroke(.white.opacity(0.3), lineWidth: 1))
+                            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
                     }
-                    .ignoresSafeArea(edges: .top)
+                    .padding(.leading, 16)
+                    .padding(.top, 50)
                     
-                    // Custom Back Button (overlaid on top)
-                    VStack {
-                        HStack {
-                            Button {
-                                HapticManager.shared.impact(style: .light)
-                                dismiss()
-                            } label: {
-                                Image(systemName: "chevron.left")
-                                    .font(.title3.weight(.semibold))
-                                    .foregroundColor(.white)
-                                    .padding(12)
-                                    .background(Circle().fill(.black.opacity(0.6)))
-                                    .overlay(Circle().stroke(.white.opacity(0.3), lineWidth: 1))
-                                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-                            }
-                            .padding(.leading, 16)
-                            .padding(.top, 50)
-                            
-                            Spacer()
-                        }
-                        Spacer()
-                    }
+                    Spacer()
                 }
-                .navigationBarHidden(true)
+                Spacer()
             }
         }
+        .navigationBarHidden(true)
         .sheet(isPresented: $showingEditProfile) {
             if isCurrentUserProfile {
                 EditProfileView(user: $editableUser)
@@ -105,22 +99,21 @@ struct PublicProfileView: View {
     }
 
     private func load() async {
-        await MainActor.run {
-            if !prefetchedVideos.isEmpty {
+        // ⚡ YOUTUBE-STYLE: Show prefetched videos immediately if available
+        if !prefetchedVideos.isEmpty {
+            await MainActor.run {
                 self.userVideos = prefetchedVideos
                 updateUserVideoCount(prefetchedVideos)
-                self.isLoading = false
-                return
             }
+            return
         }
         
-        // 🔥 LOAD ONLY REAL VIDEOS: Get actual videos from Firestore
+        // 🔥 LOAD ONLY REAL VIDEOS: Get actual videos from Firestore in background
         let firestoreVids = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: user.id)
         if !firestoreVids.isEmpty {
             await MainActor.run {
                 self.userVideos = firestoreVids
                 updateUserVideoCount(firestoreVids)
-                self.isLoading = false
             }
             return
         }
@@ -130,7 +123,6 @@ struct PublicProfileView: View {
             await MainActor.run {
                 self.userVideos = vids
                 updateUserVideoCount(vids)
-                self.isLoading = false
             }
             return
         }
@@ -156,13 +148,11 @@ struct PublicProfileView: View {
             await MainActor.run {
                 self.userVideos = mapped
                 updateUserVideoCount(mapped)
-                self.isLoading = false
             }
         } catch {
             await MainActor.run {
                 self.userVideos = [] // NO MOCK DATA - empty if no videos
                 updateUserVideoCount([])
-                self.isLoading = false
             }
         }
     }
@@ -187,6 +177,7 @@ struct PublicProfileView: View {
             createdAt: user.createdAt,
             location: user.location,
             website: user.website,
+            showWebsiteOnProfile: user.showWebsiteOnProfile,
             socialLinks: user.socialLinks,
             followerCount: user.followerCount,
             followingCount: user.followingCount,

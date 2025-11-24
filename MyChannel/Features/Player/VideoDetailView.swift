@@ -131,13 +131,15 @@ struct VideoDetailView: View {
         
         // Minimal top bar for YouTube embed
         HStack {
+            // 🔥 YOUTUBE PARITY: Chevron down to minimize (not close!)
             Button(action: { dismiss() }) {
                 ZStack {
                     Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                    Image(systemName: "xmark").font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
+                    Image(systemName: "chevron.down").font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
                 }
             }
             .buttonStyle(ScaleButtonStyle())
+            .accessibilityLabel("Minimize")
             
             Spacer()
             
@@ -172,7 +174,8 @@ struct VideoDetailView: View {
     private var avPlayerView: some View {
         Group {
             if let player = activePlayer {
-                VideoPlayer(player: player)
+                // 🔥 FIX: Use PiPEnabledVideoPlayer to allow manual PiP activation
+                PiPEnabledVideoPlayer(player: player)
                     .frame(maxWidth: .infinity)
                     .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
                     .background(Color.black)
@@ -337,18 +340,21 @@ struct VideoDetailView: View {
     @ViewBuilder
     private var topControlBar: some View {
         HStack {
+            // 🔥 YOUTUBE PARITY: Chevron down to minimize to PiP (not close!)
+            // This allows users to continue watching while navigating the app
             Button(action: {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    globalPlayer.closePlayer()
-                    dismiss()
-                }
+                // Register video with GlobalVideoPlayerManager for PiP
+                globalPlayer.registerLocalPlayer(video: video, player: playerManager.player)
+                globalPlayer.startPiP()
+                dismiss()
             }) {
                 ZStack {
                     Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                    Image(systemName: "xmark").font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
+                    Image(systemName: "chevron.down").font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
                 }
             }
             .buttonStyle(ScaleButtonStyle())
+            .accessibilityLabel("Minimize to Picture in Picture")
             
             Spacer()
             
@@ -435,16 +441,38 @@ struct VideoDetailView: View {
         }
         .buttonStyle(ScaleButtonStyle())
         
-        // Mini player / PiP button (always uses system PiP when available)
-        Button(action: { triggerMiniPlayerOrPiP() }) {
+        // Immersive fullscreen (YouTube-style)
+        Button(action: {
+            presentFullscreenPlayer()
+        }) {
             ZStack {
                 Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                Image(systemName: globalPlayer.isPiPActive ? "pip.exit" : "pip.enter")
+                Image(systemName: "arrow.down.left.and.arrow.up.right")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
             }
         }
         .buttonStyle(ScaleButtonStyle())
+        .accessibilityLabel("Fullscreen")
+        
+        // Minimize to native iOS PiP
+        Button(action: { 
+            print("🔘 [VideoDetailView] PiP button tapped!")
+            print("   globalPlayer.currentVideo: \(String(describing: globalPlayer.currentVideo?.title))")
+            print("   globalPlayer.isCleanedUp: \(globalPlayer.isCleanedUp)")
+            print("   globalPlayer.showingFullscreen: \(globalPlayer.showingFullscreen)")
+            // Start native iOS PiP - it will handle dismissing the view
+            globalPlayer.startPiP()
+        }) {
+            ZStack {
+                Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
+                Image(systemName: "pip.enter")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .accessibilityLabel("Minimize to Picture in Picture")
     }
     
     @ViewBuilder
@@ -669,11 +697,15 @@ struct VideoDetailView: View {
             }
             .buttonStyle(ScaleButtonStyle())
             
-            Button(action: { triggerMiniPlayerOrPiP() }) {
-                Image(systemName: globalPlayer.isPiPActive ? "pip.exit" : "pip.enter")
+            Button(action: { 
+                // Start native iOS PiP - it will handle dismissing the view
+                globalPlayer.startPiP()
+            }) {
+                Image(systemName: "pip.enter")
                     .font(.caption.weight(.semibold))
             }
             .buttonStyle(ScaleButtonStyle())
+            .accessibilityLabel("Minimize to Picture in Picture")
             
             // 🔥 YOUTUBE PARITY: Queue button
             Button(action: { 
@@ -778,6 +810,8 @@ struct VideoDetailView: View {
                         playerManager.hasError = false
                         playerManager.errorMessage = nil
                         playerManager.setupPlayer(with: video)
+                        // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP
+                        globalPlayer.registerLocalPlayer(video: video, player: playerManager.player)
                     }) {
                         Text("Retry")
                             .font(.system(size: 16, weight: .semibold))
@@ -910,8 +944,6 @@ struct VideoDetailView: View {
             ImmersiveFullscreenPlayerView(video: video) {
                 // Exit fullscreen back to inline without breaking playback
                 globalPlayer.showingFullscreen = false
-                globalPlayer.shouldShowMiniPlayer = false
-                globalPlayer.isMiniplayer = false
                 showingFullscreenOverlay = false
             }
         }
@@ -1067,6 +1099,9 @@ struct VideoDetailView: View {
                                 videoQuality = AppState.shared.preferredVideoQuality
                             }
                             playerManager.requestAutoPlay()
+                            
+                            // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP support
+                            GlobalVideoPlayerManager.shared.registerLocalPlayer(video: video, player: playerManager.player)
                             return
                         }
                         
@@ -1080,6 +1115,9 @@ struct VideoDetailView: View {
                                 videoQuality = AppState.shared.preferredVideoQuality
                             }
                             playerManager.requestAutoPlay()
+                            
+                            // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP support
+                            GlobalVideoPlayerManager.shared.registerLocalPlayer(video: video, player: playerManager.player)
                             return
                         }
                         
@@ -1115,6 +1153,9 @@ struct VideoDetailView: View {
                                     videoQuality = AppState.shared.preferredVideoQuality
                                 }
                                 playerManager.requestAutoPlay()
+                                
+                                // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP
+                                globalPlayer.registerLocalPlayer(video: video, player: playerManager.player)
                             }
                         } else {
                             print("❌ No ads available - playing video directly")
@@ -1126,6 +1167,9 @@ struct VideoDetailView: View {
                                 videoQuality = AppState.shared.preferredVideoQuality
                             }
                             playerManager.requestAutoPlay()
+                            
+                            // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP
+                            globalPlayer.registerLocalPlayer(video: video, player: playerManager.player)
                         }
                     }
                     // Log watch start to history
@@ -1173,21 +1217,32 @@ struct VideoDetailView: View {
             if !isYouTube {
                 // Only try to show mini player if we're not actively going fullscreen
                 if !globalPlayer.showingFullscreen {
-                    Task {
-                        // If the global player hasn't adopted this VideoDetailView's player yet,
-                        // wire it up now so the mini player has a video + AVPlayer to show.
-                        if globalPlayer.currentVideo == nil {
-                            print("🔄 [VideoDetailView] Adopting player manager for mini player on disappear")
+                    // 🔥 FIX: Adopt player SYNCHRONOUSLY on main thread to prevent race conditions
+                    // Start native PiP when dismissing
+                    if globalPlayer.currentVideo == nil {
+                        print("🔄 [VideoDetailView] Adopting player manager for PiP on disappear")
+                        Task { @MainActor in
+                            let wasPlaying = playerManager.isPlaying
                             await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
+                            
+                            // 🔥 NATIVE PIP: Start PiP after adoption
+                            if globalPlayer.currentVideo != nil {
+                                globalPlayer.startPiP()
+                                
+                                // Ensure playback continues
+                                if wasPlaying, let player = globalPlayer.player, player.rate == 0 {
+                                    player.play()
+                                    globalPlayer.isPlaying = true
+                                }
+                            }
                         }
-                        
-                        if globalPlayer.currentVideo != nil {
-                            globalPlayer.minimizePlayer()
-                        }
+                    } else {
+                        // Player already adopted - just start PiP
+                        globalPlayer.startPiP()
                     }
                 }
                 
-                if !(globalPlayer.isMiniplayer || globalPlayer.showingFullscreen),
+                if !globalPlayer.showingFullscreen,
                    globalPlayer.currentVideo?.id != video.id {
                     playerManager.performCleanup()
                 }
@@ -1389,39 +1444,24 @@ struct VideoDetailView: View {
 
     @MainActor
     private func minimizeToMiniPlayer() async {
-        print("🔄 [VideoDetailView] Minimizing to mini player")
-        print("📊 [VideoDetailView] Current state - shouldShow: \(globalPlayer.shouldShowMiniPlayer), isMini: \(globalPlayer.isMiniplayer), fullscreen: \(globalPlayer.showingFullscreen)")
+        print("🔄 [VideoDetailView] Minimizing to native PiP via swipe/button")
         print("📊 [VideoDetailView] Player manager exists: \(playerManager != nil)")
         print("📊 [VideoDetailView] Player exists: \(playerManager.player != nil)")
         print("📊 [VideoDetailView] Is playing: \(playerManager.isPlaying)")
         
-        // 🔥 FIX: Ensure player continues playing and mini player stays visible
-        // Set state BEFORE dismissing to prevent race conditions
         let wasPlaying = playerManager.isPlaying
+        
+        // Adopt player and start native PiP
         await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
-        enforceMiniPlayerStateIfNeeded(wasPlaying: wasPlaying, reason: "Initial minimize state")
         
-        // 🔥 CRITICAL: Ensure player is playing AFTER adoption
-        DispatchQueue.main.async {
-            self.enforceMiniPlayerStateIfNeeded(wasPlaying: wasPlaying, reason: "Immediate verification")
-        }
+        // Start native iOS PiP
+        globalPlayer.startPiP()
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            self.enforceMiniPlayerStateIfNeeded(wasPlaying: wasPlaying, reason: "0.1s verification")
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            guard !self.globalPlayer.showingFullscreen else {
-                print("⛔️ [VideoDetailView] Skipping mini player restore (0.5s) because fullscreen requested")
-                return
-            }
-            
-            if !self.globalPlayer.shouldShowMiniPlayer || !self.globalPlayer.isMiniplayer {
-                print("⚠️ [VideoDetailView] Mini player state LOST - RESTORING")
-                self.enforceMiniPlayerStateIfNeeded(wasPlaying: wasPlaying, reason: "0.5s restore")
-            } else {
-                self.resumeMiniPlayerPlaybackIfNeeded(wasPlaying: wasPlaying, reason: "0.5s playback check")
-            }
+        // Ensure playback continues
+        if wasPlaying, let player = globalPlayer.player, player.rate == 0 {
+            print("▶️ [VideoDetailView] Resuming playback after PiP")
+            player.play()
+            globalPlayer.isPlaying = true
         }
         
         // Dismiss the view
@@ -1443,17 +1483,16 @@ struct VideoDetailView: View {
     @MainActor
     private func enforceMiniPlayerStateIfNeeded(wasPlaying: Bool, reason: String) {
         if globalPlayer.showingFullscreen {
-            print("⛔️ [VideoDetailView] Skipping mini player enforcement (\(reason)) because fullscreen requested")
+            print("⛔️ [VideoDetailView] Skipping PiP enforcement (\(reason)) because fullscreen requested")
             return
         }
         
-        // 🔥 FIX: Call globalPlayer.minimizePlayer() instead of directly setting state
-        // This ensures the mini-player state is properly synchronized
-        print("🔄 [VideoDetailView] Enforcing mini player state via globalPlayer.minimizePlayer() (\(reason))")
-        globalPlayer.minimizePlayer()
+        // Start native PiP
+        print("🔄 [VideoDetailView] Starting native PiP (\(reason))")
+        globalPlayer.startPiP()
         
         resumeMiniPlayerPlaybackIfNeeded(wasPlaying: wasPlaying, reason: reason)
-        print("✅ [VideoDetailView] Mini player state confirmed (\(reason))")
+        print("✅ [VideoDetailView] Native PiP started (\(reason))")
     }
     
     @MainActor
@@ -1477,19 +1516,6 @@ struct VideoDetailView: View {
         }
     }
 
-    private func triggerMiniPlayerOrPiP() {
-        print("🔽 [VideoDetailView] Mini-player / PiP button tapped")
-        
-        if globalPlayer.togglePictureInPicture() {
-            print("✅ [VideoDetailView] Toggled native PiP")
-            return
-        }
-        
-        Task {
-            await minimizeToMiniPlayer()
-            print("✅ [VideoDetailView] Minimized to custom mini player fallback")
-        }
-    }
     
     private func formatTime(_ timeInterval: TimeInterval) -> String {
         let totalSeconds = Int(timeInterval)

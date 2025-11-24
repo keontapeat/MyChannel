@@ -1,0 +1,10 @@
+---
+alwaysApply: true
+---
+Firebase integration:
+- Always use #if canImport(FirebaseFirestore)
+- Always use FieldValue.serverTimestamp()
+- Always use batch operations for multiple writes
+- Always implement real-time listeners
+- Collections: lowercase-with-hyphens
+- Document IDs: UUID strings

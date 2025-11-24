@@ -347,7 +347,11 @@ final class OwnerVerificationDashboardViewModel: ObservableObject {
         }
         
         eligibleUsers = eligible.sorted { $0.progress.percentComplete > $1.progress.percentComplete }
-        verifiedUsers = verified.sorted { ($0.verificationBadge?.awardedAt ?? Date.distantPast) > ($1.verificationBadge?.awardedAt ?? Date.distantPast) }
+        verifiedUsers = verified.sorted { (user1, user2) -> Bool in
+            let date1 = user1.verificationBadge?.awardedAt ?? Date.distantPast
+            let date2 = user2.verificationBadge?.awardedAt ?? Date.distantPast
+            return date1 > date2
+        }
     }
     
     func grantBadge(for user: User) async {

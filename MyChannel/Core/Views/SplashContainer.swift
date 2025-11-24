@@ -66,9 +66,6 @@ struct SplashContainer: View {
             }
         }
         .ignoresSafeArea(.keyboard)
-        .overlay(alignment: .bottomTrailing) {
-            GlobalMiniPlayerOverlay()
-        }
         .onAppear {
             if isRunningInPreviews {
                 disablePreviewURLProtocolStubIfAny()
