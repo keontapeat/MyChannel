@@ -10,13 +10,15 @@ import AVKit
 
 /// Global reference to the current PiP-enabled player view controller
 /// This allows GlobalVideoPlayerManager to trigger PiP
-class PiPPlayerManager {
+class PiPPlayerManager: NSObject, AVPictureInPictureControllerDelegate {
     static let shared = PiPPlayerManager()
     weak var currentPlayerViewController: AVPlayerViewController?
     var pipController: AVPictureInPictureController?
     private var pipPossibleObservation: NSKeyValueObservation?
     
-    private init() {}
+    private override init() {
+        super.init()
+    }
     
     func setupPiP(for playerViewController: AVPlayerViewController, player: AVPlayer) {
         currentPlayerViewController = playerViewController
@@ -38,13 +40,14 @@ class PiPPlayerManager {
         // Create PiP controller
         if let controller = try? AVPictureInPictureController(playerLayer: playerLayer) {
             pipController = controller
+            controller.delegate = self  // 🔥 FIX: Set delegate for restore handling
             
             // Observe when PiP becomes possible
             pipPossibleObservation = controller.observe(\.isPictureInPicturePossible, options: [.new, .initial]) { [weak self] controller, _ in
                 print("🔔 [PiPPlayerManager] isPictureInPicturePossible: \(controller.isPictureInPicturePossible)")
             }
             
-            print("✅ [PiPPlayerManager] PiP controller created")
+            print("✅ [PiPPlayerManager] PiP controller created with delegate")
         } else {
             print("❌ [PiPPlayerManager] Failed to create PiP controller")
         }
@@ -81,6 +84,39 @@ class PiPPlayerManager {
         pipPossibleObservation = nil
         pipController = nil
         currentPlayerViewController = nil
+    }
+    
+    // MARK: - AVPictureInPictureControllerDelegate
+    
+    func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+        print("🎬 [PiPPlayerManager] PiP did START")
+    }
+    
+    func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+        print("🛑 [PiPPlayerManager] PiP did STOP")
+    }
+    
+    func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
+        print("❌ [PiPPlayerManager] PiP failed to start: \(error.localizedDescription)")
+    }
+    
+    func pictureInPictureController(
+        _ pictureInPictureController: AVPictureInPictureController,
+        restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
+    ) {
+        print("🔄 [PiPPlayerManager] Restore UI requested - user tapped PiP window!")
+        
+        // 🔥 YOUTUBE PARITY: Notify GlobalVideoPlayerManager to expand to fullscreen
+        NotificationCenter.default.post(
+            name: NSNotification.Name("ExpandFromNativePiP"),
+            object: nil
+        )
+        
+        // Wait briefly for UI to prepare, then complete
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            completionHandler(true)
+            print("✅ [PiPPlayerManager] UI restored - VideoDetailView should appear")
+        }
     }
 }
 
