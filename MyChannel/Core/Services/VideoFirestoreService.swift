@@ -98,6 +98,98 @@ final class VideoFirestoreService: ObservableObject {
         #endif
     }
     
+    // MARK: - 📝 Update Video Metadata (Only changed fields)
+    func updateVideoMetadata(
+        videoId: String,
+        title: String? = nil,
+        description: String? = nil,
+        category: VideoCategory? = nil,
+        tags: [String]? = nil
+    ) async throws {
+        #if canImport(FirebaseFirestore)
+        var updateData: [String: Any] = [
+            "updatedAt": FieldValue.serverTimestamp()
+        ]
+        
+        // Only update fields that are provided (not nil)
+        if let title = title {
+            updateData["title"] = title
+        }
+        if let description = description {
+            updateData["description"] = description
+        }
+        if let category = category {
+            updateData["category"] = category.rawValue
+        }
+        if let tags = tags {
+            updateData["tags"] = tags
+        }
+        
+        let ref = db.collection("videos").document(videoId)
+        try await ref.updateData(updateData)
+        print("📝 [VideoFirestoreService] Updated video metadata for: \(videoId)")
+        #endif
+    }
+    
+    // MARK: - 💰 Update Monetization Settings (YouTube-style ads)
+    func updateMonetization(videoId: String, monetization: Video.MonetizationSettings) async throws {
+        #if canImport(FirebaseFirestore)
+        var monetizationData: [String: Any] = [
+            "isMonetized": monetization.isMonetized,
+            "donationEnabled": monetization.donationEnabled,
+            "totalRevenue": monetization.totalRevenue
+        ]
+        
+        // Add ad breaks if present
+        if let adBreaks = monetization.adBreaks {
+            monetizationData["adBreaks"] = [
+                "preRoll": adBreaks.preRoll,
+                "midRoll": adBreaks.midRoll,
+                "postRoll": adBreaks.postRoll,
+                "midRollInterval": adBreaks.midRollInterval ?? 480
+            ]
+        }
+        
+        // Add sponsor segments if present
+        if let sponsorSegments = monetization.sponsorSegments {
+            monetizationData["sponsorSegments"] = sponsorSegments.map { segment in
+                [
+                    "startTime": segment.startTime,
+                    "endTime": segment.endTime,
+                    "sponsor": segment.sponsor,
+                    "category": segment.category.rawValue
+                ]
+            }
+        }
+        
+        // Add merchandise if present
+        if let merchandise = monetization.merchandise {
+            monetizationData["merchandise"] = merchandise.map { item in
+                [
+                    "name": item.name,
+                    "description": item.description,
+                    "price": item.price,
+                    "currency": item.currency,
+                    "imageURL": item.imageURL,
+                    "purchaseURL": item.purchaseURL
+                ]
+            }
+        }
+        
+        // Add subscription tier if present
+        if let subscriptionTier = monetization.subscriptionTier {
+            monetizationData["subscriptionTier"] = subscriptionTier.rawValue
+        }
+        
+        let ref = db.collection("videos").document(videoId)
+        try await ref.updateData([
+            "monetization": monetizationData,
+            "updatedAt": FieldValue.serverTimestamp()
+        ])
+        print("💰 [VideoFirestoreService] Updated monetization for video: \(videoId), isMonetized: \(monetization.isMonetized)")
+        #endif
+    }
+    
     // 🔥 THERMONUCLEAR: Batch operations for 10x faster writes
     func saveMultipleVideos(_ videos: [Video]) async throws {
         #if canImport(FirebaseFirestore)

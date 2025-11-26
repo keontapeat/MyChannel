@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct VMAPResponse: Codable {
     let prerollUrl: String?
@@ -48,14 +51,21 @@ struct ServedAd: Codable {
 // MARK: - Enhanced AdsService for Real Monetization
 extension AdsService {
     static func requestPreRoll(for video: Video, personalized: Bool = true) async -> ServedAd? {
-        // 🔥 MONETIZATION CHECK: Show ads by default unless explicitly disabled
+        // 🔥 MONETIZATION CHECK: Show ads only if monetization is enabled
         let shouldShowAds = video.monetization?.isMonetized ?? true // Default to true if no monetization settings
         guard shouldShowAds else {
             print("🚫 Video \(video.id ?? "unknown") has monetization disabled - no ads will be served")
             return nil
         }
         
-        print("✅ Serving ads for video \(video.id ?? "unknown") - monetized: \(video.monetization?.isMonetized ?? true)")
+        // 💰 Check if pre-roll ads are enabled (default to true if not set)
+        let preRollEnabled = video.monetization?.adBreaks?.preRoll ?? true
+        guard preRollEnabled else {
+            print("⏭️ [Ads] Pre-roll ads disabled for video \(video.id ?? "unknown")")
+            return nil
+        }
+        
+        print("✅ Serving ads for video \(video.id ?? "unknown") - monetized: \(video.monetization?.isMonetized ?? true), preRoll: \(preRollEnabled)")
         
         // 🔥 CHECK FREQUENCY CAP: Don't show too many ads to same user
         if await isFrequencyCapped(userId: video.creator.id, videoId: video.id) {
@@ -245,26 +255,121 @@ extension AdsService {
         return ("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4", "https://mychannel.app", 30)
     }
     
-    // 🔥 NEW: Revenue tracking for creators
+    // 🔥 REAL REVENUE TRACKING: Track ad revenue to Firebase for creator payouts
     static func trackAdRevenue(for video: Video, adRevenue: Double) async {
         guard let monetization = video.monetization, monetization.isMonetized else { return }
+        let videoId = video.id
+        guard !videoId.isEmpty else { return }
         
-        // Update video's total revenue
-        let updatedMonetization = Video.MonetizationSettings(
-            isMonetized: monetization.isMonetized,
-            adBreaks: monetization.adBreaks,
-            sponsorSegments: monetization.sponsorSegments,
-            merchandise: monetization.merchandise,
-            donationEnabled: monetization.donationEnabled,
-            subscriptionTier: monetization.subscriptionTier,
-            totalRevenue: monetization.totalRevenue + adRevenue
-        )
+        let creatorId = video.creator.id
         
-        // Save updated monetization data (would typically go to backend)
-        print("💰 Ad revenue tracked: $\(adRevenue) for video \(video.id)")
+        print("💰 [AdsService] Tracking ad revenue: $\(String(format: "%.4f", adRevenue)) for video \(videoId)")
         
-        // Notify analytics service
-        await AdvancedAnalyticsService.shared.trackRevenue(videoId: video.id, amount: adRevenue, source: "ads")
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        
+        do {
+            // 1. Create ad revenue transaction record
+            let transactionData: [String: Any] = [
+                "videoId": videoId,
+                "creatorId": creatorId,
+                "amount": adRevenue,
+                "type": "ad_revenue",
+                "status": "completed",
+                "createdAt": FieldValue.serverTimestamp(),
+                "adType": "pre_roll",
+                "cpm": adRevenue * 1000,  // Convert to CPM for analytics
+                "impressionId": UUID().uuidString
+            ]
+            
+            try await db.collection("ad_revenue_transactions")
+                .document(UUID().uuidString)
+                .setData(transactionData)
+            
+            // 2. Update video's total ad revenue
+            try await db.collection("videos")
+                .document(videoId)
+                .updateData([
+                    "monetization.totalRevenue": FieldValue.increment(adRevenue),
+                    "monetization.adImpressions": FieldValue.increment(Int64(1)),
+                    "monetization.lastAdRevenueAt": FieldValue.serverTimestamp()
+                ])
+            
+            // 3. Update creator's pending earnings
+            try await db.collection("creator_earnings")
+                .document(creatorId)
+                .setData([
+                    "pendingBalance": FieldValue.increment(adRevenue),
+                    "totalEarnings": FieldValue.increment(adRevenue),
+                    "adRevenue": FieldValue.increment(adRevenue),
+                    "lastEarningAt": FieldValue.serverTimestamp(),
+                    "updatedAt": FieldValue.serverTimestamp()
+                ], merge: true)
+            
+            print("✅ [AdsService] Revenue tracked to Firebase: $\(String(format: "%.4f", adRevenue))")
+            
+        } catch {
+            print("❌ [AdsService] Failed to track revenue: \(error)")
+        }
+        #endif
+        
+        // Also track in local analytics
+        await AdvancedAnalyticsService.shared.trackRevenue(videoId: videoId, amount: adRevenue, source: "ads")
+    }
+    
+    // 🔥 GET CREATOR EARNINGS
+    static func getCreatorEarnings(creatorId: String) async -> (pending: Double, total: Double, adRevenue: Double)? {
+        #if canImport(FirebaseFirestore)
+        do {
+            let doc = try await Firestore.firestore()
+                .collection("creator_earnings")
+                .document(creatorId)
+                .getDocument()
+            
+            guard let data = doc.data() else { return nil }
+            
+            let pending = data["pendingBalance"] as? Double ?? 0
+            let total = data["totalEarnings"] as? Double ?? 0
+            let adRevenueTotal = data["adRevenue"] as? Double ?? 0
+            
+            return (pending, total, adRevenueTotal)
+        } catch {
+            print("❌ [AdsService] Failed to get earnings: \(error)")
+            return nil
+        }
+        #else
+        return nil
+        #endif
+    }
+    
+    // 🔥 REQUEST PAYOUT (when creator wants to cash out)
+    static func requestPayout(creatorId: String, amount: Double) async throws {
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        
+        // Create payout request
+        let payoutData: [String: Any] = [
+            "creatorId": creatorId,
+            "amount": amount,
+            "status": "pending",
+            "requestedAt": FieldValue.serverTimestamp(),
+            "type": "ad_revenue_payout"
+        ]
+        
+        try await db.collection("payout_requests")
+            .document(UUID().uuidString)
+            .setData(payoutData)
+        
+        // Deduct from pending balance
+        try await db.collection("creator_earnings")
+            .document(creatorId)
+            .updateData([
+                "pendingBalance": FieldValue.increment(-amount),
+                "pendingPayout": FieldValue.increment(amount)
+            ])
+        
+        print("✅ [AdsService] Payout requested: $\(String(format: "%.2f", amount))")
+        #endif
     }
     
     // MARK: - 🎯 FREQUENCY CAPPING
@@ -314,13 +419,21 @@ extension AdsService {
     static func requestMidRoll(for video: Video, at timestamp: TimeInterval, personalized: Bool = true) async -> ServedAd? {
         guard video.monetization?.isMonetized ?? true else { return nil }
         
-        // Check if mid-roll is configured
-        guard let adBreaks = video.monetization?.adBreaks,
-              adBreaks.contains(where: { abs($0.timeStamp - timestamp) < 5.0 }) else {
+        // 💰 Check if mid-roll ads are enabled using the new boolean structure
+        guard video.monetization?.adBreaks?.midRoll == true else {
+            print("⏭️ [Ads] Mid-roll ads disabled for this video")
             return nil
         }
         
-        print("🎬 [Ads] Requesting mid-roll at \(timestamp)s")
+        // Check mid-roll interval (default 8 minutes = 480 seconds)
+        let midRollInterval = TimeInterval(video.monetization?.adBreaks?.midRollInterval ?? 480)
+        
+        // Only show mid-roll at appropriate intervals
+        guard timestamp >= midRollInterval && Int(timestamp) % Int(midRollInterval) < 5 else {
+            return nil
+        }
+        
+        print("🎬 [Ads] Requesting mid-roll at \(timestamp)s (interval: \(midRollInterval)s)")
         
         // Use same logic as pre-roll but with mid-roll tracking
         if var ad = await requestPreRoll(for: video, personalized: personalized) {
@@ -335,6 +448,12 @@ extension AdsService {
     
     static func requestPostRoll(for video: Video, personalized: Bool = true) async -> ServedAd? {
         guard video.monetization?.isMonetized ?? true else { return nil }
+        
+        // 💰 Check if post-roll ads are enabled using the new boolean structure
+        guard video.monetization?.adBreaks?.postRoll == true else {
+            print("⏭️ [Ads] Post-roll ads disabled for this video")
+            return nil
+        }
         
         print("🏁 [Ads] Requesting post-roll")
         

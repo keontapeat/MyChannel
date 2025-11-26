@@ -205,7 +205,7 @@ final class StripeConnectService: ObservableObject {
             matchId: matchId,
             winnerId: winnerId,
             loserId: loserId,
-            amount: winnerAmount
+            totalPot: winnerAmount
         )
         
         print("🏆 [Stripe] Released $\(winnerAmount) to winner \(winnerId)")

@@ -513,11 +513,32 @@ struct Video: Identifiable, Codable, Hashable {
         }
     }
     
+    // MARK: - 💰 Ad Placement Settings (YouTube-style)
+    struct AdBreaks: Codable {
+        let preRoll: Bool
+        let midRoll: Bool
+        let postRoll: Bool
+        let midRollInterval: Int?  // Seconds between mid-roll ads (e.g., 480 = 8 minutes)
+        
+        init(
+            preRoll: Bool = true,
+            midRoll: Bool = true,
+            postRoll: Bool = false,
+            midRollInterval: Int? = 480
+        ) {
+            self.preRoll = preRoll
+            self.midRoll = midRoll
+            self.postRoll = postRoll
+            self.midRollInterval = midRollInterval
+        }
+    }
+    
     // MARK: - Monetization Settings
     struct MonetizationSettings: Codable {
         let isMonetized: Bool
-        let adBreaks: [AdBreak]
-        let sponsorSegments: [SponsorSegment]
+        let adBreaks: AdBreaks?       // 💰 NEW: Simple boolean flags for YouTube-style ads
+        let adBreakTimestamps: [AdBreak]?  // Original time-based ad breaks (for advanced control)
+        let sponsorSegments: [SponsorSegment]?
         let merchandise: [MerchandiseItem]?
         let donationEnabled: Bool
         let subscriptionTier: SubscriptionTier?
@@ -525,8 +546,9 @@ struct Video: Identifiable, Codable, Hashable {
         
         init(
             isMonetized: Bool = false,
-            adBreaks: [AdBreak] = [],
-            sponsorSegments: [SponsorSegment] = [],
+            adBreaks: AdBreaks? = nil,
+            adBreakTimestamps: [AdBreak]? = nil,
+            sponsorSegments: [SponsorSegment]? = nil,
             merchandise: [MerchandiseItem]? = nil,
             donationEnabled: Bool = false,
             subscriptionTier: SubscriptionTier? = nil,
@@ -534,6 +556,7 @@ struct Video: Identifiable, Codable, Hashable {
         ) {
             self.isMonetized = isMonetized
             self.adBreaks = adBreaks
+            self.adBreakTimestamps = adBreakTimestamps
             self.sponsorSegments = sponsorSegments
             self.merchandise = merchandise
             self.donationEnabled = donationEnabled

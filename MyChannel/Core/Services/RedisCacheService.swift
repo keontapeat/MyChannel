@@ -185,25 +185,172 @@ class RedisCacheService {
         return await get("search:\(normalizedQuery)", type: [Video].self)
     }
     
-    // MARK: - 🔧 REDIS OPERATIONS (Simulated - Connect to Google Memorystore)
+    // MARK: - 🔧 REDIS OPERATIONS (via Backend API)
+    // iOS can't connect directly to Redis for security - uses Cloud Run proxy
+    
+    /// Redis backend endpoint (Cloud Run service connected to Google Memorystore)
+    private let redisBackendURL = "https://us-central1-mychannel-ca26d.cloudfunctions.net/redis-cache"
     
     private func getFromRedis<T: Codable>(_ key: String) async -> T? {
-        // TODO: Connect to Google Memorystore Redis
-        // For now, return nil (cache miss)
-        return nil
+        let url = URL(string: "\(redisBackendURL)/get?key=\(key.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? key)")!
+        
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.timeoutInterval = 2 // 2 second timeout for cache
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200,
+                  !data.isEmpty else {
+                return nil
+            }
+            
+            // Check if data is "null" response
+            if let responseString = String(data: data, encoding: .utf8),
+               responseString == "null" || responseString.isEmpty {
+                return nil
+            }
+            
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            // Cache errors should be silent - just return nil
+            print("⚠️ [Redis L2] Get failed: \(error.localizedDescription)")
+            return nil
+        }
     }
     
     private func setInRedis<T: Codable>(_ key: String, value: T, ttl: TimeInterval) async {
-        // TODO: Connect to Google Memorystore Redis
-        // For now, do nothing
+        guard let url = URL(string: "\(redisBackendURL)/set") else { return }
+        
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 2
+            
+            let valueData = try JSONEncoder().encode(value)
+            let valueString = String(data: valueData, encoding: .utf8) ?? ""
+            
+            let body: [String: Any] = [
+                "key": key,
+                "value": valueString,
+                "ttl": Int(ttl)
+            ]
+            
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            
+            let (_, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode) else {
+                return
+            }
+        } catch {
+            // Cache errors should be silent
+            print("⚠️ [Redis L2] Set failed: \(error.localizedDescription)")
+        }
     }
     
     private func deleteFromRedis(_ key: String) async {
-        // TODO: Connect to Google Memorystore Redis
+        guard let url = URL(string: "\(redisBackendURL)/delete") else { return }
+        
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 2
+            
+            let body = ["key": key]
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            
+            _ = try? await URLSession.shared.data(for: request)
+        } catch {
+            print("⚠️ [Redis L2] Delete failed: \(error.localizedDescription)")
+        }
     }
     
     private func clearRedis() async {
-        // TODO: Connect to Google Memorystore Redis
+        guard let url = URL(string: "\(redisBackendURL)/flush") else { return }
+        
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 5
+            
+            _ = try? await URLSession.shared.data(for: request)
+        } catch {
+            print("⚠️ [Redis L2] Flush failed: \(error.localizedDescription)")
+        }
+    }
+    
+    // MARK: - 🚀 BATCH OPERATIONS (Optimized)
+    
+    /// Get multiple values in a single request (MGET)
+    func getBatch<T: Codable>(_ keys: [String], type: T.Type) async -> [String: T] {
+        guard let url = URL(string: "\(redisBackendURL)/mget") else { return [:] }
+        
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 3
+            
+            request.httpBody = try JSONSerialization.data(withJSONObject: ["keys": keys])
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                return [:]
+            }
+            
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: String] ?? [:]
+            var result: [String: T] = [:]
+            
+            for (key, valueString) in json {
+                if let valueData = valueString.data(using: .utf8),
+                   let value = try? JSONDecoder().decode(T.self, from: valueData) {
+                    result[key] = value
+                }
+            }
+            
+            return result
+        } catch {
+            print("⚠️ [Redis L2] Batch get failed: \(error.localizedDescription)")
+            return [:]
+        }
+    }
+    
+    /// Set multiple values in a single request (MSET)
+    func setBatch<T: Codable>(_ items: [String: T], ttl: TimeInterval = 300) async {
+        guard let url = URL(string: "\(redisBackendURL)/mset") else { return }
+        
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 3
+            
+            var serializedItems: [String: String] = [:]
+            for (key, value) in items {
+                if let data = try? JSONEncoder().encode(value),
+                   let string = String(data: data, encoding: .utf8) {
+                    serializedItems[key] = string
+                }
+            }
+            
+            let body: [String: Any] = [
+                "items": serializedItems,
+                "ttl": Int(ttl)
+            ]
+            
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            _ = try? await URLSession.shared.data(for: request)
+        } catch {
+            print("⚠️ [Redis L2] Batch set failed: \(error.localizedDescription)")
+        }
     }
     
     // MARK: - 🧹 CACHE EVICTION
