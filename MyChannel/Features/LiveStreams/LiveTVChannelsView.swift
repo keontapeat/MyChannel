@@ -224,57 +224,9 @@ struct LiveTVChannelsView: View {
         print("📺 Playing channel: \(channel.name)")
         print("   Stream URL: \(channel.streamURL)")
         
-        // Haptic feedback
-        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-        impactFeedback.impactOccurred()
-        
-        // Create video object from channel
-        let video = Video(
-            title: channel.name,
-            description: channel.description,
-            thumbnailURL: channel.logoURL,
-            videoURL: channel.streamURL,
-            duration: 0,
-            viewCount: channel.viewerCount,
-            likeCount: 0,
-            creator: User.defaultUser,
-            category: mapCategory(channel.category),
-            tags: [channel.category.rawValue],
-            isPublic: true,
-            quality: [.quality720p, .quality1080p],
-            aspectRatio: .landscape,
-            isLiveStream: true,
-            contentSource: nil,
-            contentRating: nil,
-            language: channel.language,
-            isVerified: true
-        )
-        
-        // Use GlobalVideoPlayerManager to play
-        GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: true)
-        
-        // Post notification to present fullscreen player
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            NotificationCenter.default.post(
-                name: NSNotification.Name("PresentVideoDetailFromMiniPlayer"),
-                object: nil
-            )
-        }
-    }
-
-    private func mapCategory(_ c: LiveTVChannel.ChannelCategory) -> VideoCategory {
-        switch c {
-        case .news: return .news
-        case .sports: return .sports
-        case .entertainment: return .entertainment
-        case .movies: return .movies
-        case .music: return .music
-        case .kids: return .kids
-        case .documentary: return .documentaries
-        case .lifestyle: return .lifestyle
-        case .business: return .news
-        case .international: return .news
-        }
+        // Set selected channel and show fullscreen player
+        selectedChannel = channel
+        showingPlayer = true
     }
 }
 
@@ -282,9 +234,6 @@ struct LiveTVChannelsView: View {
 private struct MinimalGridChannelCard: View {
     let channel: LiveTVChannel
     let action: () -> Void
-
-    @State private var showPreview = false
-    @State private var isPressed = false
 
     var body: some View {
         Button(action: {
@@ -294,70 +243,31 @@ private struct MinimalGridChannelCard: View {
         }) {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
-                    if showPreview {
-                        LiveChannelThumbnailView(
-                            streamURL: channel.streamURL, 
-                            posterURL: channel.logoURL, 
-                            fallbackStreamURL: channel.previewFallbackURL
-                        )
-                        .aspectRatio(16/9, contentMode: .fill)
-                        .frame(maxWidth: .infinity)
-                        .background(Color(.systemGray6))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    } else {
-                        // Show channel logo as fallback
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            channel.category.color.opacity(0.2),
-                                            channel.category.color.opacity(0.1)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                            
-                            AsyncImage(url: URL(string: channel.logoURL)) { image in
-                                image.resizable().scaledToFit()
-                                    .padding(12)
-                            } placeholder: { 
-                                VStack(spacing: 4) {
-                                    Image(systemName: "tv.fill")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(channel.category.color)
-                                    Text(String(channel.name.prefix(3)).uppercased())
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(channel.category.color)
-                                }
-                            }
-                        }
+                    // Professional thumbnail with logo
+                    channelThumbnail
                         .aspectRatio(16/9, contentMode: .fit)
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
                     
                     // Play button overlay
                     Circle()
-                        .fill(.white.opacity(0.9))
-                        .frame(width: 36, height: 36)
+                        .fill(.white.opacity(0.95))
+                        .frame(width: 40, height: 40)
                         .overlay(
                             Image(systemName: "play.fill")
-                                .font(.system(size: 14))
+                                .font(.system(size: 16))
                                 .foregroundColor(.black)
                         )
-                        .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
-                        .opacity(isPressed ? 1.0 : 0.8)
+                        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
 
                     // LIVE badge
                     if channel.isLive {
                         HStack(spacing: 4) {
-                            Circle().fill(.white).frame(width: 4, height: 4)
+                            Circle().fill(.white).frame(width: 5, height: 5)
                             Text("LIVE").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
                         }
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Capsule().fill(Color.red.opacity(0.9)))
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(Capsule().fill(Color.red))
                         .padding(8)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     }
@@ -367,39 +277,96 @@ private struct MinimalGridChannelCard: View {
                         .font(.system(size: 9, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.black.opacity(0.7)))
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.black.opacity(0.75)))
                         .padding(8)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 }
-                .onAppear { showPreview = true }
-                .onDisappear { showPreview = false }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(channel.name)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.primary)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
                         .lineLimit(1)
 
                     HStack(spacing: 4) {
                         Image(systemName: "eye.fill")
                             .font(.system(size: 9))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
                         Text("\(formatViewerCount(channel.viewerCount)) viewers")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 11))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .buttonStyle(PlainButtonStyle())
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
-        .onPressGesture(
-            onPress: { isPressed = true },
-            onRelease: { isPressed = false }
-        )
+        .buttonStyle(PressableScaleStyle(scale: 0.96))
+    }
+    
+    // Professional channel thumbnail
+    private var channelThumbnail: some View {
+        ZStack {
+            // Gradient background based on category
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            categoryBackgroundColor.opacity(0.15),
+                            categoryBackgroundColor.opacity(0.05)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            
+            // Subtle pattern overlay
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppTheme.Colors.surface.opacity(0.5))
+            
+            // Channel logo or icon
+            VStack(spacing: 6) {
+                Image(systemName: categoryIcon)
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundColor(categoryBackgroundColor.opacity(0.8))
+                
+                Text(channel.name)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .lineLimit(1)
+                    .padding(.horizontal, 8)
+            }
+        }
+    }
+    
+    private var categoryBackgroundColor: Color {
+        switch channel.category {
+        case .news: return .red
+        case .sports: return .green
+        case .entertainment: return .purple
+        case .movies: return .blue
+        case .music: return .orange
+        case .kids: return .yellow
+        case .documentary: return .teal
+        case .lifestyle: return .mint
+        case .business: return .gray
+        case .international: return .cyan
+        }
+    }
+    
+    private var categoryIcon: String {
+        switch channel.category {
+        case .news: return "newspaper.fill"
+        case .sports: return "sportscourt.fill"
+        case .entertainment: return "tv.fill"
+        case .movies: return "film.fill"
+        case .music: return "music.note.tv.fill"
+        case .kids: return "figure.2.and.child.holdinghands"
+        case .documentary: return "globe.americas.fill"
+        case .lifestyle: return "house.fill"
+        case .business: return "chart.line.uptrend.xyaxis"
+        case .international: return "globe"
+        }
     }
 
     private func formatViewerCount(_ count: Int) -> String {
@@ -418,8 +385,6 @@ private struct MinimalListChannelCard: View {
     let channel: LiveTVChannel
     let action: () -> Void
 
-    @State private var showPreview = false
-    @State private var isPressed = false
     private let thumbSize = CGSize(width: 160, height: 90)
     private let rowHeight: CGFloat = 114
 
@@ -430,53 +395,21 @@ private struct MinimalListChannelCard: View {
             action()
         }) {
             HStack(spacing: 12) {
+                // Thumbnail
                 ZStack {
-                    LiveChannelThumbnailView(
-                        streamURL: channel.streamURL, 
-                        posterURL: channel.logoURL, 
-                        fallbackStreamURL: channel.previewFallbackURL
-                    )
-                    .opacity(showPreview ? 1 : 0)
-
-                    // Fallback logo
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        channel.category.color.opacity(0.2),
-                                        channel.category.color.opacity(0.1)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                        
-                        AsyncImage(url: URL(string: channel.logoURL)) { image in
-                            image.resizable().scaledToFit()
-                                .padding(12)
-                        } placeholder: { 
-                            VStack(spacing: 4) {
-                                Image(systemName: "tv.fill")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(channel.category.color)
-                                Text(String(channel.name.prefix(3)).uppercased())
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(channel.category.color)
-                            }
-                        }
-                    }
-                    .opacity(showPreview ? 0 : 1)
+                    // Professional thumbnail
+                    channelThumbnail
                     
                     // Play button
                     Circle()
-                        .fill(.white.opacity(0.9))
-                        .frame(width: 32, height: 32)
+                        .fill(.white.opacity(0.95))
+                        .frame(width: 36, height: 36)
                         .overlay(
                             Image(systemName: "play.fill")
-                                .font(.system(size: 12))
+                                .font(.system(size: 14))
                                 .foregroundColor(.black)
                         )
+                        .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
 
                     // LIVE badge overlay
                     if channel.isLive {
@@ -488,45 +421,44 @@ private struct MinimalListChannelCard: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Capsule().fill(Color.red.opacity(0.9)))
+                        .background(Capsule().fill(Color.red))
                         .padding(6)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     }
                 }
                 .frame(width: thumbSize.width, height: thumbSize.height)
-                .background(Color(.systemGray6))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 // Text area
                 VStack(alignment: .leading, spacing: 4) {
                     Text(channel.name)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(AppTheme.Colors.textPrimary)
                         .lineLimit(1)
 
                     Text(channel.description)
                         .font(.system(size: 12))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
                         .lineLimit(2)
 
                     HStack(spacing: 8) {
                         // Category badge
                         Text(channel.category.displayName)
                             .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(channel.category.color)
+                            .foregroundColor(categoryColor)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
                             .background(
                                 Capsule()
-                                    .fill(channel.category.color.opacity(0.15))
+                                    .fill(categoryColor.opacity(0.12))
                             )
                         
                         Image(systemName: "eye.fill")
                             .font(.system(size: 10))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
                         Text("\(formatViewerCount(channel.viewerCount)) • \(channel.quality)")
                             .font(.system(size: 11))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -539,15 +471,71 @@ private struct MinimalListChannelCard: View {
                     .fill(AppTheme.Colors.surface)
             )
         }
-        .buttonStyle(PlainButtonStyle())
-        .scaleEffect(isPressed ? 0.98 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
-        .onAppear { showPreview = true }
-        .onDisappear { showPreview = false }
-        .onPressGesture(
-            onPress: { isPressed = true },
-            onRelease: { isPressed = false }
-        )
+        .buttonStyle(PressableScaleStyle(scale: 0.98))
+    }
+    
+    // Professional channel thumbnail
+    private var channelThumbnail: some View {
+        ZStack {
+            // Gradient background
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            categoryColor.opacity(0.15),
+                            categoryColor.opacity(0.05)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            
+            // Surface overlay
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppTheme.Colors.surface.opacity(0.5))
+            
+            // Category icon
+            VStack(spacing: 4) {
+                Image(systemName: categoryIcon)
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(categoryColor.opacity(0.8))
+                
+                Text(String(channel.name.prefix(8)))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .lineLimit(1)
+            }
+        }
+    }
+    
+    private var categoryColor: Color {
+        switch channel.category {
+        case .news: return .red
+        case .sports: return .green
+        case .entertainment: return .purple
+        case .movies: return .blue
+        case .music: return .orange
+        case .kids: return .yellow
+        case .documentary: return .teal
+        case .lifestyle: return .mint
+        case .business: return .gray
+        case .international: return .cyan
+        }
+    }
+    
+    private var categoryIcon: String {
+        switch channel.category {
+        case .news: return "newspaper.fill"
+        case .sports: return "sportscourt.fill"
+        case .entertainment: return "tv.fill"
+        case .movies: return "film.fill"
+        case .music: return "music.note.tv.fill"
+        case .kids: return "figure.2.and.child.holdinghands"
+        case .documentary: return "globe.americas.fill"
+        case .lifestyle: return "house.fill"
+        case .business: return "chart.line.uptrend.xyaxis"
+        case .international: return "globe"
+        }
     }
 
     private func formatViewerCount(_ count: Int) -> String {

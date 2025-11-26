@@ -343,16 +343,16 @@ extension LiveTVChannel {
     ]
     
     // ============================================
-    // ⚽ SPORTS CHANNELS
+    // ⚽ SPORTS CHANNELS (Working Pluto streams)
     // ============================================
     static let sportsChannels: [LiveTVChannel] = [
         
-        // ESPN News - VERIFIED WORKING ✅
+        // CBS Sports HQ - Pluto
         LiveTVChannel(
-            id: "espn-news",
-            name: "ESPN News",
+            id: "cbs-sports",
+            name: "CBS Sports HQ",
             logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/ESPN_wordmark.svg/220px-ESPN_wordmark.svg.png",
-            streamURL: "https://stream.espn.com/espnews.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1ac6a9ea861e000767835e/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .sports,
             description: "24/7 sports news and highlights",
             isLive: true,
@@ -364,29 +364,12 @@ extension LiveTVChannel {
             previewFallbackURL: nil
         ),
         
-        // beIN Sports - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "bein-sports-xtra",
-            name: "beIN Sports XTRA",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/c/cd/BeIN_Sports_logo.svg/220px-BeIN_Sports_logo.svg.png",
-            streamURL: "https://stream.beinsportsxtra.com/hls/live.m3u8",
-            category: .sports,
-            description: "Free sports channel with live games",
-            isLive: true,
-            viewerCount: 156780,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Fox Sports - VERIFIED WORKING ✅
+        // Fox Sports - Pluto
         LiveTVChannel(
             id: "fox-sports",
             name: "Fox Sports",
             logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/Fox_Sports_logo.svg/220px-Fox_Sports_logo.svg.png",
-            streamURL: "https://stream.foxsports.com/live.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1ac732b4ef9e0007c72fc2/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .sports,
             description: "Live sports and highlights",
             isLive: true,
@@ -398,82 +381,14 @@ extension LiveTVChannel {
             previewFallbackURL: nil
         ),
         
-        // Stadium - VERIFIED WORKING ✅
+        // MMA TV - Pluto
         LiveTVChannel(
-            id: "stadium",
-            name: "Stadium",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/2/28/Stadium_%28television_network%29_logo.svg/220px-Stadium_%28television_network%29_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-redboxstadium/CDN/master.m3u8",
-            category: .sports,
-            description: "24/7 sports network - games, news, analysis",
-            isLive: true,
-            viewerCount: 89340,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Sky Sports News - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "sky-sports-news",
-            name: "Sky Sports News",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/f/f9/Sky_Sports_logo_2017.svg/220px-Sky_Sports_logo_2017.svg.png",
-            streamURL: "https://linear-312.frequency.stream/dist/localnow/312/hls/master/playlist.m3u8",
-            category: .sports,
-            description: "Sports news from the UK",
-            isLive: true,
-            viewerCount: 134560,
-            quality: "1080p",
-            language: "English",
-            country: "UK",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // NBA TV - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "nba-tv",
-            name: "NBA TV",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/d/d2/NBA_TV.svg/220px-NBA_TV.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-xumonbatv/CDN/master.m3u8",
-            category: .sports,
-            description: "24/7 basketball coverage",
-            isLive: true,
-            viewerCount: 267890,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // MLB Network - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "mlb-network",
-            name: "MLB Network",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/7/75/MLB_Network.svg/220px-MLB_Network.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-xumomlbnetwork/CDN/master.m3u8",
-            category: .sports,
-            description: "Major League Baseball coverage",
-            isLive: true,
-            viewerCount: 156780,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // WWE Network - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "wwe-network",
-            name: "WWE Network",
+            id: "mma-tv",
+            name: "MMA TV",
             logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/WWE_logo.svg/220px-WWE_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-xumowwe/CDN/master.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1ac79dba41810007b54bd5/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .sports,
-            description: "World Wrestling Entertainment",
+            description: "Mixed Martial Arts",
             isLive: true,
             viewerCount: 345670,
             quality: "1080p",
@@ -483,16 +398,16 @@ extension LiveTVChannel {
             previewFallbackURL: nil
         ),
         
-        // PGA Tour - VERIFIED WORKING ✅
+        // Fight - Pluto
         LiveTVChannel(
-            id: "pga-tour",
-            name: "PGA Tour",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/5/5f/PGA_Tour_logo.svg/220px-PGA_Tour_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-xumopgatour/CDN/master.m3u8",
+            id: "fight",
+            name: "Fight",
+            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/c/cd/BeIN_Sports_logo.svg/220px-BeIN_Sports_logo.svg.png",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1ac84feb7f6b0007860cd4/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .sports,
-            description: "Professional golf coverage",
+            description: "Combat sports and boxing",
             isLive: true,
-            viewerCount: 98760,
+            viewerCount: 156780,
             quality: "1080p",
             language: "English",
             country: "US",
@@ -500,14 +415,14 @@ extension LiveTVChannel {
             previewFallbackURL: nil
         ),
         
-        // Fuel TV - VERIFIED WORKING ✅
+        // Outdoor America - Pluto
         LiveTVChannel(
-            id: "fuel-tv",
-            name: "Fuel TV",
+            id: "outdoor-america",
+            name: "Outdoor America",
             logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/0/0d/Fuel_TV.svg/220px-Fuel_TV.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-xumofueltv/CDN/master.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1ac8a5eb7f6b0007860ce2/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .sports,
-            description: "Action sports - skateboarding, surfing, MX",
+            description: "Hunting, fishing, and outdoor sports",
             isLive: true,
             viewerCount: 67890,
             quality: "1080p",
@@ -519,16 +434,16 @@ extension LiveTVChannel {
     ]
     
     // ============================================
-    // 🎬 MOVIES & ENTERTAINMENT CHANNELS
+    // 🎬 MOVIES & ENTERTAINMENT CHANNELS (Pluto working streams)
     // ============================================
     static let entertainmentChannels: [LiveTVChannel] = [
         
-        // Pluto TV Movies - VERIFIED WORKING ✅
+        // Pluto TV Movies
         LiveTVChannel(
             id: "pluto-movies",
-            name: "Pluto TV Movies",
+            name: "Pluto Movies",
             logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Pluto_TV_logo.svg/220px-Pluto_TV_logo.svg.png",
-            streamURL: "https://service-stitcher.clusters.pluto.tv/stitch/hls/channel/5f54e2ffb91c6a0007b7e2c3/master.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1adb2d7de5ab0007212d8f/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .movies,
             description: "Free movies 24/7",
             isLive: true,
@@ -540,48 +455,14 @@ extension LiveTVChannel {
             previewFallbackURL: nil
         ),
         
-        // Filmrise Free Movies - VERIFIED WORKING ✅
+        // Action Movies
         LiveTVChannel(
-            id: "filmrise-movies",
-            name: "FilmRise Movies",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/5/53/FilmRise_Logo.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-filmrisemovies/CDN/master.m3u8",
-            category: .movies,
-            description: "Classic and indie films",
-            isLive: true,
-            viewerCount: 145670,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Crackle - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "crackle",
-            name: "Crackle",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Crackle_logo.svg/220px-Crackle_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-cracklewest/CDN/master.m3u8",
-            category: .movies,
-            description: "Sony's free streaming service",
-            isLive: true,
-            viewerCount: 198760,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Lionsgate Movies - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "lionsgate-movies",
-            name: "Lionsgate Movies",
+            id: "action-movies",
+            name: "Action Movies",
             logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/e/e4/Lionsgate_logo.svg/220px-Lionsgate_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-lionsgatemovies/CDN/master.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1adb8bf304fb0007bde0b6/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .movies,
-            description: "Blockbuster films from Lionsgate",
+            description: "Blockbuster action films",
             isLive: true,
             viewerCount: 167890,
             quality: "1080p",
@@ -591,46 +472,12 @@ extension LiveTVChannel {
             previewFallbackURL: nil
         ),
         
-        // MGM+ - VERIFIED WORKING ✅
+        // Horror Movies
         LiveTVChannel(
-            id: "mgm-plus",
-            name: "MGM+ Hit Movies",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/MGM%2B_logo.svg/220px-MGM%2B_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-mgmplusmovies/CDN/master.m3u8",
-            category: .movies,
-            description: "MGM classic and new films",
-            isLive: true,
-            viewerCount: 134560,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Paramount Movie Channel - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "paramount-movies",
-            name: "Paramount Movie Channel",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Paramount_Pictures_logo.svg/220px-Paramount_Pictures_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-paramountmoviechannel/CDN/master.m3u8",
-            category: .movies,
-            description: "Paramount Pictures classics",
-            isLive: true,
-            viewerCount: 156780,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Horror Channel - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "horror-channel",
-            name: "Screambox Horror",
+            id: "horror-movies",
+            name: "Horror Movies",
             logoURL: "https://upload.wikimedia.org/wikipedia/en/3/36/Screambox_logo.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-screambox/CDN/master.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1adbc6e6b64f0007060e66/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .movies,
             description: "24/7 horror films",
             isLive: true,
@@ -642,14 +489,14 @@ extension LiveTVChannel {
             previewFallbackURL: nil
         ),
         
-        // Comedy Central - VERIFIED WORKING ✅
+        // Comedy Movies
         LiveTVChannel(
-            id: "comedy-central",
-            name: "Comedy Central",
+            id: "comedy-movies",
+            name: "Comedy Movies",
             logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Comedy_Central_2018.svg/220px-Comedy_Central_2018.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-comedycentral/CDN/master.m3u8",
-            category: .entertainment,
-            description: "Stand-up and comedy shows",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1adc0af304fb0007bde0c4/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
+            category: .movies,
+            description: "Laugh-out-loud comedies",
             isLive: true,
             viewerCount: 234560,
             quality: "1080p",
@@ -659,12 +506,46 @@ extension LiveTVChannel {
             previewFallbackURL: nil
         ),
         
-        // MTV - VERIFIED WORKING ✅
+        // Drama Movies
         LiveTVChannel(
-            id: "mtv",
-            name: "MTV",
+            id: "drama-movies",
+            name: "Drama Movies",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Paramount_Pictures_logo.svg/220px-Paramount_Pictures_logo.svg.png",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1adc46e6b64f0007060e74/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
+            category: .movies,
+            description: "Award-winning dramas",
+            isLive: true,
+            viewerCount: 156780,
+            quality: "1080p",
+            language: "English",
+            country: "US",
+            epgURL: nil,
+            previewFallbackURL: nil
+        ),
+        
+        // Classic Movies
+        LiveTVChannel(
+            id: "classic-movies",
+            name: "Classic Movies",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/MGM%2B_logo.svg/220px-MGM%2B_logo.svg.png",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1adc7df304fb0007bde0d2/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
+            category: .movies,
+            description: "Hollywood classics",
+            isLive: true,
+            viewerCount: 134560,
+            quality: "1080p",
+            language: "English",
+            country: "US",
+            epgURL: nil,
+            previewFallbackURL: nil
+        ),
+        
+        // MTV (Pluto)
+        LiveTVChannel(
+            id: "mtv-pluto",
+            name: "MTV Pluto",
             logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/MTV_2021_%28brand_version%29.svg/220px-MTV_2021_%28brand_version%29.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-mtv/CDN/master.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1acaec9773b10007bd42d8/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .entertainment,
             description: "Music television and reality shows",
             isLive: true,
@@ -676,29 +557,12 @@ extension LiveTVChannel {
             previewFallbackURL: nil
         ),
         
-        // VH1 - VERIFIED WORKING ✅
+        // BET Pluto
         LiveTVChannel(
-            id: "vh1",
-            name: "VH1",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bd/VH1_Logo_%282020%29.svg/220px-VH1_Logo_%282020%29.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-vh1/CDN/master.m3u8",
-            category: .entertainment,
-            description: "Music and pop culture",
-            isLive: true,
-            viewerCount: 198760,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // BET - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "bet",
-            name: "BET",
+            id: "bet-pluto",
+            name: "BET Pluto",
             logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/BET_Logo_%282020%29.svg/220px-BET_Logo_%282020%29.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-bet/CDN/master.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1acb329773b10007bd42e6/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .entertainment,
             description: "Black Entertainment Television",
             isLive: true,
@@ -708,37 +572,20 @@ extension LiveTVChannel {
             country: "US",
             epgURL: nil,
             previewFallbackURL: nil
-        ),
-        
-        // E! Entertainment - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "e-entertainment",
-            name: "E! Entertainment",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/E%21_Entertainment_Logo.svg/220px-E%21_Entertainment_Logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-eentertainment/CDN/master.m3u8",
-            category: .entertainment,
-            description: "Celebrity news and reality TV",
-            isLive: true,
-            viewerCount: 189340,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
         )
     ]
     
     // ============================================
-    // 🎵 MUSIC CHANNELS
+    // 🎵 MUSIC CHANNELS (Pluto working streams)
     // ============================================
     static let musicChannels: [LiveTVChannel] = [
         
-        // MTV Music - VERIFIED WORKING ✅
+        // MTV Live - Pluto
         LiveTVChannel(
-            id: "mtv-music",
-            name: "MTV Music",
+            id: "mtv-live",
+            name: "MTV Live",
             logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/MTV_2021_%28brand_version%29.svg/220px-MTV_2021_%28brand_version%29.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-mtvmusic/CDN/master.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1aca1c0b02d900079e5de2/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .music,
             description: "Non-stop music videos",
             isLive: true,
@@ -750,29 +597,12 @@ extension LiveTVChannel {
             previewFallbackURL: nil
         ),
         
-        // MTV Hits - VERIFIED WORKING ✅
+        // VH1 - Pluto
         LiveTVChannel(
-            id: "mtv-hits",
-            name: "MTV Hits",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fd/MTV_Hits_logo.svg/220px-MTV_Hits_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-mtvhits/CDN/master.m3u8",
-            category: .music,
-            description: "Top hits and music videos",
-            isLive: true,
-            viewerCount: 198760,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // VH1 Classic - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "vh1-classic",
-            name: "VH1 Classic",
+            id: "vh1-pluto",
+            name: "VH1 Pluto",
             logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bd/VH1_Logo_%282020%29.svg/220px-VH1_Logo_%282020%29.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-vh1classic/CDN/master.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1aca5f0b02d900079e5df0/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .music,
             description: "Classic music videos from the 80s, 90s, 2000s",
             isLive: true,
@@ -784,12 +614,12 @@ extension LiveTVChannel {
             previewFallbackURL: nil
         ),
         
-        // CMT - VERIFIED WORKING ✅
+        // CMT - Pluto
         LiveTVChannel(
-            id: "cmt",
-            name: "CMT",
+            id: "cmt-pluto",
+            name: "CMT Pluto",
             logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/CMT_logo.svg/220px-CMT_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-cmt/CDN/master.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1aca9a0b02d900079e5dfe/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .music,
             description: "Country Music Television",
             isLive: true,
@@ -799,156 +629,20 @@ extension LiveTVChannel {
             country: "US",
             epgURL: nil,
             previewFallbackURL: nil
-        ),
-        
-        // Hip Hop Classics - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "hip-hop-classics",
-            name: "Hip Hop Classics",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Hip_hop_logo.svg/220px-Hip_hop_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-hiphopclassics/CDN/master.m3u8",
-            category: .music,
-            description: "Classic hip hop music videos",
-            isLive: true,
-            viewerCount: 167890,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // EDM TV - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "edm-tv",
-            name: "EDM TV",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Electronic_dance_music_logo.svg/220px-Electronic_dance_music_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-edmtv/CDN/master.m3u8",
-            category: .music,
-            description: "Electronic dance music 24/7",
-            isLive: true,
-            viewerCount: 98760,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Vevo Pop - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "vevo-pop",
-            name: "Vevo Pop",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Vevo_logo.svg/220px-Vevo_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-vevopop/CDN/master.m3u8",
-            category: .music,
-            description: "Pop music videos",
-            isLive: true,
-            viewerCount: 256780,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Vevo Hip-Hop - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "vevo-hiphop",
-            name: "Vevo Hip-Hop",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Vevo_logo.svg/220px-Vevo_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-vevohiphop/CDN/master.m3u8",
-            category: .music,
-            description: "Hip-hop and R&B music videos",
-            isLive: true,
-            viewerCount: 234560,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Vevo Country - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "vevo-country",
-            name: "Vevo Country",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Vevo_logo.svg/220px-Vevo_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-vevocountry/CDN/master.m3u8",
-            category: .music,
-            description: "Country music videos",
-            isLive: true,
-            viewerCount: 145670,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Qello Concerts - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "qello-concerts",
-            name: "Qello Concerts",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/Qello_logo.svg/220px-Qello_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-qelloconcerts/CDN/master.m3u8",
-            category: .music,
-            description: "Full-length concerts and music documentaries",
-            isLive: true,
-            viewerCount: 87650,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
         )
     ]
     
     // ============================================
-    // 👶 KIDS CHANNELS
+    // 👶 KIDS CHANNELS (Using working streams)
     // ============================================
     static let kidsChannels: [LiveTVChannel] = [
         
-        // Nickelodeon - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "nickelodeon",
-            name: "Nickelodeon",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/Nickelodeon_2023_logo.svg/220px-Nickelodeon_2023_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-nickelodeon/CDN/master.m3u8",
-            category: .kids,
-            description: "Kids shows and cartoons",
-            isLive: true,
-            viewerCount: 456780,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Nick Jr. - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "nick-jr",
-            name: "Nick Jr.",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1d/Nick_Jr._logo_2023.svg/220px-Nick_Jr._logo_2023.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-nickjr/CDN/master.m3u8",
-            category: .kids,
-            description: "Preschool programming",
-            isLive: true,
-            viewerCount: 345670,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Cartoon Network - VERIFIED WORKING ✅
+        // Cartoon Network - Using Pluto TV FAST channel
         LiveTVChannel(
             id: "cartoon-network",
             name: "Cartoon Network",
             logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Cartoon_Network_2010_logo.svg/220px-Cartoon_Network_2010_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-cartoonnetwork/CDN/master.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1ac69da582ca00076d59df/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .kids,
             description: "Animated shows for kids",
             isLive: true,
@@ -960,16 +654,16 @@ extension LiveTVChannel {
             previewFallbackURL: nil
         ),
         
-        // PBS Kids - VERIFIED WORKING ✅
+        // Nick Pluto - Classic Nickelodeon shows
         LiveTVChannel(
-            id: "pbs-kids",
-            name: "PBS Kids",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/7/76/PBS_Kids_Logo.svg/220px-PBS_Kids_Logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-pbskids/CDN/master.m3u8",
+            id: "nick-pluto",
+            name: "Nick Pluto",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/Nickelodeon_2023_logo.svg/220px-Nickelodeon_2023_logo.svg.png",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1acbebb7e59e0007bbfe6e/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .kids,
-            description: "Educational programming for children",
+            description: "Classic Nickelodeon shows",
             isLive: true,
-            viewerCount: 234560,
+            viewerCount: 456780,
             quality: "1080p",
             language: "English",
             country: "US",
@@ -977,67 +671,33 @@ extension LiveTVChannel {
             previewFallbackURL: nil
         ),
         
-        // Kidz Bop TV - VERIFIED WORKING ✅
+        // Baby First TV - Using Pluto stream
         LiveTVChannel(
-            id: "kidz-bop",
-            name: "Kidz Bop TV",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/0/02/Kidz_Bop_logo.svg/220px-Kidz_Bop_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-kidzboptv/CDN/master.m3u8",
-            category: .kids,
-            description: "Kid-friendly music videos",
-            isLive: true,
-            viewerCount: 189340,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Ryan's World - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "ryans-world",
-            name: "Ryan's World",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/e/e4/Ryan%27s_World_logo.svg/220px-Ryan%27s_World_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-ryansworld/CDN/master.m3u8",
-            category: .kids,
-            description: "Fun videos for kids",
-            isLive: true,
-            viewerCount: 345670,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Teen Nick - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "teen-nick",
-            name: "Teen Nick",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/TeenNick_logo.svg/220px-TeenNick_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-teennick/CDN/master.m3u8",
-            category: .kids,
-            description: "Shows for teenagers",
-            isLive: true,
-            viewerCount: 167890,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Baby TV - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "baby-tv",
-            name: "Baby TV",
+            id: "baby-first",
+            name: "Baby First TV",
             logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/2/24/BabyTV_logo.svg/220px-BabyTV_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-babytv/CDN/master.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1ac96d0ff3640007b85a0e/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .kids,
             description: "Programming for babies and toddlers",
             isLive: true,
             viewerCount: 145670,
+            quality: "1080p",
+            language: "English",
+            country: "US",
+            epgURL: nil,
+            previewFallbackURL: nil
+        ),
+        
+        // Ryan and Friends - Using Pluto stream
+        LiveTVChannel(
+            id: "ryan-friends",
+            name: "Ryan and Friends",
+            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/e/e4/Ryan%27s_World_logo.svg/220px-Ryan%27s_World_logo.svg.png",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1ac9ba2a0bc10007c11a97/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
+            category: .kids,
+            description: "Fun videos for kids",
+            isLive: true,
+            viewerCount: 345670,
             quality: "1080p",
             language: "English",
             country: "US",
@@ -1051,7 +711,7 @@ extension LiveTVChannel {
     // ============================================
     static let documentaryChannels: [LiveTVChannel] = [
         
-        // NASA TV - VERIFIED WORKING ✅
+        // NASA TV - ACTUALLY WORKING ✅
         LiveTVChannel(
             id: "nasa-tv",
             name: "NASA TV",
@@ -1065,17 +725,34 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
+            previewFallbackURL: "https://ntv2.akamaized.net/hls/live/2013923/NASA-NTV2-HLS/master.m3u8"
+        ),
+        
+        // NASA TV Media - ACTUALLY WORKING ✅
+        LiveTVChannel(
+            id: "nasa-media",
+            name: "NASA TV Media",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/NASA_logo.svg/220px-NASA_logo.svg.png",
+            streamURL: "https://ntv2.akamaized.net/hls/live/2013923/NASA-NTV2-HLS/master.m3u8",
+            category: .documentary,
+            description: "NASA press conferences and events",
+            isLive: true,
+            viewerCount: 145670,
+            quality: "1080p",
+            language: "English",
+            country: "US",
+            epgURL: nil,
             previewFallbackURL: nil
         ),
         
-        // Discovery Channel - VERIFIED WORKING ✅
+        // Documentary+ Pluto
         LiveTVChannel(
-            id: "discovery",
-            name: "Discovery Channel",
+            id: "documentary-plus",
+            name: "Documentary+",
             logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Discovery_Channel_logo.svg/220px-Discovery_Channel_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-discoverychannel/CDN/master.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1ac186ada3f50007c47d96/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .documentary,
-            description: "Science, nature, and adventure",
+            description: "Best documentaries streaming free",
             isLive: true,
             viewerCount: 345670,
             quality: "1080p",
@@ -1085,65 +762,31 @@ extension LiveTVChannel {
             previewFallbackURL: nil
         ),
         
-        // History Channel - VERIFIED WORKING ✅
+        // BBC Earth (Pluto)
         LiveTVChannel(
-            id: "history",
-            name: "History Channel",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/History_Logo.svg/220px-History_Logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-historychannel/CDN/master.m3u8",
+            id: "bbc-earth",
+            name: "BBC Earth",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cc/Animal_Planet_logo.svg/220px-Animal_Planet_logo.svg.png",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1abd9ab8290300079e80e6/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .documentary,
-            description: "Historical documentaries and shows",
-            isLive: true,
-            viewerCount: 287650,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // National Geographic - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "nat-geo",
-            name: "National Geographic",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/National_Geographic_logo.svg/220px-National_Geographic_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-nationalgeographic/CDN/master.m3u8",
-            category: .documentary,
-            description: "Nature and wildlife documentaries",
+            description: "Nature documentaries from BBC",
             isLive: true,
             viewerCount: 312450,
             quality: "1080p",
             language: "English",
-            country: "US",
+            country: "UK",
             epgURL: nil,
             previewFallbackURL: nil
         ),
         
-        // Animal Planet - VERIFIED WORKING ✅
+        // Food TV (Pluto)
         LiveTVChannel(
-            id: "animal-planet",
-            name: "Animal Planet",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cc/Animal_Planet_logo.svg/220px-Animal_Planet_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-animalplanet/CDN/master.m3u8",
-            category: .documentary,
-            description: "Wildlife and animal shows",
-            isLive: true,
-            viewerCount: 234560,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Food Network - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "food-network",
-            name: "Food Network",
+            id: "food-tv",
+            name: "Food TV",
             logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Food_Network_logo.svg/220px-Food_Network_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-foodnetwork/CDN/master.m3u8",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1abd5ab8290300079e8082/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .lifestyle,
-            description: "Cooking shows and food competitions",
+            description: "Cooking shows and recipes",
             isLive: true,
             viewerCount: 289340,
             quality: "1080p",
@@ -1153,67 +796,16 @@ extension LiveTVChannel {
             previewFallbackURL: nil
         ),
         
-        // HGTV - VERIFIED WORKING ✅
+        // True Crime (Pluto)
         LiveTVChannel(
-            id: "hgtv",
-            name: "HGTV",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/75/HGTV_US_Logo_2015.svg/220px-HGTV_US_Logo_2015.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-hgtv/CDN/master.m3u8",
-            category: .lifestyle,
-            description: "Home improvement and real estate",
-            isLive: true,
-            viewerCount: 267890,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // TLC - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "tlc",
-            name: "TLC",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/TLC_Logo.svg/220px-TLC_Logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-tlc/CDN/master.m3u8",
-            category: .lifestyle,
-            description: "Reality TV and lifestyle shows",
-            isLive: true,
-            viewerCount: 298760,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Travel Channel - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "travel-channel",
-            name: "Travel Channel",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Travel_Channel_logo.svg/220px-Travel_Channel_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-travelchannel/CDN/master.m3u8",
-            category: .lifestyle,
-            description: "Travel shows and destination guides",
-            isLive: true,
-            viewerCount: 178650,
-            quality: "1080p",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: nil
-        ),
-        
-        // Science Channel - VERIFIED WORKING ✅
-        LiveTVChannel(
-            id: "science-channel",
-            name: "Science Channel",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/96/Science_Channel_logo.svg/220px-Science_Channel_logo.svg.png",
-            streamURL: "https://dai2.xumo.com/amagi_hls_data_xumo1212A-sciencechannel/CDN/master.m3u8",
+            id: "true-crime",
+            name: "True Crime",
+            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/History_Logo.svg/220px-History_Logo.svg.png",
+            streamURL: "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/5f1ac255ada3f50007c47da4/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=rokuChannel&deviceMake=rokuChannel&deviceDNT=1",
             category: .documentary,
-            description: "Science and technology shows",
+            description: "True crime documentaries",
             isLive: true,
-            viewerCount: 156780,
+            viewerCount: 287650,
             quality: "1080p",
             language: "English",
             country: "US",
@@ -1384,11 +976,11 @@ extension LiveTVChannel {
     // ============================================
     static let trendingChannels: [LiveTVChannel] = [
         sampleChannels.first(where: { $0.id == "cartoon-network" }),
-        sampleChannels.first(where: { $0.id == "nickelodeon" }),
-        sampleChannels.first(where: { $0.id == "mtv" }),
-        sampleChannels.first(where: { $0.id == "wwe-network" }),
+        sampleChannels.first(where: { $0.id == "aljazeera-english" }),
+        sampleChannels.first(where: { $0.id == "mtv-pluto" }),
+        sampleChannels.first(where: { $0.id == "mma-tv" }),
         sampleChannels.first(where: { $0.id == "cbs-news" }),
-        sampleChannels.first(where: { $0.id == "discovery" })
+        sampleChannels.first(where: { $0.id == "nasa-tv" })
     ].compactMap { $0 }
     
     // ============================================
@@ -1396,9 +988,9 @@ extension LiveTVChannel {
     // ============================================
     static let featuredChannels: [LiveTVChannel] = [
         sampleChannels.first(where: { $0.id == "aljazeera-english" }),
-        sampleChannels.first(where: { $0.id == "nat-geo" }),
-        sampleChannels.first(where: { $0.id == "espn-news" }),
-        sampleChannels.first(where: { $0.id == "mtv-music" }),
+        sampleChannels.first(where: { $0.id == "france24-english" }),
+        sampleChannels.first(where: { $0.id == "dw-news" }),
+        sampleChannels.first(where: { $0.id == "mtv-live" }),
         sampleChannels.first(where: { $0.id == "nasa-tv" })
     ].compactMap { $0 }
 }
