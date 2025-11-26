@@ -89,10 +89,10 @@ class AgentAPIService: ObservableObject {
         transactionType: String,
         amount: Double,
         metadata: [String: Any]
-    ) async throws -> FraudDetectionResult {
+    ) async throws -> APIFraudDetectionResult {
         // NO CACHING for fraud detection (always real-time)
         
-        let result: FraudDetectionResult = try await callAgent(
+        let result: APIFraudDetectionResult = try await callAgent(
             name: "Fraud Detection AI",
             prompt: buildFraudDetectionPrompt(
                 userId: userId,
@@ -136,8 +136,8 @@ class AgentAPIService: ObservableObject {
         opponent: String,
         wagerAmount: Double,
         category: String
-    ) async throws -> MatchFairnessResult {
-        let result: MatchFairnessResult = try await callAgent(
+    ) async throws -> APIMatchFairnessResult {
+        let result: APIMatchFairnessResult = try await callAgent(
             name: "Match Fairness Referee",
             prompt: buildMatchFairnessPrompt(
                 challenger: challenger,
@@ -707,7 +707,7 @@ struct AdPlacementTiming: Codable {
     let duration: TimeInterval
 }
 
-struct FraudDetectionResult: Codable {
+struct APIFraudDetectionResult: Codable {
     let riskScore: Double
     let decision: String // "allow", "review", "block"
     let reasons: [String]
@@ -720,7 +720,7 @@ struct UpsellRecommendation: Codable {
     let confidence: Double
 }
 
-struct MatchFairnessResult: Codable {
+struct APIMatchFairnessResult: Codable {
     let fairnessScore: Double
     let isBalanced: Bool
     let reasoning: String

@@ -178,7 +178,7 @@ final class MatchOrchestrator: ObservableObject {
             matchId: matchId,
             winnerId: winnerId,
             loserId: loserId,
-            amount: winnerPayout
+            totalPot: winnerPayout
         )
         
         print("🏆 [Match Orchestrator] Match \(matchId) won by \(winnerId) - $\(Int(winnerPayout))")
