@@ -1,0 +1,23 @@
+{
+  "name": "mychannel-escrow-payments",
+  "version": "1.0.0",
+  "description": "Stripe Connect escrow payments for VS Matches",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "gcloud functions deploy escrow-payments --gen2 --runtime=nodejs20 --region=us-central1 --source=. --entry-point=escrowPayments --trigger-http --allow-unauthenticated --memory=256MB --timeout=60s --set-env-vars STRIPE_SECRET_KEY=$STRIPE_SECRET_KEY,STRIPE_WEBHOOK_SECRET=$STRIPE_WEBHOOK_SECRET"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.3.0",
+    "firebase-admin": "^12.0.0",
+    "stripe": "^14.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
+
+
+
+
+

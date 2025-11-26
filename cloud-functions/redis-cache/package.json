@@ -1,0 +1,22 @@
+{
+  "name": "mychannel-redis-cache",
+  "version": "1.0.0",
+  "description": "Redis cache proxy for MyChannel iOS app",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "gcloud functions deploy redis-cache --gen2 --runtime=nodejs20 --region=us-central1 --source=. --entry-point=redisCache --trigger-http --allow-unauthenticated --memory=256MB --timeout=30s --set-env-vars REDIS_HOST=$REDIS_HOST,REDIS_PORT=6379"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.3.0",
+    "ioredis": "^5.3.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
+
+
+
+
+
