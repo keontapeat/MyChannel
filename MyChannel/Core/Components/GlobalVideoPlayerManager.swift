@@ -636,7 +636,7 @@ class GlobalVideoPlayerManager: ObservableObject {
         HapticManager.shared.impact(style: .medium)
     }
     
-    // 🔥 THERMONUCLEAR: Pre-load next video in queue for instant playback
+    // 🔥🔥🔥 THERMONUCLEAR: Pre-load next video for INSTANT playback (<100ms)
     private func preloadNextVideo() {
         guard hasNextVideo else {
             preloadedAsset = nil
@@ -653,21 +653,35 @@ class GlobalVideoPlayerManager: ObservableObject {
             guard let self = self else { return }
             guard let url = URL(string: nextVideo.videoURL) else { return }
             
-            print("🔄 [GlobalVideoPlayerManager] Pre-loading next video: \(nextVideo.title)")
-            
-            let asset = AVURLAsset(url: url)
+            let asset = AVURLAsset(url: url, options: [
+                AVURLAssetPreferPreciseDurationAndTimingKey: true
+            ])
             asset.resourceLoader.preloadsEligibleContentKeys = true
             
-            // Pre-load tracks and duration (warms up the cache)
-            _ = try? await asset.load(.tracks)
-            _ = try? await asset.load(.duration)
-            _ = try? await asset.load(.isPlayable)
+            // 🔥 THERMONUCLEAR: Pre-load ALL critical properties
+            async let tracks = asset.load(.tracks)
+            async let duration = asset.load(.duration)
+            async let isPlayable = asset.load(.isPlayable)
+            async let preferredMediaSelection = asset.load(.preferredMediaSelection)
+            
+            // Wait for all to complete in parallel
+            _ = try? await (tracks, duration, isPlayable, preferredMediaSelection)
             
             await MainActor.run { [weak self] in
                 guard let self = self, !self.isCleanedUp else { return }
                 self.preloadedAsset = asset
-                print("✅ [GlobalVideoPlayerManager] Pre-loaded next video: \(nextVideo.title) - READY FOR INSTANT START!")
+                
+                // 🔥 PERF: Also cache in PlayerPoolManager for instant reuse
+                PlayerPoolManager.shared.preloadAsset(for: nextVideo.videoURL)
             }
+        }
+        
+        // 🔥 THERMONUCLEAR: Pre-load 2 more videos ahead
+        if queueIndex + 2 < videoQueue.count {
+            PlayerPoolManager.shared.preloadAsset(for: videoQueue[queueIndex + 2].videoURL)
+        }
+        if queueIndex + 3 < videoQueue.count {
+            PlayerPoolManager.shared.preloadAsset(for: videoQueue[queueIndex + 3].videoURL)
         }
     }
     

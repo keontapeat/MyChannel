@@ -2,8 +2,8 @@
 //  NativePiPController.swift
 //  MyChannel
 //
-//  YouTube Parity: Native iOS PiP for background playback
-//  Activates ONLY when user leaves the app (goes to home screen/another app)
+//  🔥🔥🔥 THERMONUCLEAR PERFORMANCE: Native iOS PiP
+//  Target: <50ms PiP start time (YouTube-level performance)
 //
 
 import AVKit
@@ -16,129 +16,158 @@ class NativePiPController: NSObject, ObservableObject {
     @Published var isPiPActive = false
     private var pipController: AVPictureInPictureController?
     private var pipPossibleObservation: NSKeyValueObservation?
+    private var playerLayer: AVPlayerLayer?  // 🔥 PERF: Keep reference for reuse
+    private var lastPlayer: AVPlayer?  // 🔥 PERF: Track player to avoid redundant setup
+    private var isPiPPossible = false  // 🔥 PERF: Cache state for instant checks
+    private var retryTask: Task<Void, Never>?  // 🔥 PERF: Cancel previous retry tasks
     
     private override init() {
         super.init()
-        print("🎬 [NativePiP] Initialized")
+        print("🎬 [NativePiP] THERMONUCLEAR Initialized")
     }
     
-    /// Setup PiP controller with a player
+    /// 🔥 THERMONUCLEAR: Setup PiP controller with instant readiness
     func setup(with player: AVPlayer) {
         guard AVPictureInPictureController.isPictureInPictureSupported() else {
-            print("⚠️ [NativePiP] PiP not supported on this device")
+            return  // 🔥 PERF: Silent fail for unsupported devices
+        }
+        
+        // 🔥 PERF: Skip redundant setup if same player
+        if lastPlayer === player && pipController != nil {
+            print("⚡ [NativePiP] Reusing existing controller (same player)")
             return
         }
         
-        // Create AVPlayerLayer (required for PiP)
-        let playerLayer = AVPlayerLayer(player: player)
+        // 🔥 PERF: Cancel any pending retry tasks
+        retryTask?.cancel()
         
-        // Create PiP controller
-        if let controller = try? AVPictureInPictureController(playerLayer: playerLayer) {
-            controller.delegate = self
-            controller.canStartPictureInPictureAutomaticallyFromInline = false  // Manual control
-            pipController = controller
-            print("✅ [NativePiP] Controller setup complete, possible: \(controller.isPictureInPicturePossible)")
+        // 🔥 PERF: Reuse player layer if possible
+        if playerLayer == nil {
+            playerLayer = AVPlayerLayer()
+        }
+        playerLayer?.player = player
+        lastPlayer = player
+        
+        // 🔥 PERF: Setup controller immediately without async
+        if let controller = try? AVPictureInPictureController(playerLayer: playerLayer!) {
+            // 🔥 PERF: Invalidate old observer before creating new one
+            pipPossibleObservation?.invalidate()
             
-            // Observe when PiP becomes possible
-            pipPossibleObservation = controller.observe(\.isPictureInPicturePossible, options: [.new]) { [weak self] controller, change in
+            controller.delegate = self
+            controller.canStartPictureInPictureAutomaticallyFromInline = false
+            pipController = controller
+            
+            // 🔥 PERF: Cache initial state
+            isPiPPossible = controller.isPictureInPicturePossible
+            
+            // 🔥 PERF: Direct KVO with immediate state sync
+            pipPossibleObservation = controller.observe(\.isPictureInPicturePossible, options: [.new, .initial]) { [weak self] controller, _ in
                 Task { @MainActor in
-                    print("🔔 [NativePiP] isPictureInPicturePossible changed to: \(controller.isPictureInPicturePossible)")
+                    self?.isPiPPossible = controller.isPictureInPicturePossible
                 }
             }
-        } else {
-            print("❌ [NativePiP] Failed to create PiP controller")
+            
+            print("✅ [NativePiP] Controller ready, possible: \(isPiPPossible)")
         }
     }
     
-    /// Start PiP (when app backgrounds)
+    /// 🔥 THERMONUCLEAR: Start PiP with <50ms target
     func startPiP() {
         guard let pipController = pipController else {
-            print("⚠️ [NativePiP] Cannot start PiP - controller is nil")
-            return
+            return  // 🔥 PERF: Silent fail
         }
         
-        print("🔍 [NativePiP] PiP Status:")
-        print("   - Controller exists: ✅")
-        print("   - isPictureInPictureActive: \(pipController.isPictureInPictureActive)")
-        print("   - isPictureInPicturePossible: \(pipController.isPictureInPicturePossible)")
-        
+        // 🔥 PERF: Fast path check using cached state
         guard !pipController.isPictureInPictureActive else {
-            print("⚠️ [NativePiP] PiP already active")
+            return  // Already active
+        }
+        
+        // 🔥 PERF: Immediate start if possible
+        if isPiPPossible {
+            pipController.startPictureInPicture()
+            print("⚡ [NativePiP] Started PiP INSTANTLY")
             return
         }
         
-        guard pipController.isPictureInPicturePossible else {
-            print("⚠️ [NativePiP] PiP not possible yet - waiting for player to be ready")
-            // Try again after a short delay
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        // 🔥 PERF: Aggressive retry with shorter delay (100ms instead of 500ms)
+        retryTask?.cancel()
+        retryTask = Task { @MainActor in
+            // 🔥 PERF: Try every 100ms up to 1 second
+            for _ in 0..<10 {
+                try? await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
+                
+                guard !Task.isCancelled else { return }
+                
                 if pipController.isPictureInPicturePossible {
-                    print("✅ [NativePiP] PiP now possible, retrying...")
                     pipController.startPictureInPicture()
-                } else {
-                    print("❌ [NativePiP] PiP still not possible after waiting")
+                    print("✅ [NativePiP] Started PiP after retry")
+                    return
                 }
             }
-            return
+            print("⚠️ [NativePiP] PiP not possible after retries")
         }
-        
-        print("▶️ [NativePiP] Starting PiP...")
-        pipController.startPictureInPicture()
     }
     
-    /// Stop PiP (when app foregrounds)
+    /// 🔥 THERMONUCLEAR: Stop PiP instantly
     func stopPiP() {
+        retryTask?.cancel()
+        
         guard let pipController = pipController,
               pipController.isPictureInPictureActive else {
-            print("⚠️ [NativePiP] PiP not active")
-            return
+            return  // 🔥 PERF: Silent fail
         }
         
-        print("⏹️ [NativePiP] Stopping PiP...")
         pipController.stopPictureInPicture()
     }
     
-    /// Check if PiP is currently active
+    /// 🔥 PERF: Fast check using cached state
     var isActive: Bool {
         pipController?.isPictureInPictureActive ?? false
     }
     
+    /// 🔥 PERF: Check if PiP can start immediately
+    var canStartImmediately: Bool {
+        isPiPPossible && !(pipController?.isPictureInPictureActive ?? true)
+    }
+    
     /// Cleanup
     func cleanup() {
+        retryTask?.cancel()
+        retryTask = nil
         stopPiP()
         pipPossibleObservation?.invalidate()
         pipPossibleObservation = nil
         pipController = nil
-        print("🧹 [NativePiP] Cleaned up")
+        playerLayer = nil
+        lastPlayer = nil
+        isPiPPossible = false
     }
 }
 
-// MARK: - AVPictureInPictureControllerDelegate
+// MARK: - AVPictureInPictureControllerDelegate (THERMONUCLEAR OPTIMIZED)
 extension NativePiPController: AVPictureInPictureControllerDelegate {
     nonisolated func pictureInPictureControllerWillStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        Task { @MainActor in
-            print("🎬 [NativePiP] Will start PiP")
-            isPiPActive = true
+        // 🔥 PERF: Use DispatchQueue.main for faster execution than Task
+        DispatchQueue.main.async { [weak self] in
+            self?.isPiPActive = true
         }
     }
     
     nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        Task { @MainActor in
-            print("✅ [NativePiP] Did start PiP")
-            isPiPActive = true
+        DispatchQueue.main.async { [weak self] in
+            self?.isPiPActive = true
+            print("✅ [NativePiP] PiP STARTED")
         }
     }
     
     nonisolated func pictureInPictureControllerWillStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        Task { @MainActor in
-            print("🎬 [NativePiP] Will stop PiP")
-        }
+        // 🔥 PERF: No-op for will stop (state change happens in didStop)
     }
     
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        Task { @MainActor in
-            print("✅ [NativePiP] Did stop PiP")
-            isPiPActive = false
+        DispatchQueue.main.async { [weak self] in
+            self?.isPiPActive = false
+            print("✅ [NativePiP] PiP STOPPED")
         }
     }
     
@@ -146,9 +175,9 @@ extension NativePiPController: AVPictureInPictureControllerDelegate {
         _ pictureInPictureController: AVPictureInPictureController,
         failedToStartPictureInPictureWithError error: Error
     ) {
-        Task { @MainActor in
-            print("❌ [NativePiP] Failed to start: \(error.localizedDescription)")
-            isPiPActive = false
+        DispatchQueue.main.async { [weak self] in
+            self?.isPiPActive = false
+            print("❌ [NativePiP] Failed: \(error.localizedDescription)")
         }
     }
     
@@ -156,24 +185,19 @@ extension NativePiPController: AVPictureInPictureControllerDelegate {
         _ pictureInPictureController: AVPictureInPictureController,
         restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
     ) {
-        Task { @MainActor in
-            print("🔄 [NativePiP] Restore UI requested (user tapped PiP window)")
+        // 🔥 THERMONUCLEAR: Instant UI restore without delay
+        DispatchQueue.main.async { [weak self] in
+            self?.isPiPActive = false
             
-            // 🔥 FIX: Stop PiP first before expanding
-            isPiPActive = false
-            
-            // Notify GlobalVideoPlayerManager to expand to fullscreen
+            // 🔥 PERF: Post notification immediately
             NotificationCenter.default.post(
                 name: NSNotification.Name("ExpandFromNativePiP"),
                 object: nil
             )
             
-            // Wait briefly for UI to prepare
-            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-            
+            // 🔥 PERF: Complete immediately - no artificial delay
             completionHandler(true)
-            
-            print("✅ [NativePiP] UI restored - PiP dismissed, fullscreen should show")
+            print("⚡ [NativePiP] UI restored INSTANTLY")
         }
     }
 }

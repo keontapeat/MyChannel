@@ -14,17 +14,22 @@ struct FlicksPeekCard: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 10) {
-                AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                } placeholder: {
-                    LinearGradient(
-                        colors: [.gray.opacity(0.3), .gray.opacity(0.15)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                }
+                // 🔥 PERF FIX: Using cached image for faster loading
+                AppAsyncImage(
+                    url: URL(string: video.thumbnailURL),
+                    content: { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    },
+                    placeholder: {
+                        LinearGradient(
+                            colors: [.gray.opacity(0.3), .gray.opacity(0.15)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    }
+                )
                 .frame(width: 56, height: 56)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 

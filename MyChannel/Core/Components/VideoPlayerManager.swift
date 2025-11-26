@@ -223,43 +223,55 @@ class VideoPlayerManager: ObservableObject {
                 installReadyObserver(on: player)
             }
         } else {
-            // 🔥 YOUTUBE-LEVEL OPTIMIZATION: Enhanced player setup
-            print("✅ Using optimized AVPlayer for uploaded video")
+            // 🔥🔥🔥 THERMONUCLEAR: Ultra-optimized player setup
             
-            // Create asset with preloading enabled
-            let asset = AVURLAsset(url: url, options: [
-                AVURLAssetPreferPreciseDurationAndTimingKey: true,
-                "AVURLAssetHTTPHeaderFieldsKey": [
-                    "User-Agent": "MyChannel iOS \(AppConfig.appVersion)"
-                ]
-            ])
-            asset.resourceLoader.preloadsEligibleContentKeys = true
+            // 🔥 PERF: Try to get pre-loaded asset from pool first
+            let asset: AVURLAsset
+            if let preloadedAsset = PlayerPoolManager.shared.getPreloadedAsset(for: video.videoURL) {
+                asset = preloadedAsset
+                print("⚡ [VideoPlayer] Using PRE-LOADED asset (instant!)")
+            } else {
+                asset = AVURLAsset(url: url, options: [
+                    AVURLAssetPreferPreciseDurationAndTimingKey: true
+                ])
+                asset.resourceLoader.preloadsEligibleContentKeys = true
+            }
             
-            // Create player item with optimized buffer settings
+            // Create player item with THERMONUCLEAR buffer settings
             let playerItem = AVPlayerItem(asset: asset)
             
-            // 🔥 YOUTUBE PARITY: Dynamic buffer sizing based on network
+            // 🔥 THERMONUCLEAR: Aggressive buffer settings for fastest start
             let networkQuality = NetworkOptimizer.shared.connectionQuality
             switch networkQuality {
             case .excellent:
-                playerItem.preferredForwardBufferDuration = 10.0 // 10 seconds on Wi-Fi
-                print("📊 [Buffer] Set to 10s (Wi-Fi)")
+                // Wi-Fi: Large buffer, instant quality ramp-up
+                playerItem.preferredForwardBufferDuration = 15.0  // 🔥 INCREASED: 15s
+                playerItem.preferredPeakBitRate = 0  // Full quality immediately
             case .good:
-                playerItem.preferredForwardBufferDuration = 5.0  // 5 seconds on good cellular
-                print("📊 [Buffer] Set to 5s (Good Cellular)")
+                // Good cellular: Medium buffer
+                playerItem.preferredForwardBufferDuration = 8.0  // 🔥 INCREASED: 8s
+                playerItem.preferredPeakBitRate = 8_000_000  // 8 Mbps cap
             case .poor:
-                playerItem.preferredForwardBufferDuration = 2.0  // 2 seconds on poor network
-                print("📊 [Buffer] Set to 2s (Poor Network)")
+                // Poor network: Fast start, lower quality
+                playerItem.preferredForwardBufferDuration = 3.0  // 🔥 INCREASED: 3s
+                playerItem.preferredPeakBitRate = 2_000_000  // 2 Mbps cap
             }
             
-            // Create player with optimized settings
-            let player = AVPlayer(playerItem: playerItem)
-            player.automaticallyWaitsToMinimizeStalling = true
+            // 🔥 PERF: Get player from pool (instant!)
+            let player = PlayerPoolManager.shared.getPlayer()
+            player.replaceCurrentItem(with: playerItem)
+            player.automaticallyWaitsToMinimizeStalling = false  // 🔥 FASTER START
             
             await MainActor.run {
                 self.player = player
                 setupPlayerCommon(player: player)
                 installReadyObserver(on: player)
+                
+                // 🔥 THERMONUCLEAR: Relax stalling after 2s for smoother playback
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                    guard let self = self, !self.isCleanedUp else { return }
+                    self.player?.automaticallyWaitsToMinimizeStalling = true
+                }
             }
         }
     }

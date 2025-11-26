@@ -80,6 +80,12 @@ struct VideoDetailView: View {
     @State private var midrolls: [VMAPResponse.Midroll] = []
     @State private var servedMidrollIndices: Set<Int> = []
     
+    // 🔥 YOUTUBE-STYLE ADS: New ad state management
+    @StateObject private var adManager = GoogleIMAAdManager.shared
+    @State private var currentVideoAd: VideoAd?
+    @State private var showingYouTubeAd = false
+    @State private var adSkipped = false
+    
     // MARK: - Enhanced YouTube Features
     @State private var showingTranscript = false
     @State private var showingVideoInfo = false
@@ -101,7 +107,10 @@ struct VideoDetailView: View {
     @ViewBuilder
     private var videoPlayerSection: some View {
         ZStack {
-            if isYouTube {
+            if showingYouTubeAd, let ad = currentVideoAd {
+                // 🔥 YOUTUBE-STYLE AD PLAYER
+                youtubeStyleAdPlayer(ad: ad)
+            } else if isYouTube {
                 youtubePlayerView
             } else {
                 avPlayerView
@@ -114,6 +123,77 @@ struct VideoDetailView: View {
             }
         }
         // 🔥 FIX: Removed highPriorityGesture - taps handled by PlayerTapCaptureView now
+    }
+    
+    // 🔥 YOUTUBE-STYLE AD PLAYER VIEW
+    @ViewBuilder
+    private func youtubeStyleAdPlayer(ad: VideoAd) -> some View {
+        ZStack {
+            // Ad video player - show video only when ready
+            if let player = adManager.adPlayer, adManager.isAdVideoReady {
+                VideoPlayer(player: player)
+                    .aspectRatio(16/9, contentMode: .fit)
+                    .disabled(true)  // No controls during ad
+                    .onAppear {
+                        // Ensure playback starts when view appears
+                        if player.rate == 0 {
+                            player.play()
+                            print("▶️ [VideoDetailView] Called play() on ad player in view")
+                        }
+                    }
+            } else {
+                // Loading state - show until video is ready
+                Color.black
+                    .aspectRatio(16/9, contentMode: .fit)
+                    .overlay {
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(1.2)
+                            Text("Loading ad...")
+                                .font(.system(size: 13))
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+            }
+            
+            // YouTube-style ad overlay - only show when video is ready
+            if adManager.isAdVideoReady {
+                YouTubeStyleAdOverlay(
+                    ad: ad,
+                    adTimeRemaining: adManager.adTimeRemaining,
+                    canSkip: adManager.canSkip,
+                    onSkip: {
+                        skipCurrentAd()
+                    },
+                    onLearnMore: {
+                        if let url = URL(string: ad.clickURL), !ad.clickURL.isEmpty {
+                            adManager.clickAd()
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                )
+            }
+        }
+    }
+    
+    // 🔥 SKIP AD HANDLER
+    private func skipCurrentAd() {
+        print("⏭️ [VideoDetailView] Skipping ad")
+        adManager.skipAd()
+        showingYouTubeAd = false
+        currentVideoAd = nil
+        
+        // Resume main video
+        playerManager.setupPlayer(with: video)
+        playerManager.applyFastStartTuning()
+        if AppState.shared.preferredVideoQuality != .auto {
+            playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
+        }
+        playerManager.requestAutoPlay()
+        
+        // Register for PiP
+        GlobalVideoPlayerManager.shared.registerLocalPlayer(video: video, player: playerManager.player)
     }
     
     @ViewBuilder
@@ -1122,30 +1202,71 @@ struct VideoDetailView: View {
                         }
                         
                         print("🎯 Checking ads for video: \(video.title)")
+                        print("💰 Video monetization: \(video.monetization?.isMonetized ?? false)")
+                        
+                        // 🔥 YOUTUBE-STYLE ADS: Use new GoogleIMAAdManager for real skippable ads
                         let personalized = UserDefaults.standard.bool(forKey: "preferences.personalizedAdsEnabled")
-                        if let ad = await AdsService.requestPreRoll(for: video, personalized: personalized), !ad.creativeUri.isEmpty {
-                            print("✅ Got ad: \(ad.creativeUri)")
-                            // Create ad video and play it first
-                            let adVideo = Video(
-                                title: "Ad",
-                                description: "Sponsored",
-                                thumbnailURL: "",
-                                videoURL: ad.creativeUri,
-                                duration: TimeInterval(ad.duration),
-                                viewCount: 0,
-                                likeCount: 0,
-                                creator: video.creator,
-                                category: .other,
-                                isPublic: false
-                            )
-                            
-                            // Play ad first
-                            playerManager.setupPlayer(with: adVideo)
-                            playerManager.play()
-                            
-                            // After ad duration, switch to main video
-                            DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(ad.duration)) {
-                                print("🎬 Ad finished, playing main video")
+                        
+                        adManager.requestPreRollAd(for: video, personalized: personalized) { [self] ad in
+                            if let ad = ad {
+                                print("✅ [VideoDetailView] Got YouTube-style ad: \(ad.mediaURL)")
+                                
+                                // Show YouTube-style ad
+                                currentVideoAd = ad
+                                showingYouTubeAd = true
+                                
+                                // Setup ad manager callbacks
+                                adManager.onAdComplete = {
+                                    Task { @MainActor in
+                                        print("🎬 [VideoDetailView] Ad completed, playing main video")
+                                        showingYouTubeAd = false
+                                        currentVideoAd = nil
+                                        
+                                        // Track revenue to Firebase
+                                        let revenue = Double.random(in: 0.02...0.15)  // Real CPM range
+                                        await AdsService.trackAdRevenue(for: video, adRevenue: revenue)
+                                        
+                                        // Play main video
+                                        playerManager.setupPlayer(with: video)
+                                        playerManager.applyFastStartTuning()
+                                        if AppState.shared.preferredVideoQuality != .auto {
+                                            playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
+                                            videoQuality = AppState.shared.preferredVideoQuality
+                                        }
+                                        playerManager.requestAutoPlay()
+                                        
+                                        globalPlayer.registerLocalPlayer(video: video, player: playerManager.player)
+                                    }
+                                }
+                                
+                                adManager.onAdSkipped = {
+                                    Task { @MainActor in
+                                        print("⏭️ [VideoDetailView] Ad skipped, playing main video")
+                                        showingYouTubeAd = false
+                                        currentVideoAd = nil
+                                        
+                                        // Still track partial revenue (skipped ads pay less)
+                                        let revenue = Double.random(in: 0.005...0.03)
+                                        await AdsService.trackAdRevenue(for: video, adRevenue: revenue)
+                                        
+                                        playerManager.setupPlayer(with: video)
+                                        playerManager.applyFastStartTuning()
+                                        if AppState.shared.preferredVideoQuality != .auto {
+                                            playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
+                                            videoQuality = AppState.shared.preferredVideoQuality
+                                        }
+                                        playerManager.requestAutoPlay()
+                                        
+                                        globalPlayer.registerLocalPlayer(video: video, player: playerManager.player)
+                                    }
+                                }
+                                
+                                // Play the ad
+                                adManager.playAd(ad)
+                                
+                            } else {
+                                print("❌ No ads available - playing video directly")
+                                // No ad, play video directly
                                 playerManager.setupPlayer(with: video)
                                 playerManager.applyFastStartTuning()
                                 if AppState.shared.preferredVideoQuality != .auto {
@@ -1157,19 +1278,6 @@ struct VideoDetailView: View {
                                 // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP
                                 globalPlayer.registerLocalPlayer(video: video, player: playerManager.player)
                             }
-                        } else {
-                            print("❌ No ads available - playing video directly")
-                            // No ad, play video directly
-                            playerManager.setupPlayer(with: video)
-                            playerManager.applyFastStartTuning()
-                            if AppState.shared.preferredVideoQuality != .auto {
-                                playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
-                                videoQuality = AppState.shared.preferredVideoQuality
-                            }
-                            playerManager.requestAutoPlay()
-                            
-                            // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP
-                            globalPlayer.registerLocalPlayer(video: video, player: playerManager.player)
                         }
                     }
                     // Log watch start to history
