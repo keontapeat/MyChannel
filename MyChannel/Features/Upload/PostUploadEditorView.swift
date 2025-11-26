@@ -44,6 +44,9 @@ struct PostUploadEditorView: View {
                         // Privacy & Settings
                         privacySection
                         
+                        // 💰 Monetization Section (YouTube-style ads)
+                        monetizationSection
+                        
                         // 🔥 NEW: MyChannel University Section
                         universitySection
                         
@@ -148,12 +151,13 @@ struct PostUploadEditorView: View {
                 .foregroundColor(AppTheme.Colors.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
+            // ✅ YOUTUBE-STYLE: All neutral colors
             HStack(spacing: 12) {
                 PostUploadQuickActionButton(
                     title: "Pro Editor",
                     subtitle: "Advanced editing",
                     icon: "cpu",
-                    color: .purple
+                    color: AppTheme.Colors.textSecondary
                 ) {
                     showProEditor = true
                 }
@@ -162,7 +166,7 @@ struct PostUploadEditorView: View {
                     title: "Analytics",
                     subtitle: "View stats",
                     icon: "chart.bar.fill",
-                    color: .blue
+                    color: AppTheme.Colors.textSecondary
                 ) {
                     // Navigate to analytics
                     NotificationCenter.default.post(
@@ -178,7 +182,7 @@ struct PostUploadEditorView: View {
                     title: "Share",
                     subtitle: "Send to friends",
                     icon: "square.and.arrow.up",
-                    color: .green
+                    color: AppTheme.Colors.textSecondary
                 ) {
                     // Share video
                     shareVideo()
@@ -188,7 +192,7 @@ struct PostUploadEditorView: View {
                     title: "Download",
                     subtitle: "Save locally",
                     icon: "arrow.down.circle.fill",
-                    color: .orange
+                    color: AppTheme.Colors.textSecondary
                 ) {
                     // Download video
                     downloadVideo()
@@ -267,6 +271,164 @@ struct PostUploadEditorView: View {
                 isOn: $viewModel.ageRestricted
             )
         }
+    }
+    
+    // MARK: - 💰 Monetization Section (YouTube-style ads)
+    private var monetizationSection: some View {
+        VStack(spacing: 20) {
+            // Header
+            HStack(spacing: 12) {
+                Image(systemName: "dollarsign.circle.fill")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(Color.green)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Monetization")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    
+                    Text("Earn money from video ads")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                
+                Spacer()
+            }
+            
+            // Main Monetization Toggle
+            ProfessionalToggleRow(
+                title: "Enable Monetization",
+                subtitle: "Show ads on this video and earn revenue",
+                icon: "play.rectangle.fill",
+                isOn: $viewModel.isMonetized
+            )
+            
+            // Monetization Details (show when enabled)
+            if viewModel.isMonetized {
+                VStack(spacing: 16) {
+                    // Ad Placement Options
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Ad Placement")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                        
+                        Text("Choose where ads appear in your video")
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        
+                        VStack(spacing: 8) {
+                            AdPlacementToggle(
+                                title: "Pre-roll ads",
+                                subtitle: "Ads before your video",
+                                icon: "play.circle",
+                                isOn: $viewModel.enablePreRollAds
+                            )
+                            
+                            if video.duration >= 480 { // Only show for videos 8+ minutes
+                                AdPlacementToggle(
+                                    title: "Mid-roll ads",
+                                    subtitle: "Ads during your video (8+ min)",
+                                    icon: "forward.circle",
+                                    isOn: $viewModel.enableMidRollAds
+                                )
+                            }
+                            
+                            AdPlacementToggle(
+                                title: "Post-roll ads",
+                                subtitle: "Ads after your video",
+                                icon: "stop.circle",
+                                isOn: $viewModel.enablePostRollAds
+                            )
+                        }
+                    }
+                    
+                    // Revenue Estimate Card
+                    HStack(spacing: 14) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.green.opacity(0.15))
+                                .frame(width: 50, height: 50)
+                            
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundColor(.green)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Estimated Revenue")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                            
+                            Text("$\(estimatedRevenue, specifier: "%.2f") - $\(estimatedRevenueHigh, specifier: "%.2f") per 1K views")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.green)
+                            
+                            Text("Based on your category and settings")
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundColor(AppTheme.Colors.textTertiary)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.green.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.green.opacity(0.2), lineWidth: 1.5)
+                            )
+                    )
+                    
+                    // Monetization Requirements Info
+                    HStack(spacing: 12) {
+                        Image(systemName: "info.circle.fill")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.primary)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("How it works")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                            
+                            Text("Viewers see skippable video ads. You earn 90% of ad revenue. Payments processed monthly via Stripe.")
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(AppTheme.Colors.surface)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
+                            )
+                    )
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+    
+    // Revenue estimates based on category
+    private var estimatedRevenue: Double {
+        switch video.category {
+        case .gaming: return 1.50
+        case .music: return 2.00
+        case .movies, .tvShows: return 3.00
+        case .anime: return 1.75
+        case .sports: return 2.50
+        case .news: return 1.80
+        case .education: return 2.20
+        default: return 1.20
+        }
+    }
+    
+    private var estimatedRevenueHigh: Double {
+        return estimatedRevenue * 2.5
     }
     
     // MARK: - 🔥 NEW: MyChannel University Section
@@ -561,6 +723,12 @@ class PostUploadEditorViewModel: ObservableObject {
     @Published var universitySkillTags: Set<String> = []
     @Published var newSkillTag: String = ""
     
+    // 💰 Monetization settings (YouTube-style ads)
+    @Published var isMonetized: Bool = false
+    @Published var enablePreRollAds: Bool = true
+    @Published var enableMidRollAds: Bool = true
+    @Published var enablePostRollAds: Bool = false
+    
     @Published var hasChanges = false
     @Published var errorMessage: String?
     
@@ -573,6 +741,16 @@ class PostUploadEditorViewModel: ObservableObject {
         self.isPublic = true // Default to public
         self.commentsEnabled = true // Fetch from video settings
         self.ageRestricted = false // Fetch from video settings
+        
+        // 💰 Load existing monetization settings
+        if let monetization = video.monetization {
+            self.isMonetized = monetization.isMonetized
+            if let adBreaks = monetization.adBreaks {
+                self.enablePreRollAds = adBreaks.preRoll
+                self.enableMidRollAds = adBreaks.midRoll
+                self.enablePostRollAds = adBreaks.postRoll
+            }
+        }
         
         // Monitor changes
         setupChangeMonitoring()
@@ -679,6 +857,34 @@ class PostUploadEditorViewModel: ObservableObject {
                 tags: Array(tags) != video.tags ? Array(tags) : nil
             )
             
+            // 💰 Save monetization settings if changed
+            let existingMonetized = video.monetization?.isMonetized ?? false
+            if isMonetized != existingMonetized || isMonetized {
+                let adBreaks = Video.AdBreaks(
+                    preRoll: enablePreRollAds,
+                    midRoll: enableMidRollAds,
+                    postRoll: enablePostRollAds,
+                    midRollInterval: 480 // Every 8 minutes
+                )
+                
+                let monetizationSettings = Video.MonetizationSettings(
+                    isMonetized: isMonetized,
+                    adBreaks: adBreaks,
+                    sponsorSegments: video.monetization?.sponsorSegments,
+                    merchandise: video.monetization?.merchandise,
+                    donationEnabled: video.monetization?.donationEnabled ?? false,
+                    subscriptionTier: video.monetization?.subscriptionTier,
+                    totalRevenue: video.monetization?.totalRevenue ?? 0
+                )
+                
+                try await VideoFirestoreService.shared.updateMonetization(
+                    videoId: video.id,
+                    monetization: monetizationSettings
+                )
+                
+                print("💰 Monetization settings saved: isMonetized=\(isMonetized), preRoll=\(enablePreRollAds), midRoll=\(enableMidRollAds), postRoll=\(enablePostRollAds)")
+            }
+            
             print("✅ Video metadata updated successfully!")
             HapticManager.shared.notification(type: .success)
         } catch {
@@ -771,12 +977,55 @@ struct DifficultyLevelButton: View {
     }
     
     private var levelColor: Color {
+        // ✅ YOUTUBE-STYLE: Neutral grays for levels
         switch level {
-        case .beginner: return .green
-        case .intermediate: return .orange
-        case .advanced: return .red
-        case .expert: return .purple
+        case .beginner: return AppTheme.Colors.textTertiary
+        case .intermediate: return AppTheme.Colors.textSecondary
+        case .advanced: return AppTheme.Colors.textPrimary
+        case .expert: return AppTheme.Colors.textPrimary
         }
+    }
+}
+
+// MARK: - Ad Placement Toggle
+struct AdPlacementToggle: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    @Binding var isOn: Bool
+    
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(isOn ? .green : AppTheme.Colors.textSecondary)
+                .frame(width: 24)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Text(subtitle)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+            
+            Spacer()
+            
+            Toggle("", isOn: $isOn)
+                .tint(.green)
+                .labelsHidden()
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AppTheme.Colors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(isOn ? Color.green.opacity(0.3) : AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
+                )
+        )
     }
 }
 

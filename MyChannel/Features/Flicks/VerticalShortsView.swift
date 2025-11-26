@@ -71,17 +71,31 @@ struct VerticalShortsView: View {
         .onChange(of: currentIndex) { newValue in
             if !viewModel.shorts.isEmpty {
                 viewModel.trackView(for: viewModel.shorts[newValue].id)
-                        // Prefetch next item for zero-lag playback
-                        let nextIdx = newValue + 1
-                        if nextIdx < viewModel.shorts.count {
-                            let next = viewModel.shorts[nextIdx]
-                            VideoPlayerManager.prewarm(urlString: next.videoURL)
+                
+                // 🔥 THERMONUCLEAR: Prefetch next 3 videos for instant swipe
+                for offset in 1...3 {
+                    let prefetchIdx = newValue + offset
+                    if prefetchIdx < viewModel.shorts.count {
+                        let prefetchVideo = viewModel.shorts[prefetchIdx]
+                        
+                        // Use PlayerPoolManager for aggressive asset preloading
+                        PlayerPoolManager.shared.preloadAsset(for: prefetchVideo.videoURL)
+                        
+                        // Also use VideoPlayerManager's prewarm for AVPlayerItem caching
+                        VideoPlayerManager.prewarm(urlString: prefetchVideo.videoURL)
+                        
+                        // Prefetch thumbnail image too
+                        if let thumbURL = URL(string: prefetchVideo.thumbnailURL) {
+                            ImagePrefetcher.shared.prefetch(urls: [thumbURL])
                         }
-                // Prefetch one more ahead for smoother scroll
-                let nextNextIdx = newValue + 2
-                if nextNextIdx < viewModel.shorts.count {
-                    let nn = viewModel.shorts[nextNextIdx]
-                    VideoPlayerManager.prewarm(urlString: nn.videoURL)
+                    }
+                }
+                
+                // Also prefetch previous video for smooth back-swipe
+                let prevIdx = newValue - 1
+                if prevIdx >= 0 {
+                    let prevVideo = viewModel.shorts[prevIdx]
+                    PlayerPoolManager.shared.preloadAsset(for: prevVideo.videoURL)
                 }
             }
         }
@@ -136,16 +150,20 @@ struct ShortVideoView: View {
                         withAnimation(.spring()) { showDebugHUD.toggle() }
                     }
             } else {
-                // Thumbnail when not active
-                AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(9/16, contentMode: .fill)
-                } placeholder: {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
-                        .aspectRatio(9/16, contentMode: .fill)
-                }
+                // Thumbnail when not active - 🔥 PERF: Use cached image
+                AppAsyncImage(
+                    url: URL(string: video.thumbnailURL),
+                    content: { image in
+                        image
+                            .resizable()
+                            .aspectRatio(9/16, contentMode: .fill)
+                    },
+                    placeholder: {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.3))
+                            .aspectRatio(9/16, contentMode: .fill)
+                    }
+                )
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .clipped()
             }
@@ -157,16 +175,20 @@ struct ShortVideoView: View {
                     
                     HStack {
                         VStack(alignment: .leading, spacing: 12) {
-                            // Creator info
+                            // Creator info - 🔥 PERF: Use cached image
                             HStack(spacing: 12) {
-                                AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Circle()
-                                        .fill(Color.white.opacity(0.3))
-                                }
+                                AppAsyncImage(
+                                    url: URL(string: video.creator.profileImageURL ?? ""),
+                                    content: { image in
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                    },
+                                    placeholder: {
+                                        Circle()
+                                            .fill(Color.white.opacity(0.3))
+                                    }
+                                )
                                 .frame(width: 40, height: 40)
                                 .clipShape(Circle())
                                 
@@ -372,18 +394,22 @@ struct ShortsActionsPanel: View {
                     .foregroundColor(.white)
             }
             
-            // Creator avatar
-            Button(action: {
+            // Creator avatar - 🔥 PERF: Use cached image
+            Button {
                 // Navigate to creator profile
-            }) {
-                AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Circle()
-                        .fill(Color.white.opacity(0.3))
-                }
+            } label: {
+                AppAsyncImage(
+                    url: URL(string: video.creator.profileImageURL ?? ""),
+                    content: { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    },
+                    placeholder: {
+                        Circle()
+                            .fill(Color.white.opacity(0.3))
+                    }
+                )
                 .frame(width: 48, height: 48)
                 .clipShape(Circle())
                 .overlay(

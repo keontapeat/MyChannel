@@ -39,7 +39,7 @@ struct PremiumLiveTVSection: View {
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(AppTheme.Colors.textPrimary)
                         
-                        Text("900+ Free Channels")
+                        Text("\(LiveTVChannel.sampleChannels.count)+ Free Channels")
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                     }

@@ -27,6 +27,17 @@ final class SubscriptionsViewModel: ObservableObject {
     // Notification settings per channel
     @Published var notificationSettings: [String: NotificationLevel] = [:]  // userId -> level
     
+    // 🔥 PERFORMANCE: Track tasks for proper cancellation
+    private var loadVideosTask: Task<Void, Never>?
+    private var loadChannelsTask: Task<Void, Never>?
+    
+    // 🔥 PERFORMANCE: Proper deinit cleanup
+    deinit {
+        loadVideosTask?.cancel()
+        loadChannelsTask?.cancel()
+        print("✅ [SubscriptionsViewModel] Deallocated - no memory leak!")
+    }
+    
     // MARK: - Filter & Sort Options
     enum FilterOption: String, CaseIterable {
         case all = "All"

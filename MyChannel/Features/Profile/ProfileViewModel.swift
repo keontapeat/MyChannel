@@ -11,6 +11,10 @@ final class ProfileViewModel: ObservableObject {
     // Inputs (injected after init to allow SwiftUI @StateObject usage)
     private var authManager: AuthenticationManager?
     private var appState: AppState?
+    
+    // 🔥 PERFORMANCE: Track tasks for proper cancellation
+    private var loadTask: Task<Void, Never>?
+    private var userChangeTask: Task<Void, Never>?
 
     // Published state
     @Published var user: User = User.defaultUser
@@ -19,6 +23,13 @@ final class ProfileViewModel: ObservableObject {
     @Published var watchHistory: [Video] = []
     @Published var isLoading: Bool = true
     @Published var errorMessage: String = ""
+    
+    // 🔥 PERFORMANCE: Proper deinit cleanup
+    deinit {
+        loadTask?.cancel()
+        userChangeTask?.cancel()
+        print("✅ [ProfileViewModel] Deallocated - no memory leak!")
+    }
 
     func configure(authManager: AuthenticationManager, appState: AppState) {
         self.authManager = authManager
@@ -86,7 +97,10 @@ final class ProfileViewModel: ObservableObject {
         if let newUser {
             user = newUser
             // 🔥 RELOAD ONLY REAL VIDEOS: No mock/fallback data
-            Task {
+            // 🔥 PERFORMANCE: Cancel previous task and track new one
+            userChangeTask?.cancel()
+            userChangeTask = Task { [weak self] in
+                guard let self = self else { return }
                 do {
                     let uploadedVideos = try await VideoFirestoreService.shared.getUserVideos(userId: newUser.id)
                     await MainActor.run {

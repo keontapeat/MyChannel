@@ -152,7 +152,7 @@ class VersusMatchService: ObservableObject {
             matchId: matchId,
             winnerId: match.challengerId,
             loserId: match.opponentId,
-            amount: match.wagerAmount
+            totalPot: match.wagerAmount
         )
         
         // Update status
@@ -203,7 +203,7 @@ class VersusMatchService: ObservableObject {
             matchId: matchId,
             winnerId: winnerId,
             loserId: loserId,
-            amount: winnerPayout
+            totalPot: winnerPayout
         )
         
         // Update match

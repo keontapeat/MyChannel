@@ -77,6 +77,15 @@ class GamingViewModel: ObservableObject {
     @Published var activePlayers: String = "0"
     @Published var monthlyPrizePool: String = "0"
     
+    // 🔥 PERFORMANCE: Track tasks for proper cancellation
+    private var loadTask: Task<Void, Never>?
+    
+    // 🔥 PERFORMANCE: Proper deinit cleanup
+    deinit {
+        loadTask?.cancel()
+        print("✅ [GamingViewModel] Deallocated - no memory leak!")
+    }
+    
     func loadGamingData() async {
         totalPrizePool = "500K"
         activePlayers = "24.5K"

@@ -245,7 +245,7 @@ final class MatchVerificationService: ObservableObject {
             matchId: matchId,
             winnerId: winnerId,
             loserId: loserId,
-            amount: winnerPayout
+            totalPot: winnerPayout
         )
         
         // Step 2: Update winner's wallet
@@ -382,7 +382,7 @@ final class MatchVerificationService: ObservableObject {
             matchId: matchId,
             winnerId: winnerId,
             loserId: loserId,
-            amount: winnerPayout
+            totalPot: winnerPayout
         )
         
         // Update wallet

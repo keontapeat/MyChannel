@@ -433,8 +433,8 @@ struct HomeView: View {
         let poster = "https://picsum.photos/seed/sbkeonta/1280/720"
 
         // Monetization flag so ad preview and pre-roll show
-        let preRoll = Video.MonetizationSettings.AdBreak(timeStamp: 0, duration: 15, type: .preRoll)
-        let monetization = Video.MonetizationSettings(isMonetized: true, adBreaks: [preRoll], sponsorSegments: [], merchandise: nil, donationEnabled: false, subscriptionTier: nil, totalRevenue: 0)
+        let adBreaks = Video.AdBreaks(preRoll: true, midRoll: false, postRoll: false)
+        let monetization = Video.MonetizationSettings(isMonetized: true, adBreaks: adBreaks, sponsorSegments: [], merchandise: nil, donationEnabled: false, subscriptionTier: nil, totalRevenue: 0)
 
         return Video(
             title: "MyChannel Intro",
@@ -1245,8 +1245,8 @@ struct MinimalContentSections: View {
         let poster = "https://picsum.photos/seed/sbkeonta/1280/720"
 
         // Monetization flag so ad preview and pre-roll show
-        let preRoll = Video.MonetizationSettings.AdBreak(timeStamp: 0, duration: 15, type: .preRoll)
-        let monetization = Video.MonetizationSettings(isMonetized: true, adBreaks: [preRoll], sponsorSegments: [], merchandise: nil, donationEnabled: false, subscriptionTier: nil, totalRevenue: 0)
+        let adBreaks = Video.AdBreaks(preRoll: true, midRoll: false, postRoll: false)
+        let monetization = Video.MonetizationSettings(isMonetized: true, adBreaks: adBreaks, sponsorSegments: [], merchandise: nil, donationEnabled: false, subscriptionTier: nil, totalRevenue: 0)
 
         return Video(
             title: "MyChannel Intro",

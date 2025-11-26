@@ -164,12 +164,16 @@ struct NuclearFlicksView: View {
             if index == currentIndex || abs(index - currentIndex) <= 1 {
                 flickVideoPlayer(flick: flick, isActive: index == currentIndex)
             } else {
-                // Thumbnail for far away videos
-                AsyncImage(url: URL(string: flick.thumbnailURL)) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Color.gray.opacity(0.3)
-                }
+                // Thumbnail for far away videos - 🔥 PERF: Use cached image
+                AppAsyncImage(
+                    url: URL(string: flick.thumbnailURL),
+                    content: { image in
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    },
+                    placeholder: {
+                        Color.gray.opacity(0.3)
+                    }
+                )
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .clipped()
             }
@@ -264,16 +268,20 @@ struct NuclearFlicksView: View {
             HStack(alignment: .bottom, spacing: 0) {
                 // Left side - Video info
                 VStack(alignment: .leading, spacing: 12) {
-                    // Creator info
+                    // Creator info - 🔥 PERF: Use cached image
                     HStack(spacing: 12) {
                         Button {
                             viewModel.navigateToCreator(flick.creator)
                         } label: {
-                            AsyncImage(url: URL(string: flick.creator.profileImageURL)) { image in
-                                image.resizable().aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                Circle().fill(Color.white.opacity(0.3))
-                            }
+                            AppAsyncImage(
+                                url: URL(string: flick.creator.profileImageURL ?? ""),
+                                content: { image in
+                                    image.resizable().aspectRatio(contentMode: .fill)
+                                },
+                                placeholder: {
+                                    Circle().fill(Color.white.opacity(0.3))
+                                }
+                            )
                             .frame(width: 44, height: 44)
                             .clipShape(Circle())
                             .overlay(
@@ -408,13 +416,17 @@ struct NuclearFlicksView: View {
                 impactLight.impactOccurred()
             }
             
-            // Music album art (spinning)
+            // Music album art (spinning) - 🔥 PERF: Use cached image
             if let musicTrack = flick.musicTrack {
-                AsyncImage(url: URL(string: musicTrack.albumArt)) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Circle().fill(Color.white.opacity(0.3))
-                }
+                AppAsyncImage(
+                    url: URL(string: musicTrack.albumArt),
+                    content: { image in
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    },
+                    placeholder: {
+                        Circle().fill(Color.white.opacity(0.3))
+                    }
+                )
                 .frame(width: 48, height: 48)
                 .clipShape(Circle())
                 .overlay(

@@ -129,14 +129,8 @@ struct UploadView: View {
             }
         }
         var color: Color {
-            switch self {
-            case .trim: return .blue
-            case .filters: return .purple
-            case .music: return .green
-            case .text: return .orange
-            case .effects: return .pink
-            case .speed: return .red
-            }
+            // ✅ YOUTUBE-STYLE: All neutral grays - no bright colors
+            return AppTheme.Colors.textSecondary
         }
     }
     
@@ -693,7 +687,7 @@ struct UploadView: View {
                             title: "Pro Editor",
                             subtitle: "Full editing suite",
                             icon: "cpu",
-                            color: .purple
+                            color: AppTheme.Colors.textSecondary
                         ) {
                             // Launch Pro Editor
                             if let videoURL = uploadManager.videoURL {
@@ -1620,33 +1614,9 @@ struct UploadCreationModeBar: View {
                     RoundedRectangle(cornerRadius: 28)
                         .fill(.ultraThinMaterial)
                     
-                    // Animated gradient border
+                    // ✅ YOUTUBE-STYLE: Clean subtle border
                     RoundedRectangle(cornerRadius: 28)
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    AppTheme.Colors.primary.opacity(0.5),
-                                    Color.purple.opacity(0.3),
-                                    AppTheme.Colors.primary.opacity(0.5)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ),
-                            lineWidth: 1
-                        )
-                    
-                    // Subtle glow
-                    RoundedRectangle(cornerRadius: 28)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    AppTheme.Colors.primary.opacity(0.05),
-                                    Color.clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
                 }
                 .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
             )
@@ -1657,59 +1627,57 @@ struct UploadCreationModeBar: View {
         .accessibilityLabel("Creation mode")
     }
     
-    // 🔥 QUICK ACTIONS BAR
+    // ✅ YOUTUBE-STYLE QUICK ACTIONS BAR
     private var quickActionsBar: some View {
-        HStack(spacing: 12) {
-            quickActionButton(icon: "camera.fill", title: "Camera", color: .blue) {
+        HStack(spacing: 16) {
+            quickActionButton(icon: "camera.fill", title: "Camera") {
                 // Open camera
             }
             
-            quickActionButton(icon: "photo.on.rectangle", title: "Gallery", color: .green) {
+            quickActionButton(icon: "photo.on.rectangle", title: "Gallery") {
                 // Open gallery
             }
             
-            quickActionButton(icon: "mic.fill", title: "Audio", color: .orange) {
+            quickActionButton(icon: "mic.fill", title: "Audio") {
                 // Record audio
             }
             
-            quickActionButton(icon: "text.bubble.fill", title: "Post", color: .purple) {
+            quickActionButton(icon: "text.bubble.fill", title: "Post") {
                 // Create post
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color.black.opacity(0.5))
+            RoundedRectangle(cornerRadius: 16)
+                .fill(AppTheme.Colors.surface.opacity(0.95))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
                 )
         )
         .padding(.bottom, 8)
     }
     
-    private func quickActionButton(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
+    private func quickActionButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
                     .frame(width: 44, height: 44)
                     .background(
                         Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [color.opacity(0.8), color.opacity(0.6)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
+                            .fill(AppTheme.Colors.surface)
+                            .overlay(
+                                Circle()
+                                    .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
                             )
                     )
                 
                 Text(title)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
             }
         }
         .buttonStyle(.plain)
@@ -1730,35 +1698,13 @@ private struct NuclearModeButton: View {
     var body: some View {
         Button(action: onTap) {
             ZStack {
-                // 🔥 ANIMATED BACKGROUND
+                // ✅ YOUTUBE-STYLE CLEAN BACKGROUND (No purple!)
                 if isSelected {
                     Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    AppTheme.Colors.primary,
-                                    Color.purple
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(AppTheme.Colors.textPrimary)
                         .matchedGeometryEffect(id: "selector", in: ns)
                         .frame(height: 44)
-                        .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 12, x: 0, y: 6)
-                        .overlay(
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.3),
-                                            Color.clear
-                                        ],
-                                        startPoint: .top,
-                                        endPoint: .center
-                                    )
-                                )
-                        )
+                        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
                 }
                 
                 // 🔥 CONTENT

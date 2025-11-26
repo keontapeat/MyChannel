@@ -223,9 +223,10 @@ struct DownloadsView: View {
     
     // MARK: - Downloads List
     
+    // 🔥 THERMONUCLEAR: Using LazyVStack for 60fps scrolling
     private var downloadsList: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
                 // Storage Info
                 storageInfo
                     .padding(.horizontal, 20)
@@ -233,23 +234,24 @@ struct DownloadsView: View {
                 
                 Divider()
                 
-                // Downloads Section
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Text("Your downloads")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.primary)
-                        
-                        Spacer()
-                        
-                        Text("\(viewModel.downloads.count) videos")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
+                // Downloads Section Header
+                HStack {
+                    Text("Your downloads")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.primary)
                     
-                    // Downloads List
+                    Spacer()
+                    
+                    Text("\(viewModel.downloads.count) videos")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
+                
+                // 🔥 THERMONUCLEAR: LazyVStack for downloads - only renders visible items
+                LazyVStack(spacing: 0) {
                     ForEach(viewModel.downloads) { download in
                         downloadRow(download)
                         

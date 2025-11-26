@@ -465,6 +465,8 @@ struct SignUpView: View {
     @State private var isLoading: Bool = false
     @State private var showingError: Bool = false
     @State private var errorMessage: String = ""
+    @State private var showingTerms: Bool = false
+    @State private var showingPrivacyPolicy: Bool = false
     
     let onSignIn: () -> Void
     
@@ -559,7 +561,7 @@ struct SignUpView: View {
                                     .multilineTextAlignment(.leading)
                                 
                                 HStack {
-                                    Button("Terms of Service") { }
+                                    Button("Terms of Service") { showingTerms = true }
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(AppTheme.Colors.primary)
                                     
@@ -567,7 +569,7 @@ struct SignUpView: View {
                                         .font(.system(size: 12))
                                         .foregroundColor(AppTheme.Colors.textTertiary)
                                     
-                                    Button("Privacy Policy") { }
+                                    Button("Privacy Policy") { showingPrivacyPolicy = true }
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(AppTheme.Colors.primary)
                                 }
@@ -631,6 +633,26 @@ struct SignUpView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(errorMessage)
+        }
+        .sheet(isPresented: $showingTerms) {
+            NavigationStack {
+                TermsView()
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("Done") { showingTerms = false }
+                        }
+                    }
+            }
+        }
+        .sheet(isPresented: $showingPrivacyPolicy) {
+            NavigationStack {
+                PrivacyPolicyView()
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("Done") { showingPrivacyPolicy = false }
+                        }
+                    }
+            }
         }
     }
     

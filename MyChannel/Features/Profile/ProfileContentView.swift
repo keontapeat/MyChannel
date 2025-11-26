@@ -72,6 +72,7 @@ struct SafeProfileContentView: View {
     var isLoadingMore: Bool = false // ⚡ PERFORMANCE: Loading state
     var isOwnProfile: Bool = false
     var videoManagementContext: VideoManagementContext? = nil
+    var isLoadingVideos: Bool = false // ⚡ PERFORMANCE: Initial loading state for skeleton
     
     var body: some View {
         SafeViewWrapper {
@@ -83,7 +84,8 @@ struct SafeProfileContentView: View {
                 hasMoreVideos: hasMoreVideos,
                 isLoadingMore: isLoadingMore,
                 isOwnProfile: isOwnProfile,
-                videoManagementContext: videoManagementContext
+                videoManagementContext: videoManagementContext,
+                isLoadingVideos: isLoadingVideos
             )
         } fallback: {
             ProfileContentFallback(selectedTab: selectedTab)
@@ -101,6 +103,7 @@ struct ProfileContentView: View {
     var isLoadingMore: Bool = false // ⚡ PERFORMANCE: Loading state
     let isOwnProfile: Bool
     var videoManagementContext: VideoManagementContext? = nil
+    var isLoadingVideos: Bool = false // ⚡ PERFORMANCE: Initial loading state for skeleton
     
     var body: some View {
         LazyVStack(spacing: 0) {
@@ -113,7 +116,8 @@ struct ProfileContentView: View {
                     onLoadMore: onLoadMore,
                     hasMoreVideos: hasMoreVideos,
                     isLoadingMore: isLoadingMore,
-                    managementContext: videoManagementContext
+                    managementContext: videoManagementContext,
+                    isLoadingVideos: isLoadingVideos
                 )
             case .shorts:
                 ProfileShortsView(videos: videos, user: user)
@@ -138,6 +142,7 @@ struct ProfileVideosView: View {
     var hasMoreVideos: Bool = false // ⚡ PERFORMANCE: Pagination state
     var isLoadingMore: Bool = false // ⚡ PERFORMANCE: Loading state
     var managementContext: VideoManagementContext? = nil
+    var isLoadingVideos: Bool = false // ⚡ PERFORMANCE: Initial loading state for skeleton
     
     @State private var layoutMode: VideoLayoutMode = .list1
     @State private var sortMode: SortMode = .newest
@@ -417,7 +422,16 @@ struct ProfileVideosView: View {
     
     @ViewBuilder
     private var videosBody: some View {
-        if layoutMode == .grid2 {
+        // ⚡ PERFORMANCE: Show skeleton while loading (only if videos are empty)
+        if isLoadingVideos && videos.isEmpty {
+            if layoutMode == .grid2 {
+                VideosLoadingSkeletonGrid(count: 6)
+                    .transition(.opacity)
+            } else {
+                VideosLoadingSkeletonList(count: 6)
+                    .transition(.opacity)
+            }
+        } else if layoutMode == .grid2 {
             LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(Array(unpinnedSortedVideos.enumerated()), id: \.element.id) { index, video in
                     let isSelected = managementContext?.selectedIDs.wrappedValue.contains(video.id) ?? false

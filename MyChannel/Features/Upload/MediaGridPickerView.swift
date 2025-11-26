@@ -46,17 +46,9 @@ struct MediaGridPickerView: View {
     
     var body: some View {
         ZStack {
-            // 🔥 NUCLEAR GRADIENT BACKGROUND
-            LinearGradient(
-                colors: [
-                    Color.black,
-                    Color(red: 0.05, green: 0.05, blue: 0.1),
-                    Color.black
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // ✅ YOUTUBE-STYLE: Always dark background for media picker
+            Color(red: 15/255, green: 15/255, blue: 15/255)
+                .ignoresSafeArea()
             
             VStack(spacing: 0) {
                 nuclearHeader
@@ -214,36 +206,12 @@ struct MediaGridPickerView: View {
             .padding(.top, 12)
             .padding(.bottom, 12)
             
-            // 🔥 ANIMATED DIVIDER
+            // ✅ YOUTUBE-STYLE: Clean divider
             Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            AppTheme.Colors.primary.opacity(0.5),
-                            Color.purple.opacity(0.3),
-                            AppTheme.Colors.primary.opacity(0.5)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+                .fill(AppTheme.Colors.divider.opacity(0.3))
                 .frame(height: 1)
         }
-        .background(
-            ZStack {
-                Color.black.opacity(0.98)
-                
-                // Subtle gradient overlay
-                LinearGradient(
-                    colors: [
-                        Color.clear,
-                        AppTheme.Colors.primary.opacity(0.05)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
-        )
+        .background(Color(red: 25/255, green: 25/255, blue: 25/255))
     }
     
     // 🔥 SEARCH & FILTER BAR
@@ -484,16 +452,7 @@ struct MediaGridPickerView: View {
             
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                AppTheme.Colors.primary.opacity(0.2),
-                                Color.purple.opacity(0.1)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(AppTheme.Colors.surface.opacity(0.3))
                     .frame(width: 120, height: 120)
                     .blur(radius: 30)
                 
@@ -531,16 +490,7 @@ struct MediaGridPickerView: View {
                     .padding(.vertical, 16)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        AppTheme.Colors.primary,
-                                        Color.purple
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                            .fill(AppTheme.Colors.primary)
                             .shadow(color: AppTheme.Colors.primary.opacity(0.5), radius: 20, y: 10)
                     )
                 }
@@ -570,32 +520,16 @@ struct MediaGridPickerView: View {
         .padding()
     }
     
-    // 🔥 NUCLEAR LOADING VIEW
+    // ✅ YOUTUBE-STYLE LOADING VIEW
     private var nuclearLoadingView: some View {
         VStack(spacing: 20) {
-            ZStack {
-                Circle()
-                    .stroke(Color.white.opacity(0.1), lineWidth: 4)
-                    .frame(width: 60, height: 60)
-                
-                Circle()
-                    .trim(from: 0, to: 0.7)
-                    .stroke(
-                        LinearGradient(
-                            colors: [AppTheme.Colors.primary, Color.purple],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
-                    )
-                    .frame(width: 60, height: 60)
-                    .rotationEffect(.degrees(-90))
-                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: UUID())
-            }
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                .scaleEffect(1.5)
             
             Text("Loading your videos...")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white.opacity(0.8))
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.white.opacity(0.7))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -745,18 +679,18 @@ private struct NuclearGridCell: View {
                     .resizable()
                     .scaledToFill()
                     .overlay(
-                        // Dynamic gradient based on selection
-                        LinearGradient(
-                            colors: isSelected ? [
-                                AppTheme.Colors.primary.opacity(0.4),
-                                Color.purple.opacity(0.3)
-                            ] : [
-                                .clear,
-                                .black.opacity(0.35)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+                        // ✅ YOUTUBE-STYLE: Clean selection overlay
+                        Group {
+                            if isSelected {
+                                Color.black.opacity(0.3)
+                            } else {
+                                LinearGradient(
+                                    colors: [.clear, .black.opacity(0.35)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            }
+                        }
                     )
             } else {
                 // Loading shimmer

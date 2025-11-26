@@ -241,6 +241,7 @@ class ProVideoEditor: ObservableObject {
 }
 
 // MARK: - Firestore Extension for Video URL Updates
+// 🔥 PERFORMANCE FIX: Removed duplicate updateVideoMetadata - already exists in VideoFirestoreService
 extension VideoFirestoreService {
     func updateVideoURL(videoId: String, newURL: String) async throws {
         #if canImport(FirebaseFirestore)
@@ -250,21 +251,6 @@ extension VideoFirestoreService {
             "updatedAt": FieldValue.serverTimestamp()
         ])
         print("✅ Video URL updated in Firestore")
-        #endif
-    }
-    
-    func updateVideoMetadata(videoId: String, title: String?, description: String?, category: VideoCategory?, tags: [String]?) async throws {
-        #if canImport(FirebaseFirestore)
-        var updates: [String: Any] = ["updatedAt": FieldValue.serverTimestamp()]
-        
-        if let title = title { updates["title"] = title }
-        if let description = description { updates["description"] = description }
-        if let category = category { updates["category"] = category.rawValue }
-        if let tags = tags { updates["tags"] = tags }
-        
-        let ref = Firestore.firestore().collection("videos").document(videoId)
-        try await ref.updateData(updates)
-        print("✅ Video metadata updated in Firestore")
         #endif
     }
 }

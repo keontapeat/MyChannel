@@ -49,8 +49,12 @@ struct ProfileView: View {
 
     @State private var scrollOffset: CGFloat = 0
     @State private var isLoading: Bool = true
+    @State private var isLoadingVideos: Bool = true  // ⚡ PERFORMANCE: Track video loading separately
     @State private var hasError: Bool = false
     @State private var errorMessage: String = ""
+    
+    // ⚡ PERFORMANCE: Cache service for instant loading
+    @StateObject private var profileCache = ProfileCacheService.shared
     
     // Video Analytics Navigation
     @State private var showingVideoAnalytics: Bool = false
@@ -276,7 +280,8 @@ struct ProfileView: View {
                         hasMoreVideos: hasMoreVideos,
                         isLoadingMore: isLoadingMoreVideos,
                         isOwnProfile: isViewingOwnProfile,
-                        videoManagementContext: videoManagementContext
+                        videoManagementContext: videoManagementContext,
+                        isLoadingVideos: isLoadingVideos  // ⚡ PERFORMANCE: Pass loading state for skeleton
                     )
                 
                 // Quick Actions and Links
@@ -681,11 +686,29 @@ struct ProfileView: View {
     // MARK: - Helpers
 
     private func loadProfileSafely() {
-        // ⚡ YOUTUBE-STYLE: Show content immediately, load data in background
-        // NO loading state - instant UI like YouTube
+        // ⚡ THERMONUCLEAR PERFORMANCE: Instant profile loading
+        // Step 1: Show cached data IMMEDIATELY (0ms delay)
         user = currentUser
         
-        // Load data in background without blocking UI
+        // Step 2: Check cache for instant video display
+        let cachedVideos = profileCache.getCachedVideos()
+        if !cachedVideos.isEmpty && profileCache.isCacheValid() {
+            // 🔥 INSTANT: Show cached videos immediately
+            userVideos = cachedVideos
+            isLoadingVideos = false
+            print("⚡ [ProfileView] Instant load from cache: \(cachedVideos.count) videos")
+        } else if !cachedVideos.isEmpty {
+            // Cache exists but may be stale - show it anyway for instant UI
+            userVideos = cachedVideos
+            isLoadingVideos = true  // Show skeleton overlay while refreshing
+            print("⚡ [ProfileView] Showing stale cache: \(cachedVideos.count) videos (refreshing)")
+        } else {
+            // No cache - show skeleton
+            isLoadingVideos = true
+            print("⏳ [ProfileView] No cache - showing skeleton")
+        }
+        
+        // Step 3: Background refresh with fresh data (non-blocking)
         Task { @MainActor in
             let creatorId = user.id
             
@@ -696,21 +719,34 @@ struct ProfileView: View {
                     limit: videosPerPage,
                     lastDocument: nil
                 )
+                
+                // Update UI with fresh data
                 userVideos = result.videos
                 lastVideoDocument = result.lastDocument
                 hasMoreVideos = result.videos.count == videosPerPage
+                isLoadingVideos = false
+                
+                // Update cache for next time
+                profileCache.cacheProfile(user: user, videos: result.videos)
                 
                 // Check local storage as backup only if Firestore is empty
                 if userVideos.isEmpty {
                     if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: creatorId), !localVids.isEmpty {
                         userVideos = Array(localVids.prefix(videosPerPage))
                         hasMoreVideos = localVids.count > videosPerPage
+                        profileCache.updateCachedVideos(userVideos)
                     }
                 }
+                
+                print("✅ [ProfileView] Loaded \(result.videos.count) videos from Firestore")
             } catch {
                 print("🚨 [ProfileView] Error loading videos: \(error)")
-                userVideos = []
+                // Keep cached videos if available, otherwise empty
+                if userVideos.isEmpty {
+                    userVideos = []
+                }
                 hasMoreVideos = false
+                isLoadingVideos = false
             }
             
             // 🔥 REAL-TIME STATS UPDATE
@@ -763,6 +799,16 @@ struct ProfileView: View {
             if let newUser {
                 print("🔄 Setting user state to new user with profileImageURL: \(newUser.profileImageURL ?? "nil")")
                 user = newUser
+                
+                // ⚡ PERFORMANCE: Show cached videos instantly while loading fresh
+                let cachedVideos = profileCache.getCachedVideos()
+                if !cachedVideos.isEmpty {
+                    userVideos = cachedVideos
+                    isLoadingVideos = true  // Show refresh indicator
+                } else {
+                    isLoadingVideos = true
+                }
+                
                 Task { @MainActor in
                     // ⚡ PERFORMANCE: Load only first page (24 videos)
                     do {
@@ -774,18 +820,27 @@ struct ProfileView: View {
                         userVideos = result.videos
                         lastVideoDocument = result.lastDocument
                         hasMoreVideos = result.videos.count == videosPerPage
+                        isLoadingVideos = false
+                        
+                        // Update cache
+                        profileCache.cacheProfile(user: newUser, videos: result.videos)
                         
                         // Check local storage as backup only if Firestore is empty
                         if userVideos.isEmpty {
                             if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: newUser.id), !localVids.isEmpty {
                                 userVideos = Array(localVids.prefix(videosPerPage))
                                 hasMoreVideos = localVids.count > videosPerPage
+                                profileCache.updateCachedVideos(userVideos)
                             }
                         }
                     } catch {
                         print("🚨 [ProfileView] Error loading videos: \(error)")
-                        userVideos = []
+                        // Keep cached videos if available
+                        if userVideos.isEmpty {
+                            userVideos = []
+                        }
                         hasMoreVideos = false
+                        isLoadingVideos = false
                     }
                     
                     recalculateUserStats()
@@ -795,6 +850,7 @@ struct ProfileView: View {
                 user = User.defaultUser
                 userVideos = []
                 watchHistory = []
+                profileCache.clearCache()
             }
         }
     }
@@ -884,6 +940,8 @@ struct ProfileView: View {
                     try await VideoFirestoreService.shared.deleteVideo(videoId: id)
                     try? await DatabaseService.shared.deleteVideo(id: id)
                     PinnedVideosStore.shared.unpin(id, for: user.id)
+                    // ⚡ PERFORMANCE: Also remove from cache
+                    profileCache.removeVideoFromCache(id)
                     await MainActor.run {
                         userVideos.removeAll { $0.id == id }
                     }
@@ -1182,6 +1240,7 @@ private struct ProfileContentSection: View {
     var onLoadMore: (() async -> Void)? = nil // ⚡ PERFORMANCE: Pagination callback
     var hasMoreVideos: Bool = false // ⚡ PERFORMANCE: Pagination state
     var isLoadingMore: Bool = false // ⚡ PERFORMANCE: Loading state
+    var isLoadingVideos: Bool = false // ⚡ PERFORMANCE: Initial loading state for skeleton
 
     var body: some View {
         SafeProfileContentView(
@@ -1190,7 +1249,8 @@ private struct ProfileContentSection: View {
             videos: videos,
             onLoadMore: onLoadMore,
             hasMoreVideos: hasMoreVideos,
-            isLoadingMore: isLoadingMore
+            isLoadingMore: isLoadingMore,
+            isLoadingVideos: isLoadingVideos
         )
     }
 }

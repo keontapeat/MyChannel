@@ -466,7 +466,8 @@ class VideoUploadManager: ObservableObject {
                 // 🔥 FIX: Always enable monetization for testing
                 monetization: Video.MonetizationSettings(
                     isMonetized: true, // Always true for testing
-                    adBreaks: [
+                    adBreaks: Video.AdBreaks(preRoll: true, midRoll: true, postRoll: false),
+                    adBreakTimestamps: [
                         Video.MonetizationSettings.AdBreak(timeStamp: 0, duration: 15, type: .preRoll), // Pre-roll
                         Video.MonetizationSettings.AdBreak(timeStamp: max(1, videoDuration) / 2, duration: 15, type: .midRoll) // Mid-roll
                     ],
@@ -581,7 +582,8 @@ class VideoUploadManager: ObservableObject {
             visibility: metadata.isPublic ? .public : .private,
             monetization: Video.MonetizationSettings(
                 isMonetized: true, // Always true for testing
-                adBreaks: [
+                adBreaks: Video.AdBreaks(preRoll: true, midRoll: true, postRoll: false),
+                adBreakTimestamps: [
                     Video.MonetizationSettings.AdBreak(timeStamp: 0, duration: 15, type: .preRoll), // Pre-roll
                     Video.MonetizationSettings.AdBreak(timeStamp: max(1, videoDuration) / 2, duration: 15, type: .midRoll) // Mid-roll
                 ],
@@ -593,7 +595,7 @@ class VideoUploadManager: ObservableObject {
         
         print("🎬 Created video with working URL: \(localVideoURLString)")
         print("💰 Monetization enabled: \(mockVideo.monetization?.isMonetized ?? false)")
-        print("🎯 Ad breaks: \(mockVideo.monetization?.adBreaks.count ?? 0)")
+        print("🎯 Ad breaks: \(mockVideo.monetization?.adBreakTimestamps?.count ?? 0)")
         return mockVideo
     }
     
