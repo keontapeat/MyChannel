@@ -8,7 +8,7 @@
 import Foundation
 import SwiftUI
 
-struct ContentAnalysis: Codable {
+struct VideoContentAnalysis: Codable {
     let viralScore: Int
     let estimatedViews: String
     let engagementRate: Int
@@ -26,7 +26,7 @@ struct UploadTimeSlot: Codable {
 
 @MainActor
 class AIContentAssistantViewModel: ObservableObject {
-    @Published var currentAnalysis: ContentAnalysis?
+    @Published var currentAnalysis: VideoContentAnalysis?
     @Published var trendingTopics: [String] = []
     @Published var bestUploadTimes: [UploadTimeSlot] = []
     
@@ -53,7 +53,7 @@ class AIContentAssistantViewModel: ObservableObject {
             let response = try await OpenAIService.shared.generate(prompt, model: .gpt5Turbo)
             // Parse JSON response
             // For now, mock the response
-            currentAnalysis = ContentAnalysis(
+            currentAnalysis = VideoContentAnalysis(
                 viralScore: Int.random(in: 60...95),
                 estimatedViews: "50K-150K",
                 engagementRate: Int.random(in: 5...12),

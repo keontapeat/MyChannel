@@ -87,8 +87,11 @@ struct SubscriptionsView: View {
         .background(AppTheme.Colors.background)
     }
     
+    // 🔥 PREMIUM: Tab button with haptic and scale animation
     private func tabButton(for tab: SubscriptionsViewModel.SubscriptionTab) -> some View {
         Button(action: {
+            // 🔥 PREMIUM: Haptic on tab change
+            HapticManager.shared.impact(style: .light)
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 viewModel.selectedTab = tab
             }
@@ -107,22 +110,31 @@ struct SubscriptionsView: View {
                 Capsule()
                     .fill(viewModel.selectedTab == tab ? AppTheme.Colors.primary : AppTheme.Colors.surface)
             )
+            // 🔥 PREMIUM: Scale animation for selected state
+            .scaleEffect(viewModel.selectedTab == tab ? 1.02 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: viewModel.selectedTab)
         }
         .buttonStyle(PlainButtonStyle())
     }
     
-    // MARK: - Toolbar
+    // MARK: - 🔥 PREMIUM: Toolbar with haptics
     private var toolbarButtons: some View {
         HStack(spacing: 16) {
             // Filter button
-            Button(action: { showFilterSheet = true }) {
+            Button(action: {
+                HapticManager.shared.impact(style: .light)
+                showFilterSheet = true
+            }) {
                 Image(systemName: "line.3.horizontal.decrease.circle")
                     .font(.system(size: 18, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textPrimary)
             }
             
             // Sort button
-            Button(action: { showSortSheet = true }) {
+            Button(action: {
+                HapticManager.shared.impact(style: .light)
+                showSortSheet = true
+            }) {
                 Image(systemName: "arrow.up.arrow.down.circle")
                     .font(.system(size: 18, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textPrimary)
@@ -130,18 +142,22 @@ struct SubscriptionsView: View {
         }
     }
     
-    // MARK: - Feed Tab
+    // MARK: - 🔥 PREMIUM: Feed Tab with staggered animations
     private var feedTab: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
-                ForEach(viewModel.filteredVideos) { video in
+                ForEach(Array(viewModel.filteredVideos.enumerated()), id: \.element.id) { index, video in
                     SubscriptionVideoCard(video: video)
                         .onTapGesture {
+                            // 🔥 PREMIUM: Haptic on video tap
+                            HapticManager.shared.impact(style: .light)
                             NotificationCenter.default.post(
                                 name: NSNotification.Name("NavigateToVideo"),
                                 object: video.id
                             )
                         }
+                        // 🔥 PREMIUM: Staggered appear animation
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
             .padding(.horizontal, 20)

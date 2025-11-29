@@ -328,8 +328,65 @@ class UltimateStoryViewModel: ObservableObject {
     }
     
     private func uploadMedia(_ media: CapturedMedia) async throws -> String {
-        // TODO: Upload to Firebase Storage
-        return "https://example.com/story-media.jpg"
+        let storyAPI = StoryAPIService.shared
+        
+        switch media {
+        case .image(let image):
+            // Compress image for upload
+            guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+                throw StoryError.processingFailed("Failed to compress image")
+            }
+            
+            // Get signed URL for upload
+            let filename = "story_\(UUID().uuidString).jpg"
+            let signedUrlResponse = try await storyAPI.getSignedUploadUrl(
+                filename: filename,
+                contentType: "image/jpeg"
+            )
+            
+            // Upload to signed URL
+            try await storyAPI.uploadMedia(
+                data: imageData,
+                to: signedUrlResponse.url,
+                contentType: "image/jpeg"
+            )
+            
+            // Finalize and get public URL
+            let finalizeResponse = try await storyAPI.finalize(
+                object: signedUrlResponse.object,
+                bucket: signedUrlResponse.bucket,
+                contentType: "image/jpeg"
+            )
+            
+            return finalizeResponse.publicUrl
+            
+        case .video(let url):
+            // Read video data
+            let videoData = try Data(contentsOf: url)
+            
+            // Get signed URL for upload
+            let filename = "story_\(UUID().uuidString).mov"
+            let signedUrlResponse = try await storyAPI.getSignedUploadUrl(
+                filename: filename,
+                contentType: "video/quicktime"
+            )
+            
+            // Upload to signed URL
+            try await storyAPI.uploadMedia(
+                data: videoData,
+                to: signedUrlResponse.url,
+                contentType: "video/quicktime"
+            )
+            
+            // Finalize and get public URL
+            let finalizeResponse = try await storyAPI.finalize(
+                object: signedUrlResponse.object,
+                bucket: signedUrlResponse.bucket,
+                contentType: "video/quicktime"
+            )
+            
+            return finalizeResponse.publicUrl
+        }
     }
     
     private func processElements() async throws -> [ProcessedElement] {
@@ -349,8 +406,18 @@ class UltimateStoryViewModel: ObservableObject {
     }
     
     private func getCurrentUserId() -> String {
-        // TODO: Get from AppState
-        return "user-123"
+        // Get from AppState - check for authenticated user
+        if let userId = AppState.shared.currentUser?.id {
+            return userId
+        }
+        // Fallback - should not happen in production
+        return UUID().uuidString
+    }
+    
+    // MARK: - Set Music
+    func setMusic(_ music: MusicTrack) {
+        selectedMusic = music
+        HapticManager.shared.impact(style: .medium)
     }
 }
 

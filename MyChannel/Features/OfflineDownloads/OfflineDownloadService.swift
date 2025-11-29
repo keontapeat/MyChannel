@@ -97,7 +97,7 @@ class OfflineDownloadService: ObservableObject {
         let queueItem = DownloadQueueItem(
             id: UUID().uuidString,
             download: download,
-            priority: .normal,
+            priority: OfflineDownloadPriority.normal,
             addedAt: Date()
         )
         
@@ -172,7 +172,7 @@ class OfflineDownloadService: ObservableObject {
         isDownloading = true
         
         // Sort queue by priority
-        downloadQueue.sort { $0.priority.rawValue > $1.priority.rawValue }
+        downloadQueue.sort(by: { $0.priority.rawValue > $1.priority.rawValue })
         
         while let queueItem = downloadQueue.first {
             do {
@@ -423,7 +423,7 @@ struct OfflineDownload: Identifiable, Codable {
 struct DownloadQueueItem: Identifiable {
     let id: String
     let download: OfflineDownload
-    let priority: DownloadPriority
+    let priority: OfflineDownloadPriority
     let addedAt: Date
 }
 
@@ -465,7 +465,7 @@ enum DownloadStatus: String, Codable {
     case queued, downloading, completed, failed, paused
 }
 
-enum DownloadPriority: Int {
+enum OfflineDownloadPriority: Int {
     case low = 1, normal = 2, high = 3
 }
 

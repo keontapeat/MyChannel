@@ -210,8 +210,11 @@ struct HomeView: View {
             UltimateStoryCreatorView { story in
                 // Dismiss and refresh from authoritative source to avoid duplicates
                 presentStoryCreator = false
+                // Notify stories changed so all views refresh
+                NotificationCenter.default.post(name: .storiesDidChange, object: nil)
                 Task { await loadUserStories() }
             }
+            .environmentObject(appState)
             .preferredColorScheme(.dark)
         }
         .sheet(isPresented: $showingQuickProfile) {
@@ -1185,6 +1188,8 @@ struct MinimalContentSections: View {
     @State private var friendChannelVideos: [Video] = []
     @State private var liveChannelsAPI: [LiveTVChannel] = []
     @State private var showLocalArtistsOnly: Bool = false
+    @State private var selectedLiveTVChannel: LiveTVChannel?
+    @State private var showLiveTVPlayer: Bool = false
 
     private var friendVideoId: String { "friend_video_yt_71GJrAY54Ew" }
     private var friendChannelID: String { "UCITAM_FKtyKEq40aHVXFTcQ" }
@@ -1584,9 +1589,20 @@ struct MinimalContentSections: View {
                 }()
             )
 
+            // 🔥🔥🔥 AI-POWERED LIVE TV SECTION - THE BEST IN THE WORLD 🔥🔥🔥
+            AILiveTVSection(
+                onSelectChannel: { channel in
+                    // Navigate to player
+                    selectedLiveTVChannel = channel
+                    showLiveTVPlayer = true
+                },
+                onSeeAll: { onSeeAllLiveTV() }
+            )
+            
+            // Also keep quick access row with MyChannel Live first
             MinimalSection(
-                title: "Live TV",
-                seeAllAction: { onSeeAllLiveTV() }
+                title: "Quick Tune",
+                seeAllAction: nil
             ) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
@@ -1616,10 +1632,11 @@ struct MinimalContentSections: View {
                                 allowPlaybackInPreviews: false
                             )
                         }
-                        .buttonStyle(PlainButtonStyle())
+                        .buttonStyle(PressableScaleStyle(scale: 0.96))
 
+                        // 🔥 Show the FIRE channels first - verified working streams
                         let source = liveChannelsAPI.isEmpty ? LiveTVChannel.sampleChannels : liveChannelsAPI
-                        let channels = Array(source.prefix(8))
+                        let channels = Array(source.prefix(8)) // Top 8 channels for quick tune
                         let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
                         let previewStreams = [
                             "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
@@ -1630,13 +1647,13 @@ struct MinimalContentSections: View {
                             NavigationLink(destination: LiveTVPlayerView(channel: channel)) {
                                 MinimalChannelCard(
                                     channel: channel,
-                                    autoPreview: index < 3,
-                                    previewOverrideStreamURL: (isPreview && index < 3) ? previewStreams[index] : nil,
+                                    autoPreview: true, // 🔥 ALL channels auto-preview now!
+                                    previewOverrideStreamURL: (isPreview && index < 3) ? previewStreams[index % previewStreams.count] : nil,
                                     previewOverridePosterURL: nil,
                                     allowPlaybackInPreviews: isPreview && index < 3
                                 )
                             }
-                            .buttonStyle(PlainButtonStyle())
+                            .buttonStyle(PressableScaleStyle(scale: 0.96))
                         }
                     }
                     .padding(.horizontal, 20)
@@ -1693,6 +1710,11 @@ struct MinimalContentSections: View {
                 group.addTask { await loadBlockbusters() }
                 group.addTask { await loadFriendChannelVideos() }
                 group.addTask { await loadLiveChannelsAPI() }
+            }
+        }
+        .fullScreenCover(isPresented: $showLiveTVPlayer) {
+            if let channel = selectedLiveTVChannel {
+                LiveTVPlayerView(channel: channel)
             }
         }
     }
@@ -1754,6 +1776,10 @@ struct MinimalContentSections: View {
 
     private func loadLiveChannelsAPI() async {
         guard liveChannelsAPI.isEmpty else { return }
+        
+        // 🔥 FIRE: Preload the first channels for instant thumbnail playback
+        await LiveTVService.shared.preloadFireChannels(count: 6)
+        
         let fetched = await IPTVOrgService.shared.fetchTopChannels(limit: 24, countries: ["US","GB","CA"], languages: ["eng"], categories: nil)
         await MainActor.run {
             self.liveChannelsAPI = fetched
@@ -2060,7 +2086,7 @@ struct MinimalVideoCard: View {
                 .frame(width: 180, alignment: .leading)
             }
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(PressableScaleStyle(scale: 0.96))
         .drawingGroup() // ⚡ PERFORMANCE: Flatten view hierarchy for smoother scrolling
     }
 }
@@ -2126,11 +2152,11 @@ struct MinimalMovieCard: View {
                 .frame(width: 120, alignment: .leading)
             }
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(PressableScaleStyle(scale: 0.96))
     }
 }
 
-// MARK: - Minimal Channel Card (stable)
+// MARK: - Minimal Channel Card (stable) 🔥
 struct MinimalChannelCard: View {
     let channel: LiveTVChannel
     var autoPreview: Bool = false
@@ -2142,52 +2168,80 @@ struct MinimalChannelCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack {
-                if showPreview {
-                    LiveChannelThumbnailView(
-                        streamURL: previewOverrideStreamURL ?? channel.streamURL,
-                        posterURL: previewOverridePosterURL ?? channel.logoURL,
-                        fallbackStreamURL: channel.previewFallbackURL,
-                        allowPlaybackInPreviews: allowPlaybackInPreviews
-                    )
-                        .frame(width: 160, height: 90)
-                        .background(Color(.systemGray6))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                } else {
-                    AppAsyncImage(url: URL(string: previewOverridePosterURL ?? channel.logoURL)) { image in
-                        image.resizable().scaledToFit()
-                    } placeholder: { Color(.systemGray6) }
-                        .frame(width: 160, height: 90)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
+                // 🔥 ALWAYS show the live thumbnail for fire channels - loads fast with great placeholders
+                LiveChannelThumbnailView(
+                    streamURL: previewOverrideStreamURL ?? channel.streamURL,
+                    posterURL: previewOverridePosterURL ?? channel.logoURL,
+                    fallbackStreamURL: channel.previewFallbackURL,
+                    allowPlaybackInPreviews: allowPlaybackInPreviews,
+                    channelCategory: channel.category,
+                    channelName: channel.name
+                )
+                .frame(width: 160, height: 90)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(channel.category.color.opacity(0.3), lineWidth: 1)
+                )
+                .shadow(color: channel.category.color.opacity(0.2), radius: 8, x: 0, y: 4)
+                // 🔥 Ensure touches pass through to NavigationLink
+                .allowsHitTesting(false)
 
+                // 🔥 LIVE badge with pulse animation
                 if channel.isLive {
-                    HStack(spacing: 4) {
-                        Circle().fill(.white).frame(width: 4, height: 4)
-                        Text("LIVE").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
+                    VStack {
+                        HStack {
+                            LiveBadge()
+                            Spacer()
+                        }
+                        Spacer()
                     }
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(Capsule().fill(Color.red.opacity(0.9)))
                     .padding(8)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .allowsHitTesting(false)
                 }
+                
+                // Category badge bottom right
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Text(channel.category.displayName)
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill(channel.category.color.opacity(0.9))
+                            )
+                    }
+                }
+                .padding(6)
+                .allowsHitTesting(false)
             }
             .onAppear {
-                showPreview = autoPreview
+                // 🔥 Always show preview immediately - no delay
+                showPreview = true
             }
-            .onDisappear { showPreview = false }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(channel.name)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.primary)
                     .lineLimit(1)
 
-                Text("\(formatViewerCount(channel.viewerCount)) viewers")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 6, height: 6)
+                    Text("\(formatViewerCount(channel.viewerCount)) watching")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
             }
             .frame(width: 160, alignment: .leading)
         }
+        .contentShape(Rectangle())
     }
 
     private func formatViewerCount(_ count: Int) -> String {
@@ -2198,6 +2252,42 @@ struct MinimalChannelCard: View {
         } else {
             return "\(count)"
         }
+    }
+}
+
+// 🔥 Animated LIVE badge
+private struct LiveBadge: View {
+    @State private var isPulsing = false
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(.white)
+                .frame(width: 5, height: 5)
+                .scaleEffect(isPulsing ? 1.3 : 1.0)
+                .animation(
+                    .easeInOut(duration: 0.8)
+                    .repeatForever(autoreverses: true),
+                    value: isPulsing
+                )
+            Text("LIVE")
+                .font(.system(size: 9, weight: .black))
+                .foregroundColor(.white)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [Color.red, Color.red.opacity(0.8)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .shadow(color: .red.opacity(0.5), radius: 4, x: 0, y: 2)
+        )
+        .onAppear { isPulsing = true }
     }
 }
 

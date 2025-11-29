@@ -14,15 +14,23 @@ import PhotosUI
 struct UltimateStoryCreatorView: View {
     @StateObject private var viewModel = UltimateStoryViewModel()
     @StateObject private var cameraEngine = ProCameraEngine()
+    @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
     
     @State private var showingModePicker = false
     @State private var showingAITools = false
     @State private var showingTemplates = false
     @State private var showingEffects = false
+    @State private var showingPhotoPicker = false
+    @State private var showingStickerPicker = false
+    @State private var showingMusicPicker = false
     @State private var isDraggingElement = false
     @State private var selectedElement: EditableElement?
     @State private var modeRecordingTask: Task<Void, Never>?
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var showingDiscardAlert = false
+    @State private var errorMessage: String?
+    @State private var showingError = false
     
     var onStoryCreated: (Story) -> Void
     
@@ -60,6 +68,113 @@ struct UltimateStoryCreatorView: View {
         }
         .onDisappear {
             cleanup()
+        }
+        // 📸 PHOTO PICKER SHEET
+        .photosPicker(
+            isPresented: $showingPhotoPicker,
+            selection: $selectedPhotoItems,
+            maxSelectionCount: 1,
+            matching: .any(of: [.images, .videos]),
+            photoLibrary: .shared()
+        )
+        .onChange(of: selectedPhotoItems) { newItems in
+            Task {
+                await loadSelectedMedia(from: newItems)
+            }
+        }
+        // 🎵 MUSIC PICKER SHEET
+        .sheet(isPresented: $showingMusicPicker) {
+            MusicPickerSheet(
+                selectedMusic: .constant(nil),
+                onMusicSelected: { music in
+                    viewModel.setMusic(MusicTrack(
+                        title: music.title,
+                        artist: music.artist,
+                        duration: music.duration,
+                        url: URL(string: music.previewURL) ?? URL(string: "https://example.com")!,
+                        thumbnailURL: music.artworkURL.flatMap { URL(string: $0) }
+                    ))
+                    showingMusicPicker = false
+                }
+            )
+            .presentationDetents([.height(500), .large])
+            .presentationDragIndicator(.visible)
+        }
+        // 🎨 STICKER PICKER SHEET
+        .sheet(isPresented: $showingStickerPicker) {
+            StickerPickerSheet { sticker in
+                // Extract emoji from sticker data
+                let emojiString: String
+                if let data = sticker.data as? String {
+                    emojiString = data
+                } else {
+                    emojiString = "😀"
+                }
+                viewModel.addStickerElement(Sticker(
+                    imageName: emojiString,
+                    category: .emoji
+                ))
+                showingStickerPicker = false
+            }
+            .presentationDetents([.height(400), .large])
+            .presentationDragIndicator(.visible)
+        }
+        // ❌ DISCARD CONFIRMATION
+        .alert("Discard Story?", isPresented: $showingDiscardAlert) {
+            Button("Discard", role: .destructive) {
+                dismiss()
+            }
+            Button("Keep Editing", role: .cancel) {}
+        } message: {
+            Text("You'll lose all your changes if you go back now.")
+        }
+        // ⚠️ ERROR ALERT
+        .alert("Error", isPresented: $showingError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "Something went wrong")
+        }
+    }
+    
+    // MARK: - Load Selected Media from Photo Picker
+    private func loadSelectedMedia(from items: [PhotosPickerItem]) async {
+        guard let item = items.first else { return }
+        
+        // Check if it's a video
+        if item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) || $0.conforms(to: .video) }) {
+            // Load video
+            do {
+                if let movie = try await item.loadTransferable(type: VideoTransferable.self) {
+                    await viewModel.setMedia(.video(movie.url))
+                    HapticManager.shared.notification(type: .success)
+                }
+            } catch {
+                print("🚨 Failed to load video: \(error)")
+                await MainActor.run {
+                    errorMessage = "Failed to load video. Please try again."
+                    showingError = true
+                }
+            }
+        } else {
+            // Load image
+            do {
+                if let data = try await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    await viewModel.setMedia(.image(image))
+                    HapticManager.shared.notification(type: .success)
+                }
+            } catch {
+                print("🚨 Failed to load image: \(error)")
+                await MainActor.run {
+                    errorMessage = "Failed to load image. Please try again."
+                    showingError = true
+                }
+            }
+        }
+        
+        // Clear selection
+        await MainActor.run {
+            selectedPhotoItems = []
         }
     }
     
@@ -186,24 +301,31 @@ struct UltimateStoryCreatorView: View {
             EditingToolsBar(
                 selectedTool: $viewModel.selectedTool,
                 onTextAdd: {
+                    HapticManager.shared.impact(style: .light)
                     viewModel.addTextElement()
                 },
                 onStickerAdd: {
-                    // Show sticker picker
+                    HapticManager.shared.impact(style: .light)
+                    showingStickerPicker = true
                 },
                 onDrawingStart: {
+                    HapticManager.shared.impact(style: .light)
                     viewModel.startDrawing()
                 },
                 onMusicAdd: {
-                    // Show music picker
+                    HapticManager.shared.impact(style: .light)
+                    showingMusicPicker = true
                 },
                 onFilterAdd: {
+                    HapticManager.shared.impact(style: .light)
                     showingEffects = true
                 },
                 onTemplateApply: {
+                    HapticManager.shared.impact(style: .light)
                     showingTemplates = true
                 },
                 onAIEnhance: {
+                    HapticManager.shared.impact(style: .light)
                     showingAITools = true
                 }
             )
@@ -228,7 +350,8 @@ struct UltimateStoryCreatorView: View {
             HStack(spacing: 20) {
                 // Photo library
                 PhotoLibraryButton {
-                    viewModel.openPhotoPicker()
+                    HapticManager.shared.impact(style: .light)
+                    showingPhotoPicker = true
                 }
                 
                 Spacer()
@@ -392,10 +515,10 @@ struct UltimateStoryCreatorView: View {
     
     private func confirmDismiss() {
         if viewModel.hasMedia {
-            // Show confirmation
-            // For now, just dismiss
+            showingDiscardAlert = true
+        } else {
+            dismiss()
         }
-        dismiss()
     }
     
     private func handleCaptureTap() {
@@ -518,10 +641,122 @@ struct UltimateStoryCreatorView: View {
 // MARK: - Media Preview View
 struct StoryVideoPlayerView: View {
     let url: URL
+    @State private var player: AVPlayer?
+    @State private var isPlaying = true
     
     var body: some View {
-        // TODO: Implement video player
-        Color.black
+        ZStack {
+            if let player = player {
+                StoryVideoPlayerRepresentable(player: player)
+                    .onAppear {
+                        player.play()
+                    }
+                    .onDisappear {
+                        player.pause()
+                    }
+            } else {
+                Color.black
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+            }
+            
+            // Tap to toggle play/pause
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if isPlaying {
+                        player?.pause()
+                    } else {
+                        player?.play()
+                    }
+                    isPlaying.toggle()
+                    HapticManager.shared.impact(style: .light)
+                }
+            
+            // Play/Pause indicator
+            if !isPlaying {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 50))
+                    .foregroundColor(.white.opacity(0.8))
+                    .shadow(radius: 10)
+            }
+        }
+        .onAppear {
+            setupPlayer()
+        }
+    }
+    
+    private func setupPlayer() {
+        let playerItem = AVPlayerItem(url: url)
+        player = AVPlayer(playerItem: playerItem)
+        player?.isMuted = false
+        
+        // Loop video
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: playerItem,
+            queue: .main
+        ) { _ in
+            player?.seek(to: .zero)
+            player?.play()
+        }
+    }
+}
+
+// MARK: - Video Player UIKit Wrapper
+struct StoryVideoPlayerRepresentable: UIViewRepresentable {
+    let player: AVPlayer
+    
+    func makeUIView(context: Context) -> PlayerUIView {
+        let view = PlayerUIView()
+        view.player = player
+        return view
+    }
+    
+    func updateUIView(_ uiView: PlayerUIView, context: Context) {
+        uiView.player = player
+    }
+}
+
+class PlayerUIView: UIView {
+    var player: AVPlayer? {
+        get { playerLayer.player }
+        set { playerLayer.player = newValue }
+    }
+    
+    var playerLayer: AVPlayerLayer {
+        layer as! AVPlayerLayer
+    }
+    
+    override static var layerClass: AnyClass {
+        AVPlayerLayer.self
+    }
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        playerLayer.videoGravity = .resizeAspectFill
+        backgroundColor = .black
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
+// MARK: - Video Transferable for Photo Picker
+struct VideoTransferable: Transferable {
+    let url: URL
+    
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(contentType: .movie) { video in
+            SentTransferredFile(video.url)
+        } importing: { received in
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension("mov")
+            try FileManager.default.copyItem(at: received.file, to: tempURL)
+            return Self(url: tempURL)
+        }
     }
 }
 

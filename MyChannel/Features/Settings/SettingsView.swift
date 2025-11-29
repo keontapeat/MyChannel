@@ -391,6 +391,7 @@ struct SettingsView: View {
     
     // MARK: - Settings Row Helper
     
+    // 🔥 PREMIUM: Settings row with haptic feedback on tap
     private func settingsRow(
         icon: String,
         title: String,
@@ -420,6 +421,10 @@ struct SettingsView: View {
             }
         }
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            HapticManager.shared.impact(style: .light)
+        }
     }
     
     // MARK: - Deleting Overlay

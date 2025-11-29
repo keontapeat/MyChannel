@@ -29,7 +29,7 @@ struct AIContentAssistantView: View {
                         assistantHero
                         
                         // Viral Score
-                        if let analysis = viewModel.currentAnalysis {
+                        if let analysis: VideoContentAnalysis = viewModel.currentAnalysis {
                             viralScoreCard(analysis: analysis)
                         }
                         
@@ -37,7 +37,7 @@ struct AIContentAssistantView: View {
                         inputSection
                         
                         // Suggestions
-                        if let analysis = viewModel.currentAnalysis {
+                        if let analysis: VideoContentAnalysis = viewModel.currentAnalysis {
                             suggestionsSection(analysis: analysis)
                         }
                         
@@ -116,7 +116,7 @@ struct AIContentAssistantView: View {
     }
     
     // MARK: - Viral Score Card
-    private func viralScoreCard(analysis: ContentAnalysis) -> some View {
+    private func viralScoreCard(analysis: VideoContentAnalysis) -> some View {
         VStack(spacing: 20) {
             // Score Circle
             ZStack {
@@ -304,7 +304,7 @@ struct AIContentAssistantView: View {
     }
     
     // MARK: - Suggestions Section
-    private func suggestionsSection(analysis: ContentAnalysis) -> some View {
+    private func suggestionsSection(analysis: VideoContentAnalysis) -> some View {
         VStack(spacing: 18) {
             HStack {
                 Text("AI Suggestions")

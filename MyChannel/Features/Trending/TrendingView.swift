@@ -9,8 +9,10 @@ import SwiftUI
 
 struct TrendingView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @State private var trendingVideos: [Video] = []
     @State private var selectedTimeframe: TrendingTimeframe = .today
+    @State private var isLoading = true
     private let friendChannelID: String = "UCITAM_FKtyKEq40aHVXFTcQ"
 
     private func extraTrendingVideos() -> [Video] {
@@ -23,15 +25,15 @@ struct TrendingView: View {
             description: "Official Music Video to \"Free Ty\" by Baby Ju off the \"Rock Em Baba\" tape. Shot by @BigHornet. Stream \"Free Ty\" on the \"Rock Em Baba\" EP",
             thumbnailURL: "https://i.ytimg.com/vi/JSXmfgZzHqQ/hqdefault.jpg",
             videoURL: "https://www.youtube.com/watch?v=JSXmfgZzHqQ",
-            duration: 184, // 3:04 from YouTube page
-            viewCount: 10_000_000, // High view count to ensure #1 position
-            likeCount: 572, // Actual likes from YouTube
+            duration: 184,
+            viewCount: 10_000_000,
+            likeCount: 572,
             creator: User(
                 username: "babyju",
                 displayName: "Baby Ju",
                 email: "noreply@yt.com",
                 profileImageURL: "https://i.ytimg.com/vi/JSXmfgZzHqQ/hqdefault.jpg",
-                subscriberCount: 2040, // 2.04K subscribers
+                subscriberCount: 2040,
                 isVerified: true,
                 isCreator: true,
                 location: "CALIFORNIA"
@@ -62,7 +64,7 @@ struct TrendingView: View {
             thumbnailURL: "https://i.ytimg.com/vi/xfdydb_3Ra0/hqdefault.jpg",
             videoURL: "https://www.youtube.com/watch?v=xfdydb_3Ra0",
             duration: Double.random(in: 90...300),
-            viewCount: 8_000_000, // High view count to ensure #2 position
+            viewCount: 8_000_000,
             likeCount: Int.random(in: 100...50_000),
             creator: User(
                 username: "ktrip",
@@ -133,11 +135,20 @@ struct TrendingView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                premiumHeader
-                timeframeSelector
-                trendingVideosList
+                // Clean header
+                header
+                
+                // Minimal tab selector
+                tabSelector
+                
+                // Video list
+                if isLoading {
+                    loadingView
+                } else {
+                    videoList
+                }
             }
-            .background(AppTheme.Colors.background)
+            .background(colorScheme == .dark ? Color.black : Color.white)
             .toolbar(.hidden, for: .navigationBar)
         }
         .task {
@@ -145,144 +156,100 @@ struct TrendingView: View {
         }
     }
     
-    // MARK: - Premium Header
-    private var premiumHeader: some View {
-        HStack(spacing: 12) {
-            closeButton
+    // MARK: - Clean Header
+    private var header: some View {
+        HStack {
+            Button {
+                HapticManager.shared.impact(style: .light)
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .frame(width: 40, height: 40)
+            }
             
             Spacer()
-            
-            trendingTitle
-            
-            Spacer()
-            
-            // Balance layout
-            Color.clear.frame(width: 36, height: 36)
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
-        .background(headerBackground)
-    }
-    
-    private var closeButton: some View {
-        Button {
-            HapticManager.shared.impact(style: .light)
-            dismiss()
-        } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-                .frame(width: 36, height: 36)
-                .background(AppTheme.Colors.surface, in: Circle())
-                .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
-        }
-        .buttonStyle(.plain)
-    }
-    
-    private var trendingTitle: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "flame.fill")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(flameGradient)
             
             Text("Trending")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundColor(AppTheme.Colors.textPrimary)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+            
+            Spacer()
+            
+            // Balance
+            Color.clear.frame(width: 40, height: 40)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
     
-    private var flameGradient: LinearGradient {
-        LinearGradient(
-            colors: [Color.red, Color.orange],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-    }
-    
-    private var headerBackground: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
-            .shadow(color: .black.opacity(0.03), radius: 2, x: 0, y: 1)
-    }
-    
-    // MARK: - Timeframe Selector
-    private var timeframeSelector: some View {
+    // MARK: - Tab Selector (YouTube Style)
+    private var tabSelector: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(spacing: 0) {
                 ForEach(TrendingTimeframe.allCases, id: \.self) { timeframe in
-                    timeframeButton(timeframe)
+                    tabButton(timeframe)
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
         }
-        .padding(.vertical, 16)
-        .background(AppTheme.Colors.background)
+        .padding(.vertical, 8)
     }
     
-    private func timeframeButton(_ timeframe: TrendingTimeframe) -> some View {
+    private func tabButton(_ timeframe: TrendingTimeframe) -> some View {
         Button {
             HapticManager.shared.impact(style: .light)
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+            withAnimation(.easeInOut(duration: 0.2)) {
                 selectedTimeframe = timeframe
             }
         } label: {
-            Text(timeframe.displayName)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(selectedTimeframe == timeframe ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 9)
-                .background(
-                    Capsule()
-                        .fill(selectedTimeframe == timeframe ? AppTheme.Colors.primary.opacity(0.12) : AppTheme.Colors.surface)
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            selectedTimeframe == timeframe
-                            ? AppTheme.Colors.primary.opacity(0.6)
-                            : AppTheme.Colors.divider.opacity(0.4),
-                            lineWidth: 1
-                        )
-                )
+            VStack(spacing: 8) {
+                Text(timeframe.displayName)
+                    .font(.system(size: 14, weight: selectedTimeframe == timeframe ? .semibold : .regular))
+                    .foregroundColor(selectedTimeframe == timeframe 
+                        ? (colorScheme == .dark ? .white : .black)
+                        : (colorScheme == .dark ? Color.white.opacity(0.6) : Color.black.opacity(0.6)))
+                
+                // Underline indicator
+                Rectangle()
+                    .fill(selectedTimeframe == timeframe 
+                        ? (colorScheme == .dark ? .white : .black)
+                        : Color.clear)
+                    .frame(height: 2)
+            }
+            .padding(.horizontal, 16)
         }
         .buttonStyle(.plain)
     }
     
-    // MARK: - Trending Videos List
-    private var trendingVideosList: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(Array(trendingVideos.enumerated()), id: \.element.id) { index, video in
-                    trendingVideoRow(video: video, index: index)
-                }
-            }
-            .padding(.vertical, 8)
+    // MARK: - Loading View
+    private var loadingView: some View {
+        VStack {
+            Spacer()
+            ProgressView()
+                .tint(colorScheme == .dark ? .white : .black)
+            Spacer()
         }
     }
     
-    private func trendingVideoRow(video: Video, index: Int) -> some View {
-        PremiumTrendingVideoRow(
-            video: video,
-            rank: index + 1,
-            positionChange: calculatePositionChange(for: video, at: index),
-            growthRate: calculateGrowthRate(for: video)
-        )
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .opacity(1)
-        .scaleEffect(1.0)
-    }
-
-    private func calculatePositionChange(for video: Video, at index: Int) -> Int {
-        // Mock position change - in real app, compare with previous ranking
-        let mockChange = Int.random(in: -5...10)
-        return mockChange
-    }
-    
-    private func calculateGrowthRate(for video: Video) -> Double {
-        // Mock growth rate percentage - in real app, calculate from historical data
-        return Double.random(in: 5.0...95.0)
+    // MARK: - Video List
+    private var videoList: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(Array(trendingVideos.enumerated()), id: \.element.id) { index, video in
+                    CleanTrendingRow(video: video, rank: index + 1)
+                    
+                    // Subtle divider
+                    if index < trendingVideos.count - 1 {
+                        Divider()
+                            .background(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.08))
+                            .padding(.leading, 72)
+                    }
+                }
+            }
+            .padding(.top, 8)
+        }
     }
     
     private func loadFriendChannelVideos() async {
@@ -291,12 +258,12 @@ struct TrendingView: View {
             let merged = items + extraTrendingVideos()
             let dedup = Array(Dictionary(grouping: merged, by: { $0.id }).values.compactMap { $0.first })
             await MainActor.run {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                withAnimation(.easeOut(duration: 0.3)) {
                     self.trendingVideos = dedup.sorted { $0.viewCount > $1.viewCount }
+                    self.isLoading = false
                 }
             }
         } catch {
-            // Fallback to a single known friend video if API key missing or call fails
             let vid = "71GJrAY54Ew"
             let friend = Video(
                 id: "yt_\(vid)",
@@ -325,21 +292,20 @@ struct TrendingView: View {
                 chapters: nil
             )
             await MainActor.run {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                withAnimation(.easeOut(duration: 0.3)) {
                     self.trendingVideos = ([friend] + extraTrendingVideos()).sorted { $0.viewCount > $1.viewCount }
+                    self.isLoading = false
                 }
             }
         }
     }
 }
 
-// MARK: - Premium Trending Video Row (World-Class Design)
-struct PremiumTrendingVideoRow: View {
+// MARK: - Clean Trending Row (YouTube Style)
+struct CleanTrendingRow: View {
     let video: Video
     let rank: Int
-    let positionChange: Int
-    let growthRate: Double
-    
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isPressed = false
     
     var body: some View {
@@ -347,239 +313,126 @@ struct PremiumTrendingVideoRow: View {
             HapticManager.shared.impact(style: .medium)
             NotificationCenter.default.post(name: NSNotification.Name("OpenVideoDetail"), object: video)
         } label: {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 16) {
-                    rankBadge
+            HStack(alignment: .top, spacing: 12) {
+                // Large rank number
+                Text("\(rank)")
+                    .font(.system(size: 16, weight: .medium, design: .default))
+                    .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.5) : Color.black.opacity(0.5))
+                    .frame(width: 32, alignment: .center)
+                    .padding(.top, 4)
+                
+                // Thumbnail
+                thumbnailView
+                
+                // Video info
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(video.title)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
                     
-                    thumbnailView
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(video.title)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .lineLimit(2)
+                    HStack(spacing: 4) {
+                        Text(video.creator.displayName)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.6) : Color.black.opacity(0.6))
                         
-                        HStack(spacing: 6) {
-                            Text(video.creator.displayName)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                            
-                            if video.creator.isVerified {
-                                Image(systemName: "checkmark.seal.fill")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(AppTheme.Colors.primary)
-                            }
-                        }
-                        
-                        HStack(spacing: 6) {
-                            Text("\(video.formattedViewCount) views")
-                            dot
-                            Text(video.timeAgo)
-                            dot
-                            Text(video.formattedDuration)
-                        }
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        
-                        HStack(spacing: 8) {
-                            if rank <= 5 {
-                                trendingChip(label: rank == 1 ? "Currently #1" : "On fire")
-                            }
-                            
-                            if positionChange != 0 {
-                                changeChip
-                            }
-                            
-                            if growthRate > 40 {
-                                growthChip
-                            }
+                        if video.creator.isVerified {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.6) : Color.black.opacity(0.6))
                         }
                     }
+                    
+                    Text("\(video.formattedViewCount) views · \(video.timeAgo)")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.5) : Color.black.opacity(0.5))
+                }
+                
+                Spacer(minLength: 0)
+                
+                // More button
+                Button {
+                    HapticManager.shared.impact(style: .light)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.6) : Color.black.opacity(0.6))
+                        .frame(width: 32, height: 32)
                 }
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(AppTheme.Colors.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(AppTheme.Colors.divider.opacity(0.25), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 6)
-            .scaleEffect(isPressed ? 0.985 : 1.0)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isPressed)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(isPressed 
+                ? (colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                : Color.clear)
         }
         .buttonStyle(.plain)
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                    }
+                    if !isPressed { isPressed = true }
                 }
                 .onEnded { _ in
                     isPressed = false
                 }
         )
-    }
-    
-    private var rankBadge: some View {
-        VStack(spacing: 6) {
-            Text("\(rank)")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(isTopThree ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
-                .frame(width: 34, height: 34)
-                .background(
-                    Circle()
-                        .fill(isTopThree ? AppTheme.Colors.primary.opacity(0.12) : AppTheme.Colors.surface.opacity(0.8))
-                )
-                .overlay(
-                    Circle()
-                        .stroke(
-                            isTopThree ? AppTheme.Colors.primary.opacity(0.6) : AppTheme.Colors.divider.opacity(0.6),
-                            lineWidth: 1
-                        )
-                )
-            
-            if let medal = medalLabel {
-                Text(medal)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-            }
-        }
+        .accessibilityLabel("\(video.title) by \(video.creator.displayName), rank \(rank)")
     }
     
     private var thumbnailView: some View {
-        ZStack(alignment: .topLeading) {
+        ZStack(alignment: .bottomTrailing) {
             AsyncImage(url: URL(string: video.thumbnailURL)) { phase in
                 switch phase {
                 case .empty:
-                    ZStack {
-                        Rectangle()
-                            .fill(AppTheme.Colors.surface.opacity(0.4))
-                        ProgressView()
-                            .tint(AppTheme.Colors.primary)
-                    }
+                    Rectangle()
+                        .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.08))
                 case .success(let image):
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                 case .failure:
                     Rectangle()
-                        .fill(AppTheme.Colors.surface)
+                        .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.08))
                 @unknown default:
                     Rectangle()
-                        .fill(AppTheme.Colors.surface)
+                        .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.08))
                 }
             }
             .frame(width: 160, height: 90)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             
-            if rank <= 10 {
-                HStack(spacing: 4) {
-                    Image(systemName: "flame.fill")
-                        .font(.system(size: 10, weight: .semibold))
-                    Text("Trending")
-                        .font(.system(size: 11, weight: .semibold))
-                }
-                .foregroundColor(AppTheme.Colors.primary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule()
-                        .fill(AppTheme.Colors.primary.opacity(0.12))
-                )
-                .padding(8)
-            }
-        }
-    }
-    
-    private var dot: some View {
-        Circle()
-            .fill(AppTheme.Colors.textSecondary.opacity(0.4))
-            .frame(width: 4, height: 4)
-    }
-    
-    private func trendingChip(label: String) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: "flame.fill")
-                .font(.system(size: 10, weight: .semibold))
-            Text(label)
-                .font(.system(size: 11, weight: .semibold))
-        }
-        .foregroundColor(AppTheme.Colors.primary)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(AppTheme.Colors.primary.opacity(0.12))
-        )
-    }
-    
-    private var changeChip: some View {
-        let isGoingUp = positionChange > 0
-        let icon = isGoingUp ? "arrow.up.right" : "arrow.down.right"
-        let label = "\(abs(positionChange))"
-        let color = isGoingUp ? Color.green : Color.orange
-        
-        return HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
-            Text(label)
-                .font(.system(size: 11, weight: .semibold))
-        }
-        .foregroundColor(color)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(color.opacity(0.12))
-        )
-    }
-    
-    private var growthChip: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "chart.line.uptrend.xyaxis")
-                .font(.system(size: 10, weight: .semibold))
-            Text("\(Int(growthRate))%")
-                .font(.system(size: 11, weight: .semibold))
-        }
-        .foregroundColor(.green)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(Color.green.opacity(0.12))
-        )
-    }
-    
-    private var isTopThree: Bool {
-        rank <= 3
-    }
-    
-    private var medalLabel: String? {
-        switch rank {
-        case 1: return "Gold"
-        case 2: return "Silver"
-        case 3: return "Bronze"
-        default: return nil
+            // Duration badge
+            Text(video.formattedDuration)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(Color.black.opacity(0.8))
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .padding(6)
         }
     }
 }
 
-// MARK: - Legacy Trending Video Row (for backwards compatibility)
+// MARK: - Legacy Support
+struct PremiumTrendingVideoRow: View {
+    let video: Video
+    let rank: Int
+    let positionChange: Int
+    let growthRate: Double
+    
+    var body: some View {
+        CleanTrendingRow(video: video, rank: rank)
+    }
+}
+
 struct TrendingVideoRow: View {
     let video: Video
     let rank: Int
     
     var body: some View {
-        PremiumTrendingVideoRow(
-            video: video,
-            rank: rank,
-            positionChange: 0,
-            growthRate: 0
-        )
+        CleanTrendingRow(video: video, rank: rank)
     }
 }
 
@@ -592,10 +445,10 @@ enum TrendingTimeframe: String, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .today: return "Today"
-        case .thisWeek: return "This Week"
-        case .thisMonth: return "This Month"
-        case .allTime: return "All Time"
+        case .today: return "Now"
+        case .thisWeek: return "This week"
+        case .thisMonth: return "This month"
+        case .allTime: return "All time"
         }
     }
 }

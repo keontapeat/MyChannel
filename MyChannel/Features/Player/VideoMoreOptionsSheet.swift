@@ -184,8 +184,17 @@ struct VideoMoreOptionsSheet: View {
         }
     }
     
+    // 🔥 PREMIUM: Enhanced haptic feedback
     func feedback() {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        HapticManager.shared.impact(style: .light)
+    }
+    
+    func successFeedback() {
+        HapticManager.shared.notification(type: .success)
+    }
+    
+    func warningFeedback() {
+        HapticManager.shared.notification(type: .warning)
     }
 
     private func reportVideo() async {

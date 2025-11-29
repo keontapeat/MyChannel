@@ -143,11 +143,13 @@ struct VideoDetailMetaView: View {
         .padding(.top, 12)
     }
     
-    // MARK: - 🔥 YOUTUBE 2024 STYLE: Minimal Stats Section
+    // MARK: - 🔥 YOUTUBE 2024 STYLE: Minimal Stats Section with Animated View Count
     private var videoStatsSection: some View {
         HStack(spacing: 0) {
-            // Views and time in YouTube's compact format
-            Text("\(formatCount(dynamicViewCount ?? video.viewCount)) views")
+            // 🔥 PREMIUM: Animated view count
+            AnimatedViewCountText(viewCount: dynamicViewCount ?? video.viewCount)
+            
+            Text(" views")
                 .font(.system(size: 13, weight: .regular))
             
             Text(" • ")
@@ -482,29 +484,42 @@ struct VideoDetailMetaView: View {
         .padding(.top, 24)
     }
     
-    // MARK: - Action Methods
+    // MARK: - 🔥 PREMIUM: Action Methods with Enhanced Haptics
     private func performLikeAction() {
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-            likeAnimationScale = 1.3
+        // 🔥 PREMIUM: Enhanced bounce animation
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+            likeAnimationScale = 1.4
             isLiked.toggle()
             if isLiked { isDisliked = false }
         }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+        // 🔥 PREMIUM: Double bounce for satisfying feel
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
+                likeAnimationScale = 0.9
+            }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 likeAnimationScale = 1.0
             }
         }
         
-        impactFeedback.impactOccurred(intensity: isLiked ? 0.8 : 0.4)
+        // 🔥 PREMIUM: Stronger haptic for like, lighter for unlike
+        if isLiked {
+            HapticManager.shared.notification(type: .success)
+        } else {
+            HapticManager.shared.impact(style: .light)
+        }
     }
     
     private func performDislikeAction() {
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             isDisliked.toggle()
             if isDisliked { isLiked = false }
         }
-        impactFeedback.impactOccurred(intensity: 0.6)
+        HapticManager.shared.impact(style: .medium)
     }
     
     private func performShareAction() {
@@ -560,19 +575,25 @@ struct VideoDetailMetaView: View {
     }
     
     private func performSubscribeAction() {
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
-            subscribeButtonScale = 0.95
+        // 🔥 PREMIUM: Enhanced subscribe animation with celebratory bounce
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+            subscribeButtonScale = isSubscribed ? 0.9 : 1.15
             isSubscribed.toggle()
         }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+        // 🔥 PREMIUM: Bounce back
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.65)) {
                 subscribeButtonScale = 1.0
             }
         }
         
-        let feedbackGenerator = UIImpactFeedbackGenerator(style: .heavy)
-        feedbackGenerator.impactOccurred(intensity: 1.0)
+        // 🔥 PREMIUM: Celebration haptic for subscribe, subtle for unsubscribe
+        if isSubscribed {
+            HapticManager.shared.notification(type: .success)
+        } else {
+            HapticManager.shared.impact(style: .light)
+        }
     }
     
     // MARK: - Helper Methods
@@ -693,6 +714,63 @@ struct ScrollOffsetPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
+    }
+}
+
+// MARK: - 🔥 PREMIUM: Animated View Count Text
+struct AnimatedViewCountText: View {
+    let viewCount: Int
+    
+    @State private var displayedCount: Int = 0
+    @State private var hasAnimated = false
+    
+    var body: some View {
+        Text(formatCount(displayedCount))
+            .font(.system(size: 13, weight: .regular))
+            .contentTransition(.numericText())
+            .onAppear {
+                guard !hasAnimated else { return }
+                hasAnimated = true
+                animateCount()
+            }
+            .onChange(of: viewCount) { newValue in
+                // Smoothly animate to new value
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    displayedCount = newValue
+                }
+            }
+    }
+    
+    private func animateCount() {
+        // 🔥 PREMIUM: Smooth count-up animation
+        let steps = min(viewCount, 20)
+        guard steps > 0 else {
+            displayedCount = viewCount
+            return
+        }
+        
+        let stepDuration = 0.5 / Double(steps)
+        
+        for step in 0...steps {
+            DispatchQueue.main.asyncAfter(deadline: .now() + stepDuration * Double(step)) {
+                let progress = Double(step) / Double(steps)
+                let easedProgress = 1 - pow(1 - progress, 3) // Cubic ease-out
+                let newValue = Int(Double(viewCount) * easedProgress)
+                
+                withAnimation(.spring(response: 0.15, dampingFraction: 0.9)) {
+                    displayedCount = newValue
+                }
+            }
+        }
+    }
+    
+    private func formatCount(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.1fM", Double(count) / 1_000_000)
+        } else if count >= 1_000 {
+            return String(format: "%.1fK", Double(count) / 1_000)
+        }
+        return "\(count)"
     }
 }
 

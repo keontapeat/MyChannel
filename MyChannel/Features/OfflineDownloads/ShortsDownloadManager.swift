@@ -49,27 +49,14 @@ final class ShortsDownloadManager: ObservableObject {
     // MARK: - Public API
     
     /// Download a short for offline viewing
-    func downloadShort(_ short: Flick) async throws -> DownloadedShort {
+    func downloadShort(_ short: NuclearFlick) async throws -> DownloadedShort {
         // Check if already downloaded
         if let existing = downloadedShorts.first(where: { $0.id == short.id }) {
             return existing
         }
         
-        // Convert Flick to Video for nuclear download
-        let video = Video(
-            id: short.id,
-            title: short.caption,
-            description: short.caption,
-            thumbnailURL: short.thumbnailURL,
-            videoURL: short.videoURL,
-            duration: short.duration,
-            viewCount: short.viewCount,
-            likeCount: short.likeCount,
-            commentCount: short.commentCount,
-            creator: short.creator,
-            uploadDate: short.uploadDate,
-            isLive: false
-        )
+        // Convert NuclearFlick to Video using built-in method
+        let video = short.toVideo()
         
         // Add to queue
         downloadQueue.append(short.id)
@@ -86,12 +73,12 @@ final class ShortsDownloadManager: ObservableObject {
             // Create downloaded short entry
             let downloadedShort = DownloadedShort(
                 id: short.id,
-                caption: short.caption,
+                caption: short.title,
                 thumbnailURL: short.thumbnailURL,
                 duration: short.duration,
                 creatorId: short.creator.id,
                 creatorName: short.creator.displayName,
-                creatorAvatar: short.creator.avatarURL ?? "",
+                creatorAvatar: short.creator.profileImageURL,
                 downloadDate: Date(),
                 localVideoURL: download.localVideoURL,
                 localThumbnailURL: download.localThumbnailURL,
@@ -112,7 +99,7 @@ final class ShortsDownloadManager: ObservableObject {
             
             saveDownloadedShorts()
             
-            print("📱 [ShortsDownload] Downloaded: \(short.caption)")
+            print("📱 [ShortsDownload] Downloaded: \(short.title)")
             
             return downloadedShort
             
@@ -124,7 +111,7 @@ final class ShortsDownloadManager: ObservableObject {
     }
     
     /// Download multiple shorts
-    func downloadShorts(_ shorts: [Flick]) async -> [Result<DownloadedShort, Error>] {
+    func downloadShorts(_ shorts: [NuclearFlick]) async -> [Result<DownloadedShort, Error>] {
         var results: [Result<DownloadedShort, Error>] = []
         
         for short in shorts {
@@ -192,7 +179,7 @@ final class ShortsDownloadManager: ObservableObject {
     }
     
     /// Get recommended shorts to download
-    func getRecommendedShorts() async -> [Flick] {
+    func getRecommendedShorts() async -> [NuclearFlick] {
         // This would integrate with shorts/flicks service
         // For now, return empty
         return []
@@ -352,9 +339,10 @@ enum ShortDownloadQuality: String, Codable, CaseIterable {
     }
 }
 
-// MARK: - Flick Protocol Extension
+// MARK: - NuclearFlick Extension
 
-extension Flick {
+@MainActor
+extension NuclearFlick {
     /// Check if this flick is downloaded
     var isDownloaded: Bool {
         ShortsDownloadManager.shared.isShortDownloaded(id)

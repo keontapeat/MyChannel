@@ -420,12 +420,12 @@ class ImmersiveContentService: ObservableObject {
         // Start real-time background replacement processing
     }
     
-    private func analyzeVideoContent(_ video: Video) async -> VideoContentAnalysis {
+    private func analyzeVideoContent(_ video: Video) async -> ImmersiveVideoContentAnalysis {
         // Analyze video content for background generation
-        return VideoContentAnalysis()
+        return ImmersiveVideoContentAnalysis()
     }
     
-    private func generateBackgrounds(analysis: VideoContentAnalysis, mood: BackgroundMood, count: Int) async -> [GeneratedBackground] {
+    private func generateBackgrounds(analysis: ImmersiveVideoContentAnalysis, mood: BackgroundMood, count: Int) async -> [GeneratedBackground] {
         // Generate AI backgrounds based on content analysis
         return []
     }
@@ -799,8 +799,8 @@ class BackgroundSegmentationModel {
     // Placeholder for ML model
 }
 
-struct VideoContentAnalysis {
-    // Placeholder for content analysis
+struct ImmersiveVideoContentAnalysis {
+    // Placeholder for immersive content analysis
 }
 
 // MARK: - Errors

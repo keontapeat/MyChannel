@@ -300,9 +300,11 @@ final class NuclearDownloadManager: NSObject, ObservableObject {
             viewCount: short.viewCount,
             likeCount: short.likeCount,
             commentCount: short.commentCount,
+            createdAt: short.uploadDate,
             creator: short.creator,
-            uploadDate: short.uploadDate,
-            isLive: false
+            category: .shorts,
+            aspectRatio: .portrait,
+            isLiveStream: false
         )
         
         return try await downloadVideo(video, quality: .high, priority: .high)
@@ -1102,7 +1104,7 @@ extension NuclearDownloadManager: AVAssetDownloadDelegate {
 
 // MARK: - Models
 
-struct NuclearDownload: Identifiable, Codable {
+struct NuclearDownload: Identifiable, Codable, Equatable {
     let id: String
     let videoId: String
     let title: String
@@ -1309,6 +1311,6 @@ protocol ShortContent {
     var viewCount: Int { get }
     var likeCount: Int { get }
     var commentCount: Int { get }
-    var creator: VideoCreator { get }
+    var creator: User { get }
     var uploadDate: Date { get }
 }

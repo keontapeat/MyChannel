@@ -21,6 +21,7 @@ struct LiveTVPlayerView: View {
     @State private var hasSubtitles: Bool = false
     @State private var captionsEnabled: Bool = false
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appState: AppState
     @State private var backTapCount: Int = 0
     @State private var showExitHint: Bool = false
     @State private var tapResetWorkItem: DispatchWorkItem? = nil
@@ -32,6 +33,13 @@ struct LiveTVPlayerView: View {
     @State private var channels: [LiveTVChannel] = LiveTVChannel.sampleChannels
     @StateObject private var networkOptimizer = NetworkOptimizer.shared
     @State private var preloadedChannels: Set<String> = []
+    @State private var showSwipeHint: Bool = true
+    @State private var swipeHintOpacity: Double = 1.0
+    
+    // 🔥 AI Watch Tracking
+    @State private var watchStartTime: Date = Date()
+    @State private var currentWatchingChannel: LiveTVChannel?
+    @StateObject private var liveTVAI = LiveTVIntelligenceAgent.shared
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -122,20 +130,21 @@ struct LiveTVPlayerView: View {
                         .padding(.top, 12)
                     )
 
-                    // Channel logos row
+                    // Channel logos row with improved image loading
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 10) {
                             ForEach(channels) { ch in
-                                Button(action: { switchToChannel(ch) }) {
-                                    AsyncImage(url: URL(string: ch.logoURL)) { img in img.resizable() } placeholder: { Rectangle().fill(.gray.opacity(0.3)) }
-                                        .frame(width: 64, height: 40)
-                                        .cornerRadius(8)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(ch.id == channel.id ? Color.red : Color.white.opacity(0.2), lineWidth: ch.id == channel.id ? 2 : 1)
-                                        )
+                                Button(action: { 
+                                    HapticManager.shared.impact(style: .medium)
+                                    switchToChannel(ch) 
+                                }) {
+                                    ChannelLogoView(channel: ch, isSelected: ch.id == channel.id)
                                 }
-                                .simultaneousGesture(LongPressGesture(minimumDuration: 0.4).onEnded { _ in withAnimation { showMiniGuide = true } })
+                                .buttonStyle(PressableScaleStyle(scale: 0.95))
+                                .simultaneousGesture(LongPressGesture(minimumDuration: 0.4).onEnded { _ in 
+                                    HapticManager.shared.impact(style: .rigid)
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showMiniGuide = true } 
+                                })
                             }
                         }
                         .padding(.horizontal)
@@ -145,6 +154,33 @@ struct LiveTVPlayerView: View {
                     Divider().background(Color.white.opacity(0.2))
 
                     Spacer()
+                    
+                    // 🔥 Swipe-up hint indicator
+                    if showSwipeHint {
+                        VStack(spacing: 4) {
+                            Image(systemName: "chevron.up")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white.opacity(0.7))
+                            Image(systemName: "chevron.up")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white.opacity(0.4))
+                            Text("Swipe up for Live Guide")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+                        .padding(.vertical, 8)
+                        .opacity(swipeHintOpacity)
+                        .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: swipeHintOpacity)
+                        .onAppear {
+                            swipeHintOpacity = 0.4
+                            // Auto-hide hint after 5 seconds
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                                withAnimation(.easeOut(duration: 0.5)) {
+                                    showSwipeHint = false
+                                }
+                            }
+                        }
+                    }
 
                     // Bottom controls: DVR slider + LIVE pill + Go Live
                     HStack(spacing: 12) {
@@ -161,20 +197,25 @@ struct LiveTVPlayerView: View {
                             .gesture(DragGesture(minimumDistance: 0).onChanged { _ in isScrubbing = true }.onEnded { _ in isScrubbing = false })
                         }
 
-                        // LIVE pill
+                        // LIVE pill with pulse animation
                         HStack(spacing: 6) {
-                            Circle().fill(Color.red).frame(width: 8, height: 8)
+                            PulsingLiveDot()
                             Text("LIVE")
-                                .font(.caption.weight(.semibold))
+                                .font(.caption.weight(.bold))
                         }
                         .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.white.opacity(0.15))
-                        .clipShape(Capsule())
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule()
+                                .fill(Color.red.opacity(0.8))
+                        )
 
                         if behindLiveSeconds >= 2.0 {
-                            Button(action: { goLive() }) {
+                            Button(action: { 
+                                HapticManager.shared.impact(style: .medium)
+                                goLive() 
+                            }) {
                                 Text("Go Live")
                                     .font(.caption.weight(.semibold))
                                     .foregroundColor(.black)
@@ -183,6 +224,7 @@ struct LiveTVPlayerView: View {
                                     .background(Color.white)
                                     .clipShape(Capsule())
                             }
+                            .buttonStyle(PressableScaleStyle(scale: 0.95))
                         }
                     }
                     .padding(.horizontal)
@@ -228,65 +270,163 @@ struct LiveTVPlayerView: View {
                 .transition(.opacity)
             }
 
-            // Mini-Guide overlay
+            // Mini-Guide overlay - Premium Design
             if showMiniGuide {
                 VStack(spacing: 0) {
+                    // Drag handle
                     Capsule()
-                        .fill(Color.white.opacity(0.4))
+                        .fill(Color.white.opacity(0.5))
                         .frame(width: 40, height: 5)
-                        .padding(.top, 8)
+                        .padding(.top, 12)
+                    
+                    // Header
                     HStack {
-                        Text("Live Guide")
-                            .foregroundColor(.white)
-                            .font(.headline)
-                        Spacer()
-                        Button(action: { withAnimation { showMiniGuide = false } }) {
-                            Image(systemName: "xmark")
+                        HStack(spacing: 8) {
+                            Image(systemName: "tv.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.red)
+                            Text("Live Guide")
                                 .foregroundColor(.white)
-                                .padding(8)
+                                .font(.system(size: 18, weight: .bold))
+                        }
+                        Spacer()
+                        Text("\(channels.count) channels")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white.opacity(0.6))
+                        Button(action: { 
+                            HapticManager.shared.impact(style: .light)
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showMiniGuide = false } 
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 24))
+                                .foregroundColor(.white.opacity(0.5))
                         }
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+                    
+                    Divider()
+                        .background(Color.white.opacity(0.1))
+                    
                     ScrollView {
-                        LazyVStack(spacing: 10) {
+                        LazyVStack(spacing: 8) {
                             ForEach(channels) { ch in
-                                Button(action: { switchToChannel(ch) }) {
-                                    HStack(spacing: 10) {
-                                        AsyncImage(url: URL(string: ch.logoURL)) { img in img.resizable() } placeholder: { Rectangle().fill(.gray.opacity(0.3)) }
-                                            .frame(width: 56, height: 36)
-                                            .cornerRadius(6)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(ch.name).foregroundColor(.white).font(.subheadline.weight(.semibold))
-                                            Text(ch.category.displayName).foregroundColor(.white.opacity(0.8)).font(.caption)
+                                Button(action: { 
+                                    HapticManager.shared.impact(style: .medium)
+                                    switchToChannel(ch) 
+                                }) {
+                                    HStack(spacing: 12) {
+                                        // Channel logo with fallback
+                                        ChannelLogoView(channel: ch, isSelected: ch.id == channel.id)
+                                        
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(ch.name)
+                                                .foregroundColor(.white)
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .lineLimit(1)
+                                            HStack(spacing: 6) {
+                                                Text(ch.category.displayName)
+                                                    .font(.system(size: 11, weight: .medium))
+                                                    .foregroundColor(ch.category.color)
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(
+                                                        Capsule()
+                                                            .fill(ch.category.color.opacity(0.2))
+                                                    )
+                                                Text("•")
+                                                    .foregroundColor(.white.opacity(0.3))
+                                                Text(ch.quality)
+                                                    .font(.system(size: 10, weight: .medium))
+                                                    .foregroundColor(.white.opacity(0.5))
+                                            }
                                         }
+                                        
                                         Spacer()
-                                        if ch.id == channel.id { Text("Now").foregroundColor(.red).font(.caption.weight(.bold)) }
+                                        
+                                        if ch.id == channel.id {
+                                            HStack(spacing: 4) {
+                                                Circle()
+                                                    .fill(Color.red)
+                                                    .frame(width: 6, height: 6)
+                                                Text("NOW")
+                                                    .font(.system(size: 10, weight: .black))
+                                                    .foregroundColor(.red)
+                                            }
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(
+                                                Capsule()
+                                                    .fill(Color.red.opacity(0.15))
+                                            )
+                                        } else {
+                                            Image(systemName: "play.circle.fill")
+                                                .font(.system(size: 24))
+                                                .foregroundColor(.white.opacity(0.3))
+                                        }
                                     }
-                                    .padding(.horizontal)
-                                    .padding(.vertical, 8)
-                                    .background(Color.white.opacity(0.08))
-                                    .cornerRadius(10)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(ch.id == channel.id ? Color.white.opacity(0.12) : Color.white.opacity(0.05))
+                                    )
                                 }
+                                .buttonStyle(PressableScaleStyle(scale: 0.98))
                             }
                         }
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 12)
                     }
-                    .frame(maxHeight: UIScreen.main.bounds.height * 0.45)
+                    .frame(maxHeight: UIScreen.main.bounds.height * 0.5)
                 }
-                .background(Color.black.opacity(0.85))
-                .cornerRadius(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.black.opacity(0.95), Color.black.opacity(0.9)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .shadow(color: .black.opacity(0.5), radius: 20, x: 0, y: -10)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 20))
                 .padding(.horizontal, 8)
                 .padding(.bottom, 10)
                 .frame(maxHeight: .infinity, alignment: .bottom)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .gesture(DragGesture().onEnded { value in if value.translation.height > 80 { withAnimation { showMiniGuide = false } } })
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .move(edge: .bottom).combined(with: .opacity)
+                ))
+                .gesture(DragGesture().onEnded { value in 
+                    if value.translation.height > 80 { 
+                        HapticManager.shared.impact(style: .light)
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showMiniGuide = false } 
+                    } 
+                })
             }
         }
         .onAppear {
             setupPlayer()
             preloadAdjacentChannels()
+            // 🔥 AI: Start tracking watch time
+            watchStartTime = Date()
+            currentWatchingChannel = channel
         }
         .onDisappear {
+            // 🔥 AI: Record watch event for ML training
+            let watchDuration = Date().timeIntervalSince(watchStartTime)
+            if let watchedChannel = currentWatchingChannel {
+                let userId = appState.currentUser?.id ?? "anonymous"
+                liveTVAI.recordWatchEvent(
+                    userId: userId,
+                    channel: watchedChannel,
+                    watchDuration: watchDuration,
+                    completed: watchDuration > 300 // Consider "completed" if watched > 5 min
+                )
+            }
             teardown()
         }
         // Gestures: single tap toggles controls, double-tap exits
@@ -619,6 +759,22 @@ struct LiveTVPlayerView: View {
     }
 
     private func switchToChannel(_ newChannel: LiveTVChannel) {
+        // 🔥 AI: Record watch event for the channel we're leaving
+        if let previousChannel = currentWatchingChannel, previousChannel.id != newChannel.id {
+            let watchDuration = Date().timeIntervalSince(watchStartTime)
+            let userId = appState.currentUser?.id ?? "anonymous"
+            liveTVAI.recordWatchEvent(
+                userId: userId,
+                channel: previousChannel,
+                watchDuration: watchDuration,
+                completed: false // Switched away, so not completed
+            )
+        }
+        
+        // 🔥 AI: Start tracking new channel
+        watchStartTime = Date()
+        currentWatchingChannel = newChannel
+        
         // Get optimal stream URL based on network quality
         let optimalURL = LiveTVService.shared.getOptimalStreamURL(
             for: newChannel,
@@ -704,6 +860,111 @@ struct LiveTVPlayerView: View {
     }
 }
 
+// MARK: - Channel Logo View with Better Image Loading
+private struct ChannelLogoView: View {
+    let channel: LiveTVChannel
+    let isSelected: Bool
+    
+    var body: some View {
+        ZStack {
+            // Background gradient based on category
+            RoundedRectangle(cornerRadius: 8)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            channel.category.color.opacity(0.3),
+                            channel.category.color.opacity(0.1)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            
+            // Try to load logo image
+            AsyncImage(url: URL(string: channel.logoURL)) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFit()
+                        .padding(4)
+                case .failure(_):
+                    // Show category icon as fallback
+                    VStack(spacing: 2) {
+                        Image(systemName: categoryIcon)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text(String(channel.name.prefix(6)))
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white.opacity(0.8))
+                            .lineLimit(1)
+                    }
+                case .empty:
+                    // Loading state
+                    VStack(spacing: 2) {
+                        Image(systemName: categoryIcon)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.6))
+                        Text(String(channel.name.prefix(6)))
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white.opacity(0.5))
+                            .lineLimit(1)
+                    }
+                @unknown default:
+                    EmptyView()
+                }
+            }
+        }
+        .frame(width: 64, height: 40)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isSelected ? Color.red : Color.white.opacity(0.2), lineWidth: isSelected ? 2.5 : 1)
+        )
+        .shadow(color: isSelected ? Color.red.opacity(0.4) : .clear, radius: 6, x: 0, y: 2)
+    }
+    
+    private var categoryIcon: String {
+        switch channel.category {
+        case .anime: return "sparkles.tv"
+        case .scifi: return "wand.and.stars"
+        case .reality: return "person.3.fill"
+        case .comedy: return "face.smiling.fill"
+        case .kids: return "figure.2.and.child.holdinghands"
+        case .news: return "newspaper.fill"
+        case .sports: return "sportscourt.fill"
+        case .movies: return "film.fill"
+        case .music: return "music.note.tv.fill"
+        case .entertainment: return "star.fill"
+        case .documentary: return "globe.americas.fill"
+        case .lifestyle: return "leaf.fill"
+        case .business: return "chart.line.uptrend.xyaxis"
+        case .international: return "globe"
+        case .classic: return "tv.fill"
+        }
+    }
+}
+
+// MARK: - Pulsing Live Dot
+private struct PulsingLiveDot: View {
+    @State private var isPulsing = false
+    
+    var body: some View {
+        Circle()
+            .fill(Color.white)
+            .frame(width: 8, height: 8)
+            .scaleEffect(isPulsing ? 1.3 : 1.0)
+            .opacity(isPulsing ? 0.7 : 1.0)
+            .animation(
+                .easeInOut(duration: 0.8)
+                .repeatForever(autoreverses: true),
+                value: isPulsing
+            )
+            .onAppear { isPulsing = true }
+    }
+}
+
 #Preview {
     LiveTVPlayerView(channel: LiveTVChannel.sampleChannels.first!)
+        .environmentObject(AppState())
 }

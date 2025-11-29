@@ -2,19 +2,75 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Associated Domains and Push Notifications enabled for paid Apple Developer Program membership -->
-	<key>com.apple.developer.associated-domains</key>
-	<array>
-		<string>applinks:mychannel.live</string>
-		<string>applinks:www.mychannel.live</string>
-	</array>
+	<!-- ================================================================ -->
+	<!-- 🔥 MyChannel - Standard Entitlements (Provisioning Profile Compatible) -->
+	<!-- ================================================================ -->
 	
-	<!-- Apple Sign In capability -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🔐 AUTHENTICATION & SIGN-IN -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<!-- Sign in with Apple - Required by App Store for social login -->
 	<key>com.apple.developer.applesignin</key>
 	<array>
 		<string>Default</string>
 	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🔗 DEEP LINKING & UNIVERSAL LINKS -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<!-- Associated Domains - Universal links, web credentials, Handoff -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<!-- Universal Links - Open app from web links -->
+		<string>applinks:mychannel.live</string>
+		<string>applinks:www.mychannel.live</string>
+		<string>applinks:*.mychannel.live</string>
+		<!-- Shared Web Credentials - AutoFill passwords -->
+		<string>webcredentials:mychannel.live</string>
+		<string>webcredentials:www.mychannel.live</string>
+		<!-- Handoff - Continue watching on other devices -->
+		<string>activitycontinuation:mychannel.live</string>
+		<string>activitycontinuation:www.mychannel.live</string>
+	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🔔 PUSH NOTIFICATIONS -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<!-- Push Notifications - New videos, comments, likes, live alerts -->
+	<key>aps-environment</key>
+	<string>development</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🔑 KEYCHAIN & SECURITY -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<!-- Keychain Sharing - Secure credential storage across extensions -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.keontapeat.MyChannelApp</string>
+		<string>$(AppIdentifierPrefix)com.keontapeat.MyChannelApp.shared</string>
+	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 📦 APP GROUPS - SHARED DATA -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<!-- App Groups - Share data with widgets, extensions -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.keontapeat.MyChannelApp</string>
+	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🔒 DATA PROTECTION -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<!-- Complete Data Protection - Maximum security -->
+	<key>com.apple.developer.default-data-protection</key>
+	<string>NSFileProtectionComplete</string>
+	
 </dict>
 </plist>
-
-

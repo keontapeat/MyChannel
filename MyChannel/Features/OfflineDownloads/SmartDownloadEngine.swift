@@ -320,7 +320,7 @@ final class SmartDownloadEngine: ObservableObject {
         score += categoryScore * 30
         
         // Recency bonus (0-15 points)
-        let hoursSinceUpload = Date().timeIntervalSince(video.uploadDate) / 3600
+        let hoursSinceUpload = Date().timeIntervalSince(video.createdAt) / 3600
         if hoursSinceUpload < 24 {
             score += 15
         } else if hoursSinceUpload < 72 {

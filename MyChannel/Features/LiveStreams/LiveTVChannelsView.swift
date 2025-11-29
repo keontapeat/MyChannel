@@ -351,6 +351,11 @@ private struct MinimalGridChannelCard: View {
         case .lifestyle: return .mint
         case .business: return .gray
         case .international: return .cyan
+        case .anime: return .indigo
+        case .scifi: return .teal
+        case .comedy: return .orange
+        case .reality: return .pink
+        case .classic: return .brown
         }
     }
     
@@ -366,6 +371,11 @@ private struct MinimalGridChannelCard: View {
         case .lifestyle: return "house.fill"
         case .business: return "chart.line.uptrend.xyaxis"
         case .international: return "globe"
+        case .anime: return "sparkles.tv.fill"
+        case .scifi: return "moon.stars.fill"
+        case .comedy: return "face.smiling.fill"
+        case .reality: return "video.fill"
+        case .classic: return "clock.fill"
         }
     }
 
@@ -520,6 +530,11 @@ private struct MinimalListChannelCard: View {
         case .lifestyle: return .mint
         case .business: return .gray
         case .international: return .cyan
+        case .anime: return .indigo
+        case .scifi: return .teal
+        case .comedy: return .orange
+        case .reality: return .pink
+        case .classic: return .brown
         }
     }
     
@@ -535,6 +550,11 @@ private struct MinimalListChannelCard: View {
         case .lifestyle: return "house.fill"
         case .business: return "chart.line.uptrend.xyaxis"
         case .international: return "globe"
+        case .anime: return "sparkles.tv.fill"
+        case .scifi: return "moon.stars.fill"
+        case .comedy: return "face.smiling.fill"
+        case .reality: return "video.fill"
+        case .classic: return "clock.fill"
         }
     }
 

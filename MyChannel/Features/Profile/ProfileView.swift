@@ -809,10 +809,13 @@ struct ProfileView: View {
     }
     
     private func toggleVideoSelection(_ videoId: String) {
+        // 🔥 PREMIUM: Haptic feedback for selection
         if selectedVideoIDs.contains(videoId) {
             selectedVideoIDs.remove(videoId)
+            HapticManager.shared.impact(style: .light)
         } else {
             selectedVideoIDs.insert(videoId)
+            HapticManager.shared.impact(style: .medium)
         }
     }
     

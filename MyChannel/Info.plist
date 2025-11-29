@@ -2,40 +2,221 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- ================================================================ -->
+	<!-- 🔥🔥🔥 ABSOLUTE NUCLEAR INFO.PLIST - EVERYTHING ENABLED 🔥🔥🔥 -->
+	<!-- ================================================================ -->
+	<!-- MyChannel - THE ULTIMATE PLATFORM -->
+	<!-- WE GOING RICH ASF 💰💰💰 -->
+	<!-- ================================================================ -->
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 📸 CAMERA & MEDIA CAPTURE -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
 	<key>NSCameraUsageDescription</key>
-	<string>MyChannel needs camera access to record videos, take photos for thumbnails, and enable live streaming.</string>
+	<string>MyChannel needs camera access to record videos, take photos for thumbnails, enable AR face filters, scan QR codes, and power live streaming.</string>
+	
 	<key>NSMicrophoneUsageDescription</key>
-	<string>MyChannel needs microphone access to record audio for your videos and live streams.</string>
+	<string>MyChannel needs microphone access to record audio for your videos, enable voice search, capture live streams, and power real-time voice effects.</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🖼️ PHOTO LIBRARY -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>MyChannel needs photo library access to upload videos and images from your device.</string>
+	<string>MyChannel needs photo library access to upload videos, images, and select thumbnails from your device.</string>
+	
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>MyChannel needs permission to save videos and images to your photo library.</string>
+	<string>MyChannel needs permission to save videos, thumbnails, and downloaded content to your photo library.</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🎤 SPEECH & VOICE -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>MyChannel uses speech recognition to generate automatic captions for your videos and enable voice search.</string>
+	<string>MyChannel uses speech recognition to generate automatic captions, enable voice search, and power real-time transcription.</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 📍 LOCATION - ALL MODES -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>MyChannel uses your location to show relevant local content and tag your videos with location.</string>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>MyChannel uses this to provide personalized content recommendations and measure ad performance.</string>
+	<string>MyChannel uses your location to show relevant local content, geo-tag your videos, and discover nearby creators and events.</string>
+	
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>MyChannel uses your location to show relevant local content, continue location-based features while recording or streaming, and send location-based notifications.</string>
+	
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>MyChannel uses your location in the background to notify you about nearby live events and trending content in your area.</string>
+	
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>NearbyContent</key>
+		<string>MyChannel needs your precise location to show content from creators near you.</string>
+		<key>GeoTagging</key>
+		<string>MyChannel needs your precise location to tag your video with the exact filming location.</string>
+	</dict>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🔐 SECURITY & AUTHENTICATION -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
 	<key>NSFaceIDUsageDescription</key>
-	<string>MyChannel uses Face ID to securely authenticate payments and protect your account.</string>
+	<string>MyChannel uses Face ID to securely authenticate payments, protect your account, and enable quick login.</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 👥 CONTACTS & SOCIAL -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
 	<key>NSContactsUsageDescription</key>
-	<string>MyChannel can access your contacts to help you find and invite friends to the platform.</string>
+	<string>MyChannel can access your contacts to help you find and invite friends, discover creators you may know, and share videos easily.</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 📅 CALENDAR & REMINDERS -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>NSCalendarsUsageDescription</key>
+	<string>MyChannel can add video premieres, live stream schedules, and creator events to your calendar so you never miss content.</string>
+	
+	<key>NSRemindersUsageDescription</key>
+	<string>MyChannel can create reminders for upcoming premieres, live streams, and content you want to watch later.</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🎧 BLUETOOTH & AUDIO DEVICES -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>MyChannel uses Bluetooth to detect audio devices like AirPods for seamless playback control, auto-pause features, and connect to gaming controllers.</string>
+	
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>MyChannel uses Bluetooth to connect to external microphones, cameras, professional audio equipment, and gaming peripherals for content creation.</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 📡 LOCAL NETWORK (Chromecast, AirPlay, Smart TVs) -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>MyChannel uses local network access to discover and connect to Chromecast, AirPlay devices, smart TVs, gaming consoles, and other streaming devices in your home.</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🎤 SIRI & VOICE CONTROL -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>NSSiriUsageDescription</key>
+	<string>MyChannel uses Siri to let you search for videos, control playback, start live streams, and navigate the app with your voice.</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🎵 APPLE MUSIC -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>NSAppleMusicUsageDescription</key>
+	<string>MyChannel accesses Apple Music to add licensed music to your videos, detect copyrighted content, and sync your music preferences.</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🏃 MOTION & FITNESS -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>NSMotionUsageDescription</key>
+	<string>MyChannel uses motion data to provide immersive viewing experiences, track workout progress during fitness videos, enable AR features, and detect device orientation for video recording.</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 📊 USER TRACKING (App Store Requirement) -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>NSUserTrackingUsageDescription</key>
+	<string>MyChannel uses this to provide personalized content recommendations, measure ad performance, and improve your experience. You can opt out anytime.</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🏥 HEALTH - FITNESS CONTENT -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>NSHealthShareUsageDescription</key>
+	<string>MyChannel reads your workout and activity data to track your progress during fitness videos, provide personalized workout recommendations, and sync with fitness challenges.</string>
+	
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>MyChannel saves workout data from fitness videos to your Health app, including calories burned, exercise minutes, and workout types to track your fitness journey.</string>
+	
+	<key>NSHealthClinicalHealthRecordsShareUsageDescription</key>
+	<string>MyChannel can access your health records to provide personalized fitness and wellness content recommendations.</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🏠 HOMEKIT - SMART HOME -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>NSHomeKitUsageDescription</key>
+	<string>MyChannel can control your smart home devices to dim lights during video playback, cast to smart TVs, and create an immersive viewing experience.</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🎮 GAME CONTROLLER -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>GCSupportedGameControllers</key>
+	<array>
+		<dict>
+			<key>ProfileName</key>
+			<string>ExtendedGamepad</string>
+		</dict>
+		<dict>
+			<key>ProfileName</key>
+			<string>MicroGamepad</string>
+		</dict>
+	</array>
+	
+	<key>GCSupportsControllerUserInteraction</key>
+	<true/>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 📺 NFC - TAP TO SHARE/PAY -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>NFCReaderUsageDescription</key>
+	<string>MyChannel uses NFC to quickly share videos, follow creators by tapping phones, and enable tap-to-pay for tips and purchases.</string>
+	
+	<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
+	<array>
+		<string>A0000002471001</string>
+	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🔗 URL SCHEMES -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>CFBundleURLTypes</key>
+	<array>
+		<!-- Google Sign-In -->
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>Google Sign-In</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.124515086975-mu4mm52mrsp5k7n760g1q57llasrte5t</string>
+			</array>
+		</dict>
+		<!-- Custom URL Scheme for deep linking -->
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>MyChannel Deep Link</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>mychannel</string>
+				<string>mychannel-app</string>
+				<string>mc</string>
+			</array>
+		</dict>
+	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🔑 API KEYS (Environment Variables) -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
 	<key>AI_API_KEY</key>
 	<string>$(AI_API_KEY)</string>
 	<key>ANTHROPIC_API_KEY</key>
 	<string>$(ANTHROPIC_API_KEY)</string>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>com.googleusercontent.apps.124515086975-mu4mm52mrsp5k7n760g1q57llasrte5t</string>
-				<string>mychannel</string>
-			</array>
-		</dict>
-	</array>
 	<key>CHANNELBOOST_BASE_URL</key>
 	<string>$(CHANNELBOOST_BASE_URL)</string>
 	<key>CHANNELBOOST_TOKEN</key>
@@ -48,36 +229,560 @@
 	<string>$(GOOGLE_CLOUD_PROJECT_ID)</string>
 	<key>OPENAI_API_KEY</key>
 	<string>$(OPENAI_API_KEY)</string>
-	<key>SKAdNetworkItems</key>
-	<array>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>cstr6suwn9.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>4pfyvq9l8r.skadnetwork</string>
-		</dict>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>v9wttpbfk9.skadnetwork</string>
-		</dict>
-	</array>
 	<key>TMDB_API_KEY</key>
 	<string>$(TMDB_API_KEY)</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 📺 AD NETWORK IDENTIFIERS (SKAdNetwork) - EVERY MAJOR NETWORK -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>SKAdNetworkItems</key>
+	<array>
+		<!-- Google AdMob (All IDs) -->
+		<dict><key>SKAdNetworkIdentifier</key><string>cstr6suwn9.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>4fzdc2evr5.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>4pfyvq9l8r.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>2fnua5tdw4.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>ydx93a7ass.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>5a6flpkh64.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>p78axxw29g.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>v72qych5uu.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>c6k4g5qg8m.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>s39g8k73mm.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>3qy4746246.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>3sh42y64q3.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>f38h382jlk.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>hs6bdukanm.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>prcb7njmu6.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>v4nxqhlyqp.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>wzmmz9fp6w.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>yclnxrl5pm.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>t38b2kh725.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>7ug5zh24hu.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>9rd848q2bz.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>n6fk4nfna4.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>kbd757ywx3.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>9t245vhmpl.skadnetwork</string></dict>
+		<!-- Facebook/Meta -->
+		<dict><key>SKAdNetworkIdentifier</key><string>v9wttpbfk9.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>n38lu8286q.skadnetwork</string></dict>
+		<!-- Unity Ads -->
+		<dict><key>SKAdNetworkIdentifier</key><string>4dzt52r2t5.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>bvpn9ufa9b.skadnetwork</string></dict>
+		<!-- AppLovin -->
+		<dict><key>SKAdNetworkIdentifier</key><string>ludvb6z3bs.skadnetwork</string></dict>
+		<!-- IronSource -->
+		<dict><key>SKAdNetworkIdentifier</key><string>su67r6k2v3.skadnetwork</string></dict>
+		<!-- Vungle -->
+		<dict><key>SKAdNetworkIdentifier</key><string>gta9lk7p23.skadnetwork</string></dict>
+		<!-- Chartboost -->
+		<dict><key>SKAdNetworkIdentifier</key><string>f38h382jlk.skadnetwork</string></dict>
+		<!-- InMobi -->
+		<dict><key>SKAdNetworkIdentifier</key><string>wzmmz9fp6w.skadnetwork</string></dict>
+		<!-- Snap -->
+		<dict><key>SKAdNetworkIdentifier</key><string>424m5254lk.skadnetwork</string></dict>
+		<!-- TikTok -->
+		<dict><key>SKAdNetworkIdentifier</key><string>22mmun2rn5.skadnetwork</string></dict>
+		<dict><key>SKAdNetworkIdentifier</key><string>238telecom.skadnetwork</string></dict>
+		<!-- Twitter/X -->
+		<dict><key>SKAdNetworkIdentifier</key><string>9t245vhmpl.skadnetwork</string></dict>
+		<!-- Yahoo -->
+		<dict><key>SKAdNetworkIdentifier</key><string>e5fvkxwrpn.skadnetwork</string></dict>
+		<!-- Amazon -->
+		<dict><key>SKAdNetworkIdentifier</key><string>p78axxw29g.skadnetwork</string></dict>
+		<!-- Microsoft -->
+		<dict><key>SKAdNetworkIdentifier</key><string>uw77j35x4d.skadnetwork</string></dict>
+		<!-- Pinterest -->
+		<dict><key>SKAdNetworkIdentifier</key><string>ggvn48r87g.skadnetwork</string></dict>
+		<!-- Reddit -->
+		<dict><key>SKAdNetworkIdentifier</key><string>7rz58n8ntl.skadnetwork</string></dict>
+		<!-- Liftoff -->
+		<dict><key>SKAdNetworkIdentifier</key><string>7953jerfzd.skadnetwork</string></dict>
+		<!-- Moloco -->
+		<dict><key>SKAdNetworkIdentifier</key><string>9nlqeag3gk.skadnetwork</string></dict>
+		<!-- Digital Turbine -->
+		<dict><key>SKAdNetworkIdentifier</key><string>m8dbw4sv7c.skadnetwork</string></dict>
+		<!-- AdColony -->
+		<dict><key>SKAdNetworkIdentifier</key><string>4pfyvq9l8r.skadnetwork</string></dict>
+		<!-- Mintegral -->
+		<dict><key>SKAdNetworkIdentifier</key><string>kbd757ywx3.skadnetwork</string></dict>
+		<!-- Fyber -->
+		<dict><key>SKAdNetworkIdentifier</key><string>cg4yq2srnc.skadnetwork</string></dict>
+		<!-- Pangle -->
+		<dict><key>SKAdNetworkIdentifier</key><string>238telecom.skadnetwork</string></dict>
+		<!-- Smaato -->
+		<dict><key>SKAdNetworkIdentifier</key><string>ppxm28t8ap.skadnetwork</string></dict>
+		<!-- Tapjoy -->
+		<dict><key>SKAdNetworkIdentifier</key><string>ecpz2srf59.skadnetwork</string></dict>
+		<!-- Verve -->
+		<dict><key>SKAdNetworkIdentifier</key><string>pu4na253f3.skadnetwork</string></dict>
+	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- ⚡ BACKGROUND MODES - ALL ENABLED -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>fetch</string>
-		<string>remote-notification</string>
+		<!-- Audio - Picture in Picture, background audio playback -->
 		<string>audio</string>
+		<!-- Background fetch - Sync subscriptions, preload content -->
+		<string>fetch</string>
+		<!-- Remote notifications - Push notifications -->
+		<string>remote-notification</string>
+		<!-- Background processing - Video uploads, transcoding -->
 		<string>processing</string>
+		<!-- Location updates - Geo-tagged content -->
+		<string>location</string>
+		<!-- Bluetooth - External devices -->
+		<string>bluetooth-central</string>
+		<string>bluetooth-peripheral</string>
+		<!-- External accessory - Pro audio/video equipment -->
+		<string>external-accessory</string>
+		<!-- Newsstand downloads (for content preloading) -->
+		<string>newsstand-content</string>
 	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 📋 BACKGROUND TASK IDENTIFIERS -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.keontapeat.MyChannelApp.refresh</string>
 		<string>com.keontapeat.MyChannelApp.processing</string>
 		<string>com.keontapeat.MyChannelApp.video-upload</string>
 		<string>com.keontapeat.MyChannelApp.sync</string>
+		<string>com.keontapeat.MyChannelApp.video-processing</string>
+		<string>com.keontapeat.MyChannelApp.thumbnail-generation</string>
+		<string>com.keontapeat.MyChannelApp.cache-cleanup</string>
+		<string>com.keontapeat.MyChannelApp.analytics-upload</string>
+		<string>com.keontapeat.MyChannelApp.download-resume</string>
+		<string>com.keontapeat.MyChannelApp.notification-sync</string>
+		<string>com.keontapeat.MyChannelApp.content-preload</string>
+		<string>com.keontapeat.MyChannelApp.health-sync</string>
+		<string>com.keontapeat.MyChannelApp.icloud-sync</string>
+		<string>com.keontapeat.MyChannelApp.ml-training</string>
 	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 📄 DOCUMENT TYPES (Import Everything) -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Video</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Default</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.movie</string>
+				<string>public.video</string>
+				<string>com.apple.quicktime-movie</string>
+				<string>public.mpeg-4</string>
+				<string>public.avi</string>
+				<string>com.apple.m4v-video</string>
+				<string>public.3gpp</string>
+				<string>public.3gpp2</string>
+				<string>org.webmproject.webm</string>
+				<string>com.microsoft.windows-media-wmv</string>
+				<string>public.mpeg</string>
+				<string>public.mpeg-2-video</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Image</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.image</string>
+				<string>public.jpeg</string>
+				<string>public.png</string>
+				<string>public.heic</string>
+				<string>public.heif</string>
+				<string>com.compuserve.gif</string>
+				<string>public.webp</string>
+				<string>public.tiff</string>
+				<string>com.adobe.raw-image</string>
+				<string>public.camera-raw-image</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Audio</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.audio</string>
+				<string>public.mp3</string>
+				<string>com.apple.m4a-audio</string>
+				<string>public.aiff-audio</string>
+				<string>com.microsoft.waveform-audio</string>
+				<string>org.xiph.flac</string>
+				<string>org.xiph.ogg-vorbis</string>
+				<string>public.aac-audio</string>
+			</array>
+		</dict>
+	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 📦 EXPORTED TYPE IDENTIFIERS -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.content</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>MyChannel Project</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.keontapeat.MyChannelApp.project</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>mcproject</string>
+					<string>mcp</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/x-mychannel-project</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>MyChannel Draft</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.keontapeat.MyChannelApp.draft</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>mcdraft</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🔍 QUERIED URL SCHEMES (Can Open ALL These Apps) -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<!-- Social Media -->
+		<string>instagram</string>
+		<string>instagram-stories</string>
+		<string>twitter</string>
+		<string>twitterauth</string>
+		<string>x</string>
+		<string>fb</string>
+		<string>fbapi</string>
+		<string>fbauth2</string>
+		<string>fbshareextension</string>
+		<string>tiktok</string>
+		<string>snssdk1128</string>
+		<string>snapchat</string>
+		<string>whatsapp</string>
+		<string>telegram</string>
+		<string>tg</string>
+		<string>linkedin</string>
+		<string>pinterest</string>
+		<string>reddit</string>
+		<string>discord</string>
+		<string>threads</string>
+		<string>mastodon</string>
+		<string>tumblr</string>
+		<string>wechat</string>
+		<string>weixin</string>
+		<string>line</string>
+		<string>kakaotalk</string>
+		<string>viber</string>
+		<string>signal</string>
+		<!-- Communication -->
+		<string>mailto</string>
+		<string>tel</string>
+		<string>telprompt</string>
+		<string>sms</string>
+		<string>facetime</string>
+		<string>facetime-audio</string>
+		<string>imessage</string>
+		<!-- Video Platforms (Competitors) -->
+		<string>youtube</string>
+		<string>vnd.youtube</string>
+		<string>vimeo</string>
+		<string>twitch</string>
+		<string>dailymotion</string>
+		<!-- Streaming Devices -->
+		<string>googlecast</string>
+		<string>plex</string>
+		<string>vlc</string>
+		<string>infuse</string>
+		<!-- Payment Apps -->
+		<string>paypal</string>
+		<string>venmo</string>
+		<string>cashapp</string>
+		<string>zelle</string>
+		<string>applepay</string>
+		<string>stripe</string>
+		<!-- Cloud Storage -->
+		<string>googledrive</string>
+		<string>dropbox</string>
+		<string>onedrive</string>
+		<string>box</string>
+		<string>icloud-drive</string>
+		<!-- Music -->
+		<string>spotify</string>
+		<string>music</string>
+		<string>soundcloud</string>
+		<string>pandora</string>
+		<string>tidal</string>
+		<string>deezer</string>
+		<string>amazonmusic</string>
+		<!-- Productivity -->
+		<string>notion</string>
+		<string>bear</string>
+		<string>evernote</string>
+		<string>todoist</string>
+		<!-- Fitness -->
+		<string>strava</string>
+		<string>nike</string>
+		<string>fitbit</string>
+		<string>myfitnesspal</string>
+		<!-- Gaming -->
+		<string>steam</string>
+		<string>epicgames</string>
+		<string>xbox</string>
+		<string>playstation</string>
+		<!-- Maps -->
+		<string>maps</string>
+		<string>comgooglemaps</string>
+		<string>waze</string>
+	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🔒 APP TRANSPORT SECURITY -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSAllowsArbitraryLoadsForMedia</key>
+		<true/>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>mychannel.live</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<true/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.3</string>
+			</dict>
+			<key>firebaseio.com</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<true/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+			</dict>
+			<key>googleapis.com</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<true/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+			</dict>
+			<key>cloudflare.com</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<true/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+			</dict>
+		</dict>
+	</dict>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 📡 BONJOUR SERVICES (Local Network Discovery) -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_googlecast._tcp</string>
+		<string>_airplay._tcp</string>
+		<string>_raop._tcp</string>
+		<string>_companion-link._tcp</string>
+		<string>_homekit._tcp</string>
+		<string>_hap._tcp</string>
+		<string>_daap._tcp</string>
+		<string>_dacp._tcp</string>
+		<string>_touch-able._tcp</string>
+		<string>_sleep-proxy._udp</string>
+	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 📱 SUPPORTED INTERFACE ORIENTATIONS -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- ⚙️ APP CONFIGURATION -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	
+	<key>UIRequiresFullScreen</key>
+	<false/>
+	
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleDefault</string>
+	
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+	
+	<key>UIApplicationSupportsMultipleScenes</key>
+	<true/>
+	
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	
+	<!-- Supports external displays -->
+	<key>UIApplicationSupportsExternalDisplays</key>
+	<true/>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 📲 HARDWARE REQUIREMENTS -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🎤 SIRI INTENTS & USER ACTIVITIES - ALL OF THEM -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>NSUserActivityTypes</key>
+	<array>
+		<!-- Custom Activities -->
+		<string>com.keontapeat.MyChannelApp.watchVideo</string>
+		<string>com.keontapeat.MyChannelApp.searchVideos</string>
+		<string>com.keontapeat.MyChannelApp.viewChannel</string>
+		<string>com.keontapeat.MyChannelApp.uploadVideo</string>
+		<string>com.keontapeat.MyChannelApp.goLive</string>
+		<string>com.keontapeat.MyChannelApp.viewSubscriptions</string>
+		<string>com.keontapeat.MyChannelApp.viewTrending</string>
+		<string>com.keontapeat.MyChannelApp.viewHistory</string>
+		<string>com.keontapeat.MyChannelApp.viewPlaylists</string>
+		<string>com.keontapeat.MyChannelApp.viewNotifications</string>
+		<string>com.keontapeat.MyChannelApp.viewProfile</string>
+		<string>com.keontapeat.MyChannelApp.viewStudio</string>
+		<string>com.keontapeat.MyChannelApp.viewAnalytics</string>
+		<string>com.keontapeat.MyChannelApp.viewGaming</string>
+		<string>com.keontapeat.MyChannelApp.viewFlicks</string>
+		<string>com.keontapeat.MyChannelApp.viewStories</string>
+		<string>com.keontapeat.MyChannelApp.viewMovies</string>
+		<string>com.keontapeat.MyChannelApp.viewMusic</string>
+		<string>com.keontapeat.MyChannelApp.viewUniversity</string>
+		<string>com.keontapeat.MyChannelApp.startWorkout</string>
+		<string>com.keontapeat.MyChannelApp.joinTournament</string>
+		<!-- System Intents -->
+		<string>INPlayMediaIntent</string>
+		<string>INSearchForMediaIntent</string>
+		<string>INAddMediaIntent</string>
+		<string>INStartWorkoutIntent</string>
+		<string>INEndWorkoutIntent</string>
+		<string>INPauseWorkoutIntent</string>
+		<string>INResumeWorkoutIntent</string>
+		<string>INShareFocusStatusIntent</string>
+	</array>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🎬 CARPLAY SCENE -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>CPTemplateApplicationSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>CarPlay Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🔥 SPOTLIGHT INDEXING -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>CoreSpotlightContinuation</key>
+	<true/>
+	
 </dict>
 </plist>

@@ -182,10 +182,11 @@ struct ProfileHeaderView: View {
                 .frame(maxWidth: .infinity)
                 .multilineTextAlignment(.center)
 
+                // 🔥 PREMIUM: Animated stats with count-up effect
                 HStack(spacing: 32) {
-                    StatItem(value: formatCount(user.subscriberCount), label: "Subscribers")
-                    StatItem(value: formatCount(user.videoCount), label: "Videos")
-                    StatItem(value: formatCount(user.totalViews ?? estimatedTotalViews(for: user)), label: "Views")
+                    AnimatedStatItem(targetValue: user.subscriberCount, label: "Subscribers", animationDuration: 0.6)
+                    AnimatedStatItem(targetValue: user.videoCount, label: "Videos", animationDuration: 0.5)
+                    AnimatedStatItem(targetValue: user.totalViews ?? estimatedTotalViews(for: user), label: "Views", animationDuration: 0.8)
                 }
                 .opacity(opacityForFactor(0.22))
                 .transition(.opacity)
@@ -442,7 +443,7 @@ private struct ProfileVideoBackground: View {
     }
 }
 
-// MARK: - Stat Item
+// MARK: - Stat Item (with Premium Counting Animation)
 struct StatItem: View {
     let value: String
     let label: String
@@ -453,11 +454,84 @@ struct StatItem: View {
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(.white)
                 .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+                .contentTransition(.numericText())
 
             Text(label)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.white.opacity(0.8))
                 .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+        }
+    }
+}
+
+// MARK: - 🔥 PREMIUM: Animated Stat Item with Count-Up Animation
+struct AnimatedStatItem: View {
+    let targetValue: Int
+    let label: String
+    let animationDuration: Double
+    
+    @State private var displayedValue: Int = 0
+    @State private var hasAnimated = false
+    
+    init(targetValue: Int, label: String, animationDuration: Double = 0.8) {
+        self.targetValue = targetValue
+        self.label = label
+        self.animationDuration = animationDuration
+    }
+    
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(formatCount(displayedValue))
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.white)
+                .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+                .contentTransition(.numericText())
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: displayedValue)
+
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white.opacity(0.8))
+                .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+        }
+        .onAppear {
+            guard !hasAnimated else { return }
+            hasAnimated = true
+            animateCount()
+        }
+        .onChange(of: targetValue) { newValue in
+            // Re-animate when value changes
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                displayedValue = newValue
+            }
+        }
+    }
+    
+    private func animateCount() {
+        // 🔥 PREMIUM: Smooth count-up animation with easing
+        let steps = min(targetValue, 30) // Max 30 steps for performance
+        let stepDuration = animationDuration / Double(steps)
+        
+        for step in 0...steps {
+            DispatchQueue.main.asyncAfter(deadline: .now() + stepDuration * Double(step)) {
+                // Ease-out curve for more natural feel
+                let progress = Double(step) / Double(steps)
+                let easedProgress = 1 - pow(1 - progress, 3) // Cubic ease-out
+                let newValue = Int(Double(targetValue) * easedProgress)
+                
+                withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) {
+                    displayedValue = newValue
+                }
+            }
+        }
+    }
+    
+    private func formatCount(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.1fM", Double(count) / 1_000_000)
+        } else if count >= 1_000 {
+            return String(format: "%.1fK", Double(count) / 1_000)
+        } else {
+            return "\(count)"
         }
     }
 }

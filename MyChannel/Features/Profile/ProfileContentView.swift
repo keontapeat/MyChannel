@@ -312,6 +312,7 @@ struct ProfileVideosView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 4)
             
+            // 🔥 PREMIUM: Animated bulk action bar with spring transition
             if isManagementActive, let management = managementContext {
                 let selectedCount = management.selectedIDs.wrappedValue.count
                 let totalCount = filteredVideos.count
@@ -321,6 +322,7 @@ struct ProfileVideosView: View {
                     isAllSelected: totalCount > 0 && selectedCount >= totalCount,
                     isDeleting: management.isDeleting,
                     onSelectOrClearAll: {
+                        HapticManager.shared.impact(style: .medium)
                         if totalCount > 0 && selectedCount >= totalCount {
                             management.onSetSelections([])
                         } else {
@@ -328,6 +330,7 @@ struct ProfileVideosView: View {
                         }
                     },
                     onDelete: {
+                        HapticManager.shared.notification(type: .warning)
                         management.onAction(.delete)
                     },
                     onAction: { action in
@@ -335,7 +338,15 @@ struct ProfileVideosView: View {
                     }
                 )
                 .padding(.horizontal, 16)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity
+                            .combined(with: .move(edge: .top))
+                            .combined(with: .scale(scale: 0.95, anchor: .top)),
+                        removal: .opacity.combined(with: .move(edge: .top))
+                    )
+                )
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isManagementActive)
             }
             
             videosBody
@@ -1347,6 +1358,7 @@ private struct VideoManagementToolbar: View {
     }
 }
 
+// 🔥 PREMIUM: Selection Badge with Spring Animation
 private struct SelectionBadge: View {
     let isSelected: Bool
     
@@ -1362,8 +1374,12 @@ private struct SelectionBadge: View {
                 Image(systemName: isSelected ? "checkmark" : "circle")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.white)
+                    .scaleEffect(isSelected ? 1.0 : 0.8)
+                    .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isSelected)
             )
             .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 1)
+            .scaleEffect(isSelected ? 1.1 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.65), value: isSelected)
     }
 }
 

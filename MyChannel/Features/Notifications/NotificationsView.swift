@@ -10,6 +10,7 @@ import SwiftUI
 struct NotificationsView: View {
     @State private var notifications: [NotificationItem] = NotificationItem.sampleNotifications
     @State private var selectedFilter: NotificationFilter = .all
+    @State private var hasAppeared = false
     
     var filteredNotifications: [NotificationItem] {
         if selectedFilter == .all {
@@ -19,14 +20,21 @@ struct NotificationsView: View {
         }
     }
     
+    // 🔥 PREMIUM: Count of unread notifications
+    private var unreadCount: Int {
+        notifications.filter { !$0.isRead }.count
+    }
+    
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // YouTube-style filter tabs with bottom border indicators
+                // 🔥 PREMIUM: YouTube-style filter tabs with haptics
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(NotificationFilter.allCases, id: \.self) { filter in
                             Button(action: {
+                                // 🔥 PREMIUM: Haptic on filter change
+                                HapticManager.shared.impact(style: .light)
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                     selectedFilter = filter
                                 }
@@ -64,10 +72,28 @@ struct NotificationsView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 12) {
-                            ForEach(filteredNotifications) { notification in
-                                NotificationCard(notification: notification) {
-                                    // Handle notification tap
-                                }
+                            ForEach(Array(filteredNotifications.enumerated()), id: \.element.id) { index, notification in
+                                NotificationCard(
+                                    notification: notification,
+                                    onTap: {
+                                        // 🔥 PREMIUM: Haptic on tap
+                                        HapticManager.shared.impact(style: .light)
+                                        markAsRead(notification.id)
+                                    },
+                                    onSwipeDelete: {
+                                        // 🔥 PREMIUM: Haptic on delete
+                                        HapticManager.shared.notification(type: .warning)
+                                        deleteNotification(notification.id)
+                                    }
+                                )
+                                // 🔥 PREMIUM: Staggered appear animation
+                                .opacity(hasAppeared ? 1 : 0)
+                                .offset(y: hasAppeared ? 0 : 20)
+                                .animation(
+                                    .spring(response: 0.4, dampingFraction: 0.8)
+                                    .delay(Double(index) * 0.05),
+                                    value: hasAppeared
+                                )
                             }
                         }
                         .padding(.horizontal, 16)
@@ -83,17 +109,25 @@ struct NotificationsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Mark all read") {
+                        // 🔥 PREMIUM: Success haptic
+                        HapticManager.shared.notification(type: .success)
                         markAllAsRead()
                     }
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppTheme.Colors.primary)
                 }
             }
+            .onAppear {
+                // 🔥 PREMIUM: Trigger staggered animation on appear
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    hasAppeared = true
+                }
+            }
         }
     }
     
     private func markAllAsRead() {
-        withAnimation(.easeInOut(duration: 0.3)) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             notifications = notifications.map { notification in
                 var updated = notification
                 updated.isRead = true
@@ -101,64 +135,165 @@ struct NotificationsView: View {
             }
         }
     }
+    
+    private func markAsRead(_ id: String) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            if let index = notifications.firstIndex(where: { $0.id == id }) {
+                notifications[index].isRead = true
+            }
+        }
+    }
+    
+    private func deleteNotification(_ id: String) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            notifications.removeAll { $0.id == id }
+        }
+    }
 }
 
-// MARK: - Notification Card
+// MARK: - 🔥 PREMIUM: Notification Card with Animations
 struct NotificationCard: View {
     let notification: NotificationItem
     let onTap: () -> Void
+    var onSwipeDelete: (() -> Void)? = nil
+    
+    @State private var isPressed = false
+    @State private var offset: CGFloat = 0
+    @State private var isSwiping = false
     
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                // Notification icon - neutral gray background
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.Colors.surface)
-                        .frame(width: 44, height: 44)
-                    
-                    Image(systemName: notification.type.iconName)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                }
-                
-                // Notification content
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(notification.title)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .lineLimit(2)
-                    
-                    Text(notification.message)
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .lineLimit(3)
-                    
-                    Text(notification.timestamp.timeAgoDisplay)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textTertiary)
-                }
-                
+        ZStack {
+            // 🔥 PREMIUM: Delete background (revealed on swipe)
+            HStack {
                 Spacer()
-                
-                // Unread indicator
-                if !notification.isRead {
-                    Circle()
-                        .fill(AppTheme.Colors.primary)
-                        .frame(width: 8, height: 8)
-                }
+                Image(systemName: "trash.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 60)
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(AppTheme.Colors.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
-                    )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.red)
+            .cornerRadius(12)
+            
+            // Main card content
+            Button(action: {
+                guard !isSwiping else { return }
+                onTap()
+            }) {
+                HStack(spacing: 12) {
+                    // Notification icon - neutral gray background
+                    ZStack {
+                        Circle()
+                            .fill(AppTheme.Colors.surface)
+                            .frame(width: 44, height: 44)
+                        
+                        Image(systemName: notification.type.iconName)
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                    
+                    // Notification content
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(notification.title)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .lineLimit(2)
+                        
+                        Text(notification.message)
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .lineLimit(3)
+                        
+                        Text(notification.timestamp.timeAgoDisplay)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+                    }
+                    
+                    Spacer()
+                    
+                    // 🔥 PREMIUM: Pulsing unread indicator
+                    if !notification.isRead {
+                        PulsingUnreadDot()
+                    }
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AppTheme.Colors.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            // 🔥 PREMIUM: Press scale effect
+            .scaleEffect(isPressed ? 0.98 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isPressed)
+            .offset(x: offset)
+            .gesture(
+                DragGesture(minimumDistance: 20)
+                    .onChanged { value in
+                        isSwiping = true
+                        if value.translation.width < 0 {
+                            offset = max(value.translation.width, -80)
+                        }
+                    }
+                    .onEnded { value in
+                        if value.translation.width < -60 {
+                            // 🔥 PREMIUM: Swipe to delete
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                offset = -400
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                onSwipeDelete?()
+                            }
+                        } else {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                offset = 0
+                            }
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            isSwiping = false
+                        }
+                    }
+            )
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in isPressed = true }
+                    .onEnded { _ in isPressed = false }
             )
         }
-        .buttonStyle(PlainButtonStyle())
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// 🔥 PREMIUM: Pulsing Unread Dot
+struct PulsingUnreadDot: View {
+    @State private var isPulsing = false
+    
+    var body: some View {
+        ZStack {
+            // Outer pulse ring
+            Circle()
+                .fill(AppTheme.Colors.primary.opacity(0.3))
+                .frame(width: 16, height: 16)
+                .scaleEffect(isPulsing ? 1.5 : 1.0)
+                .opacity(isPulsing ? 0 : 0.6)
+            
+            // Inner dot
+            Circle()
+                .fill(AppTheme.Colors.primary)
+                .frame(width: 8, height: 8)
+        }
+        .onAppear {
+            withAnimation(
+                .easeInOut(duration: 1.2)
+                .repeatForever(autoreverses: false)
+            ) {
+                isPulsing = true
+            }
+        }
     }
 }
 

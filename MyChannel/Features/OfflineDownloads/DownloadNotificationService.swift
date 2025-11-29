@@ -555,5 +555,4 @@ enum NotificationType {
 extension Notification.Name {
     static let playOfflineVideo = Notification.Name("playOfflineVideo")
     static let navigateToDownloads = Notification.Name("navigateToDownloads")
-    static let navigateToPremium = Notification.Name("navigateToPremium")
 }

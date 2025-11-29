@@ -611,7 +611,7 @@ struct DownloadedVideoRow: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 6)
-                        .padding(.vertical: 2)
+                        .padding(.vertical, 2)
                         .background(Color.black.opacity(0.8))
                         .cornerRadius(4)
                         .padding(4)

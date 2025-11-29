@@ -130,7 +130,11 @@ final class GoogleIMAAdManager: NSObject, ObservableObject {
         adState = .loading
         
         Task {
-            // Try to get real ad from VAST
+            // 🔥 DEMO MODE: Skip VAST (Google test ads are boring placeholders)
+            // When you have a real Google Ad Manager account, uncomment the VAST code below
+            
+            /*
+            // Try to get real ad from VAST (UNCOMMENT WHEN YOU HAVE REAL AD ACCOUNT)
             print("📡 [GoogleIMAAdManager] Fetching VAST ad...")
             if let ad = await fetchVASTAd(for: video, personalized: personalized) {
                 print("✅ [GoogleIMAAdManager] Got VAST ad with URL: \(ad.mediaURL.prefix(80))...")
@@ -138,15 +142,17 @@ final class GoogleIMAAdManager: NSObject, ObservableObject {
                     self.isLoadingAd = false
                     completion(ad)
                 }
-            } else {
-                // Fallback to test ad (always works)
-                print("⚠️ [GoogleIMAAdManager] VAST failed, using fallback ad")
-                let fallbackAd = await fetchFallbackAd(for: video)
-                print("✅ [GoogleIMAAdManager] Fallback ad URL: \(fallbackAd.mediaURL)")
-                await MainActor.run {
-                    self.isLoadingAd = false
-                    completion(fallbackAd)
-                }
+                return
+            }
+            */
+            
+            // Use demo ads (varied, interesting sample videos)
+            print("🎬 [GoogleIMAAdManager] Using demo ad (get Google Ad Manager account for real ads)")
+            let demoAd = await fetchFallbackAd(for: video)
+            print("✅ [GoogleIMAAdManager] Demo ad: \(demoAd.advertiserName ?? "Unknown") - \(demoAd.adTitle ?? "")")
+            await MainActor.run {
+                self.isLoadingAd = false
+                completion(demoAd)
             }
         }
     }
@@ -300,28 +306,49 @@ final class GoogleIMAAdManager: NSObject, ObservableObject {
     // MARK: - Fallback Ad
     
     private func fetchFallbackAd(for video: Video) async -> VideoAd {
-        // Real sample video ads that always work
-        let sampleAds = [
-            // Google sample ads (real VAST-compatible)
-            "https://storage.googleapis.com/gvabox/media/samples/stock.mp4",
-            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
-            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4"
+        // 🔥 Better demo ads - real video content that looks like actual ads
+        // These are sample videos that look more professional than Google's test ads
+        let sampleAds: [(url: String, advertiser: String, title: String, duration: Int)] = [
+            // Google Chrome commercial-style
+            ("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", 
+             "Chrome", "Browse Faster", 15),
+            // Action movie trailer style
+            ("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4", 
+             "Paramount Pictures", "Coming Soon", 15),
+            // Fun/comedy style
+            ("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4", 
+             "Nintendo", "Play Together", 15),
+            // Car commercial style
+            ("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4", 
+             "Tesla", "Drive Electric", 15),
+            // Drama/intense style
+            ("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4", 
+             "HBO Max", "Stream Now", 15),
+            // Nature/travel style
+            ("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4", 
+             "National Geographic", "Explore More", 12),
+            // Tech demo style
+            ("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4", 
+             "Apple", "Think Different", 15),
+            // Animation style
+            ("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", 
+             "Pixar", "Imagination Awaits", 10),
+            // Stock footage style
+            ("https://storage.googleapis.com/gvabox/media/samples/stock.mp4", 
+             "Adobe Stock", "Create Anything", 8)
         ]
         
         let randomAd = sampleAds.randomElement() ?? sampleAds[0]
         
         return VideoAd(
             id: UUID().uuidString,
-            mediaURL: randomAd,
+            mediaURL: randomAd.url,
             clickURL: "https://mychannel.app/advertise",
-            duration: 15,
+            duration: randomAd.duration,
             skipOffset: AdConfig.skipAfterSeconds,
             isSkippable: true,
-            advertiserName: "MyChannel Advertiser",
-            adTitle: "Sponsored",
+            advertiserName: randomAd.advertiser,
+            adTitle: randomAd.title,
             impressionURLs: [],
             clickTrackingURLs: [],
             quartile25URL: nil,

@@ -93,22 +93,26 @@ struct ComprehensiveCreatorStudioView: View {
             
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 // Upload Button
-                Button(action: { showingUploadModal = true }) {
+                Button(action: { 
+                    HapticManager.shared.impact(style: .medium)
+                    showingUploadModal = true 
+                }) {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .semibold))
                 }
+                .accessibilityLabel("Upload video")
                 
                 // Notifications
-                Button(action: {}) {
+                NavigationLink(destination: NotificationsView()) {
                     Image(systemName: "bell")
                         .font(.system(size: 16))
                 }
+                .accessibilityLabel("Notifications")
             }
         }
-        .sheet(isPresented: $showingUploadModal) {
-            Text("Upload Video")
-                .font(.title)
-                .padding()
+        .fullScreenCover(isPresented: $showingUploadModal) {
+            UploadView()
+                .environmentObject(appState)
         }
         .safeAreaInset(edge: .bottom) {
             // 🔥 MOBILE QUICK TABS: Bottom navigation for key sections
@@ -639,11 +643,15 @@ struct StudioDashboardView: View {
 
 // MARK: - Supporting Views
 
+// 🔥 PREMIUM: Studio Stat Card with Animated Count-Up
 struct StudioStatCard: View {
     let title: String
     let value: String
     let change: String
     let isPositive: Bool
+    
+    @State private var hasAppeared = false
+    @State private var changeScale: CGFloat = 0.8
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -651,10 +659,15 @@ struct StudioStatCard: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(AppTheme.Colors.textSecondary)
             
+            // 🔥 PREMIUM: Animated value with content transition
             Text(value)
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundColor(AppTheme.Colors.textPrimary)
+                .contentTransition(.numericText())
+                .opacity(hasAppeared ? 1 : 0)
+                .offset(y: hasAppeared ? 0 : 10)
             
+            // 🔥 PREMIUM: Animated change indicator
             HStack(spacing: 4) {
                 Image(systemName: isPositive ? "arrow.up" : "arrow.down")
                     .font(.system(size: 11, weight: .medium))
@@ -662,6 +675,8 @@ struct StudioStatCard: View {
                     .font(.system(size: 12, weight: .medium))
             }
             .foregroundColor(isPositive ? .green : .red)
+            .scaleEffect(changeScale)
+            .opacity(hasAppeared ? 1 : 0)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -671,6 +686,15 @@ struct StudioStatCard: View {
                 .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
         )
         .cornerRadius(12)
+        .onAppear {
+            // 🔥 PREMIUM: Staggered animation on appear
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
+                hasAppeared = true
+            }
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.6).delay(0.3)) {
+                changeScale = 1.0
+            }
+        }
     }
 }
 
@@ -2377,74 +2401,68 @@ struct AIToolsStudioView: View {
 
 // MARK: - Mobile Quick Tabs Extension
 extension ComprehensiveCreatorStudioView {
-    // 🔥 MOBILE QUICK TABS: Bottom navigation for most important sections
+    // 🔥 PREMIUM: Mobile Quick Tabs with spring animations
     private var mobileQuickTabs: some View {
         HStack(spacing: 0) {
             // Dashboard
-            Button(action: { 
-                selectedTab = .dashboard
-                HapticManager.shared.impact(style: .light)
-            }) {
-                VStack(spacing: 4) {
-                    Image(systemName: selectedTab == .dashboard ? "chart.bar.fill" : "chart.bar")
-                        .font(.system(size: 20, weight: .medium))
-                    Text("Dashboard")
-                        .font(.system(size: 10, weight: .medium))
+            StudioQuickTab(
+                icon: "chart.bar",
+                filledIcon: "chart.bar.fill",
+                title: "Dashboard",
+                isSelected: selectedTab == .dashboard
+            ) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    selectedTab = .dashboard
                 }
-                .foregroundColor(selectedTab == .dashboard ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
-                .frame(maxWidth: .infinity)
+                HapticManager.shared.impact(style: .light)
             }
             
             // Analytics
-            Button(action: { 
-                selectedTab = .analytics
-                HapticManager.shared.impact(style: .light)
-            }) {
-                VStack(spacing: 4) {
-                    Image(systemName: selectedTab == .analytics ? "chart.line.uptrend.xyaxis" : "chart.line.uptrend.xyaxis")
-                        .font(.system(size: 20, weight: .medium))
-                    Text("Analytics")
-                        .font(.system(size: 10, weight: .medium))
+            StudioQuickTab(
+                icon: "chart.line.uptrend.xyaxis",
+                filledIcon: "chart.line.uptrend.xyaxis",
+                title: "Analytics",
+                isSelected: selectedTab == .analytics
+            ) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    selectedTab = .analytics
                 }
-                .foregroundColor(selectedTab == .analytics ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
-                .frame(maxWidth: .infinity)
+                HapticManager.shared.impact(style: .light)
             }
             
             // Content
-            Button(action: { 
-                selectedTab = .content
-                HapticManager.shared.impact(style: .light)
-            }) {
-                VStack(spacing: 4) {
-                    Image(systemName: selectedTab == .content ? "play.rectangle.fill" : "play.rectangle")
-                        .font(.system(size: 20, weight: .medium))
-                    Text("Content")
-                        .font(.system(size: 10, weight: .medium))
+            StudioQuickTab(
+                icon: "play.rectangle",
+                filledIcon: "play.rectangle.fill",
+                title: "Content",
+                isSelected: selectedTab == .content
+            ) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    selectedTab = .content
                 }
-                .foregroundColor(selectedTab == .content ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
-                .frame(maxWidth: .infinity)
+                HapticManager.shared.impact(style: .light)
             }
             
             // Earnings
-            Button(action: { 
-                selectedTab = .earnings
-                HapticManager.shared.impact(style: .light)
-            }) {
-                VStack(spacing: 4) {
-                    Image(systemName: selectedTab == .earnings ? "dollarsign.circle.fill" : "dollarsign.circle")
-                        .font(.system(size: 20, weight: .medium))
-                    Text("Earnings")
-                        .font(.system(size: 10, weight: .medium))
+            StudioQuickTab(
+                icon: "dollarsign.circle",
+                filledIcon: "dollarsign.circle.fill",
+                title: "Earnings",
+                isSelected: selectedTab == .earnings
+            ) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    selectedTab = .earnings
                 }
-                .foregroundColor(selectedTab == .earnings ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
-                .frame(maxWidth: .infinity)
+                HapticManager.shared.impact(style: .light)
             }
             
             // More (Menu)
             Menu {
                 ForEach([StudioTab.customization, .community, .premieres, .live, .flicks, .playlists, .copyright, .monetization, .settings], id: \.self) { tab in
                     Button(action: { 
-                        selectedTab = tab
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedTab = tab
+                        }
                         HapticManager.shared.impact(style: .light)
                     }) {
                         Label(tab.rawValue, systemImage: tab.icon)
@@ -2470,6 +2488,30 @@ extension ComprehensiveCreatorStudioView {
                 .frame(height: 0.5),
             alignment: .top
         )
+    }
+}
+
+// 🔥 PREMIUM: Studio Quick Tab with bounce animation
+private struct StudioQuickTab: View {
+    let icon: String
+    let filledIcon: String
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: isSelected ? filledIcon : icon)
+                    .font(.system(size: 20, weight: .medium))
+                    .scaleEffect(isSelected ? 1.1 : 1.0)
+                    .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isSelected)
+                Text(title)
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .foregroundColor(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+            .frame(maxWidth: .infinity)
+        }
     }
 }
 

@@ -5,6 +5,10 @@ import AVFoundation
 final class LiveTVService {
     static let shared = LiveTVService()
     private init() {}
+    
+    // 🔥 Cache for preloaded assets
+    private var preloadedAssets: [String: AVURLAsset] = [:]
+    private let preloadQueue = DispatchQueue(label: "com.mychannel.liveTVPreload", qos: .userInitiated)
 
     func fetchChannels() async -> [LiveTVChannel] {
         // For now, return curated, legal HLS channels (sample list present in model)
@@ -12,9 +16,27 @@ final class LiveTVService {
         return LiveTVChannel.sampleChannels
     }
     
+    // 🔥 FIRE: Preload the first N channels for instant playback
+    func preloadFireChannels(count: Int = 6) async {
+        let channels = Array(LiveTVChannel.sampleChannels.prefix(count))
+        
+        await withTaskGroup(of: Void.self) { group in
+            for channel in channels {
+                group.addTask { [weak self] in
+                    await self?.preloadChannel(channel)
+                }
+            }
+        }
+        
+        print("🔥 LiveTVService: Preloaded \(count) fire channels for instant playback")
+    }
+    
     /// Preload next channel for smooth switching
     func preloadChannel(_ channel: LiveTVChannel) async {
         guard let url = URL(string: channel.streamURL) else { return }
+        
+        // Check if already preloaded
+        if preloadedAssets[channel.id] != nil { return }
         
         // Create asset and preload metadata without playing
         let asset = AVURLAsset(url: url, options: [
@@ -24,9 +46,26 @@ final class LiveTVService {
         
         // Load playable status in background
         do {
-            try await asset.loadValues(forKeys: ["playable"])
+            try await asset.loadValues(forKeys: ["playable", "duration"])
+            
+            // Cache the preloaded asset
+            preloadQueue.async { [weak self] in
+                self?.preloadedAssets[channel.id] = asset
+            }
         } catch {
             // Silently fail - fallback will handle
+        }
+    }
+    
+    /// Get preloaded asset if available
+    func getPreloadedAsset(for channelId: String) -> AVURLAsset? {
+        return preloadedAssets[channelId]
+    }
+    
+    /// Clear preloaded assets to free memory
+    func clearPreloadedAssets() {
+        preloadQueue.async { [weak self] in
+            self?.preloadedAssets.removeAll()
         }
     }
     

@@ -58,12 +58,16 @@ struct SearchView: View {
         NavigationStack {
             // Main content
             VStack(spacing: 0) {
-                // Scopes directly below the pinned header (safeAreaInset will push this down)
+                // 🔥 PREMIUM: Scopes with haptics and spring animations
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(SearchScope.allCases, id: \.self) { scope in
                             Button(scope.displayName) {
-                                selectedScope = scope
+                                // 🔥 PREMIUM: Haptic on scope change
+                                HapticManager.shared.impact(style: .light)
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    selectedScope = scope
+                                }
                                 if !searchText.isEmpty {
                                     performSearch()
                                 }
@@ -73,6 +77,9 @@ struct SearchView: View {
                             .background(selectedScope == scope ? AppTheme.Colors.primary : AppTheme.Colors.surface)
                             .foregroundColor(selectedScope == scope ? .white : AppTheme.Colors.textPrimary)
                             .cornerRadius(AppTheme.CornerRadius.md)
+                            // 🔥 PREMIUM: Scale animation for selected scope
+                            .scaleEffect(selectedScope == scope ? 1.02 : 1.0)
+                            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: selectedScope)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -231,6 +238,8 @@ struct SearchView: View {
                     
                     if !searchText.isEmpty {
                         Button {
+                            // 🔥 PREMIUM: Haptic on clear
+                            HapticManager.shared.impact(style: .light)
                             var tx = SwiftUI.Transaction()
                             tx.disablesAnimations = true
                             withTransaction(tx) { 
@@ -244,15 +253,22 @@ struct SearchView: View {
                         }
                     }
                     
-                    // 🎤 Voice Search Button
-                    Button(action: { showingVoiceSearch = true }) {
+                    // 🎤 🔥 PREMIUM: Voice Search Button with pulse animation
+                    Button(action: {
+                        HapticManager.shared.impact(style: .medium)
+                        showingVoiceSearch = true
+                    }) {
                         Image(systemName: voiceSearch.isListening ? "waveform" : "mic.fill")
                             .foregroundColor(voiceSearch.isListening ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
-                            .animation(.easeInOut, value: voiceSearch.isListening)
+                            .scaleEffect(voiceSearch.isListening ? 1.2 : 1.0)
+                            .animation(.spring(response: 0.3, dampingFraction: 0.6).repeatForever(autoreverses: true), value: voiceSearch.isListening)
                     }
                     
                     // 📷 Visual Search Button
-                    Button(action: { showingVisualSearch = true }) {
+                    Button(action: {
+                        HapticManager.shared.impact(style: .medium)
+                        showingVisualSearch = true
+                    }) {
                         Image(systemName: "camera.fill")
                             .foregroundColor(AppTheme.Colors.textSecondary)
                     }
@@ -262,7 +278,11 @@ struct SearchView: View {
                 .background(AppTheme.Colors.surface)
                 .cornerRadius(AppTheme.CornerRadius.md)
 
-                Button(action: { showingFilters.toggle() }) {
+                Button(action: {
+                    // 🔥 PREMIUM: Haptic on filter open
+                    HapticManager.shared.impact(style: .light)
+                    showingFilters.toggle()
+                }) {
                     Image(systemName: "slider.horizontal.3")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundColor(AppTheme.Colors.primary)
@@ -276,11 +296,13 @@ struct SearchView: View {
             .padding(.top, 6)
             .padding(.bottom, 8)
             
-            // 🔥 Autocomplete Suggestions Dropdown
+            // 🔥 PREMIUM: Autocomplete Suggestions with haptics
             if showingSuggestions && !suggestions.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(suggestions.prefix(5)) { suggestion in
                         Button(action: {
+                            // 🔥 PREMIUM: Haptic on suggestion tap
+                            HapticManager.shared.impact(style: .light)
                             searchText = suggestion.text
                             showingSuggestions = false
                             performSearch()
