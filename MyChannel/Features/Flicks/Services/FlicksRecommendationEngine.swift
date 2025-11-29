@@ -453,10 +453,11 @@ class FlicksRecommendationEngine: ObservableObject {
     }
 }
 
+@available(iOS 17.0, *)
 #Preview {
-    @StateObject var recommendationEngine = FlicksRecommendationEngine()
-    @State var recommendations: [Video] = []
-    @State var isLoading = false
+    @Previewable @StateObject var recommendationEngine = FlicksRecommendationEngine()
+    @Previewable @State var recommendations: [Video] = []
+    @Previewable @State var isLoading = false
     
     VStack(spacing: 20) {
         Text("AI Recommendation Engine")

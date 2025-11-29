@@ -279,9 +279,10 @@ struct WaveformBar: View {
     }
 }
 
+@available(iOS 17.0, *)
 #Preview {
-    @State var selectedMusic: CreateStoryViewModel.MusicItem? = nil
-    return MusicPickerSheet(selectedMusic: $selectedMusic) { music in
+    @Previewable @State var selectedMusic: CreateStoryViewModel.MusicItem? = nil
+    MusicPickerSheet(selectedMusic: $selectedMusic) { music in
         print("Music selected: \(music.title)")
     }
 }

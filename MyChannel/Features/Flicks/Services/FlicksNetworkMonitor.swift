@@ -154,10 +154,11 @@ class FlicksNetworkMonitor: ObservableObject {
     }
 }
 
+@available(iOS 17.0, *)
 #Preview {
-    @StateObject var networkMonitor = FlicksNetworkMonitor()
+    @Previewable @StateObject var networkMonitor = FlicksNetworkMonitor()
     
-    return VStack(spacing: 20) {
+    VStack(spacing: 20) {
         Text("Network Monitor")
             .font(.largeTitle)
             .fontWeight(.bold)

@@ -598,7 +598,7 @@ final class ToxicityFilter: ObservableObject {
         print("🔍 [Toxicity] Filtering \(snapshot.documents.count) messages")
         
         for doc in snapshot.documents {
-            let messageId = doc.documentID
+            _ = doc.documentID // messageId - for future logging
             let text = doc.data()["text"] as? String ?? ""
             let userId = doc.data()["userId"] as? String ?? ""
             

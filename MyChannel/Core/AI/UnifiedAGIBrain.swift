@@ -166,11 +166,11 @@ class UnifiedAGIBrain: ObservableObject {
         let strategy = await planContentStrategy(topic: topic, research: research, style: style)
         
         // STEP 3: Create (generate actual content)
-        let generatedVideo = try? await contentAI.generateVideoFromTrend(
+        _ = try? await contentAI.generateVideoFromTrend(
             topic: strategy.title,
             style: .educational,
             duration: TimeInterval(strategy.duration)
-        )
+        ) // generatedVideo - for future video generation pipeline
         
         let response = try? await centralAI.generate(
             prompt: "Generate a \(strategy.tone) script about \(topic) that is \(strategy.duration) seconds long",

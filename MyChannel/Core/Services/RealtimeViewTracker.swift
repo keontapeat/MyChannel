@@ -369,7 +369,7 @@ class RealtimeViewTracker: ObservableObject {
                 )
             }
             
-        case .viewEnded(let videoId, let userId, let watchDuration, let completionRate):
+        case .viewEnded(let videoId, _, let watchDuration, let completionRate): // userId not needed here
             // Track engagement metrics
             aiMonitoring.logMetric(
                 name: "video.watch_duration",

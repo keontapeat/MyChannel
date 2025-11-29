@@ -99,16 +99,16 @@ class AudioIntelligenceEngine: ObservableObject {
             return AudioTranscript(fullText: "", segments: [], language: "en", confidence: 0.0)
         }
         
-        var segments: [AudioTranscriptSegment] = []
+        let segments: [AudioTranscriptSegment] = []
         var fullText = ""
         
         // Extract audio track
-        guard let audioTrack = try await asset.loadTracks(withMediaType: .audio).first else {
+        guard (try await asset.loadTracks(withMediaType: .audio).first) != nil else {
             return AudioTranscript(fullText: "", segments: [], language: "en", confidence: 0.0)
         }
         
         // Use Speech framework for transcription
-        let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+        _ = SFSpeechRecognizer(locale: Locale(identifier: "en-US")) // recognizer - for future transcription
         
         // Note: In production, you'd extract audio file and process
         // For now, return placeholder
@@ -205,7 +205,7 @@ class AudioIntelligenceEngine: ObservableObject {
         }
         
         // Get audio format
-        let formatDescriptions = try await audioTrack.load(.formatDescriptions)
+        _ = try await audioTrack.load(.formatDescriptions) // formatDescriptions - for future format analysis
         
         // Calculate bitrate (proxy for quality)
         let estimatedBitrate = try await audioTrack.load(.estimatedDataRate)

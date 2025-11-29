@@ -111,7 +111,7 @@ class ComputerVisionEngine: ObservableObject {
                 try handler.perform([faceRequest])
                 
                 // Process face detection results
-                if let results = faceRequest.results as? [VNFaceObservation] {
+                if let results = faceRequest.results {
                     for observation in results {
                         if observation.confidence > 0.6 {
                             let obj = DetectedObject(

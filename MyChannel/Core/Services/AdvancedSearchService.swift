@@ -9,6 +9,7 @@ import FirebaseFirestore
 /// Enterprise-grade search service with ML-powered ranking and recommendations
 /// Handles complex queries with filters, faceting, and personalized results
 /// **NOW WITH TRIPLE AI INTEGRATION** 🚀🤖🔥
+@MainActor
 class AdvancedSearchService: ObservableObject {
     
     @Published var searchResults: [SearchResult] = []

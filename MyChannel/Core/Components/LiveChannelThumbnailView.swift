@@ -3,6 +3,150 @@ import AVFoundation
 import AVKit
 import UIKit
 
+// 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
+// 🔥 THERMONUCLEAR LIVE THUMBNAIL SYSTEM - FASTEST IN THE WORLD 🔥
+// 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
+//
+// Performance targets:
+// - First frame: < 200ms (cached) / < 800ms (network)
+// - Memory per thumbnail: < 2MB
+// - CPU usage: < 5% per thumbnail
+// - Battery impact: Minimal (ultra-low bitrate)
+//
+// 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
+
+// MARK: - 🔥 THERMONUCLEAR THUMBNAIL CACHE
+final class ThermonuclearThumbnailCache {
+    static let shared = ThermonuclearThumbnailCache()
+    
+    // 🔥 Multi-layer cache system
+    private var imageCache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 100 // Max 100 thumbnails
+        cache.totalCostLimit = 50 * 1024 * 1024 // 50MB max
+        return cache
+    }()
+    
+    // 🔥 Pre-warmed player cache
+    private var playerCache: [String: AVPlayer] = [:]
+    private let playerQueue = DispatchQueue(label: "com.mychannel.thermonuclear.players", attributes: .concurrent)
+    
+    // 🔥 Asset cache for instant replay
+    private var assetCache: [String: AVURLAsset] = [:]
+    private let assetQueue = DispatchQueue(label: "com.mychannel.thermonuclear.assets", attributes: .concurrent)
+    
+    private init() {
+        // 🔥 Listen for memory warnings
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMemoryWarning),
+            name: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil
+        )
+    }
+    
+    @objc private func handleMemoryWarning() {
+        print("🔥 [ThermonuclearCache] Memory warning - clearing caches")
+        imageCache.removeAllObjects()
+        playerQueue.async(flags: .barrier) { [weak self] in
+            self?.playerCache.values.forEach { $0.pause() }
+            self?.playerCache.removeAll()
+        }
+        assetQueue.async(flags: .barrier) { [weak self] in
+            self?.assetCache.removeAll()
+        }
+    }
+    
+    // MARK: - Image Cache
+    func getCachedImage(for url: String) -> UIImage? {
+        imageCache.object(forKey: url as NSString)
+    }
+    
+    func cacheImage(_ image: UIImage, for url: String) {
+        let cost = Int(image.size.width * image.size.height * 4) // Approximate bytes
+        imageCache.setObject(image, forKey: url as NSString, cost: cost)
+    }
+    
+    // MARK: - Player Cache
+    func getCachedPlayer(for url: String) -> AVPlayer? {
+        playerQueue.sync { playerCache[url] }
+    }
+    
+    func cachePlayer(_ player: AVPlayer, for url: String) {
+        playerQueue.async(flags: .barrier) { [weak self] in
+            // Limit player cache to 10
+            if self?.playerCache.count ?? 0 >= 10 {
+                if let oldest = self?.playerCache.keys.first {
+                    self?.playerCache[oldest]?.pause()
+                    self?.playerCache.removeValue(forKey: oldest)
+                }
+            }
+            self?.playerCache[url] = player
+        }
+    }
+    
+    func removeCachedPlayer(for url: String) {
+        playerQueue.async(flags: .barrier) { [weak self] in
+            self?.playerCache[url]?.pause()
+            self?.playerCache.removeValue(forKey: url)
+        }
+    }
+    
+    // MARK: - Asset Cache
+    func getCachedAsset(for url: String) -> AVURLAsset? {
+        assetQueue.sync { assetCache[url] }
+    }
+    
+    func cacheAsset(_ asset: AVURLAsset, for url: String) {
+        assetQueue.async(flags: .barrier) { [weak self] in
+            if self?.assetCache.count ?? 0 >= 20 {
+                self?.assetCache.removeValue(forKey: self?.assetCache.keys.first ?? "")
+            }
+            self?.assetCache[url] = asset
+        }
+    }
+    
+    // MARK: - 🔥 THERMONUCLEAR PREWARM
+    func prewarmStreams(_ urls: [String]) {
+        let queue = DispatchQueue.global(qos: .userInitiated)
+        queue.async { [weak self] in
+            for urlString in urls.prefix(6) {
+                guard let url = URL(string: urlString) else { continue }
+                guard self?.getCachedAsset(for: urlString) == nil else { continue }
+                
+                // 🔥 Create ultra-optimized asset
+                let asset = AVURLAsset(url: url, options: [
+                    AVURLAssetPreferPreciseDurationAndTimingKey: false,
+                    AVURLAssetAllowsCellularAccessKey: true,
+                    "AVURLAssetHTTPHeaderFieldsKey": [
+                        "Connection": "keep-alive",
+                        "Accept-Encoding": "gzip, deflate"
+                    ]
+                ])
+                
+                self?.cacheAsset(asset, for: urlString)
+                
+                // 🔥 Pre-create player for top 3
+                if urls.prefix(3).contains(urlString) {
+                    let item = AVPlayerItem(asset: asset, automaticallyLoadedAssetKeys: [])
+                    item.preferredPeakBitRate = 100_000 // 100kbps - BLAZING
+                    item.preferredForwardBufferDuration = 0.05 // 50ms buffer
+                    item.preferredMaximumResolution = CGSize(width: 320, height: 180) // 180p
+                    
+                    let player = AVPlayer(playerItem: item)
+                    player.isMuted = true
+                    player.automaticallyWaitsToMinimizeStalling = false
+                    player.preventsDisplaySleepDuringVideoPlayback = false
+                    
+                    self?.cachePlayer(player, for: urlString)
+                }
+            }
+            print("🔥 [ThermonuclearCache] Prewarmed \(min(urls.count, 6)) streams")
+        }
+    }
+}
+
+// MARK: - 🔥 THERMONUCLEAR LIVE THUMBNAIL VIEW
 struct LiveChannelThumbnailView: View {
     let streamURL: String
     let posterURL: String?
@@ -12,10 +156,17 @@ struct LiveChannelThumbnailView: View {
     var channelName: String?
 
     @State private var isReady: Bool = false
-    @State private var snapshot: UIImage?
-    @State private var loadAttempted: Bool = false
+    @State private var cachedSnapshot: UIImage?
+    @State private var hasAppeared = false
 
-    init(streamURL: String, posterURL: String? = nil, fallbackStreamURL: String? = nil, allowPlaybackInPreviews: Bool = false, channelCategory: LiveTVChannel.ChannelCategory? = nil, channelName: String? = nil) {
+    init(
+        streamURL: String,
+        posterURL: String? = nil,
+        fallbackStreamURL: String? = nil,
+        allowPlaybackInPreviews: Bool = false,
+        channelCategory: LiveTVChannel.ChannelCategory? = nil,
+        channelName: String? = nil
+    ) {
         self.streamURL = streamURL
         self.posterURL = posterURL
         self.fallbackStreamURL = fallbackStreamURL
@@ -26,91 +177,124 @@ struct LiveChannelThumbnailView: View {
 
     var body: some View {
         ZStack {
-            // 🔥 FIRE GRADIENT PLACEHOLDER - Shows immediately while loading
+            // 🔥 Layer 1: Fire gradient placeholder (shows INSTANTLY)
             firePlaceholder
             
-            // Video preview sits in the back and fades in when ready
-            if !AppConfig.isPreview || allowPlaybackInPreviews {
-                LivePreviewPlayer(
-                    urls: [streamURL] + (fallbackStreamURL != nil ? [fallbackStreamURL!] : []),
-                    onReady: {
-                        if !isReady {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                isReady = true
-                            }
-                        }
-                    },
-                    onSnapshot: { img in
-                        if snapshot == nil {
-                            snapshot = img
-                        }
-                    }
-                )
-                .opacity(isReady ? 1 : 0)
-            }
-
-            // Snapshot overlay for smooth transitions
-            if let snap = snapshot, !isReady {
-                Image(uiImage: snap)
+            // 🔥 Layer 2: Cached snapshot (shows in <50ms if available)
+            if let snapshot = cachedSnapshot {
+                Image(uiImage: snapshot)
                     .resizable()
                     .scaledToFill()
-                    .transition(.opacity)
+                    .transition(.opacity.animation(.easeOut(duration: 0.15)))
             }
             
-            // 🔥 LIVE pulse indicator overlay
-            if !isReady {
-                livePulseOverlay
+            // 🔥 Layer 3: Live video player (fades in smoothly)
+            if hasAppeared && (!AppConfig.isPreview || allowPlaybackInPreviews) {
+                ThermonuclearPlayer(
+                    urls: buildURLCandidates(),
+                    onReady: { handleReady() },
+                    onSnapshot: { handleSnapshot($0) }
+                )
+                .opacity(isReady ? 1 : 0)
+                .animation(.easeOut(duration: 0.2), value: isReady)
+            }
+            
+            // 🔥 Layer 4: LIVE badge (always visible when playing)
+            if isReady {
+                liveBadge
+            } else if hasAppeared {
+                loadingIndicator
             }
         }
         .clipped()
+        .drawingGroup() // 🔥 GPU acceleration for smooth scrolling
         .onAppear {
-            loadAttempted = true
+            // 🔥 Check cache first for INSTANT display
+            if let cached = ThermonuclearThumbnailCache.shared.getCachedImage(for: streamURL) {
+                cachedSnapshot = cached
+            }
+            
+            // 🔥 Delay player creation slightly to prioritize UI
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                hasAppeared = true
+            }
         }
     }
     
+    // 🔥 Build URL candidates with nuclear fallbacks
+    private func buildURLCandidates() -> [String] {
+        var urls = [streamURL]
+        if let fallback = fallbackStreamURL {
+            urls.append(fallback)
+        }
+        
+        // 🔥 NUCLEAR FALLBACKS - 100% reliable streams
+        let nuclearFallbacks = [
+            "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+            "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8",
+            "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8"
+        ]
+        
+        for fallback in nuclearFallbacks where !urls.contains(fallback) {
+            urls.append(fallback)
+        }
+        
+        return urls
+    }
+    
+    private func handleReady() {
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+            isReady = true
+        }
+    }
+    
+    private func handleSnapshot(_ image: UIImage) {
+        cachedSnapshot = image
+        ThermonuclearThumbnailCache.shared.cacheImage(image, for: streamURL)
+    }
+    
     // 🔥 Fire gradient placeholder based on category
-    @ViewBuilder
     private var firePlaceholder: some View {
         let categoryColor = channelCategory?.color ?? .blue
         
-        ZStack {
-            // Dynamic gradient based on category
+        return ZStack {
+            // Dynamic gradient
             LinearGradient(
                 colors: [
-                    categoryColor.opacity(0.8),
-                    categoryColor.opacity(0.4),
-                    Color.black.opacity(0.6)
+                    categoryColor.opacity(0.9),
+                    categoryColor.opacity(0.5),
+                    Color.black.opacity(0.7)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             
-            // Animated shimmer effect
-            if !isReady {
-                ShimmerView()
-                    .opacity(0.3)
+            // Shimmer effect when loading
+            if !isReady && hasAppeared {
+                ThermonuclearShimmer()
+                    .opacity(0.4)
             }
             
             // Category icon
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 Image(systemName: categoryIcon)
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(.white.opacity(0.9))
-                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white.opacity(0.95))
+                    .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
                 
                 if let name = channelName {
                     Text(name)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.8))
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white.opacity(0.9))
                         .lineLimit(1)
-                        .shadow(color: .black.opacity(0.5), radius: 1, x: 0, y: 1)
+                        .shadow(color: .black.opacity(0.5), radius: 1)
                 }
             }
         }
         .opacity(isReady ? 0 : 1)
+        .animation(.easeOut(duration: 0.2), value: isReady)
     }
     
-    // Category-specific icons
     private var categoryIcon: String {
         switch channelCategory {
         case .anime: return "sparkles.tv"
@@ -132,219 +316,195 @@ struct LiveChannelThumbnailView: View {
         }
     }
     
-    // Live pulse indicator
-    @ViewBuilder
-    private var livePulseOverlay: some View {
+    // 🔥 LIVE badge
+    private var liveBadge: some View {
         VStack {
-            Spacer()
             HStack {
-                Spacer()
                 HStack(spacing: 4) {
-                    PulsingDot()
-                    Text("LOADING")
-                        .font(.system(size: 8, weight: .bold))
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 6, height: 6)
+                    Text("LIVE")
+                        .font(.system(size: 8, weight: .black))
                         .foregroundColor(.white)
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
                 .background(
                     Capsule()
-                        .fill(Color.black.opacity(0.6))
+                        .fill(Color.red.opacity(0.9))
                 )
-                .padding(6)
+                Spacer()
+            }
+            Spacer()
+        }
+        .padding(4)
+    }
+    
+    // 🔥 Loading indicator
+    private var loadingIndicator: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                HStack(spacing: 4) {
+                    ThermonuclearPulsingDot()
+                    Text("LOADING")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule()
+                        .fill(Color.black.opacity(0.7))
+                )
+                .padding(4)
             }
         }
     }
 }
 
-// 🔥 Pulsing dot for loading indicator
-private struct PulsingDot: View {
-    @State private var isPulsing = false
-    
-    var body: some View {
-        Circle()
-            .fill(Color.red)
-            .frame(width: 6, height: 6)
-            .scaleEffect(isPulsing ? 1.2 : 0.8)
-            .opacity(isPulsing ? 1 : 0.6)
-            .animation(
-                .easeInOut(duration: 0.6)
-                .repeatForever(autoreverses: true),
-                value: isPulsing
-            )
-            .onAppear { isPulsing = true }
-    }
-}
-
-// 🔥 Shimmer loading effect
-private struct ShimmerView: View {
-    @State private var phase: CGFloat = 0
-    
-    var body: some View {
-        GeometryReader { geo in
-            LinearGradient(
-                colors: [
-                    .clear,
-                    .white.opacity(0.4),
-                    .clear
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(width: geo.size.width * 2)
-            .offset(x: -geo.size.width + (phase * geo.size.width * 2))
-            .animation(
-                .linear(duration: 1.5)
-                .repeatForever(autoreverses: false),
-                value: phase
-            )
-            .onAppear { phase = 1 }
-        }
-        .clipped()
-    }
-}
-
-private struct LivePreviewPlayer: UIViewRepresentable {
+// MARK: - 🔥 THERMONUCLEAR PLAYER
+private struct ThermonuclearPlayer: UIViewRepresentable {
     let urls: [String]
     let onReady: () -> Void
     let onSnapshot: (UIImage) -> Void
 
-    func makeUIView(context: Context) -> PlayerContainerView {
-        let view = PlayerContainerView()
+    func makeUIView(context: Context) -> ThermonuclearPlayerView {
+        let view = ThermonuclearPlayerView()
         view.backgroundColor = .clear
         return view
     }
 
-    func updateUIView(_ uiView: PlayerContainerView, context: Context) {
-        uiView.configure(with: urls, onReady: onReady, onSnapshot: onSnapshot)
+    func updateUIView(_ uiView: ThermonuclearPlayerView, context: Context) {
+        uiView.configure(urls: urls, onReady: onReady, onSnapshot: onSnapshot)
+    }
+    
+    static func dismantleUIView(_ uiView: ThermonuclearPlayerView, coordinator: ()) {
+        uiView.teardown()
     }
 }
 
-private final class PlayerContainerView: UIView {
+// MARK: - 🔥 THERMONUCLEAR PLAYER VIEW
+private final class ThermonuclearPlayerView: UIView {
     private var player: AVPlayer?
     private var playerLayer: AVPlayerLayer?
     private var urlCandidates: [String] = []
     private var currentIndex: Int = 0
-    private var timeControlObserver: NSKeyValueObservation?
     private var statusObserver: NSKeyValueObservation?
+    private var timeControlObserver: NSKeyValueObservation?
     private var endObserver: NSObjectProtocol?
-    private var readyTimeoutWork: DispatchWorkItem?
-    private var retryWork: DispatchWorkItem?
+    private var retryWorkItem: DispatchWorkItem?
+    private var snapshotWorkItem: DispatchWorkItem?
     private var hasNotifiedReady = false
-    private var isConfigured = false // 🔥 Prevent duplicate configurations
-    private var configuredURLs: [String] = [] // 🔥 Track what we configured with
+    private var isConfigured = false
+    private var configuredURLs: [String] = []
     
-    // 🔥 THERMONUCLEAR: Static cache for pre-loaded players
-    private static var playerCache: [String: AVPlayer] = [:]
-    private static let cacheQueue = DispatchQueue(label: "com.mychannel.playerCache", attributes: .concurrent)
-
     override func layoutSubviews() {
         super.layoutSubviews()
         playerLayer?.frame = bounds
     }
-
-    func configure(with urls: [String], onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void) {
-        // 🔥 PREVENT DUPLICATE CONFIGURATIONS - Only configure once per URL set
-        if isConfigured && configuredURLs == urls {
-            return
-        }
+    
+    func configure(urls: [String], onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void) {
+        // 🔥 Prevent duplicate configurations
+        guard !isConfigured || configuredURLs != urls else { return }
         
         urlCandidates = urls
         configuredURLs = urls
-        
-        // 🔥 NUCLEAR FALLBACKS - Multiple reliable test streams for 100% success
-        let nuclearFallbacks = [
-            "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", // Mux test stream
-            "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8", // Apple test
-            "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8", // Google Shaka
-            "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8", // Akamai test
-            "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8" // Unified streaming
-        ]
-        
-        for fallback in nuclearFallbacks {
-            if !urlCandidates.contains(where: { $0 == fallback }) {
-                urlCandidates.append(fallback)
-            }
-        }
-        
         currentIndex = 0
-        teardown()
         isConfigured = true
+        
+        teardownPlayerOnly()
         startPlayer(onReady: onReady, onSnapshot: onSnapshot)
     }
-
+    
     private func startPlayer(onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void) {
-        guard currentIndex < urlCandidates.count, let url = URL(string: urlCandidates[currentIndex]) else { return }
-
-        // 🔥🔥🔥 THERMONUCLEAR OPTIMIZATIONS - FASTEST IN THE WORLD 🔥🔥🔥
-        
-        // 1. Check if we have a cached player ready to go
-        let urlString = url.absoluteString
-        if let cachedPlayer = Self.playerCache[urlString] {
-            Self.cacheQueue.async(flags: .barrier) {
-                Self.playerCache.removeValue(forKey: urlString)
-            }
-            setupExistingPlayer(cachedPlayer, onReady: onReady, onSnapshot: onSnapshot)
+        guard currentIndex < urlCandidates.count else {
+            // 🔥 All failed - still notify ready to hide loading
+            DispatchQueue.main.async { onReady() }
             return
         }
         
-        // 2. Create asset with AGGRESSIVE low-latency options
-        let asset = AVURLAsset(url: url, options: [
-            AVURLAssetPreferPreciseDurationAndTimingKey: false,
-            AVURLAssetAllowsCellularAccessKey: true,
-            "AVURLAssetHTTPHeaderFieldsKey": ["Connection": "keep-alive"]
-        ])
+        let urlString = urlCandidates[currentIndex]
+        guard let url = URL(string: urlString) else {
+            tryNextURL(onReady: onReady, onSnapshot: onSnapshot)
+            return
+        }
         
-        // 3. Load only what we need - don't wait for full metadata
+        // 🔥 Check cache first
+        let cache = ThermonuclearThumbnailCache.shared
+        
+        // Try cached player
+        if let cachedPlayer = cache.getCachedPlayer(for: urlString) {
+            cache.removeCachedPlayer(for: urlString)
+            setupPlayer(cachedPlayer, onReady: onReady)
+            return
+        }
+        
+        // 🔥 Create THERMONUCLEAR optimized player
+        let asset: AVURLAsset
+        if let cachedAsset = cache.getCachedAsset(for: urlString) {
+            asset = cachedAsset
+        } else {
+            asset = AVURLAsset(url: url, options: [
+                AVURLAssetPreferPreciseDurationAndTimingKey: false,
+                AVURLAssetAllowsCellularAccessKey: true,
+                "AVURLAssetHTTPHeaderFieldsKey": [
+                    "Connection": "keep-alive",
+                    "Accept-Encoding": "gzip, deflate"
+                ]
+            ])
+            cache.cacheAsset(asset, for: urlString)
+        }
+        
         let item = AVPlayerItem(asset: asset, automaticallyLoadedAssetKeys: [])
-        item.canUseNetworkResourcesForLiveStreamingWhilePaused = false // 🔥 Don't waste bandwidth when paused
         
-        // 🔥🔥🔥 THERMONUCLEAR BITRATE - Ultra-low for INSTANT thumbnails
-        item.preferredPeakBitRate = 150_000 // 150 kbps - BLAZING FAST
-        item.preferredForwardBufferDuration = 0.1 // 100ms buffer - INSTANT!
-        item.preferredMaximumResolution = CGSize(width: 426, height: 240) // 240p max for thumbnails
-
+        // 🔥🔥🔥 THERMONUCLEAR SETTINGS - ABSOLUTE MINIMUM LATENCY 🔥🔥🔥
+        item.preferredPeakBitRate = 80_000 // 80kbps - INSTANT LOAD
+        item.preferredForwardBufferDuration = 0.05 // 50ms buffer
+        item.preferredMaximumResolution = CGSize(width: 320, height: 180) // 180p
+        item.canUseNetworkResourcesForLiveStreamingWhilePaused = false
+        
         let player = AVPlayer(playerItem: item)
         player.isMuted = true
         player.automaticallyWaitsToMinimizeStalling = false
         player.preventsDisplaySleepDuringVideoPlayback = false
         
-        // 🔥 iOS 16+ low latency mode
         if #available(iOS 16.0, *) {
             player.defaultRate = 1.0
         }
-
-        let layer = AVPlayerLayer(player: player)
-        layer.videoGravity = .resizeAspectFill
-        layer.needsDisplayOnBoundsChange = true
-        self.layer.addSublayer(layer)
-
-        self.player = player
-        self.playerLayer = layer
-        self.hasNotifiedReady = false
-
-        // 🔥 Observe status with high priority
+        
+        setupPlayer(player, onReady: onReady)
+        
+        // 🔥 Status observer
         statusObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
-            guard let self else { return }
             DispatchQueue.main.async {
-                if item.status == .readyToPlay {
-                    self.notifyReadyIfNeeded(onReady)
-                    player.play()
-                } else if item.status == .failed {
-                    self.tryNextCandidate(onReady: onReady, onSnapshot: onSnapshot)
+                guard let self else { return }
+                switch item.status {
+                case .readyToPlay:
+                    self.notifyReady(onReady)
+                    self.player?.play()
+                case .failed:
+                    self.tryNextURL(onReady: onReady, onSnapshot: onSnapshot)
+                default:
+                    break
                 }
             }
         }
-
-        timeControlObserver = player.observe(\.timeControlStatus, options: [.new, .initial]) { [weak self] p, _ in
-            guard let self else { return }
+        
+        // 🔥 Time control observer
+        timeControlObserver = player.observe(\.timeControlStatus, options: [.new]) { [weak self] p, _ in
             DispatchQueue.main.async {
                 if p.timeControlStatus == .playing {
-                    self.notifyReadyIfNeeded(onReady)
+                    self?.notifyReady(onReady)
+                    // 🔥 Generate snapshot after playing
+                    self?.generateSnapshotIfNeeded(from: asset, onSnapshot: onSnapshot)
                 }
             }
         }
-
+        
+        // 🔥 Loop observer
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item,
@@ -353,135 +513,94 @@ private final class PlayerContainerView: UIView {
             self?.player?.seek(to: .zero)
             self?.player?.play()
         }
-
-        // 🔥 ULTRA-FAST TIMEOUT: Snapshot after 500ms
-        let readyWork = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            if self.player?.timeControlStatus != .playing {
-                self.generateSnapshot(from: asset) { img in
-                    if let img { onSnapshot(img) }
-                }
-            }
-        }
-        self.readyTimeoutWork = readyWork
-        DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.5, execute: readyWork)
-
-        // 🔥 AGGRESSIVE RETRY: Try next URL after 1.5 seconds
+        
+        // 🔥 AGGRESSIVE RETRY - 1 second timeout
         let retry = DispatchWorkItem { [weak self] in
-            guard let self else { return }
             DispatchQueue.main.async {
-                if self.player?.timeControlStatus != .playing {
-                    self.tryNextCandidate(onReady: onReady, onSnapshot: onSnapshot)
-                }
+                guard let self, self.player?.timeControlStatus != .playing else { return }
+                self.tryNextURL(onReady: onReady, onSnapshot: onSnapshot)
             }
         }
-        self.retryWork = retry
-        DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 1.5, execute: retry)
-
-        NotificationCenter.default.addObserver(self, selector: #selector(handleAppBackground), name: UIApplication.willResignActiveNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(handleAppForeground), name: UIApplication.didBecomeActiveNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(handlePreviewsPause), name: NSNotification.Name("LivePreviewsShouldPause"), object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(handlePreviewsResume), name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
-
+        retryWorkItem = retry
+        DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 1.0, execute: retry)
+        
+        // 🔥 Snapshot timeout - generate even if not playing
+        let snapshot = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.generateSnapshotIfNeeded(from: asset, onSnapshot: onSnapshot)
+        }
+        snapshotWorkItem = snapshot
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.3, execute: snapshot)
+        
         player.play()
-        setNeedsLayout()
-        layoutIfNeeded()
     }
     
-    // 🔥 Setup existing cached player instantly
-    private func setupExistingPlayer(_ player: AVPlayer, onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void) {
+    private func setupPlayer(_ player: AVPlayer, onReady: @escaping () -> Void) {
+        self.player = player
+        
         let layer = AVPlayerLayer(player: player)
         layer.videoGravity = .resizeAspectFill
         layer.needsDisplayOnBoundsChange = true
         self.layer.addSublayer(layer)
-        
-        self.player = player
         self.playerLayer = layer
-        self.hasNotifiedReady = false
         
-        // Cached player is ready immediately
-        notifyReadyIfNeeded(onReady)
-        player.play()
+        hasNotifiedReady = false
         setNeedsLayout()
         layoutIfNeeded()
+        
+        // 🔥 Background/foreground handling
+        NotificationCenter.default.addObserver(self, selector: #selector(pause), name: UIApplication.willResignActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(play), name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(pause), name: NSNotification.Name("LivePreviewsShouldPause"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(play), name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
     }
     
-    // 🔥 STATIC: Pre-warm players for upcoming URLs
-    static func prewarmPlayers(for urls: [String]) {
-        let queue = DispatchQueue.global(qos: .utility)
-        queue.async {
-            for urlString in urls.prefix(3) {
-                guard let url = URL(string: urlString) else { continue }
-                guard playerCache[urlString] == nil else { continue }
-                
-                let asset = AVURLAsset(url: url, options: [
-                    AVURLAssetPreferPreciseDurationAndTimingKey: false,
-                    AVURLAssetAllowsCellularAccessKey: true
-                ])
-                let item = AVPlayerItem(asset: asset, automaticallyLoadedAssetKeys: [])
-                item.preferredPeakBitRate = 150_000
-                item.preferredForwardBufferDuration = 0.1
-                
-                let player = AVPlayer(playerItem: item)
-                player.isMuted = true
-                player.automaticallyWaitsToMinimizeStalling = false
-                
-                cacheQueue.async(flags: .barrier) {
-                    playerCache[urlString] = player
-                }
-            }
-        }
+    private func notifyReady(_ onReady: @escaping () -> Void) {
+        guard !hasNotifiedReady else { return }
+        hasNotifiedReady = true
+        retryWorkItem?.cancel()
+        DispatchQueue.main.async { onReady() }
     }
-
-    private func tryNextCandidate(onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void) {
+    
+    private func tryNextURL(onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void) {
         currentIndex += 1
         teardownPlayerOnly()
-        if currentIndex < urlCandidates.count {
-            startPlayer(onReady: onReady, onSnapshot: onSnapshot)
-        } else {
-            // 🔥 ALL STREAMS FAILED - Still notify ready so UI doesn't hang on loading forever
-            // The placeholder will remain visible which is better than infinite loading
-            print("⚠️ [LiveThumbnail] All \(urlCandidates.count) stream URLs failed - showing placeholder")
-            DispatchQueue.main.async {
-                onReady() // This will hide the "LOADING" indicator
-            }
-        }
+        startPlayer(onReady: onReady, onSnapshot: onSnapshot)
     }
-
-    private func notifyReadyIfNeeded(_ onReady: @escaping () -> Void) {
-        if !hasNotifiedReady {
-            hasNotifiedReady = true
-            DispatchQueue.main.async { onReady() }
-        }
-    }
-
-    private func generateSnapshot(from asset: AVAsset, completion: @escaping (UIImage?) -> Void) {
+    
+    private var hasGeneratedSnapshot = false
+    
+    private func generateSnapshotIfNeeded(from asset: AVAsset, onSnapshot: @escaping (UIImage) -> Void) {
+        guard !hasGeneratedSnapshot else { return }
+        hasGeneratedSnapshot = true
+        
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 640, height: 360)
-        let time = CMTime(seconds: 1, preferredTimescale: 600)
-
+        generator.maximumSize = CGSize(width: 480, height: 270) // 270p snapshot
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 2, preferredTimescale: 600)
+        
+        let time = CMTime(seconds: 0.5, preferredTimescale: 600)
+        
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let cgImage = try generator.copyCGImage(at: time, actualTime: nil)
                 let image = UIImage(cgImage: cgImage)
-                DispatchQueue.main.async { completion(image) }
+                DispatchQueue.main.async { onSnapshot(image) }
             } catch {
-                DispatchQueue.main.async { completion(nil) }
+                // Silent fail - video will show instead
             }
         }
     }
-
-    @objc private func handleAppBackground() { player?.pause() }
-    @objc private func handleAppForeground() { player?.play() }
-    @objc private func handlePreviewsPause() { player?.pause() }
-    @objc private func handlePreviewsResume() { player?.play() }
-
+    
+    @objc private func pause() { player?.pause() }
+    @objc private func play() { player?.play() }
+    
     private func teardownPlayerOnly() {
-        readyTimeoutWork?.cancel()
-        retryWork?.cancel()
-        readyTimeoutWork = nil
-        retryWork = nil
+        retryWorkItem?.cancel()
+        snapshotWorkItem?.cancel()
+        retryWorkItem = nil
+        snapshotWorkItem = nil
         statusObserver?.invalidate()
         timeControlObserver?.invalidate()
         statusObserver = nil
@@ -491,24 +610,118 @@ private final class PlayerContainerView: UIView {
         player = nil
         playerLayer?.removeFromSuperlayer()
         playerLayer = nil
+        hasGeneratedSnapshot = false
     }
-
+    
     func teardown() {
         NotificationCenter.default.removeObserver(self)
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         endObserver = nil
         teardownPlayerOnly()
     }
-
+    
     deinit { teardown() }
 }
 
-#Preview("LiveChannelThumbnailView") {
-    LiveChannelThumbnailView(
-        streamURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-        posterURL: "https://upload.wikimedia.org/wikipedia/commons/3/31/Red_dot.svg"
-    )
-    .frame(width: 200, height: 112)
-    .background(Color(.systemGray6))
-    .preferredColorScheme(.light)
+// MARK: - 🔥 THERMONUCLEAR SHIMMER
+private struct ThermonuclearShimmer: View {
+    @State private var phase: CGFloat = 0
+    
+    var body: some View {
+        GeometryReader { geo in
+            LinearGradient(
+                colors: [
+                    .clear,
+                    .white.opacity(0.5),
+                    .clear
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: geo.size.width * 2)
+            .offset(x: -geo.size.width + (phase * geo.size.width * 2))
+        }
+        .clipped()
+        .onAppear {
+            withAnimation(.linear(duration: 1.0).repeatForever(autoreverses: false)) {
+                phase = 1
+            }
+        }
+    }
+}
+
+// MARK: - 🔥 THERMONUCLEAR PULSING DOT
+private struct ThermonuclearPulsingDot: View {
+    @State private var isPulsing = false
+    
+    var body: some View {
+        Circle()
+            .fill(Color.red)
+            .frame(width: 5, height: 5)
+            .scaleEffect(isPulsing ? 1.3 : 0.7)
+            .opacity(isPulsing ? 1 : 0.5)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
+                    isPulsing = true
+                }
+            }
+    }
+}
+
+// MARK: - 🔥 THERMONUCLEAR PREWARM HELPER
+enum ThermonuclearPrewarm {
+    static func prewarmChannels(_ channels: [LiveTVChannel]) {
+        let urls = channels.map { $0.streamURL }
+        ThermonuclearThumbnailCache.shared.prewarmStreams(urls)
+    }
+    
+    static func prewarmURLs(_ urls: [String]) {
+        ThermonuclearThumbnailCache.shared.prewarmStreams(urls)
+    }
+}
+
+// MARK: - Preview
+#Preview("🔥 THERMONUCLEAR Thumbnail") {
+    VStack(spacing: 16) {
+        Text("🔥 THERMONUCLEAR THUMBNAILS 🔥")
+            .font(.headline)
+        
+        HStack(spacing: 12) {
+            LiveChannelThumbnailView(
+                streamURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+                channelCategory: .anime,
+                channelName: "Dragon Ball Z"
+            )
+            .frame(width: 160, height: 90)
+            .cornerRadius(8)
+            
+            LiveChannelThumbnailView(
+                streamURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8",
+                channelCategory: .comedy,
+                channelName: "Family Guy"
+            )
+            .frame(width: 160, height: 90)
+            .cornerRadius(8)
+        }
+        
+        HStack(spacing: 12) {
+            LiveChannelThumbnailView(
+                streamURL: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
+                channelCategory: .sports,
+                channelName: "ESPN"
+            )
+            .frame(width: 160, height: 90)
+            .cornerRadius(8)
+            
+            LiveChannelThumbnailView(
+                streamURL: "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8",
+                channelCategory: .movies,
+                channelName: "Action Movies"
+            )
+            .frame(width: 160, height: 90)
+            .cornerRadius(8)
+        }
+    }
+    .padding()
+    .background(Color.black)
 }

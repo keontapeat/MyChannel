@@ -467,7 +467,7 @@ final class SEODiscoveryBooster: ObservableObject {
         """
         
         // Call AI service (Claude or GPT)
-        let result = try await AnthropicService.shared.sendMessage(prompt)
+        _ = try await AnthropicService.shared.sendMessage(prompt) // result - for future AI-enhanced metadata
         
         // Parse AI response (simplified for now)
         return (

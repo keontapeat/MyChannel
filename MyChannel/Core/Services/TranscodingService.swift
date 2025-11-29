@@ -16,7 +16,7 @@ class TranscodingService {
     static let shared = TranscodingService()
     
     // 🔥 GOOGLE CLOUD PROJECT CONFIG
-    private let projectID = AppSecrets.googleCloudProjectID ?? "mychannel-app"
+    private let projectID = AppSecrets.googleCloudProjectID
     private let location = "us-central1"
     
     // 🎯 TRANSCODING PROFILES

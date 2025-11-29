@@ -271,7 +271,9 @@ class RealtimeAnalyticsWebSocket: ObservableObject {
     private func startHeartbeat() {
         // Send heartbeat every 30 seconds to keep connection alive
         Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            self?.sendMessage(["type": "heartbeat", "timestamp": Date().timeIntervalSince1970])
+            Task { @MainActor in
+                self?.sendMessage(["type": "heartbeat", "timestamp": Date().timeIntervalSince1970])
+            }
         }
     }
     
@@ -287,11 +289,13 @@ class RealtimeAnalyticsWebSocket: ObservableObject {
         print("🔄 Attempting to reconnect in \(delay) seconds... (attempt \(reconnectAttempts)/\(maxReconnectAttempts))")
         
         reconnectTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-            guard let self = self,
-                  let creatorId = AuthenticationManager.shared.currentUser?.id else {
-                return
+            Task { @MainActor in
+                guard let self = self,
+                      let creatorId = await AuthenticationManager.shared.currentUser?.id else {
+                    return
+                }
+                self.connect(creatorId: creatorId)
             }
-            self.connect(creatorId: creatorId)
         }
     }
 }

@@ -17,7 +17,7 @@ import SwiftUI
 import FirebaseFirestore
 
 // Make String Identifiable for fullScreenCover
-extension String: Identifiable {
+extension String: @retroactive Identifiable {
     public var id: String { self }
 }
 

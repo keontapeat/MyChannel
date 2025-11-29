@@ -167,8 +167,8 @@ class InfoCardPlaybackManager: ObservableObject {
     private var allCards: [InfoCard] = []
     private var currentVideoId: String?
     
-    init(service: InfoCardService = .shared) {
-        self.service = service
+    init(service: InfoCardService? = nil) {
+        self.service = service ?? InfoCardService.shared
     }
     
     func loadCards(for videoId: String) async {
@@ -218,3 +218,4 @@ class InfoCardPlaybackManager: ObservableObject {
         dismissedCardIds.removeAll()
     }
 }
+

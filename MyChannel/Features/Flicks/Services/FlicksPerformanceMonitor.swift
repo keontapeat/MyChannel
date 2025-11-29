@@ -282,8 +282,9 @@ class FlicksPerformanceMonitor: ObservableObject {
     }
 }
 
+@available(iOS 17.0, *)
 #Preview {
-    @StateObject var performanceMonitor = FlicksPerformanceMonitor()
+    @Previewable @StateObject var performanceMonitor = FlicksPerformanceMonitor()
     
     ScrollView {
         VStack(spacing: 20) {

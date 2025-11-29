@@ -156,8 +156,8 @@ class PollPlaybackManager: ObservableObject {
     private var allPolls: [VideoPoll] = []
     private var currentVideoId: String?
     
-    init(service: VideoPollService = .shared) {
-        self.service = service
+    init(service: VideoPollService? = nil) {
+        self.service = service ?? VideoPollService.shared
     }
     
     func loadPolls(for videoId: String) async {
@@ -225,3 +225,4 @@ class PollPlaybackManager: ObservableObject {
         dismissedPollIds.removeAll()
     }
 }
+

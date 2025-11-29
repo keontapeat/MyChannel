@@ -164,10 +164,10 @@ class QuantumAnalyticsEngine: ObservableObject {
         let probabilities = try await calculateRealTimeProbabilities(state: currentState)
         
         // Quantum optimization suggestions
-        let optimizations = try await quantumOptimizer.generateOptimizations(
+        _ = try await quantumOptimizer.generateOptimizations(
             state: currentState,
             probabilities: probabilities
-        )
+        ) // optimizations - for future optimization pipeline
         
         let insights = [
             RealTimeInsight(
@@ -435,7 +435,7 @@ class QuantumAnalyticsEngine: ObservableObject {
 // MARK: - Quantum Models
 
 struct QuantumPrediction: Identifiable, Codable {
-    let id = UUID()
+    var id = UUID()
     let videoId: String
     let predictedViews: Int
     let predictedEngagement: Double
@@ -449,7 +449,7 @@ struct QuantumPrediction: Identifiable, Codable {
 }
 
 struct FutureMetrics: Identifiable, Codable {
-    let id = UUID()
+    var id = UUID()
     let creatorId: String
     let timeHorizon: TimeInterval
     let predictedSubscribers: ProbabilityDistribution
@@ -463,7 +463,7 @@ struct FutureMetrics: Identifiable, Codable {
 }
 
 struct RealTimeInsight: Identifiable, Codable {
-    let id = UUID()
+    var id = UUID()
     let type: InsightType
     let title: String
     let description: String
@@ -478,7 +478,7 @@ struct RealTimeInsight: Identifiable, Codable {
 }
 
 struct UniverseAnalysis: Identifiable, Codable {
-    let id = UUID()
+    var id = UUID()
     let universeId: Int
     let views: Int
     let engagement: Double
@@ -487,7 +487,7 @@ struct UniverseAnalysis: Identifiable, Codable {
 }
 
 struct QuantumOptimization: Identifiable, Codable {
-    let id = UUID()
+    var id = UUID()
     let originalVideo: Video
     let optimizedTitle: String
     let optimizedDescription: String
@@ -520,7 +520,7 @@ struct ConfidenceIntervals: Codable {
 }
 
 struct ScenarioModel: Identifiable, Codable {
-    let id = UUID()
+    var id = UUID()
     let name: String
     let probability: Double
     let outcomes: ScenarioOutcomes

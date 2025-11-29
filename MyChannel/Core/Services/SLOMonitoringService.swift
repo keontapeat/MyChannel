@@ -314,8 +314,6 @@ final class SLOMonitoringService: ObservableObject {
                 
                 return rollbackId
             }
-        } catch {
-            print("❌ Rollback failed: \(error)")
         }
         
         return nil
@@ -357,8 +355,9 @@ final class SLOMonitoringService: ObservableObject {
             try? await Task.sleep(nanoseconds: 60_000_000_000) // 1 minute between steps
             
             // Check if SLO is recovering
-            let currentSLO = await getCurrentSLOValue(slo: slos.first { $0.service == service }!)
-            if currentSLO >= slos.first { $0.service == service }!.target {
+            guard let targetSLO = slos.first(where: { $0.service == service }) else { break }
+            let currentSLO = await getCurrentSLOValue(slo: targetSLO)
+            if currentSLO >= targetSLO.target {
                 print("✅ SLO recovered at \(step)% traffic shift")
                 break
             }
@@ -480,7 +479,7 @@ final class SLOMonitoringService: ObservableObject {
                 projectedExhaustion: projectedExhaustion
             )
             
-            var updatedSLO = SLO(
+            let updatedSLO = SLO(
                 id: slo.id,
                 name: slo.name,
                 service: slo.service,

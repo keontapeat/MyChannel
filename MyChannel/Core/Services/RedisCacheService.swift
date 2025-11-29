@@ -8,7 +8,7 @@
 
 import Foundation
 
-class RedisCacheService {
+final class RedisCacheService: @unchecked Sendable {
     static let shared = RedisCacheService()
     
     // 🔥 CACHE LAYERS
@@ -274,15 +274,11 @@ class RedisCacheService {
     private func clearRedis() async {
         guard let url = URL(string: "\(redisBackendURL)/flush") else { return }
         
-        do {
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.timeoutInterval = 5
-            
-            _ = try? await URLSession.shared.data(for: request)
-        } catch {
-            print("⚠️ [Redis L2] Flush failed: \(error.localizedDescription)")
-        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 5
+        
+        _ = try? await URLSession.shared.data(for: request)
     }
     
     // MARK: - 🚀 BATCH OPERATIONS (Optimized)

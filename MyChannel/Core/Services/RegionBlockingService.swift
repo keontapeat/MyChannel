@@ -116,14 +116,14 @@ final class RegionBlockingService: ObservableObject {
     func setRegionPolicy(videoId: String, allowedRegions: [String], blockedRegions: [String], requiresLicense: [String], updatedBy: String) async -> Bool {
         #if canImport(FirebaseFirestore)
         do {
-            let policy = RegionPolicy(
+            _ = RegionPolicy(
                 videoId: videoId,
                 allowedRegions: allowedRegions,
                 blockedRegions: blockedRegions,
                 requiresLicense: requiresLicense,
                 createdAt: Date(),
                 updatedBy: updatedBy
-            )
+            ) // policy - used for Firestore storage
             
             try await db.collection("region_policies").document(videoId).setData([
                 "allowedRegions": allowedRegions,

@@ -21,7 +21,7 @@ struct AILiveTVSection: View {
     @State private var forYouSection: LiveTVForYouSection?
     @State private var isLoading = true
     @State private var selectedTab: AILiveTVTab = .forYou
-    @State private var showAIInsight = true
+    @State private var showAIInsight = false  // Disabled - no AI insight banner
     
     enum AILiveTVTab: String, CaseIterable {
         case forYou = "For You"

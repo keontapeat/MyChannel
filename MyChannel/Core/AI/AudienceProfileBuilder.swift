@@ -49,7 +49,7 @@ final class AudienceProfileBuilder: ObservableObject {
         
         // Analyze seed users
         var commonInterests: [String] = []
-        var commonDemographics: Set<String> = []
+        _ = Set<String>() // commonDemographics - reserved for future demographic analysis
         
         for userId in seedUserIds {
             if let profile = try? await AdTargetingAGI.shared.buildUserProfile(userId: userId) {
@@ -58,7 +58,7 @@ final class AudienceProfileBuilder: ObservableObject {
         }
         
         // Find similar users
-        let targetSize = Int(Double(seedUserIds.count) * expansionFactor)
+        _ = Int(Double(seedUserIds.count) * expansionFactor) // targetSize - for future pagination
         let criteria = AudienceCriteria(
             interests: Array(Set(commonInterests)),
             ageRanges: [],

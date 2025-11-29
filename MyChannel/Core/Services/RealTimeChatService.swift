@@ -535,11 +535,10 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
     
     private func setupNetworkMonitoring() {
         networkMonitor.pathUpdateHandler = { [weak self] path in
+            guard let self = self else { return }
             if path.status != .satisfied {
-                Task { [weak self] in
-                    await MainActor.run {
-                        self?.lastError = .networkUnavailable
-                    }
+                Task { @MainActor [weak self] in
+                    self?.lastError = .networkUnavailable
                 }
             }
         }
@@ -550,14 +549,14 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
         messageBuffer
             .collect(.byTime(DispatchQueue.main, 0.1)) // Batch messages every 100ms
             .sink { [weak self] messages in
-                Task { [weak self] in
-                    await MainActor.run {
-                        self?.messages.append(contentsOf: messages)
-                        
-                        // Keep only last 200 messages
-                        if let self = self, self.messages.count > 200 {
-                            self.messages.removeFirst(self.messages.count - 200)
-                        }
+                guard let self = self else { return }
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    self.messages.append(contentsOf: messages)
+                    
+                    // Keep only last 200 messages
+                    if self.messages.count > 200 {
+                        self.messages.removeFirst(self.messages.count - 200)
                     }
                 }
             }
@@ -601,9 +600,8 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
         heartbeatTimer?.invalidate()
         reconnectTimer?.invalidate()
         networkMonitor.cancel()
-        Task {
-            try? await disconnectFromChat()
-        }
+        // Note: Cannot call async disconnectFromChat() in deinit
+        // Cleanup is handled by invalidating timers and canceling network monitor
     }
 }
 

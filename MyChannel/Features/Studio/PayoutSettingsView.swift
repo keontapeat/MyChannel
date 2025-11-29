@@ -59,7 +59,7 @@ struct PayoutSettingsView: View {
                 .disabled(isOpeningConnect)
                 Button("Save") {
                     Task {
-                        let uid = appState.currentUser?.id ?? User.sampleUsers.first?.id ?? ""
+                        _ = appState.currentUser?.id ?? User.sampleUsers.first?.id ?? "" // uid - for future user tracking
                         struct Req: Codable { let fullName: String; let routing: String; let account: String; let country: String }
                         let _: MessageResponse = try await NetworkService.shared.post(
                             endpoint: .custom("/pay/settings"),

@@ -16,9 +16,19 @@ final class LiveTVService {
         return LiveTVChannel.sampleChannels
     }
     
+    // 🔥🔥🔥 THERMONUCLEAR: Prewarm thumbnails for instant display 🔥🔥🔥
+    func thermonuclearPrewarm(count: Int = 10) {
+        let channels = Array(LiveTVChannel.sampleChannels.prefix(count))
+        ThermonuclearPrewarm.prewarmChannels(channels)
+        print("🔥🔥🔥 [THERMONUCLEAR] Prewarmed \(count) channels for INSTANT thumbnails!")
+    }
+    
     // 🔥 FIRE: Preload the first N channels for instant playback
     func preloadFireChannels(count: Int = 6) async {
         let channels = Array(LiveTVChannel.sampleChannels.prefix(count))
+        
+        // 🔥 Also prewarm thumbnails
+        thermonuclearPrewarm(count: count)
         
         await withTaskGroup(of: Void.self) { group in
             for channel in channels {

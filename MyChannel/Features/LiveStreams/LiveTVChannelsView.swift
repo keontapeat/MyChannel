@@ -304,39 +304,15 @@ private struct MinimalGridChannelCard: View {
         .buttonStyle(PressableScaleStyle(scale: 0.96))
     }
     
-    // Professional channel thumbnail
+    // 🔥 THERMONUCLEAR channel thumbnail - LIVE VIDEO!
     private var channelThumbnail: some View {
-        ZStack {
-            // Gradient background based on category
-            RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            categoryBackgroundColor.opacity(0.15),
-                            categoryBackgroundColor.opacity(0.05)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            
-            // Subtle pattern overlay
-            RoundedRectangle(cornerRadius: 12)
-                .fill(AppTheme.Colors.surface.opacity(0.5))
-            
-            // Channel logo or icon
-            VStack(spacing: 6) {
-                Image(systemName: categoryIcon)
-                    .font(.system(size: 28, weight: .medium))
-                    .foregroundColor(categoryBackgroundColor.opacity(0.8))
-                
-                Text(channel.name)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .lineLimit(1)
-                    .padding(.horizontal, 8)
-            }
-        }
+        LiveChannelThumbnailView(
+            streamURL: channel.streamURL,
+            posterURL: channel.logoURL,
+            fallbackStreamURL: channel.previewFallbackURL,
+            channelCategory: channel.category,
+            channelName: channel.name
+        )
     }
     
     private var categoryBackgroundColor: Color {
@@ -484,38 +460,15 @@ private struct MinimalListChannelCard: View {
         .buttonStyle(PressableScaleStyle(scale: 0.98))
     }
     
-    // Professional channel thumbnail
+    // 🔥 THERMONUCLEAR channel thumbnail - LIVE VIDEO!
     private var channelThumbnail: some View {
-        ZStack {
-            // Gradient background
-            RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            categoryColor.opacity(0.15),
-                            categoryColor.opacity(0.05)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            
-            // Surface overlay
-            RoundedRectangle(cornerRadius: 12)
-                .fill(AppTheme.Colors.surface.opacity(0.5))
-            
-            // Category icon
-            VStack(spacing: 4) {
-                Image(systemName: categoryIcon)
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundColor(categoryColor.opacity(0.8))
-                
-                Text(String(channel.name.prefix(8)))
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .lineLimit(1)
-            }
-        }
+        LiveChannelThumbnailView(
+            streamURL: channel.streamURL,
+            posterURL: channel.logoURL,
+            fallbackStreamURL: channel.previewFallbackURL,
+            channelCategory: channel.category,
+            channelName: channel.name
+        )
     }
     
     private var categoryColor: Color {

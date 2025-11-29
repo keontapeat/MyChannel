@@ -263,7 +263,7 @@ final class AdTargetingAGI: ObservableObject {
     
     private func predictBuyingIntent(watchHistory: [Video], engagement: EngagementData) async -> AdUserProfile.BuyingIntent {
         // Analyze signals for buying intent
-        let buyingSignals: [String] = []
+        _ = [String]() // buyingSignals - reserved for future use
         var score = 0.0
         var confidence = 0.0
         var suggestedCategory: String?

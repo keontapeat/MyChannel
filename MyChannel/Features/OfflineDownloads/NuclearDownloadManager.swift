@@ -1040,13 +1040,13 @@ extension NuclearDownloadManager: AVAssetDownloadDelegate {
     
     nonisolated func urlSession(
         _ session: URLSession,
-        aggregateAssetDownloadTask: AVAggregateAssetDownloadTask,
+        assetDownloadTask: AVAssetDownloadTask,
         didLoad timeRange: CMTimeRange,
         totalTimeRangesLoaded loadedTimeRanges: [NSValue],
         timeRangeExpectedToLoad: CMTimeRange
     ) {
         Task { @MainActor in
-            guard let downloadId = aggregateAssetDownloadTask.taskDescription else { return }
+            guard let downloadId = assetDownloadTask.taskDescription else { return }
             
             var percentComplete = 0.0
             for value in loadedTimeRanges {

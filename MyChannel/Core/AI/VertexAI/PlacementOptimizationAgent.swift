@@ -225,8 +225,8 @@ final class PlacementOptimizationAgent: ObservableObject {
     /// Thompson Sampling for multi-armed bandit
     private func calculateThompsonSample(stats: PlacementStats) -> Double {
         // Beta distribution sampling
-        let alpha = Double(stats.clicks + 1)
-        let beta = Double(stats.impressions - stats.clicks + 1)
+        _ = Double(stats.clicks + 1)
+        _ = Double(stats.impressions - stats.clicks + 1)
         
         // Simplified Thompson sample (in production, use proper beta distribution)
         return stats.avgCTR + (stats.avgRevenue * 0.5)

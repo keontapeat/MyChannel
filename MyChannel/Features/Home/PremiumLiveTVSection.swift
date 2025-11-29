@@ -197,10 +197,13 @@ struct PremiumChannelCard: View {
                 // Channel Logo with Live Indicator
                 ZStack {
                     if showPreview {
+                        // 🔥 THERMONUCLEAR THUMBNAIL
                         LiveChannelThumbnailView(
                             streamURL: channel.streamURL,
                             posterURL: channel.logoURL,
-                            fallbackStreamURL: channel.previewFallbackURL
+                            fallbackStreamURL: channel.previewFallbackURL,
+                            channelCategory: channel.category,
+                            channelName: channel.name
                         )
                         .frame(width: 120, height: 80)
                         .clipShape(RoundedRectangle(cornerRadius: 16))

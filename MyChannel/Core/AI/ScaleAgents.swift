@@ -283,7 +283,7 @@ final class AutoScaler: ObservableObject {
         print("⚖️ [Auto-Scaler] Checking infrastructure load")
         
         let cpuUsage = Double.random(in: 0.2...0.9)
-        let requestRate = Int.random(in: 100...1000)
+        _ = Int.random(in: 100...1000) // requestRate - for future rate limiting
         
         if cpuUsage > 0.7 {
             currentInstances += 1

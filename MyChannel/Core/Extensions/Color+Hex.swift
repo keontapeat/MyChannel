@@ -8,8 +8,41 @@
 import SwiftUI
 
 extension Color {
-    /// Initialize a Color from a hex string (e.g., "#FF5733" or "FF5733")
-    init?(hex: String) {
+    /// Initialize a Color from a hex string (non-optional, defaults to clear if invalid)
+    init(hex: String) {
+        var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
+        
+        var rgb: UInt64 = 0
+        
+        guard Scanner(string: hexSanitized).scanHexInt64(&rgb) else {
+            self.init(.clear)
+            return
+        }
+        
+        let length = hexSanitized.count
+        let r, g, b, a: Double
+        
+        if length == 6 {
+            r = Double((rgb & 0xFF0000) >> 16) / 255.0
+            g = Double((rgb & 0x00FF00) >> 8) / 255.0
+            b = Double(rgb & 0x0000FF) / 255.0
+            a = 1.0
+        } else if length == 8 {
+            r = Double((rgb & 0xFF000000) >> 24) / 255.0
+            g = Double((rgb & 0x00FF0000) >> 16) / 255.0
+            b = Double((rgb & 0x0000FF00) >> 8) / 255.0
+            a = Double(rgb & 0x000000FF) / 255.0
+        } else {
+            self.init(.clear)
+            return
+        }
+        
+        self.init(red: r, green: g, blue: b, opacity: a)
+    }
+    
+    /// Initialize a Color from a hex string (optional version, returns nil if invalid)
+    init?(hexOptional hex: String) {
         var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
         

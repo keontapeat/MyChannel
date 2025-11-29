@@ -2,7 +2,7 @@ import Foundation
 import Security
 import CommonCrypto
 
-final class SSLPinningDelegate: NSObject, URLSessionDelegate {
+final class SSLPinningDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
     private let pins: [String]
     private let allowInDebug: Bool
 

@@ -53,7 +53,7 @@ class GlobalVideoPlayerManager: ObservableObject {
     private var timeControlObserver: NSKeyValueObservation? // 🔥 APPLE BEST PRACTICE: Store KVO observer
     private var playerStatusObserver: NSKeyValueObservation? // 🔥 CRITICAL: Store player status observer
     private var playerItemStatusObserver: NSKeyValueObservation? // 🔥 CRITICAL: Store playerItem status observer
-    internal(set) var isCleanedUp = false
+    private(set) var isCleanedUp = false
     private var wasPlayingBeforeFlicks = false
     private var wasPlayingBeforeBackground = false
     private let allowSystemPictureInPicture = true
