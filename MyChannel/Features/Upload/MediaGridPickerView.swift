@@ -781,11 +781,11 @@ private struct NuclearGridCell: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in isPressed = true }
-                .onEnded { _ in isPressed = false }
-        )
+        .onLongPressGesture(minimumDuration: 0.01, pressing: { pressing in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = pressing
+            }
+        }, perform: {})
         .task {
             let size = CGSize(width: 600, height: 600)
             let options = PHImageRequestOptions()

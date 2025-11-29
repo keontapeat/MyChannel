@@ -14,7 +14,15 @@ import FirebaseFirestore
 struct ProfileView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @EnvironmentObject private var appState: AppState
-    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared // 🔥 FIX: Access global player to hide mini player
+    
+    // ⚡ PERF: Use @ObservedObject for singletons (they manage their own lifecycle)
+    @ObservedObject private var globalPlayer = GlobalVideoPlayerManager.shared
+    @ObservedObject private var playlistService = PlaylistFirestoreService.shared
+    @ObservedObject private var profileCache = ProfileCacheService.shared
+    @ObservedObject private var storeKit = StoreKitService.shared
+    
+    // Local state objects (we own these)
+    @StateObject private var toastManager = ToastManager()
 
     @State private var selectedTab: ProfileTab = .videos
     @State private var showingSettings: Bool = false
@@ -38,30 +46,28 @@ struct ProfileView: View {
     @State private var playlists: [Playlist] = []
     @State private var isLoadingPlaylists = false
     @State private var undoPayload: BulkUndoPayload?
-    @StateObject private var playlistService = PlaylistFirestoreService.shared
-    @StateObject private var toastManager = ToastManager()
     
-    // ⚡ PERFORMANCE: Pagination state
+    // ⚡ PERFORMANCE: Pagination state with proper type safety
     @State private var isLoadingMoreVideos = false
     @State private var hasMoreVideos = true
-    @State private var lastVideoDocument: Any? = nil // Firestore DocumentSnapshot
+    #if canImport(FirebaseFirestore)
+    @State private var lastVideoDocument: DocumentSnapshot? = nil
+    #else
+    @State private var lastVideoDocument: Any? = nil
+    #endif
     private let videosPerPage = 24
 
     @State private var scrollOffset: CGFloat = 0
     @State private var isLoading: Bool = true
-    @State private var isLoadingVideos: Bool = true  // ⚡ PERFORMANCE: Track video loading separately
+    @State private var isLoadingVideos: Bool = true
     @State private var hasError: Bool = false
     @State private var errorMessage: String = ""
-    
-    // ⚡ PERFORMANCE: Cache service for instant loading
-    @StateObject private var profileCache = ProfileCacheService.shared
     
     // Video Analytics Navigation
     @State private var showingVideoAnalytics: Bool = false
     @State private var videoToAnalyze: Video?
     
     // Premium & Downloads Navigation
-    @StateObject private var storeKit = StoreKitService.shared
     @State private var showingDownloads = false
     @State private var showingPremiumBenefits = false
     @State private var showingMyChannelPlus = false
@@ -97,155 +103,102 @@ struct ProfileView: View {
     }
 
     var body: some View {
+        mainContentView
+            .applyLifecycleModifiers(
+                onAppearAction: loadProfileSafely,
+                onDisappearAction: { print("🎥 [ProfileView] Profile page disappeared") }
+            )
+            .applyUserChangeModifiers(
+                authManager: authManager,
+                appState: appState,
+                handleUserChange: handleUserChange
+            )
+            .applyNotificationModifiers(
+                showingSettings: $showingSettings,
+                videoToAnalyze: $videoToAnalyze,
+                showingVideoAnalytics: $showingVideoAnalytics,
+                currentUser: currentUser,
+                handleVideoViewCountUpdate: handleVideoViewCountUpdate,
+                loadProfileSafely: loadProfileSafely
+            )
+            .applyVideoManagementModifiers(
+                userVideos: userVideos,
+                isManagingVideos: isManagingVideos,
+                pruneSelectedVideoIDs: pruneSelectedVideoIDs,
+                clearSelectedVideoIDs: { selectedVideoIDs.removeAll() }
+            )
+            .applyAlertModifiers(
+                showBulkDeleteConfirmation: $showBulkDeleteConfirmation,
+                bulkDeleteErrorMessage: $bulkDeleteErrorMessage,
+                selectedVideoIDs: selectedVideoIDs,
+                deleteSelectedVideos: deleteSelectedVideos
+            )
+            .fullScreenCover(isPresented: $showingVideoAnalytics) {
+                videoAnalyticsSheet
+            }
+            .toast(toast: $toastManager.toast)
+            .overlay(alignment: .bottom) {
+                undoOverlay
+            }
+    }
+    
+    // MARK: - Body Sub-Views (Broken up to help compiler)
+    
+    @ViewBuilder
+    private var mainContentView: some View {
         Group {
             if !authManager.isAuthenticated {
-                // Show YouTube-like sign-in prompt when not authenticated
                 UnauthenticatedPromptView(promptType: .profile) {
-                    // Present our professional sign-in sheet
                     NotificationCenter.default.post(name: .presentSignInSheet, object: nil)
                 }
             } else if hasError {
                 profileErrorView
             } else {
-                // ⚡ YOUTUBE-STYLE: Always show content immediately (no loading state)
                 profileContent
             }
         }
-        .onAppear {
-            loadProfileSafely()
-            
-            // Native PiP handles visibility automatically
-            print("🎥 [ProfileView] Profile page appeared")
-        }
-        .onDisappear {
-            // Native PiP persists automatically
-            print("🎥 [ProfileView] Profile page disappeared")
-        }
-        .onChange(of: authManager.currentUser) { newUser in
-            handleUserChange(newUser)
-        }
-        .onChange(of: appState.currentUser) { newUser in
-            handleUserChange(newUser)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .userProfileUpdated)) { note in
-            if let updated = note.object as? User {
-                print("🔄 ProfileView received userProfileUpdated notification with profileImageURL: \(updated.profileImageURL ?? "nil")")
-                handleUserChange(updated)
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshProfile"))) { _ in
-            print("🔄 ProfileView received RefreshProfile notification")
-            // 🔥 IMMEDIATE REFRESH: Reload profile when video is uploaded
-            loadProfileSafely()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenNotificationsInbox"))) { _ in
-            showingSettings = false
-            NotificationCenter.default.post(name: Notification.Name("PresentNotificationsInbox"), object: nil)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToVideoAnalytics"))) { notification in
-            if let video = notification.object as? Video {
-                videoToAnalyze = video
-                // Show analytics immediately without delay
-                showingVideoAnalytics = true
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowVideoAnalyticsInStudio"))) { notification in
-            if let videoId = notification.object as? String {
-                // Create a dummy video object for analytics
-                let video = Video(
-                    id: videoId,
-                    title: "",
-                    description: "",
-                    thumbnailURL: "",
-                    videoURL: "",
-                    duration: 0,
-                    viewCount: 0,
-                    likeCount: 0,
-                    creator: currentUser,
-                    category: .entertainment
-                )
-                videoToAnalyze = video
-                showingVideoAnalytics = true
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("VideoViewCountUpdated"))) { notification in
-            guard
-                let userInfo = notification.userInfo,
-                let videoId = userInfo["videoId"] as? String,
-                let latestCount = userInfo["viewCount"] as? Int
-            else { return }
-            
-            handleVideoViewCountUpdate(videoId: videoId, latestCount: latestCount)
-        }
-        .fullScreenCover(isPresented: $showingVideoAnalytics) {
-            if let video = videoToAnalyze {
-                NavigationStack {
-                    VideoAnalyticsView(videoId: video.id)
-                        .navigationTitle("Video Analytics")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Done") {
-                                    showingVideoAnalytics = false
-                                    videoToAnalyze = nil
-                                }
+    }
+    
+    @ViewBuilder
+    private var videoAnalyticsSheet: some View {
+        if let video = videoToAnalyze {
+            NavigationStack {
+                VideoAnalyticsView(videoId: video.id)
+                    .navigationTitle("Video Analytics")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("Done") {
+                                showingVideoAnalytics = false
+                                videoToAnalyze = nil
                             }
-                            ToolbarItem(placement: .navigationBarTrailing) {
-                                NavigationLink(destination: ComprehensiveCreatorStudioView()) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "chart.bar.xaxis")
-                                        Text("Studio")
-                                            .font(.system(size: 15, weight: .semibold))
-                                    }
+                        }
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            NavigationLink(destination: ComprehensiveCreatorStudioView()) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chart.bar.xaxis")
+                                    Text("Studio")
+                                        .font(.system(size: 15, weight: .semibold))
                                 }
                             }
                         }
-                }
+                    }
             }
         }
-        .fullScreenCover(isPresented: Binding(
-            get: { false },
-            set: { _ in }
-        )) {
-            EmptyView()
-        }
-        .onChange(of: userVideos) { _ in
-            pruneSelectedVideoIDs()
-        }
-        .onChange(of: isManagingVideos) { isManaging in
-            if !isManaging {
-                selectedVideoIDs.removeAll()
-            }
-        }
-        .alert("Delete selected videos?", isPresented: $showBulkDeleteConfirmation) {
-            Button("Delete", role: .destructive) {
-                deleteSelectedVideos()
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("This will permanently delete \(selectedVideoIDs.count) video\(selectedVideoIDs.count == 1 ? "" : "s"). This action cannot be undone.")
-        }
-        .alert("Couldn't delete videos", isPresented: Binding(
-            get: { bulkDeleteErrorMessage != nil },
-            set: { if !$0 { bulkDeleteErrorMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(bulkDeleteErrorMessage ?? "")
-        }
-        .toast(toast: $toastManager.toast)
-        .overlay(alignment: .bottom) {
-            if let payload = undoPayload {
-                UndoSnackBar(
-                    message: payload.message,
-                    actionTitle: "Undo",
-                    onAction: { handleUndoAction(payload) },
-                    onDismiss: { undoPayload = nil }
-                )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 80)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+    }
+    
+    @ViewBuilder
+    private var undoOverlay: some View {
+        if let payload = undoPayload {
+            UndoSnackBar(
+                message: payload.message,
+                actionTitle: "Undo",
+                onAction: { handleUndoAction(payload) },
+                onDismiss: { undoPayload = nil }
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 80)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
 
@@ -538,50 +491,6 @@ struct ProfileView: View {
                     ) {
                         NotificationCenter.default.post(name: .openFullHistory, object: nil)
                     }
-                    
-                    // AI Content Factory Link - TEMPORARILY HIDDEN
-                    // NavigationLink(destination: AIContentFactoryView()) {
-                    //     HStack(spacing: 12) {
-                    //         Image(systemName: "brain.head.profile")
-                    //             .foregroundColor(.purple)
-                    //         Text("🤖 AI Content Factory")
-                    //             .font(.system(size: 15, weight: .semibold))
-                    //             .foregroundColor(AppTheme.Colors.textPrimary)
-                    //         Spacer()
-                    //         Text("NEW")
-                    //             .font(.system(size: 9, weight: .bold))
-                    //             .foregroundColor(.white)
-                    //             .padding(.horizontal, 5)
-                    //             .padding(.vertical, 1)
-                    //             .background(.red, in: Capsule())
-                    //     }
-                    //     .padding()
-                    //     .background(AppTheme.Colors.surface)
-                    //     .cornerRadius(12)
-                    //     .padding(.horizontal)
-                    // }
-                    
-                    // Quantum Analytics Link - TEMPORARILY HIDDEN
-                    // NavigationLink(destination: QuantumAnalyticsDashboard()) {
-                    //     HStack(spacing: 12) {
-                    //         Image(systemName: "atom")
-                    //             .foregroundColor(.cyan)
-                    //         Text("🌌 Quantum Analytics")
-                    //             .font(.system(size: 15, weight: .semibold))
-                    //             .foregroundColor(AppTheme.Colors.textPrimary)
-                    //         Spacer()
-                    //         Text("NEW")
-                    //             .font(.system(size: 9, weight: .bold))
-                    //             .foregroundColor(.white)
-                    //             .padding(.horizontal, 5)
-                    //             .padding(.vertical, 1)
-                    //             .background(.green, in: Capsule())
-                    //     }
-                    //     .padding()
-                    //     .background(AppTheme.Colors.surface)
-                    //     .cornerRadius(12)
-                    //     .padding(.horizontal)
-                    // }
                 }
                 .padding(.vertical)
             }
@@ -793,76 +702,73 @@ struct ProfileView: View {
     // REMOVED: createFallbackVideos() - No more mock/fallback videos
     // Only show real videos the user has actually posted
 
+    @MainActor
     private func handleUserChange(_ newUser: User?) {
         print("🔄 handleUserChange called with profileImageURL: \(newUser?.profileImageURL ?? "nil")")
-        DispatchQueue.main.async {
-            if let newUser {
-                print("🔄 Setting user state to new user with profileImageURL: \(newUser.profileImageURL ?? "nil")")
-                user = newUser
+        
+        guard let newUser else {
+            user = User.defaultUser
+            userVideos = []
+            watchHistory = []
+            profileCache.clearCache()
+            return
+        }
+        
+        print("🔄 Setting user state to new user with profileImageURL: \(newUser.profileImageURL ?? "nil")")
+        user = newUser
+        
+        // ⚡ PERFORMANCE: Show cached videos instantly while loading fresh
+        let cachedVideos = profileCache.getCachedVideos()
+        if !cachedVideos.isEmpty {
+            userVideos = cachedVideos
+        }
+        isLoadingVideos = true
+        
+        Task {
+            // ⚡ PERFORMANCE: Load only first page (24 videos)
+            do {
+                let result = try await VideoFirestoreService.shared.fetchVideosByCreatorPaginated(
+                    creatorId: newUser.id,
+                    limit: videosPerPage,
+                    lastDocument: nil
+                )
+                userVideos = result.videos
+                lastVideoDocument = result.lastDocument
+                hasMoreVideos = result.videos.count == videosPerPage
+                isLoadingVideos = false
                 
-                // ⚡ PERFORMANCE: Show cached videos instantly while loading fresh
-                let cachedVideos = profileCache.getCachedVideos()
-                if !cachedVideos.isEmpty {
-                    userVideos = cachedVideos
-                    isLoadingVideos = true  // Show refresh indicator
-                } else {
-                    isLoadingVideos = true
-                }
+                // Update cache
+                profileCache.cacheProfile(user: newUser, videos: result.videos)
                 
-                Task { @MainActor in
-                    // ⚡ PERFORMANCE: Load only first page (24 videos)
-                    do {
-                        let result = try await VideoFirestoreService.shared.fetchVideosByCreatorPaginated(
-                            creatorId: newUser.id,
-                            limit: videosPerPage,
-                            lastDocument: nil
-                        )
-                        userVideos = result.videos
-                        lastVideoDocument = result.lastDocument
-                        hasMoreVideos = result.videos.count == videosPerPage
-                        isLoadingVideos = false
-                        
-                        // Update cache
-                        profileCache.cacheProfile(user: newUser, videos: result.videos)
-                        
-                        // Check local storage as backup only if Firestore is empty
-                        if userVideos.isEmpty {
-                            if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: newUser.id), !localVids.isEmpty {
-                                userVideos = Array(localVids.prefix(videosPerPage))
-                                hasMoreVideos = localVids.count > videosPerPage
-                                profileCache.updateCachedVideos(userVideos)
-                            }
-                        }
-                    } catch {
-                        print("🚨 [ProfileView] Error loading videos: \(error)")
-                        // Keep cached videos if available
-                        if userVideos.isEmpty {
-                            userVideos = []
-                        }
-                        hasMoreVideos = false
-                        isLoadingVideos = false
+                // Check local storage as backup only if Firestore is empty
+                if userVideos.isEmpty {
+                    if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: newUser.id), !localVids.isEmpty {
+                        userVideos = Array(localVids.prefix(videosPerPage))
+                        hasMoreVideos = localVids.count > videosPerPage
+                        profileCache.updateCachedVideos(userVideos)
                     }
-                    
-                    recalculateUserStats()
-                    watchHistory = []
                 }
-            } else {
-                user = User.defaultUser
-                userVideos = []
-                watchHistory = []
-                profileCache.clearCache()
+            } catch {
+                print("🚨 [ProfileView] Error loading videos: \(error)")
+                // Keep cached videos if available
+                if userVideos.isEmpty {
+                    userVideos = []
+                }
+                hasMoreVideos = false
+                isLoadingVideos = false
             }
+            
+            recalculateUserStats()
+            watchHistory = []
         }
     }
 
+    @MainActor
     private func handleError(_ message: String) {
-        DispatchQueue.main.async {
-            errorMessage = message
-            hasError = true
-            isLoading = false
-
-            print("❌ Profile error: \(message)")
-        }
+        errorMessage = message
+        hasError = true
+        isLoading = false
+        print("❌ Profile error: \(message)")
     }
 
     private func retryLoadProfile() {
@@ -872,6 +778,7 @@ struct ProfileView: View {
     }
     
     // ⚡ PERFORMANCE: Load more videos (pagination)
+    @MainActor
     private func loadMoreVideos() async {
         guard !isLoadingMoreVideos && hasMoreVideos else { return }
         
@@ -880,7 +787,7 @@ struct ProfileView: View {
         
         #if canImport(FirebaseFirestore)
         do {
-            guard let lastDoc = lastVideoDocument as? DocumentSnapshot else {
+            guard let lastDoc = lastVideoDocument else {
                 hasMoreVideos = false
                 return
             }
@@ -891,14 +798,12 @@ struct ProfileView: View {
                 lastDocument: lastDoc
             )
             
-            await MainActor.run {
-                userVideos.append(contentsOf: result.videos)
-                lastVideoDocument = result.lastDocument
-                hasMoreVideos = result.videos.count == videosPerPage
-            }
+            userVideos.append(contentsOf: result.videos)
+            lastVideoDocument = result.lastDocument
+            hasMoreVideos = result.videos.count == videosPerPage
         } catch {
             print("🚨 [ProfileView] Error loading more videos: \(error)")
-            await MainActor.run { hasMoreVideos = false }
+            hasMoreVideos = false
         }
         #endif
     }
@@ -1213,11 +1118,7 @@ struct ProfileView: View {
     }
 }
 
-// MARK: - SafeProfileHeaderView (Updated – No selectedTab)
-
-// Removed SafeProfileHeaderView - replaced with simpler structure
-
-// Removed ProfileHeaderSection - using ProfileHeaderView directly
+// MARK: - Helper Sections (Keep minimal - main components extracted to separate files)
 
 private struct ProfileTabsSection: View {
     @Binding var selectedTab: ProfileTab
@@ -1237,10 +1138,10 @@ private struct ProfileContentSection: View {
     let selectedTab: ProfileTab
     let user: User
     let videos: [Video]
-    var onLoadMore: (() async -> Void)? = nil // ⚡ PERFORMANCE: Pagination callback
-    var hasMoreVideos: Bool = false // ⚡ PERFORMANCE: Pagination state
-    var isLoadingMore: Bool = false // ⚡ PERFORMANCE: Loading state
-    var isLoadingVideos: Bool = false // ⚡ PERFORMANCE: Initial loading state for skeleton
+    var onLoadMore: (() async -> Void)? = nil
+    var hasMoreVideos: Bool = false
+    var isLoadingMore: Bool = false
+    var isLoadingVideos: Bool = false
 
     var body: some View {
         SafeProfileContentView(
@@ -1255,256 +1156,7 @@ private struct ProfileContentSection: View {
     }
 }
 
-// MARK: - New: Quick Actions Chips (Switch account / Google Account / Incognito)
-
-private struct ProfileQuickActionsChips: View {
-    let isIncognito: Bool
-    let switchAccountAction: () -> Void
-    let googleAccountAction: () -> Void
-    let toggleIncognitoAction: () -> Void
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ActionChip(
-                    title: "Switch account",
-                    systemImage: "person.crop.circle",
-                    action: switchAccountAction
-                )
-
-                ActionChip(
-                    title: "Google Account",
-                    systemImage: "globe",
-                    action: googleAccountAction
-                )
-
-                ActionChip(
-                    title: isIncognito ? "Incognito On" : "Turn on Incognito",
-                    systemImage: isIncognito ? "eye.slash.circle.fill" : "eye.slash",
-                    isHighlighted: isIncognito,
-                    action: toggleIncognitoAction
-                )
-            }
-            .padding(.vertical, 6)
-        }
-        .overlay(alignment: .trailing) {
-            LinearGradient(
-                gradient: Gradient(stops: [
-                    .init(color: AppTheme.Colors.background.opacity(0), location: 0.0),
-                    .init(color: AppTheme.Colors.background, location: 1.0)
-                ]),
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(width: 16)
-        }
-    }
-}
-
-private struct ActionChip: View {
-    let title: String
-    let systemImage: String
-    var isHighlighted: Bool = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 16, weight: .semibold))
-                Text(title)
-                    .font(.callout.weight(.semibold))
-            }
-            .foregroundStyle(isHighlighted ? Color.white : AppTheme.Colors.textPrimary)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 14)
-            .background(
-                Capsule()
-                    .fill(isHighlighted ? AppTheme.Colors.primary : AppTheme.Colors.backgroundSecondary.opacity(0.6))
-            )
-            .overlay(
-                Capsule()
-                    .stroke(isHighlighted ? AppTheme.Colors.primary : AppTheme.Colors.backgroundSecondary, lineWidth: 0.5)
-            )
-        }
-        .buttonStyle(.plain)
-        .contentShape(Rectangle())
-        .shadow(color: Color.black.opacity(isHighlighted ? 0.12 : 0.06), radius: 8, x: 0, y: 3)
-        .animation(.spring(response: 0.28, dampingFraction: 0.9), value: isHighlighted)
-    }
-}
-
-// MARK: - New: History Section (horizontal carousel like YouTube)
-
-private struct ProfileHistorySection: View {
-    let title: String
-    let videos: [Video]
-    var onViewAll: () -> Void
-
-    @State private var appear = false
-
-    var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text(title)
-                    .font(.title2.bold())
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-
-                Spacer()
-
-                if !videos.isEmpty {
-                    Button(action: onViewAll) {
-                        Text("View all")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 14)
-                            .background(
-                                Capsule()
-                                    .fill(AppTheme.Colors.backgroundSecondary.opacity(0.6))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal)
-
-            if videos.isEmpty {
-                // Empty state
-                VStack(spacing: 12) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 40))
-                        .foregroundColor(AppTheme.Colors.textTertiary)
-                    
-                    Text("No watch history yet")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                    
-                    Text("Videos you watch will appear here")
-                        .font(.system(size: 14))
-                        .foregroundColor(AppTheme.Colors.textTertiary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 14) {
-                        ForEach(videos) { video in
-                            HistoryVideoCard(video: video)
-                                .frame(width: 280)
-                                .transition(.opacity.combined(with: .scale))
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, 6)
-                }
-                .mask(
-                    LinearGradient(
-                        gradient: Gradient(stops: [
-                            .init(color: .clear, location: 0.0),
-                            .init(color: .black, location: 0.04),
-                            .init(color: .black, location: 0.96),
-                            .init(color: .clear, location: 1.0)
-                        ]),
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-            }
-        }
-        .onAppear {
-            if !appear {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
-                    appear = true
-                }
-            }
-        }
-    }
-}
-
-private struct HistoryVideoCard: View {
-    let video: Video
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ZStack(alignment: .bottomTrailing) {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(AppTheme.Colors.backgroundSecondary.opacity(0.6))
-
-                AsyncImage(url: URL(string: video.thumbnailURL)) { phase in
-                    switch phase {
-                    case .empty:
-                        ZStack {
-                            LinearGradient(colors: [AppTheme.Colors.backgroundSecondary, AppTheme.Colors.background], startPoint: .top, endPoint: .bottom)
-                            ProgressView()
-                                .tint(AppTheme.Colors.primary)
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    case .failure:
-                        ZStack {
-                            Color.gray.opacity(0.25)
-                            Image(systemName: "photo.on.rectangle.angled")
-                                .font(.system(size: 28, weight: .semibold))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    @unknown default:
-                        EmptyView()
-                    }
-                }
-                .frame(height: 160)
-                .overlay(
-                    LinearGradient(
-                        colors: [.clear, .black.opacity(0.25)],
-                        startPoint: .center,
-                        endPoint: .bottom
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                )
-
-                Text(video.duration.formattedAsTimestamp())
-                    .font(.caption2.monospacedDigit())
-                    .foregroundColor(.white)
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 6)
-                    .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .padding(8)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(video.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-
-                Text(video.creator.displayName)
-                    .font(.caption)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-            }
-            .padding(.horizontal, 8)
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(AppTheme.Colors.surface)
-                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .onTapGesture {
-            HapticManager.shared.impact(style: .light)
-            NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
-        }
-    }
-}
-
-// MARK: - Wrappers for previews
+// MARK: - Wrappers for sheets
 
 struct ProfileEditWrapper: View {
     @Binding var user: User
@@ -1521,134 +1173,7 @@ struct ProfileSettingsWrapper: View {
     }
 }
 
-struct ProfileBulkVisibilitySheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let selectedVideoIds: [String]
-    let onApply: (Video.VisibilityStatus) -> Void
-    
-    @State private var selectedVisibility: Video.VisibilityStatus = .public
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Text("\(selectedVideoIds.count) video\(selectedVideoIds.count == 1 ? "" : "s") selected")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                }
-                
-                Section("Visibility") {
-                    ForEach(Video.VisibilityStatus.allCases, id: \.self) { visibility in
-                        Button {
-                            selectedVisibility = visibility
-                        } label: {
-                            HStack {
-                                Image(systemName: visibility.iconName)
-                                Text(visibility.displayName)
-                                Spacer()
-                                if selectedVisibility == visibility {
-                                    Image(systemName: "checkmark")
-                                        .foregroundColor(AppTheme.Colors.primary)
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                Section {
-                    Button("Apply") {
-                        onApply(selectedVisibility)
-                        dismiss()
-                    }
-                    .disabled(selectedVideoIds.isEmpty)
-                }
-            }
-            .navigationTitle("Change Visibility")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
-        }
-    }
-}
-
-struct ProfileBulkPlaylistSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let playlists: [Playlist]
-    let isLoading: Bool
-    let selectedVideoIds: [String]
-    let onApply: (Set<String>) -> Void
-    
-    @State private var selectedPlaylists: Set<String> = []
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Text("\(selectedVideoIds.count) video\(selectedVideoIds.count == 1 ? "" : "s") selected")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                }
-                
-                if isLoading {
-                    Section {
-                        ProgressView("Loading playlists…")
-                    }
-                } else if playlists.isEmpty {
-                    Section {
-                        Text("You haven't created any playlists yet.")
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                } else {
-                    Section("Add to Playlists") {
-                        ForEach(playlists, id: \.id) { playlist in
-                            Button {
-                                toggleSelection(for: playlist.id)
-                            } label: {
-                                HStack {
-                                    Image(systemName: selectedPlaylists.contains(playlist.id) ? "checkmark.square.fill" : "square")
-                                        .foregroundColor(selectedPlaylists.contains(playlist.id) ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
-                                    Text(playlist.title)
-                                    Spacer()
-                                    Text("\(playlist.videoCount) videos")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(AppTheme.Colors.textSecondary)
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                Section {
-                    Button("Add to Selected Playlists") {
-                        onApply(selectedPlaylists)
-                        dismiss()
-                    }
-                    .disabled(selectedPlaylists.isEmpty || selectedVideoIds.isEmpty)
-                }
-            }
-            .navigationTitle("Add to Playlists")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
-        }
-    }
-    
-    private func toggleSelection(for playlistId: String) {
-        if selectedPlaylists.contains(playlistId) {
-            selectedPlaylists.remove(playlistId)
-        } else {
-            selectedPlaylists.insert(playlistId)
-        }
-    }
-}
-
-// MARK: - Notifications used by the new sections
+// MARK: - Notifications used by profile sections
 
 extension Notification.Name {
     static let openFullHistory = Notification.Name("openFullHistory")
@@ -1659,56 +1184,6 @@ extension Notification.Name {
 }
 
 // MARK: - Previews
-
-#Preview("Profile Header Section") {
-    ProfileHeaderView(
-        user: User.sampleUsers.first ?? .defaultUser,
-        scrollOffset: 0,
-        isFollowing: Binding.constant(false),
-        showingEditProfile: Binding.constant(false),
-        showingSettings: Binding.constant(false)
-    )
-    .environmentObject(AppState())
-}
-
-#Preview("Profile Tabs Section") {
-    ProfileTabsSection(
-        selectedTab: Binding.constant(.videos),
-        user: User.sampleUsers.first ?? .defaultUser,
-        scrollOffset: 0
-    )
-    .environmentObject(AppState())
-}
-
-#Preview("History Section") {
-    ProfileHistorySection(
-        title: "History",
-        videos: Array(Video.sampleVideos.prefix(6))
-    ) { }
-    .environmentObject(AppState())
-    .padding()
-    .background(AppTheme.Colors.background)
-}
-
-#Preview("Quick Actions Chips") {
-    ProfileQuickActionsChips(
-        isIncognito: false,
-        switchAccountAction: {},
-        googleAccountAction: {},
-        toggleIncognitoAction: {}
-    )
-    .padding()
-    .background(AppTheme.Colors.background)
-}
-
-#Preview("Profile Content Section") {
-    ProfileContentSection(
-        selectedTab: .videos,
-        user: User.sampleUsers.first ?? .defaultUser,
-        videos: Array(Video.sampleVideos.prefix(6))
-    )
-    .environmentObject(AppState())
-}
 
 #Preview("Profile View") {
     ProfileView()
@@ -1724,130 +1199,136 @@ extension Notification.Name {
     ProfileSettingsWrapper()
 }
 
-struct BulkUndoPayload: Identifiable, Equatable {
-    enum Action: Equatable {
-        case delete(videos: [Video])
-    }
-    
-    let id = UUID()
-    let action: Action
-    
-    var message: String {
-        switch action {
-        case .delete(let videos):
-            return "Deleted \(videos.count) video\(videos.count == 1 ? "" : "s")"
-        }
-    }
-}
+// MARK: - View Modifier Extensions (Helps compiler type-check)
 
-struct UndoSnackBar: View {
-    let message: String
-    let actionTitle: String
-    let onAction: () -> Void
-    let onDismiss: () -> Void
+private extension View {
     
-    var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(message)
-                    .font(.system(size: 15, weight: .semibold))
-                Text("Tap undo to restore.")
-                    .font(.system(size: 13))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+    func applyLifecycleModifiers(
+        onAppearAction: @escaping () -> Void,
+        onDisappearAction: @escaping () -> Void
+    ) -> some View {
+        self
+            .onAppear {
+                onAppearAction()
+                print("🎥 [ProfileView] Profile page appeared")
             }
-            
-            Spacer()
-            
-            Button(actionTitle) {
-                onAction()
+            .onDisappear {
+                onDisappearAction()
             }
-            .font(.system(size: 14, weight: .bold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(AppTheme.Colors.primary)
-            .clipShape(Capsule())
-            
-            Button {
-                onDismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(AppTheme.Colors.surface)
-                .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: 10)
-        )
-        .padding(.bottom, 16)
     }
-}
-
-// MARK: - YouTube-Style Feature Card Component
-struct YouTubeStyleFeatureCard<Destination: View>: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let destination: Destination
-    var isAdmin: Bool = false
     
-    var body: some View {
-        NavigationLink(destination: destination) {
-            HStack(spacing: 16) {
-                // Icon (YouTube-style: neutral background, subtle)
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.Colors.surface)
-                        .frame(width: 44, height: 44)
-                    
-                    Image(systemName: icon)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                }
-                
-                // Content
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(title)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                        
-                        if isAdmin {
-                            Text("ADMIN")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.red, in: Capsule())
-                        }
-                    }
-                    
-                    Text(subtitle)
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .lineLimit(1)
-                }
-                
-                Spacer()
-                
-                // Chevron (YouTube-style: subtle)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.textTertiary)
+    func applyUserChangeModifiers(
+        authManager: AuthenticationManager,
+        appState: AppState,
+        handleUserChange: @escaping (User?) -> Void
+    ) -> some View {
+        self
+            .onChange(of: authManager.currentUser) { newUser in
+                handleUserChange(newUser)
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(AppTheme.Colors.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+            .onChange(of: appState.currentUser) { newUser in
+                handleUserChange(newUser)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .userProfileUpdated)) { note in
+                if let updated = note.object as? User {
+                    print("🔄 ProfileView received userProfileUpdated notification")
+                    handleUserChange(updated)
+                }
+            }
+    }
+    
+    func applyNotificationModifiers(
+        showingSettings: Binding<Bool>,
+        videoToAnalyze: Binding<Video?>,
+        showingVideoAnalytics: Binding<Bool>,
+        currentUser: User,
+        handleVideoViewCountUpdate: @escaping (String, Int) -> Void,
+        loadProfileSafely: @escaping () -> Void = {}
+    ) -> some View {
+        self
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshProfile"))) { _ in
+                print("🔄 ProfileView received RefreshProfile notification")
+                loadProfileSafely()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenNotificationsInbox"))) { _ in
+                showingSettings.wrappedValue = false
+                NotificationCenter.default.post(name: Notification.Name("PresentNotificationsInbox"), object: nil)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToVideoAnalytics"))) { notification in
+                if let video = notification.object as? Video {
+                    videoToAnalyze.wrappedValue = video
+                    showingVideoAnalytics.wrappedValue = true
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowVideoAnalyticsInStudio"))) { notification in
+                if let videoId = notification.object as? String {
+                    let video = Video(
+                        id: videoId,
+                        title: "",
+                        description: "",
+                        thumbnailURL: "",
+                        videoURL: "",
+                        duration: 0,
+                        viewCount: 0,
+                        likeCount: 0,
+                        creator: currentUser,
+                        category: .entertainment
                     )
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
+                    videoToAnalyze.wrappedValue = video
+                    showingVideoAnalytics.wrappedValue = true
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("VideoViewCountUpdated"))) { notification in
+                guard
+                    let userInfo = notification.userInfo,
+                    let videoId = userInfo["videoId"] as? String,
+                    let latestCount = userInfo["viewCount"] as? Int
+                else { return }
+                handleVideoViewCountUpdate(videoId, latestCount)
+            }
+    }
+    
+    func applyVideoManagementModifiers(
+        userVideos: [Video],
+        isManagingVideos: Bool,
+        pruneSelectedVideoIDs: @escaping () -> Void,
+        clearSelectedVideoIDs: @escaping () -> Void
+    ) -> some View {
+        self
+            .onChange(of: userVideos) { _ in
+                pruneSelectedVideoIDs()
+            }
+            .onChange(of: isManagingVideos) { isManaging in
+                if !isManaging {
+                    clearSelectedVideoIDs()
+                }
+            }
+    }
+    
+    func applyAlertModifiers(
+        showBulkDeleteConfirmation: Binding<Bool>,
+        bulkDeleteErrorMessage: Binding<String?>,
+        selectedVideoIDs: Set<String>,
+        deleteSelectedVideos: @escaping () -> Void
+    ) -> some View {
+        let hasError = Binding<Bool>(
+            get: { bulkDeleteErrorMessage.wrappedValue != nil },
+            set: { if !$0 { bulkDeleteErrorMessage.wrappedValue = nil } }
+        )
+        
+        return self
+            .alert("Delete selected videos?", isPresented: showBulkDeleteConfirmation) {
+                Button("Delete", role: .destructive) {
+                    deleteSelectedVideos()
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("This will permanently delete \(selectedVideoIDs.count) video\(selectedVideoIDs.count == 1 ? "" : "s"). This action cannot be undone.")
+            }
+            .alert("Couldn't delete videos", isPresented: hasError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(bulkDeleteErrorMessage.wrappedValue ?? "")
+            }
     }
 }

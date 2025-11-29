@@ -2487,6 +2487,24 @@ private struct TopIndieFilmmakersSection: View {
             avatar: merchHDAvatar
         )
         
+        // Pros Kt as #3 filmmaker
+        let prosKtAssetName = "ProsKtAvatar"
+        let prosKtAvatar: String
+        if UIImage(named: prosKtAssetName) != nil {
+            prosKtAvatar = "asset://\(prosKtAssetName)"
+            print("✅ Found Pros Kt asset: \(prosKtAssetName)")
+        } else {
+            prosKtAvatar = "https://i.pravatar.cc/200?u=pros_kt"
+            print("⚠️ Pros Kt asset '\(prosKtAssetName)' not found - using placeholder")
+        }
+        
+        let prosKt = Filmmaker(
+            name: "Pros Kt",
+            films: 18,
+            score: 98, // Third highest score for #3 position
+            avatar: prosKtAvatar
+        )
+        
         let names = [
             "A. Rivers", "N. Carter", "M. Sloan", "J. Patel", "R. Alvarez",
             "S. Kim", "D. Morgan", "K. O'Neal", "B. Laurent", "T. Ito"
@@ -2495,12 +2513,12 @@ private struct TopIndieFilmmakersSection: View {
             Filmmaker(
                 name: n,
                 films: Int.random(in: 2...12),
-                score: Int.random(in: 60...98), // Max 98 to stay below MerchHD
+                score: Int.random(in: 60...97), // Max 97 to stay below Pros Kt
                 avatar: "https://i.pravatar.cc/200?u=indie_\(idx)"
             )
         }
         
-        var all = [teeCee, merchHD] + items
+        var all = [teeCee, merchHD, prosKt] + items
         return all.sorted { $0.score > $1.score }
     }
 

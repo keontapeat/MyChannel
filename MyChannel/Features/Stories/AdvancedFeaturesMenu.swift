@@ -320,7 +320,7 @@ struct MultiClipView: View {
 }
 
 struct ClipCard: View {
-    let clip: VideoClip
+    let clip: MultiClipVideoClip
     @ObservedObject var engine: MultiClipEngine
     
     var body: some View {

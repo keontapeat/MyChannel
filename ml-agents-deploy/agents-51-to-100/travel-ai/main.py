@@ -6,3 +6,4 @@ def main(request): return jsonify({'destinations': 10000, 'bookings': '50M/year'
 
 
 
+

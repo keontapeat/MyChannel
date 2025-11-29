@@ -6,3 +6,4 @@ def main(request): return jsonify({'fund_size': '$5B/year', 'creators_paid': '10
 
 
 
+

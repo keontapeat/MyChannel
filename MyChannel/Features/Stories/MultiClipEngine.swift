@@ -10,12 +10,33 @@ import SwiftUI
 import AVFoundation
 import Photos
 
+// Local VideoClip type for MultiClipEngine to avoid ambiguity with other VideoClip types
+struct MultiClipVideoClip: Identifiable {
+    let id: String
+    let url: URL
+    var duration: TimeInterval
+    var startTime: TimeInterval
+    var transition: VideoTransition = .none
+    var speed: Double = 1.0
+    var originalDuration: TimeInterval
+    
+    init(id: String, url: URL, duration: TimeInterval, startTime: TimeInterval, transition: VideoTransition = .none, speed: Double = 1.0) {
+        self.id = id
+        self.url = url
+        self.duration = duration
+        self.startTime = startTime
+        self.transition = transition
+        self.speed = speed
+        self.originalDuration = duration
+    }
+}
+
 @MainActor
 class MultiClipEngine: ObservableObject {
     
     // MARK: - Published State
-    @Published var clips: [VideoClip] = []
-    @Published var selectedClip: VideoClip?
+    @Published var clips: [MultiClipVideoClip] = []
+    @Published var selectedClip: MultiClipVideoClip?
     @Published var isProcessing = false
     @Published var processingProgress: Double = 0.0
     @Published var totalDuration: TimeInterval = 0
@@ -40,7 +61,7 @@ class MultiClipEngine: ObservableObject {
             return
         }
         
-        let clip = VideoClip(
+        let clip = MultiClipVideoClip(
             id: UUID().uuidString,
             url: url,
             duration: duration,

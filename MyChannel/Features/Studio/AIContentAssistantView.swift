@@ -315,7 +315,7 @@ struct AIContentAssistantView: View {
             }
             
             ForEach(analysis.suggestions, id: \.self) { suggestion in
-                SuggestionRow(suggestion: suggestion)
+                AISuggestionRow(suggestion: suggestion)
             }
             
             if !analysis.alternativeTitles.isEmpty {
@@ -416,7 +416,7 @@ struct MetricItem: View {
     }
 }
 
-struct SuggestionRow: View {
+struct AISuggestionRow: View {
     let suggestion: String
     
     var body: some View {

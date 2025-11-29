@@ -31,6 +31,8 @@ struct VideoDetailMetaView: View {
     @State private var scrollOffset: CGFloat = 0
     @State private var actionButtonsOpacity: Double = 1.0
     @State private var showingTipSheet: Bool = false
+    @State private var showingSuperThanks: Bool = false  // 🔥 YOUTUBE PARITY: Super Thanks
+    @State private var showingClipsView: Bool = false    // 🔥 YOUTUBE PARITY: Clips
     
     // MARK: - Performance Optimization
     private let impactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -101,6 +103,12 @@ struct VideoDetailMetaView: View {
         .sheet(isPresented: $showingTipSheet) {
             TipSheet(video: video)
         }
+        .sheet(isPresented: $showingSuperThanks) {
+            SuperThanksSheet(video: video)
+        }
+        .sheet(isPresented: $showingClipsView) {
+            ClipsView(video: video, currentTime: 0)
+        }
         .sheet(isPresented: $showingDownloadQualitySheet) {
             DownloadQualitySheet(video: video)
         }
@@ -120,68 +128,48 @@ struct VideoDetailMetaView: View {
         }
     }
     
-    // MARK: - Professional Title Section
+    // MARK: - 🔥 YOUTUBE 2024 STYLE: Clean Title Section
     private var professionalTitleSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(video.title)
-                .font(.system(size: 20, weight: .semibold, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [AppTheme.Colors.textPrimary, AppTheme.Colors.textPrimary.opacity(0.9)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .font(.system(size: 17, weight: .semibold))  // 🔥 Slightly smaller, cleaner
+                .foregroundColor(AppTheme.Colors.textPrimary)
                 .lineLimit(expandedDescription ? nil : 2)
                 .multilineTextAlignment(.leading)
-                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: expandedDescription)
+                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: expandedDescription)
                 .accessibilityLabel("Video title: \(video.title)")
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
     }
     
-    // MARK: - Enhanced Stats Section
+    // MARK: - 🔥 YOUTUBE 2024 STYLE: Minimal Stats Section
     private var videoStatsSection: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 4) {
-                Image(systemName: "eye")
-                    .font(.caption)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                
-                Text("\(formatCount(dynamicViewCount ?? video.viewCount)) views")
-                    .font(.system(size: 14, weight: .medium))
-            }
+        HStack(spacing: 0) {
+            // Views and time in YouTube's compact format
+            Text("\(formatCount(dynamicViewCount ?? video.viewCount)) views")
+                .font(.system(size: 13, weight: .regular))
             
-            Circle()
-                .fill(AppTheme.Colors.textSecondary.opacity(0.6))
-                .frame(width: 3, height: 3)
+            Text(" • ")
+                .font(.system(size: 13, weight: .regular))
             
-            HStack(spacing: 4) {
-                Image(systemName: "clock")
-                    .font(.caption)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                
-                Text(video.timeAgo)
-                    .font(.system(size: 14, weight: .medium))
-            }
-
-            // Removed inline share button (already available in action row)
+            Text(video.timeAgo)
+                .font(.system(size: 13, weight: .regular))
             
             Spacer()
         }
         .foregroundColor(AppTheme.Colors.textSecondary)
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-        .padding(.bottom, 10)
+        .padding(.horizontal, 16)
+        .padding(.top, 2)
+        .padding(.bottom, 8)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(formatCount(dynamicViewCount ?? video.viewCount)) views, \(video.timeAgo)")
     }
     
-    // MARK: - YouTube-Style Action Buttons
+    // MARK: - 🔥 YOUTUBE 2024 STYLE: Compact Pill Action Buttons
     private var youtubeActionButtons: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 16) {
+            HStack(spacing: 8) {  // 🔥 Tighter spacing for sleek look
                 // Like Button with Advanced Animation
                 VideoMetaActionButton(
                     icon: isLiked ? "hand.thumbsup.fill" : "hand.thumbsup",
@@ -208,23 +196,59 @@ struct VideoDetailMetaView: View {
                 .accessibilityLabel(isDisliked ? "Remove dislike" : "Dislike")
                 .accessibilityHint("Double tap to \(isDisliked ? "remove your dislike" : "dislike this video")")
                 
-                // Share Button with Pulse Effect
+                // Share Button
                 VideoMetaActionButton(
-                    icon: "square.and.arrow.up",
-                    title: "Share",
-                    hasSpecialEffect: true
+                    icon: "arrowshape.turn.up.right.fill",
+                    title: "Share"
                 ) {
                     performShareAction()
                 }
                 .accessibilityLabel("Share video")
                 .accessibilityHint("Double tap to share this video with others")
+                
+                // Save Button
+                VideoMetaActionButton(
+                    icon: isWatchLater ? "bookmark.fill" : "bookmark",
+                    title: "Save",
+                    isActive: isWatchLater,
+                    activeColor: AppTheme.Colors.accent ?? AppTheme.Colors.primary
+                ) {
+                    performSaveAction()
+                }
 
-                // Tip Button - Real Payment Processing
+                // Download Button (Premium Feature) - YouTube-style
+                DownloadButtonView(video: video) {
+                    performDownloadAction()
+                }
+                .buttonStyle(.plain)
+                
+                // 🔥 YOUTUBE PARITY: Clips Button
+                VideoMetaActionButton(
+                    icon: "scissors",
+                    title: "Clip"
+                ) {
+                    showingClipsView = true
+                    HapticManager.shared.impact(style: .light)
+                }
+                .accessibilityLabel("Create clip")
+                .accessibilityHint("Double tap to create a shareable clip from this video")
+                
+                // 🔥 YOUTUBE PARITY: Super Thanks Button
+                VideoMetaActionButton(
+                    icon: "dollarsign.circle.fill",
+                    title: "Thanks"
+                ) {
+                    showingSuperThanks = true
+                    HapticManager.shared.impact(style: .medium)
+                }
+                .accessibilityLabel("Super Thanks")
+                .accessibilityHint("Double tap to send a Super Thanks to the creator")
+                
+                // Tip Button - Real Payment Processing (if enabled)
                 if video.monetization?.donationEnabled == true {
                     VideoMetaActionButton(
                         icon: "heart.fill",
-                        title: "Tip",
-                        hasSpecialEffect: true
+                        title: "Tip"
                     ) {
                         showingTipSheet = true
                     }
@@ -243,84 +267,34 @@ struct VideoDetailMetaView: View {
                         }
                     }
                 }
-
-                // Save Button
-                VideoMetaActionButton(
-                    icon: isWatchLater ? "bookmark.fill" : "bookmark",
-                    title: "Save",
-                    isActive: isWatchLater,
-                    activeColor: AppTheme.Colors.accent ?? AppTheme.Colors.primary
-                ) {
-                    performSaveAction()
-                }
                 
-                // Download Button (Premium Feature) - YouTube-style
-                DownloadButtonView(video: video) {
-                    performDownloadAction()
-                }
-                .buttonStyle(.plain)
-                
-                // Transcript Button
+                // More Options (contains less common actions)
                 VideoMetaActionButton(
-                    icon: "text.bubble",
-                    title: "Transcript"
-                ) {
-                    // Handle transcript action
-                    NotificationCenter.default.post(name: NSNotification.Name("ShowTranscript"), object: nil)
-                }
-                
-                // Video Info Button
-                VideoMetaActionButton(
-                    icon: "info.circle",
-                    title: "Info"
-                ) {
-                    // Handle video info action
-                    NotificationCenter.default.post(name: NSNotification.Name("ShowVideoInfo"), object: nil)
-                }
-                
-                // More Options
-                VideoMetaActionButton(
-                    icon: "ellipsis.circle",
+                    icon: "ellipsis",
                     title: "More"
                 ) {
                     performMoreAction()
                 }
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
         }
-        .padding(.top, 14)
-        .padding(.vertical, 2)
-        .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
-        )
-        .padding(.horizontal, 14)
+        .padding(.top, 8)  // 🔥 Reduced padding for sleeker look
     }
     
-    // MARK: - Modern Divider
+    // MARK: - 🔥 YOUTUBE 2024 STYLE: Subtle Divider
     private var modernDivider: some View {
         Rectangle()
-            .fill(
-                LinearGradient(
-                    colors: [
-                        AppTheme.Colors.surface.opacity(0.3),
-                        AppTheme.Colors.surface.opacity(0.6),
-                        AppTheme.Colors.surface.opacity(0.3)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            .frame(height: 1)
-            .padding(.horizontal, 20)
-            .padding(.top, 24)
+            .fill(AppTheme.Colors.surface.opacity(0.4))
+            .frame(height: 0.5)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
     }
     
-    // MARK: - Creator Profile Section
+    // MARK: - 🔥 YOUTUBE 2024 STYLE: Compact Creator Profile Section
     private var creatorProfileSection: some View {
-        HStack(spacing: 16) {
-            // Creator Avatar with Glow Effect - Clickable
+        HStack(spacing: 12) {
+            // Creator Avatar - Clickable
             Button(action: {
                 HapticManager.shared.impact(style: .light)
                 onProfileTap?()
@@ -331,175 +305,124 @@ struct VideoDetailMetaView: View {
                         .aspectRatio(contentMode: .fill)
                 } placeholder: {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [AppTheme.Colors.surface, AppTheme.Colors.surface.opacity(0.7)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(AppTheme.Colors.surface)
                         .overlay(
                             Image(systemName: "person.fill")
+                                .font(.system(size: 14))
                                 .foregroundColor(AppTheme.Colors.textSecondary)
                         )
                 }
-                .frame(width: 48, height: 48)
+                .frame(width: 40, height: 40)  // 🔥 Smaller avatar
                 .clipShape(Circle())
-                .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 4, x: 0, y: 2)
             }
             .buttonStyle(.plain)
             
-            // Creator Info
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
+            // Creator Info - More compact
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
                     Text(video.creator.displayName)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
                     
                     if video.creator.isVerified {
                         Image(systemName: "checkmark.seal.fill")
                             .foregroundColor(AppTheme.Colors.primary)
-                            .font(.system(size: 14))
-                            .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 2)
+                            .font(.system(size: 12))
                     }
                 }
                 
                 Text("\(formatCount(video.creator.subscriberCount)) subscribers")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12, weight: .regular))
                     .foregroundColor(AppTheme.Colors.textSecondary)
             }
             
             Spacer()
             
-            // Professional Subscribe Button
+            // 🔥 YOUTUBE 2024 STYLE: Compact Subscribe Button
             Button(action: performSubscribeAction) {
-                HStack(spacing: 8) {
-                    if !isSubscribed {
-                        Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                    
-                    Text(isSubscribed ? "Subscribed" : "Subscribe")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(isSubscribed ? AppTheme.Colors.textSecondary : .white)
-                }
-                .padding(.horizontal, isSubscribed ? 24 : 20)
-                .padding(.vertical, 12)
-                .background(
-                    Group {
-                        if isSubscribed {
-                            RoundedRectangle(cornerRadius: 22)
-                                .fill(AppTheme.Colors.surface)
-                        } else {
-                            RoundedRectangle(cornerRadius: 22)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [AppTheme.Colors.primary, AppTheme.Colors.primary.opacity(0.8)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .shadow(
-                                    color: AppTheme.Colors.primary.opacity(0.3),
-                                    radius: 8,
-                                    x: 0,
-                                    y: 4
-                                )
-                        }
-                    }
-                )
-                .scaleEffect(subscribeButtonScale)
-                .accessibilityLabel(isSubscribed ? "Unsubscribe" : "Subscribe")
-                .accessibilityHint("Double tap to \(isSubscribed ? "unsubscribe from" : "subscribe to") \(video.creator.displayName)")
-                .accessibilityValue("\(video.creator.subscriberCount) subscribers")
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22)
-                        .stroke(isSubscribed ? AppTheme.Colors.surface : Color.clear, lineWidth: 1)
-                )
+                Text(isSubscribed ? "Subscribed" : "Subscribe")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(isSubscribed ? AppTheme.Colors.textSecondary : .white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill(isSubscribed ? AppTheme.Colors.surface : AppTheme.Colors.primary)
+                    )
+                    .scaleEffect(subscribeButtonScale)
             }
+            .buttonStyle(.plain)
             .accessibilityLabel(isSubscribed ? "Unsubscribe from \(video.creator.displayName)" : "Subscribe to \(video.creator.displayName)")
+            .accessibilityHint("Double tap to \(isSubscribed ? "unsubscribe from" : "subscribe to") \(video.creator.displayName)")
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
     }
     
-    // MARK: - Intelligent Description Section (YouTube-style with rich text)
+    // MARK: - 🔥 YOUTUBE 2024 STYLE: Compact Description Section
     private var intelligentDescriptionSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            let previewText = String(video.description.prefix(120))
-            let shouldShowMore = video.description.count > 120
+        VStack(alignment: .leading, spacing: 8) {
+            let previewText = String(video.description.prefix(100))
+            let shouldShowMore = video.description.count > 100
             let displayText = expandedDescription ? video.description : previewText + (shouldShowMore ? "..." : "")
             
             // 🔥 YOUTUBE PARITY: Rich text description with clickable links, timestamps, @mentions, #hashtags
             RichTextDescriptionView(
                 description: displayText,
                 onLinkTap: { url in
-                    // Open link in Safari
                     if UIApplication.shared.canOpenURL(url) {
                         UIApplication.shared.open(url)
                     }
                 },
                 onTimestampTap: { time in
-                    // Seek video to timestamp
                     NotificationCenter.default.post(
                         name: NSNotification.Name("SeekToTimestamp"),
                         object: time
                     )
                 },
                 onChannelTap: { channelName in
-                    // Navigate to channel profile
                     print("📺 Navigate to channel: \(channelName)")
-                    // TODO: Implement channel navigation
                 },
                 onHashtagTap: { hashtag in
-                    // Navigate to hashtag search
                     print("🔍 Navigate to hashtag: \(hashtag)")
-                    // TODO: Implement hashtag search navigation
                 }
             )
-            .font(.system(size: 15, weight: .regular))
-            .lineLimit(expandedDescription ? nil : 3)
+            .font(.system(size: 14, weight: .regular))
+            .lineLimit(expandedDescription ? nil : 2)
             .fixedSize(horizontal: false, vertical: true)
-            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: expandedDescription)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: expandedDescription)
             
             if shouldShowMore {
                 Button(action: {
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                         expandedDescription.toggle()
                     }
                     let selectionFeedback = UISelectionFeedbackGenerator()
                     selectionFeedback.selectionChanged()
                 }) {
-                    HStack(spacing: 4) {
-                        Text(expandedDescription ? "Show less" : "Show more")
-                            .font(.system(size: 14, weight: .semibold))
-                        
-                        Image(systemName: expandedDescription ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 12, weight: .semibold))
-                            .rotationEffect(.degrees(expandedDescription ? 180 : 0))
-                    }
-                    .foregroundColor(AppTheme.Colors.primary)
-                    .padding(.vertical, 8)
+                    Text(expandedDescription ? "Show less" : "...more")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
                 }
                 .accessibilityLabel(expandedDescription ? "Show less description" : "Show more description")
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
     }
     
-    // MARK: - Smart Tags Section
+    // MARK: - 🔥 YOUTUBE 2024 STYLE: Minimal Tags Section
     private var smartTagsSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 12) {
-                ForEach(Array(video.tags.prefix(8).enumerated()), id: \.offset) { index, tag in
+            LazyHStack(spacing: 8) {
+                ForEach(Array(video.tags.prefix(6).enumerated()), id: \.offset) { index, tag in
                     SmartTagView(tag: tag, index: index)
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
         }
-        .padding(.top, 16)
+        .padding(.top, 8)
     }
     
     // MARK: - Comments Preview Section
@@ -663,7 +586,11 @@ struct VideoDetailMetaView: View {
     }
 }
 
-// MARK: - Video Meta Action Button Component
+// MARK: - 🔥 YOUTUBE 2024 STYLE: Pill-Shaped Action Button Component
+/// Compact horizontal pill button matching YouTube's 2024 Material You design
+/// - Icon + text side-by-side in a rounded pill shape
+/// - Much smaller footprint than vertical stacked buttons
+/// - Sleek, minimal, professional appearance
 struct VideoMetaActionButton: View {
     let icon: String
     let title: String
@@ -679,49 +606,38 @@ struct VideoMetaActionButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
-                ZStack {
-                    // Background with subtle glow
-                    Circle()
-                        .fill(isActive ? activeColor.opacity(0.15) : AppTheme.Colors.surface.opacity(0.8))
-                        .frame(width: 48, height: 48)
-                        .shadow(
-                            color: isActive ? activeColor.opacity(0.3) : AppTheme.Colors.surface.opacity(0.2),
-                            radius: isActive ? 8 : 4,
-                            x: 0,
-                            y: 2
-                        )
-                        .scaleEffect(pulseScale * scale)
-                    
-                    // Icon
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(isActive ? activeColor : AppTheme.Colors.textSecondary)
-                        .scaleEffect(isPressed ? 0.9 : 1.0)
-                    
-                    // Premium indicator
-                    if isPremium {
-                        VStack {
-                            HStack {
-                                Spacer()
-                                Image(systemName: "crown.fill")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.yellow)
-                                    .offset(x: 6, y: -6)
-                            }
-                            Spacer()
-                        }
-                    }
-                }
+            HStack(spacing: 6) {
+                // Icon
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(isActive ? activeColor : AppTheme.Colors.textSecondary)
+                    .scaleEffect(isPressed ? 0.9 : 1.0)
                 
                 // Title
                 Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isActive ? activeColor : AppTheme.Colors.textSecondary)
                     .lineLimit(1)
+                
+                // Premium indicator (inline)
+                if isPremium {
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 8))
+                        .foregroundColor(.yellow)
+                }
             }
-            .scaleEffect(isPressed ? 0.95 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isPressed)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(isActive ? activeColor.opacity(0.12) : AppTheme.Colors.surface.opacity(0.9))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(isActive ? activeColor.opacity(0.3) : Color.clear, lineWidth: 1)
+            )
+            .scaleEffect((isPressed ? 0.95 : 1.0) * pulseScale * scale)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
             .animation(.spring(response: 0.4, dampingFraction: 0.6), value: pulseScale)
         }
         .buttonStyle(PlainButtonStyle())
@@ -748,50 +664,26 @@ struct VideoMetaActionButton: View {
     
     private func startPulseAnimation() {
         withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
-            pulseScale = 1.05
+            pulseScale = 1.02
         }
     }
 }
 
-// MARK: - Smart Tag View Component
+// MARK: - 🔥 YOUTUBE 2024 STYLE: Minimal Tag Pill
 struct SmartTagView: View {
     let tag: String
     let index: Int
     
-    @State private var animationOffset: CGFloat = 50
-    @State private var opacity: Double = 0
-    
     var body: some View {
         Text("#\(tag)")
-            .font(.system(size: 13, weight: .medium))
-            .foregroundColor(AppTheme.Colors.primary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(AppTheme.Colors.textSecondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
             .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                AppTheme.Colors.primary.opacity(0.1),
-                                AppTheme.Colors.primary.opacity(0.05)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(AppTheme.Colors.primary.opacity(0.2), lineWidth: 1)
-                    )
+                Capsule()
+                    .fill(AppTheme.Colors.surface.opacity(0.9))
             )
-            .offset(x: animationOffset)
-            .opacity(opacity)
-            .onAppear {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(Double(index) * 0.1)) {
-                    animationOffset = 0
-                    opacity = 1
-                }
-            }
             .accessibilityLabel("Tag: \(tag)")
     }
 }

@@ -1,0 +1,24 @@
+# 🔥🤖 SUPER AI TEAM - DEPENDENCIES 🤖🔥
+# Elite Claude Opus 4.5 ML Agents for MyChannel
+
+# Google Cloud Functions
+functions-framework==3.*
+
+# Claude Opus 4.5 on Vertex AI
+anthropic[vertex]>=0.34.0
+
+# HTTP Client
+requests>=2.31.0
+
+# Flask (included with functions-framework)
+flask>=2.0.0
+
+# Async support
+aiohttp>=3.9.0
+
+# Data validation
+pydantic>=2.0.0
+
+# Environment management
+python-dotenv>=1.0.0
+

@@ -451,7 +451,8 @@ struct VideoDetailView: View {
                         print("🔍 Navigate to hashtag: \(hashtag)")
                         // TODO: Implement hashtag search navigation
                     },
-                    textColor: .white  // 🔥 FIX: White text for visibility on black background
+                    textColor: .white,  // 🔥 FIX: White text for visibility on black background
+                    channelMapper: ChannelMentionMapper(creator: video.creator)  // 🔥 YOUTUBE PARITY: @sbkeonta_ → @ShotByKeonta
                 )
                 .font(.system(size: 15, weight: .medium))
                 .lineLimit(2)

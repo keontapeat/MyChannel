@@ -6,3 +6,4 @@ def main(request): return jsonify({'gmv': '$50B/year', 'platform_cut': 0.10, 're
 
 
 
+

@@ -2,7 +2,7 @@
 //  DownloadButtonView.swift
 //  MyChannel
 //
-//  YouTube Premium-style download button with proper states
+//  🔥 YOUTUBE 2024 STYLE: Pill-shaped download button with proper states
 //
 
 import SwiftUI
@@ -74,66 +74,56 @@ struct DownloadButtonView: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            HStack(spacing: 6) {
+                // Icon with inline progress
                 ZStack {
-                    // Background with subtle glow
-                    Circle()
-                        .fill(backgroundFill)
-                        .frame(width: 48, height: 48)
-                        .shadow(
-                            color: shadowColor,
-                            radius: shadowRadius,
-                            x: 0,
-                            y: 2
-                        )
-                        .scaleEffect(pulseScale * (isPressed ? 0.95 : 1.0))
-                    
-                    // Icon
                     downloadIcon
-                        .font(.system(size: 20, weight: .medium))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(iconColor)
                         .scaleEffect(isPressed ? 0.9 : 1.0)
                     
-                    // Progress indicator for downloading
+                    // Progress ring for downloading state
                     if case .downloading(let progress) = downloadState {
                         Circle()
                             .trim(from: 0, to: progress)
-                            .stroke(iconColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                            .stroke(iconColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                             .rotationEffect(.degrees(-90))
-                            .frame(width: 48, height: 48)
-                    }
-                    
-                    // Premium indicator
-                    if downloadState == .premiumRequired {
-                        VStack {
-                            HStack {
-                                Spacer()
-                                Image(systemName: "crown.fill")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.yellow)
-                                    .offset(x: 6, y: -6)
-                            }
-                            Spacer()
-                        }
+                            .frame(width: 18, height: 18)
                     }
                 }
                 
-                // Title with progress if downloading
-                VStack(spacing: 2) {
-                    Text(downloadTitle)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+                // Title with progress percentage if downloading
+                if case .downloading(let progress) = downloadState {
+                    Text("\(Int(progress * 100))%")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(iconColor)
                         .lineLimit(1)
-                    
-                    if case .downloading(let progress) = downloadState {
-                        Text("\(Int(progress * 100))%")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.blue)
-                    }
+                } else {
+                    Text(downloadTitle)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(iconColor)
+                        .lineLimit(1)
+                }
+                
+                // Premium indicator (inline crown)
+                if downloadState == .premiumRequired {
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 8))
+                        .foregroundColor(.yellow)
                 }
             }
-            .scaleEffect(isPressed ? 0.95 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isPressed)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(backgroundFill)
+            )
+            .overlay(
+                Capsule()
+                    .stroke(isActive ? iconColor.opacity(0.3) : Color.clear, lineWidth: 1)
+            )
+            .scaleEffect((isPressed ? 0.95 : 1.0) * pulseScale)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
             .animation(.spring(response: 0.4, dampingFraction: 0.6), value: pulseScale)
         }
         .buttonStyle(PlainButtonStyle())
@@ -157,42 +147,27 @@ struct DownloadButtonView: View {
         .accessibilityLabel("\(downloadTitle) button")
     }
     
+    private var isActive: Bool {
+        switch downloadState {
+        case .downloaded, .downloading:
+            return true
+        default:
+            return false
+        }
+    }
+    
     private var backgroundFill: Color {
         switch downloadState {
         case .available:
-            return AppTheme.Colors.surface.opacity(0.8)
+            return AppTheme.Colors.surface.opacity(0.9)
         case .downloading:
-            return Color.blue.opacity(0.15)
+            return Color.blue.opacity(0.12)
         case .downloaded:
-            return Color.green.opacity(0.15)
+            return Color.green.opacity(0.12)
         case .expired:
-            return Color.orange.opacity(0.15)
+            return Color.orange.opacity(0.12)
         case .premiumRequired:
-            return AppTheme.Colors.surface.opacity(0.8)
-        }
-    }
-    
-    private var shadowColor: Color {
-        switch downloadState {
-        case .available:
-            return AppTheme.Colors.surface.opacity(0.2)
-        case .downloading:
-            return Color.blue.opacity(0.3)
-        case .downloaded:
-            return Color.green.opacity(0.3)
-        case .expired:
-            return Color.orange.opacity(0.3)
-        case .premiumRequired:
-            return AppTheme.Colors.surface.opacity(0.2)
-        }
-    }
-    
-    private var shadowRadius: CGFloat {
-        switch downloadState {
-        case .available, .premiumRequired:
-            return 4
-        case .downloading, .downloaded, .expired:
-            return 8
+            return AppTheme.Colors.surface.opacity(0.9)
         }
     }
     
@@ -213,7 +188,7 @@ struct DownloadButtonView: View {
     
     private func startPulseAnimation() {
         withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
-            pulseScale = 1.05
+            pulseScale = 1.02
         }
     }
     
@@ -221,15 +196,15 @@ struct DownloadButtonView: View {
     private var downloadIcon: some View {
         switch downloadState {
         case .available:
-            Image(systemName: "arrow.down.circle")
+            Image(systemName: "arrow.down.to.line")
         case .downloading:
             Image(systemName: "arrow.down.circle.fill")
         case .downloaded:
             Image(systemName: "checkmark.circle.fill")
         case .expired:
-            Image(systemName: "arrow.clockwise.circle")
+            Image(systemName: "arrow.clockwise")
         case .premiumRequired:
-            Image(systemName: "arrow.down.circle")
+            Image(systemName: "arrow.down.to.line")
         }
     }
     
@@ -237,29 +212,14 @@ struct DownloadButtonView: View {
         switch downloadState {
         case .available:
             return "Download"
-        case .downloading(let progress):
+        case .downloading:
             return "Downloading"
         case .downloaded:
-            return "Downloaded"
+            return "Saved"
         case .expired:
             return "Expired"
         case .premiumRequired:
             return "Download"
-        }
-    }
-    
-    private var downloadColor: Color {
-        switch downloadState {
-        case .available:
-            return AppTheme.Colors.textSecondary
-        case .downloading:
-            return .blue
-        case .downloaded:
-            return .green
-        case .expired:
-            return .orange
-        case .premiumRequired:
-            return AppTheme.Colors.textSecondary
         }
     }
 }

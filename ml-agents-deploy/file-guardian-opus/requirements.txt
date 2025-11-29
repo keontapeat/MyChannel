@@ -1,0 +1,5 @@
+functions-framework==3.*
+flask>=2.0.0
+anthropic[vertex]>=0.40.0
+google-cloud-aiplatform>=1.38.0
+

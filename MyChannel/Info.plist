@@ -2,6 +2,24 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>MyChannel needs camera access to record videos, take photos for thumbnails, and enable live streaming.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>MyChannel needs microphone access to record audio for your videos and live streams.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MyChannel needs photo library access to upload videos and images from your device.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>MyChannel needs permission to save videos and images to your photo library.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>MyChannel uses speech recognition to generate automatic captions for your videos and enable voice search.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>MyChannel uses your location to show relevant local content and tag your videos with location.</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>MyChannel uses this to provide personalized content recommendations and measure ad performance.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>MyChannel uses Face ID to securely authenticate payments and protect your account.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>MyChannel can access your contacts to help you find and invite friends to the platform.</string>
 	<key>AI_API_KEY</key>
 	<string>$(AI_API_KEY)</string>
 	<key>ANTHROPIC_API_KEY</key>
@@ -53,6 +71,13 @@
 		<string>remote-notification</string>
 		<string>audio</string>
 		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.keontapeat.MyChannelApp.refresh</string>
+		<string>com.keontapeat.MyChannelApp.processing</string>
+		<string>com.keontapeat.MyChannelApp.video-upload</string>
+		<string>com.keontapeat.MyChannelApp.sync</string>
 	</array>
 </dict>
 </plist>
