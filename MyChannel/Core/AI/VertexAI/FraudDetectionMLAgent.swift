@@ -200,7 +200,7 @@ final class FraudDetectionMLAgent: ObservableObject {
         features["ua_is_empty"] = request.userAgent.isEmpty ? 1.0 : 0.0
         
         // Request timing patterns
-        features["request_interval"] = request.timeSinceLastRequest ?? 1000
+        features["request_interval"] = request.timeSinceLastRequest
         features["requests_per_minute"] = Double(request.recentRequestCount)
         
         // Device consistency

@@ -40,7 +40,7 @@ struct VideoPlayerView: View {
                     }
                     
                     Spacer()
-                    if let ad = currentAd {
+                    if currentAd != nil {
                         HStack(spacing: 8) {
                             Text("Ad")
                                 .font(.system(size: 12, weight: .semibold))
@@ -92,7 +92,7 @@ struct VideoPlayerView: View {
             // Setup local manager and hand off to global manager; start playback explicitly (no toggle)
             Task { @MainActor in
                 // Premium gating: no ads for subscribers
-                if (try? await StoreKitService.shared.hasActiveSubscription()) == true {
+                if (await StoreKitService.shared.hasActiveSubscription()) == true {
                     print("👑 Premium user - no ads")
                     playerManager.setupPlayer(with: video)
                     playerManager.play()

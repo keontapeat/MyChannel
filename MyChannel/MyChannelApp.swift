@@ -136,7 +136,7 @@ struct MyChannelApp: App {
     private func configureAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .moviePlayback, options: [.allowBluetooth, .allowAirPlay])
+            try session.setCategory(.playback, mode: .moviePlayback, options: [.allowBluetoothA2DP, .allowAirPlay])
             try session.setActive(true)
             print("✅ [MyChannelApp] Audio session configured for background playback")
         } catch {

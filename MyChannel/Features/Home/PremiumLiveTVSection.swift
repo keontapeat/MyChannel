@@ -80,7 +80,7 @@ struct PremiumLiveTVSection: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(Array(filteredChannels.prefix(8).enumerated()), id: \.element.id) { index, channel in
-                        PremiumChannelCard(channel: channel, showPreview: index < 3) {
+                        PremiumChannelCard(channel: channel, showPreview: true) {
                             onChannelTap(channel)
                         }
                     }

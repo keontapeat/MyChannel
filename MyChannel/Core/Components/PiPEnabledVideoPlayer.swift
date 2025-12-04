@@ -56,7 +56,7 @@ class PiPPlayerManager: NSObject, AVPictureInPictureControllerDelegate {
         }
         
         // 🔥 PERF: Setup controller without delay
-        if let controller = try? AVPictureInPictureController(playerLayer: playerLayer!) {
+        if let controller = AVPictureInPictureController(playerLayer: playerLayer!) {
             // Clean up old observer first
             pipPossibleObservation?.invalidate()
             

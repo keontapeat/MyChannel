@@ -154,6 +154,7 @@ final class FeaturedStore: ObservableObject {
     }
 
     // Ensure owner's intro video is at the top if bundled locally
+    // 🔥 CONNECTED TO YOUR PROFILE: Uses current user as creator
     func ensureOwnerIntroFirstIfAvailable() {
         let introId = "owner_intro_video"
         if let existingIndex = featured.firstIndex(where: { $0.id == introId }) {
@@ -166,19 +167,31 @@ final class FeaturedStore: ObservableObject {
         // Build video from bundle if present
         if let path = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4") {
             let url = URL(fileURLWithPath: path).absoluteString
-            let me = User(username: "sbkeonta_", displayName: "sbkeonta_", email: "keontapeat@mychannel.live", isVerified: true, isCreator: true)
+            
+            // 🔥 USE CURRENT USER as creator so it links to YOUR profile
+            let currentUser = AppState.shared.currentUser ?? AuthenticationManager.shared.currentUser
+            let me = currentUser ?? User(
+                id: "sbkeonta_owner",
+                username: "sbkeonta_",
+                displayName: "Shot By Keonta",
+                email: "keontapeat@mychannel.live",
+                profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop",
+                isVerified: true,
+                isCreator: true
+            )
+            
             let vid = Video(
                 id: introId,
-                title: "MyChannel Intro",
-                description: "Intro by Keonta",
-                thumbnailURL: "https://i.ytimg.com/vi/71GJrAY54Ew/hqdefault.jpg",
+                title: "Shot By Keonta Intro",
+                description: "Welcome to MyChannel - Shot By Keonta 🎬🔥",
+                thumbnailURL: "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=1280&h=720&fit=crop",
                 videoURL: url,
-                duration: 11,
+                duration: 35,
                 viewCount: 0,
                 likeCount: 0,
                 creator: me,
                 category: .entertainment,
-                tags: ["intro","owner"],
+                tags: ["intro", "keonta", "mychannel"],
                 isPublic: true
             )
             add(vid)

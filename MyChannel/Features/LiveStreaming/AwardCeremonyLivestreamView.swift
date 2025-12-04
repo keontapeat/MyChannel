@@ -61,7 +61,7 @@ struct AwardCeremonyLivestreamView: View {
             
             // Confetti effect
             if showConfetti {
-                ConfettiView()
+                AwardConfettiView()
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
                     .zIndex(99)
@@ -602,15 +602,15 @@ struct WinnerAnnouncementOverlay: View {
     }
 }
 
-// MARK: - Confetti View
+// MARK: - Award Confetti View
 
-struct ConfettiView: View {
+struct AwardConfettiView: View {
     @State private var animate = false
     
     var body: some View {
         ZStack {
             ForEach(0..<50) { index in
-                ConfettiPiece()
+                AwardConfettiPiece()
                     .offset(
                         x: CGFloat.random(in: -200...200),
                         y: animate ? 1000 : -100
@@ -630,7 +630,7 @@ struct ConfettiView: View {
     }
 }
 
-struct ConfettiPiece: View {
+struct AwardConfettiPiece: View {
     let colors: [Color] = [.red, .blue, .green, .yellow, .purple, .pink, .orange]
     let randomColor: Color
     

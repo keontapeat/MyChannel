@@ -75,10 +75,22 @@ struct LiveTVChannel: Identifiable, Codable {
         }
     }
     
-    // Helper to build Pluto TV URLs
+    // Helper to build Pluto TV URLs - Updated December 2024
     static func plutoURL(_ channelId: String) -> String {
-        "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/\(channelId)/master.m3u8?deviceId=channel&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=web&deviceMake=web&deviceDNT=1"
+        // Use a stable device ID based on the channel ID for consistent caching
+        let stableDeviceId = "mychannel-\(channelId.prefix(8))-device"
+        let stableSessionId = "mychannel-\(channelId.prefix(8))-session"
+        
+        // Use the embed URL format which is more reliable for third-party apps
+        return "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/\(channelId)/master.m3u8?deviceId=\(stableDeviceId)&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=web&deviceMake=web&deviceDNT=0&sid=\(stableSessionId)"
     }
+    
+    // 🔥 Reliable fallback streams for when Pluto fails
+    static let reliableFallbackStreams: [String] = [
+        "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8",
+        "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8",
+        "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+    ]
 }
 
 // MARK: - 🔥 150+ VERIFIED WORKING CHANNELS - NOVEMBER 2025 🔥
@@ -93,7 +105,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "naruto",
             name: "Naruto",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/9/94/NauroLogo.svg/220px-NauroLogo.svg.png",
+            logoURL: "https://i.ytimg.com/vi/1dy2zPPrKD0/hqdefault.jpg",
             streamURL: plutoURL("5da0c85bd2c9c10009370984"),
             category: .anime,
             description: "Believe it! 24/7 Naruto episodes",
@@ -103,13 +115,13 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         LiveTVChannel(
             id: "one-piece",
             name: "One Piece",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/2/2b/One_Piece_Logo_-_Title_Art.png/220px-One_Piece_Logo_-_Title_Art.png",
+            logoURL: "https://i.ytimg.com/vi/MCb13lbVGE0/hqdefault.jpg",
             streamURL: plutoURL("5f7790b3ed0c88000720b241"),
             category: .anime,
             description: "Set sail with Luffy! 24/7 One Piece",
@@ -119,13 +131,13 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         LiveTVChannel(
             id: "crunchyroll",
             name: "Crunchyroll",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/2/21/Crunchyroll_logo_2024.svg/220px-Crunchyroll_logo_2024.svg.png",
+            logoURL: "https://i.ytimg.com/vi/d5HT8HoiAHg/hqdefault.jpg",
             streamURL: plutoURL("65652f7fc0fc88000883537a"),
             category: .anime,
             description: "The best anime streaming 24/7",
@@ -135,13 +147,13 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         LiveTVChannel(
             id: "pokemon",
             name: "Pokémon",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/International_Pok%C3%A9mon_logo.svg/220px-International_Pok%C3%A9mon_logo.svg.png",
+            logoURL: "https://i.ytimg.com/vi/rg6CiPI6h2g/hqdefault.jpg",
             streamURL: plutoURL("6675c7868768aa0008d7f1c7"),
             category: .anime,
             description: "Gotta catch 'em all! 24/7 Pokémon",
@@ -151,13 +163,13 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         LiveTVChannel(
             id: "yugioh",
             name: "Yu-Gi-Oh!",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/3/30/Yu-Gi-Oh%21_logo.svg/220px-Yu-Gi-Oh%21_logo.svg.png",
+            logoURL: "https://i.ytimg.com/vi/fKY8wq-lMKA/hqdefault.jpg",
             streamURL: plutoURL("5f4ec10ed9636f00089b8c89"),
             category: .anime,
             description: "It's time to duel! 24/7",
@@ -167,13 +179,13 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         LiveTVChannel(
             id: "sailor-moon",
             name: "Sailor Moon",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/f/f4/Sailor_Moon_Crystal_logo.svg/220px-Sailor_Moon_Crystal_logo.svg.png",
+            logoURL: "https://i.ytimg.com/vi/5txHGxJRwtQ/hqdefault.jpg",
             streamURL: plutoURL("637e55347427a40007fac703"),
             category: .anime,
             description: "In the name of the moon! 24/7",
@@ -183,14 +195,14 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         // 🐉🔥 DRAGON BALL Z - THE GOAT 🔥🐉
         LiveTVChannel(
             id: "dragon-ball-z",
             name: "Dragon Ball Z",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Dragon_Ball_Z_logo.svg/220px-Dragon_Ball_Z_logo.svg.png",
+            logoURL: "https://i.ytimg.com/vi/sB1hy8q0tic/hqdefault.jpg",
             streamURL: plutoURL("5f4e93f8e20a230007a04d77"),
             category: .anime,
             description: "IT'S OVER 9000! 24/7 DBZ 🐉",
@@ -200,13 +212,13 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         LiveTVChannel(
             id: "dragon-ball-super",
             name: "Dragon Ball Super",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1d/Dragon_Ball_Super_Logo.svg/220px-Dragon_Ball_Super_Logo.svg.png",
+            logoURL: "https://i.ytimg.com/vi/GH9u4eZQGk8/hqdefault.jpg",
             streamURL: plutoURL("62de0b0b17d9a10007f99f8e"),
             category: .anime,
             description: "Ultra Instinct vibes 24/7 ⚡",
@@ -216,14 +228,14 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         // 🔥😤 ADULT ANIMATION GOATS 😤🔥
         LiveTVChannel(
             id: "family-guy",
             name: "Family Guy",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/a/aa/Family_Guy_Logo.svg/220px-Family_Guy_Logo.svg.png",
+            logoURL: "https://i.ytimg.com/vi/Q-EStdvjd_8/hqdefault.jpg",
             streamURL: plutoURL("5f1acd26c830c60007a5267a"),
             category: .comedy,
             description: "Giggity giggity! 24/7 Family Guy 😂",
@@ -233,13 +245,13 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         LiveTVChannel(
             id: "boondocks",
             name: "The Boondocks",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/1/1f/TheBoondocks.svg/220px-TheBoondocks.svg.png",
+            logoURL: "https://i.ytimg.com/vi/g37HT4-EtzE/hqdefault.jpg",
             streamURL: plutoURL("5f779283e2f12b0007566f13"),
             category: .comedy,
             description: "Huey & Riley 24/7 🔥😤",
@@ -249,13 +261,13 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         LiveTVChannel(
             id: "futurama",
             name: "Futurama",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Futurama_logo.svg/220px-Futurama_logo.svg.png",
+            logoURL: "https://i.ytimg.com/vi/QgaRd4d8hOY/hqdefault.jpg",
             streamURL: plutoURL("5f779393b5680c0007d6fce0"),
             category: .comedy,
             description: "Good news everyone! 24/7 🚀",
@@ -265,7 +277,7 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         LiveTVChannel(
@@ -388,7 +400,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "rick-and-morty",
             name: "Rick and Morty",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Rick_and_Morty.svg/220px-Rick_and_Morty.svg.png",
+            logoURL: "https://i.ytimg.com/vi/hl1U0bxTHbY/hqdefault.jpg",
             streamURL: plutoURL("5f4e9512e20a230007a04dcd"),
             category: .comedy,
             description: "Wubba lubba dub dub! 24/7 🥒",
@@ -398,7 +410,7 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         LiveTVChannel(
@@ -518,7 +530,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "spongebob",
             name: "SpongeBob SquarePants",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/3/3b/SpongeBob_SquarePants_logo.svg/220px-SpongeBob_SquarePants_logo.svg.png",
+            logoURL: "https://i.ytimg.com/vi/r9L4AseD-aA/hqdefault.jpg",
             streamURL: plutoURL("5ca673a837b88b269472dac9"),
             category: .kids,
             description: "I'M READY! 24/7 🧽",
@@ -528,7 +540,7 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         LiveTVChannel(
@@ -583,7 +595,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "simpsons",
             name: "The Simpsons",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/0/0d/Simpsons_FamilyPicture.png/220px-Simpsons_FamilyPicture.png",
+            logoURL: "https://i.ytimg.com/vi/DX1iplQQJTo/hqdefault.jpg",
             streamURL: plutoURL("5f779526b5680c0007d6fd84"),
             category: .comedy,
             description: "D'oh! 24/7 🍩",
@@ -593,7 +605,7 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         LiveTVChannel(
@@ -664,7 +676,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "tom-jerry",
             name: "Tom & Jerry",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/3/3e/Tom_and_Jerry_title_card.svg/220px-Tom_and_Jerry_title_card.svg.png",
+            logoURL: "https://i.ytimg.com/vi/HhVp7kGLFAk/hqdefault.jpg",
             streamURL: plutoURL("5f4e9845e20a230007a04f8d"),
             category: .kids,
             description: "Classic cat & mouse! 24/7 🐱🐭",
@@ -674,7 +686,7 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         // 🔥 MORE ANIME HEAT
@@ -794,7 +806,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "fresh-prince",
             name: "The Fresh Prince of Bel-Air",
-            logoURL: "https://upload.wikimedia.org/wikipedia/en/thumb/3/33/Fresh_Prince_of_Bel-Air_logo.svg/220px-Fresh_Prince_of_Bel-Air_logo.svg.png",
+            logoURL: "https://i.ytimg.com/vi/1nCqRmx3Dnw/hqdefault.jpg",
             streamURL: plutoURL("5dc0c6c2b77f5f0009f8e8b0"),
             category: .comedy,
             description: "In West Philadelphia born and raised! 24/7 👑",
@@ -804,7 +816,7 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         LiveTVChannel(
@@ -1888,7 +1900,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "mtv",
             name: "MTV Pluto TV",
-            logoURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/MTV_2021_%28brand_version%29.svg/220px-MTV_2021_%28brand_version%29.svg.png",
+            logoURL: "https://i.ytimg.com/vi/X9fLbfzCqWw/hqdefault.jpg",
             streamURL: plutoURL("5ca672f515a62078d2ec0ad2"),
             category: .music,
             description: "Music television 24/7",
@@ -1898,7 +1910,7 @@ extension LiveTVChannel {
             language: "English",
             country: "US",
             epgURL: nil,
-            previewFallbackURL: nil
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
         ),
         
         LiveTVChannel(

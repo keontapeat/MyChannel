@@ -558,3 +558,6 @@ if __name__ == "__main__":
     print(f"Total blocked: {agent.blocked_count}")
     print("=" * 60)
 
+
+
+

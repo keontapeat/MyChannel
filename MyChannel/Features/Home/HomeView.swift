@@ -212,7 +212,7 @@ struct HomeView: View {
                 presentStoryCreator = false
                 // Notify stories changed so all views refresh
                 NotificationCenter.default.post(name: .storiesDidChange, object: nil)
-                Task { await loadUserStories() }
+                Task { loadUserStories() }
             }
             .environmentObject(appState)
             .preferredColorScheme(.dark)
@@ -418,12 +418,21 @@ struct HomeView: View {
     }
 
     // Always-First Featured: Shot By Keonta intro (uses local bundle if present)
+    // 🔥 CONNECTED TO YOUR PROFILE: When tapped, navigates to VideoDetail with YOUR profile as creator
     private func introFeaturedVideo() -> Video {
-        let keontaUser = User(
+        // 🔥 USE CURRENT USER (YOU!) as the creator so tapping goes to YOUR profile
+        let currentUser = appState.currentUser ?? AuthenticationManager.shared.currentUser
+        
+        // Fallback user if not logged in (still points to your profile info)
+        let keontaUser: User = currentUser ?? User(
+            id: "sbkeonta_owner",
             username: "sbkeonta_",
             displayName: "Shot By Keonta",
             email: "keontapeat@mychannel.live",
-            profileImageURL: "https://i.pravatar.cc/200?u=sbkeonta_intro",
+            profileImageURL: currentUser?.profileImageURL ?? "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop",
+            bio: "Creator of MyChannel 🎬",
+            subscriberCount: currentUser?.subscriberCount ?? 0,
+            videoCount: currentUser?.videoCount ?? 1,
             isVerified: true,
             isCreator: true
         )
@@ -432,22 +441,23 @@ struct HomeView: View {
         let localPath = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4")
         let videoURL = localPath.map { URL(fileURLWithPath: $0).absoluteString } ?? "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
 
-        // Simple poster
-        let poster = "https://picsum.photos/seed/sbkeonta/1280/720"
+        // 🔥 FIX: Use reliable thumbnail URLs (Unsplash is more reliable than picsum)
+        let poster = "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=1280&h=720&fit=crop"
 
         // Monetization flag so ad preview and pre-roll show
         let adBreaks = Video.AdBreaks(preRoll: true, midRoll: false, postRoll: false)
         let monetization = Video.MonetizationSettings(isMonetized: true, adBreaks: adBreaks, sponsorSegments: [], merchandise: nil, donationEnabled: false, subscriptionTier: nil, totalRevenue: 0)
 
         return Video(
-            title: "MyChannel Intro",
-            description: "Shot By Keonta intro (demo)",
+            id: "sbkeonta_intro_video_\(keontaUser.id)",
+            title: "Shot By Keonta Intro",
+            description: "Welcome to MyChannel - Shot By Keonta 🎬🔥",
             thumbnailURL: poster,
             videoURL: videoURL,
             duration: 35,
             viewCount: 0,
             likeCount: 0,
-            creator: keontaUser,
+            creator: keontaUser,  // 🔥 YOUR PROFILE as creator!
             category: .entertainment,
             tags: ["intro", "keonta", "mychannel"],
             isPublic: true,
@@ -594,7 +604,7 @@ struct HomeView: View {
         // For now, we'll simulate loading stories only if user has subscriptions
         
         // Example: Only show stories from users the current user actually follows
-        let followedUserIds = appState.subscriptions
+        _ = appState.subscriptions
         
         // In a real implementation, this would query the backend for active stories
         // from the followed users within the last 24 hours
@@ -1610,7 +1620,7 @@ struct MinimalContentSections: View {
                         let myChannelLive = LiveTVChannel(
                             id: "mychannel-live",
                             name: "MyChannel Live",
-                            logoURL: "https://picsum.photos/seed/mychannel-live/320/180",
+                            logoURL: "https://i.ytimg.com/vi/jfKfPfyJRdk/hqdefault.jpg",
                             streamURL: "\(AppConfig.API.cloudRunBaseURL)/live/playlist",
                             category: .entertainment,
                             description: "Go Live playback",
@@ -1620,7 +1630,7 @@ struct MinimalContentSections: View {
                             language: "English",
                             country: "US",
                             epgURL: nil,
-                            previewFallbackURL: nil
+                            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
                         )
 
                         NavigationLink(destination: LiveTVPlayerView(channel: myChannelLive)) {
@@ -1672,7 +1682,7 @@ struct MinimalContentSections: View {
                                 onSelectMovie(movie)
                                 // Track movie view for enhanced service
                                 Task {
-                                    await EnhancedMoviesService.shared.addToRecentlyWatched(movie)
+                                    EnhancedMoviesService.shared.addToRecentlyWatched(movie)
                                 }
                             })
                         }
@@ -1715,6 +1725,7 @@ struct MinimalContentSections: View {
         .fullScreenCover(isPresented: $showLiveTVPlayer) {
             if let channel = selectedLiveTVChannel {
                 LiveTVPlayerView(channel: channel)
+                    .environmentObject(appState)
             }
         }
     }
@@ -2608,7 +2619,7 @@ private struct TopIndieFilmmakersSection: View {
             )
         }
         
-        var all = [teeCee, merchHD, prosKt] + items
+        let all = [teeCee, merchHD, prosKt] + items
         return all.sorted { $0.score > $1.score }
     }
 
@@ -2707,211 +2718,38 @@ private struct TopIndieFilmmakersSection: View {
     }
 }
 
-// MARK: - Featured Creator Model
-fileprivate struct FeaturedCreator: Identifiable {
-    let id: String
-    let name: String
-    let handle: String
-    let avatar: String
-    let subscribers: Int
-    let totalViews: Int
-    let category: String
-    let isVerified: Bool
-    let accentColor: Color
-}
-
-// MARK: - Top MyChannels Section (Premium Featured Creators)
+// MARK: - Top MyChannels Section (Simple Style - Matches Other Top Sections)
 private struct TopMyChannelsSection: View {
     let sourceVideos: [Video]
     var onSelect: (String, String, Int, Int, [Video]) -> Void = { _,_,_,_,_ in }
     
-    @State private var animatedRanks: Set<String> = []
-    
     // Top YouTubers with their actual profile pictures
-    private let featuredCreators: [FeaturedCreator] = [
-        FeaturedCreator(
-            id: "mrbeast",
-            name: "MrBeast",
-            handle: "@MrBeast",
-            avatar: "https://yt3.googleusercontent.com/ytc/AIdro_kX1DcvNxfFVKoqwqNhMNAqVDHF9zyN5Qf-Ug0A8Q=s800-c-k-c0x00ffffff-no-rj",
-            subscribers: 345_000_000,
-            totalViews: 62_000_000_000,
-            category: "Entertainment",
-            isVerified: true,
-            accentColor: Color(hex: "1DB954")
-        ),
-        FeaturedCreator(
-            id: "pewdiepie",
-            name: "PewDiePie",
-            handle: "@PewDiePie",
-            avatar: "https://yt3.googleusercontent.com/5oUY3tashyxfqsjO5SGhjT4dus8FkN9CsAHwXWISFrdPYii1FudD4ICtLfuCw6-THJsJbgoY=s800-c-k-c0x00ffffff-no-rj",
-            subscribers: 111_000_000,
-            totalViews: 29_000_000_000,
-            category: "Gaming",
-            isVerified: true,
-            accentColor: Color(hex: "FF0000")
-        ),
-        FeaturedCreator(
-            id: "markiplier",
-            name: "Markiplier",
-            handle: "@markiplier",
-            avatar: "https://yt3.googleusercontent.com/uFnVs1sOLqqnGpIzgkLcNMqwdMB1dJTqpfyhkw-X-AMJLnlVKPbqHwQ6NL7xzqLQBZo7_fxq=s800-c-k-c0x00ffffff-no-rj",
-            subscribers: 37_000_000,
-            totalViews: 19_500_000_000,
-            category: "Gaming",
-            isVerified: true,
-            accentColor: Color(hex: "E91E63")
-        ),
-        FeaturedCreator(
-            id: "dude_perfect",
-            name: "Dude Perfect",
-            handle: "@DudePerfect",
-            avatar: "https://yt3.googleusercontent.com/8Lhf0gwxbtMmX9SB-IJioLvRLMpwfznS3S_-aEfcNLRCt6hA9g-BY3I-prMzCwQMjC8P6_3z=s800-c-k-c0x00ffffff-no-rj",
-            subscribers: 60_000_000,
-            totalViews: 16_000_000_000,
-            category: "Sports",
-            isVerified: true,
-            accentColor: Color(hex: "2196F3")
-        ),
-        FeaturedCreator(
-            id: "logan_paul",
-            name: "Logan Paul",
-            handle: "@LoganPaul",
-            avatar: "https://yt3.googleusercontent.com/ytc/AIdro_mDSV7nA2xCdCjTKqCE9FX_MQzKwg0FqPqW8A=s800-c-k-c0x00ffffff-no-rj",
-            subscribers: 23_700_000,
-            totalViews: 5_900_000_000,
-            category: "Entertainment",
-            isVerified: true,
-            accentColor: Color(hex: "FF9800")
-        ),
-        FeaturedCreator(
-            id: "ksi",
-            name: "KSI",
-            handle: "@KSI",
-            avatar: "https://yt3.googleusercontent.com/hZDUwjoeZ5FhMqNhVRbXc4roxpLwHKrNPjTfIsPVNtVlYBpjgdG1G8Jg_7QHLMmIlSte9zGqPQ=s800-c-k-c0x00ffffff-no-rj",
-            subscribers: 24_500_000,
-            totalViews: 7_200_000_000,
-            category: "Entertainment",
-            isVerified: true,
-            accentColor: Color(hex: "9C27B0")
-        ),
-        FeaturedCreator(
-            id: "emma_chamberlain",
-            name: "emma chamberlain",
-            handle: "@emmachamberlain",
-            avatar: "https://yt3.googleusercontent.com/dC2QLWvJ9tPpS7N0V6QJNQ8HqcLmqGXN-WQ1Yd0LqDHu0Qj2KfQWNjJpNQ=s800-c-k-c0x00ffffff-no-rj",
-            subscribers: 12_100_000,
-            totalViews: 1_600_000_000,
-            category: "Lifestyle",
-            isVerified: true,
-            accentColor: Color(hex: "795548")
-        ),
-        FeaturedCreator(
-            id: "mkbhd",
-            name: "MKBHD",
-            handle: "@MKBHD",
-            avatar: "https://yt3.googleusercontent.com/lkH37D712tiyphnu0Id0D5MwwQ7IRuwgQLVD05iMXlDWO-kDHut3uI4MgIBjQ5s3BlXmoH_KjQ=s800-c-k-c0x00ffffff-no-rj",
-            subscribers: 19_200_000,
-            totalViews: 4_100_000_000,
-            category: "Tech",
-            isVerified: true,
-            accentColor: Color(hex: "F44336")
-        ),
-        FeaturedCreator(
-            id: "dream",
-            name: "Dream",
-            handle: "@Dream",
-            avatar: "https://yt3.googleusercontent.com/ytc/AIdro_kJEOVoH2Xk54B8Jd0H0Sn0Qy7-pK3JoT0Qv8Qw=s800-c-k-c0x00ffffff-no-rj",
-            subscribers: 32_400_000,
-            totalViews: 3_200_000_000,
-            category: "Gaming",
-            isVerified: true,
-            accentColor: Color(hex: "4CAF50")
-        ),
-        FeaturedCreator(
-            id: "casey_neistat",
-            name: "Casey Neistat",
-            handle: "@casey",
-            avatar: "https://yt3.googleusercontent.com/ytc/AIdro_kZMkLQ3fR8J9GbQmOBF2H8Jd0H0Sn0Qy7pK3JoT0Qv8Qw=s800-c-k-c0x00ffffff-no-rj",
-            subscribers: 12_600_000,
-            totalViews: 3_100_000_000,
-            category: "Vlog",
-            isVerified: true,
-            accentColor: Color(hex: "607D8B")
-        )
+    private let featuredCreators: [(id: String, name: String, avatar: String, subscribers: Int, totalViews: Int)] = [
+        ("mrbeast", "MrBeast", "https://yt3.googleusercontent.com/ytc/AIdro_kX1DcvNxfFVKoqwqNhMNAqVDHF9zyN5Qf-Ug0A8Q=s800-c-k-c0x00ffffff-no-rj", 345_000_000, 62_000_000_000),
+        ("pewdiepie", "PewDiePie", "https://yt3.googleusercontent.com/5oUY3tashyxfqsjO5SGhjT4dus8FkN9CsAHwXWISFrdPYii1FudD4ICtLfuCw6-THJsJbgoY=s800-c-k-c0x00ffffff-no-rj", 111_000_000, 29_000_000_000),
+        ("markiplier", "Markiplier", "https://yt3.googleusercontent.com/uFnVs1sOLqqnGpIzgkLcNMqwdMB1dJTqpfyhkw-X-AMJLnlVKPbqHwQ6NL7xzqLQBZo7_fxq=s800-c-k-c0x00ffffff-no-rj", 37_000_000, 19_500_000_000),
+        ("dude_perfect", "Dude Perfect", "https://yt3.googleusercontent.com/8Lhf0gwxbtMmX9SB-IJioLvRLMpwfznS3S_-aEfcNLRCt6hA9g-BY3I-prMzCwQMjC8P6_3z=s800-c-k-c0x00ffffff-no-rj", 60_000_000, 16_000_000_000),
+        ("logan_paul", "Logan Paul", "https://yt3.googleusercontent.com/ytc/AIdro_mDSV7nA2xCdCjTKqCE9FX_MQzKwg0FqPqW8A=s800-c-k-c0x00ffffff-no-rj", 23_700_000, 5_900_000_000),
+        ("ksi", "KSI", "https://yt3.googleusercontent.com/hZDUwjoeZ5FhMqNhVRbXc4roxpLwHKrNPjTfIsPVNtVlYBpjgdG1G8Jg_7QHLMmIlSte9zGqPQ=s800-c-k-c0x00ffffff-no-rj", 24_500_000, 7_200_000_000),
+        ("emma_chamberlain", "emma chamberlain", "https://yt3.googleusercontent.com/dC2QLWvJ9tPpS7N0V6QJNQ8HqcLmqGXN-WQ1Yd0LqDHu0Qj2KfQWNjJpNQ=s800-c-k-c0x00ffffff-no-rj", 12_100_000, 1_600_000_000),
+        ("mkbhd", "MKBHD", "https://yt3.googleusercontent.com/lkH37D712tiyphnu0Id0D5MwwQ7IRuwgQLVD05iMXlDWO-kDHut3uI4MgIBjQ5s3BlXmoH_KjQ=s800-c-k-c0x00ffffff-no-rj", 19_200_000, 4_100_000_000),
+        ("dream", "Dream", "https://yt3.googleusercontent.com/ytc/AIdro_kJEOVoH2Xk54B8Jd0H0Sn0Qy7-pK3JoT0Qv8Qw=s800-c-k-c0x00ffffff-no-rj", 32_400_000, 3_200_000_000),
+        ("casey_neistat", "Casey Neistat", "https://yt3.googleusercontent.com/ytc/AIdro_kZMkLQ3fR8J9GbQmOBF2H8Jd0H0Sn0Qy7pK3JoT0Qv8Qw=s800-c-k-c0x00ffffff-no-rj", 12_600_000, 3_100_000_000)
     ]
 
-    private func fmt(_ n: Int) -> String {
+    private func format(_ n: Int) -> String {
         if n >= 1_000_000_000 { return String(format: "%.1fB", Double(n)/1_000_000_000) }
         if n >= 1_000_000 { return String(format: "%.1fM", Double(n)/1_000_000) }
         if n >= 1_000 { return String(format: "%.1fK", Double(n)/1_000) }
         return "\(n)"
     }
-    
-    private func rankGradient(for index: Int) -> LinearGradient {
-        switch index {
-        case 0: // Gold
-            return LinearGradient(
-                colors: [Color(hex: "FFD700"), Color(hex: "FFA500")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        case 1: // Silver
-            return LinearGradient(
-                colors: [Color(hex: "C0C0C0"), Color(hex: "A8A8A8")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        case 2: // Bronze
-            return LinearGradient(
-                colors: [Color(hex: "CD7F32"), Color(hex: "B87333")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        default:
-            return LinearGradient(
-                colors: [AppTheme.Colors.primary, AppTheme.Colors.primary.opacity(0.8)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
-    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header with gradient accent
-            HStack(spacing: 12) {
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 24))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [Color(hex: "FFD700"), Color(hex: "FFA500")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Top MyChannels")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(.primary)
-                    Text("Most popular creators worldwide")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                Button {
-                    HapticManager.shared.impact(style: .light)
-                } label: {
-                    Text("See All")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.primary)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Top MyChannels")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(AppTheme.Colors.primary)
+                .padding(.top, 4)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
@@ -2921,238 +2759,50 @@ private struct TopMyChannelsSection: View {
                             let vids = sourceVideos.filter { $0.creator.displayName.lowercased().contains(creator.name.lowercased()) }
                             onSelect(creator.name, creator.avatar, creator.subscribers, creator.totalViews, vids)
                         } label: {
-                            TopCreatorCard(
-                                creator: creator,
-                                rank: idx + 1,
-                                rankGradient: rankGradient(for: idx),
-                                isAnimated: animatedRanks.contains(creator.id)
-                            )
-                        }
-                        .buttonStyle(HomeScaleButtonStyle())
-                        .onAppear {
-                            // Staggered animation on appear
-                            DispatchQueue.main.asyncAfter(deadline: .now() + Double(idx) * 0.08) {
-                                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                                    animatedRanks.insert(creator.id)
+                            VStack(alignment: .center, spacing: 8) {
+                                ZStack(alignment: .topLeading) {
+                                    ZStack {
+                                        Circle()
+                                            .stroke(AppTheme.Colors.primary, lineWidth: 3)
+                                            .frame(width: 64, height: 64)
+
+                                        AppAsyncImage(url: URL(string: creator.avatar)) { img in
+                                            img.resizable().scaledToFill()
+                                        } placeholder: { Color.white }
+                                        .frame(width: 58, height: 58)
+                                        .clipShape(Circle())
+                                    }
+
+                                    Text("#\(idx + 1)")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Capsule().fill(AppTheme.Colors.primary))
+                                        .padding(.top, 2)
+                                        .padding(.leading, 2)
+                                }
+
+                                VStack(alignment: .center, spacing: 2) {
+                                    Text(creator.name)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                        .frame(width: 110)
+                                    Text("\(format(creator.subscribers)) subs")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                        .frame(width: 110)
                                 }
                             }
+                            .frame(width: 120)
                         }
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
                 .padding(.horizontal, 20)
-                .padding(.vertical, 4)
-            }
-        }
-        .padding(.bottom, 8)
-    }
-}
-
-// MARK: - Top Creator Card (Premium Design)
-private struct TopCreatorCard: View {
-    let creator: FeaturedCreator
-    let rank: Int
-    let rankGradient: LinearGradient
-    let isAnimated: Bool
-    
-    @State private var subscriberCount: Int = 0
-    @State private var viewCount: Int = 0
-    
-    private func fmt(_ n: Int) -> String {
-        if n >= 1_000_000_000 { return String(format: "%.1fB", Double(n)/1_000_000_000) }
-        if n >= 1_000_000 { return String(format: "%.1fM", Double(n)/1_000_000) }
-        if n >= 1_000 { return String(format: "%.1fK", Double(n)/1_000) }
-        return "\(n)"
-    }
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Profile image with rank badge
-            ZStack {
-                // Outer glow ring
-                Circle()
-                    .fill(creator.accentColor.opacity(0.15))
-                    .frame(width: 100, height: 100)
-                    .blur(radius: 8)
-                
-                // Border ring with gradient
-                Circle()
-                    .stroke(
-                        LinearGradient(
-                            colors: [creator.accentColor, creator.accentColor.opacity(0.5)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 3
-                    )
-                    .frame(width: 88, height: 88)
-                
-                // Profile image
-                AppAsyncImage(url: URL(string: creator.avatar)) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                } placeholder: {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [AppTheme.Colors.surface, AppTheme.Colors.surface.opacity(0.7)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 32, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                }
-                .frame(width: 80, height: 80)
-                .clipShape(Circle())
-                
-                // Rank badge (top-left)
-                VStack {
-                    HStack {
-                        Text("#\(rank)")
-                            .font(.system(size: 13, weight: .black))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(
-                                Capsule()
-                                    .fill(rankGradient)
-                                    .shadow(color: rank <= 3 ? Color.black.opacity(0.3) : .clear, radius: 4, y: 2)
-                            )
-                            .scaleEffect(isAnimated ? 1.0 : 0.5)
-                            .opacity(isAnimated ? 1.0 : 0)
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .frame(width: 88, height: 88)
-                
-                // Verified badge (bottom-right)
-                if creator.isVerified {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 18))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [Color(hex: "1DA1F2"), Color(hex: "1A91DA")],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .background(
-                                    Circle()
-                                        .fill(.white)
-                                        .frame(width: 14, height: 14)
-                                )
-                        }
-                    }
-                    .frame(width: 88, height: 88)
-                }
-            }
-            .frame(width: 100, height: 100)
-            .scaleEffect(isAnimated ? 1.0 : 0.8)
-            .opacity(isAnimated ? 1.0 : 0)
-            
-            // Creator info
-            VStack(spacing: 4) {
-                Text(creator.name)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                
-                Text(creator.handle)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                
-                // Category tag
-                Text(creator.category)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(creator.accentColor)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(
-                        Capsule()
-                            .fill(creator.accentColor.opacity(0.15))
-                    )
-                    .padding(.top, 2)
-                
-                // Stats
-                HStack(spacing: 8) {
-                    VStack(spacing: 1) {
-                        Text(fmt(subscriberCount))
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.primary)
-                            .contentTransition(.numericText())
-                        Text("subs")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.3))
-                        .frame(width: 1, height: 20)
-                    
-                    VStack(spacing: 1) {
-                        Text(fmt(viewCount))
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.primary)
-                            .contentTransition(.numericText())
-                        Text("views")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .padding(.top, 6)
-            }
-            .padding(.top, 10)
-            .opacity(isAnimated ? 1.0 : 0)
-        }
-        .frame(width: 130)
-        .padding(.vertical, 12)
-        .padding(.horizontal, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(AppTheme.Colors.surface)
-                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(
-                    rank <= 3 ? creator.accentColor.opacity(0.2) : Color.clear,
-                    lineWidth: 1
-                )
-        )
-        .onAppear {
-            // Animate subscriber count
-            animateCount(to: creator.subscribers, duration: 0.8) { value in
-                subscriberCount = value
-            }
-            // Animate view count
-            animateCount(to: creator.totalViews, duration: 0.9) { value in
-                viewCount = value
-            }
-        }
-    }
-    
-    private func animateCount(to target: Int, duration: Double, update: @escaping (Int) -> Void) {
-        let steps = 30
-        let stepDuration = duration / Double(steps)
-        
-        for step in 0...steps {
-            DispatchQueue.main.asyncAfter(deadline: .now() + stepDuration * Double(step)) {
-                let progress = Double(step) / Double(steps)
-                let eased = 1 - pow(1 - progress, 3) // Ease out cubic
-                let value = Int(Double(target) * eased)
-                withAnimation(.linear(duration: 0.05)) {
-                    update(value)
-                }
+                .background(AppTheme.Colors.background)
             }
         }
     }

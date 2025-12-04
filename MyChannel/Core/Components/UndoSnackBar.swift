@@ -168,3 +168,6 @@ struct GenericSnackBar: View {
     }
     .background(AppTheme.Colors.background)
 }
+
+
+

@@ -72,5 +72,16 @@
 	<key>com.apple.developer.default-data-protection</key>
 	<string>NSFileProtectionComplete</string>
 	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- 🎵 MUSICKIT - APPLE MUSIC INTEGRATION -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<!-- MusicKit - TEMPORARILY DISABLED until provisioning profile syncs -->
+	<!-- To re-enable: uncomment the key below and click "Try Again" in Xcode Signing -->
+	<!--
+	<key>com.apple.developer.musickit</key>
+	<true/>
+	-->
+	
 </dict>
 </plist>

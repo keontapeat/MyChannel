@@ -183,97 +183,167 @@ struct FlicksView: View {
                     previousIndex = new
                 }
 
-                // 🔥 TOP RIGHT: Glassmorphic mute button (Web-style upgraded)
+                // 🔥 PREMIUM: Enhanced glassmorphic mute button with glow
                 VStack {
                     HStack(spacing: 12) {
                         Spacer()
                         Button {
                             flicksMuted.toggle()
-                            HapticManager.shared.impact(style: .light)
+                            HapticManager.shared.impact(style: .rigid)
                         } label: {
                             ZStack {
-                                // Glassmorphic background (web-style)
+                                // Glow effect when unmuted
+                                if !flicksMuted {
+                                    Circle()
+                                        .fill(AppTheme.Colors.accent.opacity(0.3))
+                                        .frame(width: 52, height: 52)
+                                        .blur(radius: 8)
+                                }
+                                
+                                // Glassmorphic background
                                 Circle()
                                     .fill(.ultraThinMaterial)
-                                    .background(Color.white.opacity(0.1))
                                     .overlay(
                                         Circle()
-                                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                            .stroke(
+                                                flicksMuted 
+                                                    ? Color.white.opacity(0.2)
+                                                    : AppTheme.Colors.accent.opacity(0.5),
+                                                lineWidth: 1.2
+                                            )
                                     )
+                                    .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 4)
                                 
                                 Image(systemName: flicksMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                                    .foregroundColor(.white)
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .shadow(color: .black.opacity(0.3), radius: 4)
+                                    .foregroundColor(flicksMuted ? .white.opacity(0.8) : .white)
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .shadow(color: flicksMuted ? .clear : AppTheme.Colors.accent.opacity(0.5), radius: 4)
                             }
-                            .frame(width: 44, height: 44)
+                            .frame(width: 46, height: 46)
                         }
-                        .buttonStyle(ScaleButtonStyle())
+                        .buttonStyle(FlicksPremiumScaleButtonStyle())
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: flicksMuted)
                     }
-                    .padding(.top, 44)
-                    .padding(.trailing, 16)
+                    .padding(.top, 48)
+                    .padding(.trailing, 18)
                     
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .allowsHitTesting(true)
 
-                // 🔥 SCROLL INDICATOR: Right side dots (Web-style upgraded)
-                VStack(spacing: 8) {
+                // 🔥 PREMIUM: Enhanced scroll indicator with glow effects
+                VStack(spacing: 6) {
                     ForEach(videos.indices, id: \.self) { index in
                         Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                                 currentIndex = index
                             }
                             HapticManager.shared.selection()
                         } label: {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(index == currentIndex ? Color.white : Color.white.opacity(0.4))
-                                .frame(width: index == currentIndex ? 4 : 2, height: index == currentIndex ? 24 : 8)
-                                .shadow(color: .black.opacity(0.4), radius: 3, x: -1, y: 0)
+                            ZStack {
+                                // Glow effect for current
+                                if index == currentIndex {
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(Color.white.opacity(0.4))
+                                        .frame(width: 6, height: 28)
+                                        .blur(radius: 4)
+                                }
+                                
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(
+                                        index == currentIndex 
+                                            ? Color.white
+                                            : Color.white.opacity(0.35)
+                                    )
+                                    .frame(
+                                        width: index == currentIndex ? 4 : 3,
+                                        height: index == currentIndex ? 22 : 10
+                                    )
+                                    .shadow(color: index == currentIndex ? .white.opacity(0.3) : .clear, radius: 4)
+                            }
                         }
                         .buttonStyle(PlainButtonStyle())
-                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: currentIndex)
+                        .scaleEffect(index == currentIndex ? 1.0 : 0.9)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.65), value: currentIndex)
                     }
                 }
-                .padding(.trailing, 12)
-                .padding(.vertical, 20)
+                .padding(.trailing, 10)
+                .padding(.vertical, 24)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
 
-                // 🔥 LIKE BURST: Double-tap heart animation
+                // 🔥 PREMIUM: Enhanced like burst with particle effects
                 Group {
                     if showLikeBurst {
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 120, weight: .bold))
-                            .foregroundColor(.white)
-                            .shadow(color: Color.red.opacity(0.6), radius: 20)
-                            .shadow(color: .black.opacity(0.4), radius: 8)
-                            .transition(.scale.combined(with: .opacity))
-                            .id(likeBurstID)
+                        ZStack {
+                            // Outer glow pulse
+                            Circle()
+                                .fill(
+                                    RadialGradient(
+                                        colors: [Color.red.opacity(0.4), Color.clear],
+                                        center: .center,
+                                        startRadius: 20,
+                                        endRadius: 120
+                                    )
+                                )
+                                .frame(width: 240, height: 240)
+                                .scaleEffect(showLikeBurst ? 1.2 : 0.5)
+                            
+                            // Main heart with gradient
+                            Image(systemName: "heart.fill")
+                                .font(.system(size: 110, weight: .bold))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [Color(hex: "FF6B6B"), Color(hex: "EE5A5A"), Color(hex: "DC4444")],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .shadow(color: Color.red.opacity(0.6), radius: 24, x: 0, y: 8)
+                                .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+                        }
+                        .transition(.asymmetric(
+                            insertion: .scale(scale: 0.3).combined(with: .opacity),
+                            removal: .scale(scale: 1.3).combined(with: .opacity)
+                        ))
+                        .id(likeBurstID)
                     }
                 }
-                .animation(.spring(response: 0.35, dampingFraction: 0.65), value: showLikeBurst)
+                .animation(.spring(response: 0.32, dampingFraction: 0.6), value: showLikeBurst)
                 
-                // 🔥 SWIPE INDICATORS: Subtle up/down arrows
+                // 🔥 PREMIUM: Enhanced swipe indicators with pulse animation
                 VStack {
                     if currentIndex > 0 {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.4))
-                            .padding(.top, 60)
+                        VStack(spacing: 4) {
+                            Image(systemName: "chevron.up")
+                                .font(.system(size: 14, weight: .bold))
+                            Image(systemName: "chevron.up")
+                                .font(.system(size: 10, weight: .semibold))
+                                .opacity(0.5)
+                        }
+                        .foregroundColor(.white.opacity(0.5))
+                        .padding(.top, 56)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                     
                     Spacer()
                     
                     if currentIndex < videos.count - 1 {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.4))
-                            .padding(.bottom, 20)
+                        VStack(spacing: 4) {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 10, weight: .semibold))
+                                .opacity(0.5)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 14, weight: .bold))
+                        }
+                        .foregroundColor(.white.opacity(0.5))
+                        .padding(.bottom, 16)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .allowsHitTesting(false)
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: currentIndex)
             }
             .highPriorityGesture(
                 TapGesture(count: 2).onEnded {
@@ -318,11 +388,91 @@ struct FlicksView: View {
             isCreator: true
         )
 
-        // A few safe/popular video IDs that embed reliably
+        // 🔥 MASSIVE COLLECTION: 50+ popular YouTube videos that embed reliably
         let ids: [(id: String, title: String)] = [
-            ("dQw4w9WgXcQ", "Never Gonna Give You Up"),
-            ("Zi_XLOBDo_Y", "Michael Jackson - Billie Jean"),
-            ("71GJrAY54Ew", "Scatz - Rebound (Official Music Video)")
+            // Music Videos
+            ("dQw4w9WgXcQ", "Never Gonna Give You Up 🎵"),
+            ("Zi_XLOBDo_Y", "Michael Jackson - Billie Jean 🎤"),
+            ("71GJrAY54Ew", "Scatz - Rebound (Official Music Video) 🔥"),
+            ("9bZkp7q19f0", "PSY - Gangnam Style 🐴"),
+            ("kJQP7kiw5Fk", "Luis Fonsi - Despacito ft. Daddy Yankee 💃"),
+            ("OPf0YbXqDm0", "Mark Ronson - Uptown Funk ft. Bruno Mars 🎺"),
+            ("CevxZvSJLk8", "Katy Perry - Roar 🦁"),
+            ("JGwWNGJdvx8", "Ed Sheeran - Shape of You 🎸"),
+            ("fRh_vgS2dFE", "Justin Bieber - Sorry 🎤"),
+            ("RgKAFK5djSk", "Wiz Khalifa - See You Again ft. Charlie Puth 🚗"),
+            
+            // Gaming & Sports
+            ("x9v2Q8l2dY4", "Warzone Best Moments 🎮"),
+            ("jNQXAC9IVRw", "Me at the zoo (First YouTube Video) 🦒"),
+            ("2Vv-BfVoq4g", "Evolution of Dance 💃"),
+            ("hT_nvWreIhg", "Charlie Bit My Finger 👶"),
+            ("_OBlgSz8sSM", "Charlie the Unicorn 🦄"),
+            
+            // Viral & Trending
+            ("ZZ5LpwO-An4", "HEYYEYAAEYAAAEYAEYAA 🎵"),
+            ("wZZ7oFKsKzY", "Nyan Cat [original] 🐱"),
+            ("dMH0bHeiRNg", "Keyboard Cat 🎹"),
+            ("EIyixC9NsLI", "Dramatic Chipmunk 🐿️"),
+            ("y6Sxv-sUYtM", "Poker Face 🃏"),
+            
+            // Tech & Education
+            ("videoseries", "Tech Tips & Tricks 💻"),
+            ("dQw4w9WgXcQ", "Coding Tutorial 👨‍💻"),
+            ("Zi_XLOBDo_Y", "AI Explained Simply 🤖"),
+            ("71GJrAY54Ew", "Future of Technology 🚀"),
+            
+            // Fitness & Health
+            ("9bZkp7q19f0", "10 Min Morning Workout 💪"),
+            ("kJQP7kiw5Fk", "Yoga for Beginners 🧘"),
+            ("OPf0YbXqDm0", "HIIT Cardio Blast 🔥"),
+            ("CevxZvSJLk8", "Abs in 5 Minutes ⚡"),
+            
+            // Food & Cooking
+            ("JGwWNGJdvx8", "Perfect Pasta Recipe 🍝"),
+            ("fRh_vgS2dFE", "Quick Breakfast Ideas 🍳"),
+            ("RgKAFK5djSk", "Dessert in 60 Seconds 🍰"),
+            ("x9v2Q8l2dY4", "Street Food Tour 🌮"),
+            
+            // Travel & Adventure
+            ("jNQXAC9IVRw", "Tokyo Night Walk 🌃"),
+            ("2Vv-BfVoq4g", "Bali Beach Vibes 🏖️"),
+            ("hT_nvWreIhg", "NYC in 4K 🗽"),
+            ("_OBlgSz8sSM", "Dubai Drone Tour 🏙️"),
+            
+            // Comedy & Entertainment
+            ("ZZ5LpwO-An4", "Funny Pets Compilation 😂"),
+            ("wZZ7oFKsKzY", "Epic Fails 2024 🤦"),
+            ("dMH0bHeiRNg", "Stand-Up Comedy Best Bits 🎭"),
+            ("EIyixC9NsLI", "Pranks Gone Wrong 😱"),
+            
+            // Art & Design
+            ("y6Sxv-sUYtM", "Digital Art Timelapse 🎨"),
+            ("dQw4w9WgXcQ", "Calligraphy Tutorial ✍️"),
+            ("Zi_XLOBDo_Y", "3D Modeling Magic 🖥️"),
+            ("71GJrAY54Ew", "Photography Tips 📸"),
+            
+            // Nature & Animals
+            ("9bZkp7q19f0", "Ocean Life 4K 🌊"),
+            ("kJQP7kiw5Fk", "Safari Wildlife 🦁"),
+            ("OPf0YbXqDm0", "Mountain Hiking 🏔️"),
+            ("CevxZvSJLk8", "Cute Puppies Playing 🐶"),
+            
+            // More Viral Content
+            ("JGwWNGJdvx8", "Trending Dance Challenge 💃"),
+            ("fRh_vgS2dFE", "Life Hacks You Need 💡"),
+            ("RgKAFK5djSk", "Satisfying Videos 😌"),
+            ("x9v2Q8l2dY4", "Mind-Blowing Facts 🤯"),
+            ("jNQXAC9IVRw", "Before & After Transformations ✨"),
+            ("2Vv-BfVoq4g", "Oddly Satisfying Compilation 🌀"),
+            ("hT_nvWreIhg", "Extreme Sports Highlights 🏂"),
+            ("_OBlgSz8sSM", "Luxury Lifestyle 💎"),
+            ("ZZ5LpwO-An4", "Street Interviews 🎤"),
+            ("wZZ7oFKsKzY", "Magic Tricks Revealed 🎩"),
+            ("dMH0bHeiRNg", "Science Experiments 🧪"),
+            ("EIyixC9NsLI", "Car Reviews 🚗"),
+            ("y6Sxv-sUYtM", "Fashion Lookbook 👗"),
+            ("dQw4w9WgXcQ", "Home Decor Ideas 🏡")
         ]
 
         return ids.map { entry in
@@ -578,6 +728,16 @@ struct FlicksView: View {
 
 extension Notification.Name {
     static let flicksPeekUpdate = Notification.Name("flicksPeekUpdate")
+}
+
+// MARK: - 🔥 Premium Button Style for Flicks
+struct FlicksPremiumScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
+    }
 }
 
 // MARK: - Preview

@@ -33,6 +33,11 @@ struct VideoDetailMetaView: View {
     @State private var showingTipSheet: Bool = false
     @State private var showingSuperThanks: Bool = false  // 🔥 YOUTUBE PARITY: Super Thanks
     @State private var showingClipsView: Bool = false    // 🔥 YOUTUBE PARITY: Clips
+    @State private var showingAskAI: Bool = false        // 🔥 YOUTUBE PARITY: Ask (Gemini)
+    @State private var showingRemixSheet: Bool = false   // 🔥 YOUTUBE PARITY: Remix
+    @State private var showingPremiumUpsell: Bool = false // 🔥 YOUTUBE PARITY: Premium upsell
+    @State private var showingStopAdsUpsell: Bool = false // 🔥 YOUTUBE PARITY: Stop ads upsell
+    @StateObject private var premiumService = PremiumService.shared
     
     // MARK: - Performance Optimization
     private let impactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -109,6 +114,22 @@ struct VideoDetailMetaView: View {
         .sheet(isPresented: $showingClipsView) {
             ClipsView(video: video, currentTime: 0)
         }
+        .sheet(isPresented: $showingAskAI) {
+            AskAISheet(video: video)
+        }
+        .sheet(isPresented: $showingRemixSheet) {
+            RemixSheet(video: video)
+        }
+        .sheet(isPresented: $showingPremiumUpsell) {
+            YouTubePremiumUpsellSheet()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.hidden)
+        }
+        .sheet(isPresented: $showingStopAdsUpsell) {
+            StopAdsUpsellSheet()
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.hidden)
+        }
         .sheet(isPresented: $showingDownloadQualitySheet) {
             DownloadQualitySheet(video: video)
         }
@@ -168,120 +189,62 @@ struct VideoDetailMetaView: View {
         .accessibilityLabel("\(formatCount(dynamicViewCount ?? video.viewCount)) views, \(video.timeAgo)")
     }
     
-    // MARK: - 🔥 YOUTUBE 2024 STYLE: Compact Pill Action Buttons
+    // MARK: - 🔥 YOUTUBE 2024 EXACT PARITY: Action Buttons Row
     private var youtubeActionButtons: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {  // 🔥 Tighter spacing for sleek look
-                // Like Button with Advanced Animation
-                VideoMetaActionButton(
-                    icon: isLiked ? "hand.thumbsup.fill" : "hand.thumbsup",
-                    title: formatCount(video.likeCount),
-                    isActive: isLiked,
-                    activeColor: AppTheme.Colors.primary,
-                    scale: likeAnimationScale
-                ) {
-                    performLikeAction()
-                }
-                .accessibilityLabel(isLiked ? "Unlike" : "Like")
-                .accessibilityHint("Double tap to \(isLiked ? "remove your like" : "like this video")")
-                .accessibilityValue("\(video.likeCount) likes")
+            HStack(spacing: 8) {
+                // 🔥 YOUTUBE EXACT: Combined Like/Dislike Pill with Separator
+                YouTubeLikeDislikePill(
+                    likeCount: video.likeCount,
+                    isLiked: isLiked,
+                    isDisliked: isDisliked,
+                    likeScale: likeAnimationScale,
+                    onLike: { performLikeAction() },
+                    onDislike: { performDislikeAction() }
+                )
                 
-                // Dislike Button
-                VideoMetaActionButton(
-                    icon: isDisliked ? "hand.thumbsdown.fill" : "hand.thumbsdown",
-                    title: "Dislike",
-                    isActive: isDisliked,
-                    activeColor: AppTheme.Colors.error
-                ) {
-                    performDislikeAction()
-                }
-                .accessibilityLabel(isDisliked ? "Remove dislike" : "Dislike")
-                .accessibilityHint("Double tap to \(isDisliked ? "remove your dislike" : "dislike this video")")
-                
-                // Share Button
-                VideoMetaActionButton(
-                    icon: "arrowshape.turn.up.right.fill",
-                    title: "Share"
-                ) {
+                // 🔥 YOUTUBE EXACT: Share Button
+                YouTubeActionPill(icon: "arrowshape.turn.up.right.fill", title: "Share") {
                     performShareAction()
                 }
-                .accessibilityLabel("Share video")
-                .accessibilityHint("Double tap to share this video with others")
                 
-                // Save Button
-                VideoMetaActionButton(
-                    icon: isWatchLater ? "bookmark.fill" : "bookmark",
-                    title: "Save",
-                    isActive: isWatchLater,
-                    activeColor: AppTheme.Colors.accent ?? AppTheme.Colors.primary
-                ) {
-                    performSaveAction()
-                }
-
-                // Download Button (Premium Feature) - YouTube-style
+                // Download Button (Premium Feature)
                 DownloadButtonView(video: video) {
                     performDownloadAction()
                 }
                 .buttonStyle(.plain)
                 
-                // 🔥 YOUTUBE PARITY: Clips Button
-                VideoMetaActionButton(
-                    icon: "scissors",
-                    title: "Clip"
-                ) {
+                // 🔥 YOUTUBE EXACT: Stop ads Button (Shows Premium upsell)
+                if !premiumService.isPremium {
+                    YouTubeActionPill(icon: "slash.circle", title: "Stop ads") {
+                        showingStopAdsUpsell = true
+                        HapticManager.shared.impact(style: .light)
+                    }
+                }
+                
+                // Clip Button
+                YouTubeActionPill(icon: "scissors", title: "Clip") {
                     showingClipsView = true
                     HapticManager.shared.impact(style: .light)
                 }
-                .accessibilityLabel("Create clip")
-                .accessibilityHint("Double tap to create a shareable clip from this video")
                 
-                // 🔥 YOUTUBE PARITY: Super Thanks Button
-                VideoMetaActionButton(
-                    icon: "dollarsign.circle.fill",
-                    title: "Thanks"
+                // Save/Bookmark Button
+                YouTubeActionPill(
+                    icon: isWatchLater ? "bookmark.fill" : "bookmark",
+                    title: "Save",
+                    isActive: isWatchLater
                 ) {
-                    showingSuperThanks = true
-                    HapticManager.shared.impact(style: .medium)
-                }
-                .accessibilityLabel("Super Thanks")
-                .accessibilityHint("Double tap to send a Super Thanks to the creator")
-                
-                // Tip Button - Real Payment Processing (if enabled)
-                if video.monetization?.donationEnabled == true {
-                    VideoMetaActionButton(
-                        icon: "heart.fill",
-                        title: "Tip"
-                    ) {
-                        showingTipSheet = true
-                    }
+                    performSaveAction()
                 }
                 
-                // Chapters Button (if available)
-                if let onChapters {
-                    let hasModelChapters = (video.chapters?.isEmpty == false)
-                    let hasParsedChapters = !video.parsedChaptersFromDescription.isEmpty
-                    if hasModelChapters || hasParsedChapters {
-                        VideoMetaActionButton(
-                            icon: "list.bullet.rectangle",
-                            title: "Chapters"
-                        ) {
-                            onChapters()
-                        }
-                    }
-                }
-                
-                // More Options (contains less common actions)
-                VideoMetaActionButton(
-                    icon: "ellipsis",
-                    title: "More"
-                ) {
+                // 🔥 YOUTUBE EXACT: Report Button
+                YouTubeActionPill(icon: "flag", title: "Report") {
                     performMoreAction()
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
-        .padding(.top, 8)  // 🔥 Reduced padding for sleeker look
     }
     
     // MARK: - 🔥 YOUTUBE 2024 STYLE: Subtle Divider
@@ -538,11 +501,11 @@ struct VideoDetailMetaView: View {
     @State private var showingDownloadQualitySheet: Bool = false
     
     private func performDownloadAction() {
-        // Check if premium user
-        let premiumService = PremiumService.shared
+        // 🔥 YOUTUBE PARITY: Check if premium user - show upsell if not
         guard premiumService.isPremium else {
-            // Show premium alert
-            NotificationCenter.default.post(name: .navigateToPremium, object: nil)
+            // Show YouTube-style premium upsell
+            showingPremiumUpsell = true
+            HapticManager.shared.impact(style: .light)
             return
         }
         
@@ -555,15 +518,14 @@ struct VideoDetailMetaView: View {
         }
         
         // Check if downloading
-        if let download = offlineService.downloads.first(where: { $0.videoId == video.id && $0.status == .downloading }) {
+        if offlineService.downloads.first(where: { $0.videoId == video.id && $0.status == .downloading }) != nil {
             // Already downloading - could show progress or cancel option
             return
         }
         
         // Show quality selection sheet
         showingDownloadQualitySheet = true
-        let selectionFeedback = UISelectionFeedbackGenerator()
-        selectionFeedback.selectionChanged()
+        HapticManager.shared.impact(style: .light)
     }
     
     @State private var showingDownloadOptions: Bool = false
@@ -607,7 +569,345 @@ struct VideoDetailMetaView: View {
     }
 }
 
-// MARK: - 🔥 YOUTUBE 2024 STYLE: Pill-Shaped Action Button Component
+// MARK: - 🔥 YOUTUBE 2024 EXACT: Combined Like/Dislike Pill
+/// Exact replica of YouTube's combined like/dislike button with separator
+struct YouTubeLikeDislikePill: View {
+    let likeCount: Int
+    let isLiked: Bool
+    let isDisliked: Bool
+    var likeScale: CGFloat = 1.0
+    let onLike: () -> Void
+    let onDislike: () -> Void
+    
+    @State private var likePressed = false
+    @State private var dislikePressed = false
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            // Like Button
+            Button(action: onLike) {
+                HStack(spacing: 6) {
+                    Image(systemName: isLiked ? "hand.thumbsup.fill" : "hand.thumbsup")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(isLiked ? AppTheme.Colors.textPrimary : AppTheme.Colors.textSecondary)
+                    
+                    Text(formatCount(likeCount))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .contentTransition(.numericText())
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .scaleEffect(likePressed ? 0.95 : likeScale)
+            }
+            .buttonStyle(.plain)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in likePressed = true }
+                    .onEnded { _ in likePressed = false }
+            )
+            .accessibilityLabel(isLiked ? "Unlike" : "Like")
+            .accessibilityValue("\(likeCount) likes")
+            
+            // Separator Line (YouTube exact style)
+            Rectangle()
+                .fill(AppTheme.Colors.textSecondary.opacity(0.3))
+                .frame(width: 1, height: 18)
+            
+            // Dislike Button
+            Button(action: onDislike) {
+                Image(systemName: isDisliked ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(isDisliked ? AppTheme.Colors.textPrimary : AppTheme.Colors.textSecondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .scaleEffect(dislikePressed ? 0.95 : 1.0)
+            }
+            .buttonStyle(.plain)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in dislikePressed = true }
+                    .onEnded { _ in dislikePressed = false }
+            )
+            .accessibilityLabel(isDisliked ? "Remove dislike" : "Dislike")
+        }
+        .background(
+            Capsule()
+                .fill(AppTheme.Colors.surface)
+        )
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: likePressed)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: dislikePressed)
+    }
+    
+    private func formatCount(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.1fM", Double(count) / 1_000_000)
+        } else if count >= 1_000 {
+            return String(format: "%.1fK", Double(count) / 1_000)
+        }
+        return "\(count)"
+    }
+}
+
+// MARK: - 🔥 YOUTUBE 2024 EXACT: Action Pill Button
+/// Simple pill button matching YouTube's exact style
+struct YouTubeActionPill: View {
+    let icon: String
+    let title: String
+    var iconColor: Color? = nil
+    var isActive: Bool = false
+    let action: () -> Void
+    
+    @State private var isPressed = false
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(iconColor ?? (isActive ? AppTheme.Colors.textPrimary : AppTheme.Colors.textSecondary))
+                
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(AppTheme.Colors.surface)
+            )
+            .scaleEffect(isPressed ? 0.95 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
+        .accessibilityLabel("\(title) button")
+    }
+}
+
+// MARK: - 🔥 YOUTUBE PARITY: Ask AI Sheet (Gemini-style)
+struct AskAISheet: View {
+    let video: Video
+    @Environment(\.dismiss) private var dismiss
+    @State private var question: String = ""
+    @State private var isLoading = false
+    @State private var response: String = ""
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                // AI Icon
+                Image(systemName: "sparkles")
+                    .font(.system(size: 48))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.blue, .purple, .pink],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .padding(.top, 24)
+                
+                Text("Ask about this video")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Text("Get AI-powered answers about \"\(video.title)\"")
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+                
+                // Question Input
+                TextField("Ask a question...", text: $question, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .padding(16)
+                    .background(AppTheme.Colors.surface)
+                    .cornerRadius(12)
+                    .padding(.horizontal, 20)
+                    .lineLimit(3...6)
+                
+                // Suggested Questions
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Suggested")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .padding(.horizontal, 20)
+                    
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(["Summarize this video", "What are the key points?", "Who is the speaker?"], id: \.self) { suggestion in
+                                Button(action: { question = suggestion }) {
+                                    Text(suggestion)
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(AppTheme.Colors.textPrimary)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(AppTheme.Colors.surface)
+                                        .cornerRadius(16)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                }
+                
+                Spacer()
+                
+                // Ask Button
+                Button(action: {
+                    isLoading = true
+                    // Simulate AI response
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        isLoading = false
+                        response = "This is an AI-generated response about the video."
+                    }
+                }) {
+                    HStack {
+                        if isLoading {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "sparkles")
+                            Text("Ask AI")
+                        }
+                    }
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        LinearGradient(
+                            colors: [.blue, .purple],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(24)
+                }
+                .disabled(question.isEmpty || isLoading)
+                .opacity(question.isEmpty ? 0.5 : 1.0)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            }
+            .background(AppTheme.Colors.background)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - 🔥 YOUTUBE PARITY: Remix Sheet
+struct RemixSheet: View {
+    let video: Video
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 8) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 48))
+                        .foregroundColor(AppTheme.Colors.primary)
+                    
+                    Text("Remix this video")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    
+                    Text("Create your own version using this video")
+                        .font(.system(size: 14))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                .padding(.top, 32)
+                
+                // Remix Options
+                VStack(spacing: 12) {
+                    RemixOptionRow(
+                        icon: "music.note",
+                        title: "Use this sound",
+                        subtitle: "Create a video with the same audio"
+                    )
+                    
+                    RemixOptionRow(
+                        icon: "scissors",
+                        title: "Cut",
+                        subtitle: "Trim this video into a Short"
+                    )
+                    
+                    RemixOptionRow(
+                        icon: "square.on.square",
+                        title: "Green Screen",
+                        subtitle: "Use this video as a background"
+                    )
+                    
+                    RemixOptionRow(
+                        icon: "rectangle.on.rectangle",
+                        title: "Collab",
+                        subtitle: "Create a side-by-side video"
+                    )
+                }
+                .padding(.horizontal, 20)
+                
+                Spacer()
+            }
+            .background(AppTheme.Colors.background)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+struct RemixOptionRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundColor(AppTheme.Colors.primary)
+                .frame(width: 44, height: 44)
+                .background(AppTheme.Colors.surface)
+                .cornerRadius(22)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Text(subtitle)
+                    .font(.system(size: 13))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+        }
+        .padding(16)
+        .background(AppTheme.Colors.surface)
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - 🔥 YOUTUBE 2024 STYLE: Pill-Shaped Action Button Component (Legacy)
 /// Compact horizontal pill button matching YouTube's 2024 Material You design
 /// - Icon + text side-by-side in a rounded pill shape
 /// - Much smaller footprint than vertical stacked buttons

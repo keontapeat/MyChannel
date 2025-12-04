@@ -82,7 +82,7 @@ extension View {
 // MARK: - Modern Confetti Animation View
 struct ModernConfettiView: View {
     let trigger: Bool
-    @State private var particles: [ConfettiParticle] = []
+    @State private var particles: [ModernConfettiParticle] = []
     
     var body: some View {
         ZStack {
@@ -105,7 +105,7 @@ struct ModernConfettiView: View {
         particles = []
         
         for _ in 0..<50 {
-            let particle = ConfettiParticle(
+            let particle = ModernConfettiParticle(
                 id: UUID(),
                 position: CGPoint(
                     x: CGFloat.random(in: 0...UIScreen.main.bounds.width),
@@ -141,7 +141,7 @@ struct ModernConfettiView: View {
     }
 }
 
-struct ConfettiParticle {
+struct ModernConfettiParticle: Identifiable {
     let id: UUID
     var position: CGPoint
     let color: Color

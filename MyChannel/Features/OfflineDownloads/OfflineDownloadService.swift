@@ -469,7 +469,7 @@ enum OfflineDownloadPriority: Int {
     case low = 1, normal = 2, high = 3
 }
 
-enum DownloadError: Error {
+enum DownloadError: LocalizedError {
     case alreadyDownloaded
     case alreadyInQueue
     case insufficientStorage
@@ -477,6 +477,25 @@ enum DownloadError: Error {
     case downloadNotFound
     case networkError
     case fileSystemError
+    
+    var errorDescription: String? {
+        switch self {
+        case .alreadyDownloaded:
+            return "This video is already downloaded"
+        case .alreadyInQueue:
+            return "This video is already in the download queue"
+        case .insufficientStorage:
+            return "Not enough storage space available"
+        case .wifiRequired:
+            return "Wi-Fi connection required for downloads"
+        case .downloadNotFound:
+            return "Download not found"
+        case .networkError:
+            return "A network error occurred. Please try again"
+        case .fileSystemError:
+            return "Unable to save the download. Please try again"
+        }
+    }
 }
 
 // MARK: - Notifications

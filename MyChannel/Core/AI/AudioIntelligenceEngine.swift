@@ -197,11 +197,11 @@ class AudioIntelligenceEngine: ObservableObject {
     // MARK: - ⭐ Audio Quality Assessment
     
     /// Assess audio quality (clarity, noise, levels, etc.)
-    private func assessAudioQuality(asset: AVAsset) async throws -> AudioQuality {
+    private func assessAudioQuality(asset: AVAsset) async throws -> AudioAnalysisQuality {
         print("⭐ [AudioIntelligence] Assessing audio quality...")
         
         guard let audioTrack = try await asset.loadTracks(withMediaType: .audio).first else {
-            return AudioQuality(overall: 0.5, clarity: 0.5, noiseLevel: 0.5, levelConsistency: 0.5, bitrate: 0)
+            return AudioAnalysisQuality(overall: 0.5, clarity: 0.5, noiseLevel: 0.5, levelConsistency: 0.5, bitrate: 0)
         }
         
         // Get audio format
@@ -220,7 +220,7 @@ class AudioIntelligenceEngine: ObservableObject {
         
         print("✅ [AudioIntelligence] Audio quality: \(Int(overall * 100))%")
         
-        return AudioQuality(
+        return AudioAnalysisQuality(
             overall: overall,
             clarity: clarityScore,
             noiseLevel: 1.0 - noiseScore, // Lower is better
@@ -417,7 +417,7 @@ struct AudioIntelligenceAnalysis {
     let transcript: AudioTranscript
     let emotion: [VoiceEmotion]
     let speakers: [SpeakerSegment]
-    let quality: AudioQuality
+    let quality: AudioAnalysisQuality
     let musicDetected: MusicDetection
     let sounds: [RecognizedSound]
     let sentiment: SentimentAnalysis
@@ -451,7 +451,7 @@ struct SpeakerSegment {
     let confidence: Double
 }
 
-struct AudioQuality {
+struct AudioAnalysisQuality {
     let overall: Double
     let clarity: Double
     let noiseLevel: Double // 0 = no noise, 1 = very noisy

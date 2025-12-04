@@ -132,3 +132,6 @@ echo -e "${GREEN}Find deleted file:${NC}        git log --all --full-history -- 
 echo -e "${GREEN}See what's deleted:${NC}       git diff --name-only --diff-filter=D"
 echo ""
 
+
+
+

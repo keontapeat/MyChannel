@@ -293,7 +293,7 @@ class VideoUploadManager: ObservableObject {
             }
             // Upload captions/dubs if any were attached
             if let uploadedVideo {
-                await uploadAuxiliaryMedia(videoId: uploadedVideo.id ?? "", rootTitle: uploadedVideo.title)
+                await uploadAuxiliaryMedia(videoId: uploadedVideo.id, rootTitle: uploadedVideo.title)
             }
             cleanupTempFiles()
             resetForm()

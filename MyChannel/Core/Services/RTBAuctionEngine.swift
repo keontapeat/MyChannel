@@ -130,7 +130,7 @@ final class RTBAuctionEngine: ObservableObject {
         
         // Race: bid vs timeout
         return await withTaskGroup(of: Bid?.self) { group in
-            group.addTask { await timeout.value }
+            group.addTask { (try? await timeout.value) ?? nil }
             group.addTask { await bidTask.value }
             
             if let firstResult = await group.next() {

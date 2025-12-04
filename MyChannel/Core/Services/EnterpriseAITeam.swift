@@ -182,7 +182,7 @@ class LegalAI: ObservableObject {
         return complianceScore / 100.0
     }
     
-    private func extractRiskLevel(_ response: String) -> RiskLevel {
+    private func extractRiskLevel(_ response: String) -> LegalRiskLevel {
         if response.lowercased().contains("high risk") { return .high }
         else if response.lowercased().contains("medium risk") { return .medium }
         else { return .low }
@@ -930,7 +930,7 @@ enum AIContentType {
 
 struct LegalReview {
     let content: String
-    let riskLevel: RiskLevel
+    let riskLevel: LegalRiskLevel
     let issues: [String]
     let recommendations: [String]
     let isCompliant: Bool
@@ -938,7 +938,7 @@ struct LegalReview {
     let reviewedAt: Date
 }
 
-enum RiskLevel {
+enum LegalRiskLevel {
     case low, medium, high
 }
 

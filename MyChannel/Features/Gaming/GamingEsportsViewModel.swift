@@ -47,6 +47,9 @@ final class GamingEsportsViewModel: ObservableObject {
     private let vsMatchService = VersusMatchService.shared
     private let walletService = VSMatchWalletService.shared
     private let userService = UserFirestoreService.shared
+    
+    // 🔥 NUCLEAR: AI Orchestrator with 7 specialized gaming agents
+    private let aiOrchestrator = GamingAIOrchestrator.shared
     #if canImport(FirebaseFirestore)
     private let db = Firestore.firestore()
     #endif
@@ -412,6 +415,69 @@ private extension GamingEsportsViewModel {
         case .refund: return "Refund"
         case .fee: return "Platform Fee"
         }
+    }
+    
+    // MARK: - 🔥 AI-Powered Methods
+    
+    /// Create a fair VS match using AI orchestration
+    func createAIOptimizedMatch(
+        opponentId: String,
+        wagerAmount: Double,
+        category: String
+    ) async throws -> AIMatchCreationResult {
+        guard let userId = currentUserId else {
+            throw MatchError.userNotLoggedIn
+        }
+        
+        return try await aiOrchestrator.createFairMatch(
+            challengerId: userId,
+            opponentId: opponentId,
+            wagerAmount: wagerAmount,
+            category: category
+        )
+    }
+    
+    /// Generate AI-optimized tournament bracket
+    func generateAITournamentBracket(
+        players: [String],
+        prizePool: Double,
+        format: TournamentFormat
+    ) async throws -> AITournamentBracket {
+        return try await aiOrchestrator.generateTournamentBracket(
+            players: players,
+            prizePool: prizePool,
+            format: format
+        )
+    }
+    
+    /// Verify match result with AI
+    func verifyMatchWithAI(
+        matchId: String,
+        player1VideoURL: String,
+        player2VideoURL: String,
+        player1Score: Int,
+        player2Score: Int
+    ) async throws -> AIMatchVerificationResult {
+        return try await aiOrchestrator.verifyMatchResult(
+            matchId: matchId,
+            player1VideoURL: player1VideoURL,
+            player2VideoURL: player2VideoURL,
+            player1Score: player1Score,
+            player2Score: player2Score
+        )
+    }
+    
+    /// Get AI status for display
+    internal var aiAgentsOnline: Int {
+        aiOrchestrator.agentsActive
+    }
+    
+    internal var aiTotalPredictions: Int {
+        aiOrchestrator.totalPredictions
+    }
+    
+    internal var isAIOnline: Bool {
+        aiOrchestrator.isOnline
     }
 }
 

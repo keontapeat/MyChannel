@@ -10,6 +10,7 @@ import SwiftUI
 struct GamingEsportsView: View {
     @StateObject private var viewModel = GamingEsportsViewModel()
     @State private var selectedTab: GamingTab = .tournaments
+    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
         NavigationView {
@@ -62,24 +63,71 @@ struct GamingEsportsView: View {
     private var esportsHeader: some View {
         VStack(spacing: 12) {
             HStack {
+                // Back button
+                Button(action: {
+                    HapticManager.shared.impact(style: .light)
+                    dismiss()
+                }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .frame(width: 40, height: 40)
+                        .background(
+                            Circle()
+                                .fill(AppTheme.Colors.surface)
+                        )
+                }
+                .accessibilityLabel("Go back")
+                
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Esports Arena")
-                        .font(.system(size: 32, weight: .bold))
+                        .font(.system(size: 28, weight: .bold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                     
                     Text("Compete. Win Money. Rise to the Top.")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Esports Arena. Compete, Win Money, Rise to the Top.")
                 
                 Spacer()
                 
-                // Live indicator
+                // 🔥 AI Status Indicator
+                if viewModel.isAIOnline {
+                    HStack(spacing: 4) {
+                        Image(systemName: "cpu")
+                            .font(.system(size: 10, weight: .bold))
+                        Text("\(viewModel.aiAgentsOnline)/7")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundColor(.green)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color.green.opacity(0.15))
+                    )
+                    .accessibilityLabel("\(viewModel.aiAgentsOnline) of 7 AI agents online")
+                }
+                
+                // Live indicator with pulsing animation
                 if viewModel.hasLiveTournaments {
                     HStack(spacing: 6) {
                         Circle()
                             .fill(Color.red)
                             .frame(width: 8, height: 8)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.red.opacity(0.5), lineWidth: 2)
+                                    .scaleEffect(1.5)
+                                    .opacity(0)
+                                    .animation(
+                                        .easeInOut(duration: 1.0)
+                                        .repeatForever(autoreverses: false),
+                                        value: viewModel.hasLiveTournaments
+                                    )
+                            )
                         
                         Text("LIVE")
                             .font(.system(size: 13, weight: .bold))
@@ -91,11 +139,12 @@ struct GamingEsportsView: View {
                         Capsule()
                             .fill(Color.red.opacity(0.1))
                     )
+                    .accessibilityLabel("Live tournaments available")
                 }
             }
             .padding(.horizontal, 20)
             .padding(.top, 60)
-            .padding(.bottom, 20)
+            .padding(.bottom, 16)
         }
         .background(
             AppTheme.Colors.surface
@@ -120,7 +169,8 @@ struct GamingEsportsView: View {
     
     private func tabButton(tab: GamingTab) -> some View {
         Button(action: {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            HapticManager.shared.impact(style: .light)
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                 selectedTab = tab
             }
         }) {
@@ -129,6 +179,7 @@ struct GamingEsportsView: View {
                     Image(systemName: tab.iconName)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(selectedTab == tab ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                        .scaleEffect(selectedTab == tab ? 1.1 : 1.0)
                     
                     Text(tab.title)
                         .font(.system(size: 15, weight: selectedTab == tab ? .semibold : .regular))
@@ -137,14 +188,17 @@ struct GamingEsportsView: View {
                 .padding(.horizontal, 16)
                 .frame(height: 48)
                 
-                // Selection indicator
+                // Selection indicator with spring animation
                 Rectangle()
                     .fill(AppTheme.Colors.primary)
-                    .frame(height: 2)
+                    .frame(height: 3)
                     .scaleEffect(x: selectedTab == tab ? 1.0 : 0.0, y: 1.0, anchor: .center)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: selectedTab)
             }
         }
         .fixedSize(horizontal: true, vertical: false)
+        .accessibilityLabel("\(tab.title) tab")
+        .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
     }
     
     // MARK: - Tournaments Content
@@ -844,41 +898,60 @@ struct GamingEsportsView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textSecondary)
                 
-                Text(viewModel.formattedTotalEarnings)
-                    .font(.system(size: 42, weight: .black))
-                    .foregroundColor(Color(hex: "#FFD700"))
+                // 🔥 Animated count-up for total earnings
+                AnimatedStatText(
+                    value: viewModel.totalEarnings,
+                    prefix: "$",
+                    font: .system(size: 42, weight: .black),
+                    color: Color(hex: "#FFD700") ?? .yellow
+                )
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Total Earnings: \(viewModel.formattedTotalEarnings)")
             
             HStack(spacing: 24) {
                 VStack(spacing: 4) {
-                    Text(viewModel.formattedAvailableBalance)
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    // 🔥 Animated available balance
+                    AnimatedStatText(
+                        value: viewModel.availableBalance,
+                        prefix: "$",
+                        font: .system(size: 18, weight: .bold),
+                        color: AppTheme.Colors.textPrimary
+                    )
                     
                     Text("Available")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                 }
                 .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Available balance: \(viewModel.formattedAvailableBalance)")
                 
                 Divider()
                     .frame(height: 40)
                     .background(AppTheme.Colors.divider.opacity(0.2))
                 
                 VStack(spacing: 4) {
-                    Text(viewModel.formattedPendingBalance)
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    // 🔥 Animated pending balance
+                    AnimatedStatText(
+                        value: viewModel.pendingBalance,
+                        prefix: "$",
+                        font: .system(size: 18, weight: .bold),
+                        color: AppTheme.Colors.textPrimary
+                    )
                     
                     Text("Pending")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                 }
                 .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Pending balance: \(viewModel.formattedPendingBalance)")
             }
             
             HStack(spacing: 12) {
                 Button(action: {
+                    HapticManager.shared.impact(style: .medium)
                     // Deposit
                 }) {
                     Text("Deposit")
@@ -889,8 +962,10 @@ struct GamingEsportsView: View {
                         .background(AppTheme.Colors.primary)
                         .cornerRadius(10)
                 }
+                .accessibilityLabel("Deposit funds")
                 
                 Button(action: {
+                    HapticManager.shared.impact(style: .medium)
                     // Withdraw
                 }) {
                     Text("Withdraw")
@@ -905,6 +980,7 @@ struct GamingEsportsView: View {
                                 .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
                         )
                 }
+                .accessibilityLabel("Withdraw funds")
             }
         }
         .padding(24)
@@ -1166,6 +1242,68 @@ struct EarningsTransaction: Identifiable {
 }
 
 // Color extension removed - use Color+Hex.swift file instead
+
+// MARK: - 🔥 PREMIUM: Animated Stat Text with Count-Up Animation
+struct AnimatedStatText: View {
+    let value: Double
+    let prefix: String
+    let font: Font
+    let color: Color
+    
+    @State private var displayedValue: Double = 0
+    @State private var hasAnimated = false
+    
+    init(value: Double, prefix: String = "", font: Font = .body, color: Color = .primary) {
+        self.value = value
+        self.prefix = prefix
+        self.font = font
+        self.color = color
+    }
+    
+    var body: some View {
+        Text("\(prefix)\(Int(displayedValue).formatted())")
+            .font(font)
+            .foregroundColor(color)
+            .contentTransition(.numericText())
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: displayedValue)
+            .onAppear {
+                guard !hasAnimated else { return }
+                hasAnimated = true
+                animateCount()
+            }
+            .onChange(of: value) { newValue in
+                // Smoothly animate to new value
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    displayedValue = newValue
+                }
+            }
+    }
+    
+    private func animateCount() {
+        // 🔥 PREMIUM: Smooth count-up animation with easing
+        let steps = min(Int(value), 25)
+        guard steps > 0 else {
+            displayedValue = value
+            return
+        }
+        
+        let animationDuration = 0.6
+        let stepDuration = animationDuration / Double(steps)
+        
+        for step in 0...steps {
+            DispatchQueue.main.asyncAfter(deadline: .now() + stepDuration * Double(step)) {
+                let progress = Double(step) / Double(steps)
+                // Cubic ease-out for premium feel
+                let easedProgress = 1 - pow(1 - progress, 3)
+                let newValue = value * easedProgress
+                
+                withAnimation(.spring(response: 0.15, dampingFraction: 0.9)) {
+                    displayedValue = newValue
+                }
+            }
+        }
+    }
+}
 
 #Preview {
     GamingEsportsView()

@@ -242,8 +242,9 @@ struct UploadView: View {
         .fileImporter(isPresented: $showCaptionImporter, allowedContentTypes: [UTType(filenameExtension: "vtt") ?? .text]) { res in
             switch res {
             case .success(let url):
-                if url.startAccessingSecurityScopedResource() { defer { url.stopAccessingSecurityScopedResource() } }
+                let accessed = url.startAccessingSecurityScopedResource()
                 uploadManager.addCaption(url: url, lang: selectedLang)
+                if accessed { url.stopAccessingSecurityScopedResource() }
             case .failure:
                 break
             }
@@ -251,8 +252,9 @@ struct UploadView: View {
         .fileImporter(isPresented: $showDubImporter, allowedContentTypes: [UTType(filenameExtension: "m4a") ?? .audio]) { res in
             switch res {
             case .success(let url):
-                if url.startAccessingSecurityScopedResource() { defer { url.stopAccessingSecurityScopedResource() } }
+                let accessed = url.startAccessingSecurityScopedResource()
                 uploadManager.addDub(url: url, lang: selectedLang)
+                if accessed { url.stopAccessingSecurityScopedResource() }
             case .failure:
                 break
             }
@@ -2026,7 +2028,7 @@ struct ProfessionalTagInput: View {
                     HStack(spacing: 8) {
                         ForEach(Array(selectedTags).sorted(), id: \.self) { tag in
                             YouTubeStyleTagChip(tag: tag, isSelected: true) {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                _ = withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                     selectedTags.remove(tag)
                                 }
                                 HapticManager.shared.impact(style: .light)
@@ -2050,7 +2052,7 @@ struct ProfessionalTagInput: View {
                         ForEach(availableSuggestedTags.prefix(8), id: \.self) { tag in
                             YouTubeStyleTagChip(tag: tag, isSelected: false) {
                                 if selectedTags.count < 10 {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    _ = withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                         selectedTags.insert(tag)
                                     }
                                     HapticManager.shared.impact(style: .light)
@@ -2075,7 +2077,7 @@ struct ProfessionalTagInput: View {
     private func addTag() {
         let tag = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !tag.isEmpty && !selectedTags.contains(tag) && selectedTags.count < 10 {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            _ = withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 selectedTags.insert(tag)
             }
             inputText = ""

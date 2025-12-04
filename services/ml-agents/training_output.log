@@ -1,0 +1,36 @@
+2025-11-30 01:00:26,777 - models.thumbnail_ctr_predictor - WARNING - PyTorch not available, using basic image features
+2025-11-30 01:00:26,787 - models.watch_time_predictor - WARNING - LightGBM not available, using XGBoost
+2025-11-30 01:00:26,790 - __main__ - INFO - 🔥 Training Viral Predictor...
+2025-11-30 01:00:27,843 - models.viral_predictor - INFO - 🔥 Training Viral Predictor on 10000 videos...
+/Users/keonta/Library/Python/3.9/lib/python/site-packages/xgboost/core.py:158: UserWarning: [01:00:30] WARNING: /Users/runner/work/xgboost/xgboost/src/learner.cc:740: 
+Parameters: { "use_label_encoder" } are not used.
+
+  warnings.warn(smsg, UserWarning)
+2025-11-30 01:00:30,647 - models.viral_predictor - INFO - ✅ Training complete! AUC: 0.9299
+2025-11-30 01:00:30,654 - models.viral_predictor - INFO - 💾 Model saved to ./trained_models/viral_predictor.joblib
+2025-11-30 01:00:30,655 - __main__ - INFO - ✅ Viral Predictor trained in 3.9s
+2025-11-30 01:00:30,655 - __main__ - INFO -    AUC: 0.9299
+2025-11-30 01:00:30,655 - __main__ - INFO - 🔥 Training Churn Predictor...
+2025-11-30 01:00:32,143 - models.churn_predictor - INFO - 🔥 Training Churn Predictor on 10000 users...
+/Users/keonta/Library/Python/3.9/lib/python/site-packages/xgboost/core.py:158: UserWarning: [01:00:33] WARNING: /Users/runner/work/xgboost/xgboost/src/learner.cc:740: 
+Parameters: { "use_label_encoder" } are not used.
+
+  warnings.warn(smsg, UserWarning)
+2025-11-30 01:00:37,650 - models.churn_predictor - INFO - ✅ Training complete! Ensemble AUC: 0.9347
+2025-11-30 01:00:37,805 - models.churn_predictor - INFO - 💾 Model saved to ./trained_models/churn_predictor.joblib
+2025-11-30 01:00:37,805 - __main__ - INFO - ✅ Churn Predictor trained in 7.2s
+2025-11-30 01:00:37,805 - __main__ - INFO -    Ensemble AUC: 0.9347
+2025-11-30 01:00:37,820 - __main__ - INFO - 🔥 Training Fraud Detector...
+2025-11-30 01:00:46,554 - models.fraud_detector - INFO - 🔥 Training Fraud Detector on 50000 clicks...
+/Users/keonta/Library/Python/3.9/lib/python/site-packages/xgboost/core.py:158: UserWarning: [01:00:48] WARNING: /Users/runner/work/xgboost/xgboost/src/learner.cc:740: 
+Parameters: { "use_label_encoder" } are not used.
+
+  warnings.warn(smsg, UserWarning)
+/Users/keonta/Library/Python/3.9/lib/python/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+2025-11-30 01:00:48,909 - models.fraud_detector - INFO - ✅ Training complete! AUC: 1.0000, Precision: 0.0000
+2025-11-30 01:00:49,086 - models.fraud_detector - INFO - 💾 Model saved to ./trained_models/fraud_detector.joblib
+2025-11-30 01:00:49,087 - __main__ - INFO - ✅ Fraud Detector trained in 11.3s
+2025-11-30 01:00:49,087 - __main__ - INFO -    AUC: 1.0000, Precision: 0.0000
+2025-11-30 01:00:49,135 - __main__ - INFO - 🔥 Training Recommendation Engine...
+2025-11-30 01:00:50,339 - models.recommendation_engine - INFO - 🔥 Training Recommendation Engine on 50000 interactions...

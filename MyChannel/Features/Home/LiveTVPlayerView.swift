@@ -461,7 +461,17 @@ struct LiveTVPlayerView: View {
         // Create optimized asset with HLS-specific settings for butter-smooth playback
         let asset = AVURLAsset(url: url, options: [
             AVURLAssetPreferPreciseDurationAndTimingKey: false, // Live streams don't need precise timing
-            AVURLAssetAllowsCellularAccessKey: true
+            AVURLAssetAllowsCellularAccessKey: true,
+            // 🔥 Add proper headers for Pluto TV and other streaming services
+            "AVURLAssetHTTPHeaderFieldsKey": [
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+                "Accept": "*/*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Connection": "keep-alive",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Origin": "https://pluto.tv",
+                "Referer": "https://pluto.tv/"
+            ]
         ])
         
         let playerItem = AVPlayerItem(asset: asset)
@@ -793,10 +803,19 @@ struct LiveTVPlayerView: View {
     
     private func switchToChannelWithURL(_ newChannel: LiveTVChannel, url: URL) {
         
-        // Create optimized asset
+        // Create optimized asset with proper headers
         let asset = AVURLAsset(url: url, options: [
             AVURLAssetPreferPreciseDurationAndTimingKey: false,
-            AVURLAssetAllowsCellularAccessKey: true
+            AVURLAssetAllowsCellularAccessKey: true,
+            "AVURLAssetHTTPHeaderFieldsKey": [
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+                "Accept": "*/*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Connection": "keep-alive",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Origin": "https://pluto.tv",
+                "Referer": "https://pluto.tv/"
+            ]
         ])
         
         let item = AVPlayerItem(asset: asset)

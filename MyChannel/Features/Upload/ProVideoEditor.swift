@@ -41,6 +41,10 @@ class ProVideoEditor: ObservableObject {
     private var existingVideo: Video?
     private var timeObserver: Any?
     
+    // Store references for cleanup in deinit (nonisolated access)
+    private nonisolated(unsafe) var playerForCleanup: AVPlayer?
+    private nonisolated(unsafe) var observerForCleanup: Any?
+    
     func loadVideo(url: URL, existing: Video?) {
         self.existingVideo = existing
         self.videoURL = url
@@ -74,6 +78,10 @@ class ProVideoEditor: ObservableObject {
                 self.currentTime = time.seconds
             }
         }
+        
+        // Store references for cleanup in deinit
+        playerForCleanup = player
+        observerForCleanup = timeObserver
     }
     
     func togglePlayback() {
@@ -232,10 +240,9 @@ class ProVideoEditor: ObservableObject {
     }
     
     deinit {
-        Task { @MainActor in
-            if let observer = timeObserver {
-                player?.removeTimeObserver(observer)
-            }
+        // Use nonisolated(unsafe) stored references for cleanup
+        if let observer = observerForCleanup {
+            playerForCleanup?.removeTimeObserver(observer)
         }
     }
 }

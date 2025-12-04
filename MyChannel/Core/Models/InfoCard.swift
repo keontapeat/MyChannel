@@ -313,3 +313,6 @@ extension InfoCard {
     }
     .background(AppTheme.Colors.background)
 }
+
+
+

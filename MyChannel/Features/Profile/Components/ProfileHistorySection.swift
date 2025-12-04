@@ -205,3 +205,6 @@ struct HistoryVideoCard: View {
         .padding()
         .background(AppTheme.Colors.background)
 }
+
+
+

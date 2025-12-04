@@ -1147,3 +1147,6 @@ struct VideoTranscript: Codable {
         let confidence: Double?
     }
 }
+
+
+

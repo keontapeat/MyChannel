@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LiveTVChannelsView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appState: AppState
     @State private var selectedCategory: LiveTVChannel.ChannelCategory? = nil
     @State private var searchText: String = ""
     @State private var viewMode: ViewMode = .grid
@@ -108,6 +109,7 @@ struct LiveTVChannelsView: View {
         .fullScreenCover(isPresented: $showingPlayer) {
             if let channel = selectedChannel {
                 LiveTVPlayerView(channel: channel)
+                    .environmentObject(appState)
             }
         }
     }

@@ -403,11 +403,14 @@ enum MatchError: LocalizedError {
     case insufficientFunds
     case invalidData
     case escrowFailed
+    case userNotLoggedIn
     
     var errorDescription: String? {
         switch self {
         case .invalidWagerAmount:
             return "Wager amount must be between $1 and $100,000"
+        case .userNotLoggedIn:
+            return "You must be logged in to create a match"
         case .matchNotFound:
             return "Match not found"
         case .insufficientFunds:

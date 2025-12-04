@@ -388,22 +388,24 @@ class VideoPlayerManager: ObservableObject {
         // Set up time observer with weak self to prevent retain cycle
         let interval = CMTime(seconds: 0.25, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            guard let self = self, !self.isCleanedUp else { return }
-            
-            self.currentTime = CMTimeGetSeconds(time)
-            
-            if self.duration > 0 {
-                self.currentProgress = self.currentTime / self.duration
-            }
-            let currentSecond = Int(self.currentTime)
-            if currentSecond != self.lastSavedSecond, currentSecond % 2 == 0 {
-                self.lastSavedSecond = currentSecond
-                self.persistResumePosition()
-                self.updateNowPlayingInfo()
-                // Mid-roll rule: insert once after 90 seconds and at least 8 minutes content
-                if !midrollServed, self.currentTime > 90, self.duration > 480 {
-                    midrollServed = true
-                    NotificationCenter.default.post(name: NSNotification.Name("RequestMidrollAd"), object: nil)
+            Task { @MainActor in
+                guard let self = self, !self.isCleanedUp else { return }
+                
+                self.currentTime = CMTimeGetSeconds(time)
+                
+                if self.duration > 0 {
+                    self.currentProgress = self.currentTime / self.duration
+                }
+                let currentSecond = Int(self.currentTime)
+                if currentSecond != self.lastSavedSecond, currentSecond % 2 == 0 {
+                    self.lastSavedSecond = currentSecond
+                    self.persistResumePosition()
+                    self.updateNowPlayingInfo()
+                    // Mid-roll rule: insert once after 90 seconds and at least 8 minutes content
+                    if !self.midrollServed, self.currentTime > 90, self.duration > 480 {
+                        self.midrollServed = true
+                        NotificationCenter.default.post(name: NSNotification.Name("RequestMidrollAd"), object: nil)
+                    }
                 }
             }
         }
@@ -592,14 +594,14 @@ class VideoPlayerManager: ObservableObject {
         let time = CMTime(seconds: targetTime, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         
         player.seek(to: time) { [weak self] completed in
-            guard let self = self, !self.isCleanedUp else { return }
-            if completed {
-                DispatchQueue.main.async {
+            Task { @MainActor in
+                guard let self = self, !self.isCleanedUp else { return }
+                if completed {
                     self.currentTime = targetTime
                     self.currentProgress = progress
                     self.persistResumePosition()
+                    await AnalyticsService.shared.trackVideoSeek(videoId: self.currentVideo?.id ?? "unknown", from: previousTime, to: targetTime)
                 }
-                Task { await AnalyticsService.shared.trackVideoSeek(videoId: self.currentVideo?.id ?? "unknown", from: previousTime, to: targetTime) }
             }
         }
     }
@@ -730,8 +732,10 @@ class VideoPlayerManager: ObservableObject {
         let event = item.accessLog()?.events.last
         let bitrateKbps = Int(((event?.observedBitrate ?? 0) / 1000.0).rounded())
         let dropped = Int(event?.numberOfDroppedVideoFrames ?? 0)
-        let fpsFloat: Float = item.asset.tracks(withMediaType: .video).first?.nominalFrameRate ?? 0
-        let fps = Double(fpsFloat)
+        var fps: Double = 0
+        if let videoTrack = item.asset.tracks(withMediaType: .video).first {
+            fps = Double(videoTrack.nominalFrameRate)
+        }
         return PlaybackStats(
             width: w,
             height: h,
@@ -801,7 +805,7 @@ class VideoPlayerManager: ObservableObject {
 
     private func updateNowPlayingInfo() {
         guard let currentVideo = currentVideo else { return }
-        var info: [String: Any] = [
+        let info: [String: Any] = [
             MPMediaItemPropertyTitle: currentVideo.title,
             MPMediaItemPropertyArtist: currentVideo.creator.displayName,
             MPMediaItemPropertyPlaybackDuration: duration,
@@ -838,30 +842,39 @@ class VideoPlayerManager: ObservableObject {
 
     // MARK: - Subtitles / Audio Tracks
     func availableSubtitleOptions() -> [AVMediaSelectionOption] {
-        guard let group = player?.currentItem?.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) else { return [] }
-        return group.options
+        guard let item = player?.currentItem else { return [] }
+        // Use synchronous access for compatibility
+        if let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) {
+            return group.options
+        }
+        return []
     }
 
     func selectSubtitle(option: AVMediaSelectionOption?) {
-        guard let item = player?.currentItem,
-              let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) else { return }
-        if let option = option {
-            item.select(option, in: group)
-        } else {
-            item.select(nil, in: group)
+        guard let item = player?.currentItem else { return }
+        if let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) {
+            if let option = option {
+                item.select(option, in: group)
+            } else {
+                item.select(nil, in: group)
+            }
         }
     }
 
     func availableAudioOptions() -> [AVMediaSelectionOption] {
-        guard let group = player?.currentItem?.asset.mediaSelectionGroup(forMediaCharacteristic: .audible) else { return [] }
-        return group.options
+        guard let item = player?.currentItem else { return [] }
+        if let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .audible) {
+            return group.options
+        }
+        return []
     }
 
     func selectAudio(option: AVMediaSelectionOption?) {
-        guard let item = player?.currentItem,
-              let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .audible) else { return }
-        if let option = option {
-            item.select(option, in: group)
+        guard let item = player?.currentItem else { return }
+        if let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .audible) {
+            if let option = option {
+                item.select(option, in: group)
+            }
         }
     }
 
