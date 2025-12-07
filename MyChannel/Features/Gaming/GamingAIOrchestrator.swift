@@ -82,9 +82,9 @@ final class GamingAIOrchestrator: ObservableObject {
         
         let startTime = Date()
         
-        // Initialize all agents in parallel
+        // Initialize all agents in parallel, passing self reference to prevent circular dependency
         await withTaskGroup(of: Bool.self) { group in
-            group.addTask { await self.matchFairnessAI.initialize() }
+            group.addTask { await self.matchFairnessAI.initialize(orchestrator: self) }
             group.addTask { await self.antiCheatGuardianAI.initialize() }
             group.addTask { await self.prizePoolOptimizerAI.initialize() }
             group.addTask { await self.tournamentBracketAI.initialize() }
@@ -387,21 +387,30 @@ final class MatchFairnessAI: ObservableObject {
     @Published var matchesEvaluated = 0
     @Published var cloudFunctionAvailable = false
     
-    private let orchestrator = GamingAIOrchestrator.shared
+    // 🔥 FIX: Lazy initialization to prevent circular dependency
+    private weak var orchestrator: GamingAIOrchestrator?
     
-    func initialize() async -> Bool {
-        // Test Cloud Function availability
-        do {
-            let testPayload: [String: Any] = ["player1Elo": 1000, "player2Elo": 1000, "wagerAmount": 10]
-            let _: CloudMatchFairnessResponse = try await orchestrator.callCloudFunction(
-                agent: "matchFairness",
-                payload: testPayload
-            )
-            cloudFunctionAvailable = true
-            print("✅ [MatchFairnessAI] Online - Cloud Function connected!")
-        } catch {
+    func initialize(orchestrator: GamingAIOrchestrator? = nil) async -> Bool {
+        // 🔥 FIX: Set orchestrator reference safely
+        self.orchestrator = orchestrator
+        
+        // Test Cloud Function availability (skip if orchestrator not available yet)
+        if let orchestrator = orchestrator {
+            do {
+                let testPayload: [String: Any] = ["player1Elo": 1000, "player2Elo": 1000, "wagerAmount": 10]
+                let _: CloudMatchFairnessResponse = try await orchestrator.callCloudFunction(
+                    agent: "matchFairness",
+                    payload: testPayload
+                )
+                cloudFunctionAvailable = true
+                print("✅ [MatchFairnessAI] Online - Cloud Function connected!")
+            } catch {
+                cloudFunctionAvailable = false
+                print("⚠️ [MatchFairnessAI] Cloud Function unavailable, using local computation")
+            }
+        } else {
             cloudFunctionAvailable = false
-            print("⚠️ [MatchFairnessAI] Cloud Function unavailable, using local computation")
+            print("⚠️ [MatchFairnessAI] Initialized without orchestrator, using local computation only")
         }
         
         isOnline = true
@@ -418,8 +427,8 @@ final class MatchFairnessAI: ObservableObject {
     ) async -> GamingMatchFairnessResult {
         matchesEvaluated += 1
         
-        // Try Cloud Function first
-        if cloudFunctionAvailable {
+        // Try Cloud Function first (only if orchestrator is available)
+        if cloudFunctionAvailable, let orchestrator = orchestrator {
             do {
                 let payload: [String: Any] = [
                     "player1Elo": player1Skill.eloRating,

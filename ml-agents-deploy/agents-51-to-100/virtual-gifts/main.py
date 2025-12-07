@@ -10,3 +10,7 @@ def main(request): return jsonify({'total_gifts': '$16B/year', 'platform_cut': 0
 
 
 
+
+
+
+

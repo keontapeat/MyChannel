@@ -1,0 +1,92 @@
+---
+alwaysApply: true
+---
+# 🖼️ IMAGE URL STANDARDS - NEVER USE BLOCKED URLs
+
+## ⛔ NEVER USE THESE URL SOURCES (THEY GET BLOCKED)
+- **wikipedia.org** - Wikipedia blocks external image requests
+- **wikimedia.org** - Wikimedia Commons blocks external requests  
+- **.svg** files - AsyncImage doesn't render SVG properly
+- Any URL that requires authentication
+- Any URL with CORS restrictions
+
+## ✅ ALWAYS USE THESE RELIABLE IMAGE SOURCES
+When setting `logoURL`, `thumbnailURL`, `posterURL`, or any image URL:
+
+### YouTube Thumbnails (PREFERRED)
+```
+https://i.ytimg.com/vi/{VIDEO_ID}/hqdefault.jpg
+https://i.ytimg.com/vi/{VIDEO_ID}/maxresdefault.jpg
+```
+
+### Other Reliable CDNs
+- `imgur.com` - Imgur images
+- `cloudinary.com` - Cloudinary CDN
+- `googleusercontent.com` - Google CDN
+- `akamaized.net` - Akamai CDN
+- `cloudfront.net` - AWS CloudFront
+- `pluto.tv` - Pluto TV images
+- `image.tmdb.org` - TMDB movie images
+- `m.media-amazon.com` - Amazon images
+
+### Direct Image Extensions (OK if from reliable hosts)
+- `.jpg` / `.jpeg`
+- `.png`
+- `.webp`
+- `.gif`
+
+## 🔥 LIVE TV CHANNEL RULES
+When creating `LiveTVChannel` objects:
+
+1. **logoURL**: MUST be a YouTube thumbnail or reliable CDN
+2. **previewFallbackURL**: ALWAYS provide Apple test stream as fallback:
+   ```
+   https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8
+   ```
+
+### ✅ CORRECT Example
+```swift
+LiveTVChannel(
+    id: "channel-id",
+    name: "Channel Name",
+    logoURL: "https://i.ytimg.com/vi/VIDEOID123/hqdefault.jpg", // ✅ YouTube thumbnail
+    streamURL: plutoURL("pluto-channel-id"),
+    category: .entertainment,
+    description: "Channel description",
+    isLive: true,
+    viewerCount: 100000,
+    quality: "1080p",
+    language: "English",
+    country: "US",
+    epgURL: nil,
+    previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8" // ✅ Always include
+)
+```
+
+### ❌ WRONG Example (Will show missing thumbnails)
+```swift
+LiveTVChannel(
+    id: "channel-id", 
+    name: "Channel Name",
+    logoURL: "https://upload.wikimedia.org/wikipedia/en/logo.svg", // ❌ Wikipedia URL
+    streamURL: plutoURL("pluto-channel-id"),
+    // ... 
+    previewFallbackURL: nil // ❌ No fallback
+)
+```
+
+## 🔍 VALIDATION CHECKLIST
+Before adding any image URL:
+- [ ] Is it NOT from wikipedia.org or wikimedia.org?
+- [ ] Is it NOT an .svg file?
+- [ ] Is it from a reliable CDN (YouTube, Cloudinary, etc.)?
+- [ ] Does the URL end in .jpg, .jpeg, .png, .webp, or .gif?
+- [ ] Have you provided a fallback URL for streaming content?
+
+## 🛠️ HOW TO FIX BLOCKED URLs
+If you find a channel with a broken image:
+
+1. Go to YouTube and search for "{Channel Name} trailer" or "{Show Name} intro"
+2. Copy the video ID from the URL (e.g., `dQw4w9WgXcQ`)
+3. Use: `https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg`
+

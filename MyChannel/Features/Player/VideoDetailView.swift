@@ -778,16 +778,6 @@ struct VideoDetailView: View {
             }
             .buttonStyle(ScaleButtonStyle())
             
-            Button(action: { 
-                // Start native iOS PiP - it will handle dismissing the view
-                globalPlayer.startPiP()
-            }) {
-                Image(systemName: "pip.enter")
-                    .font(.caption.weight(.semibold))
-            }
-            .buttonStyle(ScaleButtonStyle())
-            .accessibilityLabel("Minimize to Picture in Picture")
-            
             // 🔥 YOUTUBE PARITY: Queue button
             Button(action: { 
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -963,55 +953,64 @@ struct VideoDetailView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // ALL-IN-ONE Video Player with YouTube-style controls
-            videoPlayerSection
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                // 🔥 iOS STATUS BAR: Reserve space for status bar with black background
+                Color.black
+                    .frame(height: geometry.safeAreaInsets.top)
+                
+                // ALL-IN-ONE Video Player with YouTube-style controls
+                videoPlayerSection
 
-            // Video metadata and controls (with Up Next autoplay)
-            VideoDetailMetaView(video: video,
-                                isSubscribed: $isSubscribed,
-                                isWatchLater: $isWatchLater,
-                                isLiked: $isLiked,
-                                isDisliked: $isDisliked,
-                                expandedDescription: $expandedDescription,
-                                onShare: { showingShareSheet = true },
-                                onMore: { showingMoreOptions = true },
-                                onComment: { showingCommentComposer = true },
-                                onChapters: {
-                                    // Only present if either chapters exist on model or can be parsed from description
-                                    if (video.chapters?.isEmpty == false) || !video.parsedChaptersFromDescription.isEmpty {
-                                        showingChapters = true
-                                    }
-                                },
-                                onProfileTap: { showingCreatorProfile = true },
-                                dynamicViewCount: currentViewCount) // 🔥 REAL-TIME: Pass reactive view count
-            .overlay(alignment: .bottom) {
-                // Simple Up Next bar with autoplay toggle
-                if let next = Video.sampleVideos.first(where: { $0.id != video.id }) {
-                    HStack(spacing: 12) {
-                        RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial)
-                            .frame(width: 56, height: 32)
-                            .overlay(Text("Up next").font(.caption2))
-                        Text(next.title).font(.caption).lineLimit(1).foregroundStyle(AppTheme.Colors.textPrimary)
-                        Spacer()
-                        Toggle(isOn: .constant(true)) { Text("Autoplay").font(.caption2) }
-                            .labelsHidden()
-                            .tint(AppTheme.Colors.primary)
-                        Button {
-                            playNext(next)
-                        } label: {
-                            Image(systemName: "play.fill")
-                                .foregroundColor(AppTheme.Colors.primary)
-                                .font(.title2)
+                // Video metadata and controls (with Up Next autoplay)
+                VideoDetailMetaView(video: video,
+                                    isSubscribed: $isSubscribed,
+                                    isWatchLater: $isWatchLater,
+                                    isLiked: $isLiked,
+                                    isDisliked: $isDisliked,
+                                    expandedDescription: $expandedDescription,
+                                    onShare: { showingShareSheet = true },
+                                    onMore: { showingMoreOptions = true },
+                                    onComment: { showingCommentComposer = true },
+                                    onChapters: {
+                                        // Only present if either chapters exist on model or can be parsed from description
+                                        if (video.chapters?.isEmpty == false) || !video.parsedChaptersFromDescription.isEmpty {
+                                            showingChapters = true
+                                        }
+                                    },
+                                    onProfileTap: { showingCreatorProfile = true },
+                                    dynamicViewCount: currentViewCount) // 🔥 REAL-TIME: Pass reactive view count
+                .overlay(alignment: .bottom) {
+                    // Simple Up Next bar with autoplay toggle
+                    if let next = Video.sampleVideos.first(where: { $0.id != video.id }) {
+                        HStack(spacing: 12) {
+                            RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial)
+                                .frame(width: 56, height: 32)
+                                .overlay(Text("Up next").font(.caption2))
+                            Text(next.title).font(.caption).lineLimit(1).foregroundStyle(AppTheme.Colors.textPrimary)
+                            Spacer()
+                            Toggle(isOn: .constant(true)) { Text("Autoplay").font(.caption2) }
+                                .labelsHidden()
+                                .tint(AppTheme.Colors.primary)
+                            Button {
+                                playNext(next)
+                            } label: {
+                                Image(systemName: "play.fill")
+                                    .foregroundColor(AppTheme.Colors.primary)
+                                    .font(.title2)
+                            }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.ultraThinMaterial)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(.ultraThinMaterial)
                 }
             }
+            .background(Color.black)
+            .ignoresSafeArea(edges: .top) // 🔥 Extend black background under status bar
         }
-        .navigationBarHidden(true)
+        .statusBarHidden(false) // 🔥 Ensure status bar is always visible
+        .preferredColorScheme(.dark)
         // When user returns from fullscreen by dismissing, ensure state is consistent
         .sheet(isPresented: $showingCommentComposer) {
             RealTimeCommentsView(video: video)

@@ -232,11 +232,11 @@ struct LiveChannelThumbnailView: View {
 
     var body: some View {
         ZStack {
-            // 🔥 Layer 1: Beautiful gradient placeholder (shows INSTANTLY)
+            // 🔥 Layer 1: Beautiful gradient placeholder (shows INSTANTLY - 0ms)
             firePlaceholder
             
             // 🔥 Layer 2: Poster/Logo image (loads fast from URL)
-            if let poster = posterURL, !poster.isEmpty {
+            if let poster = posterURL, !poster.isEmpty, isValidImageURL(poster) {
                 AsyncImage(url: URL(string: poster)) { phase in
                     switch phase {
                     case .success(let image):
@@ -244,25 +244,21 @@ struct LiveChannelThumbnailView: View {
                             .resizable()
                             .scaledToFill()
                             .onAppear { posterLoaded = true }
-                    case .failure(_):
-                        // Show placeholder with channel branding on failure
-                        EmptyView()
-                    case .empty:
-                        // Loading - show shimmer
+                    case .failure(_), .empty:
                         EmptyView()
                     @unknown default:
                         EmptyView()
                     }
                 }
-                .opacity(isReady ? 0 : 1)
+                .opacity(isReady ? 0 : (posterLoaded ? 1 : 0))
             }
             
-            // 🔥 Layer 3: Cached video snapshot (shows in <50ms if available)
+            // 🔥 Layer 3: Cached video snapshot (shows in <10ms if available)
             if let snapshot = cachedSnapshot {
                 Image(uiImage: snapshot)
                     .resizable()
                     .scaledToFill()
-                    .transition(.opacity.animation(.easeOut(duration: 0.15)))
+                    .transition(.opacity.animation(.easeOut(duration: 0.1)))
             }
             
             // 🔥 Layer 4: Live video player (ONLY if limiter allows)
@@ -273,38 +269,33 @@ struct LiveChannelThumbnailView: View {
                     onSnapshot: { handleSnapshot($0) }
                 )
                 .opacity(isReady ? 1 : 0)
-                .animation(.easeOut(duration: 0.2), value: isReady)
+                .animation(.easeOut(duration: 0.15), value: isReady)
             }
             
             // 🔥 Layer 5: LIVE badge (always visible)
             liveBadge
         }
         .clipped()
-        .drawingGroup() // 🔥 GPU acceleration for smooth scrolling
+        .drawingGroup() // 🔥 GPU acceleration
         .onAppear {
             hasAppeared = true
             
-            // 🔥 Check cache first for INSTANT display
+            // 🔥 INSTANT cache check - no delay!
             if let cached = ThermonuclearThumbnailCache.shared.getCachedImage(for: streamURL) {
                 cachedSnapshot = cached
             }
             
-            // 🔥 Request activation from limiter (prevents too many concurrent players)
+            // 🔥 FAST player activation - reduced delay!
             Task { @MainActor in
-                // Small delay to allow scroll to settle
-                try? await Task.sleep(nanoseconds: 150_000_000) // 150ms
-                
-                // Only activate if limiter allows (max 6 concurrent players)
+                try? await Task.sleep(nanoseconds: 50_000_000) // 🔥 50ms (was 150ms)
                 if ActivePlayerLimiter.shared.requestActivation(for: streamURL) {
                     canActivatePlayer = true
                 }
             }
         }
         .onDisappear {
-            // 🔥 CRITICAL: Deactivate when scrolled off-screen to free up slots
-            Task { @MainActor in
-                ActivePlayerLimiter.shared.deactivate(url: streamURL)
-            }
+            // 🔥 Instant cleanup
+            ActivePlayerLimiter.shared.deactivate(url: streamURL)
             canActivatePlayer = false
             isReady = false
         }
@@ -356,48 +347,75 @@ struct LiveChannelThumbnailView: View {
             // Dynamic gradient - beautiful category-colored background
             LinearGradient(
                 colors: [
-                    categoryColor.opacity(0.85),
-                    categoryColor.opacity(0.6),
-                    categoryColor.opacity(0.4)
+                    categoryColor.opacity(0.9),
+                    categoryColor.opacity(0.7),
+                    categoryColor.opacity(0.5)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             
-            // Subtle pattern overlay for depth
+            // Subtle wave pattern for visual interest
             GeometryReader { geo in
-                Path { path in
-                    let w = geo.size.width
-                    let h = geo.size.height
-                    for i in stride(from: 0, to: w + h, by: 20) {
-                        path.move(to: CGPoint(x: i, y: 0))
-                        path.addLine(to: CGPoint(x: 0, y: i))
+                ZStack {
+                    // Curved wave overlay
+                    Path { path in
+                        let w = geo.size.width
+                        let h = geo.size.height
+                        path.move(to: CGPoint(x: 0, y: h * 0.7))
+                        path.addQuadCurve(
+                            to: CGPoint(x: w, y: h * 0.6),
+                            control: CGPoint(x: w * 0.5, y: h * 0.4)
+                        )
+                        path.addLine(to: CGPoint(x: w, y: h))
+                        path.addLine(to: CGPoint(x: 0, y: h))
+                        path.closeSubpath()
                     }
+                    .fill(Color.white.opacity(0.08))
+                    
+                    // Second wave
+                    Path { path in
+                        let w = geo.size.width
+                        let h = geo.size.height
+                        path.move(to: CGPoint(x: 0, y: h * 0.85))
+                        path.addQuadCurve(
+                            to: CGPoint(x: w, y: h * 0.75),
+                            control: CGPoint(x: w * 0.6, y: h * 0.95)
+                        )
+                        path.addLine(to: CGPoint(x: w, y: h))
+                        path.addLine(to: CGPoint(x: 0, y: h))
+                        path.closeSubpath()
+                    }
+                    .fill(Color.white.opacity(0.05))
                 }
-                .stroke(Color.white.opacity(0.05), lineWidth: 1)
             }
             
             // Shimmer effect when loading
             if !isReady && hasAppeared && canActivatePlayer {
                 ThermonuclearShimmer()
-                    .opacity(0.3)
+                    .opacity(0.25)
             }
             
-            // Channel branding - TV icon with channel name
-            VStack(spacing: 6) {
-                // Three stick figures icon (like in screenshot) for kids/family content
-                // Or TV icon for others
-                Image(systemName: categoryIcon)
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.3), radius: 3, x: 0, y: 2)
+            // Channel branding - centered logo/icon with channel name
+            VStack(spacing: 8) {
+                // Logo circle with icon
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.2))
+                        .frame(width: 48, height: 48)
+                    
+                    Image(systemName: categoryIcon)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
                 
                 if let name = channelName {
                     Text(name)
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(1)
-                        .shadow(color: .black.opacity(0.4), radius: 2)
+                        .shadow(color: .black.opacity(0.3), radius: 2)
                         .padding(.horizontal, 8)
                 }
             }
@@ -425,6 +443,42 @@ struct LiveChannelThumbnailView: View {
         case .classic: return "tv.fill"
         case .none: return "tv.fill"
         }
+    }
+    
+    // Helper to check if a URL is likely to work for images
+    private func isValidImageURL(_ urlString: String) -> Bool {
+        // Skip Wikipedia URLs as they often block external requests
+        if urlString.contains("wikipedia.org") || urlString.contains("wikimedia.org") {
+            return false
+        }
+        // Skip SVG URLs as AsyncImage doesn't handle them well
+        if urlString.hasSuffix(".svg") {
+            return false
+        }
+        // 🔥 Accept any URL that looks like an image
+        // Direct image file extensions
+        if urlString.hasSuffix(".jpg") ||
+           urlString.hasSuffix(".jpeg") ||
+           urlString.hasSuffix(".png") ||
+           urlString.hasSuffix(".webp") ||
+           urlString.hasSuffix(".gif") {
+            return true
+        }
+        // Known reliable image CDNs and services
+        return urlString.contains("ytimg.com") ||           // YouTube thumbnails
+               urlString.contains("imgur.com") ||           // Imgur
+               urlString.contains("cloudinary.com") ||      // Cloudinary CDN
+               urlString.contains("pluto.tv") ||            // Pluto TV
+               urlString.contains("googleusercontent.com") || // Google CDN
+               urlString.contains("akamaized.net") ||       // Akamai CDN
+               urlString.contains("cloudfront.net") ||      // AWS CloudFront
+               urlString.contains("twimg.com") ||           // Twitter images
+               urlString.contains("fbcdn.net") ||           // Facebook CDN
+               urlString.contains("staticflickr.com") ||    // Flickr
+               urlString.contains("image.tmdb.org") ||      // TMDB movie images
+               urlString.contains("static.wikia.nocookie.net") || // Fandom wikis (not Wikipedia)
+               urlString.contains("m.media-amazon.com") ||  // Amazon images
+               urlString.contains("images-na.ssl-images-amazon.com") // Amazon SSL images
     }
     
     // 🔥 LIVE badge
@@ -578,9 +632,9 @@ private final class ThermonuclearPlayerView: UIView {
         let item = AVPlayerItem(asset: asset, automaticallyLoadedAssetKeys: [])
         
         // 🔥🔥🔥 THERMONUCLEAR SETTINGS - ABSOLUTE MINIMUM LATENCY 🔥🔥🔥
-        item.preferredPeakBitRate = 80_000 // 80kbps - INSTANT LOAD
-        item.preferredForwardBufferDuration = 0.05 // 50ms buffer
-        item.preferredMaximumResolution = CGSize(width: 320, height: 180) // 180p
+        item.preferredPeakBitRate = 50_000 // 🔥 50kbps - BLAZING INSTANT!
+        item.preferredForwardBufferDuration = 0.02 // 🔥 20ms buffer - NUCLEAR!
+        item.preferredMaximumResolution = CGSize(width: 256, height: 144) // 🔥 144p - SPEED!
         item.canUseNetworkResourcesForLiveStreamingWhilePaused = false
         
         let player = AVPlayer(playerItem: item)
@@ -631,7 +685,7 @@ private final class ThermonuclearPlayerView: UIView {
             self?.player?.play()
         }
         
-        // 🔥 AGGRESSIVE RETRY - 1 second timeout
+        // 🔥 BLAZING FAST RETRY - 600ms timeout!
         let retry = DispatchWorkItem { [weak self] in
             DispatchQueue.main.async {
                 guard let self, self.player?.timeControlStatus != .playing else { return }
@@ -639,7 +693,7 @@ private final class ThermonuclearPlayerView: UIView {
             }
         }
         retryWorkItem = retry
-        DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 1.0, execute: retry)
+        DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.6, execute: retry) // 🔥 600ms!
         
         // 🔥 Snapshot timeout - generate even if not playing
         let snapshot = DispatchWorkItem { [weak self] in
@@ -787,13 +841,22 @@ private struct ThermonuclearPulsingDot: View {
 
 // MARK: - 🔥 THERMONUCLEAR PREWARM HELPER
 enum ThermonuclearPrewarm {
+    /// 🔥 Prewarm channels - only prewarm healthy ones!
     static func prewarmChannels(_ channels: [LiveTVChannel]) {
-        let urls = channels.map { $0.streamURL }
-        ThermonuclearThumbnailCache.shared.prewarmStreams(urls)
+        Task {
+            // Only prewarm healthy channels for SPEED
+            let healthyIds = await StreamHealthMLAgent.shared.healthyChannelIds
+            let healthyURLs = channels
+                .filter { healthyIds.isEmpty || healthyIds.contains($0.id) }
+                .prefix(6) // 🔥 Only top 6 for speed
+                .map { $0.streamURL }
+            ThermonuclearThumbnailCache.shared.prewarmStreams(Array(healthyURLs))
+        }
     }
     
     static func prewarmURLs(_ urls: [String]) {
-        ThermonuclearThumbnailCache.shared.prewarmStreams(urls)
+        // 🔥 Only prewarm first 6 for speed
+        ThermonuclearThumbnailCache.shared.prewarmStreams(Array(urls.prefix(6)))
     }
 }
 

@@ -47,21 +47,66 @@ service cloud.firestore {
     }
     
     // ========================================
+    // 🖼️ IMAGE URL VALIDATION HELPERS
+    // ========================================
+    // Prevents broken thumbnails from Wikipedia/Wikimedia URLs
+    
+    // Check if URL is from a blocked source (Wikipedia, Wikimedia, SVG)
+    function isBlockedImageURL(url) {
+      return url == null || 
+             url.matches('.*wikipedia\\.org.*') ||
+             url.matches('.*wikimedia\\.org.*') ||
+             url.matches('.*\\.svg$') ||
+             url.matches('.*\\.svg\\?.*');
+    }
+    
+    // Check if URL is from approved image CDNs
+    function isApprovedImageURL(url) {
+      return url == null || // Allow null (will use placeholder)
+             url.matches('.*ytimg\\.com.*') ||           // YouTube thumbnails
+             url.matches('.*imgur\\.com.*') ||           // Imgur
+             url.matches('.*cloudinary\\.com.*') ||      // Cloudinary
+             url.matches('.*googleusercontent\\.com.*') || // Google CDN
+             url.matches('.*akamaized\\.net.*') ||       // Akamai
+             url.matches('.*cloudfront\\.net.*') ||      // AWS CloudFront
+             url.matches('.*pluto\\.tv.*') ||            // Pluto TV
+             url.matches('.*image\\.tmdb\\.org.*') ||    // TMDB
+             url.matches('.*\\.jpg$') ||                 // Direct JPG
+             url.matches('.*\\.jpeg$') ||                // Direct JPEG
+             url.matches('.*\\.png$') ||                 // Direct PNG
+             url.matches('.*\\.webp$') ||                // Direct WebP
+             url.matches('.*\\.gif$');                   // Direct GIF
+    }
+    
+    // Validate image URL - returns true if URL is valid or null
+    function isValidImageURL(url) {
+      return !isBlockedImageURL(url) && isApprovedImageURL(url);
+    }
+    
+    // ========================================
     // 📺 CORE VIDEO & CONTENT (OPTIMIZED)
     // ========================================
     
     // Videos - 🔥 OPTIMIZED: Split read/write rules for better cache
+    // 🖼️ Validates thumbnailURL to prevent blocked image sources
     match /videos/{videoId} {
       // Public read (cached by Firebase)
       allow read: if true;
       
-      // Create (auth check only, no DB reads)
+      // Create (auth check + image URL validation)
       allow create: if isSignedIn() && 
-                       isValidSize(request.resource.data, 50);
+                       isValidSize(request.resource.data, 50) &&
+                       (!('thumbnailURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.thumbnailURL));
       
-      // Update/Delete (owner check without extra DB read)
-      allow update, delete: if isSignedIn() && 
-                              (request.auth.uid == resource.data.creatorId || isAdmin());
+      // Update/Delete (owner check + image URL validation on update)
+      allow update: if isSignedIn() && 
+                       (request.auth.uid == resource.data.creatorId || isAdmin()) &&
+                       (!('thumbnailURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.thumbnailURL));
+      
+      allow delete: if isSignedIn() && 
+                       (request.auth.uid == resource.data.creatorId || isAdmin());
     }
     
     // Video analytics - 🔥 OPTIMIZED: Lightweight rule
@@ -98,18 +143,30 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
     
-    // Flicks - 🔥 OPTIMIZED: Inline creator check
+    // Flicks - 🔥 OPTIMIZED: Inline creator check + image validation
     match /flicks/{flickId} {
       allow read: if true;
-      allow create: if isSignedIn() && isValidSize(request.resource.data, 30);
-      allow update, delete: if isCreator(resource.data.creatorId) || isAdmin();
+      allow create: if isSignedIn() && 
+                       isValidSize(request.resource.data, 30) &&
+                       (!('thumbnailURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.thumbnailURL));
+      allow update: if (isCreator(resource.data.creatorId) || isAdmin()) &&
+                       (!('thumbnailURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.thumbnailURL));
+      allow delete: if isCreator(resource.data.creatorId) || isAdmin();
     }
     
-    // Shorts - 🔥 OPTIMIZED
+    // Shorts - 🔥 OPTIMIZED + image validation
     match /shorts/{shortId} {
       allow read: if true;
-      allow create: if isSignedIn() && isValidSize(request.resource.data, 30);
-      allow update, delete: if isCreator(resource.data.creatorId) || isAdmin();
+      allow create: if isSignedIn() && 
+                       isValidSize(request.resource.data, 30) &&
+                       (!('thumbnailURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.thumbnailURL));
+      allow update: if (isCreator(resource.data.creatorId) || isAdmin()) &&
+                       (!('thumbnailURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.thumbnailURL));
+      allow delete: if isCreator(resource.data.creatorId) || isAdmin();
     }
     
     // Stories - 🔥 OPTIMIZED with comprehensive validation
@@ -173,16 +230,35 @@ service cloud.firestore {
     // ========================================
     
     // User profiles - 🔥 OPTIMIZED: Single rule for both collections
+    // 🖼️ Validates profileImageURL and bannerURL
     match /users/{userId} {
       allow read: if true;
-      allow create: if isSignedIn();
-      allow update, delete: if isOwner(userId) || isAdmin();
+      allow create: if isSignedIn() &&
+                       (!('profileImageURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.profileImageURL)) &&
+                       (!('bannerURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.bannerURL));
+      allow update: if (isOwner(userId) || isAdmin()) &&
+                       (!('profileImageURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.profileImageURL)) &&
+                       (!('bannerURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.bannerURL));
+      allow delete: if isOwner(userId) || isAdmin();
     }
     
     match /user_profiles/{userId} {
       allow read: if true;
-      allow create: if isSignedIn();
-      allow update, delete: if isOwner(userId) || isAdmin();
+      allow create: if isSignedIn() &&
+                       (!('profileImageURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.profileImageURL)) &&
+                       (!('bannerURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.bannerURL));
+      allow update: if (isOwner(userId) || isAdmin()) &&
+                       (!('profileImageURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.profileImageURL)) &&
+                       (!('bannerURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.bannerURL));
+      allow delete: if isOwner(userId) || isAdmin();
     }
     
     // 🔥 PERFORMANCE: Group private user collections
@@ -393,6 +469,35 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isSignedIn() && isValidSize(request.resource.data, 30);
       allow update, delete: if isCreator(resource.data.streamerId) || isAdmin();
+    }
+    
+    // ========================================
+    // 📺 LIVE TV CHANNELS (WITH IMAGE VALIDATION)
+    // ========================================
+    // Validates that channel logos use approved image sources
+    // NEVER allows Wikipedia/Wikimedia/SVG URLs
+    
+    match /live_tv_channels/{channelId} {
+      allow read: if true;
+      
+      // Create - validates logoURL is from approved source
+      allow create: if isAdmin() && 
+                       isValidSize(request.resource.data, 20) &&
+                       (!('logoURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.logoURL));
+      
+      // Update - validates logoURL if being changed
+      allow update: if isAdmin() && 
+                       (!('logoURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.logoURL));
+      
+      allow delete: if isAdmin();
+    }
+    
+    // Channel health/status tracking
+    match /live_tv_health/{channelId} {
+      allow read: if true;
+      allow write: if isSignedIn();
     }
     
     // 🔥 OPTIMIZED: Live chat (lightweight auth)

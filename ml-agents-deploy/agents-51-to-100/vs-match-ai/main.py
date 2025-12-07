@@ -10,3 +10,7 @@ def main(request): return jsonify({'total_wagered': '$100B/year', 'platform_fee'
 
 
 
+
+
+
+

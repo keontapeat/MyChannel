@@ -8,6 +8,7 @@
 
 import SwiftUI
 import Combine
+import UIKit
 
 // MARK: - Professional YouTube-Style Video Meta View
 struct VideoDetailMetaView: View {
@@ -189,9 +190,10 @@ struct VideoDetailMetaView: View {
         .accessibilityLabel("\(formatCount(dynamicViewCount ?? video.viewCount)) views, \(video.timeAgo)")
     }
     
-    // MARK: - 🔥 YOUTUBE 2024 EXACT PARITY: Action Buttons Row
+    // MARK: - 🔥 YOUTUBE 2024 EXACT PARITY: Action Buttons Row (Scrollable)
     private var youtubeActionButtons: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        // 🔥 FIX: Use UIKit-backed scrollable container for reliable horizontal scrolling
+        HorizontalScrollableActionButtons {
             HStack(spacing: 8) {
                 // 🔥 YOUTUBE EXACT: Combined Like/Dislike Pill with Separator
                 YouTubeLikeDislikePill(
@@ -241,10 +243,23 @@ struct VideoDetailMetaView: View {
                 YouTubeActionPill(icon: "flag", title: "Report") {
                     performMoreAction()
                 }
+                
+                // 🔥 YOUTUBE EXACT: Thanks (Super Thanks) Button
+                YouTubeActionPill(icon: "heart.circle", title: "Thanks") {
+                    showingSuperThanks = true
+                    HapticManager.shared.impact(style: .light)
+                }
+                
+                // 🔥 YOUTUBE EXACT: Remix Button
+                YouTubeActionPill(icon: "arrow.triangle.2.circlepath", title: "Remix") {
+                    showingRemixSheet = true
+                    HapticManager.shared.impact(style: .light)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
+        .frame(height: 52) // 🔥 FIX: Fixed height for proper layout
     }
     
     // MARK: - 🔥 YOUTUBE 2024 STYLE: Subtle Divider
@@ -1014,6 +1029,59 @@ struct ScrollOffsetPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
+    }
+}
+
+// MARK: - 🔥 UIKit-Backed Horizontal Scroll View for Reliable Scrolling
+/// This wrapper uses UIScrollView to ensure horizontal scrolling works
+/// even when nested inside a vertical ScrollView
+struct HorizontalScrollableActionButtons<Content: View>: UIViewRepresentable {
+    let content: Content
+    
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+    
+    func makeUIView(context: Context) -> UIScrollView {
+        let scrollView = UIScrollView()
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.alwaysBounceHorizontal = true
+        scrollView.alwaysBounceVertical = false
+        scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.delaysContentTouches = false // 🔥 Allow immediate touch response for buttons
+        
+        // Host the SwiftUI content
+        let hostController = UIHostingController(rootView: content)
+        hostController.view.backgroundColor = .clear
+        hostController.view.translatesAutoresizingMaskIntoConstraints = false
+        
+        scrollView.addSubview(hostController.view)
+        
+        // Store reference for updates
+        context.coordinator.hostController = hostController
+        
+        NSLayoutConstraint.activate([
+            hostController.view.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            hostController.view.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            hostController.view.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            hostController.view.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            hostController.view.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor)
+        ])
+        
+        return scrollView
+    }
+    
+    func updateUIView(_ scrollView: UIScrollView, context: Context) {
+        context.coordinator.hostController?.rootView = content
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+    
+    class Coordinator {
+        var hostController: UIHostingController<Content>?
     }
 }
 

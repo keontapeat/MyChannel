@@ -22,7 +22,7 @@ struct OwnerProfile {
 }
 
 struct FriendArtist: Identifiable, Codable, Hashable {
-    var id = UUID()
+    let id = UUID()
     let name: String
     let instagram: String
     let avatar: String

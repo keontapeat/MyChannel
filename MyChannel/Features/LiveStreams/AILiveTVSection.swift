@@ -289,16 +289,24 @@ struct AILiveTVSection: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
                     ForEach(LiveTVChannel.ChannelCategory.allCases, id: \.self) { category in
-                        LiveTVCategoryCard(
-                            category: category,
-                            channelCount: LiveTVChannel.sampleChannels.filter { $0.category == category }.count,
-                            onSelect: {
-                                // Filter to category
-                                if let channel = LiveTVChannel.sampleChannels.first(where: { $0.category == category }) {
-                                    onSelectChannel(channel)
+                        // Only show categories that have healthy channels
+                        let healthyChannels = StreamHealthMLAgent.shared.healthyChannelIds
+                        let categoryChannels = LiveTVChannel.sampleChannels.filter { 
+                            $0.category == category && (healthyChannels.isEmpty || healthyChannels.contains($0.id))
+                        }
+                        
+                        if !categoryChannels.isEmpty {
+                            LiveTVCategoryCard(
+                                category: category,
+                                channelCount: categoryChannels.count,
+                                onSelect: {
+                                    // Filter to category - only show healthy channels
+                                    if let channel = categoryChannels.first {
+                                        onSelectChannel(channel)
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -324,10 +332,19 @@ struct AILiveTVSection: View {
     private func loadAIRecommendations() async {
         isLoading = true
         
-        let userId = appState.currentUser?.id ?? "anonymous"
-        forYouSection = await aiAgent.getForYouSection(userId: userId)
+        // 🔥 Run health check and AI recommendations in parallel!
+        async let healthCheck: Void = StreamHealthMLAgent.shared.isInitialized ? () : Task { 
+            _ = await StreamHealthMLAgent.shared.filterHealthyChannels(Array(LiveTVChannel.sampleChannels.prefix(20)))
+        }.value
         
-        withAnimation {
+        let userId = appState.currentUser?.id ?? "anonymous"
+        async let recommendations = aiAgent.getForYouSection(userId: userId)
+        
+        // Wait for both
+        _ = await healthCheck
+        forYouSection = await recommendations
+        
+        withAnimation(.easeOut(duration: 0.2)) {
             isLoading = false
         }
     }

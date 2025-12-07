@@ -874,6 +874,8 @@ class VideoPlayerManager: ObservableObject {
         if let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .audible) {
             if let option = option {
                 item.select(option, in: group)
+            } else {
+                item.select(nil, in: group)
             }
         }
     }

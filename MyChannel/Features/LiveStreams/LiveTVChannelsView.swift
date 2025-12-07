@@ -98,13 +98,23 @@ struct LiveTVChannelsView: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .task {
-            // Health-rank in the background
-            let ranked = await LiveStreamHealthChecker.rankHealthyChannels(allChannels, timeout: 2.0)
-            await MainActor.run {
-                // If we get healthy channels, use them; otherwise show all
-                healthyChannels = ranked.isEmpty ? allChannels : ranked
-                isCheckingHealth = false
+            // 🔥 BLAZING FAST - Check cache first, then filter
+            let healthAgent = StreamHealthMLAgent.shared
+            
+            // If already initialized, use cached results INSTANTLY
+            if healthAgent.isInitialized && !healthAgent.healthyChannelIds.isEmpty {
+                let cachedHealthy = allChannels.filter { healthAgent.healthyChannelIds.contains($0.id) }
+                if !cachedHealthy.isEmpty {
+                    healthyChannels = cachedHealthy
+                    isCheckingHealth = false
+                    return
+                }
             }
+            
+            // Otherwise do fast parallel check
+            let filtered = await healthAgent.filterHealthyChannels(allChannels)
+            healthyChannels = filtered.isEmpty ? allChannels : filtered
+            isCheckingHealth = false
         }
         .fullScreenCover(isPresented: $showingPlayer) {
             if let channel = selectedChannel {

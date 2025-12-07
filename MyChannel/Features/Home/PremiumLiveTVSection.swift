@@ -6,9 +6,16 @@ struct PremiumLiveTVSection: View {
     
     @State private var selectedCategory: LiveTVChannel.ChannelCategory = .news
     @State private var isShowingAllChannels: Bool = false
+    @StateObject private var healthAgent = StreamHealthMLAgent.shared
     
     private var channels: [LiveTVChannel] {
-        LiveTVChannel.sampleChannels
+        // 🔥 Only return healthy channels
+        let healthyIds = healthAgent.healthyChannelIds
+        if healthyIds.isEmpty {
+            // If health check hasn't run yet, show all channels
+            return LiveTVChannel.sampleChannels
+        }
+        return LiveTVChannel.sampleChannels.filter { healthyIds.contains($0.id) }
     }
     
     private var filteredChannels: [LiveTVChannel] {

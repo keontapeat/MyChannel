@@ -10,3 +10,7 @@ def main(request): return jsonify({'total_tips': '$5B/year', 'platform_cut': 0.3
 
 
 
+
+
+
+

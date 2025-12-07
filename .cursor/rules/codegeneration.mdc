@@ -12,3 +12,10 @@ When generating code:
 8. Always use @MainActor for ObservableObject
 9. Always implement proper deinit cleanup
 10. Always follow MVVM architecture
+
+## 🖼️ IMAGE URL RULES (CRITICAL!)
+11. NEVER use wikipedia.org or wikimedia.org URLs for images (they get blocked)
+12. NEVER use .svg files (AsyncImage can't render them)
+13. ALWAYS use YouTube thumbnails (ytimg.com) or approved CDNs for logos
+14. ALWAYS include previewFallbackURL for LiveTVChannel (use Apple test stream)
+15. Approved CDNs: ytimg.com, imgur.com, cloudinary.com, googleusercontent.com, akamaized.net, cloudfront.net

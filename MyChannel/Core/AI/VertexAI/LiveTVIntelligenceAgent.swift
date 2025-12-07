@@ -87,8 +87,8 @@ final class LiveTVIntelligenceAgent: ObservableObject {
         // 1. Get user preferences from watch history
         let preferences = await analyzeUserPreferences(userId: userId)
         
-        // 2. Get all available channels
-        let allChannels = LiveTVChannel.sampleChannels
+        // 2. Get all available channels - 🔥 FILTER OUT UNHEALTHY STREAMS
+        let allChannels = await StreamHealthMLAgent.shared.filterHealthyChannels(LiveTVChannel.sampleChannels)
         
         // 3. Score each channel using multiple AI signals
         var scoredChannels: [(channel: LiveTVChannel, score: LiveTVScore)] = []
@@ -170,7 +170,8 @@ final class LiveTVIntelligenceAgent: ObservableObject {
     
     /// AI-powered trending channel detection
     func getTrendingChannels(limit: Int = 10) async -> [TrendingChannel] {
-        let allChannels = LiveTVChannel.sampleChannels
+        // 🔥 Only show healthy channels
+        let allChannels = await StreamHealthMLAgent.shared.filterHealthyChannels(LiveTVChannel.sampleChannels)
         
         var trending: [TrendingChannel] = []
         
@@ -571,7 +572,9 @@ final class LiveTVIntelligenceAgent: ObservableObject {
             timeLabel = "Late Night"
         }
         
-        let channels = LiveTVChannel.sampleChannels
+        // 🔥 Only show healthy channels
+        let healthyChannels = await StreamHealthMLAgent.shared.filterHealthyChannels(LiveTVChannel.sampleChannels)
+        let channels = healthyChannels
             .filter { goodCategories.contains($0.category) }
             .sorted { $0.viewerCount > $1.viewerCount }
             .prefix(limit)

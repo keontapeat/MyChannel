@@ -49,7 +49,8 @@ final class GamingEsportsViewModel: ObservableObject {
     private let userService = UserFirestoreService.shared
     
     // 🔥 NUCLEAR: AI Orchestrator with 7 specialized gaming agents
-    private let aiOrchestrator = GamingAIOrchestrator.shared
+    // 🔥 FIX: Lazy initialization to prevent circular dependency crash
+    private lazy var aiOrchestrator = GamingAIOrchestrator.shared
     #if canImport(FirebaseFirestore)
     private let db = Firestore.firestore()
     #endif
