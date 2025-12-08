@@ -807,41 +807,146 @@ struct VideoDetailView: View {
         .zIndex(100)
     }
     
+    // MARK: - YouTube-Style End Screen Overlay
     @ViewBuilder
     private func endScreenOverlay(next: Video) -> some View {
         ZStack {
-            Rectangle().fill(Color.black.opacity(0.6))
-            VStack(spacing: 12) {
-                Text("Up next in \(upNextCountdown)s").font(.headline).foregroundColor(.white)
+            // Dark overlay background
+            Rectangle()
+                .fill(Color.black.opacity(0.85))
+            
+            VStack(spacing: 0) {
+                // Countdown text at top
+                Text("Up next in \(upNextCountdown)s")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
+                    .padding(.top, 20)
+                    .padding(.bottom, 16)
+                
+                // Video preview card
                 HStack(spacing: 12) {
-                    AsyncImage(url: URL(string: next.thumbnailURL)) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: { Rectangle().fill(.gray.opacity(0.3)) }
-                    .frame(width: 160, height: 90)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(next.title).font(.subheadline).lineLimit(2).foregroundColor(.white)
-                        Text(next.creator.displayName).font(.caption).foregroundColor(.white.opacity(0.85))
+                    // Thumbnail with duration badge
+                    ZStack(alignment: .bottomTrailing) {
+                        AsyncImage(url: URL(string: next.thumbnailURL)) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .aspectRatio(16/9, contentMode: .fill)
+                            case .failure:
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .overlay(
+                                        Image(systemName: "photo")
+                                            .foregroundColor(.white.opacity(0.5))
+                                    )
+                            case .empty:
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .overlay(ProgressView().tint(.white))
+                            @unknown default:
+                                Rectangle().fill(Color.gray.opacity(0.3))
+                            }
+                        }
+                        .frame(width: 160, height: 90)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        
+                        // Duration badge
+                        if next.duration > 0 {
+                            Text(formatTime(TimeInterval(next.duration)))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(Color.black.opacity(0.8))
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                                .padding(4)
+                        }
                     }
-                    Spacer()
+                    
+                    // Video info
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(next.title)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        
+                        Text(next.creator.displayName)
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundColor(.white.opacity(0.7))
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                HStack(spacing: 12) {
-                    Button("Cancel") { cancelEndscreen() }
-                        .buttonStyle(.plain)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(Color.white.opacity(0.15), in: Capsule())
-                    Button("Play now") { playNext(next) }
-                        .buttonStyle(.plain)
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(Color.white, in: Capsule())
+                .padding(.horizontal, 20)
+                
+                Spacer()
+                
+                // Action buttons - YouTube style
+                HStack(spacing: 16) {
+                    // Cancel button
+                    Button {
+                        HapticManager.shared.impact(style: .light)
+                        cancelEndscreen()
+                    } label: {
+                        Text("Cancel")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white.opacity(0.15))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    
+                    // Play now button with countdown ring
+                    Button {
+                        HapticManager.shared.impact(style: .medium)
+                        playNext(next)
+                    } label: {
+                        HStack(spacing: 8) {
+                            // Circular countdown indicator
+                            ZStack {
+                                Circle()
+                                    .stroke(Color.black.opacity(0.2), lineWidth: 2)
+                                    .frame(width: 20, height: 20)
+                                
+                                Circle()
+                                    .trim(from: 0, to: CGFloat(upNextCountdown) / 5.0)
+                                    .stroke(Color.black, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                                    .frame(width: 20, height: 20)
+                                    .rotationEffect(.degrees(-90))
+                                    .animation(.linear(duration: 1), value: upNextCountdown)
+                                
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundColor(.black)
+                            }
+                            
+                            Text("Play now")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.black)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(
+                            Capsule()
+                                .fill(Color.white)
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
+                .padding(.bottom, 24)
             }
-            .padding()
         }
         .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
-        .transition(.opacity)
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .scale(scale: 0.95)),
+            removal: .opacity
+        ))
         .zIndex(50)
     }
     

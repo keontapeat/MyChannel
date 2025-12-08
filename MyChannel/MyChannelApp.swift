@@ -24,6 +24,18 @@ struct MyChannelApp: App {
     init() {
         print("🚀 MyChannelApp init started...")
         
+        // 🔥 Clear cached thumbnails to fix any stale/broken images (v2.1 fix)
+        let cacheVersion = "thumbnail_cache_v2.1"
+        if UserDefaults.standard.string(forKey: "thumbnail_cache_version") != cacheVersion {
+            URLCache.shared.removeAllCachedResponses()
+            UserDefaults.standard.set(cacheVersion, forKey: "thumbnail_cache_version")
+            print("🔥 Cleared thumbnail cache for fresh images")
+        }
+        
+        // 🔥🛡️ NUCLEAR VALIDATION - Crash immediately if any Wikipedia URLs exist
+        // This prevents broken thumbnails from EVER appearing in the app
+        LiveTVChannel.validateAllChannelURLs()
+        
         // Configure Firebase as early as possible to avoid startup warnings
         FirebaseManager.shared.configureIfPossible()
         setupAppearance()

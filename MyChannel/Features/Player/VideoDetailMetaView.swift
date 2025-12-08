@@ -8,7 +8,6 @@
 
 import SwiftUI
 import Combine
-import UIKit
 
 // MARK: - Professional YouTube-Style Video Meta View
 struct VideoDetailMetaView: View {
@@ -44,23 +43,19 @@ struct VideoDetailMetaView: View {
     private let impactFeedback = UIImpactFeedbackGenerator(style: .light)
     
     var body: some View {
-        GeometryReader { geometry in
+        VStack(spacing: 0) {
+            // MARK: - Video Title Section (Fixed at top)
+            professionalTitleSection
+            
+            // MARK: - Stats & Metadata
+            videoStatsSection
+            
+            // MARK: - YouTube-Style Action Buttons (OUTSIDE ScrollView for proper scrolling)
+            youtubeActionButtons
+            
+            // MARK: - Scrollable Content Below
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    // MARK: - Video Title Section
-                    professionalTitleSection
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                    
-                    // MARK: - Stats & Metadata
-                    videoStatsSection
-                        .transition(.slide.combined(with: .opacity))
-                    
-                    // MARK: - YouTube-Style Action Buttons
-                    youtubeActionButtons
-                        .opacity(actionButtonsOpacity)
-                        .scaleEffect(actionButtonsOpacity)
-                        .transition(.scale.combined(with: .opacity))
-                    
                     // MARK: - Professional Divider
                     modernDivider
                     
@@ -85,20 +80,6 @@ struct VideoDetailMetaView: View {
                     // Bottom safe area padding
                     Spacer()
                         .frame(height: 120)
-                }
-                .background(
-                    GeometryReader { geo in
-                        Color.clear
-                            .preference(key: ScrollOffsetPreferenceKey.self, 
-                                      value: geo.frame(in: .named("scroll")).minY)
-                    }
-                )
-            }
-            .coordinateSpace(name: "scroll")
-            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
-                withAnimation(.easeOut(duration: 0.3)) {
-                    scrollOffset = value
-                    actionButtonsOpacity = max(0.6, min(1.0, 1 + (value / 200)))
                 }
             }
         }
@@ -192,8 +173,8 @@ struct VideoDetailMetaView: View {
     
     // MARK: - 🔥 YOUTUBE 2024 EXACT PARITY: Action Buttons Row (Scrollable)
     private var youtubeActionButtons: some View {
-        // 🔥 FIX: Use UIKit-backed scrollable container for reliable horizontal scrolling
-        HorizontalScrollableActionButtons {
+        // 🔥 FIX: Simple SwiftUI ScrollView - works now that it's NOT nested in another ScrollView
+        ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 // 🔥 YOUTUBE EXACT: Combined Like/Dislike Pill with Separator
                 YouTubeLikeDislikePill(
@@ -259,7 +240,6 @@ struct VideoDetailMetaView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
-        .frame(height: 52) // 🔥 FIX: Fixed height for proper layout
     }
     
     // MARK: - 🔥 YOUTUBE 2024 STYLE: Subtle Divider
@@ -1029,59 +1009,6 @@ struct ScrollOffsetPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
-    }
-}
-
-// MARK: - 🔥 UIKit-Backed Horizontal Scroll View for Reliable Scrolling
-/// This wrapper uses UIScrollView to ensure horizontal scrolling works
-/// even when nested inside a vertical ScrollView
-struct HorizontalScrollableActionButtons<Content: View>: UIViewRepresentable {
-    let content: Content
-    
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
-    
-    func makeUIView(context: Context) -> UIScrollView {
-        let scrollView = UIScrollView()
-        scrollView.showsHorizontalScrollIndicator = false
-        scrollView.showsVerticalScrollIndicator = false
-        scrollView.alwaysBounceHorizontal = true
-        scrollView.alwaysBounceVertical = false
-        scrollView.contentInsetAdjustmentBehavior = .never
-        scrollView.delaysContentTouches = false // 🔥 Allow immediate touch response for buttons
-        
-        // Host the SwiftUI content
-        let hostController = UIHostingController(rootView: content)
-        hostController.view.backgroundColor = .clear
-        hostController.view.translatesAutoresizingMaskIntoConstraints = false
-        
-        scrollView.addSubview(hostController.view)
-        
-        // Store reference for updates
-        context.coordinator.hostController = hostController
-        
-        NSLayoutConstraint.activate([
-            hostController.view.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
-            hostController.view.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
-            hostController.view.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-            hostController.view.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-            hostController.view.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor)
-        ])
-        
-        return scrollView
-    }
-    
-    func updateUIView(_ scrollView: UIScrollView, context: Context) {
-        context.coordinator.hostController?.rootView = content
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-    
-    class Coordinator {
-        var hostController: UIHostingController<Content>?
     }
 }
 

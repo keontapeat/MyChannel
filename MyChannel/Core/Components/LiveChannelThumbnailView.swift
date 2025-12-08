@@ -23,8 +23,8 @@ final class ActivePlayerLimiter: ObservableObject {
     static let shared = ActivePlayerLimiter()
     
     // 🔥 CRITICAL: Maximum concurrent video players (prevents render flattening issues)
-    // Increased to 6 for better UX while still maintaining performance
-    private let maxActivePlayers: Int = 6
+    // Increased to 8 for faster channel loading while maintaining performance
+    private let maxActivePlayers: Int = 8
     
     // Track active player URLs in order of activation (oldest first)
     @Published private(set) var activePlayers: [String] = []
@@ -66,6 +66,70 @@ final class ActivePlayerLimiter: ObservableObject {
     
     /// Get current active count
     var activeCount: Int { activePlayers.count }
+}
+
+// MARK: - 🔥 LIVE CHANNEL LOADING TRACKER
+/// Tracks loading state of live channels across sections for smart UI updates
+@MainActor
+final class LiveChannelLoadingTracker: ObservableObject {
+    static let shared = LiveChannelLoadingTracker()
+    
+    @Published private(set) var readyChannels: Set<String> = []
+    @Published private(set) var failedChannels: Set<String> = []
+    @Published private(set) var isInitialLoadComplete = false
+    
+    private var loadingTimeout: Task<Void, Never>?
+    
+    private init() {
+        // Start a 5-second timeout for initial load
+        startLoadingTimeout()
+    }
+    
+    func markReady(_ channelId: String) {
+        readyChannels.insert(channelId)
+        failedChannels.remove(channelId)
+        checkInitialLoadComplete()
+    }
+    
+    func markFailed(_ channelId: String) {
+        failedChannels.insert(channelId)
+        readyChannels.remove(channelId)
+        checkInitialLoadComplete()
+    }
+    
+    func isReady(_ channelId: String) -> Bool {
+        readyChannels.contains(channelId)
+    }
+    
+    func isFailed(_ channelId: String) -> Bool {
+        failedChannels.contains(channelId)
+    }
+    
+    private func startLoadingTimeout() {
+        loadingTimeout?.cancel()
+        loadingTimeout = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds
+            if !Task.isCancelled {
+                isInitialLoadComplete = true
+            }
+        }
+    }
+    
+    private func checkInitialLoadComplete() {
+        // Consider initial load complete if we have at least 3 channels ready or 6 total processed
+        let totalProcessed = readyChannels.count + failedChannels.count
+        if readyChannels.count >= 3 || totalProcessed >= 6 {
+            isInitialLoadComplete = true
+            loadingTimeout?.cancel()
+        }
+    }
+    
+    func reset() {
+        readyChannels.removeAll()
+        failedChannels.removeAll()
+        isInitialLoadComplete = false
+        startLoadingTimeout()
+    }
 }
 
 // MARK: - 🔥 THERMONUCLEAR THUMBNAIL CACHE
@@ -207,12 +271,16 @@ struct LiveChannelThumbnailView: View {
     let allowPlaybackInPreviews: Bool
     var channelCategory: LiveTVChannel.ChannelCategory?
     var channelName: String?
+    var channelId: String?
+    var onStreamFailed: (() -> Void)?
+    var onStreamReady: (() -> Void)?
 
     @State private var isReady: Bool = false
     @State private var cachedSnapshot: UIImage?
     @State private var hasAppeared = false
     @State private var canActivatePlayer = false
     @State private var posterLoaded = false
+    @State private var streamFailed = false
 
     init(
         streamURL: String,
@@ -220,7 +288,10 @@ struct LiveChannelThumbnailView: View {
         fallbackStreamURL: String? = nil,
         allowPlaybackInPreviews: Bool = false,
         channelCategory: LiveTVChannel.ChannelCategory? = nil,
-        channelName: String? = nil
+        channelName: String? = nil,
+        channelId: String? = nil,
+        onStreamFailed: (() -> Void)? = nil,
+        onStreamReady: (() -> Void)? = nil
     ) {
         self.streamURL = streamURL
         self.posterURL = posterURL
@@ -228,32 +299,17 @@ struct LiveChannelThumbnailView: View {
         self.allowPlaybackInPreviews = allowPlaybackInPreviews
         self.channelCategory = channelCategory
         self.channelName = channelName
+        self.channelId = channelId
+        self.onStreamFailed = onStreamFailed
+        self.onStreamReady = onStreamReady
     }
 
     var body: some View {
         ZStack {
-            // 🔥 Layer 1: Beautiful gradient placeholder (shows INSTANTLY - 0ms)
-            firePlaceholder
+            // 🔥 NO PLACEHOLDER - Only show content when video is playing!
+            // This ensures users only see channels with working streams
             
-            // 🔥 Layer 2: Poster/Logo image (loads fast from URL)
-            if let poster = posterURL, !poster.isEmpty, isValidImageURL(poster) {
-                AsyncImage(url: URL(string: poster)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .onAppear { posterLoaded = true }
-                    case .failure(_), .empty:
-                        EmptyView()
-                    @unknown default:
-                        EmptyView()
-                    }
-                }
-                .opacity(isReady ? 0 : (posterLoaded ? 1 : 0))
-            }
-            
-            // 🔥 Layer 3: Cached video snapshot (shows in <10ms if available)
+            // 🔥 Layer 1: Cached video snapshot (shows in <10ms if available)
             if let snapshot = cachedSnapshot {
                 Image(uiImage: snapshot)
                     .resizable()
@@ -261,19 +317,23 @@ struct LiveChannelThumbnailView: View {
                     .transition(.opacity.animation(.easeOut(duration: 0.1)))
             }
             
-            // 🔥 Layer 4: Live video player (ONLY if limiter allows)
-            if canActivatePlayer && hasAppeared && (!AppConfig.isPreview || allowPlaybackInPreviews) {
+            // 🔥 Layer 2: Live video player (ONLY if limiter allows)
+            // Video player is completely hidden until stream is ready
+            if canActivatePlayer && hasAppeared && (!AppConfig.isPreview || allowPlaybackInPreviews) && !streamFailed {
                 ThermonuclearPlayer(
                     urls: buildURLCandidates(),
                     onReady: { handleReady() },
-                    onSnapshot: { handleSnapshot($0) }
+                    onSnapshot: { handleSnapshot($0) },
+                    onAllFailed: { handleAllFailed() }
                 )
                 .opacity(isReady ? 1 : 0)
-                .animation(.easeOut(duration: 0.15), value: isReady)
+                .allowsHitTesting(isReady)
             }
             
-            // 🔥 Layer 5: LIVE badge (always visible)
-            liveBadge
+            // 🔥 Layer 3: LIVE badge (only when stream is ready)
+            if isReady {
+                liveBadge
+            }
         }
         .clipped()
         .drawingGroup() // 🔥 GPU acceleration
@@ -283,6 +343,13 @@ struct LiveChannelThumbnailView: View {
             // 🔥 INSTANT cache check - no delay!
             if let cached = ThermonuclearThumbnailCache.shared.getCachedImage(for: streamURL) {
                 cachedSnapshot = cached
+                // If we have a cached snapshot, consider it ready enough to show
+                if !isReady {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        isReady = true
+                    }
+                    onStreamReady?()
+                }
             }
             
             // 🔥 FAST player activation - reduced delay!
@@ -299,6 +366,18 @@ struct LiveChannelThumbnailView: View {
             canActivatePlayer = false
             isReady = false
         }
+    }
+    
+    private func handleAllFailed() {
+        streamFailed = true
+        // Report to health agent and loading tracker if we have a channel ID
+        if let channelId = channelId {
+            Task { @MainActor in
+                StreamHealthMLAgent.shared.markChannelUnhealthy(channelId)
+                LiveChannelLoadingTracker.shared.markFailed(channelId)
+            }
+        }
+        onStreamFailed?()
     }
     
     // 🔥 Build URL candidates with nuclear fallbacks
@@ -332,6 +411,14 @@ struct LiveChannelThumbnailView: View {
         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
             isReady = true
         }
+        // Mark channel as healthy when stream plays successfully
+        if let channelId = channelId {
+            Task { @MainActor in
+                StreamHealthMLAgent.shared.markChannelHealthy(channelId)
+                LiveChannelLoadingTracker.shared.markReady(channelId)
+            }
+        }
+        onStreamReady?()
     }
     
     private func handleSnapshot(_ image: UIImage) {
@@ -535,6 +622,7 @@ private struct ThermonuclearPlayer: UIViewRepresentable {
     let urls: [String]
     let onReady: () -> Void
     let onSnapshot: (UIImage) -> Void
+    var onAllFailed: (() -> Void)?
 
     func makeUIView(context: Context) -> ThermonuclearPlayerView {
         let view = ThermonuclearPlayerView()
@@ -543,7 +631,7 @@ private struct ThermonuclearPlayer: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: ThermonuclearPlayerView, context: Context) {
-        uiView.configure(urls: urls, onReady: onReady, onSnapshot: onSnapshot)
+        uiView.configure(urls: urls, onReady: onReady, onSnapshot: onSnapshot, onAllFailed: onAllFailed)
     }
     
     static func dismantleUIView(_ uiView: ThermonuclearPlayerView, coordinator: ()) {
@@ -563,15 +651,17 @@ private final class ThermonuclearPlayerView: UIView {
     private var retryWorkItem: DispatchWorkItem?
     private var snapshotWorkItem: DispatchWorkItem?
     private var hasNotifiedReady = false
+    private var hasNotifiedAllFailed = false
     private var isConfigured = false
     private var configuredURLs: [String] = []
+    private var onAllFailedCallback: (() -> Void)?
     
     override func layoutSubviews() {
         super.layoutSubviews()
         playerLayer?.frame = bounds
     }
     
-    func configure(urls: [String], onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void) {
+    func configure(urls: [String], onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void, onAllFailed: (() -> Void)? = nil) {
         // 🔥 Prevent duplicate configurations
         guard !isConfigured || configuredURLs != urls else { return }
         
@@ -579,6 +669,8 @@ private final class ThermonuclearPlayerView: UIView {
         configuredURLs = urls
         currentIndex = 0
         isConfigured = true
+        hasNotifiedAllFailed = false
+        onAllFailedCallback = onAllFailed
         
         teardownPlayerOnly()
         startPlayer(onReady: onReady, onSnapshot: onSnapshot)
@@ -586,8 +678,13 @@ private final class ThermonuclearPlayerView: UIView {
     
     private func startPlayer(onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void) {
         guard currentIndex < urlCandidates.count else {
-            // 🔥 All failed - still notify ready to hide loading
-            DispatchQueue.main.async { onReady() }
+            // 🔥 All URLs failed - notify caller so they can hide the channel
+            if !hasNotifiedAllFailed {
+                hasNotifiedAllFailed = true
+                DispatchQueue.main.async { [weak self] in
+                    self?.onAllFailedCallback?()
+                }
+            }
             return
         }
         
@@ -792,6 +889,101 @@ private final class ThermonuclearPlayerView: UIView {
     }
     
     deinit { teardown() }
+}
+
+// MARK: - 🔥 BULLETPROOF ASYNC IMAGE (Never shows broken icon)
+private struct BulletproofAsyncImage: View {
+    let url: String
+    let onLoaded: () -> Void
+    
+    @State private var image: UIImage?
+    @State private var isLoading = true
+    
+    var body: some View {
+        Group {
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                // Show absolutely nothing when loading/failed - gradient is behind
+                Color.clear
+            }
+        }
+        .onAppear {
+            loadImage()
+        }
+    }
+    
+    private func loadImage() {
+        guard let imageURL = URL(string: url) else {
+            isLoading = false
+            return
+        }
+        
+        // 🔥 Skip cache for YouTube thumbnails to ensure fresh images
+        let shouldSkipCache = url.contains("ytimg.com")
+        
+        // Check cache first (skip for YouTube to avoid stale "unavailable" thumbnails)
+        if !shouldSkipCache,
+           let cached = URLCache.shared.cachedResponse(for: URLRequest(url: imageURL)),
+           let uiImage = UIImage(data: cached.data) {
+            self.image = uiImage
+            self.isLoading = false
+            onLoaded()
+            return
+        }
+        
+        // Load from network
+        Task {
+            do {
+                var request = URLRequest(url: imageURL)
+                request.cachePolicy = shouldSkipCache ? .reloadIgnoringLocalCacheData : .useProtocolCachePolicy
+                
+                let (data, response) = try await URLSession.shared.data(for: request)
+                
+                // 🔥 Validate image isn't too small (YouTube "unavailable" placeholder is often tiny)
+                guard let uiImage = UIImage(data: data) else {
+                    await MainActor.run {
+                        self.isLoading = false
+                    }
+                    return
+                }
+                
+                // 🔥 Reject suspiciously small images (likely error placeholders)
+                let minSize: CGFloat = 100
+                guard uiImage.size.width >= minSize && uiImage.size.height >= minSize else {
+                    print("🔥 [BulletproofImage] Rejecting small image: \(uiImage.size) for \(url)")
+                    await MainActor.run {
+                        self.isLoading = false
+                    }
+                    return
+                }
+                
+                // Cache the response (only if valid)
+                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200, !shouldSkipCache {
+                    let cachedResponse = CachedURLResponse(response: response, data: data)
+                    URLCache.shared.storeCachedResponse(cachedResponse, for: URLRequest(url: imageURL))
+                }
+                
+                await MainActor.run {
+                    self.image = uiImage
+                    self.isLoading = false
+                    onLoaded()
+                }
+            } catch {
+                await MainActor.run {
+                    self.isLoading = false
+                }
+            }
+        }
+    }
+    
+    // 🔥 Clear all cached YouTube thumbnails
+    static func clearYouTubeThumbnailCache() {
+        URLCache.shared.removeAllCachedResponses()
+        print("🔥 [BulletproofImage] Cleared all URL cache")
+    }
 }
 
 // MARK: - 🔥 THERMONUCLEAR SHIMMER

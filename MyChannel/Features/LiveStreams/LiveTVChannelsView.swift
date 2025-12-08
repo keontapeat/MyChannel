@@ -246,74 +246,80 @@ struct LiveTVChannelsView: View {
 private struct MinimalGridChannelCard: View {
     let channel: LiveTVChannel
     let action: () -> Void
+    
+    @State private var streamReady = false
+    @State private var streamFailed = false
 
     var body: some View {
-        Button(action: {
-            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-            impactFeedback.impactOccurred()
-            action()
-        }) {
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack {
-                    // Professional thumbnail with logo
-                    channelThumbnail
-                        .aspectRatio(16/9, contentMode: .fit)
-                        .frame(maxWidth: .infinity)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    
-                    // Play button overlay
-                    Circle()
-                        .fill(.white.opacity(0.95))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(.black)
-                        )
-                        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+        // 🔥 Only show channel when video is actually playing - no placeholder!
+        if streamReady && !streamFailed {
+            Button(action: {
+                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                impactFeedback.impactOccurred()
+                action()
+            }) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ZStack {
+                        // Live video thumbnail - only shows when playing
+                        channelThumbnail
+                            .aspectRatio(16/9, contentMode: .fit)
+                            .frame(maxWidth: .infinity)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        
+                        // Play button overlay
+                        Circle()
+                            .fill(.white.opacity(0.95))
+                            .frame(width: 40, height: 40)
+                            .overlay(
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.black)
+                            )
+                            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
 
-                    // LIVE badge
-                    if channel.isLive {
-                        HStack(spacing: 4) {
-                            Circle().fill(.white).frame(width: 5, height: 5)
-                            Text("LIVE").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
+                        // LIVE badge
+                        if channel.isLive {
+                            HStack(spacing: 4) {
+                                Circle().fill(.white).frame(width: 5, height: 5)
+                                Text("LIVE").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
+                            }
+                            .padding(.horizontal, 8).padding(.vertical, 5)
+                            .background(Capsule().fill(Color.red))
+                            .padding(8)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         }
-                        .padding(.horizontal, 8).padding(.vertical, 5)
-                        .background(Capsule().fill(Color.red))
-                        .padding(8)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        
+                        // Quality badge
+                        Text(channel.quality)
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.black.opacity(0.75)))
+                            .padding(8)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     }
-                    
-                    // Quality badge
-                    Text(channel.quality)
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.black.opacity(0.75)))
-                        .padding(8)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                }
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(channel.name)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(channel.name)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .lineLimit(1)
 
-                    HStack(spacing: 4) {
-                        Image(systemName: "eye.fill")
-                            .font(.system(size: 9))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        Text("\(formatViewerCount(channel.viewerCount)) viewers")
-                            .font(.system(size: 11))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        HStack(spacing: 4) {
+                            Image(systemName: "eye.fill")
+                                .font(.system(size: 9))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            Text("\(formatViewerCount(channel.viewerCount)) viewers")
+                                .font(.system(size: 11))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .buttonStyle(PressableScaleStyle(scale: 0.96))
         }
-        .buttonStyle(PressableScaleStyle(scale: 0.96))
     }
     
     // 🔥 THERMONUCLEAR channel thumbnail - LIVE VIDEO!
@@ -323,7 +329,18 @@ private struct MinimalGridChannelCard: View {
             posterURL: channel.logoURL,
             fallbackStreamURL: channel.previewFallbackURL,
             channelCategory: channel.category,
-            channelName: channel.name
+            channelName: channel.name,
+            channelId: channel.id,
+            onStreamFailed: {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    streamFailed = true
+                }
+            },
+            onStreamReady: {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    streamReady = true
+                }
+            }
         )
     }
     
@@ -385,91 +402,97 @@ private struct MinimalListChannelCard: View {
 
     private let thumbSize = CGSize(width: 160, height: 90)
     private let rowHeight: CGFloat = 114
+    
+    @State private var streamReady = false
+    @State private var streamFailed = false
 
     var body: some View {
-        Button(action: {
-            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-            impactFeedback.impactOccurred()
-            action()
-        }) {
-            HStack(spacing: 12) {
-                // Thumbnail
-                ZStack {
-                    // Professional thumbnail
-                    channelThumbnail
-                    
-                    // Play button
-                    Circle()
-                        .fill(.white.opacity(0.95))
-                        .frame(width: 36, height: 36)
-                        .overlay(
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(.black)
-                        )
-                        .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
-
-                    // LIVE badge overlay
-                    if channel.isLive {
-                        HStack(spacing: 4) {
-                            Circle().fill(.white).frame(width: 4, height: 4)
-                            Text("LIVE")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(Color.red))
-                        .padding(6)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    }
-                }
-                .frame(width: thumbSize.width, height: thumbSize.height)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                // Text area
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(channel.name)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .lineLimit(1)
-
-                    Text(channel.description)
-                        .font(.system(size: 12))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .lineLimit(2)
-
-                    HStack(spacing: 8) {
-                        // Category badge
-                        Text(channel.category.displayName)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(categoryColor)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(
-                                Capsule()
-                                    .fill(categoryColor.opacity(0.12))
-                            )
+        // 🔥 Only show channel when video is actually playing - no placeholder!
+        if streamReady && !streamFailed {
+            Button(action: {
+                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                impactFeedback.impactOccurred()
+                action()
+            }) {
+                HStack(spacing: 12) {
+                    // Thumbnail
+                    ZStack {
+                        // Live video thumbnail
+                        channelThumbnail
                         
-                        Image(systemName: "eye.fill")
-                            .font(.system(size: 10))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        Text("\(formatViewerCount(channel.viewerCount)) • \(channel.quality)")
-                            .font(.system(size: 11))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        // Play button
+                        Circle()
+                            .fill(.white.opacity(0.95))
+                            .frame(width: 36, height: 36)
+                            .overlay(
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.black)
+                            )
+                            .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+
+                        // LIVE badge overlay
+                        if channel.isLive {
+                            HStack(spacing: 4) {
+                                Circle().fill(.white).frame(width: 4, height: 4)
+                                Text("LIVE")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Color.red))
+                            .padding(6)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        }
                     }
+                    .frame(width: thumbSize.width, height: thumbSize.height)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                    // Text area
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(channel.name)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .lineLimit(1)
+
+                        Text(channel.description)
+                            .font(.system(size: 12))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .lineLimit(2)
+
+                        HStack(spacing: 8) {
+                            // Category badge
+                            Text(channel.category.displayName)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(categoryColor)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(categoryColor.opacity(0.12))
+                                )
+                            
+                            Image(systemName: "eye.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            Text("\(formatViewerCount(channel.viewerCount)) • \(channel.quality)")
+                                .font(.system(size: 11))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(height: rowHeight, alignment: .center)
+                .contentShape(Rectangle())
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(AppTheme.Colors.surface)
+                )
             }
-            .frame(height: rowHeight, alignment: .center)
-            .contentShape(Rectangle())
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(AppTheme.Colors.surface)
-            )
+            .buttonStyle(PressableScaleStyle(scale: 0.98))
         }
-        .buttonStyle(PressableScaleStyle(scale: 0.98))
     }
     
     // 🔥 THERMONUCLEAR channel thumbnail - LIVE VIDEO!
@@ -479,7 +502,18 @@ private struct MinimalListChannelCard: View {
             posterURL: channel.logoURL,
             fallbackStreamURL: channel.previewFallbackURL,
             channelCategory: channel.category,
-            channelName: channel.name
+            channelName: channel.name,
+            channelId: channel.id,
+            onStreamFailed: {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    streamFailed = true
+                }
+            },
+            onStreamReady: {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    streamReady = true
+                }
+            }
         )
     }
     

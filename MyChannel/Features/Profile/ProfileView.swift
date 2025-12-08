@@ -89,6 +89,31 @@ struct ProfileView: View {
         currentUser.id == user.id
     }
     
+    // 🔥 OWNER INTRO VIDEO: First video on profile with reliable YouTube thumbnail
+    private func ownerIntroVideo() -> Video? {
+        let introId = "owner_intro_video"
+        // Check if bundled intro video exists
+        guard let path = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4") else {
+            return nil
+        }
+        let url = URL(fileURLWithPath: path).absoluteString
+        
+        return Video(
+            id: introId,
+            title: "Shot By Keonta Intro",
+            description: "Welcome to MyChannel - Shot By Keonta 🎬🔥",
+            thumbnailURL: "https://i.ytimg.com/vi/YQHsXMglC9A/hqdefault.jpg",
+            videoURL: url,
+            duration: 35,
+            viewCount: 0,
+            likeCount: 0,
+            creator: user, // Use current profile user as creator
+            category: .entertainment,
+            tags: ["intro", "keonta", "mychannel"],
+            isPublic: true
+        )
+    }
+    
     private var videoManagementContext: VideoManagementContext? {
         guard isViewingOwnProfile else { return nil }
         return VideoManagementContext(
@@ -630,13 +655,25 @@ struct ProfileView: View {
                 )
                 
                 // Update UI with fresh data
-                userVideos = result.videos
+                var videosWithIntro = result.videos
+                
+                // 🔥 ENSURE OWNER'S INTRO VIDEO IS FIRST
+                if isViewingOwnProfile, let intro = ownerIntroVideo() {
+                    // Remove if already in list (to avoid duplicates)
+                    videosWithIntro.removeAll { $0.id == intro.id }
+                    // Insert at beginning
+                    videosWithIntro.insert(intro, at: 0)
+                    // Auto-pin the intro video
+                    PinnedVideosStore.shared.pin(intro.id, for: user.id)
+                }
+                
+                userVideos = videosWithIntro
                 lastVideoDocument = result.lastDocument
                 hasMoreVideos = result.videos.count == videosPerPage
                 isLoadingVideos = false
                 
                 // Update cache for next time
-                profileCache.cacheProfile(user: user, videos: result.videos)
+                profileCache.cacheProfile(user: user, videos: videosWithIntro)
                 
                 // Check local storage as backup only if Firestore is empty
                 if userVideos.isEmpty {
@@ -732,13 +769,22 @@ struct ProfileView: View {
                     limit: videosPerPage,
                     lastDocument: nil
                 )
-                userVideos = result.videos
+                
+                // 🔥 ENSURE OWNER'S INTRO VIDEO IS FIRST
+                var videosWithIntro = result.videos
+                if isViewingOwnProfile, let intro = ownerIntroVideo() {
+                    videosWithIntro.removeAll { $0.id == intro.id }
+                    videosWithIntro.insert(intro, at: 0)
+                    PinnedVideosStore.shared.pin(intro.id, for: newUser.id)
+                }
+                
+                userVideos = videosWithIntro
                 lastVideoDocument = result.lastDocument
                 hasMoreVideos = result.videos.count == videosPerPage
                 isLoadingVideos = false
                 
                 // Update cache
-                profileCache.cacheProfile(user: newUser, videos: result.videos)
+                profileCache.cacheProfile(user: newUser, videos: videosWithIntro)
                 
                 // Check local storage as backup only if Firestore is empty
                 if userVideos.isEmpty {

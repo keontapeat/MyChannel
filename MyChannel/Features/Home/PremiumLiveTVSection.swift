@@ -192,25 +192,39 @@ struct PremiumChannelCard: View {
     
     @State private var isPressed: Bool = false
     @State private var isHovered: Bool = false
+    @State private var streamReady: Bool = false
+    @State private var streamFailed: Bool = false
     
     var body: some View {
-        Button(action: {
-            print("📺 LIVE TV CLICKED: \(channel.name)")
-            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-            impactFeedback.impactOccurred()
-            action()
-        }) {
-            VStack(spacing: 12) {
-                // Channel Logo with Live Indicator
-                ZStack {
-                    if showPreview {
-                        // 🔥 THERMONUCLEAR THUMBNAIL
+        // 🔥 Only show channel when video is actually playing - no placeholder!
+        if streamReady && !streamFailed {
+            Button(action: {
+                print("📺 LIVE TV CLICKED: \(channel.name)")
+                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                impactFeedback.impactOccurred()
+                action()
+            }) {
+                VStack(spacing: 12) {
+                    // Channel Live Video
+                    ZStack {
+                        // 🔥 LIVE VIDEO THUMBNAIL - only shows when playing
                         LiveChannelThumbnailView(
                             streamURL: channel.streamURL,
                             posterURL: channel.logoURL,
                             fallbackStreamURL: channel.previewFallbackURL,
                             channelCategory: channel.category,
-                            channelName: channel.name
+                            channelName: channel.name,
+                            channelId: channel.id,
+                            onStreamFailed: {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    streamFailed = true
+                                }
+                            },
+                            onStreamReady: {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    streamReady = true
+                                }
+                            }
                         )
                         .frame(width: 120, height: 80)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -228,145 +242,97 @@ struct PremiumChannelCard: View {
                                     lineWidth: 1
                                 )
                         )
-                    } else {
-                        // Premium background with gradient
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        channel.category.color.opacity(0.1),
-                                        channel.category.color.opacity(0.05)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 120, height: 80)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                channel.category.color.opacity(0.3),
-                                                channel.category.color.opacity(0.1)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            )
                         
-                        // Channel Logo - ALWAYS SHOW WORKING CONTENT
-                        VStack(spacing: 8) {
-                            Image(systemName: "tv.fill")
-                                .font(.system(size: 28))
-                                .foregroundColor(channel.category.color)
-                            
-                            Text(String(channel.name.prefix(3)).uppercased())
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(channel.category.color)
-                        }
-                    }
-                    
-                    // CLICKABLE PLAY OVERLAY
-                    VStack {
-                        Spacer()
-                        HStack {
+                        // Play button overlay
+                        VStack {
                             Spacer()
-                            
-                            Circle()
-                                .fill(.white.opacity(0.9))
-                                .frame(width: 40, height: 40)
-                                .overlay(
-                                    Image(systemName: "play.fill")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(.black)
-                                )
-                                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
-                            
-                            Spacer()
-                        }
-                        Spacer()
-                    }
-                    .opacity(isPressed ? 1.0 : 0.8)
-                    
-                    // Live Badge
-                    VStack {
-                        HStack {
-                            Spacer()
-                            
-                            HStack(spacing: 3) {
+                            HStack {
+                                Spacer()
                                 Circle()
-                                    .fill(.white)
-                                    .frame(width: 4, height: 4)
-                                    .scaleEffect(1.0)
-                                    .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: true)
-                                
-                                Text("LIVE")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundColor(.white)
+                                    .fill(.white.opacity(0.9))
+                                    .frame(width: 40, height: 40)
+                                    .overlay(
+                                        Image(systemName: "play.fill")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(.black)
+                                    )
+                                    .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                                Spacer()
                             }
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule()
-                                    .fill(.red)
-                                    .shadow(color: .red.opacity(0.4), radius: 2, x: 0, y: 1)
-                            )
+                            Spacer()
                         }
+                        .opacity(isPressed ? 1.0 : 0.8)
                         
-                        Spacer()
+                        // LIVE Badge
+                        VStack {
+                            HStack {
+                                Spacer()
+                                HStack(spacing: 3) {
+                                    Circle()
+                                        .fill(.white)
+                                        .frame(width: 4, height: 4)
+                                    Text("LIVE")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule()
+                                        .fill(.red)
+                                        .shadow(color: .red.opacity(0.4), radius: 2, x: 0, y: 1)
+                                )
+                            }
+                            Spacer()
+                        }
+                        .frame(width: 120, height: 80)
+                        .padding(6)
                     }
-                    .frame(width: 120, height: 80)
-                    .padding(6)
-                }
-                
-                // Channel Info
-                VStack(spacing: 4) {
-                    Text(channel.name)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .lineLimit(1)
                     
-                    HStack(spacing: 6) {
-                        HStack(spacing: 2) {
-                            Image(systemName: "eye.fill")
+                    // Channel Info
+                    VStack(spacing: 4) {
+                        Text(channel.name)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .lineLimit(1)
+                        
+                        HStack(spacing: 6) {
+                            HStack(spacing: 2) {
+                                Image(systemName: "eye.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                                
+                                Text("\(channel.viewerCount.formatted())")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            }
+                            
+                            Text("•")
                                 .font(.system(size: 10))
                                 .foregroundColor(AppTheme.Colors.textTertiary)
                             
-                            Text("\(channel.viewerCount.formatted())")
-                                .font(.system(size: 11))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            Text(channel.quality)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(channel.category.color)
                         }
-                        
-                        Text("•")
-                            .font(.system(size: 10))
-                            .foregroundColor(AppTheme.Colors.textTertiary)
-                        
-                        Text(channel.quality)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(channel.category.color)
                     }
+                    .frame(width: 120)
                 }
-                .frame(width: 120)
             }
+            .buttonStyle(PlainButtonStyle())
+            .scaleEffect(isPressed ? 0.95 : (isHovered ? 1.05 : 1.0))
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isHovered)
+            .onPressGesture(
+                onPress: { isPressed = true },
+                onRelease: { isPressed = false }
+            )
+            .onHover { hovering in
+                isHovered = hovering
+            }
+            .accessibilityLabel("\(channel.name) live channel")
+            .accessibilityHint("Double tap to watch live")
         }
-        .buttonStyle(PlainButtonStyle())
-        .scaleEffect(isPressed ? 0.95 : (isHovered ? 1.05 : 1.0))
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isHovered)
-        .onPressGesture(
-            onPress: { 
-                isPressed = true
-            },
-            onRelease: { isPressed = false }
-        )
-        .onHover { hovering in
-            isHovered = hovering
-        }
-        .accessibilityLabel("\(channel.name) live channel")
-        .accessibilityHint("Double tap to watch live")
     }
 }
 

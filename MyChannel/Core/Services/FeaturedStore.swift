@@ -12,11 +12,14 @@ final class FeaturedStore: ObservableObject {
     static let shared = FeaturedStore()
     private init() {
         load()
-        syncFromFirestore()
+        startFirestoreListener()
         startExpirationTimer()
     }
 
     @Published private(set) var featured: [StoredFeatured] = []
+    @Published private(set) var isLoading: Bool = false
+    @Published private(set) var hasSyncedFromFirestore: Bool = false
+    
     private let key = "featured_videos_local_store"
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -27,6 +30,11 @@ final class FeaturedStore: ObservableObject {
     #endif
     
     private var expirationTimer: Timer?
+    
+    /// Returns the actual count of user-added featured videos (not including hardcoded intro)
+    var actualFeaturedCount: Int {
+        featured.count
+    }
 
     func load() {
         guard let data = UserDefaults.standard.data(forKey: key),
@@ -44,47 +52,78 @@ final class FeaturedStore: ObservableObject {
         }
     }
     
-    // MARK: - Firestore Sync
-    func syncFromFirestore() {
+    // MARK: - Firestore Sync (Real-time listener for featured_videos collection)
+    func startFirestoreListener() {
         #if canImport(FirebaseFirestore)
-        // Listen for active featured videos from Firestore
-        activeListener = db.collection("active_featured_videos")
-            .whereField("isActive", isEqualTo: true)
-            .whereField("expiresAt", isGreaterThan: Timestamp(date: Date()))
-            .order(by: "priority", descending: true)
-            .order(by: "featuredAt", descending: true)
+        isLoading = true
+        
+        // Listen to the featured_videos collection (same as ThermonuclearFeaturedManager uses)
+        activeListener = db.collection("featured_videos")
+            .order(by: "priority", descending: false)
+            .limit(to: 3)
             .addSnapshotListener { [weak self] snap, error in
                 guard let self = self else { return }
                 if let error = error {
                     print("❌ Error syncing featured videos: \(error)")
+                    Task { @MainActor in
+                        self.isLoading = false
+                        self.hasSyncedFromFirestore = true
+                    }
                     return
                 }
                 Task { @MainActor in
-                    await self.updateFromFirestore(snap: snap)
+                    await self.loadVideosFromFirestoreSnapshot(snap: snap)
                 }
             }
+        #else
+        hasSyncedFromFirestore = true
         #endif
     }
     
-    private func updateFromFirestore(snap: Any?) async {
+    private func loadVideosFromFirestoreSnapshot(snap: Any?) async {
         #if canImport(FirebaseFirestore)
-        guard let snap = snap as? QuerySnapshot else { return }
+        guard let snap = snap as? QuerySnapshot else {
+            isLoading = false
+            hasSyncedFromFirestore = true
+            return
+        }
         
         // Get video IDs from Firestore
-        let firestoreVideoIds = Set(snap.documents.compactMap { doc in
+        let videoIds = snap.documents.compactMap { doc in
             doc.data()["videoId"] as? String
-        })
+        }
         
-        // Keep local videos that aren't from Firestore (manual additions)
-        let localOnly = featured.filter { !firestoreVideoIds.contains($0.id) }
+        // Clear local cache and load fresh from Firestore
+        var loadedVideos: [StoredFeatured] = []
         
-        // TODO: Fetch full video objects for Firestore featured videos
-        // For now, we'll merge them when available
+        for videoId in videoIds {
+            do {
+                let videoDoc = try await db.collection("videos").document(videoId).getDocument()
+                if let video = try? videoDoc.data(as: Video.self) {
+                    loadedVideos.append(StoredFeatured(from: video))
+                }
+            } catch {
+                print("❌ Error loading video \(videoId): \(error)")
+            }
+        }
         
-        // Remove expired Firestore videos from local store
-        featured = localOnly + featured.filter { firestoreVideoIds.contains($0.id) && !isExpired($0.id) }
+        // Update local store with Firestore data
+        featured = loadedVideos
         persist()
+        isLoading = false
+        hasSyncedFromFirestore = true
+        
+        print("✅ FeaturedStore synced \(loadedVideos.count) videos from Firestore")
         #endif
+    }
+    
+    // MARK: - Legacy sync method (for backward compatibility)
+    func syncFromFirestore() {
+        startFirestoreListener()
+    }
+    
+    private func updateFromFirestore(snap: Any?) async {
+        await loadVideosFromFirestoreSnapshot(snap: snap)
     }
     
     // MARK: - Expiration Handling
@@ -157,12 +196,29 @@ final class FeaturedStore: ObservableObject {
     // 🔥 CONNECTED TO YOUR PROFILE: Uses current user as creator
     func ensureOwnerIntroFirstIfAvailable() {
         let introId = "owner_intro_video"
+        // Old thumbnail URLs that need to be replaced with reliable ytimg.com thumbnail
+        let oldBrokenThumbnails = [
+            "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4",
+            "unsplash.com"
+        ]
+        
         if let existingIndex = featured.firstIndex(where: { $0.id == introId }) {
-            if existingIndex != 0 {
-                featured.move(fromOffsets: IndexSet(integer: existingIndex), toOffset: 0)
-                persist()
+            let existing = featured[existingIndex]
+            // 🔥 FIX: Check if thumbnail needs updating (old broken URL)
+            let needsUpdate = oldBrokenThumbnails.contains { existing.thumb.contains($0) }
+            
+            if needsUpdate {
+                // Remove old cached entry with broken thumbnail
+                featured.remove(at: existingIndex)
+                // Will be re-added below with correct thumbnail
+            } else {
+                // Thumbnail is fine, just ensure it's first
+                if existingIndex != 0 {
+                    featured.move(fromOffsets: IndexSet(integer: existingIndex), toOffset: 0)
+                    persist()
+                }
+                return
             }
-            return
         }
         // Build video from bundle if present
         if let path = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4") {
@@ -184,7 +240,7 @@ final class FeaturedStore: ObservableObject {
                 id: introId,
                 title: "Shot By Keonta Intro",
                 description: "Welcome to MyChannel - Shot By Keonta 🎬🔥",
-                thumbnailURL: "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=1280&h=720&fit=crop",
+                thumbnailURL: "https://i.ytimg.com/vi/YQHsXMglC9A/hqdefault.jpg",
                 videoURL: url,
                 duration: 35,
                 viewCount: 0,

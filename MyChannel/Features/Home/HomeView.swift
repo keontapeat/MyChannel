@@ -67,6 +67,7 @@ enum FullScreenRoute: Identifiable {
 // MARK: - HomeView
 struct HomeView: View {
     @EnvironmentObject private var appState: AppState
+    @ObservedObject private var featuredStore = FeaturedStore.shared
     private let globalPlayer = GlobalVideoPlayerManager.shared
     @State private var miniActive = false
 
@@ -160,6 +161,9 @@ struct HomeView: View {
                             onSeeAllTrending: { route = .trending },
                             onSeeAllMusic: { route = .custom("musicHub") },
                             onSeeAllExplore: { route = .custom("exploreHub") },
+                            onSeeAllArtists: { route = .custom("topArtists") },
+                            onSeeAllFilmmakers: { route = .custom("topFilmmakers") },
+                            onSeeAllChannels: { route = .custom("topChannels") },
                             onOpenArtistDetail: { name, avatar, vids, total in
                                 route = .artistDetail(name: name, avatar: avatar, videos: vids.isEmpty ? Array(Video.sampleVideos.prefix(8)) : vids, totalViews: total)
                             },
@@ -205,6 +209,10 @@ struct HomeView: View {
         .refreshable { await refreshContent() }
         .onChange(of: appState.isAuthenticated) { newValue in
             loadUserStories()
+        }
+        .onChange(of: featuredStore.featured) { _ in
+            // 🔥 React to featured video changes (add/remove)
+            setupContent()
         }
         .sheet(isPresented: $presentStoryCreator) {
             UltimateStoryCreatorView { story in
@@ -349,190 +357,16 @@ struct HomeView: View {
     // MARK: - Setup Methods
     @State private var presentStoryCreator: Bool = false
 
-    // Helper to pin specific YouTube link first
-    private var pinnedYouTubeURL: String {
-        guard AppConfig.Features.enableMockData else { return "" }
-        return "https://www.youtube.com/watch?v=71GJrAY54Ew&list=RD71GJrAY54Ew&start_radio=1"
-    }
-    private func parseYouTubeID(from urlString: String) -> String? {
-        guard let comps = URLComponents(string: urlString) else { return nil }
-        if let v = comps.queryItems?.first(where: { $0.name == "v" })?.value, !v.isEmpty {
-            return v
-        }
-        if let host = comps.host, host.contains("youtu.be"), let id = comps.path.split(separator: "/").last {
-            return String(id)
-        }
-        return nil
-    }
-    private func pinnedFeaturedVideo() -> Video {
-        guard AppConfig.Features.enableMockData else {
-            // When mock data disabled, return a harmless placeholder not shown
-            return Video(
-                title: "",
-                description: "",
-                thumbnailURL: "",
-                videoURL: "",
-                duration: 0,
-                viewCount: 0,
-                likeCount: 0,
-                creator: User(username: "", displayName: "", email: ""),
-                category: .other,
-                isPublic: false
-            )
-        }
-        let ytID = parseYouTubeID(from: pinnedYouTubeURL) ?? "71GJrAY54Ew"
-        let friendUser = User(
-            username: "scatz",
-            displayName: "Scatz",
-            email: "music@artist.com",
-            profileImageURL: "https://i.ytimg.com/vi/\(ytID)/hqdefault.jpg",
-            bannerImageURL: nil,
-            bio: "Artist",
-            subscriberCount: 21_300,
-            videoCount: 0,
-            isVerified: true,
-            isCreator: true
-        )
-        return Video(
-            id: "friend_yt_\(ytID)",
-            title: "Scatz - Rebound ( Official Music Video ) Shot By @ImmortalVision",
-            description: "Official music video. Shot by @ImmortalVision.",
-            thumbnailURL: "https://i.ytimg.com/vi/\(ytID)/maxresdefault.jpg",
-            videoURL: pinnedYouTubeURL,
-            duration: 94,
-            viewCount: 5_000,
-            likeCount: 191,
-            commentCount: 12,
-            createdAt: Calendar.current.date(byAdding: .weekOfYear, value: -4, to: Date()) ?? Date(),
-            creator: friendUser,
-            category: .music,
-            tags: ["music","official","video","scatz","immortalvision"],
-            isPublic: true,
-            quality: [.quality720p],
-            aspectRatio: .landscape,
-            isLiveStream: false,
-            contentSource: .youtube,
-            externalID: ytID,
-            isVerified: true
-        )
-    }
-
-    // Always-First Featured: Shot By Keonta intro (uses local bundle if present)
-    // 🔥 CONNECTED TO YOUR PROFILE: When tapped, navigates to VideoDetail with YOUR profile as creator
-    private func introFeaturedVideo() -> Video {
-        // 🔥 USE CURRENT USER (YOU!) as the creator so tapping goes to YOUR profile
-        let currentUser = appState.currentUser ?? AuthenticationManager.shared.currentUser
-        
-        // Fallback user if not logged in (still points to your profile info)
-        let keontaUser: User = currentUser ?? User(
-            id: "sbkeonta_owner",
-            username: "sbkeonta_",
-            displayName: "Shot By Keonta",
-            email: "keontapeat@mychannel.live",
-            profileImageURL: currentUser?.profileImageURL ?? "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop",
-            bio: "Creator of MyChannel 🎬",
-            subscriberCount: currentUser?.subscriberCount ?? 0,
-            videoCount: currentUser?.videoCount ?? 1,
-            isVerified: true,
-            isCreator: true
-        )
-
-        // Resolve local video in app bundle; fallback to a demo MP4
-        let localPath = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4")
-        let videoURL = localPath.map { URL(fileURLWithPath: $0).absoluteString } ?? "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-
-        // 🔥 FIX: Use reliable thumbnail URLs (Unsplash is more reliable than picsum)
-        let poster = "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=1280&h=720&fit=crop"
-
-        // Monetization flag so ad preview and pre-roll show
-        let adBreaks = Video.AdBreaks(preRoll: true, midRoll: false, postRoll: false)
-        let monetization = Video.MonetizationSettings(isMonetized: true, adBreaks: adBreaks, sponsorSegments: [], merchandise: nil, donationEnabled: false, subscriptionTier: nil, totalRevenue: 0)
-
-        return Video(
-            id: "sbkeonta_intro_video_\(keontaUser.id)",
-            title: "Shot By Keonta Intro",
-            description: "Welcome to MyChannel - Shot By Keonta 🎬🔥",
-            thumbnailURL: poster,
-            videoURL: videoURL,
-            duration: 35,
-            viewCount: 0,
-            likeCount: 0,
-            creator: keontaUser,  // 🔥 YOUR PROFILE as creator!
-            category: .entertainment,
-            tags: ["intro", "keonta", "mychannel"],
-            isPublic: true,
-            quality: [.quality720p, .quality1080p, .quality2160p],
-            aspectRatio: .landscape,
-            isLiveStream: false,
-            contentSource: .userUploaded,
-            externalID: nil,
-            isVerified: true,
-            monetization: monetization,
-            isSponsored: false
-        )
-    }
-
     private func setupContent() {
-        // Pull owner-managed Featured list (for possible 3rd slot)
-        FeaturedStore.shared.ensureOwnerIntroFirstIfAvailable()
+        // 🔥 FEATURED VIDEOS: Only show ACTUAL featured videos from Firestore
+        // No more hardcoded fallbacks - if 0 videos are featured, show 0 slides
         let ownerFeatured = FeaturedStore.shared.toVideos()
-        // In production/TestFlight, do not show mock content for authenticated users
-        let seeds = SeedCatalogService.shared.seedVideos
-        let samples = Video.sampleVideos
-        var base: [Video] = []
-        if AppConfig.Features.enableMockData {
-            base = (samples + seeds).filter { $0.viewCount > 500_000 }
-        } else {
-            base = []
-        }
-        let friend: [Video] = AppConfig.Features.enableMockData ? friendHeroVideos() : []
-
-        // Always pin Shot By Keonta intro first, then requested YouTube video
-        let keonta = introFeaturedVideo()
-        let pinned = pinnedFeaturedVideo()
-
-        var seen = Set<String>()
-        var ordered: [Video] = []
-        // 1) ALWAYS put Keonta intro first (even in Release builds for App Store screenshots)
-        if seen.insert(keonta.id).inserted { ordered.append(keonta) }
-        // 2) Then the pinned YouTube request (only in debug/mock mode)
-        if AppConfig.Features.enableMockData {
-            if seen.insert(pinned.id).inserted { ordered.append(pinned) }
-        }
-        // 3) Fill remaining slots preferring friend hero, then owner featured, then base
-        let candidates: [Video] = (friend + ownerFeatured + base)
-        for v in candidates {
-            if ordered.count >= 3 { break }
-            if seen.insert(v.id).inserted { ordered.append(v) }
-        }
-
-        // Ensure we have at least the Keonta intro, even in Release builds
-        if ordered.isEmpty {
-            ordered = [keonta]
-            if AppConfig.Features.enableMockData {
-                ordered.append(contentsOf: [pinned] + Array(samples.prefix(2)))
-            }
-        }
-
-        // Cap to exactly 3 items to show only three page dots in the hero
-        featuredContent = Array(ordered.prefix(3))
+        
+        // Only use actual featured videos, no fallbacks
+        featuredContent = Array(ownerFeatured.prefix(3))
         heroVideoIndex = 0
-
-        // Ensure we always have at least two items for the Featured carousel.
-        if featuredContent.count < 2 {
-            var mapped: [Video] = []
-            // Prefer sample movie posters as fallback (stable thumbnails)
-            for m in FreeMovie.sampleMovies.prefix(4) {
-                let v = MoviePlaybackResolver.video(from: m, creator: User.defaultUser)
-                mapped.append(v)
-            }
-            // Merge uniques until we have 2
-            var seen = Set(featuredContent.map { $0.id })
-            for v in mapped where featuredContent.count < 2 {
-                if seen.insert(v.id).inserted { featuredContent.append(v) }
-            }
-            heroVideoIndex = 0
-        }
+        
+        print("📺 Featured content loaded: \(featuredContent.count) videos")
     }
 
     private func refreshContent() async {
@@ -641,69 +475,6 @@ struct HomeView: View {
         route = .video(video)
     }
 
-    private func friendHeroVideos() -> [Video] {
-        let friendUser = User(
-            username: "scatz",
-            displayName: "Scatz",
-            email: "music@artist.com",
-            profileImageURL: "https://i.ytimg.com/vi/71GJrAY54Ew/hqdefault.jpg",
-            bannerImageURL: nil,
-            bio: "Artist",
-            subscriberCount: 21_300,
-            videoCount: 0,
-            isVerified: true,
-            isCreator: true
-        )
-
-        let v1 = Video(
-            id: "friend_yt_71GJrAY54Ew",
-            title: "Scatz - Rebound ( Official Music Video ) Shot By @ImmortalVision",
-            description: "Official music video. Shot by @ImmortalVision.",
-            thumbnailURL: "https://i.ytimg.com/vi/71GJrAY54Ew/maxresdefault.jpg",
-            videoURL: "https://www.youtube.com/watch?v=71GJrAY54Ew",
-            duration: 94,
-            viewCount: 5_000,
-            likeCount: 191,
-            commentCount: 12,
-            createdAt: Calendar.current.date(byAdding: .weekOfYear, value: -4, to: Date()) ?? Date(),
-            creator: friendUser,
-            category: .music,
-            tags: ["music","official","video","scatz","immortalvision"],
-            isPublic: true,
-            quality: [.quality720p],
-            aspectRatio: .landscape,
-            isLiveStream: false,
-            contentSource: .youtube,
-            externalID: "71GJrAY54Ew",
-            isVerified: true
-        )
-
-        let v2 = Video(
-            id: "friend_yt_d17K2Tl_Ljg",
-            title: "Scatz - Hibachi ( Official Music Video )",
-            description: "Official music video.",
-            thumbnailURL: "https://i.ytimg.com/vi/d17K2Tl_Ljg/maxresdefault.jpg",
-            videoURL: "https://www.youtube.com/watch?v=d17K2Tl_Ljg",
-            duration: 120,
-            viewCount: 4_200,
-            likeCount: 150,
-            commentCount: 8,
-            createdAt: Calendar.current.date(byAdding: .weekOfYear, value: -10, to: Date()) ?? Date(),
-            creator: friendUser,
-            category: .music,
-            tags: ["music","official","video","scatz"],
-            isPublic: true,
-            quality: [.quality720p],
-            aspectRatio: .landscape,
-            isLiveStream: false,
-            contentSource: .youtube,
-            externalID: "d17K2Tl_Ljg",
-            isVerified: true
-        )
-
-        return [v1, v2]
-    }
-    
     // MARK: - ULTRA-THERMONUCLEAR FAB 🔥💥😤
     private var thermonuclearFAB: some View {
         VStack {
@@ -918,7 +689,8 @@ struct MinimalHeroSection: View {
     }
 
     var body: some View {
-        if !featuredContent.isEmpty {
+        // 🔥 Only show section if there are featured videos OR user is admin (to add videos)
+        if !featuredContent.isEmpty || isAdmin {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 6) {
                     Image(systemName: "star.fill")
@@ -959,25 +731,78 @@ struct MinimalHeroSection: View {
                         .environmentObject(appState)
                 }
 
-                TabView(selection: $selectedIndex) {
-                    ForEach(Array(featuredContent.enumerated()), id: \.offset) { index, vid in
-                        FeaturedHeroCard(
-                            video: vid,
-                            isCompact: isCompact,
-                            showLivePreview: (index == selectedIndex) || (index == 0),
-                            allowLiveInPreview: showLiveHeroPreviewInPreviews,
-                            onPlay: { onPlayVideo(vid) },
-                            onAddToList: { onAddToList(vid) }
-                        )
+                // 🔥 ACCURATE DISPLAY: Only show carousel if there are actually featured videos
+                if featuredContent.isEmpty {
+                    // Empty state for admin
+                    if isAdmin {
+                        VStack(spacing: 16) {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(AppTheme.Colors.surface)
+                                .frame(height: 200)
+                                .overlay(
+                                    VStack(spacing: 12) {
+                                        Image(systemName: "star.circle")
+                                            .font(.system(size: 48, weight: .medium))
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
+                                        
+                                        Text("No Featured Videos")
+                                            .font(.system(size: 17, weight: .semibold))
+                                            .foregroundColor(AppTheme.Colors.textPrimary)
+                                        
+                                        Text("Pin up to 3 videos to feature on Home")
+                                            .font(.system(size: 14, weight: .regular))
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
+                                        
+                                        Button {
+                                            HapticManager.shared.impact(style: .medium)
+                                            showingFeaturedManager = true
+                                        } label: {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: "plus.circle.fill")
+                                                    .font(.system(size: 16, weight: .semibold))
+                                                Text("Add First Video")
+                                                    .font(.system(size: 15, weight: .semibold))
+                                            }
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 20)
+                                            .padding(.vertical, 10)
+                                            .background(
+                                                Capsule()
+                                                    .fill(AppTheme.Colors.primary)
+                                            )
+                                        }
+                                    }
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
+                                )
+                        }
                         .padding(.horizontal, 20)
-                        .tag(index)
                     }
+                } else {
+                    // Show actual featured videos
+                    TabView(selection: $selectedIndex) {
+                        ForEach(Array(featuredContent.enumerated()), id: \.offset) { index, vid in
+                            FeaturedHeroCard(
+                                video: vid,
+                                isCompact: isCompact,
+                                showLivePreview: (index == selectedIndex) || (index == 0),
+                                allowLiveInPreview: showLiveHeroPreviewInPreviews,
+                                onPlay: { onPlayVideo(vid) },
+                                onAddToList: { onAddToList(vid) }
+                            )
+                            .padding(.horizontal, 20)
+                            .tag(index)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .automatic))
+                    .frame(height: 250)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                .tabViewStyle(.page(indexDisplayMode: .automatic))
-                .frame(height: 250)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
         }
+        // 🔥 For non-admins: Section is completely hidden when there are no featured videos
     }
 }
 
@@ -1188,6 +1013,9 @@ struct MinimalContentSections: View {
     let onSeeAllTrending: () -> Void
     let onSeeAllMusic: () -> Void
     let onSeeAllExplore: () -> Void
+    let onSeeAllArtists: () -> Void
+    let onSeeAllFilmmakers: () -> Void
+    let onSeeAllChannels: () -> Void
     let onOpenArtistDetail: (String, String, [Video], Int) -> Void
     let onOpenFilmmakerDetail: (String, [FreeMovie]) -> Void
     let onOpenChannelDetail: (String, String, Int, Int, [Video]) -> Void
@@ -1609,66 +1437,8 @@ struct MinimalContentSections: View {
                 onSeeAll: { onSeeAllLiveTV() }
             )
             
-            // Also keep quick access row with MyChannel Live first
-            MinimalSection(
-                title: "Quick Tune",
-                seeAllAction: nil
-            ) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 16) {
-                        // Our Go Live channel via Cloud Run proxy
-                        let myChannelLive = LiveTVChannel(
-                            id: "mychannel-live",
-                            name: "MyChannel Live",
-                            logoURL: "https://i.ytimg.com/vi/jfKfPfyJRdk/hqdefault.jpg",
-                            streamURL: "\(AppConfig.API.cloudRunBaseURL)/live/playlist",
-                            category: .entertainment,
-                            description: "Go Live playback",
-                            isLive: true,
-                            viewerCount: 0,
-                            quality: "HD",
-                            language: "English",
-                            country: "US",
-                            epgURL: nil,
-                            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
-                        )
-
-                        NavigationLink(destination: LiveTVPlayerView(channel: myChannelLive)) {
-                            MinimalChannelCard(
-                                channel: myChannelLive,
-                                autoPreview: true,
-                                previewOverrideStreamURL: nil,
-                                previewOverridePosterURL: nil,
-                                allowPlaybackInPreviews: false
-                            )
-                        }
-                        .buttonStyle(PressableScaleStyle(scale: 0.96))
-
-                        // 🔥 Show the FIRE channels first - verified working streams
-                        let source = liveChannelsAPI.isEmpty ? LiveTVChannel.sampleChannels : liveChannelsAPI
-                        let channels = Array(source.prefix(8)) // Top 8 channels for quick tune
-                        let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
-                        let previewStreams = [
-                            "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-                            "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8",
-                            "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8"
-                        ]
-                        ForEach(Array(channels.enumerated()), id: \.element.id) { index, channel in
-                            NavigationLink(destination: LiveTVPlayerView(channel: channel)) {
-                                MinimalChannelCard(
-                                    channel: channel,
-                                    autoPreview: true, // 🔥 ALL channels auto-preview now!
-                                    previewOverrideStreamURL: (isPreview && index < 3) ? previewStreams[index % previewStreams.count] : nil,
-                                    previewOverridePosterURL: nil,
-                                    allowPlaybackInPreviews: isPreview && index < 3
-                                )
-                            }
-                            .buttonStyle(PressableScaleStyle(scale: 0.96))
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-            }
+            // 🔥 Quick Tune - Smart loading section
+            QuickTuneSection(liveChannelsAPI: liveChannelsAPI)
 
             MinimalSection(
                 title: "Movies",
@@ -1695,10 +1465,12 @@ struct MinimalContentSections: View {
                 sourceVideos: detroitFlintArtistsTrending() + [makeFriendTrendingVideo()] + Video.sampleVideos,
                 onSelect: { name, avatar, vids, total in
                     onOpenArtistDetail(name, avatar, vids, total)
-                }
+                },
+                onSeeAll: onSeeAllArtists
             )
             .padding(.horizontal, 20)
             TopIndieFilmmakersSection(
+                onSeeAll: onSeeAllFilmmakers,
                 onSelect: { name, films in
                     onOpenFilmmakerDetail(name, films)
                 }
@@ -1709,7 +1481,8 @@ struct MinimalContentSections: View {
                 sourceVideos: detroitFlintArtistsTrending() + gamingCOD() + Video.sampleVideos,
                 onSelect: { name, avatar, subs, total, vids in
                     onOpenChannelDetail(name, avatar, subs, total, vids)
-                }
+                },
+                onSeeAll: onSeeAllChannels
             )
             .padding(.horizontal, 20)
         }
@@ -2019,6 +1792,103 @@ struct MinimalSection<Content: View>: View {
     }
 }
 
+// MARK: - 🔥 Quick Tune Section (Smart Loading)
+private struct QuickTuneSection: View {
+    let liveChannelsAPI: [LiveTVChannel]
+    
+    @StateObject private var loadingTracker = LiveChannelLoadingTracker.shared
+    
+    private var hasReadyChannels: Bool {
+        !loadingTracker.readyChannels.isEmpty
+    }
+    
+    private var isLoading: Bool {
+        !loadingTracker.isInitialLoadComplete && loadingTracker.readyChannels.isEmpty
+    }
+    
+    var body: some View {
+        // Only show section if we have ready channels OR still loading
+        if hasReadyChannels || isLoading {
+            MinimalSection(title: "Quick Tune", seeAllAction: nil) {
+                if isLoading {
+                    loadingView
+                } else {
+                    channelsScrollView
+                }
+            }
+            .animation(.easeOut(duration: 0.3), value: hasReadyChannels)
+        }
+    }
+    
+    private var loadingView: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .scaleEffect(0.8)
+            Text("Loading channels...")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.vertical, 30)
+    }
+    
+    private var channelsScrollView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 16) {
+                // MyChannel Live
+                NavigationLink(destination: LiveTVPlayerView(channel: myChannelLive)) {
+                    MinimalChannelCard(
+                        channel: myChannelLive,
+                        autoPreview: true,
+                        previewOverrideStreamURL: nil,
+                        previewOverridePosterURL: nil,
+                        allowPlaybackInPreviews: false
+                    )
+                }
+                .buttonStyle(PressableScaleStyle(scale: 0.96))
+                
+                // Other channels
+                ForEach(channels) { channel in
+                    NavigationLink(destination: LiveTVPlayerView(channel: channel)) {
+                        MinimalChannelCard(
+                            channel: channel,
+                            autoPreview: true,
+                            previewOverrideStreamURL: nil,
+                            previewOverridePosterURL: nil,
+                            allowPlaybackInPreviews: false
+                        )
+                    }
+                    .buttonStyle(PressableScaleStyle(scale: 0.96))
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+    
+    private var myChannelLive: LiveTVChannel {
+        LiveTVChannel(
+            id: "mychannel-live",
+            name: "MyChannel Live",
+            logoURL: "https://i.ytimg.com/vi/5qap5aO4i9A/hqdefault.jpg",
+            streamURL: "\(AppConfig.API.cloudRunBaseURL)/live/playlist",
+            category: .entertainment,
+            description: "Go Live playback",
+            isLive: true,
+            viewerCount: 0,
+            quality: "HD",
+            language: "English",
+            country: "US",
+            epgURL: nil,
+            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
+        )
+    }
+    
+    private var channels: [LiveTVChannel] {
+        let source = liveChannelsAPI.isEmpty ? LiveTVChannel.sampleChannels : liveChannelsAPI
+        return Array(source.prefix(8))
+    }
+}
+
 // MARK: - Minimal Video Card
 struct MinimalVideoCard: View {
     let video: Video
@@ -2175,84 +2045,100 @@ struct MinimalChannelCard: View {
     var previewOverridePosterURL: String? = nil
     var allowPlaybackInPreviews: Bool = false
     @State private var showPreview: Bool = false
+    @State private var streamReady: Bool = false
+    @State private var streamFailed: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ZStack {
-                // 🔥 ALWAYS show the live thumbnail for fire channels - loads fast with great placeholders
-                LiveChannelThumbnailView(
-                    streamURL: previewOverrideStreamURL ?? channel.streamURL,
-                    posterURL: previewOverridePosterURL ?? channel.logoURL,
-                    fallbackStreamURL: channel.previewFallbackURL,
-                    allowPlaybackInPreviews: allowPlaybackInPreviews,
-                    channelCategory: channel.category,
-                    channelName: channel.name
-                )
-                .frame(width: 160, height: 90)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(channel.category.color.opacity(0.3), lineWidth: 1)
-                )
-                .shadow(color: channel.category.color.opacity(0.2), radius: 8, x: 0, y: 4)
-                // 🔥 Ensure touches pass through to NavigationLink
-                .allowsHitTesting(false)
+        // 🔥 Only show channel when video is actually playing - no placeholder!
+        if streamReady && !streamFailed {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack {
+                    // 🔥 Live video thumbnail - only shows when playing
+                    LiveChannelThumbnailView(
+                        streamURL: previewOverrideStreamURL ?? channel.streamURL,
+                        posterURL: previewOverridePosterURL ?? channel.logoURL,
+                        fallbackStreamURL: channel.previewFallbackURL,
+                        allowPlaybackInPreviews: allowPlaybackInPreviews,
+                        channelCategory: channel.category,
+                        channelName: channel.name,
+                        channelId: channel.id,
+                        onStreamFailed: {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                streamFailed = true
+                            }
+                        },
+                        onStreamReady: {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                streamReady = true
+                            }
+                        }
+                    )
+                    .frame(width: 160, height: 90)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(channel.category.color.opacity(0.3), lineWidth: 1)
+                    )
+                    .shadow(color: channel.category.color.opacity(0.2), radius: 8, x: 0, y: 4)
+                    // 🔥 Ensure touches pass through to NavigationLink
+                    .allowsHitTesting(false)
 
-                // 🔥 LIVE badge with pulse animation
-                if channel.isLive {
-                    VStack {
-                        HStack {
-                            LiveBadge()
+                    // 🔥 LIVE badge with pulse animation
+                    if channel.isLive {
+                        VStack {
+                            HStack {
+                                LiveBadge()
+                                Spacer()
+                            }
                             Spacer()
                         }
-                        Spacer()
+                        .padding(8)
+                        .allowsHitTesting(false)
                     }
-                    .padding(8)
+                    
+                    // Category badge bottom right
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Text(channel.category.displayName)
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(channel.category.color.opacity(0.9))
+                                )
+                        }
+                    }
+                    .padding(6)
                     .allowsHitTesting(false)
                 }
-                
-                // Category badge bottom right
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Text(channel.category.displayName)
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(
-                                Capsule()
-                                    .fill(channel.category.color.opacity(0.9))
-                            )
+                .onAppear {
+                    // 🔥 Always show preview immediately - no delay
+                    showPreview = true
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(channel.name)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 6, height: 6)
+                        Text("\(formatViewerCount(channel.viewerCount)) watching")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
                     }
                 }
-                .padding(6)
-                .allowsHitTesting(false)
+                .frame(width: 160, alignment: .leading)
             }
-            .onAppear {
-                // 🔥 Always show preview immediately - no delay
-                showPreview = true
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(channel.name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 6, height: 6)
-                    Text("\(formatViewerCount(channel.viewerCount)) watching")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.secondary)
-                }
-            }
-            .frame(width: 160, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .contentShape(Rectangle())
     }
 
     private func formatViewerCount(_ count: Int) -> String {
@@ -2416,6 +2302,7 @@ private struct MinimalCategoriesSection: View {
 private struct TopArtistsSection: View {
     let sourceVideos: [Video]
     var onSelect: (String, String, [Video], Int) -> Void = { _,_,_,_  in }
+    var onSeeAll: () -> Void = {}
 
     private var rankings: [ArtistRank] {
         let grouped = Dictionary(grouping: sourceVideos) { $0.creator.displayName }
@@ -2470,10 +2357,23 @@ private struct TopArtistsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Top Artists")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(AppTheme.Colors.primary)
-                .padding(.top, 4)
+            HStack {
+                Text("Top Artists")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.primary)
+                
+                Spacer()
+                
+                Button {
+                    HapticManager.shared.impact(style: .light)
+                    onSeeAll()
+                } label: {
+                    Text("See all")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.primary)
+                }
+            }
+            .padding(.top, 4)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
@@ -2540,6 +2440,8 @@ private struct TopIndieFilmmakersSection: View {
         let score: Int
         let avatar: String
     }
+    
+    var onSeeAll: () -> Void = {}
 
     private var filmmakers: [Filmmaker] {
         // Tee Cee as #1 top filmmaker
@@ -2627,10 +2529,23 @@ private struct TopIndieFilmmakersSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Top Indie Filmmakers")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(AppTheme.Colors.primary)
-                .padding(.top, 4)
+            HStack {
+                Text("Top Indie Filmmakers")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.primary)
+                
+                Spacer()
+                
+                Button {
+                    HapticManager.shared.impact(style: .light)
+                    onSeeAll()
+                } label: {
+                    Text("See all")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.primary)
+                }
+            }
+            .padding(.top, 4)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
@@ -2722,6 +2637,7 @@ private struct TopIndieFilmmakersSection: View {
 private struct TopMyChannelsSection: View {
     let sourceVideos: [Video]
     var onSelect: (String, String, Int, Int, [Video]) -> Void = { _,_,_,_,_ in }
+    var onSeeAll: () -> Void = {}
     
     // Top YouTubers with their actual profile pictures
     private let featuredCreators: [(id: String, name: String, avatar: String, subscribers: Int, totalViews: Int)] = [
@@ -2746,10 +2662,23 @@ private struct TopMyChannelsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Top MyChannels")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(AppTheme.Colors.primary)
-                .padding(.top, 4)
+            HStack {
+                Text("Top MyChannels")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.primary)
+                
+                Spacer()
+                
+                Button {
+                    HapticManager.shared.impact(style: .light)
+                    onSeeAll()
+                } label: {
+                    Text("See all")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.primary)
+                }
+            }
+            .padding(.top, 4)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {

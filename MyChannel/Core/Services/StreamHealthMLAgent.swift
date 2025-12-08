@@ -151,6 +151,48 @@ final class StreamHealthMLAgent: ObservableObject {
         healthCache[channelId]?.status ?? .unknown
     }
     
+    /// 🔥 Mark a channel as unhealthy (called when stream fails to play)
+    func markChannelUnhealthy(_ channelId: String) {
+        print("🔥 [StreamHealthML] Marking \(channelId) as UNHEALTHY from player failure")
+        
+        // Update cache with unhealthy status
+        let result = StreamHealthResult(
+            channelId: channelId,
+            streamURL: "",
+            status: .unhealthy,
+            latencyMs: 0,
+            lastChecked: Date(),
+            consecutiveFailures: (healthCache[channelId]?.consecutiveFailures ?? 0) + 1,
+            successRate: 0
+        )
+        healthCache[channelId] = result
+        
+        // Update published state
+        healthyChannelIds.remove(channelId)
+        unhealthyChannelIds.insert(channelId)
+    }
+    
+    /// 🔥 Mark a channel as healthy (called when stream plays successfully)
+    func markChannelHealthy(_ channelId: String) {
+        // Only update if not already healthy in cache
+        if healthCache[channelId]?.status != .healthy {
+            let result = StreamHealthResult(
+                channelId: channelId,
+                streamURL: "",
+                status: .healthy,
+                latencyMs: 100,
+                lastChecked: Date(),
+                consecutiveFailures: 0,
+                successRate: 1.0
+            )
+            healthCache[channelId] = result
+            
+            // Update published state
+            unhealthyChannelIds.remove(channelId)
+            healthyChannelIds.insert(channelId)
+        }
+    }
+    
     // MARK: - 🔥🔥🔥 THERMONUCLEAR PROBING 🔥🔥🔥
     
     /// 🔥 Single channel ultra-fast check

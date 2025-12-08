@@ -61,7 +61,7 @@ struct FreeMovie: Identifiable, Codable {
             case .youtube: return "https://www.youtube.com/s/desktop/youtube-logo.png"
             case .pexels: return "https://images.pexels.com/lib/api/pexels.png"
             case .pixabay: return "https://pixabay.com/static/img/logo_square.png"
-            case .nasa: return "https://www.nasa.gov/wp-content/themes/nasa/assets/images/nasa-logo.svg"
+            case .nasa: return "https://i.ytimg.com/vi/21X5lGlDOfg/hqdefault.jpg"
             }
         }
         
@@ -175,8 +175,8 @@ extension FreeMovie {
         FreeMovie(
             id: "ia-cosmos-laundromat",
             title: "Cosmos Laundromat",
-            posterURL: "https://upload.wikimedia.org/wikipedia/en/d/d9/Cosmos_Laundromat_poster.jpg",
-            backdropURL: "https://upload.wikimedia.org/wikipedia/en/d/d9/Cosmos_Laundromat_poster.jpg",
+            posterURL: "https://i.ytimg.com/vi/Y-rmzh0PI3c/hqdefault.jpg",
+            backdropURL: "https://i.ytimg.com/vi/Y-rmzh0PI3c/maxresdefault.jpg",
             overview: "A suicidal sheep named Franck meets a mysterious being who offers him the chance to live infinite lives. Mind-bending animated adventure from Blender Foundation!",
             releaseDate: "2015-08-10",
             runtime: 12,
@@ -197,8 +197,8 @@ extension FreeMovie {
         FreeMovie(
             id: "ia-spring-blender",
             title: "Spring",
-            posterURL: "https://upload.wikimedia.org/wikipedia/en/2/2f/Spring_%282019_film%29_poster.jpg",
-            backdropURL: "https://upload.wikimedia.org/wikipedia/en/2/2f/Spring_%282019_film%29_poster.jpg",
+            posterURL: "https://i.ytimg.com/vi/WhWc3b3KhnY/hqdefault.jpg",
+            backdropURL: "https://i.ytimg.com/vi/WhWc3b3KhnY/maxresdefault.jpg",
             overview: "A shepherd girl and her magical dog embark on a perilous journey through ancient lands. Breathtaking Blender animation with stunning visuals!",
             releaseDate: "2019-04-04",
             runtime: 8,
@@ -219,8 +219,8 @@ extension FreeMovie {
         FreeMovie(
             id: "ia-agent-327",
             title: "Agent 327: Operation Barbershop",
-            posterURL: "https://upload.wikimedia.org/wikipedia/en/1/1f/Agent_327_Operation_Barbershop.png",
-            backdropURL: "https://upload.wikimedia.org/wikipedia/en/1/1f/Agent_327_Operation_Barbershop.png",
+            posterURL: "https://i.ytimg.com/vi/mN0zPOpADL4/hqdefault.jpg",
+            backdropURL: "https://i.ytimg.com/vi/mN0zPOpADL4/maxresdefault.jpg",
             overview: "Secret agent 327 must stop a villain in a barbershop that's more than it seems. High-octane spy action with incredible 3D animation!",
             releaseDate: "2017-05-15",
             runtime: 4,
@@ -821,7 +821,7 @@ extension FreeMovie {
         FreeMovie(
             id: "blender-big-buck-bunny",
             title: "Big Buck Bunny",
-            posterURL: "https://upload.wikimedia.org/wikipedia/commons/c/c5/Big_buck_bunny_poster_big.jpg",
+            posterURL: "https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg",
             backdropURL: "https://ia801504.us.archive.org/11/items/BigBuckBunny_124/BigBuckBunny_124.thumbs/BigBuckBunny_124_000005.jpg",
             overview: "A lovable giant bunny takes on three bullying rodents. Stunning open-source animation in 4K!",
             releaseDate: "2008-04-10",
@@ -842,7 +842,7 @@ extension FreeMovie {
         FreeMovie(
             id: "blender-sintel",
             title: "Sintel",
-            posterURL: "https://upload.wikimedia.org/wikipedia/commons/c/c5/Sintel_poster.jpg",
+            posterURL: "https://i.ytimg.com/vi/eRsGyueVLvQ/hqdefault.jpg",
             backdropURL: "https://ia601404.us.archive.org/2/items/Sintel/Sintel.thumbs/Sintel_000001.jpg",
             overview: "A young woman searches for her lost dragon companion. Emotionally powerful short film with stunning visuals!",
             releaseDate: "2010-09-27",
@@ -863,7 +863,7 @@ extension FreeMovie {
         FreeMovie(
             id: "blender-tears-of-steel",
             title: "Tears of Steel",
-            posterURL: "https://upload.wikimedia.org/wikipedia/commons/9/9f/Tears_of_Steel_poster.jpg",
+            posterURL: "https://i.ytimg.com/vi/41hv2tW5Lc4/hqdefault.jpg",
             backdropURL: "https://ia801406.us.archive.org/33/items/TearOfSteel/TearOfSteel.thumbs/TearOfSteel_000001.jpg",
             overview: "In a dystopian future, scientists desperately work to save humanity. Groundbreaking VFX meets emotional storytelling!",
             releaseDate: "2012-09-26",
@@ -884,7 +884,7 @@ extension FreeMovie {
         FreeMovie(
             id: "blender-elephants-dream",
             title: "Elephants Dream",
-            posterURL: "https://upload.wikimedia.org/wikipedia/commons/e/e8/Elephants_Dream_cover.jpg",
+            posterURL: "https://i.ytimg.com/vi/TLkA0RELQ1g/hqdefault.jpg",
             backdropURL: "https://ia601508.us.archive.org/10/items/ElephantsDream/ElephantsDream.thumbs/ElephantsDream_000001.jpg",
             overview: "Two characters explore a surreal machine world. The first Blender open movie project!",
             releaseDate: "2006-05-18",
