@@ -2,9 +2,9 @@
 //  SearchEngineService.swift
 //  MyChannel
 //
-//  🔍 ALGOLIA SEARCH ENGINE - YOUTUBE-LEVEL SEARCH!
-//  Typo-tolerant, instant search with autocomplete
-//  FREE TIER: 10K records forever!
+//  🔍 FIREBASE SEARCH ENGINE - YOUTUBE-LEVEL SEARCH!
+//  Uses Firestore for search with local caching
+//  Note: For production scale, consider Firebase Extensions with Algolia/Typesense
 //
 
 import Foundation
@@ -12,10 +12,11 @@ import Foundation
 class SearchEngineService {
     static let shared = SearchEngineService()
     
-    // 🔥 ALGOLIA CONFIGURATION (FREE TIER!)
-    private let algoliaAppID = "YOUR_ALGOLIA_APP_ID" // TODO: Add to AppSecrets
-    private let algoliaAPIKey = "YOUR_ALGOLIA_API_KEY"
-    private let indexName = "mychannel_videos"
+    // 🔥 FIREBASE CONFIGURATION
+    // Search is powered by Firestore queries with client-side filtering
+    // For advanced typo-tolerance at scale, integrate Algolia via Firebase Extension
+    private let useFirebaseSearch = true
+    private let indexName = "videos" // Firestore collection
     
     // MARK: - 📊 INDEX VIDEO
     

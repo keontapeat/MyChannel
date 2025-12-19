@@ -87,7 +87,8 @@ struct AppConfig {
         static let mlAgentsURL: String? = "https://ml-agents-124515086975.us-central1.run.app"
         static let version = "v1"
         static let timeout: TimeInterval = 30.0
-        static let supabaseAnonKey = "your-supabase-anon-key-here" // Replace with actual key
+        // Note: This app uses Firebase exclusively - no Supabase needed
+        static let supabaseAnonKey = "" // Deprecated - use Firebase
         
         // Google Cloud Partner Benefits
         static var googleCloudAPIKey: String? {
