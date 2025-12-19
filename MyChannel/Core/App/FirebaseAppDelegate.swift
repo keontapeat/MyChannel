@@ -12,6 +12,9 @@ import UserNotifications
 #if canImport(GoogleSignIn)
 import GoogleSignIn
 #endif
+#if canImport(GoogleMobileAds)
+import GoogleMobileAds
+#endif
 import Foundation
 
 final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
@@ -55,6 +58,11 @@ final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
         Task { @MainActor in
             let locale = Locale.current.identifier
             await ChannelBoostService.shared.logInstall(platform: "ios", locale: locale, source: "app", campaign: nil, referral: nil)
+        }
+        
+        // 💰 Initialize Google Mobile Ads SDK for REAL ad revenue!
+        Task { @MainActor in
+            AdMobManager.shared.initialize()
         }
         // Set notification center delegate early (only if push notifications are available)
         // Note: Push notifications require a paid Apple Developer Program membership

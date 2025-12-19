@@ -214,7 +214,8 @@ struct ComprehensiveCreatorStudioView: View {
     private func destinationView(for tab: StudioTab) -> some View {
         switch tab {
         case .dashboard:
-            StudioDashboardView()
+            // 🔥 NUCLEAR: Use the new YouTube-parity dashboard
+            NuclearYouTubeStudioDashboard()
                 .navigationTitle("Dashboard")
         case .aiStudio:
             AICreatorStudioView()
@@ -232,7 +233,8 @@ struct ComprehensiveCreatorStudioView: View {
             ChannelCustomizationView()
                 .navigationTitle("Customization")
         case .community:
-            CommunityManagementView()
+            // 🔥 NUCLEAR: Full YouTube-parity comments management
+            NuclearCommentsManagementView()
                 .navigationTitle("Community")
         case .premieres:
             PremieresManagementView()
@@ -264,7 +266,8 @@ struct ComprehensiveCreatorStudioView: View {
     private var mainContentArea: some View {
         switch selectedTab {
         case .dashboard:
-            StudioDashboardView()
+            // 🔥 NUCLEAR: Use the new YouTube-parity dashboard
+            NuclearYouTubeStudioDashboard()
         case .aiStudio:
             AICreatorStudioView()
         case .content:
@@ -276,7 +279,8 @@ struct ComprehensiveCreatorStudioView: View {
         case .customization:
             ChannelCustomizationView()
         case .community:
-            CommunityManagementView()
+            // 🔥 NUCLEAR: Full YouTube-parity comments management  
+            NuclearCommentsManagementView()
         case .premieres:
             PremieresManagementView()
         case .live:
@@ -357,8 +361,32 @@ struct StudioDashboardView: View {
     }
     
     private func loadDashboardData() async {
-        // Load recent videos and comments
-        // This would fetch from VideoFirestoreService and CommentService
+        // 🔥 REAL DATA: Load recent videos from Firestore
+        guard let creatorId = AppState.shared.currentUser?.id else {
+            print("⚠️ [StudioDashboardView] No current user - cannot load dashboard data")
+            return
+        }
+        
+        print("📊 [StudioDashboardView] Loading dashboard data for creator: \(creatorId)")
+        
+        // Load creator's videos from Firestore (sorted by upload date, limit 10)
+        let fetchedVideos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: creatorId, limit: 10)
+        
+        await MainActor.run {
+            self.recentVideos = fetchedVideos
+            print("✅ [StudioDashboardView] Loaded \(fetchedVideos.count) recent videos")
+        }
+        
+        // Load channel analytics
+        do {
+            _ = try await analyticsService.getChannelAnalytics(for: creatorId, timeframe: .last30Days)
+            print("✅ [StudioDashboardView] Channel analytics loaded")
+        } catch {
+            print("⚠️ [StudioDashboardView] Failed to load channel analytics: \(error)")
+        }
+        
+        // Start real-time monitoring for instant analytics updates
+        await analyticsService.startRealtimeMonitoring(for: creatorId)
     }
     
     private var channelAnalyticsSummary: some View {

@@ -1364,6 +1364,9 @@ struct MinimalContentSections: View {
     var body: some View {
         VStack(spacing: 40) {
             ForYouSection(onPlayVideo: onPlayVideo, onSeeAllExplore: onSeeAllExplore)
+            
+            // 🔥🔥🔥 NEW FROM CREATORS - Real videos from your beta testers! 🔥🔥🔥
+            NewFromCreatorsSection(onPlayVideo: onPlayVideo)
 
             if !appState.watchHistory.isEmpty {
                 MinimalSection(
@@ -1807,17 +1810,15 @@ private struct QuickTuneSection: View {
     }
     
     var body: some View {
-        // Only show section if we have ready channels OR still loading
-        if hasReadyChannels || isLoading {
-            MinimalSection(title: "Quick Tune", seeAllAction: nil) {
-                if isLoading {
-                    loadingView
-                } else {
-                    channelsScrollView
-                }
+        // 🔥 ALWAYS show Quick Tune section - never hide it completely
+        MinimalSection(title: "Quick Tune", seeAllAction: nil) {
+            if isLoading {
+                loadingView
+            } else {
+                channelsScrollView
             }
-            .animation(.easeOut(duration: 0.3), value: hasReadyChannels)
         }
+        .animation(.easeOut(duration: 0.3), value: hasReadyChannels)
     }
     
     private var loadingView: some View {
@@ -2049,11 +2050,33 @@ struct MinimalChannelCard: View {
     @State private var streamFailed: Bool = false
 
     var body: some View {
-        // 🔥 Only show channel when video is actually playing - no placeholder!
-        if streamReady && !streamFailed {
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack {
-                    // 🔥 Live video thumbnail - only shows when playing
+        // 🔥 Always show channel - use static thumbnail as fallback
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack {
+                // Thumbnail - show live stream or fallback to static image
+                if streamFailed {
+                    AsyncImage(url: URL(string: previewOverridePosterURL ?? channel.logoURL)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(channel.category.color.opacity(0.3))
+                            .overlay(
+                                Image(systemName: "tv.fill")
+                                    .font(.system(size: 28))
+                                    .foregroundColor(channel.category.color)
+                            )
+                    }
+                    .frame(width: 160, height: 90)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(channel.category.color.opacity(0.3), lineWidth: 1)
+                    )
+                    .shadow(color: channel.category.color.opacity(0.2), radius: 8, x: 0, y: 4)
+                    .allowsHitTesting(false)
+                } else {
                     LiveChannelThumbnailView(
                         streamURL: previewOverrideStreamURL ?? channel.streamURL,
                         posterURL: previewOverridePosterURL ?? channel.logoURL,
@@ -2082,63 +2105,63 @@ struct MinimalChannelCard: View {
                     .shadow(color: channel.category.color.opacity(0.2), radius: 8, x: 0, y: 4)
                     // 🔥 Ensure touches pass through to NavigationLink
                     .allowsHitTesting(false)
+                }
 
-                    // 🔥 LIVE badge with pulse animation
-                    if channel.isLive {
-                        VStack {
-                            HStack {
-                                LiveBadge()
-                                Spacer()
-                            }
-                            Spacer()
-                        }
-                        .padding(8)
-                        .allowsHitTesting(false)
-                    }
-                    
-                    // Category badge bottom right
+                // 🔥 LIVE badge with pulse animation
+                if channel.isLive {
                     VStack {
-                        Spacer()
                         HStack {
+                            LiveBadge()
                             Spacer()
-                            Text(channel.category.displayName)
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(
-                                    Capsule()
-                                        .fill(channel.category.color.opacity(0.9))
-                                )
                         }
+                        Spacer()
                     }
-                    .padding(6)
+                    .padding(8)
                     .allowsHitTesting(false)
                 }
-                .onAppear {
-                    // 🔥 Always show preview immediately - no delay
-                    showPreview = true
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(channel.name)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 6, height: 6)
-                        Text("\(formatViewerCount(channel.viewerCount)) watching")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.secondary)
+                
+                // Category badge bottom right
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Text(channel.category.displayName)
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill(channel.category.color.opacity(0.9))
+                            )
                     }
                 }
-                .frame(width: 160, alignment: .leading)
+                .padding(6)
+                .allowsHitTesting(false)
             }
-            .contentShape(Rectangle())
+            .onAppear {
+                // 🔥 Always show preview immediately - no delay
+                showPreview = true
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(channel.name)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 6, height: 6)
+                    Text("\(formatViewerCount(channel.viewerCount)) watching")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .frame(width: 160, alignment: .leading)
         }
+        .contentShape(Rectangle())
     }
 
     private func formatViewerCount(_ count: Int) -> String {
@@ -2855,6 +2878,222 @@ struct ForYouSection: View {
         await MainActor.run {
             forYouVideos = feed
             isLoading = false
+        }
+    }
+}
+
+// MARK: - 🔥🔥🔥 NEW FROM CREATORS SECTION - Real Videos from Beta Testers! 🔥🔥🔥
+struct NewFromCreatorsSection: View {
+    let onPlayVideo: (Video) -> Void
+    
+    @State private var creatorVideos: [Video] = []
+    @State private var isLoading = true
+    @State private var hasAppeared = false
+    
+    var body: some View {
+        if !creatorVideos.isEmpty || isLoading {
+            MinimalSection(
+                title: "New From Creators",
+                seeAllAction: nil
+            ) {
+                if isLoading {
+                    // Shimmer loading state
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 16) {
+                            ForEach(0..<4, id: \.self) { _ in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color(.systemGray5))
+                                        .frame(width: 180, height: 101)
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color(.systemGray5))
+                                        .frame(width: 140, height: 14)
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color(.systemGray6))
+                                        .frame(width: 100, height: 12)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(spacing: 16) {
+                            ForEach(creatorVideos) { video in
+                                CreatorVideoCard(video: video, onPlay: { onPlayVideo(video) })
+                                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: creatorVideos.count)
+                    }
+                }
+            }
+            .task {
+                guard !hasAppeared else { return }
+                hasAppeared = true
+                await loadCreatorVideos()
+            }
+            // 🔥🔥🔥 YOUTUBE PARITY: Listen for new video uploads to refresh instantly!
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshHomeFeed"))) { notification in
+                print("🔄 [NewFromCreators] Received RefreshHomeFeed notification - refreshing videos!")
+                
+                // If notification contains the newly uploaded video, prepend it immediately
+                if let newVideo = notification.object as? Video, newVideo.visibility == .public {
+                    print("🎬 [NewFromCreators] Prepending new video: \(newVideo.title)")
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        // Remove duplicate if exists, then prepend
+                        creatorVideos.removeAll { $0.id == newVideo.id }
+                        creatorVideos.insert(newVideo, at: 0)
+                    }
+                    HapticManager.shared.notification(type: .success)
+                }
+                
+                // Also refresh from Firestore to ensure we have the latest
+                Task {
+                    await loadCreatorVideos(forceRefresh: true)
+                }
+            }
+        }
+    }
+    
+    private func loadCreatorVideos(forceRefresh: Bool = false) async {
+        // Don't show loading indicator for background refresh
+        if !forceRefresh {
+            isLoading = true
+        }
+        
+        // 🔥 FETCH ALL PUBLIC VIDEOS FROM FIREBASE - This shows beta tester uploads!
+        let firestoreVideos = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 24)
+        
+        await MainActor.run {
+            if !firestoreVideos.isEmpty {
+                // Sort by most recent first
+                let sortedVideos = firestoreVideos.sorted { $0.createdAt > $1.createdAt }
+                
+                // 🔥 Animate updates for smooth UX
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    creatorVideos = sortedVideos
+                }
+                print("🔥 [NewFromCreators] Loaded \(firestoreVideos.count) videos from Firebase!")
+            } else {
+                print("⚠️ [NewFromCreators] No public videos found in Firebase")
+                creatorVideos = []
+            }
+            isLoading = false
+        }
+    }
+}
+
+// MARK: - Creator Video Card (YouTube-Style)
+private struct CreatorVideoCard: View {
+    let video: Video
+    let onPlay: () -> Void
+    
+    @State private var isPressed = false
+    
+    var body: some View {
+        Button(action: {
+            HapticManager.shared.impact(style: .medium)
+            onPlay()
+        }) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Thumbnail
+                ZStack(alignment: .bottomTrailing) {
+                    MultiSourceAsyncImage(
+                        urls: video.posterCandidates,
+                        content: { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 200, height: 112)
+                                .clipped()
+                        },
+                        placeholder: {
+                            Rectangle()
+                                .fill(Color(.systemGray5))
+                                .overlay(
+                                    Image(systemName: "play.rectangle.fill")
+                                        .font(.title2)
+                                        .foregroundColor(.secondary)
+                                )
+                        }
+                    )
+                    .frame(width: 200, height: 112)
+                    .cornerRadius(12)
+                    
+                    // Duration badge
+                    Text(video.formattedDuration)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(.black.opacity(0.85))
+                        .cornerRadius(4)
+                        .padding(6)
+                }
+                
+                // Video info
+                HStack(alignment: .top, spacing: 10) {
+                    // Creator avatar
+                    AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Circle()
+                            .fill(Color(.systemGray5))
+                            .overlay(
+                                Text(video.creator.displayName.prefix(1).uppercased())
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.secondary)
+                            )
+                    }
+                    .frame(width: 32, height: 32)
+                    .clipShape(Circle())
+                    
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(video.title)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.primary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        
+                        HStack(spacing: 4) {
+                            Text(video.creator.displayName)
+                            if video.creator.isVerified {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                            }
+                        }
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        
+                        Text("\(formatViewCount(video.viewCount)) views • \(video.uploadTimeAgo)")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                .frame(width: 200, alignment: .leading)
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .scaleEffect(isPressed ? 0.97 : 1.0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
+        .onLongPressGesture(minimumDuration: 0.1, pressing: { pressing in
+            isPressed = pressing
+        }) { }
+        .accessibilityLabel("Video: \(video.title) by \(video.creator.displayName)")
+    }
+    
+    private func formatViewCount(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.1fM", Double(count) / 1_000_000)
+        } else if count >= 1_000 {
+            return String(format: "%.1fK", Double(count) / 1_000)
+        } else {
+            return "\(count)"
         }
     }
 }

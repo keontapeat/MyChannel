@@ -228,7 +228,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "naruto",
             name: "Naruto",
-            logoURL: "https://i.ytimg.com/vi/QczGoCmX-pI/hqdefault.jpg", // Official Naruto trailer
+            logoURL: "https://i.ytimg.com/vi/ZnL6hjwcRqQ/hqdefault.jpg", // Naruto Shippuden VIZ
             streamURL: plutoURL("5da0c85bd2c9c10009370984"),
             category: .anime,
             description: "Believe it! 24/7 Naruto episodes",
@@ -260,7 +260,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "crunchyroll",
             name: "Crunchyroll",
-            logoURL: "https://i.ytimg.com/vi/d5HT8HoiAHg/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/wVRn1_5uO90/hqdefault.jpg", // Crunchyroll Anime 2024
             streamURL: plutoURL("65652f7fc0fc88000883537a"),
             category: .anime,
             description: "The best anime streaming 24/7",
@@ -276,7 +276,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "pokemon",
             name: "Pokémon",
-            logoURL: "https://i.ytimg.com/vi/rg6CiPI6h2g/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/yJ2oq33xE_M/hqdefault.jpg", // Pokemon World Championships 2024
             streamURL: plutoURL("6675c7868768aa0008d7f1c7"),
             category: .anime,
             description: "Gotta catch 'em all! 24/7 Pokémon",
@@ -292,7 +292,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "yugioh",
             name: "Yu-Gi-Oh!",
-            logoURL: "https://i.ytimg.com/vi/fKY8wq-lMKA/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/nubcZ4BDj4o/hqdefault.jpg", // Yu-Gi-Oh Official Trailer
             streamURL: plutoURL("5f4ec10ed9636f00089b8c89"),
             category: .anime,
             description: "It's time to duel! 24/7",
@@ -308,7 +308,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "sailor-moon",
             name: "Sailor Moon",
-            logoURL: "https://i.ytimg.com/vi/5txHGxJRwtQ/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/8DQN3vngAEs/hqdefault.jpg", // Sailor Moon Crystal VIZ
             streamURL: plutoURL("637e55347427a40007fac703"),
             category: .anime,
             description: "In the name of the moon! 24/7",
@@ -325,7 +325,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "dragon-ball-z",
             name: "Dragon Ball Z",
-            logoURL: "https://i.ytimg.com/vi/BwrHGO7ljR0/hqdefault.jpg", // DBZ Rock the Dragon
+            logoURL: "https://i.ytimg.com/vi/TZuJLX5sK14/hqdefault.jpg", // DBZ Official US Trailer
             streamURL: plutoURL("5f4e93f8e20a230007a04d77"),
             category: .anime,
             description: "IT'S OVER 9000! 24/7 DBZ 🐉",
@@ -341,7 +341,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "dragon-ball-super",
             name: "Dragon Ball Super",
-            logoURL: "https://i.ytimg.com/vi/GH9u4eZQGk8/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/6_fXQSobiHs/hqdefault.jpg", // DBS Super Hero Launch
             streamURL: plutoURL("62de0b0b17d9a10007f99f8e"),
             category: .anime,
             description: "Ultra Instinct vibes 24/7 ⚡",
@@ -358,7 +358,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "family-guy",
             name: "Family Guy",
-            logoURL: "https://i.ytimg.com/vi/gVPZjmFXNNc/hqdefault.jpg", // Family Guy clip
+            logoURL: "https://i.ytimg.com/vi/-0ibe6_GvHU/hqdefault.jpg", // Family Guy 25th Anniversary
             streamURL: plutoURL("5f1acd26c830c60007a5267a"),
             category: .comedy,
             description: "Giggity giggity! 24/7 Family Guy 😂",
@@ -374,7 +374,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "boondocks",
             name: "The Boondocks",
-            logoURL: "https://i.ytimg.com/vi/g37HT4-EtzE/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/xQ-WEP7EFZA/hqdefault.jpg", // Boondocks Official Trailer
             streamURL: plutoURL("5f779283e2f12b0007566f13"),
             category: .comedy,
             description: "Huey & Riley 24/7 🔥😤",
@@ -390,7 +390,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "futurama",
             name: "Futurama",
-            logoURL: "https://i.ytimg.com/vi/QgaRd4d8hOY/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/T2wHJ2p0hZA/hqdefault.jpg", // Futurama Season 12
             streamURL: plutoURL("5f779393b5680c0007d6fce0"),
             category: .comedy,
             description: "Good news everyone! 24/7 🚀",
@@ -406,7 +406,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "robot-chicken",
             name: "Robot Chicken",
-            logoURL: "https://i.ytimg.com/vi/0wipiqsgsaU/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/opgGQB5AjgU/hqdefault.jpg", // Robot Chicken 2025 Trailer
             streamURL: plutoURL("5f7793f3e2f12b0007567005"),
             category: .comedy,
             description: "Stop-motion chaos 24/7 🐔🤖",
@@ -423,7 +423,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "teen-titans",
             name: "Teen Titans Go!",
-            logoURL: "https://i.ytimg.com/vi/NdJQct3P7Qc/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/l0vuBG3EDqg/hqdefault.jpg", // Teen Titans Go HBO Max
             streamURL: plutoURL("5f4e87c5e20a230007a04b0f"),
             category: .kids,
             description: "Titans GO! 24/7 🦸‍♂️💥",
@@ -455,7 +455,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "scooby-doo",
             name: "Scooby-Doo",
-            logoURL: "https://i.ytimg.com/vi/0_C2HJvtRDY/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/zKWW1LuPylc/hqdefault.jpg", // Scoob! 2020 Trailer
             streamURL: plutoURL("5f4e8a7ce20a230007a04bc5"),
             category: .kids,
             description: "Scooby-Dooby-Doo! 24/7 🐕🔍",
@@ -472,7 +472,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "wwe",
             name: "WWE",
-            logoURL: "https://i.ytimg.com/vi/BzpXjG0V8ME/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/SsEvqFgqivk/hqdefault.jpg", // WWE 2K24 Official
             streamURL: plutoURL("62c9cec0f530640007bc1bf5"),
             category: .sports,
             description: "AND HIS NAME IS JOHN CENA! 24/7 🤼💪",
@@ -491,7 +491,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "american-dad",
             name: "American Dad",
-            logoURL: "https://i.ytimg.com/vi/i8tyaeuAqno/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/d0EROb04hn8/hqdefault.jpg", // American Dad Movie Trailer
             streamURL: plutoURL("5f1ace5dc830c60007a526b8"),
             category: .comedy,
             description: "Good morning USA! 24/7 🇺🇸",
@@ -507,7 +507,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "south-park",
             name: "South Park",
-            logoURL: "https://i.ytimg.com/vi/cPE_xN7ReCg/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/B3Mj8Ht0g8M/hqdefault.jpg", // South Park Snow Day 2024
             streamURL: plutoURL("5f779476b5680c0007d6fd2a"),
             category: .comedy,
             description: "Oh my God, they killed Kenny! 24/7",
@@ -523,7 +523,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "rick-and-morty",
             name: "Rick and Morty",
-            logoURL: "https://i.ytimg.com/vi/hl1U0bxTHbY/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/sBvV1miNoA8/hqdefault.jpg", // Rick and Morty Season 7
             streamURL: plutoURL("5f4e9512e20a230007a04dcd"),
             category: .comedy,
             description: "Wubba lubba dub dub! 24/7 🥒",
@@ -653,7 +653,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "spongebob",
             name: "SpongeBob SquarePants",
-            logoURL: "https://i.ytimg.com/vi/He-LBIyBUz8/hqdefault.jpg", // SpongeBob theme
+            logoURL: "https://i.ytimg.com/vi/ZbhRD9lGios/hqdefault.jpg", // SpongeBob Movie 2025
             streamURL: plutoURL("5ca673a837b88b269472dac9"),
             category: .kids,
             description: "I'M READY! 24/7 🧽",
@@ -701,7 +701,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "avatar",
             name: "Avatar: The Last Airbender",
-            logoURL: "https://i.ytimg.com/vi/d1EnW4kn1kg/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/WdudOdxs7aU/hqdefault.jpg", // Avatar Netflix Final Trailer
             streamURL: plutoURL("5f4e9415e20a230007a04edd"),
             category: .anime,
             description: "Water. Earth. Fire. Air. 24/7 🌊🪨🔥💨",
@@ -783,7 +783,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "looney-tunes",
             name: "Looney Tunes",
-            logoURL: "https://i.ytimg.com/vi/AguPH0XBxdw/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/nalw1XRAiMI/hqdefault.jpg", // Looney Tunes Cartoons HBO Max
             streamURL: plutoURL("5f4e9734e20a230007a04f35"),
             category: .kids,
             description: "That's all folks! 24/7 🐰🦆",
@@ -799,7 +799,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "tom-jerry",
             name: "Tom & Jerry",
-            logoURL: "https://i.ytimg.com/vi/HhVp7kGLFAk/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/E7lwxBBnGEg/hqdefault.jpg", // Tom & Jerry 2021 Movie
             streamURL: plutoURL("5f4e9845e20a230007a04f8d"),
             category: .kids,
             description: "Classic cat & mouse! 24/7 🐱🐭",
@@ -816,7 +816,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "bleach",
             name: "Bleach",
-            logoURL: "https://i.ytimg.com/vi/5t69sZRGEVc/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/78WIYzX_m98/hqdefault.jpg", // Bleach TYBW Jump Festa
             streamURL: plutoURL("5f4e99560b1f8f0007d3b8f9"),
             category: .anime,
             description: "Bankai! 24/7 ⚔️",
@@ -848,7 +848,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "attack-titan",
             name: "Attack on Titan",
-            logoURL: "https://i.ytimg.com/vi/MGRm4IzK1SQ/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/o_go-8TFBXs/hqdefault.jpg", // AOT Final Season Trailer
             streamURL: plutoURL("5f4e9b78e20a230007a0503d"),
             category: .anime,
             description: "SHINZOU WO SASAGEYO! 24/7 🗡️",
@@ -864,7 +864,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "my-hero",
             name: "My Hero Academia",
-            logoURL: "https://i.ytimg.com/vi/EPVkcfx5T4Q/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/i5gsMF3yZ60/hqdefault.jpg", // MHA Season 4 Crunchyroll
             streamURL: plutoURL("5f4e9c89e20a230007a05095"),
             category: .anime,
             description: "PLUS ULTRA! 24/7 💪🦸",
@@ -880,7 +880,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "demon-slayer",
             name: "Demon Slayer",
-            logoURL: "https://i.ytimg.com/vi/VQGCKyvzIM4/hqdefault.jpg", // Demon Slayer trailer
+            logoURL: "https://i.ytimg.com/vi/TcuxuwtIhtY/hqdefault.jpg", // Demon Slayer Hashira Training
             streamURL: plutoURL("5f4e9d9ae20a230007a050ed"),
             category: .anime,
             description: "Hinokami Kagura! 24/7 🔥⚔️",
@@ -929,7 +929,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "fresh-prince",
             name: "The Fresh Prince of Bel-Air",
-            logoURL: "https://i.ytimg.com/vi/1nCqRmx3Dnw/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/ghMFFe2Q9hA/hqdefault.jpg", // Fresh Prince Reunion
             streamURL: plutoURL("5dc0c6c2b77f5f0009f8e8b0"),
             category: .comedy,
             description: "In West Philadelphia born and raised! 24/7 👑",
@@ -1269,7 +1269,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "nba-tv",
             name: "NBA TV",
-            logoURL: "https://i.ytimg.com/vi/cKPjRnLJM_U/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/VQpr5FHoGGY/hqdefault.jpg", // NBA Best Plays
             streamURL: plutoURL("5e66978e70f34c0007d050d2"),
             category: .sports,
             description: "Basketball 24/7 🏀🔥",
@@ -1285,7 +1285,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "espn-classic",
             name: "ESPN Classic",
-            logoURL: "https://i.ytimg.com/vi/npcGql9Ir6Y/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/3LEeiRb-49M/hqdefault.jpg", // ESPN SportsCenter Classic
             streamURL: plutoURL("5e6698a070f34c0007d050e6"),
             category: .sports,
             description: "Legendary games 24/7 🏆",
@@ -1302,7 +1302,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "teen-titans-2",
             name: "Teen Titans Go!",
-            logoURL: "https://i.ytimg.com/vi/NdJQct3P7Qc/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/l0vuBG3EDqg/hqdefault.jpg", // Teen Titans Go HBO Max
             streamURL: plutoURL("5f4e87c5e20a230007a04b0f"),
             category: .kids,
             description: "Titans GO! 24/7 🦸‍♂️💥",

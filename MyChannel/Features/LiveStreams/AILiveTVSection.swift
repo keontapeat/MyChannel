@@ -41,42 +41,40 @@ struct AILiveTVSection: View {
     }
     
     var body: some View {
-        // 🔥 Only show section if we have ready channels OR still loading
-        if hasReadyChannels || isInitialLoading {
-            VStack(alignment: .leading, spacing: 16) {
-                // Header with AI badge
-                headerView
-                
-                // AI Insight banner
-                if showAIInsight, let insight = forYouSection?.aiInsight {
-                    aiInsightBanner(insight)
-                }
-                
-                // Tab selector
-                tabSelector
-                
-                // Show loading indicator while channels are loading
-                if isInitialLoading && !hasReadyChannels {
-                    liveChannelsLoadingView
-                } else {
-                    // Content based on selected tab
-                    Group {
-                        switch selectedTab {
-                        case .forYou:
-                            forYouContent
-                        case .trending:
-                            trendingContent
-                        case .categories:
-                            categoriesContent
-                        }
+        // 🔥 ALWAYS show the Live TV section - never hide it completely
+        VStack(alignment: .leading, spacing: 16) {
+            // Header with AI badge
+            headerView
+            
+            // AI Insight banner
+            if showAIInsight, let insight = forYouSection?.aiInsight {
+                aiInsightBanner(insight)
+            }
+            
+            // Tab selector
+            tabSelector
+            
+            // Show loading indicator while channels are loading
+            if isInitialLoading && !hasReadyChannels {
+                liveChannelsLoadingView
+            } else {
+                // Content based on selected tab
+                Group {
+                    switch selectedTab {
+                    case .forYou:
+                        forYouContent
+                    case .trending:
+                        trendingContent
+                    case .categories:
+                        categoriesContent
                     }
                 }
             }
-            .task {
-                await loadAIRecommendations()
-            }
-            .animation(.easeOut(duration: 0.3), value: hasReadyChannels)
         }
+        .task {
+            await loadAIRecommendations()
+        }
+        .animation(.easeOut(duration: 0.3), value: hasReadyChannels)
     }
     
     // MARK: - Loading View
@@ -395,15 +393,32 @@ private struct AIChannelCard: View {
     @State private var streamFailed = false
     
     var body: some View {
-        // 🔥 Only show channel when video is actually playing - no placeholder!
-        if streamReady && !streamFailed {
-            Button(action: {
-                HapticManager.shared.impact(style: .medium)
-                onSelect()
-            }) {
-                VStack(alignment: .leading, spacing: 8) {
-                    ZStack {
-                        // Thumbnail
+        // 🔥 Always show channel - use static thumbnail as fallback
+        Button(action: {
+            HapticManager.shared.impact(style: .medium)
+            onSelect()
+        }) {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack {
+                    // Thumbnail - show live stream or fallback to static image
+                    if streamFailed {
+                        // Fallback to static logo image
+                        AsyncImage(url: URL(string: channel.logoURL)) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(channel.category.color.opacity(0.3))
+                                .overlay(
+                                    Image(systemName: "tv.fill")
+                                        .font(.system(size: 32))
+                                        .foregroundColor(channel.category.color)
+                                )
+                        }
+                        .frame(width: 180, height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } else {
                         LiveChannelThumbnailView(
                             streamURL: channel.streamURL,
                             posterURL: channel.logoURL,
@@ -426,64 +441,64 @@ private struct AIChannelCard: View {
                         .frame(width: 180, height: 100)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         .allowsHitTesting(false)
-                        
-                        // LIVE badge
-                        VStack {
-                            HStack {
-                                LiveBadgeSmall()
-                                Spacer()
-                            }
-                            Spacer()
-                        }
-                        .padding(8)
-                        .allowsHitTesting(false)
-                        
-                        // Match badge - clean green style
-                        VStack {
-                            HStack {
-                                Spacer()
-                                Text("\(Int(confidence * 100))%")
-                                    .font(.system(size: 10, weight: .black))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(
-                                        Capsule()
-                                            .fill(Color.green.opacity(0.9))
-                                    )
-                            }
-                            Spacer()
-                        }
-                        .padding(8)
-                        .allowsHitTesting(false)
                     }
-                    .contentShape(Rectangle())
                     
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(channel.name)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .lineLimit(1)
-                        
-                        Text(reason)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .lineLimit(1)
-                        
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(Color.green)
-                                .frame(width: 6, height: 6)
-                            Text("\(formatViewers(channel.viewerCount)) watching")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
+                    // LIVE badge
+                    VStack {
+                        HStack {
+                            LiveBadgeSmall()
+                            Spacer()
                         }
+                        Spacer()
                     }
-                    .frame(width: 180, alignment: .leading)
+                    .padding(8)
+                    .allowsHitTesting(false)
+                    
+                    // Match badge - clean green style
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Text("\(Int(confidence * 100))%")
+                                .font(.system(size: 10, weight: .black))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.green.opacity(0.9))
+                                )
+                        }
+                        Spacer()
+                    }
+                    .padding(8)
+                    .allowsHitTesting(false)
                 }
+                .contentShape(Rectangle())
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(channel.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
+                    
+                    Text(reason)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .lineLimit(1)
+                    
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 6, height: 6)
+                        Text("\(formatViewers(channel.viewerCount)) watching")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                }
+                .frame(width: 180, alignment: .leading)
             }
-            .buttonStyle(PressableScaleStyle(scale: 0.96))
         }
+        .buttonStyle(PressableScaleStyle(scale: 0.96))
     }
     
     private func formatViewers(_ count: Int) -> String {
@@ -507,15 +522,31 @@ private struct TrendingChannelCard: View {
     @State private var streamFailed = false
     
     var body: some View {
-        // 🔥 Only show channel when video is actually playing - no placeholder!
-        if streamReady && !streamFailed {
-            Button(action: {
-                HapticManager.shared.impact(style: .medium)
-                onSelect()
-            }) {
-                VStack(alignment: .leading, spacing: 8) {
-                    ZStack {
-                        // Thumbnail
+        // 🔥 Always show channel - use static thumbnail as fallback
+        Button(action: {
+            HapticManager.shared.impact(style: .medium)
+            onSelect()
+        }) {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack {
+                    // Thumbnail - show live stream or fallback to static image
+                    if streamFailed {
+                        AsyncImage(url: URL(string: item.channel.logoURL)) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(item.channel.category.color.opacity(0.3))
+                                .overlay(
+                                    Image(systemName: "tv.fill")
+                                        .font(.system(size: 28))
+                                        .foregroundColor(item.channel.category.color)
+                                )
+                        }
+                        .frame(width: 160, height: 90)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } else {
                         LiveChannelThumbnailView(
                             streamURL: item.channel.streamURL,
                             posterURL: item.channel.logoURL,
@@ -538,44 +569,44 @@ private struct TrendingChannelCard: View {
                         .frame(width: 160, height: 90)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         .allowsHitTesting(false)
-                        
-                        // Rank badge
-                        VStack {
-                            HStack {
-                                Text("#\(item.rank)")
-                                    .font(.system(size: 14, weight: .black))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(
-                                        Capsule()
-                                            .fill(Color.red)
-                                    )
-                                Spacer()
-                            }
+                    }
+                    
+                    // Rank badge
+                    VStack {
+                        HStack {
+                            Text("#\(item.rank)")
+                                .font(.system(size: 14, weight: .black))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.red)
+                                )
                             Spacer()
                         }
-                        .padding(8)
-                        .allowsHitTesting(false)
+                        Spacer()
                     }
-                    .contentShape(Rectangle())
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.channel.name)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .lineLimit(1)
-                        
-                        Text(item.trendingReason)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.orange)
-                            .lineLimit(1)
-                    }
-                    .frame(width: 160, alignment: .leading)
+                    .padding(8)
+                    .allowsHitTesting(false)
                 }
+                .contentShape(Rectangle())
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.channel.name)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
+                    
+                    Text(item.trendingReason)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.orange)
+                        .lineLimit(1)
+                }
+                .frame(width: 160, alignment: .leading)
             }
-            .buttonStyle(PressableScaleStyle(scale: 0.96))
         }
+        .buttonStyle(PressableScaleStyle(scale: 0.96))
     }
 }
 
@@ -589,14 +620,31 @@ private struct BecauseYouWatchedCard: View {
     @State private var streamFailed = false
     
     var body: some View {
-        // 🔥 Only show channel when video is actually playing - no placeholder!
-        if streamReady && !streamFailed {
-            Button(action: {
-                HapticManager.shared.impact(style: .medium)
-                onSelect()
-            }) {
-                VStack(alignment: .leading, spacing: 8) {
-                    ZStack {
+        // 🔥 Always show channel - use static thumbnail as fallback
+        Button(action: {
+            HapticManager.shared.impact(style: .medium)
+            onSelect()
+        }) {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack {
+                    // Thumbnail - show live stream or fallback to static image
+                    if streamFailed {
+                        AsyncImage(url: URL(string: item.recommendedChannel.logoURL)) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(item.recommendedChannel.category.color.opacity(0.3))
+                                .overlay(
+                                    Image(systemName: "tv.fill")
+                                        .font(.system(size: 28))
+                                        .foregroundColor(item.recommendedChannel.category.color)
+                                )
+                        }
+                        .frame(width: 160, height: 90)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } else {
                         LiveChannelThumbnailView(
                             streamURL: item.recommendedChannel.streamURL,
                             posterURL: item.recommendedChannel.logoURL,
@@ -619,36 +667,36 @@ private struct BecauseYouWatchedCard: View {
                         .frame(width: 160, height: 90)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         .allowsHitTesting(false)
-                        
-                        // LIVE badge
-                        VStack {
-                            HStack {
-                                LiveBadgeSmall()
-                                Spacer()
-                            }
+                    }
+                    
+                    // LIVE badge
+                    VStack {
+                        HStack {
+                            LiveBadgeSmall()
                             Spacer()
                         }
-                        .padding(8)
-                        .allowsHitTesting(false)
+                        Spacer()
                     }
-                    .contentShape(Rectangle())
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.recommendedChannel.name)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .lineLimit(1)
-                        
-                        Text("Because you watched \(item.watchedChannel.name)")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .lineLimit(2)
-                    }
-                    .frame(width: 160, alignment: .leading)
+                    .padding(8)
+                    .allowsHitTesting(false)
                 }
+                .contentShape(Rectangle())
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.recommendedChannel.name)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
+                    
+                    Text("Because you watched \(item.watchedChannel.name)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .lineLimit(2)
+                }
+                .frame(width: 160, alignment: .leading)
             }
-            .buttonStyle(PressableScaleStyle(scale: 0.96))
         }
+        .buttonStyle(PressableScaleStyle(scale: 0.96))
     }
 }
 
@@ -662,14 +710,31 @@ private struct TimeBasedCard: View {
     @State private var streamFailed = false
     
     var body: some View {
-        // 🔥 Only show channel when video is actually playing - no placeholder!
-        if streamReady && !streamFailed {
-            Button(action: {
-                HapticManager.shared.impact(style: .medium)
-                onSelect()
-            }) {
-                VStack(alignment: .leading, spacing: 8) {
-                    ZStack {
+        // 🔥 Always show channel - use static thumbnail as fallback
+        Button(action: {
+            HapticManager.shared.impact(style: .medium)
+            onSelect()
+        }) {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack {
+                    // Thumbnail - show live stream or fallback to static image
+                    if streamFailed {
+                        AsyncImage(url: URL(string: pick.channel.logoURL)) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(pick.channel.category.color.opacity(0.3))
+                                .overlay(
+                                    Image(systemName: "tv.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(pick.channel.category.color)
+                                )
+                        }
+                        .frame(width: 140, height: 80)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    } else {
                         LiveChannelThumbnailView(
                             streamURL: pick.channel.streamURL,
                             posterURL: pick.channel.logoURL,
@@ -692,36 +757,36 @@ private struct TimeBasedCard: View {
                         .frame(width: 140, height: 80)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                         .allowsHitTesting(false)
-                        
-                        // LIVE badge
-                        VStack {
-                            HStack {
-                                LiveBadgeSmall()
-                                Spacer()
-                            }
+                    }
+                    
+                    // LIVE badge
+                    VStack {
+                        HStack {
+                            LiveBadgeSmall()
                             Spacer()
                         }
-                        .padding(6)
-                        .allowsHitTesting(false)
+                        Spacer()
                     }
-                    .contentShape(Rectangle())
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(pick.channel.name)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .lineLimit(1)
-                        
-                        Text(pick.reason)
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .lineLimit(1)
-                    }
-                    .frame(width: 140, alignment: .leading)
+                    .padding(6)
+                    .allowsHitTesting(false)
                 }
+                .contentShape(Rectangle())
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pick.channel.name)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
+                    
+                    Text(pick.reason)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .lineLimit(1)
+                }
+                .frame(width: 140, alignment: .leading)
             }
-            .buttonStyle(PressableScaleStyle(scale: 0.96))
         }
+        .buttonStyle(PressableScaleStyle(scale: 0.96))
     }
 }
 

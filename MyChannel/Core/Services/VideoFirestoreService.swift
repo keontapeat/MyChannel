@@ -357,6 +357,107 @@ final class VideoFirestoreService: ObservableObject {
         #endif
     }
     
+    // 🔥🔥🔥 FETCH ALL PUBLIC VIDEOS - For HomeView "New From Creators" Section! 🔥🔥🔥
+    // This powers the home feed with REAL videos from your beta testers
+    func fetchAllPublicVideos(limit: Int = 24) async -> [Video] {
+        #if canImport(FirebaseFirestore)
+        do {
+            print("🔥 [VideoFirestoreService] Fetching ALL public videos for home feed (limit: \(limit))")
+            
+            // Query all videos ordered by most recent first
+            // We'll filter for public visibility client-side since some videos may use different field names
+            let query: Query = db.collection("videos")
+                .order(by: "createdAt", descending: true)
+                .limit(to: limit * 2) // Fetch extra in case some are private
+            
+            let snap = try await query.getDocuments()
+            print("📺 [VideoFirestoreService] Found \(snap.documents.count) public videos in Firestore")
+            
+            var videos: [Video] = []
+            for doc in snap.documents {
+                let d = doc.data()
+                
+                // 🔥 Check if video is public (handle both visibility and isPublic fields)
+                let visibilityRaw = (d["visibility"] as? String)?.lowercased() ?? ""
+                let isPublicField = (d["isPublic"] as? Bool) ?? true
+                let isPublic = visibilityRaw == "public" || (visibilityRaw.isEmpty && isPublicField)
+                
+                // Skip private/unlisted videos
+                guard isPublic else {
+                    print("  ⏭️ Skipping non-public video: \(d["title"] as? String ?? "untitled")")
+                    continue
+                }
+                
+                // Get view count
+                var viewCount = 0
+                if let firestoreCount = d["viewCount"] as? Int {
+                    viewCount = firestoreCount
+                } else if let firestoreCount = d["viewCount"] as? Int64 {
+                    viewCount = Int(firestoreCount)
+                }
+                
+                // Get creator info from Firestore
+                let creatorId = d["userId"] as? String ?? ""
+                var creator = User.defaultUser
+                
+                if !creatorId.isEmpty {
+                    // Try to fetch the actual creator from users collection
+                    if let creatorDoc = try? await db.collection("users").document(creatorId).getDocument(),
+                       creatorDoc.exists,
+                       let creatorData = creatorDoc.data() {
+                        creator = User(
+                            id: creatorId,
+                            username: creatorData["username"] as? String ?? "user",
+                            displayName: creatorData["displayName"] as? String ?? "Creator",
+                            email: creatorData["email"] as? String ?? "",
+                            profileImageURL: creatorData["profileImageURL"] as? String ?? creatorData["profileImageUrl"] as? String,
+                            bannerImageURL: creatorData["bannerImageURL"] as? String ?? creatorData["bannerImageUrl"] as? String,
+                            bio: creatorData["bio"] as? String,
+                            subscriberCount: (creatorData["subscriberCount"] as? Int) ?? 0,
+                            videoCount: (creatorData["videoCount"] as? Int) ?? 0,
+                            isVerified: (creatorData["isVerified"] as? Bool) ?? false,
+                            isCreator: true,
+                            createdAt: (creatorData["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+                        )
+                    }
+                }
+                
+                let video = Video(
+                    id: doc.documentID,
+                    title: d["title"] as? String ?? "",
+                    description: d["description"] as? String ?? "",
+                    thumbnailURL: d["thumbnailUrl"] as? String ?? "",
+                    videoURL: d["videoUrl"] as? String ?? "",
+                    duration: (d["duration"] as? Double) ?? 0,
+                    viewCount: viewCount,
+                    likeCount: (d["likeCount"] as? Int) ?? 0,
+                    creator: creator, // 🔥 Use the actual creator, not current user
+                    category: VideoCategory(rawValue: d["category"] as? String ?? "") ?? .entertainment,
+                    tags: (d["tags"] as? [String]) ?? [],
+                    isPublic: true,
+                    visibility: .public
+                )
+                
+                videos.append(video)
+                print("  ✅ Video: \(video.title) by \(creator.displayName)")
+                
+                // Stop if we have enough public videos
+                if videos.count >= limit {
+                    break
+                }
+            }
+            
+            print("🔥 [VideoFirestoreService] Successfully loaded \(videos.count) public videos for home feed")
+            return videos
+        } catch {
+            print("🚨 [VideoFirestoreService] Error fetching public videos: \(error)")
+            return []
+        }
+        #else
+        return []
+        #endif
+    }
+    
     // ⚡ PERFORMANCE: Paginated fetch with last document tracking
     func fetchVideosByCreatorPaginated(creatorId: String, limit: Int = 24, lastDocument: DocumentSnapshot? = nil) async throws -> (videos: [Video], lastDocument: DocumentSnapshot?) {
         #if canImport(FirebaseFirestore)

@@ -269,6 +269,78 @@ class AdvancedSearchService: ObservableObject {
         
         var creators = User.sampleUsers.filter { $0.isCreator }
         
+        // 🔥 REAL SEARCH: Also search Firebase for real users/creators
+        #if canImport(FirebaseFirestore)
+        do {
+            // Search by display name (case-insensitive prefix search)
+            let searchTermLower = query.originalQuery.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            let searchTermClean = searchTermLower.replacingOccurrences(of: "@", with: "") // Handle @username searches
+            
+            // Query users collection - search by displayName and username
+            let usersSnap = try await db.collection("users")
+                .whereField("isCreator", isEqualTo: true)
+                .limit(to: 50)
+                .getDocuments()
+            
+            let firebaseCreators: [User] = usersSnap.documents.compactMap { doc -> User? in
+                let d = doc.data()
+                let displayName = d["displayName"] as? String ?? ""
+                let username = d["username"] as? String ?? ""
+                let bio = d["bio"] as? String ?? ""
+                
+                // Check if this creator matches the search query
+                let matchesQuery = displayName.lowercased().contains(searchTermClean) ||
+                                   username.lowercased().contains(searchTermClean) ||
+                                   bio.lowercased().contains(searchTermClean)
+                
+                guard matchesQuery else { return nil }
+                
+                // Convert socialLinks dictionary to [SocialLink] array
+                let socialLinksDict = (d["socialLinks"] as? [String: String]) ?? [:]
+                let socialLinks: [SocialLink] = socialLinksDict.compactMap { key, value in
+                    guard let platform = SocialPlatform(rawValue: key.lowercased()) else { return nil }
+                    return SocialLink(platform: platform, url: value, displayName: platform.displayName)
+                }
+                
+                return User(
+                    id: doc.documentID,
+                    username: username,
+                    displayName: displayName,
+                    email: d["email"] as? String ?? "",
+                    profileImageURL: d["profileImageURL"] as? String ?? d["profileImageUrl"] as? String,
+                    bannerImageURL: d["bannerImageURL"] as? String ?? d["bannerImageUrl"] as? String,
+                    bio: bio.isEmpty ? nil : bio,
+                    subscriberCount: (d["subscriberCount"] as? Int) ?? 0,
+                    videoCount: (d["videoCount"] as? Int) ?? 0,
+                    isVerified: (d["isVerified"] as? Bool) ?? false,
+                    isCreator: true,
+                    createdAt: (d["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
+                    location: d["location"] as? String,
+                    website: d["website"] as? String,
+                    showWebsiteOnProfile: (d["showWebsiteOnProfile"] as? Bool) ?? false,
+                    socialLinks: socialLinks,
+                    followerCount: (d["followerCount"] as? Int) ?? 0,
+                    followingCount: (d["followingCount"] as? Int) ?? 0,
+                    joinDate: (d["joinDate"] as? Timestamp)?.dateValue(),
+                    totalViews: (d["totalViews"] as? Int) ?? 0,
+                    totalEarnings: (d["totalEarnings"] as? Double) ?? 0
+                )
+            }
+            
+            // Add Firebase creators to the list (avoid duplicates)
+            let existingIds = Set(creators.map { $0.id })
+            for creator in firebaseCreators {
+                if !existingIds.contains(creator.id) {
+                    creators.append(creator)
+                }
+            }
+            
+            print("🔍 [SearchCreators] Found \(firebaseCreators.count) creators from Firebase matching '\(searchTermClean)'")
+        } catch {
+            print("⚠️ [SearchCreators] Firebase search error: \(error)")
+        }
+        #endif
+        
         // Apply creator-specific filters
         if let subscriberRange = filters.subscriberRange {
             creators = creators.filter { creator in

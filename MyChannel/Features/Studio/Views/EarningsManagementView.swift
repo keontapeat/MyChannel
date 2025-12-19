@@ -10,10 +10,13 @@ import SwiftUI
 import Charts
 
 struct EarningsManagementView: View {
+    @EnvironmentObject private var appState: AppState
     @StateObject private var analyticsService = AdvancedAnalyticsService.shared
     @State private var selectedPeriod: Period = .thisMonth
     @State private var showingWithdrawal = false
     @State private var showingPaymentHistory = false
+    @State private var isLoading = true
+    @State private var topVideos: [(video: Video, revenue: Double)] = []
     
     enum Period: String, CaseIterable {
         case today = "Today"
@@ -61,6 +64,46 @@ struct EarningsManagementView: View {
         }
         .sheet(isPresented: $showingPaymentHistory) {
             PaymentHistorySheet()
+        }
+        .task {
+            await loadEarningsData()
+        }
+    }
+    
+    // MARK: - Data Loading
+    
+    private func loadEarningsData() async {
+        guard let creatorId = appState.currentUser?.id else {
+            isLoading = false
+            return
+        }
+        
+        print("💰 [EarningsManagementView] Loading earnings data for: \(creatorId)")
+        
+        // Load channel analytics
+        do {
+            _ = try await analyticsService.getChannelAnalytics(for: creatorId, timeframe: .last30Days)
+            _ = try await analyticsService.getRevenueAnalytics(for: creatorId, timeframe: .last30Days)
+        } catch {
+            print("⚠️ [EarningsManagementView] Failed to load analytics: \(error)")
+        }
+        
+        // Load top earning videos
+        let videos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: creatorId, limit: 10)
+        
+        // Calculate estimated revenue per video based on views
+        // YouTube CPM averages $1-3 per 1000 views, we estimate $2
+        let videosWithRevenue = videos.map { video -> (video: Video, revenue: Double) in
+            let estimatedCPM = 2.0 // $2 per 1000 views
+            let revenue = Double(video.viewCount) / 1000.0 * estimatedCPM
+            return (video, revenue)
+        }
+        .sorted { $0.revenue > $1.revenue }
+        
+        await MainActor.run {
+            self.topVideos = videosWithRevenue
+            self.isLoading = false
+            print("✅ [EarningsManagementView] Loaded \(videosWithRevenue.count) videos with revenue data")
         }
     }
     

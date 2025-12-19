@@ -3,6 +3,7 @@
 //  MyChannel
 //
 //  🔥 YOUTUBE 2024 STYLE: Pill-shaped download button with proper states
+//  💰 Now with Watch Ad to Download option!
 //
 
 import SwiftUI
@@ -13,6 +14,11 @@ struct DownloadButtonView: View {
     
     @StateObject private var premiumService = PremiumService.shared
     @StateObject private var offlineService = OfflineDownloadService.shared
+    @StateObject private var adManager = AdMobManager.shared
+    
+    @State private var showingAdOption = false
+    @State private var isWatchingAd = false
+    @State private var adUnlockedDownload = false  // Temporary unlock via ad
     
     private var downloadState: DownloadState {
         // Check if downloading
@@ -36,8 +42,8 @@ struct DownloadButtonView: View {
             }
         }
         
-        // Check if premium
-        if premiumService.isPremium {
+        // Check if premium OR ad-unlocked
+        if premiumService.isPremium || adUnlockedDownload {
             return .available
         } else {
             return .premiumRequired
@@ -73,7 +79,14 @@ struct DownloadButtonView: View {
     @State private var pulseScale: CGFloat = 1.0
     
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            // 💰 Show ad option for non-premium users
+            if downloadState == .premiumRequired {
+                showingAdOption = true
+            } else {
+                action()
+            }
+        }) {
             HStack(spacing: 6) {
                 // Icon with inline progress
                 ZStack {
@@ -105,11 +118,19 @@ struct DownloadButtonView: View {
                         .lineLimit(1)
                 }
                 
-                // Premium indicator (inline crown)
+                // Premium/Ad indicator
                 if downloadState == .premiumRequired {
-                    Image(systemName: "crown.fill")
-                        .font(.system(size: 8))
-                        .foregroundColor(.yellow)
+                    // 💰 Show play icon to indicate ad option
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.green)
+                }
+                
+                // Loading indicator for ad
+                if isWatchingAd {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .green))
+                        .scaleEffect(0.6)
                 }
             }
             .padding(.horizontal, 12)
@@ -145,6 +166,70 @@ struct DownloadButtonView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(downloadTitle) button")
+        .confirmationDialog(
+            "Download Video",
+            isPresented: $showingAdOption,
+            titleVisibility: .visible
+        ) {
+            Button("Watch Ad to Download Free") {
+                watchAdToUnlock()
+            }
+            
+            Button("Get Premium - Unlimited Downloads") {
+                // Navigate to premium
+                premiumService.showPremiumUpsell = true
+            }
+            
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Watch a short ad to unlock this download, or upgrade to Premium for unlimited downloads!")
+        }
+    }
+    
+    // MARK: - 💰 Watch Ad to Unlock Download
+    
+    private func watchAdToUnlock() {
+        isWatchingAd = true
+        HapticManager.shared.impact(style: .medium)
+        
+        // Track the ad impression
+        AdRevenueTracker.shared.trackImpression(
+            adType: .rewarded,
+            videoId: video.id,
+            creatorId: video.creator.id
+        )
+        
+        if adManager.isRewardedAdReady {
+            adManager.showRewardedAd(
+                onReward: { _ in
+                    // Ad completed - unlock download!
+                    adUnlockedDownload = true
+                    isWatchingAd = false
+                    
+                    // Track rewarded completion
+                    AdRevenueTracker.shared.trackRewardedComplete(
+                        videoId: video.id,
+                        creatorId: video.creator.id
+                    )
+                    
+                    HapticManager.shared.notification(type: .success)
+                    
+                    // Auto-start download
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        action()
+                    }
+                },
+                onDismiss: {
+                    isWatchingAd = false
+                }
+            )
+        } else {
+            // Ad not ready - give free unlock (good UX)
+            print("⚠️ [Download] Ad not ready, granting free unlock")
+            adUnlockedDownload = true
+            isWatchingAd = false
+            action()
+        }
     }
     
     private var isActive: Bool {

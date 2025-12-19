@@ -84,6 +84,7 @@ struct AppConfig {
         static let cloudRunBaseURL = "https://mychannel-ai-124515086975.us-central1.run.app"
         static let gatewayBaseURL = "https://mychannel-gw-1l792fzz.uc.gateway.dev"
         static let adsBaseURL: String = gatewayBaseURL
+        static let mlAgentsURL: String? = "https://ml-agents-124515086975.us-central1.run.app"
         static let version = "v1"
         static let timeout: TimeInterval = 30.0
         static let supabaseAnonKey = "your-supabase-anon-key-here" // Replace with actual key

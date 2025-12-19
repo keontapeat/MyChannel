@@ -574,9 +574,6 @@ struct YouTubeLikeDislikePill: View {
     let onLike: () -> Void
     let onDislike: () -> Void
     
-    @State private var likePressed = false
-    @State private var dislikePressed = false
-    
     var body: some View {
         HStack(spacing: 0) {
             // Like Button
@@ -593,14 +590,9 @@ struct YouTubeLikeDislikePill: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .scaleEffect(likePressed ? 0.95 : likeScale)
+                .scaleEffect(likeScale)
             }
-            .buttonStyle(.plain)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in likePressed = true }
-                    .onEnded { _ in likePressed = false }
-            )
+            .buttonStyle(PillPressedButtonStyle())
             .accessibilityLabel(isLiked ? "Unlike" : "Like")
             .accessibilityValue("\(likeCount) likes")
             
@@ -616,22 +608,14 @@ struct YouTubeLikeDislikePill: View {
                     .foregroundColor(isDisliked ? AppTheme.Colors.textPrimary : AppTheme.Colors.textSecondary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .scaleEffect(dislikePressed ? 0.95 : 1.0)
             }
-            .buttonStyle(.plain)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in dislikePressed = true }
-                    .onEnded { _ in dislikePressed = false }
-            )
+            .buttonStyle(PillPressedButtonStyle())
             .accessibilityLabel(isDisliked ? "Remove dislike" : "Dislike")
         }
         .background(
             Capsule()
                 .fill(AppTheme.Colors.surface)
         )
-        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: likePressed)
-        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: dislikePressed)
     }
     
     private func formatCount(_ count: Int) -> String {
@@ -644,16 +628,25 @@ struct YouTubeLikeDislikePill: View {
     }
 }
 
+// MARK: - 🔥 FIX: Custom ButtonStyle that doesn't block ScrollView gestures
+/// Uses configuration.isPressed instead of DragGesture to detect pressed state
+struct PillPressedButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
 // MARK: - 🔥 YOUTUBE 2024 EXACT: Action Pill Button
 /// Simple pill button matching YouTube's exact style
+/// 🔥 FIX: Uses PillPressedButtonStyle instead of DragGesture to allow ScrollView scrolling
 struct YouTubeActionPill: View {
     let icon: String
     let title: String
     var iconColor: Color? = nil
     var isActive: Bool = false
     let action: () -> Void
-    
-    @State private var isPressed = false
     
     var body: some View {
         Button(action: action) {
@@ -672,15 +665,8 @@ struct YouTubeActionPill: View {
                 Capsule()
                     .fill(AppTheme.Colors.surface)
             )
-            .scaleEffect(isPressed ? 0.95 : 1.0)
         }
-        .buttonStyle(.plain)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in isPressed = true }
-                .onEnded { _ in isPressed = false }
-        )
-        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
+        .buttonStyle(PillPressedButtonStyle())
         .accessibilityLabel("\(title) button")
     }
 }

@@ -163,17 +163,8 @@ struct ProfileVideosView: View {
     var body: some View {
         VStack(spacing: 16) {
             if !pinnedVideos.isEmpty {
-                PinnedVideosCarousel(videos: pinnedVideos)
-                    .padding(.horizontal, 16)
+                PremiumPinnedSection(videos: pinnedVideos)
                     .padding(.top, 16)
-                
-                HStack {
-                    Text("Pinned")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
             } else if videos.isEmpty && AuthenticationManager.shared.currentUser?.id == user.id {
                 // Clean empty state - single placeholder
                 VStack(spacing: 20) {
@@ -1778,18 +1769,238 @@ private struct FullWidthThumb: View {
     }
 }
 
+// MARK: - 🔥 Premium Pinned Section
+struct PremiumPinnedSection: View {
+    let videos: [Video]
+    @State private var appeared = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Premium Header
+            HStack(spacing: 8) {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.Colors.primary)
+                    .rotationEffect(.degrees(-45))
+                
+                Text("Pinned")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                
+                Text("•")
+                    .foregroundStyle(AppTheme.Colors.textTertiary)
+                
+                Text("\(videos.count) video\(videos.count == 1 ? "" : "s")")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            
+            // Premium Carousel
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(Array(videos.enumerated()), id: \.element.id) { index, video in
+                        PremiumPinnedVideoCard(video: video)
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 20)
+                            .animation(
+                                .spring(response: 0.5, dampingFraction: 0.8)
+                                .delay(Double(index) * 0.1),
+                                value: appeared
+                            )
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
+        }
+        .onAppear {
+            HapticManager.shared.impact(style: .light)
+            withAnimation { appeared = true }
+        }
+    }
+}
+
+// MARK: - 🔥 Premium Pinned Video Card
+struct PremiumPinnedVideoCard: View {
+    let video: Video
+    @EnvironmentObject private var appState: AppState
+    @State private var isPressed = false
+    @State private var showOptions = false
+    @State private var isSubscribedLocal = false
+    @State private var isWatchLaterLocal = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Premium Thumbnail with Pin Badge
+            ZStack(alignment: .topLeading) {
+                // Thumbnail
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(AppTheme.Colors.surface)
+                    .overlay(
+                        PinnedCardThumb(urls: video.posterCandidates)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [AppTheme.Colors.primary.opacity(0.5), AppTheme.Colors.primary.opacity(0.1)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    )
+                    .frame(width: 280, height: 158) // 16:9 ratio
+                
+                // Duration Badge
+                Text(video.formattedDuration)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(.black.opacity(0.85))
+                    .cornerRadius(4)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                
+                // Pin Badge
+                HStack(spacing: 4) {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 9, weight: .bold))
+                    Text("PINNED")
+                        .font(.system(size: 9, weight: .heavy, design: .rounded))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [AppTheme.Colors.primary, AppTheme.Colors.primary.opacity(0.8)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 4, y: 2)
+                )
+                .padding(8)
+            }
+            
+            // Video Info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(video.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                
+                HStack(spacing: 4) {
+                    ReactiveViewCountText(videoId: video.id, initialCount: video.viewCount)
+                    Text("views")
+                    Text("•")
+                    Text(video.uploadTimeAgo)
+                }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppTheme.Colors.textSecondary)
+                .lineLimit(1)
+            }
+            .frame(width: 280, alignment: .leading)
+        }
+        .scaleEffect(isPressed ? 0.97 : 1.0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            HapticManager.shared.impact(style: .medium)
+            GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: true)
+        }
+        .onLongPressGesture(minimumDuration: 0.5, pressing: { pressing in
+            isPressed = pressing
+            if pressing { HapticManager.shared.impact(style: .light) }
+        }) {
+            HapticManager.shared.impact(style: .medium)
+            isSubscribedLocal = appState.isSubscribedTo(video.creator.id)
+            isWatchLaterLocal = appState.isVideoInWatchLater(video.id)
+            showOptions = true
+        }
+        .sheet(isPresented: $showOptions) {
+            VideoMoreOptionsSheet(
+                video: video,
+                isSubscribed: $isSubscribedLocal,
+                isWatchLater: $isWatchLaterLocal
+            )
+        }
+        .accessibilityLabel("Pinned video: \(video.title)")
+    }
+}
+
+// MARK: - Pinned Card Thumbnail
+private struct PinnedCardThumb: View {
+    let urls: [URL]
+    @State private var currentIndex = 0
+    
+    var body: some View {
+        GeometryReader { geo in
+            if urls.isEmpty {
+                placeholder
+            } else {
+                AsyncImage(url: urls[currentIndex]) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geo.size.width, height: geo.size.height)
+                    case .failure:
+                        if currentIndex < urls.count - 1 {
+                            Color.clear.onAppear { currentIndex += 1 }
+                        } else {
+                            placeholder
+                        }
+                    case .empty:
+                        shimmer
+                    @unknown default:
+                        placeholder
+                    }
+                }
+            }
+        }
+        .clipped()
+    }
+    
+    private var placeholder: some View {
+        ZStack {
+            AppTheme.Colors.surface
+            Image(systemName: "play.rectangle.fill")
+                .font(.system(size: 32, weight: .light))
+                .foregroundStyle(AppTheme.Colors.textTertiary.opacity(0.5))
+        }
+    }
+    
+    private var shimmer: some View {
+        AppTheme.Colors.surface
+            .overlay(
+                LinearGradient(
+                    colors: [
+                        AppTheme.Colors.surface,
+                        AppTheme.Colors.surface.opacity(0.5),
+                        AppTheme.Colors.surface
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+    }
+}
+
+// MARK: - Legacy Carousel (Deprecated)
 struct PinnedVideosCarousel: View {
     let videos: [Video]
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(videos) { video in
-                    FullWidthVideoCard(video: video)
-                        .frame(width: 260)
-                }
-            }
-            .padding(.vertical, 6)
-        }
+        PremiumPinnedSection(videos: videos)
     }
 }
 
@@ -1847,4 +2058,12 @@ struct ReactiveViewCountText: View {
     }
     .background(AppTheme.Colors.background)
     .preferredColorScheme(.light)
+}
+
+#Preview("🔥 Premium Pinned Section") {
+    ScrollView {
+        PremiumPinnedSection(videos: Array(Video.sampleVideos.prefix(3)))
+    }
+    .background(AppTheme.Colors.background)
+    .environmentObject(AppState())
 }

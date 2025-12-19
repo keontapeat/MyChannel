@@ -306,8 +306,9 @@ struct LiveChannelThumbnailView: View {
 
     var body: some View {
         ZStack {
-            // 🔥 NO PLACEHOLDER - Only show content when video is playing!
-            // This ensures users only see channels with working streams
+            // 🔥 Layer 0: ALWAYS show poster/logo image as base layer
+            // This ensures thumbnails are ALWAYS visible, never blank
+            staticPosterImage
             
             // 🔥 Layer 1: Cached video snapshot (shows in <10ms if available)
             if let snapshot = cachedSnapshot {
@@ -330,8 +331,8 @@ struct LiveChannelThumbnailView: View {
                 .allowsHitTesting(isReady)
             }
             
-            // 🔥 Layer 3: LIVE badge (only when stream is ready)
-            if isReady {
+            // 🔥 Layer 3: LIVE badge (always show when we have a poster or stream is ready)
+            if posterLoaded || isReady {
                 liveBadge
             }
         }
@@ -424,6 +425,89 @@ struct LiveChannelThumbnailView: View {
     private func handleSnapshot(_ image: UIImage) {
         cachedSnapshot = image
         ThermonuclearThumbnailCache.shared.cacheImage(image, for: streamURL)
+    }
+    
+    // 🔥 STATIC POSTER IMAGE - Always shows the channel logo as fallback
+    private var staticPosterImage: some View {
+        Group {
+            if let posterURL = posterURL, isValidImageURL(posterURL) {
+                // 🔥 Show the actual logo/poster image
+                AsyncImage(url: URL(string: posterURL)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .onAppear {
+                                if !posterLoaded {
+                                    posterLoaded = true
+                                }
+                            }
+                    case .failure(_):
+                        // Fallback to gradient placeholder if image fails
+                        categoryGradientPlaceholder
+                    case .empty:
+                        // Show gradient while loading
+                        categoryGradientPlaceholder
+                            .overlay(
+                                ProgressView()
+                                    .scaleEffect(0.6)
+                                    .tint(.white.opacity(0.7))
+                            )
+                    @unknown default:
+                        categoryGradientPlaceholder
+                    }
+                }
+            } else {
+                // No poster URL provided - show gradient placeholder
+                categoryGradientPlaceholder
+            }
+        }
+    }
+    
+    // 🔥 Beautiful gradient placeholder with channel branding
+    private var categoryGradientPlaceholder: some View {
+        let categoryColor = channelCategory?.color ?? .blue
+        
+        return ZStack {
+            // Dynamic gradient background
+            LinearGradient(
+                colors: [
+                    categoryColor.opacity(0.9),
+                    categoryColor.opacity(0.6),
+                    categoryColor.opacity(0.4)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            
+            // Channel icon and name
+            VStack(spacing: 6) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.2))
+                        .frame(width: 40, height: 40)
+                    
+                    Image(systemName: categoryIcon)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                
+                if let name = channelName {
+                    Text(name)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .shadow(color: .black.opacity(0.3), radius: 2)
+                }
+            }
+        }
+        .onAppear {
+            // Mark poster as loaded for gradient placeholder
+            if !posterLoaded {
+                posterLoaded = true
+            }
+        }
     }
     
     // 🔥 Fire gradient placeholder based on category

@@ -32,7 +32,7 @@ class VideoUploadManager: ObservableObject {
     @Published var selectedTags: Set<String> = []
     @Published var selectedCategory: VideoCategory = .entertainment
     @Published var isPublic: Bool = true
-    @Published var monetizationEnabled: Bool = false
+    @Published var monetizationEnabled: Bool = true // 🔥💰 DEFAULT: ON! Creators earn from day 1!
     
     // 🔥 NEW: Scheduling & Advanced Features
     @Published var isScheduled: Bool = false
@@ -211,6 +211,33 @@ class VideoUploadManager: ObservableObject {
                 // Persist to local profile and refresh AppState
                 try? await DatabaseService.shared.saveVideo(uploadedVideo)
                 
+                // 🔥💰 NUCLEAR: AUTO-SETUP MONETIZATION - INSTANT EARNINGS FROM DAY 1!
+                if self.monetizationEnabled, let user = AuthenticationManager.shared.currentUser {
+                    Task {
+                        do {
+                            let config = try await NuclearAdMonetizationService.shared.setupMonetizationForVideo(
+                                video: uploadedVideo,
+                                creatorId: user.id
+                            )
+                            print("🔥💰 [VideoUploadManager] MONETIZATION ACTIVE!")
+                            print("   ✅ Video will start earning from FIRST VIEW")
+                            print("   ✅ 90% revenue share to creator")
+                            print("   ✅ No waiting period!")
+                            print("   ✅ \(config.adPlacements.count) ad placements configured")
+                            
+                            // Start tracking earnings in real-time
+                            RealTimeRevenueTracker.shared.startTracking(creatorId: user.id)
+                            
+                            // Haptic feedback for monetization enabled
+                            await MainActor.run {
+                                HapticManager.shared.notification(type: .success)
+                            }
+                        } catch {
+                            print("⚠️ [VideoUploadManager] Monetization setup error: \(error)")
+                        }
+                    }
+                }
+                
                 // 🔥 INCREMENT VIDEO COUNT: Update user's videoCount after successful upload
                 if var user = AuthenticationManager.shared.currentUser {
                     user = User(
@@ -256,6 +283,11 @@ class VideoUploadManager: ObservableObject {
                 NotificationCenter.default.post(name: .userProfileUpdated, object: AuthenticationManager.shared.currentUser)
                 // 🔥 REFRESH PROFILE STATS: Update video count and views in real-time
                 NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
+                
+                // 🔥🔥🔥 YOUTUBE PARITY: Refresh home feed so new videos appear IMMEDIATELY!
+                // This is critical for beta testers to see their uploads right away
+                NotificationCenter.default.post(name: NSNotification.Name("RefreshHomeFeed"), object: uploadedVideo)
+                print("📢 [VideoUploadManager] Posted RefreshHomeFeed notification - video should appear on home feed NOW!")
                 
                 // 🔥 AUTO-UPDATE CREATOR STUDIO ANALYTICS: Connect upload to analytics tracking
                 Task {

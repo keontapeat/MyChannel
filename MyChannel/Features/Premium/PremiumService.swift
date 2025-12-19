@@ -18,6 +18,7 @@ class PremiumService: ObservableObject {
     @Published var downloadedVideos: [PremiumDownloadedVideo] = []
     @Published var premiumFeatures: Set<PremiumFeature> = []
     @Published var downloadProgress: [String: Double] = [:] // videoID: progress
+    @Published var showPremiumUpsell = false
     
     private init() {
         loadPremiumStatus()

@@ -792,21 +792,28 @@ struct ModernSearchResultCard: View {
 
 struct VideoSearchCard: View {
     let videoResult: VideoSearchResult
+    @EnvironmentObject private var appState: AppState
+    @State private var isPressed = false
     
     var body: some View {
         HStack(spacing: 12) {
-            AsyncImage(url: URL(string: videoResult.video.thumbnailURL)) { image in
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Rectangle()
-                    .fill(AppTheme.Colors.surface)
-                    .overlay(Image(systemName: "play.rectangle.fill").foregroundColor(AppTheme.Colors.textTertiary))
+            // Thumbnail with poster candidates support
+            ZStack(alignment: .bottomTrailing) {
+                SearchVideoThumbnail(video: videoResult.video)
+                    .frame(width: 120, height: 68)
+                    .cornerRadius(AppTheme.CornerRadius.sm)
+                    .clipped()
+                
+                // Duration badge
+                Text(videoResult.video.formattedDuration)
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(.black.opacity(0.8))
+                    .cornerRadius(3)
+                    .padding(4)
             }
-            .frame(width: 120, height: 68)
-            .cornerRadius(AppTheme.CornerRadius.sm)
-            .clipped()
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(videoResult.video.title)
@@ -825,17 +832,6 @@ struct VideoSearchCard: View {
                 }
                 .font(AppTheme.Typography.caption)
                 .foregroundColor(AppTheme.Colors.textTertiary)
-                
-                HStack {
-                    Text("Relevance: \(Int(videoResult.relevanceScore * 100))%")
-                        .font(.caption2)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(AppTheme.Colors.primary.opacity(0.1))
-                        .foregroundColor(AppTheme.Colors.primary)
-                        .cornerRadius(4)
-                    Spacer()
-                }
             }
             Spacer()
         }
@@ -843,14 +839,89 @@ struct VideoSearchCard: View {
         .background(AppTheme.Colors.cardBackground)
         .cornerRadius(AppTheme.CornerRadius.md)
         .shadow(color: AppTheme.Colors.textPrimary.opacity(0.05), radius: 4, x: 0, y: 2)
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            HapticManager.shared.impact(style: .medium)
+            // 🔥 Navigate to video player
+            GlobalVideoPlayerManager.shared.playVideo(videoResult.video, showFullscreen: true)
+        }
+        .onLongPressGesture(minimumDuration: 0.1, pressing: { pressing in
+            isPressed = pressing
+        }) { }
+        .accessibilityLabel("Video: \(videoResult.video.title) by \(videoResult.video.creator.displayName)")
+        .accessibilityHint("Double tap to play")
+    }
+}
+
+// MARK: - Search Video Thumbnail (Handles poster candidates)
+private struct SearchVideoThumbnail: View {
+    let video: Video
+    @State private var currentIndex = 0
+    
+    private var thumbnailURLs: [URL] {
+        // Try poster candidates first, then fall back to thumbnailURL
+        var urls = video.posterCandidates
+        if urls.isEmpty, let url = URL(string: video.thumbnailURL) {
+            urls = [url]
+        }
+        return urls
+    }
+    
+    var body: some View {
+        if thumbnailURLs.isEmpty {
+            placeholder
+        } else {
+            AsyncImage(url: thumbnailURLs[currentIndex]) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable()
+                        .aspectRatio(contentMode: .fill)
+                case .failure:
+                    if currentIndex < thumbnailURLs.count - 1 {
+                        Color.clear.onAppear { currentIndex += 1 }
+                    } else {
+                        placeholder
+                    }
+                case .empty:
+                    shimmer
+                @unknown default:
+                    placeholder
+                }
+            }
+        }
+    }
+    
+    private var placeholder: some View {
+        Rectangle()
+            .fill(AppTheme.Colors.surface)
+            .overlay(
+                Image(systemName: "play.rectangle.fill")
+                    .foregroundColor(AppTheme.Colors.textTertiary)
+            )
+    }
+    
+    private var shimmer: some View {
+        Rectangle()
+            .fill(AppTheme.Colors.surface)
+            .overlay(
+                ProgressView()
+                    .tint(AppTheme.Colors.textTertiary)
+            )
     }
 }
 
 struct CreatorSearchCard: View {
     let creatorResult: CreatorSearchResult
+    @EnvironmentObject private var appState: AppState
+    @State private var isPressed = false
+    @State private var showingProfile = false
+    @State private var isSubscribed = false
     
     var body: some View {
         HStack(spacing: 12) {
+            // Profile Image
             AsyncImage(url: URL(string: creatorResult.creator.profileImageURL ?? "")) { image in
                 image
                     .resizable()
@@ -858,43 +929,118 @@ struct CreatorSearchCard: View {
             } placeholder: {
                 Circle()
                     .fill(AppTheme.Colors.surface)
-                    .overlay(Image(systemName: "person.fill").foregroundColor(AppTheme.Colors.textTertiary))
+                    .overlay(
+                        Text(creatorResult.creator.displayName.prefix(1).uppercased())
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+                    )
             }
             .frame(width: 60, height: 60)
             .clipShape(Circle())
+            .overlay(
+                // Verified badge if creator is verified
+                Group {
+                    if creatorResult.creator.isVerified {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.white, AppTheme.Colors.primary)
+                            .offset(x: 20, y: 20)
+                    }
+                }
+            )
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(creatorResult.creator.displayName)
-                    .font(AppTheme.Typography.headline)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+                HStack(spacing: 4) {
+                    Text(creatorResult.creator.displayName)
+                        .font(AppTheme.Typography.headline)
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    
+                    if creatorResult.creator.isVerified {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppTheme.Colors.primary)
+                    }
+                }
                 
                 Text("@\(creatorResult.creator.username)")
                     .font(AppTheme.Typography.subheadline)
                     .foregroundColor(AppTheme.Colors.textSecondary)
                 
-                Text("\(creatorResult.creator.subscriberCount) subscribers")
-                    .font(AppTheme.Typography.caption)
-                    .foregroundColor(AppTheme.Colors.textTertiary)
+                HStack(spacing: 4) {
+                    Text(formatSubscriberCount(creatorResult.creator.subscriberCount))
+                    Text("subscribers")
+                    
+                    if creatorResult.creator.videoCount > 0 {
+                        Text("•")
+                        Text("\(creatorResult.creator.videoCount) videos")
+                    }
+                }
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.Colors.textTertiary)
                 
-                if let bio = creatorResult.creator.bio {
+                if let bio = creatorResult.creator.bio, !bio.isEmpty {
                     Text(bio)
                         .font(AppTheme.Typography.caption)
                         .foregroundColor(AppTheme.Colors.textSecondary)
                         .lineLimit(2)
                 }
             }
+            
             Spacer()
-            Button("Subscribe") {}
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(AppTheme.Colors.primary)
-                .foregroundColor(.white)
-                .cornerRadius(AppTheme.CornerRadius.sm)
+            
+            // Subscribe Button
+            Button {
+                HapticManager.shared.impact(style: .medium)
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    isSubscribed.toggle()
+                }
+                appState.toggleSubscription(for: creatorResult.creator.id)
+            } label: {
+                Text(isSubscribed ? "Subscribed" : "Subscribe")
+                    .font(.system(size: 13, weight: .semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(isSubscribed ? AppTheme.Colors.surface : AppTheme.Colors.primary)
+                    .foregroundColor(isSubscribed ? AppTheme.Colors.textPrimary : .white)
+                    .cornerRadius(AppTheme.CornerRadius.sm)
+            }
+            .buttonStyle(.plain)
         }
         .padding()
         .background(AppTheme.Colors.cardBackground)
         .cornerRadius(AppTheme.CornerRadius.md)
         .shadow(color: AppTheme.Colors.textPrimary.opacity(0.05), radius: 4, x: 0, y: 2)
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            HapticManager.shared.impact(style: .light)
+            // 🔥 Navigate to creator's public profile
+            showingProfile = true
+        }
+        .onLongPressGesture(minimumDuration: 0.1, pressing: { pressing in
+            isPressed = pressing
+        }) { }
+        .sheet(isPresented: $showingProfile) {
+            NavigationStack {
+                PublicProfileView(user: creatorResult.creator)
+            }
+        }
+        .onAppear {
+            isSubscribed = appState.isSubscribedTo(creatorResult.creator.id)
+        }
+        .accessibilityLabel("Channel: \(creatorResult.creator.displayName)")
+        .accessibilityHint("Double tap to view channel")
+    }
+    
+    private func formatSubscriberCount(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.1fM", Double(count) / 1_000_000)
+        } else if count >= 1_000 {
+            return String(format: "%.1fK", Double(count) / 1_000)
+        } else {
+            return "\(count)"
+        }
     }
 }
 
@@ -1343,5 +1489,6 @@ struct VisualSearchSheet: View {
 
 #Preview {
     SearchView()
+        .environmentObject(AppState())
         .preferredColorScheme(.light)
 }

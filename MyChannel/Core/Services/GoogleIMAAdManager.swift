@@ -3,11 +3,16 @@
 //  MyChannel
 //
 //  Real YouTube-style video ads with skip functionality
+//  💰 Now integrated with Google Mobile Ads SDK for REAL revenue!
 //
 
 import Foundation
 import AVFoundation
 import Combine
+
+#if canImport(GoogleMobileAds)
+import GoogleMobileAds
+#endif
 
 // MARK: - Ad Configuration
 struct AdConfig {
@@ -130,12 +135,15 @@ final class GoogleIMAAdManager: NSObject, ObservableObject {
         adState = .loading
         
         Task {
-            // 🔥 DEMO MODE: Skip VAST (Google test ads are boring placeholders)
-            // When you have a real Google Ad Manager account, uncomment the VAST code below
+            #if canImport(GoogleMobileAds)
+            // 💰 REAL ADS MODE: Google Mobile Ads SDK is available!
+            // The AdMobManager handles rewarded/interstitial ads
+            // This manager handles VAST pre-roll video ads
             
-            /*
-            // Try to get real ad from VAST (UNCOMMENT WHEN YOU HAVE REAL AD ACCOUNT)
-            print("📡 [GoogleIMAAdManager] Fetching VAST ad...")
+            print("💰 [GoogleIMAAdManager] Google Mobile Ads SDK available!")
+            print("📡 [GoogleIMAAdManager] Fetching VAST ad for pre-roll...")
+            
+            // Try to get real ad from VAST
             if let ad = await fetchVASTAd(for: video, personalized: personalized) {
                 print("✅ [GoogleIMAAdManager] Got VAST ad with URL: \(ad.mediaURL.prefix(80))...")
                 await MainActor.run {
@@ -144,16 +152,29 @@ final class GoogleIMAAdManager: NSObject, ObservableObject {
                 }
                 return
             }
-            */
+            
+            // Fallback to demo ads if VAST fails
+            print("⚠️ [GoogleIMAAdManager] VAST failed, using demo ad")
+            let demoAd = await fetchFallbackAd(for: video)
+            await MainActor.run {
+                self.isLoadingAd = false
+                completion(demoAd)
+            }
+            
+            #else
+            // 🎬 DEMO MODE: SDK not installed yet
+            print("⚠️ [GoogleIMAAdManager] GoogleMobileAds SDK not installed")
+            print("📦 Add via SPM: https://github.com/googleads/swift-package-manager-google-mobile-ads")
             
             // Use demo ads (varied, interesting sample videos)
-            print("🎬 [GoogleIMAAdManager] Using demo ad (get Google Ad Manager account for real ads)")
+            print("🎬 [GoogleIMAAdManager] Using demo ad")
             let demoAd = await fetchFallbackAd(for: video)
             print("✅ [GoogleIMAAdManager] Demo ad: \(demoAd.advertiserName ?? "Unknown") - \(demoAd.adTitle ?? "")")
             await MainActor.run {
                 self.isLoadingAd = false
                 completion(demoAd)
             }
+            #endif
         }
     }
     
