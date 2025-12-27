@@ -498,9 +498,9 @@ struct AIVisuals: Codable {
 
 struct AIMusic: Codable {
     let audioURL: String
-    let genre: MusicGenre
-    let mood: MusicMood
-    let intensity: MusicIntensity
+    let genre: AIMusicGenre
+    let mood: AIMusicMood
+    let intensity: AIMusicIntensity
     let duration: TimeInterval
 }
 
@@ -559,7 +559,7 @@ struct AIGenerationViralFactor: Codable {
 
 struct VideoGenerationMetadata: Codable {
     let voiceType: AIVoiceType
-    let musicGenre: MusicGenre
+    let musicGenre: AIMusicGenre
     let visualStyle: VideoStyle
     let processingTime: TimeInterval
 }
@@ -623,15 +623,15 @@ enum VideoFormat: String, Codable, CaseIterable {
     case mp4, mov, avi, mkv
 }
 
-enum MusicGenre: String, Codable, CaseIterable {
+enum AIMusicGenre: String, Codable, CaseIterable {
     case cinematic, electronic, acoustic, ambient, upbeat
 }
 
-enum MusicMood: String, Codable, CaseIterable {
+enum AIMusicMood: String, Codable, CaseIterable {
     case inspiring, energetic, calm, dramatic, mysterious
 }
 
-enum MusicIntensity: String, Codable, CaseIterable {
+enum AIMusicIntensity: String, Codable, CaseIterable {
     case low, medium, high, epic
 }
 
@@ -714,11 +714,11 @@ class VideoGenerationAI {
 }
 
 class MusicGenerationAI {
-    func generateBackgroundMusic(mood: ScriptMood, duration: TimeInterval, genre: MusicGenre, intensity: MusicIntensity) async throws -> AIMusic {
+    func generateBackgroundMusic(mood: ScriptMood, duration: TimeInterval, genre: AIMusicGenre, intensity: AIMusicIntensity) async throws -> AIMusic {
         return AIMusic(
             audioURL: "https://example.com/music.mp3",
             genre: genre,
-            mood: .inspiring,
+            mood: AIMusicMood.inspiring,
             intensity: intensity,
             duration: duration
         )

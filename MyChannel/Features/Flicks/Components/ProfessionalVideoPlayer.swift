@@ -176,7 +176,7 @@ struct ProfessionalVideoPlayer: View {
                         .font(.system(size: 80))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [Color(hex: "FF6B6B"), Color(hex: "EE5A5A"), Color(hex: "DC4444")],
+                                colors: [Color(hexString: "FF6B6B"), Color(hexString: "EE5A5A"), Color(hexString: "DC4444")],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -267,7 +267,7 @@ struct ProfessionalVideoPlayer: View {
         guard !reduceMotion else { return }
         
         let symbols = ["heart.fill", "sparkle", "star.fill", "heart.fill", "heart.fill"]
-        let colors: [Color] = [.red, .pink, .orange, .red.opacity(0.8), Color(hex: "FF6B6B")]
+        let colors: [Color] = [.red, .pink, .orange, .red.opacity(0.8), Color(hexString: "FF6B6B")]
         
         for i in 0..<12 {
             let angle = Double(i) * (360.0 / 12.0) + Double.random(in: -15...15)

@@ -3,10 +3,11 @@
 // 🔥 YOUTUBE-LEVEL PROFESSIONAL HOME PAGE 🔥
 // Desktop: Premium YouTube-style layout with category tabs + video grid
 // Mobile: App parity with Stories + Featured + Trending
+// NOW CONNECTED TO REAL FIREBASE DATA! 🔥
 
 import { Search, Bell, Plus, Video, Users } from 'lucide-react';
 import Link from 'next/link';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import TopNav from '@/components/layout/TopNav';
 import Header from '@/components/layout/Header';
@@ -14,18 +15,58 @@ import Hero from '@/components/layout/Hero';
 import CategoryTabs from '@/components/layout/CategoryTabs';
 import VideoCard from '@/components/video/VideoCard';
 import { VideoGridSkeleton } from '@/components/skeletons/VideoSkeleton';
+import { useVideos, useTrendingVideos } from '@/hooks/useVideos';
+import { videoService, VideoCategory } from '@/lib/firebase/services/video-service';
+
+// Category mapping for Firebase
+const categoryMap: Record<string, VideoCategory | 'all'> = {
+  'All': 'all',
+  'Music': 'music',
+  'Gaming': 'gaming',
+  'Entertainment': 'entertainment',
+  'Education': 'education',
+  'Sports': 'sports',
+  'News': 'news',
+  'Technology': 'technology',
+  'Lifestyle': 'lifestyle',
+  'Comedy': 'comedy',
+};
 
 export default function HomePage() {
   const [showAuthBanner, setShowAuthBanner] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [isLoading, setIsLoading] = useState(true);
-  const [videos, setVideos] = useState<any[]>([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const observerRef = useRef<HTMLDivElement>(null);
+
+  // 🔥 REAL FIREBASE DATA - No more mock videos!
+  const { 
+    videos: firebaseVideos, 
+    isLoading, 
+    isLoadingMore: loadingMore, 
+    hasMore, 
+    loadMore,
+    setCategory,
+    refresh 
+  } = useVideos({ 
+    category: categoryMap[selectedCategory] || 'all',
+    pageSize: 24,
+    autoFetch: true 
+  });
+
+  // Transform Firebase videos to component format
+  const videos = firebaseVideos.map(video => ({
+    id: video.id,
+    title: video.title,
+    channel: video.creator.displayName,
+    channelIcon: video.creator.profileImageURL || `https://i.pravatar.cc/150?u=${video.creator.id}`,
+    subscribers: videoService.formatViewCount(video.creator.subscriberCount || 0),
+    views: videoService.formatViewCount(video.viewCount),
+    timeAgo: videoService.formatTimeAgo(video.createdAt),
+    duration: videoService.formatDuration(video.duration),
+    thumbnailURL: video.thumbnailURL || `https://picsum.photos/seed/${video.id}/640/360`,
+    isVerified: video.creator.isVerified || false,
+  }));
 
   // Detect screen size
   useEffect(() => {
@@ -38,10 +79,11 @@ export default function HomePage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Initial load
-  useEffect(() => {
-    loadInitialVideos();
-  }, [selectedCategory]);
+  // Handle category change
+  const handleCategoryChange = useCallback((category: string) => {
+    setSelectedCategory(category);
+    setCategory(categoryMap[category] || 'all');
+  }, [setCategory]);
 
   // Infinite scroll observer
   useEffect(() => {
@@ -50,7 +92,7 @@ export default function HomePage() {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !loadingMore) {
-          loadMoreVideos();
+          loadMore();
         }
       },
       { threshold: 0.1 }
@@ -63,50 +105,7 @@ export default function HomePage() {
         observer.unobserve(observerRef.current);
       }
     };
-  }, [hasMore, loadingMore, isMobile]);
-
-  const loadInitialVideos = () => {
-    setIsLoading(true);
-    const initialVideos = generateMockVideos(0, 24);
-    setVideos(initialVideos);
-    setPage(1);
-    setHasMore(true);
-    setTimeout(() => setIsLoading(false), 800);
-  };
-
-  const loadMoreVideos = async () => {
-    if (loadingMore || !hasMore) return;
-    
-    setLoadingMore(true);
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    const newVideos = generateMockVideos(page * 24, 12);
-    setVideos(prev => [...prev, ...newVideos]);
-    setPage(prev => prev + 1);
-    
-    // Stop after 100 videos for demo
-    if ((page + 1) * 24 >= 100) {
-      setHasMore(false);
-    }
-    
-    setLoadingMore(false);
-  };
-
-  const generateMockVideos = (startIndex: number, count: number) => {
-    return Array.from({ length: count }, (_, i) => ({
-      id: `video-${startIndex + i + 1}`,
-      title: `Amazing Video Title ${startIndex + i + 1} - This is a longer title to test truncation`,
-      channel: 'Creator Name',
-      channelIcon: `https://i.pravatar.cc/150?img=${((startIndex + i) % 10) + 1}`,
-      subscribers: `${Math.floor(Math.random() * 500 + 50)}K`,
-      views: `${Math.floor(Math.random() * 1000 + 100)}K`,
-      timeAgo: `${Math.floor(Math.random() * 30 + 1)} days ago`,
-      duration: `${Math.floor(Math.random() * 20 + 5)}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`,
-      thumbnailURL: `https://picsum.photos/seed/video${startIndex + i + 1}/640/360`,
-      isVerified: Math.random() > 0.5,
-    }));
-  };
+  }, [hasMore, loadingMore, isMobile, loadMore]);
 
   // Featured videos (including Shot By Keonta intro)
   const featuredVideos = [
@@ -435,10 +434,7 @@ export default function HomePage() {
       <div className={`transition-all duration-200 ${isSidebarCollapsed ? 'pl-16' : 'pl-56'}`}>
         <CategoryTabs
           activeCategory={selectedCategory}
-          onCategoryChange={(category) => {
-            setSelectedCategory(category);
-            setIsLoading(true);
-          }}
+          onCategoryChange={handleCategoryChange}
         />
       </div>
 
@@ -488,6 +484,28 @@ export default function HomePage() {
                 <div className="max-w-[1800px] mx-auto">
                   {isLoading ? (
                     <VideoGridSkeleton count={24} />
+                  ) : videos.length === 0 ? (
+                    // Empty state when no videos found
+                    <div className="py-20 text-center">
+                      <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-[rgb(var(--color-surface))] flex items-center justify-center">
+                        <Video size={40} className="text-[rgb(var(--color-text-secondary))]" />
+                      </div>
+                      <h3 className="text-xl font-semibold text-[rgb(var(--color-text-primary))] mb-2">
+                        No videos yet
+                      </h3>
+                      <p className="text-[rgb(var(--color-text-secondary))] mb-6">
+                        {selectedCategory === 'All' 
+                          ? 'Be the first to upload a video!' 
+                          : `No ${selectedCategory.toLowerCase()} videos found. Try a different category.`}
+                      </p>
+                      <Link
+                        href="/upload"
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-[rgb(var(--color-primary))] text-white rounded-full font-medium hover:bg-[rgb(var(--color-primary-hover))] transition-colors"
+                      >
+                        <Plus size={20} />
+                        Upload Video
+                      </Link>
+                    </div>
                   ) : (
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-x-4 gap-y-10">
@@ -520,7 +538,7 @@ export default function HomePage() {
                       
                       {!hasMore && videos.length > 0 && (
                         <div className="py-8 text-center text-[rgb(var(--color-text-secondary))] text-sm">
-                          No more videos to load
+                          You've reached the end! 🎉
                         </div>
                       )}
                     </>

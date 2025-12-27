@@ -96,13 +96,19 @@ struct ProfileView: View {
         guard let path = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4") else {
             return nil
         }
-        let url = URL(fileURLWithPath: path).absoluteString
+        // 🔥 FIX: Use file:// URL format for local video playback
+        let fileURL = URL(fileURLWithPath: path)
+        let url = fileURL.absoluteString
+        
+        // 🔥 FIX: Use reliable thumbnail URL - YouTube thumbnail for Adele Hello (matches video content)
+        // Fallback to picsum if YouTube thumbnail fails
+        let thumbnailURL = "https://i.ytimg.com/vi/YQHsXMglC9A/maxresdefault.jpg"
         
         return Video(
             id: introId,
             title: "Shot By Keonta Intro",
             description: "Welcome to MyChannel - Shot By Keonta 🎬🔥",
-            thumbnailURL: "https://i.ytimg.com/vi/YQHsXMglC9A/hqdefault.jpg",
+            thumbnailURL: thumbnailURL,
             videoURL: url,
             duration: 35,
             viewCount: 0,

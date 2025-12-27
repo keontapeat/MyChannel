@@ -197,7 +197,7 @@ struct ProEditorView: View {
             .padding(.horizontal, 20)
             
             // Timeline Scrubber
-            TimelineView(
+            VideoTimelineView(
                 currentTime: $editor.currentTime,
                 duration: editor.duration,
                 trimStart: $editor.trimStart,
@@ -335,7 +335,7 @@ struct ProEditorView: View {
 }
 
 // MARK: - Timeline View
-struct TimelineView: View {
+struct VideoTimelineView: View {
     @Binding var currentTime: TimeInterval
     let duration: TimeInterval
     @Binding var trimStart: TimeInterval

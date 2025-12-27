@@ -294,7 +294,7 @@ struct FlicksView: View {
                                 .font(.system(size: 110, weight: .bold))
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: [Color(hex: "FF6B6B"), Color(hex: "EE5A5A"), Color(hex: "DC4444")],
+                                        colors: [Color(hexString: "FF6B6B"), Color(hexString: "EE5A5A"), Color(hexString: "DC4444")],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )

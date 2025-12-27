@@ -607,7 +607,7 @@ struct EnhancedStoryContentView: View {
         case .text:
             ZStack {
                 let bgColor = content.backgroundColor ?? "#FF6B6B"
-                Color(hex: bgColor)
+                Color(hexString: bgColor)
 
                 if let text = content.text {
                     Text(text)

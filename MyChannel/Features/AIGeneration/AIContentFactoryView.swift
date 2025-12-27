@@ -697,7 +697,42 @@ struct AIGenerationTrendingTopicCard: View {
     }
 }
 
-// MARK: - Extensions
+// MARK: - AI Factory Stat Card
+
+private struct StatCard: View {
+    let title: String
+    let value: String
+    let change: String
+    let isPositive: Bool
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundColor(color)
+                Spacer()
+                Text(change)
+                    .font(.caption)
+                    .foregroundColor(isPositive ? .green : .red)
+            }
+            
+            Text(value)
+                .font(.system(size: 20, weight: .bold))
+            
+            Text(title)
+                .font(.caption)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+        }
+        .padding(12)
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - Preview
 
 #Preview {
     AIContentFactoryView()

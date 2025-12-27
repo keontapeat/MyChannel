@@ -30,6 +30,43 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/privacy",
+        "destination": "/privacy/index.html"
+      },
+      {
+        "source": "/terms",
+        "destination": "/terms/index.html"
+      },
+      {
+        "source": "/support",
+        "destination": "/support/index.html"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "X-XSS-Protection",
+            "value": "1; mode=block"
+          }
+        ]
+      }
     ]
   }
 }

@@ -53,7 +53,7 @@ struct PrizePoolBreakdownView: View {
             
             Text("$\(Int(tournament.prizePool).formatted())")
                 .font(.system(size: 48, weight: .black))
-                .foregroundColor(Color(hex: "#FFD700") ?? .yellow)
+                .foregroundColor(Color(hexString: "#FFD700") ?? .yellow)
             
             HStack(spacing: 20) {
                 VStack(spacing: 4) {
@@ -98,7 +98,7 @@ struct PrizePoolBreakdownView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(
                             LinearGradient(
-                                colors: [(Color(hex: "#FFD700") ?? .yellow).opacity(0.3), (Color(hex: "#DC143C") ?? .red).opacity(0.3)],
+                                colors: [(Color(hexString: "#FFD700") ?? .yellow).opacity(0.3), (Color(hexString: "#DC143C") ?? .red).opacity(0.3)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
@@ -163,7 +163,7 @@ struct PrizePoolBreakdownView: View {
             // Amount
             Text("$\(Int(amount).formatted())")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(Color(hex: "#FFD700"))
+                .foregroundColor(Color(hexString: "#FFD700"))
                 .frame(width: 100, alignment: .trailing)
         }
         .padding(.horizontal, 16)

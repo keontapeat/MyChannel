@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - MyChannel</title>
+    <meta name="description" content="MyChannel Privacy Policy - How we collect, use, and protect your data.">
+    <link rel="icon" href="/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a25;
+            --accent: #6366f1;
+            --accent-light: #818cf8;
+            --text-primary: #ffffff;
+            --text-secondary: #a1a1aa;
+            --border: rgba(255,255,255,0.1);
+        }
+        
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.7;
+            min-height: 100vh;
+        }
+        
+        .gradient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 600px;
+            background: radial-gradient(ellipse at top, rgba(99,102,241,0.15) 0%, transparent 60%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(10,10,15,0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 700;
+            font-size: 1.5rem;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+        
+        nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            margin-left: 2rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        
+        nav a:hover {
+            color: var(--text-primary);
+        }
+        
+        main {
+            position: relative;
+            z-index: 1;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 4rem 2rem 6rem;
+        }
+        
+        h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .last-updated {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-top: 3rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+        
+        h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            color: var(--accent-light);
+        }
+        
+        p {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+        
+        ul {
+            color: var(--text-secondary);
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        li {
+            margin-bottom: 0.5rem;
+        }
+        
+        .highlight-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+        
+        .highlight-box.important {
+            border-color: var(--accent);
+            background: rgba(99,102,241,0.1);
+        }
+        
+        .contact-box {
+            background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(129,140,248,0.1));
+            border: 1px solid var(--accent);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-top: 3rem;
+            text-align: center;
+        }
+        
+        .contact-box h3 {
+            color: var(--text-primary);
+            margin-top: 0;
+        }
+        
+        .contact-box a {
+            color: var(--accent-light);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .contact-box a:hover {
+            text-decoration: underline;
+        }
+        
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        footer a {
+            color: var(--accent-light);
+            text-decoration: none;
+            margin: 0 1rem;
+        }
+        
+        @media (max-width: 640px) {
+            h1 { font-size: 2rem; }
+            main { padding: 2rem 1rem 4rem; }
+            .header-content { padding: 1rem; }
+            nav a { margin-left: 1rem; font-size: 0.9rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="gradient-bg"></div>
+    
+    <header>
+        <div class="header-content">
+            <a href="/" class="logo">
+                <div class="logo-icon">📺</div>
+                MyChannel
+            </a>
+            <nav>
+                <a href="/privacy">Privacy</a>
+                <a href="/terms">Terms</a>
+                <a href="/support">Support</a>
+            </nav>
+        </div>
+    </header>
+    
+    <main>
+        <h1>Privacy Policy</h1>
+        <p class="last-updated">Last updated: December 20, 2025</p>
+        
+        <p>MyChannel ("we," "our," or "us") respects your privacy and is committed to protecting your personal information. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application and services.</p>
+        
+        <div class="highlight-box important">
+            <strong>🔒 Our Commitment:</strong> We do not sell your personal information. Your data is used only to provide and improve our services.
+        </div>
+        
+        <h2>1. Information We Collect</h2>
+        
+        <h3>Information You Provide</h3>
+        <ul>
+            <li><strong>Account Information:</strong> Username, email address, password, profile photo</li>
+            <li><strong>Content:</strong> Videos, comments, messages, and other content you create</li>
+            <li><strong>Profile Data:</strong> Bio, links, preferences, and settings you configure</li>
+            <li><strong>Payment Information:</strong> When you make purchases or receive payments (processed securely by our payment providers)</li>
+        </ul>
+        
+        <h3>Information Collected Automatically</h3>
+        <ul>
+            <li><strong>Device Information:</strong> Device type, operating system, unique device identifiers</li>
+            <li><strong>Usage Data:</strong> Videos watched, time spent, interactions, and app features used</li>
+            <li><strong>Location Information:</strong> With your permission, for local content recommendations</li>
+            <li><strong>Log Data:</strong> IP address, browser type, access times, and referring URLs</li>
+        </ul>
+        
+        <h3>Camera, Microphone & Photos</h3>
+        <ul>
+            <li>We access your camera and microphone <strong>only</strong> when you actively record content</li>
+            <li>Photo library access is used <strong>only</strong> when you choose to upload or save media</li>
+            <li>We do not access these features in the background or without your explicit action</li>
+        </ul>
+        
+        <h2>2. How We Use Your Information</h2>
+        <ul>
+            <li>Provide, maintain, and improve our services</li>
+            <li>Personalize content and recommendations</li>
+            <li>Process transactions and send related information</li>
+            <li>Send notifications about your account, content, and interactions</li>
+            <li>Respond to your comments, questions, and support requests</li>
+            <li>Monitor and analyze trends, usage, and activities</li>
+            <li>Detect, investigate, and prevent fraudulent or illegal activities</li>
+            <li>Comply with legal obligations</li>
+        </ul>
+        
+        <h2>3. Information Sharing</h2>
+        <p>We may share your information in the following circumstances:</p>
+        <ul>
+            <li><strong>With Your Consent:</strong> When you explicitly agree to share information</li>
+            <li><strong>Public Content:</strong> Videos and profiles you make public are visible to others</li>
+            <li><strong>Service Providers:</strong> With vendors who assist our operations (hosting, analytics, payments)</li>
+            <li><strong>Legal Requirements:</strong> When required by law or to protect rights and safety</li>
+            <li><strong>Business Transfers:</strong> In connection with a merger, acquisition, or sale of assets</li>
+        </ul>
+        
+        <div class="highlight-box">
+            <strong>🚫 We Never:</strong>
+            <ul>
+                <li>Sell your personal information to third parties</li>
+                <li>Share your private messages without consent</li>
+                <li>Use your content for purposes you haven't approved</li>
+            </ul>
+        </div>
+        
+        <h2>4. Your Rights & Choices</h2>
+        <ul>
+            <li><strong>Access:</strong> Request a copy of your personal data</li>
+            <li><strong>Update:</strong> Correct or update your information in Settings</li>
+            <li><strong>Delete:</strong> Delete your account and associated data</li>
+            <li><strong>Portability:</strong> Export your data in a machine-readable format</li>
+            <li><strong>Opt-Out:</strong> Unsubscribe from marketing communications</li>
+            <li><strong>Privacy Controls:</strong> Adjust visibility and sharing settings</li>
+        </ul>
+        
+        <h2>5. Data Security</h2>
+        <p>We implement industry-standard security measures to protect your information:</p>
+        <ul>
+            <li>End-to-end encryption for sensitive data</li>
+            <li>Secure HTTPS connections for all data transmission</li>
+            <li>Regular security audits and vulnerability assessments</li>
+            <li>Access controls and authentication requirements</li>
+            <li>Secure storage using iOS Keychain for credentials</li>
+        </ul>
+        
+        <h2>6. Data Retention</h2>
+        <p>We retain your information for as long as your account is active or as needed to provide services. When you delete your account, we will delete or anonymize your personal data within 30 days, except where retention is required by law.</p>
+        
+        <h2>7. Children's Privacy</h2>
+        <p>MyChannel is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. If you believe a child has provided us with personal information, please contact us immediately.</p>
+        
+        <h2>8. International Data Transfers</h2>
+        <p>Your information may be transferred to and processed in countries other than your own. We ensure appropriate safeguards are in place to protect your data in accordance with this Privacy Policy.</p>
+        
+        <h2>9. Third-Party Services</h2>
+        <p>Our app may contain links to third-party websites or integrate with third-party services. This Privacy Policy does not apply to those services, and we encourage you to review their privacy policies.</p>
+        
+        <h2>10. Updates to This Policy</h2>
+        <p>We may update this Privacy Policy periodically. We will notify you of material changes by posting the new policy on this page and updating the "Last Updated" date. Your continued use of our services after changes constitutes acceptance of the updated policy.</p>
+        
+        <div class="contact-box">
+            <h3>Questions About Privacy?</h3>
+            <p>If you have questions or concerns about this Privacy Policy or our data practices, please contact us:</p>
+            <p><a href="mailto:privacy@mychannel.live">privacy@mychannel.live</a></p>
+        </div>
+    </main>
+    
+    <footer>
+        <p>&copy; 2025 MyChannel. All rights reserved.</p>
+        <p>
+            <a href="/privacy">Privacy Policy</a>
+            <a href="/terms">Terms of Service</a>
+            <a href="/support">Support</a>
+        </p>
+    </footer>
+</body>
+</html>
+
+
+
+

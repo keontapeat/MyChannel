@@ -65,7 +65,7 @@ struct PremiumMoviesHubSection: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(FreeMovie.MovieGenre.allCases.prefix(8), id: \.self) { genre in
-                        GenreChip(
+                        MovieGenreChip(
                             genre: genre,
                             isSelected: selectedGenre == genre,
                             movieCount: movies.filter { $0.genre.contains(genre) }.count
@@ -337,7 +337,7 @@ struct MyChannelCategoryChip: View {
 }
 
 // MARK: - Genre Chip
-struct GenreChip: View {
+struct MovieGenreChip: View {
     let genre: FreeMovie.MovieGenre
     let isSelected: Bool
     let movieCount: Int

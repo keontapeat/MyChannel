@@ -489,7 +489,7 @@ extension User {
         Text("User Models")
             .font(AppTheme.Typography.largeTitle)
         
-        ForEach(Array(User.sampleUsers.prefix(2))) { user in
+        ForEach(Array(User.sampleUsers.prefix(2)), id: \.id) { user in
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(user.displayName)

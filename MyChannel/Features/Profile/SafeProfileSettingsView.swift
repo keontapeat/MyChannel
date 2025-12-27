@@ -110,7 +110,7 @@ struct ProfileSettingsView: View {
     // MARK: - Account Section
     private var accountSection: some View {
         Section("Account") {
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "person.crop.circle",
                 title: "Edit Profile",
                 iconColor: AppTheme.Colors.primary
@@ -118,7 +118,7 @@ struct ProfileSettingsView: View {
                 // Handle edit profile
             }
             
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "bell",
                 title: "Notification Preferences",
                 iconColor: .orange
@@ -126,7 +126,7 @@ struct ProfileSettingsView: View {
                 NotificationCenter.default.post(name: NSNotification.Name("OpenNotificationSettings"), object: nil)
             }
             
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "shield.lefthalf.fill",
                 title: "Privacy Settings",
                 iconColor: .green
@@ -137,7 +137,7 @@ struct ProfileSettingsView: View {
             }
 
             // Easier Sign Out (YouTube-style placement near account controls)
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "rectangle.portrait.and.arrow.right",
                 title: "Sign Out",
                 iconColor: .orange
@@ -290,7 +290,7 @@ struct ProfileSettingsView: View {
 
     private var sessionsSection: some View {
         Section("Devices") {
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "iphone.and.arrow.forward",
                 title: "Sign out of other devices",
                 iconColor: .red
@@ -399,7 +399,7 @@ struct ProfileSettingsView: View {
     // MARK: - Privacy Section
     private var privacySection: some View {
         Section("Privacy & Safety") {
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "hand.raised.fill",
                 title: "Blocked Users",
                 iconColor: .red
@@ -407,7 +407,7 @@ struct ProfileSettingsView: View {
                 // Handle blocked users
             }
             
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "eye.slash",
                 title: "Watch History",
                 iconColor: .gray
@@ -415,7 +415,7 @@ struct ProfileSettingsView: View {
                 // Handle watch history
             }
             
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "location.slash",
                 title: "Location Services",
                 iconColor: .blue
@@ -424,7 +424,7 @@ struct ProfileSettingsView: View {
             }
 
             // Permissions Shortcuts
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "bell.badge.fill",
                 title: "Notification Settings",
                 iconColor: .orange
@@ -433,7 +433,7 @@ struct ProfileSettingsView: View {
                     UIApplication.shared.open(url)
                 }
             }
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "camera.fill",
                 title: "Camera & Microphone",
                 iconColor: .indigo
@@ -442,7 +442,7 @@ struct ProfileSettingsView: View {
                     UIApplication.shared.open(url)
                 }
             }
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "photo.fill.on.rectangle.fill",
                 title: "Photos Access",
                 iconColor: .purple
@@ -457,7 +457,7 @@ struct ProfileSettingsView: View {
     // MARK: - About Section
     private var aboutSection: some View {
         Section("About") {
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "questionmark.circle",
                 title: "Help & Support",
                 iconColor: .cyan
@@ -467,7 +467,7 @@ struct ProfileSettingsView: View {
                 }
             }
             
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "envelope.fill",
                 title: "Send Feedback",
                 iconColor: .blue
@@ -483,7 +483,7 @@ struct ProfileSettingsView: View {
                 }
             }
             
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "doc.text",
                 title: "Terms of Service",
                 iconColor: .brown
@@ -493,7 +493,7 @@ struct ProfileSettingsView: View {
                 }
             }
             
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "lock.doc",
                 title: "Privacy Policy",
                 iconColor: .mint
@@ -503,7 +503,7 @@ struct ProfileSettingsView: View {
                 }
             }
 
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "square.and.arrow.up",
                 title: "Export My Data",
                 iconColor: .teal
@@ -511,7 +511,7 @@ struct ProfileSettingsView: View {
                 showingDataExport = true
             }
 
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "star.circle.fill",
                 title: "Rate MyChannel",
                 iconColor: .yellow
@@ -523,7 +523,7 @@ struct ProfileSettingsView: View {
                 #endif
             }
 
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "globe",
                 title: "Language",
                 iconColor: .purple
@@ -531,7 +531,7 @@ struct ProfileSettingsView: View {
                 NotificationCenter.default.post(name: NSNotification.Name("OpenLanguageSettings"), object: nil)
             }
 
-            SettingsRow(
+            ProfileSettingsRow(
                 icon: "link",
                 title: "Validate Universal Links",
                 iconColor: .gray
@@ -663,7 +663,7 @@ private struct SessionsListView: View {
     }
 }
 // MARK: - Settings Row
-struct SettingsRow: View {
+struct ProfileSettingsRow: View {
     let icon: String
     let title: String
     let iconColor: Color

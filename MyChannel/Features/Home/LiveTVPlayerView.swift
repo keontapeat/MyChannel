@@ -30,7 +30,8 @@ struct LiveTVPlayerView: View {
     @State private var dvrFraction: Double = 1.0
     @State private var isDVRAvailable: Bool = false
     @State private var showMiniGuide: Bool = false
-    @State private var channels: [LiveTVChannel] = LiveTVChannel.sampleChannels
+    @State private var channels: [LiveTVChannel] = []
+    @State private var isRefreshingChannels = false
     @StateObject private var networkOptimizer = NetworkOptimizer.shared
     @State private var preloadedChannels: Set<String> = []
     @State private var showSwipeHint: Bool = true
@@ -40,6 +41,31 @@ struct LiveTVPlayerView: View {
     @State private var watchStartTime: Date = Date()
     @State private var currentWatchingChannel: LiveTVChannel?
     @StateObject private var liveTVAI = LiveTVIntelligenceAgent.shared
+    
+    // 🔥 Stream error state
+    @State private var streamError: StreamError?
+    
+    enum StreamError {
+        case networkError
+        case streamUnavailable
+        case unknown
+        
+        var title: String {
+            switch self {
+            case .networkError: return "Connection Error"
+            case .streamUnavailable: return "Stream Unavailable"
+            case .unknown: return "Playback Error"
+            }
+        }
+        
+        var message: String {
+            switch self {
+            case .networkError: return "Check your internet connection and try again."
+            case .streamUnavailable: return "This channel may be temporarily unavailable. Try another channel."
+            case .unknown: return "Something went wrong. Please try again."
+            }
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -48,9 +74,68 @@ struct LiveTVPlayerView: View {
             if let player = player {
                 VideoPlayer(player: player)
                     .ignoresSafeArea()
+            } else if let error = streamError {
+                // 🔥 Stream error view with retry
+                VStack(spacing: 20) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 48))
+                        .foregroundColor(.orange)
+                    
+                    Text(error.title)
+                        .font(.title2.bold())
+                        .foregroundColor(.white)
+                    
+                    Text(error.message)
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                    
+                    HStack(spacing: 16) {
+                        Button(action: {
+                            HapticManager.shared.impact(style: .medium)
+                            streamError = nil
+                            setupPlayer()
+                        }) {
+                            HStack {
+                                Image(systemName: "arrow.clockwise")
+                                Text("Retry")
+                            }
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Color.blue)
+                            .cornerRadius(10)
+                        }
+                        
+                        Button(action: {
+                            HapticManager.shared.impact(style: .light)
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                showMiniGuide = true
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "tv")
+                                Text("Try Another")
+                            }
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Color.white.opacity(0.2))
+                            .cornerRadius(10)
+                        }
+                    }
+                }
             } else {
-                ProgressView()
-                    .tint(.white)
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .tint(.white)
+                    Text("Loading \(channel.name)...")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.6))
+                }
             }
 
             // Overlay header + controls
@@ -293,6 +378,36 @@ struct LiveTVPlayerView: View {
                         Text("\(channels.count) channels")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white.opacity(0.6))
+                        
+                        // 🔥 Refresh button for 24/7 reliability
+                        Button(action: {
+                            guard !isRefreshingChannels else { return }
+                            HapticManager.shared.impact(style: .medium)
+                            isRefreshingChannels = true
+                            Task {
+                                await LiveTVManager.shared.refreshChannels()
+                                channels = LiveTVManager.shared.channels
+                                isRefreshingChannels = false
+                                HapticManager.shared.notification(type: .success)
+                            }
+                        }) {
+                            Group {
+                                if isRefreshingChannels {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.7)
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.7))
+                                }
+                            }
+                            .frame(width: 32, height: 32)
+                            .background(Color.white.opacity(0.1))
+                            .clipShape(Circle())
+                        }
+                        .disabled(isRefreshingChannels)
+                        
                         Button(action: { 
                             HapticManager.shared.impact(style: .light)
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showMiniGuide = false } 
@@ -409,11 +524,29 @@ struct LiveTVPlayerView: View {
             }
         }
         .onAppear {
+            // 🔥 Load channels from LiveTVManager for 24/7 reliability
+            Task { @MainActor in
+                let manager = LiveTVManager.shared
+                if manager.channels.isEmpty {
+                    channels = LiveTVChannel.sampleChannels
+                } else {
+                    channels = manager.channels
+                }
+            }
+            
             setupPlayer()
             preloadAdjacentChannels()
             // 🔥 AI: Start tracking watch time
             watchStartTime = Date()
             currentWatchingChannel = channel
+            
+            // 🔥 Loading timeout - show error if stream doesn't start in 15 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 15.0) { [self] in
+                if player == nil && streamError == nil {
+                    streamError = .streamUnavailable
+                    HapticManager.shared.notification(type: .warning)
+                }
+            }
         }
         .onDisappear {
             // 🔥 AI: Record watch event for ML training
@@ -440,9 +573,48 @@ struct LiveTVPlayerView: View {
     }
 
     private func setupPlayer() {
-        // Try primary stream URL first, then fallback if available
-        let streamURLs = [channel.streamURL] + (channel.previewFallbackURL != nil ? [channel.previewFallbackURL!] : [])
-        setupPlayerWithURLs(streamURLs)
+        // 🔥 Use LiveTVManager to get the best working URL
+        Task { @MainActor in
+            // Try to get a verified working URL first
+            let workingURL = await LiveTVManager.shared.getWorkingStreamURL(for: channel)
+            
+            // Build fallback chain
+            var streamURLs = [workingURL]
+            
+            // Add the original URL if different
+            if workingURL != channel.streamURL {
+                streamURLs.append(channel.streamURL)
+            }
+            
+            // Add alternative Pluto URL format if this is a Pluto stream
+            if channel.streamURL.contains("pluto.tv") {
+                if let channelId = extractPlutoChannelId(from: channel.streamURL) {
+                    let altURL = LiveTVChannel.plutoURLAlt(channelId)
+                    if !streamURLs.contains(altURL) {
+                        streamURLs.append(altURL)
+                    }
+                }
+            }
+            
+            // Add the fallback URL last
+            if let fallback = channel.previewFallbackURL, !streamURLs.contains(fallback) {
+                streamURLs.append(fallback)
+            }
+            
+            setupPlayerWithURLs(streamURLs)
+        }
+    }
+    
+    /// Extract Pluto channel ID from stream URL
+    private func extractPlutoChannelId(from url: String) -> String? {
+        // URL format: .../channel/{ID}/master.m3u8...
+        guard let range = url.range(of: "/channel/"),
+              let endRange = url.range(of: "/master.m3u8") else {
+            return nil
+        }
+        let startIndex = range.upperBound
+        let endIndex = endRange.lowerBound
+        return String(url[startIndex..<endIndex])
     }
     
     @State private var retryCount = 0
@@ -450,7 +622,15 @@ struct LiveTVPlayerView: View {
     
     private func setupPlayerWithURLs(_ urls: [String], currentIndex: Int = 0) {
         guard currentIndex < urls.count, let url = URL(string: urls[currentIndex]) else {
-            // All URLs failed
+            // 🔥 All URLs failed - show error state
+            DispatchQueue.main.async {
+                if NetworkOptimizer.shared.connectionQuality == .poor {
+                    streamError = .networkError
+                } else {
+                    streamError = .streamUnavailable
+                }
+                HapticManager.shared.notification(type: .warning)
+            }
             return
         }
         

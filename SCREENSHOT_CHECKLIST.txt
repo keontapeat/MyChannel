@@ -1,0 +1,36 @@
+📸 SCREENSHOT CHECKLIST - USE YOUR AVAILABLE DEVICES
+
+DEVICE 1: iPhone 17 Pro Max (for 6.7" screenshots)
+[ ] Home Feed
+[ ] Video Player  
+[ ] Creator Studio
+[ ] Upload Screen
+[ ] User Profile
+[ ] Search/Discovery
+
+DEVICE 2: iPhone 17 Pro (for 6.5" screenshots)
+[ ] Home Feed
+[ ] Video Player
+[ ] Creator Studio
+[ ] Upload Screen
+[ ] User Profile
+[ ] Search/Discovery
+
+DEVICE 3: iPad Pro 13-inch (M4) (for 12.9" screenshots)
+[ ] Home Feed
+[ ] Video Player
+[ ] Creator Studio
+[ ] Upload Screen
+[ ] User Profile
+[ ] Search/Discovery
+
+DEVICE 4: iPad Pro 11-inch (M4) (for 11" screenshots)
+[ ] Home Feed
+[ ] Video Player
+[ ] Creator Studio
+[ ] Upload Screen
+[ ] User Profile
+[ ] Search/Discovery
+
+TOTAL: 24 screenshots
+LOCATION: ~/Desktop (auto-saved)

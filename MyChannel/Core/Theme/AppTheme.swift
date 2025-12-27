@@ -13,57 +13,57 @@ struct AppTheme {
     // MARK: - Premium Colors (Sleeker than YouTube)
     struct Colors {
         // Primary brand - refined coral with depth
-        static let primary = Color(hex: "E85D5D")
-        static let primaryLight = Color(hex: "FF8A8A")
-        static let primaryDark = Color(hex: "C94444")
+        static let primary = Color(hexString: "E85D5D")
+        static let primaryLight = Color(hexString: "FF8A8A")
+        static let primaryDark = Color(hexString: "C94444")
         
         // Secondary - sophisticated teal
-        static let secondary = Color(hex: "3BB8AB")
-        static let secondaryLight = Color(hex: "5CD6C9")
+        static let secondary = Color(hexString: "3BB8AB")
+        static let secondaryLight = Color(hexString: "5CD6C9")
         
         // Accent - premium blue with luminosity
-        static let accent = Color(hex: "3D9FE0")
-        static let accentGlow = Color(hex: "3D9FE0").opacity(0.4)
+        static let accent = Color(hexString: "3D9FE0")
+        static let accentGlow = Color(hexString: "3D9FE0").opacity(0.4)
         
         // Backgrounds - refined neutrals with subtle warmth
-        static let background = Color(hex: "FAFBFC")
-        static let backgroundDark = Color(hex: "0A0A0C")  // OLED-optimized
-        static let surface = Color(hex: "F4F5F7")
-        static let surfaceDark = Color(hex: "161618")
-        static let cardBackground = Color(hex: "FFFFFF")
-        static let cardBackgroundDark = Color(hex: "1C1C1E")
-        static let backgroundSecondary = Color(hex: "EBEDF0")
-        static let backgroundTertiary = Color(hex: "E4E6E9")
+        static let background = Color(hexString: "FAFBFC")
+        static let backgroundDark = Color(hexString: "0A0A0C")  // OLED-optimized
+        static let surface = Color(hexString: "F4F5F7")
+        static let surfaceDark = Color(hexString: "161618")
+        static let cardBackground = Color(hexString: "FFFFFF")
+        static let cardBackgroundDark = Color(hexString: "1C1C1E")
+        static let backgroundSecondary = Color(hexString: "EBEDF0")
+        static let backgroundTertiary = Color(hexString: "E4E6E9")
         
         // Elevated surfaces (for modals, sheets)
-        static let elevated = Color(hex: "FFFFFF")
-        static let elevatedDark = Color(hex: "2C2C2E")
+        static let elevated = Color(hexString: "FFFFFF")
+        static let elevatedDark = Color(hexString: "2C2C2E")
         
         // Text - refined hierarchy with proper contrast
-        static let textPrimary = Color(hex: "0F1419")
-        static let textPrimaryDark = Color(hex: "F5F5F7")
-        static let textSecondary = Color(hex: "536471")
-        static let textSecondaryDark = Color(hex: "8E8E93")
-        static let textTertiary = Color(hex: "8899A6")
-        static let textTertiaryDark = Color(hex: "636366")
-        static let textMuted = Color(hex: "B0BEC5")
+        static let textPrimary = Color(hexString: "0F1419")
+        static let textPrimaryDark = Color(hexString: "F5F5F7")
+        static let textSecondary = Color(hexString: "536471")
+        static let textSecondaryDark = Color(hexString: "8E8E93")
+        static let textTertiary = Color(hexString: "8899A6")
+        static let textTertiaryDark = Color(hexString: "636366")
+        static let textMuted = Color(hexString: "B0BEC5")
         
         // Dividers - subtle and refined
-        static let divider = Color(hex: "EFF3F4")
-        static let dividerDark = Color(hex: "2F2F31")
+        static let divider = Color(hexString: "EFF3F4")
+        static let dividerDark = Color(hexString: "2F2F31")
         
         // Status colors - balanced and professional
-        static let success = Color(hex: "00BA7C")
-        static let successLight = Color(hex: "00BA7C").opacity(0.15)
-        static let warning = Color(hex: "FFB800")
-        static let warningLight = Color(hex: "FFB800").opacity(0.15)
-        static let error = Color(hex: "F4212E")
-        static let errorLight = Color(hex: "F4212E").opacity(0.15)
+        static let success = Color(hexString: "00BA7C")
+        static let successLight = Color(hexString: "00BA7C").opacity(0.15)
+        static let warning = Color(hexString: "FFB800")
+        static let warningLight = Color(hexString: "FFB800").opacity(0.15)
+        static let error = Color(hexString: "F4212E")
+        static let errorLight = Color(hexString: "F4212E").opacity(0.15)
         
         // Verification & special
-        static let verificationBlue = Color(hex: "1D9BF0")
-        static let premium = Color(hex: "FFD700")
-        static let live = Color(hex: "FF0000")
+        static let verificationBlue = Color(hexString: "1D9BF0")
+        static let premium = Color(hexString: "FFD700")
+        static let live = Color(hexString: "FF0000")
         
         // Premium gradients
         static let gradient = LinearGradient(
@@ -73,7 +73,7 @@ struct AppTheme {
         )
         
         static let premiumGradient = LinearGradient(
-            colors: [Color(hex: "E85D5D"), Color(hex: "FF8A5B")],
+            colors: [Color(hexString: "E85D5D"), Color(hexString: "FF8A5B")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -85,7 +85,7 @@ struct AppTheme {
         )
         
         static let darkGradient = LinearGradient(
-            colors: [Color(hex: "1C1C1E"), Color(hex: "0A0A0C")],
+            colors: [Color(hexString: "1C1C1E"), Color(hexString: "0A0A0C")],
             startPoint: .top,
             endPoint: .bottom
         )

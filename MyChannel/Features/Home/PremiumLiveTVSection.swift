@@ -7,15 +7,18 @@ struct PremiumLiveTVSection: View {
     @State private var selectedCategory: LiveTVChannel.ChannelCategory = .news
     @State private var isShowingAllChannels: Bool = false
     @StateObject private var healthAgent = StreamHealthMLAgent.shared
+    @StateObject private var liveTVManager = LiveTVManager.shared
     
     private var channels: [LiveTVChannel] {
-        // 🔥 Only return healthy channels
+        // 🔥 Use LiveTVManager for dynamic channels (24/7 reliability)
+        let allChannels = liveTVManager.channels.isEmpty ? LiveTVChannel.sampleChannels : liveTVManager.channels
+        
+        // Filter to only healthy channels if health check has run
         let healthyIds = healthAgent.healthyChannelIds
         if healthyIds.isEmpty {
-            // If health check hasn't run yet, show all channels
-            return LiveTVChannel.sampleChannels
+            return allChannels
         }
-        return LiveTVChannel.sampleChannels.filter { healthyIds.contains($0.id) }
+        return allChannels.filter { healthyIds.contains($0.id) || liveTVManager.isChannelHealthy($0.id) }
     }
     
     private var filteredChannels: [LiveTVChannel] {
@@ -46,7 +49,7 @@ struct PremiumLiveTVSection: View {
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(AppTheme.Colors.textPrimary)
                         
-                        Text("\(LiveTVChannel.sampleChannels.count)+ Free Channels")
+                        Text("\(liveTVManager.channels.isEmpty ? LiveTVChannel.sampleChannels.count : liveTVManager.channels.count)+ Free Channels")
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                     }
@@ -370,8 +373,12 @@ struct PremiumChannelCard: View {
 struct TrendingLiveBanner: View {
     @State private var currentIndex: Int = 0
     @State private var timer: Timer?
+    @StateObject private var liveTVManager = LiveTVManager.shared
     
-    private let trendingChannels = Array(LiveTVChannel.sampleChannels.prefix(3))
+    private var trendingChannels: [LiveTVChannel] {
+        let source = liveTVManager.channels.isEmpty ? LiveTVChannel.sampleChannels : liveTVManager.channels
+        return Array(source.prefix(3))
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

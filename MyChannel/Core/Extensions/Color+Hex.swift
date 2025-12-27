@@ -9,7 +9,7 @@ import SwiftUI
 
 extension Color {
     /// Initialize a Color from a hex string (non-optional, defaults to clear if invalid)
-    init(hex: String) {
+    init(hexString hex: String) {
         var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
         

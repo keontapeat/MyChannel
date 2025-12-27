@@ -37,12 +37,12 @@ struct PlaylistManagementView: View {
         }
         .navigationTitle("Playlists")
         .sheet(isPresented: $showingCreatePlaylist) {
-            CreatePlaylistSheet { playlist in
+            StudioCreatePlaylistSheet { playlist in
                 playlists.append(playlist)
             }
         }
         .sheet(item: $selectedPlaylist) { playlist in
-            EditPlaylistSheet(playlist: playlist)
+            StudioEditPlaylistSheet(playlist: playlist)
         }
     }
     
@@ -149,7 +149,7 @@ struct PlaylistRow: View {
     }
 }
 
-struct CreatePlaylistSheet: View {
+struct StudioCreatePlaylistSheet: View {
     @Environment(\.dismiss) private var dismiss
     let onCreate: (Playlist) -> Void
     
@@ -193,7 +193,7 @@ struct CreatePlaylistSheet: View {
     }
 }
 
-struct EditPlaylistSheet: View {
+struct StudioEditPlaylistSheet: View {
     @Environment(\.dismiss) private var dismiss
     let playlist: Playlist
     

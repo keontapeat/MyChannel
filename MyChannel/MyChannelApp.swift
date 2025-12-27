@@ -79,6 +79,12 @@ struct MyChannelApp: App {
                         await SmartUserSeederService.shared.initialize()
                     }
                     
+                    // 🔥 INITIALIZE LIVE TV: Fetch fresh channel data for 24/7 reliability
+                    Task {
+                        await LiveTVService.shared.initialize()
+                        print("📺 [LiveTV] Initialized with fresh channel data")
+                    }
+                    
                     // Ensure auth state is checked at launch and sync to AppState
                     authManager.checkAuthenticationStatus()
                     if let current = authManager.currentUser {
@@ -102,6 +108,18 @@ struct MyChannelApp: App {
                 }
                 .onChange(of: scenePhase) { newPhase in
                     print("🎬 [MyChannelApp] ScenePhase changed to \(newPhase)")
+                    
+                    // 🔥 LiveTV: Handle app lifecycle for 24/7 channel reliability
+                    Task { @MainActor in
+                        switch newPhase {
+                        case .active:
+                            LiveTVManager.shared.onAppBecameActive()
+                        case .background:
+                            LiveTVManager.shared.onAppEnteredBackground()
+                        default:
+                            break
+                        }
+                    }
                 }
                 .onOpenURL { url in
                     #if canImport(GoogleSignIn)

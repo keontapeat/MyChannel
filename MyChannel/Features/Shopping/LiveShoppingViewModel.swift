@@ -37,14 +37,14 @@ enum ShoppingCategory: String, CaseIterable, Identifiable, Codable {
     
     var color: Color {
         switch self {
-        case .fashion: return Color(hex: "F3F0FF") ?? AppTheme.Colors.backgroundSecondary
-        case .tech: return Color(hex: "EDF4FF") ?? AppTheme.Colors.backgroundSecondary
-        case .beauty: return Color(hex: "FDF2F8") ?? AppTheme.Colors.backgroundSecondary
-        case .home: return Color(hex: "F5F5F0") ?? AppTheme.Colors.backgroundSecondary
-        case .sports: return Color(hex: "EDF8F2") ?? AppTheme.Colors.backgroundSecondary
-        case .food: return Color(hex: "FFF5EB") ?? AppTheme.Colors.backgroundSecondary
-        case .books: return Color(hex: "F6EFE4") ?? AppTheme.Colors.backgroundSecondary
-        case .art: return Color(hex: "F7ECFF") ?? AppTheme.Colors.backgroundSecondary
+        case .fashion: return Color(hexString: "F3F0FF") ?? AppTheme.Colors.backgroundSecondary
+        case .tech: return Color(hexString: "EDF4FF") ?? AppTheme.Colors.backgroundSecondary
+        case .beauty: return Color(hexString: "FDF2F8") ?? AppTheme.Colors.backgroundSecondary
+        case .home: return Color(hexString: "F5F5F0") ?? AppTheme.Colors.backgroundSecondary
+        case .sports: return Color(hexString: "EDF8F2") ?? AppTheme.Colors.backgroundSecondary
+        case .food: return Color(hexString: "FFF5EB") ?? AppTheme.Colors.backgroundSecondary
+        case .books: return Color(hexString: "F6EFE4") ?? AppTheme.Colors.backgroundSecondary
+        case .art: return Color(hexString: "F7ECFF") ?? AppTheme.Colors.backgroundSecondary
         }
     }
 }

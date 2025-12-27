@@ -990,14 +990,6 @@ struct SmartTagView: View {
     }
 }
 
-// MARK: - Scroll Offset Preference Key
-struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 // MARK: - 🔥 PREMIUM: Animated View Count Text
 struct AnimatedViewCountText: View {
     let viewCount: Int

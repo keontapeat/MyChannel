@@ -36,7 +36,7 @@ final class LiveMatchViewModel: ObservableObject {
                 text: "\(match.team1.name) scored first blood!",
                 time: Date().addingTimeInterval(-120),
                 iconName: "star.fill",
-                color: Color(hex: "#FFD700") ?? .yellow
+                color: Color(hexString: "#FFD700") ?? .yellow
             ),
             GameFeedEvent(
                 id: "2",

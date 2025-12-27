@@ -427,7 +427,7 @@ struct CareerPathVideoCard: View {
         )
     }
     
-    return ScrollView {
+    ScrollView {
         CareerPathVideoRow(
             careerPath: sampleCareerPath,
             progress: sampleProgress,

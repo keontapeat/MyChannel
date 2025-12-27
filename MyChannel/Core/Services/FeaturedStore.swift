@@ -240,7 +240,7 @@ final class FeaturedStore: ObservableObject {
                 id: introId,
                 title: "Shot By Keonta Intro",
                 description: "Welcome to MyChannel - Shot By Keonta 🎬🔥",
-                thumbnailURL: "https://i.ytimg.com/vi/YQHsXMglC9A/hqdefault.jpg",
+                thumbnailURL: "https://i.ytimg.com/vi/YQHsXMglC9A/maxresdefault.jpg",
                 videoURL: url,
                 duration: 35,
                 viewCount: 0,

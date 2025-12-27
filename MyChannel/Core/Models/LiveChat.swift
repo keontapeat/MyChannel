@@ -128,7 +128,7 @@ struct UserBadge: Identifiable, Codable, Equatable {
     }
     
     var badgeColor: Color {
-        Color(hex: color) ?? .blue
+        Color(hexString: color) ?? .blue
     }
     
     // MARK: - Equatable

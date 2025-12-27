@@ -11,9 +11,23 @@ final class LiveTVService {
     private let preloadQueue = DispatchQueue(label: "com.mychannel.liveTVPreload", qos: .userInitiated)
 
     func fetchChannels() async -> [LiveTVChannel] {
-        // For now, return curated, legal HLS channels (sample list present in model)
-        // Later we can plug in Samsung TV Plus/Pluto public guide JSONs if allowed
-        return LiveTVChannel.sampleChannels
+        // 🔥 Use dynamic LiveTVManager for fresh channel data
+        // Access MainActor-isolated properties properly
+        let channels = await MainActor.run {
+            let manager = LiveTVManager.shared
+            return manager.channels.isEmpty ? LiveTVChannel.sampleChannels : manager.channels
+        }
+        return channels
+    }
+    
+    /// Initialize the Live TV system - call on app launch
+    func initialize() async {
+        await LiveTVManager.shared.initialize()
+    }
+    
+    /// Force refresh channel data from API
+    func refreshChannels() async {
+        await LiveTVManager.shared.refreshChannels()
     }
     
     // 🔥🔥🔥 THERMONUCLEAR: Prewarm thumbnails for instant display 🔥🔥🔥

@@ -325,7 +325,7 @@ struct ContinueLearningEmptyState: View {
         )
     ]
     
-    return ScrollView {
+    ScrollView {
         VStack(spacing: 24) {
             ContinueLearningSection(videos: sampleVideos) { video in
                 print("Continue: \(video.video.title)")

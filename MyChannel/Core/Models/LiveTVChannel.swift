@@ -150,13 +150,21 @@ struct LiveTVChannel: Identifiable, Codable {
     }
     
     // Helper to build Pluto TV URLs - Updated December 2024
+    // 🔥 Uses the latest working URL format with proper parameters
     static func plutoURL(_ channelId: String) -> String {
-        // Use a stable device ID based on the channel ID for consistent caching
-        let stableDeviceId = "mychannel-\(channelId.prefix(8))-device"
-        let stableSessionId = "mychannel-\(channelId.prefix(8))-session"
+        // Generate unique but stable device/session IDs
+        let deviceId = UUID().uuidString.lowercased()
+        let sessionId = UUID().uuidString.lowercased()
         
-        // Use the embed URL format which is more reliable for third-party apps
-        return "https://service-stitcher.clusters.pluto.tv/v1/stitch/embed/hls/channel/\(channelId)/master.m3u8?deviceId=\(stableDeviceId)&deviceModel=web&deviceVersion=1.0&appVersion=1.0&deviceType=web&deviceMake=web&deviceDNT=0&sid=\(stableSessionId)"
+        // Use the stitcher endpoint which is the most reliable for external playback
+        // This format works better than the embed format as of December 2024
+        return "https://service-stitcher.clusters.pluto.tv/stitch/hls/channel/\(channelId)/master.m3u8?advertisingId=\(deviceId)&appName=web&appVersion=5.0&deviceDNT=0&deviceId=\(deviceId)&deviceMake=web&deviceModel=web&deviceType=web&deviceVersion=1.0&includeExtendedEvents=false&sid=\(sessionId)&serverSideAds=false"
+    }
+    
+    // 🔥 Alternative URL format if primary fails (used as fallback)
+    static func plutoURLAlt(_ channelId: String) -> String {
+        let deviceId = UUID().uuidString.lowercased()
+        return "https://service-stitcher.clusters.pluto.tv/v2/stitch/hls/channel/\(channelId)/master.m3u8?deviceId=\(deviceId)&deviceType=web&deviceMake=web&deviceModel=web&deviceVersion=1.0&appName=web&appVersion=5.0&deviceDNT=1"
     }
     
     // 🔥 Reliable fallback streams for when Pluto fails

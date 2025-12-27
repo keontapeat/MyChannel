@@ -52,17 +52,17 @@ extension NSNotification.Name {
         // Hex colors
         HStack(spacing: 16) {
             Rectangle()
-                .fill(Color(hex: "FF6B6B"))
+                .fill(Color(hexString: "FF6B6B"))
                 .frame(width: 60, height: 60)
                 .cornerRadius(12)
             
             Rectangle()
-                .fill(Color(hex: "4ECDC4"))
+                .fill(Color(hexString: "4ECDC4"))
                 .frame(width: 60, height: 60)
                 .cornerRadius(12)
             
             Rectangle()
-                .fill(Color(hex: "45B7D1"))
+                .fill(Color(hexString: "45B7D1"))
                 .frame(width: 60, height: 60)
                 .cornerRadius(12)
         }
@@ -82,7 +82,7 @@ extension NSNotification.Name {
             Text("Brightness Adjustments")
                 .font(.headline)
             
-            let baseColor = Color(hex: "FF6B6B")
+            let baseColor = Color(hexString: "FF6B6B")
             
             HStack(spacing: 8) {
                 Rectangle()

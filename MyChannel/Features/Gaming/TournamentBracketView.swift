@@ -57,7 +57,7 @@ struct TournamentBracketView: View {
                     HStack(spacing: 12) {
                         Text(tournament.formattedPrizePool)
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(Color(hex: "#FFD700"))
+                            .foregroundColor(Color(hexString: "#FFD700"))
                         
                         Text("•")
                             .foregroundColor(AppTheme.Colors.textSecondary)
@@ -246,18 +246,18 @@ struct TournamentBracketView: View {
         HStack(spacing: 10) {
             // Profile
             Circle()
-                .fill(isWinner ? (Color(hex: "#FFD700") ?? .yellow).opacity(0.1) : AppTheme.Colors.surface)
+                .fill(isWinner ? (Color(hexString: "#FFD700") ?? .yellow).opacity(0.1) : AppTheme.Colors.surface)
                 .frame(width: 32, height: 32)
                 .overlay(
                     Image(systemName: "person.fill")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(isWinner ? (Color(hex: "#FFD700") ?? .yellow) : AppTheme.Colors.textPrimary)
+                        .foregroundColor(isWinner ? (Color(hexString: "#FFD700") ?? .yellow) : AppTheme.Colors.textPrimary)
                 )
             
             // Name
             Text(team.name)
                 .font(.system(size: 13, weight: isWinner ? .bold : .semibold))
-                .foregroundColor(isWinner ? (Color(hex: "#FFD700") ?? .yellow) : AppTheme.Colors.textPrimary)
+                .foregroundColor(isWinner ? (Color(hexString: "#FFD700") ?? .yellow) : AppTheme.Colors.textPrimary)
                 .lineLimit(1)
             
             Spacer()
@@ -266,7 +266,7 @@ struct TournamentBracketView: View {
             if let score = score {
                 Text("\(score)")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(isWinner ? (Color(hex: "#FFD700") ?? .yellow) : AppTheme.Colors.textPrimary)
+                    .foregroundColor(isWinner ? (Color(hexString: "#FFD700") ?? .yellow) : AppTheme.Colors.textPrimary)
             } else if isLive {
                 ProgressView()
                     .scaleEffect(0.7)
@@ -276,14 +276,14 @@ struct TournamentBracketView: View {
             if isWinner {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(Color(hex: "#FFD700") ?? .yellow)
+                    .foregroundColor(Color(hexString: "#FFD700") ?? .yellow)
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(isWinner ? (Color(hex: "#FFD700") ?? .yellow).opacity(0.05) : Color.clear)
+                .fill(isWinner ? (Color(hexString: "#FFD700") ?? .yellow).opacity(0.05) : Color.clear)
         )
     }
 }
@@ -377,7 +377,7 @@ struct LiveMatchSpectatorView: View {
                 
                 Text("$5,000")
                     .font(.system(size: 28, weight: .black))
-                    .foregroundColor(Color(hex: "#FFD700"))
+                    .foregroundColor(Color(hexString: "#FFD700"))
             }
             
             // Scores
@@ -399,7 +399,7 @@ struct LiveMatchSpectatorView: View {
                     
                     Text("\(match.score1 ?? 0)")
                         .font(.system(size: 36, weight: .black))
-                        .foregroundColor(Color(hex: "#FFD700"))
+                        .foregroundColor(Color(hexString: "#FFD700"))
                 }
                 .frame(maxWidth: .infinity)
                 
@@ -426,7 +426,7 @@ struct LiveMatchSpectatorView: View {
                         
                         Text("\(match.score2 ?? 0)")
                             .font(.system(size: 36, weight: .black))
-                            .foregroundColor(Color(hex: "#FFD700"))
+                            .foregroundColor(Color(hexString: "#FFD700"))
                     }
                     .frame(maxWidth: .infinity)
                 }

@@ -127,7 +127,7 @@ struct CreatorAnalyticsDashboard: View {
     private var quickStatsSection: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
             if let analytics = creatorAnalytics {
-                StatCard(
+                AnalyticsStatCard(
                     title: "Total Views",
                     value: formatNumber(analytics.totalViews),
                     change: "+12.5%",
@@ -136,7 +136,7 @@ struct CreatorAnalyticsDashboard: View {
                     color: .blue
                 )
                 
-                StatCard(
+                AnalyticsStatCard(
                     title: "Watch Time",
                     value: formatDuration(analytics.watchTime),
                     change: "+8.2%",
@@ -145,7 +145,7 @@ struct CreatorAnalyticsDashboard: View {
                     color: .purple
                 )
                 
-                StatCard(
+                AnalyticsStatCard(
                     title: "Engagement",
                     value: "\(Int(analytics.engagement * 100))%",
                     change: "+3.1%",
@@ -154,7 +154,7 @@ struct CreatorAnalyticsDashboard: View {
                     color: .green
                 )
                 
-                StatCard(
+                AnalyticsStatCard(
                     title: "Growth",
                     value: "+\(Int(analytics.growth * 100))%",
                     change: "This period",
@@ -543,7 +543,7 @@ struct CreatorAnalyticsDashboard: View {
 
 // MARK: - Supporting Views
 
-struct StatCard: View {
+struct AnalyticsStatCard: View {
     let title: String
     let value: String
     let change: String

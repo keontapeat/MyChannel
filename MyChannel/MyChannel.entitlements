@@ -41,7 +41,7 @@
 	
 	<!-- Push Notifications - New videos, comments, likes, live alerts -->
 	<key>aps-environment</key>
-	<string>development</string>
+	<string>production</string>
 	
 	<!-- ═══════════════════════════════════════════════════════════════ -->
 	<!-- 🔑 KEYCHAIN & SECURITY -->

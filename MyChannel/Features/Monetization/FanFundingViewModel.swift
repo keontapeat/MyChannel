@@ -21,7 +21,7 @@ struct FundingTier: Identifiable, Codable {
     
     // Computed property to get Color from hex
     var color: Color {
-        Color(hex: colorHex) ?? .blue
+        Color(hexString: colorHex) ?? .blue
     }
     
     enum CodingKeys: String, CodingKey {

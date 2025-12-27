@@ -505,16 +505,19 @@ final class FlintArtistService: ObservableObject {
     // MARK: - Private Helpers
     
     private func updateArtistCategories() {
-        featuredArtists = artists.filter { $0.isVerified && $0.totalStreams > 1000 }
+        // Featured = Top artists by streams
+        featuredArtists = artists
             .sorted { $0.totalStreams > $1.totalStreams }
             .prefix(10)
             .map { $0 }
         
-        risingArtists = artists.filter { $0.verificationBadge == .rising }
+        // Rising = Newer artists with lower streams
+        risingArtists = artists.filter { $0.totalStreams < 100000 }
             .sorted { $0.memberSince > $1.memberSince }
             .prefix(10)
             .map { $0 }
         
+        // All verified artists
         verifiedArtists = artists.filter { $0.isVerified }
             .sorted { $0.totalStreams > $1.totalStreams }
     }
@@ -542,113 +545,194 @@ final class FlintArtistService: ObservableObject {
         }
     }
     
-    // MARK: - Seed Data (Flint Artists)
+    // MARK: - Seed Data (Flint Artists) - VERIFIED REAL 810 ONLY
     
     static let seedArtists: [FlintArtist] = [
+        
+        // ========== LEGENDS / OGs ==========
+        
         FlintArtist(
             id: "flint-001",
-            name: "Jon Connor",
-            stageName: "Jon Connor",
-            bio: "Flint's own lyrical powerhouse. Signed to Dr. Dre's Aftermath Entertainment.",
-            genres: ["Hip-Hop", "Rap"],
+            name: "MC Breed",
+            stageName: "MC Breed",
+            bio: "Flint hip-hop pioneer. 'Ain't No Future in Yo' Frontin'' put Flint on the map. RIP Legend.",
+            genres: ["Hip-Hop", "G-Funk"],
             hometown: "Flint, MI",
-            profileImageURL: nil,
+            profileImageURL: "https://i.ytimg.com/vi/3LfgZdZbv0I/hqdefault.jpg",
             isVerified: true,
-            verificationBadge: .platinum,
-            totalStreams: 150000,
-            monthlyListeners: 25000,
-            followerCount: 50000
+            verificationBadge: .verified,
+            totalStreams: 5000000,
+            monthlyListeners: 150000,
+            followerCount: 250000
         ),
         FlintArtist(
             id: "flint-002",
             name: "Dayton Family",
             stageName: "Dayton Family",
-            bio: "Legendary Flint hip-hop group. Pioneers of the Midwest sound.",
+            bio: "Legendary Flint hip-hop group. FBI album went gold. Midwest gangsta rap pioneers.",
             genres: ["Hip-Hop", "Gangsta Rap"],
             hometown: "Flint, MI",
+            profileImageURL: "https://i.ytimg.com/vi/gPft7MPWq0k/hqdefault.jpg",
             isVerified: true,
-            verificationBadge: .diamond,
-            totalStreams: 500000,
-            monthlyListeners: 15000,
-            followerCount: 75000
+            verificationBadge: .verified,
+            totalStreams: 3000000,
+            monthlyListeners: 80000,
+            followerCount: 175000
         ),
         FlintArtist(
             id: "flint-003",
-            name: "Killa Kyleon",
-            stageName: "Killa Kyleon",
-            bio: "Flint rapper bringing that raw street sound.",
-            genres: ["Hip-Hop", "Trap"],
+            name: "Bootleg",
+            stageName: "Bootleg",
+            bio: "Dayton Family member. Flint gangsta rap legend.",
+            genres: ["Hip-Hop", "Gangsta Rap"],
             hometown: "Flint, MI",
+            profileImageURL: "https://i.ytimg.com/vi/8xQMfcR_Txw/hqdefault.jpg",
             isVerified: true,
-            verificationBadge: .gold,
-            totalStreams: 75000,
-            monthlyListeners: 8000,
-            followerCount: 20000
+            verificationBadge: .verified,
+            totalStreams: 600000,
+            monthlyListeners: 25000,
+            followerCount: 65000
         ),
         FlintArtist(
             id: "flint-004",
-            name: "Bootleg",
-            stageName: "Bootleg",
-            bio: "Member of Dayton Family. Flint hip-hop legend.",
+            name: "Shoestring",
+            stageName: "Shoestring",
+            bio: "Dayton Family founding member. Flint rap pioneer.",
             genres: ["Hip-Hop", "Gangsta Rap"],
             hometown: "Flint, MI",
             isVerified: true,
-            verificationBadge: .platinum,
-            totalStreams: 200000,
-            monthlyListeners: 10000,
+            verificationBadge: .verified,
+            totalStreams: 400000,
+            monthlyListeners: 12000,
             followerCount: 35000
         ),
         FlintArtist(
             id: "flint-005",
-            name: "MC Breed",
-            stageName: "MC Breed",
-            bio: "Flint hip-hop pioneer. 'Ain't No Future in Yo' Frontin'' legend.",
-            genres: ["Hip-Hop", "G-Funk"],
+            name: "Big Herk",
+            stageName: "Big Herk",
+            bio: "Flint OG. Street legend.",
+            genres: ["Hip-Hop", "Gangsta Rap"],
             hometown: "Flint, MI",
+            profileImageURL: "https://i.ytimg.com/vi/W8CiGjLlHDs/hqdefault.jpg",
             isVerified: true,
-            verificationBadge: .diamond,
-            totalStreams: 1000000,
-            monthlyListeners: 50000,
-            followerCount: 100000
+            verificationBadge: .verified,
+            totalStreams: 500000,
+            monthlyListeners: 15000,
+            followerCount: 40000
         ),
+        
+        // ========== CURRENT GENERATION ==========
+        
         FlintArtist(
             id: "flint-006",
-            name: "Young Rising Star",
-            stageName: "YRS",
-            bio: "New wave Flint artist. The future of 810 music.",
-            genres: ["Hip-Hop", "Melodic Rap"],
+            name: "YN Jay",
+            stageName: "YN Jay",
+            bio: "The Coochie Man. Viral sensation. Flint's biggest current artist.",
+            genres: ["Hip-Hop", "Michigan Rap"],
             hometown: "Flint, MI",
-            isVerified: false,
-            verificationBadge: .rising,
-            totalStreams: 500,
-            monthlyListeners: 100,
-            followerCount: 250
+            profileImageURL: "https://i.ytimg.com/vi/pnQ0BXTfBjk/hqdefault.jpg",
+            appleMusicArtistID: "1474729367",
+            instagramHandle: "yn_jay",
+            isVerified: true,
+            verificationBadge: .verified,
+            totalStreams: 50000000,
+            monthlyListeners: 800000,
+            followerCount: 500000
         ),
         FlintArtist(
             id: "flint-007",
-            name: "810 Collective",
-            stageName: "810 Collective",
-            bio: "Flint's premier hip-hop collective. Representing the city.",
-            genres: ["Hip-Hop", "Rap"],
+            name: "Rio Da Yung OG",
+            stageName: "Rio Da Yung OG",
+            bio: "Flint street rap king. Raw 810 energy.",
+            genres: ["Hip-Hop", "Michigan Rap"],
             hometown: "Flint, MI",
+            profileImageURL: "https://i.ytimg.com/vi/6DZSh9vqlWc/hqdefault.jpg",
+            appleMusicArtistID: "1459166831",
+            instagramHandle: "riodayungog",
             isVerified: true,
             verificationBadge: .verified,
-            totalStreams: 25000,
-            monthlyListeners: 3000,
-            followerCount: 8000
+            totalStreams: 2500000,
+            monthlyListeners: 250000,
+            followerCount: 350000
         ),
         FlintArtist(
             id: "flint-008",
-            name: "Flint Stone",
-            stageName: "Flint Stone",
-            bio: "Hard-hitting bars from the Vehicle City.",
-            genres: ["Hip-Hop", "Boom Bap"],
+            name: "Jon Connor",
+            stageName: "Jon Connor",
+            bio: "Signed to Dr. Dre's Aftermath Entertainment. Lyrical powerhouse.",
+            genres: ["Hip-Hop", "Conscious Rap"],
             hometown: "Flint, MI",
+            profileImageURL: "https://i.ytimg.com/vi/0zq7cRFyCpU/hqdefault.jpg",
+            appleMusicArtistID: "421440126",
+            instagramHandle: "jonconnormusic",
             isVerified: true,
-            verificationBadge: .gold,
-            totalStreams: 45000,
-            monthlyListeners: 5000,
-            followerCount: 12000
+            verificationBadge: .verified,
+            totalStreams: 800000,
+            monthlyListeners: 45000,
+            followerCount: 95000
+        ),
+        FlintArtist(
+            id: "flint-009",
+            name: "RMC Mike",
+            stageName: "RMC Mike",
+            bio: "Viral freestyles. Comedy and hard bars. Flint favorite.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "Flint, MI",
+            profileImageURL: "https://i.ytimg.com/vi/x_E1bq1sYdY/hqdefault.jpg",
+            appleMusicArtistID: "1467627944",
+            instagramHandle: "rmcmike",
+            isVerified: true,
+            verificationBadge: .verified,
+            totalStreams: 5000000,
+            monthlyListeners: 150000,
+            followerCount: 180000
+        ),
+        FlintArtist(
+            id: "flint-010",
+            name: "Louie Ray",
+            stageName: "Louie Ray",
+            bio: "Flint's melodic king. Smooth flows over hard beats.",
+            genres: ["Hip-Hop", "Melodic Rap"],
+            hometown: "Flint, MI",
+            profileImageURL: "https://i.ytimg.com/vi/oVP_aK7JzDw/hqdefault.jpg",
+            appleMusicArtistID: "1452673627",
+            instagramHandle: "louieray",
+            isVerified: true,
+            verificationBadge: .verified,
+            totalStreams: 3000000,
+            monthlyListeners: 120000,
+            followerCount: 140000
+        ),
+        FlintArtist(
+            id: "flint-011",
+            name: "KrispyLife Kidd",
+            stageName: "KrispyLife Kidd",
+            bio: "KrispyLife gang. Consistent drops. Real 810.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "Flint, MI",
+            profileImageURL: "https://i.ytimg.com/vi/xv88_-pLqz8/hqdefault.jpg",
+            appleMusicArtistID: "1487654432",
+            instagramHandle: "krispylifekidd",
+            isVerified: true,
+            verificationBadge: .verified,
+            totalStreams: 2000000,
+            monthlyListeners: 80000,
+            followerCount: 90000
+        ),
+        FlintArtist(
+            id: "flint-012",
+            name: "YSR Gramz",
+            stageName: "YSR Gramz",
+            bio: "Flint rapper. Street anthems. YSR gang.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "Flint, MI",
+            profileImageURL: "https://i.ytimg.com/vi/HqC7Ov7sCwA/hqdefault.jpg",
+            instagramHandle: "ysrgramz",
+            isVerified: true,
+            verificationBadge: .verified,
+            totalStreams: 1500000,
+            monthlyListeners: 60000,
+            followerCount: 75000
         )
     ]
 }

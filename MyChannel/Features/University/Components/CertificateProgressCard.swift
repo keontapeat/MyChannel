@@ -406,7 +406,7 @@ extension ContentSizeCategory {
         )
     }
     
-    return ScrollView {
+    ScrollView {
         VStack(spacing: 32) {
             CertificateProgressCard(
                 careerPath: sampleCareerPath,

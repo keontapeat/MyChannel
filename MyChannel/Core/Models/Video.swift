@@ -1026,7 +1026,7 @@ extension Video {
         Text("Video Models")
             .font(AppTheme.Typography.largeTitle)
         
-        ForEach(Video.sampleVideos.prefix(2)) { video in
+        ForEach(Array(Video.sampleVideos.prefix(2)), id: \.id) { video in
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(video.title)

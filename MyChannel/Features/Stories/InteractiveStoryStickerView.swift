@@ -197,7 +197,7 @@ struct StoryPollInteractionView: View {
                 // Background bar (result)
                 if hasVoted {
                     let percentage = poll.totalVotes > 0 ? Double(option.voteCount) / Double(poll.totalVotes) : 0
-                    let barColor = (Color(hex: option.color) ?? AppTheme.Colors.primary).opacity(0.6)
+                    let barColor = (Color(hexString: option.color) ?? AppTheme.Colors.primary).opacity(0.6)
                     
                     GeometryReader { geometry in
                         RoundedRectangle(cornerRadius: 10)

@@ -25,8 +25,8 @@ enum MusicKitAuthStatus: String {
     case authorized = "Authorized"
 }
 
-// MARK: - Audio Quality
-enum AudioQuality: String, CaseIterable, Identifiable {
+// MARK: - MusicKit Audio Quality
+enum MusicKitAudioQuality: String, CaseIterable, Identifiable {
     case standard = "Standard"
     case highQuality = "High Quality"
     case lossless = "Lossless"
@@ -110,7 +110,7 @@ final class MusicKitService: ObservableObject {
     @Published private(set) var playbackProgress: Double = 0
     @Published private(set) var currentLyrics: [SyncedLyric] = []
     @Published private(set) var currentLyricIndex: Int = 0
-    @Published var audioQuality: AudioQuality = .highQuality
+    @Published var audioQuality: MusicKitAudioQuality = .highQuality
     @Published var spatialAudioEnabled: Bool = true
     @Published var crossfadeDuration: TimeInterval = 3.0
     

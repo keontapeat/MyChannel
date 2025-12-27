@@ -291,28 +291,28 @@ struct AICreatorStudioView: View {
             
             if let analytics = analytics {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
-                    AnalyticsStatCard(
+                    AIStudioStatCard(
                         title: "Total Views",
                         value: formatNumber(analytics.totalViews),
                         icon: "eye",
                         color: .blue
                     )
                     
-                    AnalyticsStatCard(
+                    AIStudioStatCard(
                         title: "Watch Time",
                         value: formatDuration(analytics.watchTime),
                         icon: "clock",
                         color: .purple
                     )
                     
-                    AnalyticsStatCard(
+                    AIStudioStatCard(
                         title: "Engagement",
                         value: "\(Int(analytics.engagement * 100))%",
                         icon: "hand.thumbsup",
                         color: .green
                     )
                     
-                    AnalyticsStatCard(
+                    AIStudioStatCard(
                         title: "Growth",
                         value: "+\(Int(analytics.growth * 100))%",
                         icon: "chart.line.uptrend.xyaxis",
@@ -576,7 +576,7 @@ struct AICreatorStudioView: View {
 
 // MARK: - Analytics Stat Card
 
-struct AnalyticsStatCard: View {
+struct AIStudioStatCard: View {
     let title: String
     let value: String
     let icon: String

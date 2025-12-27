@@ -358,15 +358,59 @@ struct HomeView: View {
     @State private var presentStoryCreator: Bool = false
 
     private func setupContent() {
-        // 🔥 FEATURED VIDEOS: Only show ACTUAL featured videos from Firestore
-        // No more hardcoded fallbacks - if 0 videos are featured, show 0 slides
+        // 🔥 FEATURED VIDEOS: Always show Shot By Keonta intro first, then Firestore videos
         let ownerFeatured = FeaturedStore.shared.toVideos()
         
-        // Only use actual featured videos, no fallbacks
-        featuredContent = Array(ownerFeatured.prefix(3))
+        // Always prepend the Shot By Keonta intro video as the first featured spot
+        var content: [Video] = [shotByKeontaIntro()]
+        
+        // Add up to 2 more from Firestore (total max 3)
+        content.append(contentsOf: Array(ownerFeatured.prefix(2)))
+        
+        featuredContent = content
         heroVideoIndex = 0
         
         print("📺 Featured content loaded: \(featuredContent.count) videos")
+    }
+    
+    // 🔥 Shot By Keonta intro video - Always plays first in featured section
+    private func shotByKeontaIntro() -> Video {
+        let keontaUser = User(
+            username: "sbkeonta_",
+            displayName: "Shot By Keonta",
+            email: "keontapeat@mychannel.live",
+            profileImageURL: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+            isVerified: true,
+            isCreator: true
+        )
+
+        // Resolve local video in app bundle
+        let localPath = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4")
+        let videoURL = localPath.map { URL(fileURLWithPath: $0).absoluteString } ?? "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+
+        // Poster thumbnail
+        let poster = "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
+
+        return Video(
+            id: "shot_by_keonta_intro",
+            title: "Shot By Keonta",
+            description: "Professional videography & content creation",
+            thumbnailURL: poster,
+            videoURL: videoURL,
+            duration: 11,
+            viewCount: 1_500_000,
+            likeCount: 85_000,
+            creator: keontaUser,
+            category: .entertainment,
+            tags: ["intro", "keonta", "mychannel"],
+            isPublic: true,
+            quality: [.quality720p, .quality1080p, .quality2160p],
+            aspectRatio: .landscape,
+            isLiveStream: false,
+            contentSource: .userUploaded,
+            externalID: nil,
+            isVerified: true
+        )
     }
 
     private func refreshContent() async {
@@ -495,470 +539,6 @@ struct HomeView: View {
         }
         .allowsHitTesting(true)
         .zIndex(999)
-    }
-}
-
-// MARK: - Minimal Navigation Header (static, slightly larger)
-struct MinimalNavigationHeader: View {
-    let scrollOffset: CGFloat
-    let onSearchTap: () -> Void
-    let onProfileTap: () -> Void
-
-    @EnvironmentObject private var appState: AppState
-
-    private var logoSize: CGFloat {
-        UIDevice.current.userInterfaceIdiom == .phone ? 28 : 32
-    }
-
-    var body: some View {
-        let showBackground = scrollOffset > 50
-        VStack(spacing: 0) {
-            HStack {
-                HStack(spacing: 12) {
-                    Image("MyChannel")
-                        .resizable()
-                        .renderingMode(.original)
-                        .interpolation(.high)
-                        .antialiased(true)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: logoSize, height: logoSize)
-
-                    Text("MyChannel")
-                        .font(.system(size: 22, weight: .semibold, design: .rounded))
-                        .foregroundColor(.primary)
-                }
-
-                Spacer()
-
-                HStack(spacing: 14) {
-                    Button(action: {
-                        HapticManager.shared.impact(style: .light)
-                        onSearchTap()
-                    }) {
-                        ZStack {
-                            Circle()
-                                .fill(Color(.systemGray6))
-                                .frame(width: 34, height: 34)
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.primary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    NavigationLink(destination: NotificationsView()) {
-                        ZStack {
-                            Circle()
-                                .fill(Color(.systemGray6))
-                                .frame(width: 34, height: 34)
-                            Image(systemName: "bell")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.primary)
-
-                            Circle()
-                                .fill(Color.red)
-                                .frame(width: 6, height: 6)
-                                .offset(x: 8, y: -8)
-                                .opacity(1)
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: {
-                        HapticManager.shared.impact(style: .light)
-                        onProfileTap()
-                    }) {
-                        ProfileAvatarView(urlString: appState.currentUser?.profileImageURL, size: 28)
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white, lineWidth: 1)
-                            )
-                            .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 44)
-            .padding(.bottom, 12)
-            .background(Color.white)
-            .animation(.easeInOut(duration: 0.25), value: showBackground)
-        }
-        .allowsHitTesting(true)
-    }
-}
-
-// MARK: - Minimal Stories Section
-struct MinimalStoriesSection: View {
-    let stories: [AssetStory]
-    let onStoryTap: (AssetStory) -> Void
-    let onAddStory: () -> Void
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 16) {
-                Button(action: onAddStory) {
-                    VStack(spacing: 8) {
-                        ZStack {
-                            Circle()
-                                .fill(Color(.systemGray6))
-                                .frame(width: 60, height: 60)
-
-                            Image(systemName: "plus")
-                                .font(.system(size: 20, weight: .medium))
-                                .foregroundColor(.primary)
-                        }
-
-                        Text("Your Story")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                .buttonStyle(PlainButtonStyle())
-
-                ForEach(stories) { story in
-                    Button(action: { onStoryTap(story) }) {
-                        VStack(spacing: 8) {
-                            ZStack {
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [.pink, .orange],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 2
-                                    )
-                                    .frame(width: 64, height: 64)
-
-                                if UIImage(named: story.authorImageName) != nil {
-                                    Image(story.authorImageName)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 58, height: 58)
-                                        .clipShape(Circle())
-                                } else {
-                                    AppAsyncImage(url: URL(string: "https://picsum.photos/200/200?random=\(abs(story.id.hashValue))")) { image in
-                                        image
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 58, height: 58)
-                                            .clipShape(Circle())
-                                    } placeholder: {
-                                        Circle()
-                                            .fill(Color(.systemGray5))
-                                            .frame(width: 58, height: 58)
-                                    }
-                                }
-                            }
-
-                            Text(story.username)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.primary)
-                                .lineLimit(1)
-                        }
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-    }
-
-}
-
-// MARK: - Minimal Hero Section (now a pager)
-struct MinimalHeroSection: View {
-    let featuredContent: [Video]
-    @Binding var selectedIndex: Int
-    let showLiveHeroPreviewInPreviews: Bool
-    let onPlayVideo: (Video) -> Void
-    let onAddToList: (Video) -> Void
-
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @EnvironmentObject private var appState: AppState
-    @State private var showingFeaturedManager = false
-    
-    private var isCompact: Bool { horizontalSizeClass == .compact }
-    
-    private var isAdmin: Bool {
-        guard let email = appState.currentUser?.email else { return false }
-        return email.lowercased() == "keontapeat@mychannel.live" || 
-               email.lowercased() == "keontapeat@gmail.com"
-    }
-
-    var body: some View {
-        // 🔥 Only show section if there are featured videos OR user is admin (to add videos)
-        if !featuredContent.isEmpty || isAdmin {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 6) {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.yellow)
-                    Text("FEATURED")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.primary)
-                        .tracking(1)
-                    
-                    Spacer()
-                    
-                    // 🔥 QUICK EDIT BUTTON (Admin Only)
-                    if isAdmin {
-                        Button {
-                            HapticManager.shared.impact(style: .light)
-                            showingFeaturedManager = true
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "pencil.circle.fill")
-                                    .font(.system(size: 16, weight: .semibold))
-                                Text("Edit")
-                                    .font(.system(size: 13, weight: .semibold))
-                            }
-                            .foregroundColor(AppTheme.Colors.primary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(AppTheme.Colors.primary.opacity(0.1))
-                            )
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-                .sheet(isPresented: $showingFeaturedManager) {
-                    ThermonuclearFeaturedManager()
-                        .environmentObject(appState)
-                }
-
-                // 🔥 ACCURATE DISPLAY: Only show carousel if there are actually featured videos
-                if featuredContent.isEmpty {
-                    // Empty state for admin
-                    if isAdmin {
-                        VStack(spacing: 16) {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(AppTheme.Colors.surface)
-                                .frame(height: 200)
-                                .overlay(
-                                    VStack(spacing: 12) {
-                                        Image(systemName: "star.circle")
-                                            .font(.system(size: 48, weight: .medium))
-                                            .foregroundColor(AppTheme.Colors.textSecondary)
-                                        
-                                        Text("No Featured Videos")
-                                            .font(.system(size: 17, weight: .semibold))
-                                            .foregroundColor(AppTheme.Colors.textPrimary)
-                                        
-                                        Text("Pin up to 3 videos to feature on Home")
-                                            .font(.system(size: 14, weight: .regular))
-                                            .foregroundColor(AppTheme.Colors.textSecondary)
-                                        
-                                        Button {
-                                            HapticManager.shared.impact(style: .medium)
-                                            showingFeaturedManager = true
-                                        } label: {
-                                            HStack(spacing: 6) {
-                                                Image(systemName: "plus.circle.fill")
-                                                    .font(.system(size: 16, weight: .semibold))
-                                                Text("Add First Video")
-                                                    .font(.system(size: 15, weight: .semibold))
-                                            }
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 20)
-                                            .padding(.vertical, 10)
-                                            .background(
-                                                Capsule()
-                                                    .fill(AppTheme.Colors.primary)
-                                            )
-                                        }
-                                    }
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
-                                )
-                        }
-                        .padding(.horizontal, 20)
-                    }
-                } else {
-                    // Show actual featured videos
-                    TabView(selection: $selectedIndex) {
-                        ForEach(Array(featuredContent.enumerated()), id: \.offset) { index, vid in
-                            FeaturedHeroCard(
-                                video: vid,
-                                isCompact: isCompact,
-                                showLivePreview: (index == selectedIndex) || (index == 0),
-                                allowLiveInPreview: showLiveHeroPreviewInPreviews,
-                                onPlay: { onPlayVideo(vid) },
-                                onAddToList: { onAddToList(vid) }
-                            )
-                            .padding(.horizontal, 20)
-                            .tag(index)
-                        }
-                    }
-                    .tabViewStyle(.page(indexDisplayMode: .automatic))
-                    .frame(height: 250)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }
-            }
-        }
-        // 🔥 For non-admins: Section is completely hidden when there are no featured videos
-    }
-}
-
-private struct FeaturedHeroCard: View {
-    let video: Video
-    let isCompact: Bool
-    let showLivePreview: Bool
-    let allowLiveInPreview: Bool
-    let onPlay: () -> Void
-    let onAddToList: () -> Void
-
-    @State private var isPressed = false
-    @EnvironmentObject private var appState: AppState
-
-    var body: some View {
-        let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
-
-        ZStack {
-            // Media layer (poster + optional live autoplay)
-            ZStack {
-                MultiSourceAsyncImage(
-                    urls: video.posterCandidates,
-                    content: { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    },
-                    placeholder: {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color(.systemGray6))
-                    }
-                )
-
-                if showLivePreview && (!isPreview || allowLiveInPreview) {
-                    VideoLiveThumbnailView(video: video, cornerRadius: 16)
-                        .transition(.opacity)
-                        .allowsHitTesting(false)
-                }
-            }
-            .frame(height: 230)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                LinearGradient(
-                    colors: [Color.black.opacity(0.35), .clear, Color.black.opacity(0.55)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            )
-
-            // Overlayed content
-            VStack(spacing: 12) {
-                HStack {
-                    HStack(spacing: 6) {
-                        Image(systemName: video.category.iconName)
-                        Text(video.category.displayName)
-                    }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(Color.black.opacity(0.35)))
-
-                    Spacer()
-
-                    HStack(spacing: 6) {
-                        Image(systemName: "clock")
-                        Text(video.formattedDuration)
-                    }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(Color.black.opacity(0.35)))
-                }
-                .padding(.horizontal, 14)
-                .padding(.top, 14)
-
-                Spacer()
-
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 12) {
-                        Label(video.creator.displayName, systemImage: "person.crop.circle")
-                        Label("\(video.formattedViewCount) views", systemImage: "eye")
-                    }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
-
-                    HStack(spacing: 12) {
-                        Button(action: {
-                            HapticManager.shared.impact(style: .medium)
-                            onPlay()
-                        }) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "play.fill")
-                                    .font(.system(size: 14, weight: .bold))
-                                Text("Play")
-                                    .font(.system(size: 16, weight: .semibold))
-                            }
-                            .foregroundColor(.white)
-                            .frame(height: 48)
-                            .frame(maxWidth: .infinity)
-                            .background(Color.black.opacity(0.7))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        }
-                        .buttonStyle(PressableScaleButtonStyle(scale: 0.98))
-
-                        Button(action: {
-                            HapticManager.shared.impact(style: .light)
-                            onAddToList()
-                        }) {
-                            let saved = appState.isVideoInWatchLater(video.id)
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.white)
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
-                                Image(systemName: saved ? "checkmark" : "plus")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(saved ? AppTheme.Colors.primary : .black)
-                            }
-                            .frame(width: 48, height: 48)
-                            .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
-                        }
-                        .buttonStyle(PressableScaleButtonStyle(scale: 0.95))
-                        .accessibilityLabel("Watch later")
-                        .accessibilityHint("Add or remove from your Watch Later")
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 14)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .compositingGroup()
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
-        )
-        .shadow(color: Color.black.opacity(0.12), radius: 18, x: 0, y: 12)
-        .scaleEffect(isPressed ? 0.99 : 1.0)
-        .animation(.spring(response: 0.25, dampingFraction: 0.9), value: isPressed)
-        .onLongPressGesture(minimumDuration: 0.01, pressing: { pressing in
-            isPressed = pressing
-        }, perform: {})
-        .padding(.bottom, 8)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(video.creator.displayName) • \(video.formattedViewCount) views")
-        .accessibilityHint("Plays the featured video")
-        .onAppear {
-           NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
-        }
-        .onDisappear {
-            NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldPause"), object: nil)
-        }
     }
 }
 
@@ -1364,9 +944,6 @@ struct MinimalContentSections: View {
     var body: some View {
         VStack(spacing: 40) {
             ForYouSection(onPlayVideo: onPlayVideo, onSeeAllExplore: onSeeAllExplore)
-            
-            // 🔥🔥🔥 NEW FROM CREATORS - Real videos from your beta testers! 🔥🔥🔥
-            NewFromCreatorsSection(onPlayVideo: onPlayVideo)
 
             if !appState.watchHistory.isEmpty {
                 MinimalSection(
@@ -1583,6 +1160,38 @@ private struct MinimalMusicSection: View {
     private var allArtists: [(name: String, avatar: String, views: Int, city: String?)] {
         // 🎵 LOCAL ARTISTS WITH ASSETS - Using local images for fast loading!
         let localArtists: [(String,String,Int,String?)] = [
+            ("Super Shoddy", "SuperShoddyAvatar", 285_000, nil),
+            ("Mbk Keelan", "MbkKeelanAvatar", 285_000, nil),
+            ("Cw Timo", "CwTimoAvatar", 285_000, nil),
+            ("Fattyrichgang Dell", "FattyrichgangDellAvatar", 285_000, nil),
+            ("BagLife Tee", "BagLifeTeeAvatar", 285_000, nil),
+            ("Kai Edwards", "KaiEdwardsAvatar", 285_000, nil),
+            ("Mia PatMan", "MiaPatManAvatar", 285_000, nil),
+            ("Yung Sak Runner", "YungSakRunnerAvatar", 285_000, nil),
+            ("Don Perrion", "DonPerrionAvatar", 285_000, nil),
+            ("Way P", "WayPAvatar", 285_000, nil),
+            ("Ysr Driveway", "YsrDrivewayAvatar", 285_000, nil),
+            ("Ysr Gramz", "YsrGramzAvatar", 285_000, nil),
+            ("Krispylife Kidd", "KrispylifeKiddAvatar", 285_000, nil),
+            ("Babii Moe", "BabiiMoeAvatar", 285_000, nil),
+            ("Rich Dior", "RichDiorAvatar", 285_000, nil),
+            ("MBK BO Demon", "MBKBODemonAvatar", 285_000, nil),
+            ("MBK Uncle Ruckus", "MBKUncleRuckusAvatar", 285_000, nil),
+            ("Ktrip", "KtripAvatar", 285_000, nil),
+            ("Cliff King Mac", "CliffKingMacAvatar", 285_000, nil),
+            ("Mia Rerock", "MiaRerockAvatar", 285_000, nil),
+            ("Juscallmeep", "JuscallmeepAvatar", 285_000, nil),
+            ("Rlsg Kd", "RlsgKdAvatar", 285_000, nil),
+            ("Yn Jay", "YnJayAvatar", 285_000, nil),
+            ("YN Quee", "YNQueeAvatar", 285_000, nil),
+            ("Detwan Love", "DetwanLoveAvatar", 285_000, nil),
+            ("Savagelife Tank", "SavagelifeTankAvatar", 285_000, nil),
+            ("Mia Ghost", "MiaGhostAvatar", 285_000, nil),
+            ("2800 TBaby", "2800TBabyAvatar", 285_000, nil),
+            ("Luh Sportcoat", "LuhSportcoatAvatar", 285_000, nil),
+            ("Ftos Twan", "FtosTwanAvatar", 285_000, nil),
+            ("Hotboy Curry", "HotboyCurryAvatar", 285_000, nil),
+            ("Twyce Marshall", "TwyceMarshallAvatar", 275_000, nil),
             ("Bae Shanicee", "BaeShaniceeAvatar", 200_000, nil),
             ("Báby Ju", "BabyJuAvatar", 210_000, nil),
             ("HTG Nook", "HTGNookAvatar", 215_600, "Flint, MI"),
@@ -1666,13 +1275,8 @@ private struct MinimalMusicSection: View {
     }
 
     private var artists: [(name: String, avatar: String, views: Int, city: String?)] {
-        // Filter out artists whose avatar assets don't exist (no empty cards)
-        allArtists.filter { artist in
-            // If it's a URL, keep it
-            if artist.avatar.hasPrefix("http") { return true }
-            // If it's a local asset, check if it exists
-            return UIImage(named: artist.avatar) != nil
-        }
+        // Allow all artists - UI will show fallback if image doesn't exist
+        allArtists
     }
 
     var body: some View {
@@ -1810,15 +1414,17 @@ private struct QuickTuneSection: View {
     }
     
     var body: some View {
-        // 🔥 ALWAYS show Quick Tune section - never hide it completely
-        MinimalSection(title: "Quick Tune", seeAllAction: nil) {
-            if isLoading {
-                loadingView
-            } else {
-                channelsScrollView
+        // Only show section if we have ready channels OR still loading
+        if hasReadyChannels || isLoading {
+            MinimalSection(title: "Quick Tune", seeAllAction: nil) {
+                if isLoading {
+                    loadingView
+                } else {
+                    channelsScrollView
+                }
             }
+            .animation(.easeOut(duration: 0.3), value: hasReadyChannels)
         }
-        .animation(.easeOut(duration: 0.3), value: hasReadyChannels)
     }
     
     private var loadingView: some View {
@@ -1887,89 +1493,6 @@ private struct QuickTuneSection: View {
     private var channels: [LiveTVChannel] {
         let source = liveChannelsAPI.isEmpty ? LiveTVChannel.sampleChannels : liveChannelsAPI
         return Array(source.prefix(8))
-    }
-}
-
-// MARK: - Minimal Video Card
-struct MinimalVideoCard: View {
-    let video: Video
-    let action: () -> Void
-    var useLivePreview: Bool = false
-
-    var body: some View {
-        let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                Group {
-                    if useLivePreview && !isPreview {
-                        VideoLiveThumbnailView(video: video, cornerRadius: 12)
-                            .frame(width: 180, height: 101)
-                    } else {
-                        MultiSourceAsyncImage(
-                            urls: video.posterCandidates,
-                            content: { image in
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 180, height: 101)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            },
-                            placeholder: {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color(.systemGray6))
-                                    .frame(width: 180, height: 101)
-                                    .overlay(
-                                        Image(systemName: video.category.iconName)
-                                            .font(.system(size: 24))
-                                            .foregroundColor(.secondary)
-                                    )
-                            }
-                        )
-                    }
-                }
-                .overlay(
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            Text(video.formattedDuration)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(Capsule().fill(.black.opacity(0.7)))
-                                .padding(8)
-                        }
-                    }
-                )
-                .onAppear {
-                    // ⚡ PERFORMANCE: Prefetch thumbnail
-                    if let url = video.posterCandidates.first {
-                        ImagePrefetcher.shared.prefetch(url: url)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(video.title)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.primary)
-                        .lineLimit(2)
-                        .frame(height: 36, alignment: .top)
-
-                    Text(video.creator.displayName)
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-
-                    Text("\(video.formattedViewCount) views")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
-                .frame(width: 180, alignment: .leading)
-            }
-        }
-        .buttonStyle(PressableScaleStyle(scale: 0.96))
-        .drawingGroup() // ⚡ PERFORMANCE: Flatten view hierarchy for smoother scrolling
     }
 }
 
@@ -2050,33 +1573,11 @@ struct MinimalChannelCard: View {
     @State private var streamFailed: Bool = false
 
     var body: some View {
-        // 🔥 Always show channel - use static thumbnail as fallback
-        VStack(alignment: .leading, spacing: 8) {
-            ZStack {
-                // Thumbnail - show live stream or fallback to static image
-                if streamFailed {
-                    AsyncImage(url: URL(string: previewOverridePosterURL ?? channel.logoURL)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(channel.category.color.opacity(0.3))
-                            .overlay(
-                                Image(systemName: "tv.fill")
-                                    .font(.system(size: 28))
-                                    .foregroundColor(channel.category.color)
-                            )
-                    }
-                    .frame(width: 160, height: 90)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(channel.category.color.opacity(0.3), lineWidth: 1)
-                    )
-                    .shadow(color: channel.category.color.opacity(0.2), radius: 8, x: 0, y: 4)
-                    .allowsHitTesting(false)
-                } else {
+        // 🔥 Only show channel when video is actually playing - no placeholder!
+        if streamReady && !streamFailed {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack {
+                    // 🔥 Live video thumbnail - only shows when playing
                     LiveChannelThumbnailView(
                         streamURL: previewOverrideStreamURL ?? channel.streamURL,
                         posterURL: previewOverridePosterURL ?? channel.logoURL,
@@ -2105,63 +1606,63 @@ struct MinimalChannelCard: View {
                     .shadow(color: channel.category.color.opacity(0.2), radius: 8, x: 0, y: 4)
                     // 🔥 Ensure touches pass through to NavigationLink
                     .allowsHitTesting(false)
-                }
 
-                // 🔥 LIVE badge with pulse animation
-                if channel.isLive {
-                    VStack {
-                        HStack {
-                            LiveBadge()
+                    // 🔥 LIVE badge with pulse animation
+                    if channel.isLive {
+                        VStack {
+                            HStack {
+                                LiveBadge()
+                                Spacer()
+                            }
                             Spacer()
                         }
-                        Spacer()
+                        .padding(8)
+                        .allowsHitTesting(false)
                     }
-                    .padding(8)
+                    
+                    // Category badge bottom right
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Text(channel.category.displayName)
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(channel.category.color.opacity(0.9))
+                                )
+                        }
+                    }
+                    .padding(6)
                     .allowsHitTesting(false)
                 }
-                
-                // Category badge bottom right
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Text(channel.category.displayName)
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(
-                                Capsule()
-                                    .fill(channel.category.color.opacity(0.9))
-                            )
+                .onAppear {
+                    // 🔥 Always show preview immediately - no delay
+                    showPreview = true
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(channel.name)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 6, height: 6)
+                        Text("\(formatViewerCount(channel.viewerCount)) watching")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
                     }
                 }
-                .padding(6)
-                .allowsHitTesting(false)
+                .frame(width: 160, alignment: .leading)
             }
-            .onAppear {
-                // 🔥 Always show preview immediately - no delay
-                showPreview = true
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(channel.name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 6, height: 6)
-                    Text("\(formatViewerCount(channel.viewerCount)) watching")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.secondary)
-                }
-            }
-            .frame(width: 160, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .contentShape(Rectangle())
     }
 
     private func formatViewerCount(_ count: Int) -> String {
@@ -2878,222 +2379,6 @@ struct ForYouSection: View {
         await MainActor.run {
             forYouVideos = feed
             isLoading = false
-        }
-    }
-}
-
-// MARK: - 🔥🔥🔥 NEW FROM CREATORS SECTION - Real Videos from Beta Testers! 🔥🔥🔥
-struct NewFromCreatorsSection: View {
-    let onPlayVideo: (Video) -> Void
-    
-    @State private var creatorVideos: [Video] = []
-    @State private var isLoading = true
-    @State private var hasAppeared = false
-    
-    var body: some View {
-        if !creatorVideos.isEmpty || isLoading {
-            MinimalSection(
-                title: "New From Creators",
-                seeAllAction: nil
-            ) {
-                if isLoading {
-                    // Shimmer loading state
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 16) {
-                            ForEach(0..<4, id: \.self) { _ in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(.systemGray5))
-                                        .frame(width: 180, height: 101)
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(Color(.systemGray5))
-                                        .frame(width: 140, height: 14)
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(Color(.systemGray6))
-                                        .frame(width: 100, height: 12)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                    }
-                } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: 16) {
-                            ForEach(creatorVideos) { video in
-                                CreatorVideoCard(video: video, onPlay: { onPlayVideo(video) })
-                                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: creatorVideos.count)
-                    }
-                }
-            }
-            .task {
-                guard !hasAppeared else { return }
-                hasAppeared = true
-                await loadCreatorVideos()
-            }
-            // 🔥🔥🔥 YOUTUBE PARITY: Listen for new video uploads to refresh instantly!
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshHomeFeed"))) { notification in
-                print("🔄 [NewFromCreators] Received RefreshHomeFeed notification - refreshing videos!")
-                
-                // If notification contains the newly uploaded video, prepend it immediately
-                if let newVideo = notification.object as? Video, newVideo.visibility == .public {
-                    print("🎬 [NewFromCreators] Prepending new video: \(newVideo.title)")
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        // Remove duplicate if exists, then prepend
-                        creatorVideos.removeAll { $0.id == newVideo.id }
-                        creatorVideos.insert(newVideo, at: 0)
-                    }
-                    HapticManager.shared.notification(type: .success)
-                }
-                
-                // Also refresh from Firestore to ensure we have the latest
-                Task {
-                    await loadCreatorVideos(forceRefresh: true)
-                }
-            }
-        }
-    }
-    
-    private func loadCreatorVideos(forceRefresh: Bool = false) async {
-        // Don't show loading indicator for background refresh
-        if !forceRefresh {
-            isLoading = true
-        }
-        
-        // 🔥 FETCH ALL PUBLIC VIDEOS FROM FIREBASE - This shows beta tester uploads!
-        let firestoreVideos = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 24)
-        
-        await MainActor.run {
-            if !firestoreVideos.isEmpty {
-                // Sort by most recent first
-                let sortedVideos = firestoreVideos.sorted { $0.createdAt > $1.createdAt }
-                
-                // 🔥 Animate updates for smooth UX
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    creatorVideos = sortedVideos
-                }
-                print("🔥 [NewFromCreators] Loaded \(firestoreVideos.count) videos from Firebase!")
-            } else {
-                print("⚠️ [NewFromCreators] No public videos found in Firebase")
-                creatorVideos = []
-            }
-            isLoading = false
-        }
-    }
-}
-
-// MARK: - Creator Video Card (YouTube-Style)
-private struct CreatorVideoCard: View {
-    let video: Video
-    let onPlay: () -> Void
-    
-    @State private var isPressed = false
-    
-    var body: some View {
-        Button(action: {
-            HapticManager.shared.impact(style: .medium)
-            onPlay()
-        }) {
-            VStack(alignment: .leading, spacing: 8) {
-                // Thumbnail
-                ZStack(alignment: .bottomTrailing) {
-                    MultiSourceAsyncImage(
-                        urls: video.posterCandidates,
-                        content: { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 200, height: 112)
-                                .clipped()
-                        },
-                        placeholder: {
-                            Rectangle()
-                                .fill(Color(.systemGray5))
-                                .overlay(
-                                    Image(systemName: "play.rectangle.fill")
-                                        .font(.title2)
-                                        .foregroundColor(.secondary)
-                                )
-                        }
-                    )
-                    .frame(width: 200, height: 112)
-                    .cornerRadius(12)
-                    
-                    // Duration badge
-                    Text(video.formattedDuration)
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(.black.opacity(0.85))
-                        .cornerRadius(4)
-                        .padding(6)
-                }
-                
-                // Video info
-                HStack(alignment: .top, spacing: 10) {
-                    // Creator avatar
-                    AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Circle()
-                            .fill(Color(.systemGray5))
-                            .overlay(
-                                Text(video.creator.displayName.prefix(1).uppercased())
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(.secondary)
-                            )
-                    }
-                    .frame(width: 32, height: 32)
-                    .clipShape(Circle())
-                    
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(video.title)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.primary)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                        
-                        HStack(spacing: 4) {
-                            Text(video.creator.displayName)
-                            if video.creator.isVerified {
-                                Image(systemName: "checkmark.seal.fill")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(AppTheme.Colors.primary)
-                            }
-                        }
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                        
-                        Text("\(formatViewCount(video.viewCount)) views • \(video.uploadTimeAgo)")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                .frame(width: 200, alignment: .leading)
-            }
-        }
-        .buttonStyle(PlainButtonStyle())
-        .scaleEffect(isPressed ? 0.97 : 1.0)
-        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
-        .onLongPressGesture(minimumDuration: 0.1, pressing: { pressing in
-            isPressed = pressing
-        }) { }
-        .accessibilityLabel("Video: \(video.title) by \(video.creator.displayName)")
-    }
-    
-    private func formatViewCount(_ count: Int) -> String {
-        if count >= 1_000_000 {
-            return String(format: "%.1fM", Double(count) / 1_000_000)
-        } else if count >= 1_000 {
-            return String(format: "%.1fK", Double(count) / 1_000)
-        } else {
-            return "\(count)"
         }
     }
 }

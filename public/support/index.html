@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Support - MyChannel</title>
+    <meta name="description" content="MyChannel Support - Get help with your account, content, and more.">
+    <link rel="icon" href="/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a25;
+            --accent: #6366f1;
+            --accent-light: #818cf8;
+            --text-primary: #ffffff;
+            --text-secondary: #a1a1aa;
+            --border: rgba(255,255,255,0.1);
+            --success: #22c55e;
+        }
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.7;
+            min-height: 100vh;
+        }
+        .gradient-bg {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 600px;
+            background: radial-gradient(ellipse at top, rgba(99,102,241,0.15) 0%, transparent 60%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(10,10,15,0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 700;
+            font-size: 1.5rem;
+        }
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+        nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            margin-left: 2rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        nav a:hover { color: var(--text-primary); }
+        main {
+            position: relative;
+            z-index: 1;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 4rem 2rem 6rem;
+        }
+        h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-align: center;
+        }
+        .subtitle {
+            color: var(--text-secondary);
+            text-align: center;
+            font-size: 1.2rem;
+            margin-bottom: 3rem;
+        }
+        .contact-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 4rem;
+        }
+        .contact-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .contact-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent);
+        }
+        .contact-card .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        .contact-card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+        .contact-card p {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            font-size: 0.95rem;
+        }
+        .contact-card a {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            color: white;
+            text-decoration: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .contact-card a:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 20px rgba(99,102,241,0.4);
+        }
+        h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        .faq-section {
+            margin-top: 4rem;
+        }
+        .faq-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+        .faq-question {
+            padding: 1.25rem 1.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+        .faq-question:hover {
+            background: rgba(99,102,241,0.1);
+        }
+        .faq-question::after {
+            content: '+';
+            font-size: 1.5rem;
+            color: var(--accent);
+        }
+        .faq-item.open .faq-question::after {
+            content: '−';
+        }
+        .faq-answer {
+            padding: 0 1.5rem;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s, padding 0.3s;
+            color: var(--text-secondary);
+        }
+        .faq-item.open .faq-answer {
+            padding: 0 1.5rem 1.25rem;
+            max-height: 500px;
+        }
+        .status-banner {
+            background: linear-gradient(135deg, rgba(34,197,94,0.2), rgba(34,197,94,0.1));
+            border: 1px solid var(--success);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 3rem;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+        .app-links {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 3rem;
+        }
+        .app-link {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            color: var(--text-primary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: border-color 0.2s;
+        }
+        .app-link:hover {
+            border-color: var(--accent);
+        }
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        footer a {
+            color: var(--accent-light);
+            text-decoration: none;
+            margin: 0 1rem;
+        }
+        @media (max-width: 640px) {
+            h1 { font-size: 2rem; }
+            main { padding: 2rem 1rem 4rem; }
+            .header-content { padding: 1rem; }
+            nav a { margin-left: 1rem; font-size: 0.9rem; }
+            .app-links { flex-direction: column; align-items: center; }
+        }
+    </style>
+</head>
+<body>
+    <div class="gradient-bg"></div>
+    
+    <header>
+        <div class="header-content">
+            <a href="/" class="logo">
+                <div class="logo-icon">📺</div>
+                MyChannel
+            </a>
+            <nav>
+                <a href="/privacy">Privacy</a>
+                <a href="/terms">Terms</a>
+                <a href="/support">Support</a>
+            </nav>
+        </div>
+    </header>
+    
+    <main>
+        <h1>How Can We Help?</h1>
+        <p class="subtitle">Get support for your MyChannel account, content, and more.</p>
+        
+        <div class="status-banner">
+            <div class="status-dot"></div>
+            <span>All systems operational</span>
+        </div>
+        
+        <div class="contact-grid">
+            <div class="contact-card">
+                <div class="icon">📧</div>
+                <h3>Email Support</h3>
+                <p>Get help within 24 hours for any account or technical issues.</p>
+                <a href="mailto:support@mychannel.live">Contact Support</a>
+            </div>
+            
+            <div class="contact-card">
+                <div class="icon">🐛</div>
+                <h3>Report a Bug</h3>
+                <p>Found something broken? Let us know and we'll fix it fast.</p>
+                <a href="mailto:bugs@mychannel.live">Report Bug</a>
+            </div>
+            
+            <div class="contact-card">
+                <div class="icon">🛡️</div>
+                <h3>Safety & Abuse</h3>
+                <p>Report harassment, spam, or policy violations.</p>
+                <a href="mailto:safety@mychannel.live">Report Issue</a>
+            </div>
+            
+            <div class="contact-card">
+                <div class="icon">💰</div>
+                <h3>Payments & Billing</h3>
+                <p>Questions about earnings, payouts, or subscriptions.</p>
+                <a href="mailto:billing@mychannel.live">Get Help</a>
+            </div>
+            
+            <div class="contact-card">
+                <div class="icon">©️</div>
+                <h3>Copyright Claims</h3>
+                <p>Submit DMCA takedown requests or counter-notices.</p>
+                <a href="mailto:copyright@mychannel.live">Submit Claim</a>
+            </div>
+            
+            <div class="contact-card">
+                <div class="icon">🤝</div>
+                <h3>Partnerships</h3>
+                <p>Interested in partnering with MyChannel?</p>
+                <a href="mailto:partners@mychannel.live">Get in Touch</a>
+            </div>
+        </div>
+        
+        <section class="faq-section">
+            <h2>Frequently Asked Questions</h2>
+            
+            <div class="faq-item">
+                <div class="faq-question">How do I create an account?</div>
+                <div class="faq-answer">Download MyChannel from the App Store, open the app, and tap "Sign Up". You can create an account using your email, Apple ID, or Google account.</div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">How do I upload a video?</div>
+                <div class="faq-answer">Tap the "+" button at the bottom of the screen, select your video from your camera roll or record a new one, add a title and description, then tap "Upload".</div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">How do I start earning money?</div>
+                <div class="faq-answer">Go to Creator Studio → Monetization to enable monetization on your account. You'll need to meet eligibility requirements (100+ subscribers, 1,000+ watch hours). We offer 90% revenue share - the best in the industry!</div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">What is MyChannel Plus?</div>
+                <div class="faq-answer">MyChannel Plus is our premium subscription ($14.99/month) that includes ad-free viewing, offline downloads, background playback, and exclusive content. You can subscribe in Settings → MyChannel Plus.</div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">What are VS Matches?</div>
+                <div class="faq-answer">VS Matches are competitive video challenges where creators can wager real money. You must be 18+ with age verification to participate. Matches are judged on views, likes, and engagement over a set period.</div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">How do I delete my account?</div>
+                <div class="faq-answer">Go to Settings → Account → Delete Account. You'll be asked to confirm twice. Account deletion is permanent and will remove all your videos, comments, and data within 30 days.</div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">How do I report inappropriate content?</div>
+                <div class="faq-answer">Tap the three-dot menu (⋯) on any video or comment, then select "Report". Choose the reason for reporting and submit. Our moderation team reviews all reports within 24 hours.</div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">When do I get paid?</div>
+                <div class="faq-answer">Payouts are processed within 24-48 hours once you reach the $10 minimum threshold. You can request a payout anytime in Creator Studio → Monetization → Payout.</div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">How do I go live?</div>
+                <div class="faq-answer">Tap the "+" button and select "Go Live". Set up your stream title, category, and thumbnail. You can enable chat, awards, and other interactive features before starting.</div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">Is my data secure?</div>
+                <div class="faq-answer">Yes! We use industry-standard encryption, secure HTTPS connections, and store sensitive data in iOS Keychain. We never sell your personal information. Read our Privacy Policy for full details.</div>
+            </div>
+        </section>
+        
+        <div class="app-links">
+            <a href="https://apps.apple.com/app/mychannel" class="app-link">
+                <span>🍎</span> Download for iOS
+            </a>
+            <a href="https://play.google.com/store/apps/details?id=com.mychannel" class="app-link">
+                <span>🤖</span> Download for Android
+            </a>
+        </div>
+    </main>
+    
+    <footer>
+        <p>&copy; 2025 MyChannel. All rights reserved.</p>
+        <p>
+            <a href="/privacy">Privacy Policy</a>
+            <a href="/terms">Terms of Service</a>
+            <a href="/support">Support</a>
+        </p>
+    </footer>
+    
+    <script>
+        // FAQ accordion functionality
+        document.querySelectorAll('.faq-question').forEach(question => {
+            question.addEventListener('click', () => {
+                const item = question.parentElement;
+                const isOpen = item.classList.contains('open');
+                
+                // Close all other items
+                document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+                
+                // Toggle current item
+                if (!isOpen) {
+                    item.classList.add('open');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+
+
+
+

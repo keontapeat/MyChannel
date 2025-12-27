@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms of Service - MyChannel</title>
+    <meta name="description" content="MyChannel Terms of Service - Rules and guidelines for using our platform.">
+    <link rel="icon" href="/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a25;
+            --accent: #6366f1;
+            --accent-light: #818cf8;
+            --text-primary: #ffffff;
+            --text-secondary: #a1a1aa;
+            --border: rgba(255,255,255,0.1);
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.7;
+            min-height: 100vh;
+        }
+        .gradient-bg {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 600px;
+            background: radial-gradient(ellipse at top, rgba(99,102,241,0.15) 0%, transparent 60%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(10,10,15,0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 700;
+            font-size: 1.5rem;
+        }
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+        nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            margin-left: 2rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        nav a:hover { color: var(--text-primary); }
+        main {
+            position: relative;
+            z-index: 1;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 4rem 2rem 6rem;
+        }
+        h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .last-updated {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border);
+        }
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-top: 3rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+        h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            color: var(--accent-light);
+        }
+        p {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+        ul, ol {
+            color: var(--text-secondary);
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        li { margin-bottom: 0.5rem; }
+        .highlight-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+        .highlight-box.warning {
+            border-color: var(--warning);
+            background: rgba(245,158,11,0.1);
+        }
+        .highlight-box.danger {
+            border-color: var(--danger);
+            background: rgba(239,68,68,0.1);
+        }
+        .contact-box {
+            background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(129,140,248,0.1));
+            border: 1px solid var(--accent);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-top: 3rem;
+            text-align: center;
+        }
+        .contact-box h3 {
+            color: var(--text-primary);
+            margin-top: 0;
+        }
+        .contact-box a {
+            color: var(--accent-light);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .contact-box a:hover { text-decoration: underline; }
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        footer a {
+            color: var(--accent-light);
+            text-decoration: none;
+            margin: 0 1rem;
+        }
+        @media (max-width: 640px) {
+            h1 { font-size: 2rem; }
+            main { padding: 2rem 1rem 4rem; }
+            .header-content { padding: 1rem; }
+            nav a { margin-left: 1rem; font-size: 0.9rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="gradient-bg"></div>
+    
+    <header>
+        <div class="header-content">
+            <a href="/" class="logo">
+                <div class="logo-icon">📺</div>
+                MyChannel
+            </a>
+            <nav>
+                <a href="/privacy">Privacy</a>
+                <a href="/terms">Terms</a>
+                <a href="/support">Support</a>
+            </nav>
+        </div>
+    </header>
+    
+    <main>
+        <h1>Terms of Service</h1>
+        <p class="last-updated">Last updated: December 20, 2025</p>
+        
+        <p>Welcome to MyChannel! These Terms of Service ("Terms") govern your use of the MyChannel mobile application and services ("Service"). By using MyChannel, you agree to these Terms. Please read them carefully.</p>
+        
+        <div class="highlight-box">
+            <strong>📋 Quick Summary:</strong>
+            <ul>
+                <li>Be respectful and create original content</li>
+                <li>You own your content, but grant us license to display it</li>
+                <li>Real money features require age 18+</li>
+                <li>We may remove content that violates our guidelines</li>
+            </ul>
+        </div>
+        
+        <h2>1. Acceptance of Terms</h2>
+        <p>By accessing or using MyChannel, you agree to be bound by these Terms and our Privacy Policy. If you do not agree, please do not use our Service.</p>
+        
+        <h2>2. Eligibility</h2>
+        <ul>
+            <li>You must be at least <strong>13 years old</strong> to use MyChannel</li>
+            <li>You must be at least <strong>18 years old</strong> to use real money features (VS Matches, payouts)</li>
+            <li>You must provide accurate and complete registration information</li>
+            <li>You are responsible for maintaining the security of your account</li>
+        </ul>
+        
+        <h2>3. Your Account</h2>
+        <p>When you create an account, you agree to:</p>
+        <ul>
+            <li>Provide accurate, current, and complete information</li>
+            <li>Keep your password confidential and secure</li>
+            <li>Notify us immediately of any unauthorized access</li>
+            <li>Accept responsibility for all activities under your account</li>
+        </ul>
+        
+        <h2>4. User Content</h2>
+        
+        <h3>Your Rights</h3>
+        <p>You retain ownership of the content you create and upload to MyChannel. By posting content, you grant us a worldwide, non-exclusive, royalty-free license to use, display, reproduce, and distribute your content in connection with the Service.</p>
+        
+        <h3>Content Guidelines</h3>
+        <p>You agree NOT to post content that:</p>
+        <ul>
+            <li>Is illegal, harmful, threatening, abusive, or harassing</li>
+            <li>Contains hate speech, discrimination, or promotes violence</li>
+            <li>Is sexually explicit or contains nudity (unless age-restricted)</li>
+            <li>Infringes on copyrights, trademarks, or other intellectual property</li>
+            <li>Contains spam, malware, or deceptive practices</li>
+            <li>Violates the privacy of others</li>
+            <li>Impersonates another person or entity</li>
+            <li>Endangers children or exploits minors</li>
+        </ul>
+        
+        <div class="highlight-box danger">
+            <strong>⚠️ Content Removal:</strong> We reserve the right to remove any content that violates these Terms or our Community Guidelines, with or without notice.
+        </div>
+        
+        <h2>5. Monetization & Payments</h2>
+        
+        <h3>Creator Monetization</h3>
+        <ul>
+            <li>Eligible creators can earn money through ad revenue, subscriptions, tips, and VS Matches</li>
+            <li>We offer industry-leading <strong>90% revenue share</strong> for creators</li>
+            <li>Minimum payout threshold: $10</li>
+            <li>Payouts are processed within 24-48 hours</li>
+        </ul>
+        
+        <h3>VS Matches (Real Money)</h3>
+        <ul>
+            <li>Participation requires age 18+ and identity verification</li>
+            <li>VS Matches involve real money wagering between creators</li>
+            <li>All wagers are held in escrow until match completion</li>
+            <li>Match results are determined by our Championship Scoring System</li>
+            <li>Platform fee: 10% of prize pool</li>
+        </ul>
+        
+        <h3>Subscriptions</h3>
+        <ul>
+            <li>MyChannel Plus and other subscriptions are billed through the App Store</li>
+            <li>Subscriptions auto-renew unless cancelled 24 hours before renewal</li>
+            <li>Manage subscriptions through your device's subscription settings</li>
+        </ul>
+        
+        <h2>6. Intellectual Property</h2>
+        <p>The MyChannel name, logo, and all related names, logos, product and service names, designs, and slogans are our trademarks. You may not use these without our prior written permission.</p>
+        
+        <h2>7. Copyright Policy</h2>
+        <p>We respect intellectual property rights. If you believe content on MyChannel infringes your copyright:</p>
+        <ul>
+            <li>Submit a DMCA takedown notice to <a href="mailto:copyright@mychannel.live" style="color: var(--accent-light);">copyright@mychannel.live</a></li>
+            <li>Include: your contact info, description of copyrighted work, URL of infringing content, statement of good faith</li>
+        </ul>
+        
+        <div class="highlight-box warning">
+            <strong>⚡ Copyright Strikes:</strong> Repeated violations may result in account termination. Three copyright strikes = permanent ban.
+        </div>
+        
+        <h2>8. Prohibited Conduct</h2>
+        <p>You agree not to:</p>
+        <ul>
+            <li>Use the Service for any illegal purpose</li>
+            <li>Attempt to gain unauthorized access to our systems</li>
+            <li>Use bots, scripts, or automation without permission</li>
+            <li>Manipulate views, likes, or other metrics</li>
+            <li>Circumvent any security or access controls</li>
+            <li>Interfere with other users' enjoyment of the Service</li>
+            <li>Sell or transfer your account</li>
+        </ul>
+        
+        <h2>9. Termination</h2>
+        <p>We may suspend or terminate your account at any time for violations of these Terms. You may delete your account at any time through Settings → Delete Account.</p>
+        <p>Upon termination:</p>
+        <ul>
+            <li>Your right to use the Service ceases immediately</li>
+            <li>We may delete your content and data</li>
+            <li>Outstanding payments owed to you will still be processed</li>
+        </ul>
+        
+        <h2>10. Disclaimers</h2>
+        <p>THE SERVICE IS PROVIDED "AS IS" WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED. We do not guarantee that the Service will be uninterrupted, secure, or error-free.</p>
+        
+        <h2>11. Limitation of Liability</h2>
+        <p>TO THE MAXIMUM EXTENT PERMITTED BY LAW, MYCHANNEL SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING FROM YOUR USE OF THE SERVICE.</p>
+        
+        <h2>12. Indemnification</h2>
+        <p>You agree to indemnify and hold MyChannel harmless from any claims, damages, or expenses arising from your use of the Service or violation of these Terms.</p>
+        
+        <h2>13. Dispute Resolution</h2>
+        <p>Any disputes arising from these Terms or the Service will be resolved through binding arbitration in accordance with the rules of the American Arbitration Association.</p>
+        
+        <h2>14. Changes to Terms</h2>
+        <p>We may update these Terms from time to time. We will notify you of material changes by email or in-app notification. Continued use of the Service after changes constitutes acceptance.</p>
+        
+        <h2>15. Governing Law</h2>
+        <p>These Terms are governed by the laws of the State of California, United States, without regard to conflict of law principles.</p>
+        
+        <h2>16. Contact</h2>
+        <p>For questions about these Terms, contact us at:</p>
+        
+        <div class="contact-box">
+            <h3>Legal Questions?</h3>
+            <p>Email: <a href="mailto:legal@mychannel.live">legal@mychannel.live</a></p>
+            <p>General Support: <a href="mailto:support@mychannel.live">support@mychannel.live</a></p>
+        </div>
+    </main>
+    
+    <footer>
+        <p>&copy; 2025 MyChannel. All rights reserved.</p>
+        <p>
+            <a href="/privacy">Privacy Policy</a>
+            <a href="/terms">Terms of Service</a>
+            <a href="/support">Support</a>
+        </p>
+    </footer>
+</body>
+</html>
+
+
+
+
