@@ -64,9 +64,29 @@ struct YouTubePlayerView: UIViewRepresentable {
         var parent: YouTubePlayerView
         weak var webView: WKWebView?
         var loadedVideoID: String?
+        private var pauseFlicksObserver: NSObjectProtocol?
 
         init(_ parent: YouTubePlayerView) {
             self.parent = parent
+            super.init()
+            pauseFlicksObserver = NotificationCenter.default.addObserver(
+                forName: Notification.Name("PauseFlicksPlayback"),
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.pausePlayback()
+            }
+        }
+
+        deinit {
+            if let o = pauseFlicksObserver {
+                NotificationCenter.default.removeObserver(o)
+            }
+        }
+
+        private func pausePlayback() {
+            let js = "try { if (window.player && player.pauseVideo) { player.pauseVideo(); player.mute(); } } catch(e) {}"
+            webView?.evaluateJavaScript(js, completionHandler: nil)
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

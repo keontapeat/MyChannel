@@ -93,11 +93,15 @@ struct NuclearFlicksView: View {
     // MARK: - Flicks Feed
     private var flicksFeed: some View {
         GeometryReader { geometry in
+            let w = geometry.size.width
+            let h = geometry.size.height
             ZStack {
-                // Vertical paging scroll
+                // Vertical paging: TabView is horizontal by default, so rotate -90° so swipe-up = next
                 TabView(selection: $currentIndex) {
                     ForEach(Array(viewModel.flicks.enumerated()), id: \.element.id) { index, flick in
                         flickCard(flick: flick, index: index, geometry: geometry)
+                            .frame(width: h, height: w)
+                            .rotationEffect(.degrees(90))
                             .tag(index)
                             .onAppear {
                                 handleFlickAppear(index: index)
@@ -108,6 +112,9 @@ struct NuclearFlicksView: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(width: h, height: w)
+                .rotationEffect(.degrees(-90))
+                .offset(x: (w - h) / 2, y: (h - w) / 2)
                 .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 0.85), value: currentIndex)
                 .onChange(of: currentIndex) { newIndex in
                     handleIndexChange(newIndex)
@@ -186,49 +193,21 @@ struct NuclearFlicksView: View {
             )
             .allowsHitTesting(false)
             
-            // UI Overlay (show/hide with swipe)
-            if showUI {
-                flickUIOverlay(flick: flick, geometry: geometry)
-                    .transition(.opacity)
-            }
-            
-            // 🔥 DOUBLE-TAP GESTURE (anywhere on screen)
+            // 🔥 Tap layer UNDER the overlay so buttons receive taps first (like, comment, share, etc.)
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) {
                     handleDoubleTap(flick: flick)
                 }
-                .onTapGesture(count: 1) {
-                    toggleUI()
-                }
+            
+            // UI Overlay on top so all buttons are clickable; tap-to-hide is inside overlay on video area only
+            if showUI {
+                flickUIOverlay(flick: flick, geometry: geometry)
+                    .transition(.opacity)
+            }
         }
         .frame(width: geometry.size.width, height: geometry.size.height)
-        .gesture(
-            DragGesture()
-                .updating($isDragging) { _, state, _ in
-                    state = true
-                }
-                .onChanged { value in
-                    dragOffset = value.translation.height
-                    
-                    // Auto-hide UI when dragging
-                    if abs(dragOffset) > 50 {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            showUI = false
-                        }
-                    }
-                }
-                .onEnded { _ in
-                    dragOffset = 0
-                    
-                    // Show UI after drag ends
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            showUI = true
-                        }
-                    }
-                }
-        )
+        // No DragGesture here so vertical swipes go to TabView for paging; use tap on video area to toggle UI
     }
     
     // MARK: - Video Player
@@ -258,14 +237,25 @@ struct NuclearFlicksView: View {
     @ViewBuilder
     private func flickUIOverlay(flick: NuclearFlick, geometry: GeometryProxy) -> some View {
         let bottomSafeArea = geometry.safeAreaInsets.bottom
-        let horizontalPadding: CGFloat = 24
-        let actionButtonTrailing: CGFloat = 20
+        let horizontalPadding: CGFloat = 20
+        let actionButtonTrailing: CGFloat = 24
         let infoRightPadding: CGFloat = 120
+        let tabBarReserved: CGFloat = 100
         
-        VStack(spacing: 0) {
-            Spacer()
+        ZStack(alignment: .top) {
+            // Tap on upper ~55% (video area) to hide UI; keeps buttons below clickable
+            Color.clear
+                .frame(maxWidth: .infinity)
+                .frame(height: geometry.size.height * 0.55)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 1) {
+                    toggleUI()
+                }
             
-            HStack(alignment: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                Spacer()
+                
+                HStack(alignment: .bottom, spacing: 0) {
                 // Left side - Video info
                 VStack(alignment: .leading, spacing: 12) {
                     // Creator info - 🔥 PERF: Use cached image
@@ -361,18 +351,23 @@ struct NuclearFlicksView: View {
                 
                 Spacer()
             }
-            .padding(.bottom, bottomSafeArea + 120) // Space for tab bar + safe area
+            .padding(.bottom, bottomSafeArea + tabBarReserved)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .bottomTrailing) {
+                actionButtons(flick: flick, bottomSafeArea: bottomSafeArea, trailingPadding: actionButtonTrailing, tabBarReserved: tabBarReserved)
+            }
         }
-        .overlay(alignment: .bottomTrailing) {
-            actionButtons(flick: flick, bottomSafeArea: bottomSafeArea, trailingPadding: actionButtonTrailing)
-        }
+        .padding(.leading, 20)
+        .padding(.trailing, 16)
     }
     
     // MARK: - Action Buttons (Glassmorphism)
     private func actionButtons(
         flick: NuclearFlick,
         bottomSafeArea: CGFloat,
-        trailingPadding: CGFloat
+        trailingPadding: CGFloat,
+        tabBarReserved: CGFloat = 100
     ) -> some View {
         VStack(spacing: 24) {
             // Like button
@@ -436,8 +431,8 @@ struct NuclearFlicksView: View {
                 .rotationEffect(.degrees(viewModel.albumArtRotation))
             }
         }
-        .padding(.trailing, trailingPadding)
-        .padding(.bottom, bottomSafeArea + 120)
+        .padding(.trailing, max(trailingPadding, 20))
+        .padding(.bottom, bottomSafeArea + tabBarReserved)
     }
     
     private func actionButton(icon: String, count: String, color: Color, scale: CGFloat = 1.0, action: @escaping () -> Void) -> some View {
@@ -487,8 +482,9 @@ struct NuclearFlicksView: View {
                 }
                 .buttonStyle(ScaleButtonStyle())
             }
-            .padding(.top, 60)
-            .padding(.trailing, 16)
+            .padding(.top, 56)
+            .padding(.trailing, 24)
+            .padding(.leading, 20)
             
             Spacer()
         }
@@ -751,6 +747,9 @@ struct NuclearVideoPlayerView: View {
         .onAppear {
             setupPlayer()
         }
+        .onDisappear {
+            playerManager.pause()
+        }
         .onChange(of: isActive) { active in
             if active {
                 playerManager.play()
@@ -760,6 +759,9 @@ struct NuclearVideoPlayerView: View {
         }
         .onChange(of: isMuted) { muted in
             playerManager.player?.isMuted = muted
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pauseFlicksPlayback)) { _ in
+            playerManager.pause()
         }
     }
     
@@ -1063,6 +1065,12 @@ class NuclearFlicksViewModel: ObservableObject {
     }
     
     private func makeDemoFlicks() -> [NuclearFlick] {
+        let freeVideos = SeedCatalogService.shared.freeCatalogVideos
+        if !freeVideos.isEmpty {
+            return freeVideos.map { video in
+                videoToFlick(video)
+            }
+        }
         let demoCreator = FlickCreator(
             id: "demo1",
             username: "demo_creator",
@@ -1070,7 +1078,6 @@ class NuclearFlicksViewModel: ObservableObject {
             profileImageURL: "https://i.pravatar.cc/200?u=demo_creator",
             isVerified: true
         )
-        
         return (1...10).map { i in
             NuclearFlick(
                 id: "demo_\(i)",
@@ -1095,6 +1102,38 @@ class NuclearFlicksViewModel: ObservableObject {
                 externalID: nil as String?
             )
         }
+    }
+
+    private func videoToFlick(_ video: Video) -> NuclearFlick {
+        let creator = FlickCreator(
+            id: video.creator.id,
+            username: video.creator.username,
+            displayName: video.creator.displayName,
+            profileImageURL: video.creator.profileImageURL ?? "https://i.pravatar.cc/200?u=\(video.id)",
+            isVerified: video.creator.isVerified
+        )
+        return NuclearFlick(
+            id: video.id,
+            videoURL: video.videoURL,
+            thumbnailURL: video.thumbnailURL,
+            title: video.title,
+            description: video.description,
+            duration: video.duration,
+            viewCount: video.viewCount,
+            likeCount: video.likeCount,
+            commentCount: video.commentCount,
+            shareCount: max(1, video.viewCount / 1000),
+            createdAt: video.createdAt,
+            creator: creator,
+            tags: video.tags.isEmpty ? ["free", "watch"] : video.tags,
+            musicTrack: FlickMusicTrack(
+                title: "Original Audio",
+                artist: video.creator.displayName,
+                albumArt: video.creator.profileImageURL ?? "https://picsum.photos/seed/\(video.id)/300/300"
+            ),
+            contentSource: video.contentSource ?? .userUploaded,
+            externalID: video.externalID
+        )
     }
 }
 

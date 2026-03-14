@@ -192,10 +192,45 @@ final class FeaturedStore: ObservableObject {
         persist()
     }
 
+    /// Canonical ID for the bundled Shot By Keonta intro video (used by Home and FeaturedManager).
+    static let ownerIntroVideoId = "owner_intro_video"
+
+    /// Returns the owner intro video if the bundle resource exists. Uses current user as creator so profile/subscribe work. Use this for Home hero and Featured Edit so counts match.
+    static func ownerIntroVideo() -> Video? {
+        let path = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4")
+            ?? Bundle.main.path(forResource: "ShotByKeontaIntro4k", ofType: "mp4")
+        guard let path = path else { return nil }
+        let url = URL(fileURLWithPath: path).absoluteString
+        let currentUser = AppState.shared.currentUser ?? AuthenticationManager.shared.currentUser
+        let me = currentUser ?? User(
+            id: "sbkeonta_owner",
+            username: "sbkeonta_",
+            displayName: "Shot By Keonta",
+            email: "keontapeat@mychannel.live",
+            profileImageURL: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+            isVerified: true,
+            isCreator: true
+        )
+        return Video(
+            id: ownerIntroVideoId,
+            title: "Shot By Keonta Intro",
+            description: "Welcome to MyChannel - Shot By Keonta 🎬🔥",
+            thumbnailURL: "asset://ShotByKeontaThumbnail",
+            videoURL: url,
+            duration: 35,
+            viewCount: 0,
+            likeCount: 0,
+            creator: me,
+            category: .entertainment,
+            tags: ["intro", "keonta", "mychannel"],
+            isPublic: true
+        )
+    }
+
     // Ensure owner's intro video is at the top if bundled locally
     // 🔥 CONNECTED TO YOUR PROFILE: Uses current user as creator
     func ensureOwnerIntroFirstIfAvailable() {
-        let introId = "owner_intro_video"
+        let introId = Self.ownerIntroVideoId
         // Old thumbnail URLs that need to be replaced with reliable ytimg.com thumbnail
         let oldBrokenThumbnails = [
             "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4",
@@ -240,7 +275,7 @@ final class FeaturedStore: ObservableObject {
                 id: introId,
                 title: "Shot By Keonta Intro",
                 description: "Welcome to MyChannel - Shot By Keonta 🎬🔥",
-                thumbnailURL: "https://i.ytimg.com/vi/YQHsXMglC9A/maxresdefault.jpg",
+                thumbnailURL: "asset://ShotByKeontaThumbnail",
                 videoURL: url,
                 duration: 35,
                 viewCount: 0,

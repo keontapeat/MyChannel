@@ -59,3 +59,8 @@ mkdir -p ~/Desktop/MyChannel_Screenshots/{iPhone_6.7,iPhone_6.5,iPad_12.9}
 
 
 
+
+
+
+
+

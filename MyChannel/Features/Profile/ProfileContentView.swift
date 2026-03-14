@@ -1834,13 +1834,22 @@ struct PremiumPinnedVideoCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Premium Thumbnail with Pin Badge
+            // Premium Thumbnail with Pin Badge (same thumbnail logic as featured/hero section)
             ZStack(alignment: .topLeading) {
-                // Thumbnail
+                // Thumbnail: use bundled asset for Shot By Keonta intro so it always shows
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(AppTheme.Colors.surface)
                     .overlay(
-                        PinnedCardThumb(urls: video.posterCandidates)
+                        Group {
+                            if video.id == "shot_by_keonta_intro" || video.id == "owner_intro_video" ||
+                                video.thumbnailURL.contains("ShotByKeonta") {
+                                Image("ShotByKeontaThumbnail")
+                                    .resizable()
+                                    .scaledToFill()
+                            } else {
+                                PinnedCardThumb(urls: video.posterCandidates)
+                            }
+                        }
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
@@ -1917,6 +1926,7 @@ struct PremiumPinnedVideoCard: View {
         .onTapGesture {
             HapticManager.shared.impact(style: .medium)
             GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: true)
+            NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
         }
         .onLongPressGesture(minimumDuration: 0.5, pressing: { pressing in
             isPressed = pressing

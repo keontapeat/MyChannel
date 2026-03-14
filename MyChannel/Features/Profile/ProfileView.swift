@@ -100,9 +100,8 @@ struct ProfileView: View {
         let fileURL = URL(fileURLWithPath: path)
         let url = fileURL.absoluteString
         
-        // 🔥 FIX: Use reliable thumbnail URL - YouTube thumbnail for Adele Hello (matches video content)
-        // Fallback to picsum if YouTube thumbnail fails
-        let thumbnailURL = "https://i.ytimg.com/vi/YQHsXMglC9A/maxresdefault.jpg"
+        // 🔥 Use local thumbnail from Assets.xcassets (extracted from video at 2 seconds)
+        let thumbnailURL = "asset://ShotByKeontaThumbnail"
         
         return Video(
             id: introId,

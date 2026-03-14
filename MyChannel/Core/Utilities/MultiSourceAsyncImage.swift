@@ -72,7 +72,9 @@ struct MultiSourceAsyncImage<Content: View, Placeholder: View>: View {
                 config.requestCachePolicy = .returnCacheDataElseLoad
                 config.urlCache = .shared
                 let session = URLSession(configuration: config)
-                let (data, response) = try await session.data(from: url)
+                var request = URLRequest(url: url)
+                request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+                let (data, response) = try await session.data(for: request)
                 if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) || data.isEmpty {
                     await tryNext()
                     return

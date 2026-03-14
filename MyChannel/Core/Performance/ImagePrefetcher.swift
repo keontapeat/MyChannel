@@ -2,7 +2,8 @@
 //  ImagePrefetcher.swift
 //  MyChannel
 //
-//  ⚡ IMAGE PREFETCHER - Load images ahead of time for smooth scrolling
+//  🔥🔥🔥 THERMONUCLEAR IMAGE PREFETCHER 🔥🔥🔥
+//  Load images ahead of time for INSTANT scrolling
 //
 
 import Foundation
@@ -12,38 +13,54 @@ import UIKit
 class ImagePrefetcher {
     static let shared = ImagePrefetcher()
     
-    private var prefetchQueue: [URL] = []
     private var activePrefetches: Set<URL> = []
-    private let maxConcurrentPrefetches = 3
     private var currentPrefetchTasks: [URL: Task<Void, Never>] = [:]
+    
+    // 🔥 THERMONUCLEAR: High-performance shared session with aggressive connection pooling
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.httpMaximumConnectionsPerHost = 10 // 🔥 10 parallel connections!
+        config.timeoutIntervalForRequest = 8
+        config.timeoutIntervalForResource = 15
+        config.urlCache = nil // No disk cache overhead
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.httpShouldUsePipelining = true // 🔥 HTTP pipelining for speed
+        return URLSession(configuration: config)
+    }()
     
     private init() {
         setupMemoryWarningObserver()
     }
     
-    /// Prefetch an image URL (non-blocking)
+    /// 🔥 Prefetch a single image URL (non-blocking, deduplicated)
     func prefetch(url: URL) {
-        guard !activePrefetches.contains(url) else { return }
+        // Skip if already prefetching or cached
+        guard !activePrefetches.contains(url),
+              !ImageCache.shared.hasImage(for: url) else { return }
         
         activePrefetches.insert(url)
         
-        let task = Task {
+        let task = Task { [weak self] in
             defer {
-                activePrefetches.remove(url)
-                currentPrefetchTasks.removeValue(forKey: url)
+                Task { @MainActor [weak self] in
+                    self?.activePrefetches.remove(url)
+                    self?.currentPrefetchTasks.removeValue(forKey: url)
+                }
             }
             
-            // Check cache first
-            if ImageCache.shared.hasImage(for: url) {
-                return
-            }
-            
-            // Prefetch image
+            // 🔥 Parse image on background thread
             do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                if let image = UIImage(data: data) {
-                    ImageCache.shared.store(image, for: url)
-                    print("✅ [ImagePrefetcher] Prefetched: \(url.lastPathComponent)")
+                let (data, _) = try await self?.session.data(from: url) ?? (Data(), URLResponse())
+                
+                // Parse on background thread for speed
+                let image = await Task.detached(priority: .utility) {
+                    UIImage(data: data)
+                }.value
+                
+                if let image = image {
+                    await MainActor.run {
+                        ImageCache.shared.store(image, for: url)
+                    }
                 }
             } catch {
                 // Silently fail - prefetching is best effort
@@ -53,22 +70,61 @@ class ImagePrefetcher {
         currentPrefetchTasks[url] = task
     }
     
-    /// Prefetch multiple images (prioritized)
-    /// 🔥 THERMONUCLEAR: Prefetch 12 images ahead (4x more aggressive)
+    /// 🔥🔥🔥 THERMONUCLEAR BATCH PREFETCH - Load 20 images in PARALLEL! 🔥🔥🔥
     func prefetch(urls: [URL], priority: Int = 0) {
-        // Prefetch first 12 URLs for ultra-fast scrolling
-        for url in urls.prefix(12) {
-            prefetch(url: url)
+        // 🔥 Fire off all prefetches in parallel (up to 20)
+        Task {
+            await withTaskGroup(of: Void.self) { group in
+                for url in urls.prefix(20) {
+                    group.addTask { @MainActor [weak self] in
+                        self?.prefetch(url: url)
+                    }
+                }
+            }
         }
     }
     
-    /// 🔥 NEW: Prefetch viewport + next screen worth of images
+    /// 🔥🔥🔥 NUCLEAR VIEWPORT PREFETCH - 3 screens ahead! 🔥🔥🔥
     func prefetchViewport(urls: [URL], visibleRange: Range<Int>) {
-        // Prefetch visible + next 24 items (2 screens ahead)
-        let prefetchRange = visibleRange.lowerBound..<min(urls.count, visibleRange.upperBound + 24)
-        for index in prefetchRange {
-            guard index < urls.count else { break }
-            prefetch(url: urls[index])
+        // Prefetch visible + next 36 items (3 screens ahead!)
+        let prefetchEnd = min(urls.count, visibleRange.upperBound + 36)
+        let prefetchStart = max(0, visibleRange.lowerBound - 12) // Also prefetch 1 screen behind
+        let prefetchRange = prefetchStart..<prefetchEnd
+        
+        let urlsToPrefetch = prefetchRange.compactMap { index -> URL? in
+            guard index < urls.count else { return nil }
+            return urls[index]
+        }
+        
+        prefetch(urls: urlsToPrefetch)
+    }
+    
+    /// 🔥 INSTANT PREWARM - Load critical images before view appears
+    func prewarmCritical(urls: [URL]) {
+        Task {
+            await withTaskGroup(of: Void.self) { group in
+                for url in urls.prefix(10) {
+                    // Skip if already cached
+                    if ImageCache.shared.hasImage(for: url) { continue }
+                    
+                    group.addTask { [weak self] in
+                        do {
+                            let (data, _) = try await self?.session.data(from: url) ?? (Data(), URLResponse())
+                            
+                            let image = await Task.detached(priority: .userInitiated) {
+                                UIImage(data: data)
+                            }.value
+                            
+                            if let image = image {
+                                await MainActor.run {
+                                    ImageCache.shared.store(image, for: url)
+                                }
+                            }
+                        } catch {}
+                    }
+                }
+            }
+            print("🔥🔥🔥 [ImagePrefetcher] Prewarmed \(min(urls.count, 10)) critical images!")
         }
     }
     
@@ -93,53 +149,75 @@ class ImagePrefetcher {
     
     deinit {
         NotificationCenter.default.removeObserver(self)
-        // Note: Cannot call MainActor methods from deinit
-        // Tasks will be cancelled automatically when ImagePrefetcher is deallocated
-        // The collections will be cleared automatically
     }
 }
 
-// MARK: - Image Cache Helper (Shared across app)
+// MARK: - 🔥🔥🔥 THERMONUCLEAR IMAGE CACHE 🔥🔥🔥
 class ImageCache {
     static let shared = ImageCache()
     
+    // 🔥 Larger cache for more instant hits
     private let cache = NSCache<NSURL, UIImage>()
-    private let maxCacheSize = 100 * 1024 * 1024 // 100MB
+    private let maxCacheSize = 150 * 1024 * 1024 // 150MB (was 100MB)
+    
+    // 🔥 Track cache stats for debugging
+    private var hits = 0
+    private var misses = 0
     
     private init() {
         cache.totalCostLimit = maxCacheSize
-        cache.countLimit = 200 // Max 200 images
+        cache.countLimit = 300 // Max 300 images (was 200)
         setupMemoryWarningObserver()
+        print("🔥 [ImageCache] THERMONUCLEAR cache initialized: 150MB, 300 images")
     }
     
-    // ⚡ PERFORMANCE: Clear cache on memory warning
     private func setupMemoryWarningObserver() {
         NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            print("⚠️ [ImageCache] Memory warning - clearing cache")
-            self?.clearCache()
+            print("⚠️ [ImageCache] Memory warning - clearing 50% of cache")
+            // 🔥 Don't clear everything - just reduce
+            self?.cache.totalCostLimit = self?.maxCacheSize ?? 0 / 2
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                self?.cache.totalCostLimit = self?.maxCacheSize ?? 0
+            }
         }
     }
     
+    // 🔥 INSTANT: O(1) lookup
     func hasImage(for url: URL) -> Bool {
-        return cache.object(forKey: url as NSURL) != nil
+        let has = cache.object(forKey: url as NSURL) != nil
+        return has
     }
     
     func store(_ image: UIImage, for url: URL) {
-        let cost = Int(image.size.width * image.size.height * 4) // Rough memory cost
+        let cost = Int(image.size.width * image.size.height * 4)
         cache.setObject(image, forKey: url as NSURL, cost: cost)
     }
     
+    // 🔥 Track cache performance
     func image(for url: URL) -> UIImage? {
-        return cache.object(forKey: url as NSURL)
+        if let img = cache.object(forKey: url as NSURL) {
+            hits += 1
+            return img
+        }
+        misses += 1
+        return nil
     }
     
     func clearCache() {
         cache.removeAllObjects()
-        print("✅ [ImageCache] Cache cleared")
+        print("✅ [ImageCache] Cache cleared (was \(hits) hits, \(misses) misses)")
+        hits = 0
+        misses = 0
+    }
+    
+    // 🔥 Cache stats for debugging
+    var hitRate: Double {
+        let total = hits + misses
+        return total > 0 ? Double(hits) / Double(total) : 0
     }
 }
 

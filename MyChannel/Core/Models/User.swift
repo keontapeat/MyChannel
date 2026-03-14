@@ -20,7 +20,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         case location, website, socialLinks
         case followerCount, followingCount, joinDate
         case totalViews, totalEarnings, membershipTiers
-        case showWebsiteOnProfile, verificationBadge
+        case showWebsiteOnProfile, showOnlineStatus, verificationBadge
     }
     let id: String
     let username: String
@@ -41,6 +41,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
     let location: String?
     let website: String?
     let showWebsiteOnProfile: Bool?
+    let showOnlineStatus: Bool?
     let socialLinks: [SocialLink]
     
     // Additional properties for compatibility
@@ -72,6 +73,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         location: String? = nil,
         website: String? = nil,
         showWebsiteOnProfile: Bool? = nil,
+        showOnlineStatus: Bool? = nil,
         socialLinks: [SocialLink] = [],
         followerCount: Int? = nil,
         followingCount: Int = 0,
@@ -102,6 +104,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         self.location = location
         self.website = website
         self.showWebsiteOnProfile = showWebsiteOnProfile
+        self.showOnlineStatus = showOnlineStatus
         self.socialLinks = socialLinks
         self.followerCount = followerCount ?? subscriberCount
         self.followingCount = followingCount
@@ -151,6 +154,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         location = try container.decodeIfPresent(String.self, forKey: .location)
         website = try container.decodeIfPresent(String.self, forKey: .website)
         showWebsiteOnProfile = try container.decodeIfPresent(Bool.self, forKey: .showWebsiteOnProfile)
+        showOnlineStatus = try container.decodeIfPresent(Bool.self, forKey: .showOnlineStatus)
         socialLinks = try container.decodeIfPresent([SocialLink].self, forKey: .socialLinks) ?? []
         followerCount = try container.decodeIfPresent(Int.self, forKey: .followerCount) ?? subscriberCount
         followingCount = try container.decodeIfPresent(Int.self, forKey: .followingCount) ?? 0
@@ -190,6 +194,7 @@ struct User: Identifiable, Codable, Equatable, Hashable {
         try container.encodeIfPresent(location, forKey: .location)
         try container.encodeIfPresent(website, forKey: .website)
         try container.encodeIfPresent(showWebsiteOnProfile, forKey: .showWebsiteOnProfile)
+        try container.encodeIfPresent(showOnlineStatus, forKey: .showOnlineStatus)
         try container.encode(socialLinks, forKey: .socialLinks)
         try container.encode(followerCount, forKey: .followerCount)
         try container.encode(followingCount, forKey: .followingCount)
@@ -354,6 +359,7 @@ extension User {
             location: self.location,
             website: self.website,
             showWebsiteOnProfile: self.showWebsiteOnProfile,
+            showOnlineStatus: self.showOnlineStatus,
             socialLinks: self.socialLinks,
             followerCount: self.followerCount,
             followingCount: self.followingCount,
@@ -391,6 +397,7 @@ extension User {
             location: self.location,
             website: self.website,
             showWebsiteOnProfile: self.showWebsiteOnProfile,
+            showOnlineStatus: self.showOnlineStatus,
             socialLinks: self.socialLinks,
             followerCount: self.followerCount,
             followingCount: self.followingCount,

@@ -79,6 +79,8 @@ struct ProfileRetryButtonStyle: ButtonStyle {
 // MARK: - Notification Names Extension
 extension Notification.Name {
     static let flicksResetToFirst = Notification.Name("FlicksResetToFirst")
+    /// Post when user leaves Flicks tab so in-feed players pause (stops audio when switching tabs).
+    static let pauseFlicksPlayback = Notification.Name("PauseFlicksPlayback")
     static let homeScrollToTop = Notification.Name("HomeScrollToTop")
     static let searchClearAndReset = Notification.Name("SearchClearAndReset")
     static let updateProfileData = Notification.Name("updateProfileData")

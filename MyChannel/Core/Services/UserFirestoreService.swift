@@ -56,6 +56,9 @@ final class UserFirestoreService: ObservableObject {
         if let website = user.website {
             userData["website"] = website
         }
+        // Always persist so "off" sticks after reload/sign-out and back in
+        userData["showWebsiteOnProfile"] = user.showWebsiteOnProfile ?? false
+        userData["showOnlineStatus"] = user.showOnlineStatus ?? false
         if let totalViews = user.totalViews {
             userData["totalViews"] = totalViews
         }
@@ -143,6 +146,8 @@ final class UserFirestoreService: ObservableObject {
             createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
             location: data["location"] as? String,
             website: data["website"] as? String,
+            showWebsiteOnProfile: data["showWebsiteOnProfile"] as? Bool,
+            showOnlineStatus: data["showOnlineStatus"] as? Bool,
             socialLinks: [], // TODO: Parse social links if needed
             followerCount: data["followerCount"] as? Int,
             followingCount: data["followingCount"] as? Int ?? 0,

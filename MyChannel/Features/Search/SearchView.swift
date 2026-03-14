@@ -226,7 +226,7 @@ struct SearchView: View {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(AppTheme.Colors.textSecondary)
 
-                    TextField("Try: title:SwiftUI, @channel, #tag", text: $searchText)
+                    TextField("Search", text: $searchText)
                         .font(AppTheme.Typography.body)
                         .foregroundColor(AppTheme.Colors.textPrimary)
                         .textFieldStyle(PlainTextFieldStyle())
@@ -262,15 +262,6 @@ struct SearchView: View {
                             .foregroundColor(voiceSearch.isListening ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
                             .scaleEffect(voiceSearch.isListening ? 1.2 : 1.0)
                             .animation(.spring(response: 0.3, dampingFraction: 0.6).repeatForever(autoreverses: true), value: voiceSearch.isListening)
-                    }
-                    
-                    // 📷 Visual Search Button
-                    Button(action: {
-                        HapticManager.shared.impact(style: .medium)
-                        showingVisualSearch = true
-                    }) {
-                        Image(systemName: "camera.fill")
-                            .foregroundColor(AppTheme.Colors.textSecondary)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -544,9 +535,6 @@ struct SearchEmptyState: View {
                 // Trending Searches (Real-time)
                 VStack(alignment: .leading, spacing: 16) {
                     HStack {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                            .foregroundColor(AppTheme.Colors.primary)
-                        
                         Text("Trending Searches")
                             .font(AppTheme.Typography.headline)
                             .foregroundColor(AppTheme.Colors.textPrimary)
@@ -597,46 +585,8 @@ struct SearchEmptyState: View {
                         }
                     }
                 }
-                
-                // Search Tips
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Search Tips")
-                        .font(AppTheme.Typography.headline)
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        SearchTipRow(icon: "text.quote", text: "Use quotes for exact match: \"SwiftUI tutorial\"")
-                        SearchTipRow(icon: "at", text: "Search channel: @channelname")
-                        SearchTipRow(icon: "number", text: "Search hashtag: #swift")
-                        SearchTipRow(icon: "textformat.abc", text: "Search by title: title:tutorial")
-                        SearchTipRow(icon: "calendar", text: "Filter by date: date:today")
-                        SearchTipRow(icon: "mic.fill", text: "Tap mic icon for voice search")
-                        SearchTipRow(icon: "camera.fill", text: "Tap camera for visual search")
-                    }
-                    .padding()
-                    .background(AppTheme.Colors.surface.opacity(0.5))
-                    .cornerRadius(AppTheme.CornerRadius.md)
-                }
             }
             .padding()
-        }
-    }
-}
-
-struct SearchTipRow: View {
-    let icon: String
-    let text: String
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 14))
-                .foregroundColor(AppTheme.Colors.primary)
-                .frame(width: 20)
-            
-            Text(text)
-                .font(.system(size: 13))
-                .foregroundColor(AppTheme.Colors.textSecondary)
         }
     }
 }

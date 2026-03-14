@@ -106,3 +106,8 @@ struct MinimalNavigationHeader: View {
     .environmentObject(AppState())
 }
 
+
+
+
+
+

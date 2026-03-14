@@ -37,15 +37,24 @@ struct SplashContainer: View {
             } else {
                 ZStack {
                     if showSplash {
-                        SplashView { proceedFromSplash() }
-                            .contentShape(Rectangle())
-                            .onTapGesture { proceedFromSplash() }
-                         .transition(.opacity)
-                         .zIndex(1)
+                        SplashView {
+                            print("✅ [SplashView] onComplete called - transitioning to MainTabView")
+                            proceedFromSplash()
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            print("👆 [SplashView] Tapped - skipping to MainTabView")
+                            proceedFromSplash()
+                        }
+                        .transition(.opacity)
+                        .zIndex(1)
                     } else {
                         // Always start unauthenticated unless user signs in (fresh TestFlight behavior)
                         MainTabView()
                             .transition(.opacity)
+                            .onAppear {
+                                print("🏠 [MainTabView] Appeared successfully!")
+                            }
                     }
                 }
                 .overlay(
@@ -57,8 +66,11 @@ struct SplashContainer: View {
                 )
                 .animation(.easeInOut(duration: 0.4), value: showSplash)
                 .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                    print("🎬 [SplashContainer] Started - waiting for SplashView completion")
+                    // 🔥 BACKUP TIMER: Only transition if SplashView callback fails
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
                         if showSplash {
+                            print("⏰ [SplashContainer] Backup timer triggered - forcing transition")
                             proceedFromSplash()
                         }
                     }
@@ -74,14 +86,23 @@ struct SplashContainer: View {
     }
 
     private func proceedFromSplash() {
+        guard showSplash else {
+            print("⚠️ [SplashContainer] proceedFromSplash called but already transitioned")
+            return
+        }
+        
+        print("🎯 [SplashContainer] proceedFromSplash - Starting transition to MainTabView")
+        
         withAnimation(.easeInOut(duration: 0.4)) {
             showSplash = false
         }
         showLaunchMask = true
+        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             withAnimation(.easeInOut(duration: 0.25)) {
                 showLaunchMask = false
             }
+            print("✅ [SplashContainer] Transition complete - MainTabView should be visible")
         }
     }
 

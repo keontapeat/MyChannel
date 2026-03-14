@@ -312,7 +312,8 @@
 	</array>
 	
 	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- ⚡ BACKGROUND MODES - ALL ENABLED -->
+	<!-- ⚡ BACKGROUND MODES (App Store Guideline 2.5.4) -->
+	<!-- Do NOT add "external-accessory" - app does not use MFi hardware. -->
 	<!-- ═══════════════════════════════════════════════════════════════ -->
 	
 	<key>UIBackgroundModes</key>
@@ -327,7 +328,7 @@
 		<string>processing</string>
 		<!-- Location updates - Geo-tagged content -->
 		<string>location</string>
-		<!-- Bluetooth - External devices -->
+		<!-- Bluetooth - Audio devices, controllers (not External Accessory) -->
 		<string>bluetooth-central</string>
 		<string>bluetooth-peripheral</string>
 	</array>

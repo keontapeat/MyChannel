@@ -364,74 +364,22 @@ class CreateStoryViewModel: ObservableObject {
         processingState.isProcessing = true
         processingState.uploadProgress = 0.0
         
+        defer {
+            processingState.isProcessing = false
+            processingState.uploadProgress = 0.0
+        }
+        
         let storyContent = createStoryContent()
         let storyStickers = createStoryStickers()
         let storyMusic = createStoryMusic()
         let creatorId = AuthenticationManager.shared.currentUser?.id ?? User.sampleUsers.first?.id ?? "user1"
         var created: Story? = nil
         
-        // Attempt backend upload flow when we have a real media URL (http/https); otherwise skip to local
-        if let media = selectedMedia, let scheme = media.url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
-            do {
-                // 1) Get signed URL
-                let filename = "story_\(UUID().uuidString).\(media.type == .video ? "mp4" : "jpg")"
-                let contentType = media.type == .video ? "video/mp4" : "image/jpeg"
-                let signed = try await StoryAPIService.shared.getSignedUploadUrl(filename: filename, contentType: contentType)
-                
-                // 2) Download the selected media data (if remote)
-                // ⚡ PERFORMANCE: Use NetworkOptimizer for caching and deduplication
-                let data = try await NetworkOptimizer.shared.optimizedRequest(
-                    for: media.url,
-                    priority: .high,
-                    cachePolicy: .returnCacheDataElseLoad
-                )
-                
-                // 3) Upload to signed URL
-                try await StoryAPIService.shared.uploadMedia(data: data, to: signed.url, contentType: contentType)
-                processingState.uploadProgress = 0.85
-                
-                // 4) Finalize
-                let finalized = try await StoryAPIService.shared.finalize(object: signed.object, bucket: signed.bucket, contentType: contentType)
-                processingState.uploadProgress = 0.92
-                
-                // 5) Create story metadata
-                let s = try await StoryAPIService.shared.createStory(
-                    mediaUrl: finalized.publicUrl,
-                    mediaType: getStoryMediaType(),
-                    duration: getStoryDuration(),
-                    caption: caption.isEmpty ? nil : caption,
-                    text: textOverlay?.text,
-                    backgroundColor: storyType == .text ? colorToHex(backgroundGradient.first ?? .blue) : nil,
-                    textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
-                    music: storyMusic,
-                    stickers: storyStickers,
-                    audience: audience.rawValue
-                )
-                created = s
-                processingState.uploadProgress = 1.0
-                try? await DatabaseService.shared.saveStory(s)
-            } catch {
-                // Fallback to local-only on any failure
-                created = Story(
-                    creatorId: creatorId,
-                    mediaURL: media.url.absoluteString,
-                    mediaType: getStoryMediaType(),
-                    duration: getStoryDuration(),
-                    caption: caption.isEmpty ? nil : caption,
-                    text: textOverlay?.text,
-                    content: [storyContent],
-                    backgroundColor: storyType == .text ? colorToHex(backgroundGradient.first ?? .blue) : nil,
-                    textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
-                    music: storyMusic,
-                    stickers: storyStickers
-                )
-                if let c = created { try? await DatabaseService.shared.saveStory(c) }
-            }
-        } else {
-            // Local-only path (camera/text or file references)
-            created = Story(
+        // Build fallback story (used on error or when no uploadable media)
+        func makeFallbackStory(mediaURL: String = selectedMedia?.url.absoluteString ?? "") -> Story {
+            Story(
                 creatorId: creatorId,
-                mediaURL: selectedMedia?.url.absoluteString ?? "",
+                mediaURL: mediaURL,
                 mediaType: getStoryMediaType(),
                 duration: getStoryDuration(),
                 caption: caption.isEmpty ? nil : caption,
@@ -442,25 +390,72 @@ class CreateStoryViewModel: ObservableObject {
                 music: storyMusic,
                 stickers: storyStickers
             )
-            if let c = created { try? await DatabaseService.shared.saveStory(c) }
-            processingState.uploadProgress = 1.0
         }
         
-        processingState.isProcessing = false
-        processingState.uploadProgress = 0.0
-        return created ?? Story(
-            creatorId: creatorId,
-            mediaURL: selectedMedia?.url.absoluteString ?? "",
-            mediaType: getStoryMediaType(),
-            duration: getStoryDuration(),
-            caption: caption.isEmpty ? nil : caption,
-            text: textOverlay?.text,
-            content: [storyContent],
-            backgroundColor: storyType == .text ? colorToHex(backgroundGradient.first ?? .blue) : nil,
-            textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
-            music: storyMusic,
-            stickers: storyStickers
-        )
+        // Get media data: from file URL (photo library) or remote URL (camera mock)
+        if let media = selectedMedia {
+            let data: Data?
+            let scheme = media.url.scheme?.lowercased()
+            if scheme == "file" {
+                // Photo picker: read from local file
+                data = try? Data(contentsOf: media.url)
+            } else if scheme == "http" || scheme == "https" {
+                // Remote URL: fetch (e.g. camera mock URLs)
+                data = try? await NetworkOptimizer.shared.optimizedRequest(
+                    for: media.url,
+                    priority: .high,
+                    cachePolicy: .returnCacheDataElseLoad
+                )
+            } else {
+                data = nil
+            }
+            
+            if let data = data, !data.isEmpty {
+                do {
+                    let filename = "story_\(UUID().uuidString).\(media.type == .video ? "mp4" : "jpg")"
+                    let contentType = media.type == .video ? "video/mp4" : "image/jpeg"
+                    
+                    let signed = try await StoryAPIService.shared.getSignedUploadUrl(filename: filename, contentType: contentType)
+                    processingState.uploadProgress = 0.3
+                    
+                    try await StoryAPIService.shared.uploadMedia(data: data, to: signed.url, contentType: contentType)
+                    processingState.uploadProgress = 0.7
+                    
+                    let finalized = try await StoryAPIService.shared.finalize(object: signed.object, bucket: signed.bucket, contentType: contentType)
+                    processingState.uploadProgress = 0.85
+                    
+                    let s = try await StoryAPIService.shared.createStory(
+                        mediaUrl: finalized.publicUrl,
+                        mediaType: getStoryMediaType(),
+                        duration: getStoryDuration(),
+                        caption: caption.isEmpty ? nil : caption,
+                        text: textOverlay?.text,
+                        backgroundColor: storyType == .text ? colorToHex(backgroundGradient.first ?? .blue) : nil,
+                        textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
+                        music: storyMusic,
+                        stickers: storyStickers,
+                        audience: audience.rawValue
+                    )
+                    created = s
+                    processingState.uploadProgress = 1.0
+                    try? await DatabaseService.shared.saveStory(s)
+                } catch {
+                    showError("Couldn't post story: \(error.localizedDescription). Saved locally.")
+                    created = makeFallbackStory(mediaURL: media.url.absoluteString)
+                    if let c = created { try? await DatabaseService.shared.saveStory(c) }
+                }
+            } else {
+                // No data (e.g. file read failed): save local story so something appears
+                created = makeFallbackStory()
+                if let c = created { try? await DatabaseService.shared.saveStory(c) }
+            }
+        } else {
+            // Text-only or no media
+            created = makeFallbackStory()
+            if let c = created { try? await DatabaseService.shared.saveStory(c) }
+        }
+        
+        return created ?? makeFallbackStory()
     }
     
     private func createStoryContent() -> StoryContent {

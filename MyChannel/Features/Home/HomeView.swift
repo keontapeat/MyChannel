@@ -342,6 +342,19 @@ struct HomeView: View {
                 } else if id == "exploreHub" {
                     ExploreHubView()
                         .onDisappear { self.route = nil }
+                } else if id == "topArtists" {
+                    TopArtistsListView(onDismiss: { self.route = nil })
+                        .environmentObject(appState)
+                        .background(Color(.systemBackground).ignoresSafeArea())
+                        .onDisappear { self.route = nil }
+                } else if id == "topFilmmakers" {
+                    TopFilmmakersListView(onDismiss: { self.route = nil })
+                        .background(Color(.systemBackground).ignoresSafeArea())
+                        .onDisappear { self.route = nil }
+                } else if id == "topChannels" {
+                    TopChannelsListView(onDismiss: { self.route = nil })
+                        .background(Color(.systemBackground).ignoresSafeArea())
+                        .onDisappear { self.route = nil }
                 }
             }
         }
@@ -358,14 +371,12 @@ struct HomeView: View {
     @State private var presentStoryCreator: Bool = false
 
     private func setupContent() {
-        // 🔥 FEATURED VIDEOS: Always show Shot By Keonta intro first, then Firestore videos
+        // 🔥 FEATURED VIDEOS: Same intro as Featured Edit (1/3) so counts match; current user as creator for profile/subscribe
         let ownerFeatured = FeaturedStore.shared.toVideos()
+        let intro = FeaturedStore.ownerIntroVideo() ?? shotByKeontaIntro()
         
-        // Always prepend the Shot By Keonta intro video as the first featured spot
-        var content: [Video] = [shotByKeontaIntro()]
-        
-        // Add up to 2 more from Firestore (total max 3)
-        content.append(contentsOf: Array(ownerFeatured.prefix(2)))
+        var content: [Video] = [intro]
+        content.append(contentsOf: Array(ownerFeatured.filter { $0.id != intro.id }.prefix(2)))
         
         featuredContent = content
         heroVideoIndex = 0
@@ -373,9 +384,11 @@ struct HomeView: View {
         print("📺 Featured content loaded: \(featuredContent.count) videos")
     }
     
-    // 🔥 Shot By Keonta intro video - Always plays first in featured section
+    // 🔥 Shot By Keonta intro video - Fallback when bundle path differs; use current user as creator so profile/subscribe work
     private func shotByKeontaIntro() -> Video {
-        let keontaUser = User(
+        let currentUser = AppState.shared.currentUser ?? AuthenticationManager.shared.currentUser
+        let keontaUser = currentUser ?? User(
+            id: "sbkeonta_owner",
             username: "sbkeonta_",
             displayName: "Shot By Keonta",
             email: "keontapeat@mychannel.live",
@@ -409,7 +422,7 @@ struct HomeView: View {
         print("📺 [HomeView] Shot By Keonta intro thumbnail URL: \(poster)")
 
         return Video(
-            id: "shot_by_keonta_intro",
+            id: FeaturedStore.ownerIntroVideoId,
             title: "Shot By Keonta",
             description: "Professional videography & content creation",
             thumbnailURL: poster,
@@ -2175,18 +2188,18 @@ private struct TopMyChannelsSection: View {
     var onSelect: (String, String, Int, Int, [Video]) -> Void = { _,_,_,_,_ in }
     var onSeeAll: () -> Void = {}
     
-    // Top YouTubers with their actual profile pictures
+    // Regular MyChannel users with profile pictures (looks like real people who signed up)
     private let featuredCreators: [(id: String, name: String, avatar: String, subscribers: Int, totalViews: Int)] = [
-        ("mrbeast", "MrBeast", "https://yt3.googleusercontent.com/ytc/AIdro_kX1DcvNxfFVKoqwqNhMNAqVDHF9zyN5Qf-Ug0A8Q=s800-c-k-c0x00ffffff-no-rj", 345_000_000, 62_000_000_000),
-        ("pewdiepie", "PewDiePie", "https://yt3.googleusercontent.com/5oUY3tashyxfqsjO5SGhjT4dus8FkN9CsAHwXWISFrdPYii1FudD4ICtLfuCw6-THJsJbgoY=s800-c-k-c0x00ffffff-no-rj", 111_000_000, 29_000_000_000),
-        ("markiplier", "Markiplier", "https://yt3.googleusercontent.com/uFnVs1sOLqqnGpIzgkLcNMqwdMB1dJTqpfyhkw-X-AMJLnlVKPbqHwQ6NL7xzqLQBZo7_fxq=s800-c-k-c0x00ffffff-no-rj", 37_000_000, 19_500_000_000),
-        ("dude_perfect", "Dude Perfect", "https://yt3.googleusercontent.com/8Lhf0gwxbtMmX9SB-IJioLvRLMpwfznS3S_-aEfcNLRCt6hA9g-BY3I-prMzCwQMjC8P6_3z=s800-c-k-c0x00ffffff-no-rj", 60_000_000, 16_000_000_000),
-        ("logan_paul", "Logan Paul", "https://yt3.googleusercontent.com/ytc/AIdro_mDSV7nA2xCdCjTKqCE9FX_MQzKwg0FqPqW8A=s800-c-k-c0x00ffffff-no-rj", 23_700_000, 5_900_000_000),
-        ("ksi", "KSI", "https://yt3.googleusercontent.com/hZDUwjoeZ5FhMqNhVRbXc4roxpLwHKrNPjTfIsPVNtVlYBpjgdG1G8Jg_7QHLMmIlSte9zGqPQ=s800-c-k-c0x00ffffff-no-rj", 24_500_000, 7_200_000_000),
-        ("emma_chamberlain", "emma chamberlain", "https://yt3.googleusercontent.com/dC2QLWvJ9tPpS7N0V6QJNQ8HqcLmqGXN-WQ1Yd0LqDHu0Qj2KfQWNjJpNQ=s800-c-k-c0x00ffffff-no-rj", 12_100_000, 1_600_000_000),
-        ("mkbhd", "MKBHD", "https://yt3.googleusercontent.com/lkH37D712tiyphnu0Id0D5MwwQ7IRuwgQLVD05iMXlDWO-kDHut3uI4MgIBjQ5s3BlXmoH_KjQ=s800-c-k-c0x00ffffff-no-rj", 19_200_000, 4_100_000_000),
-        ("dream", "Dream", "https://yt3.googleusercontent.com/ytc/AIdro_kJEOVoH2Xk54B8Jd0H0Sn0Qy7-pK3JoT0Qv8Qw=s800-c-k-c0x00ffffff-no-rj", 32_400_000, 3_200_000_000),
-        ("casey_neistat", "Casey Neistat", "https://yt3.googleusercontent.com/ytc/AIdro_kZMkLQ3fR8J9GbQmOBF2H8Jd0H0Sn0Qy7pK3JoT0Qv8Qw=s800-c-k-c0x00ffffff-no-rj", 12_600_000, 3_100_000_000)
+        ("alex_m", "Alex M.", "https://i.pravatar.cc/150?img=1", 12_400, 890_000),
+        ("jordan_t", "Jordan T.", "https://i.pravatar.cc/150?img=3", 8_200, 420_000),
+        ("sam_r", "Sam R.", "https://i.pravatar.cc/150?img=5", 3_100, 156_000),
+        ("casey_l", "Casey L.", "https://i.pravatar.cc/150?img=9", 22_800, 1_200_000),
+        ("riley_j", "Riley J.", "https://i.pravatar.cc/150?img=10", 1_560, 78_000),
+        ("morgan_k", "Morgan K.", "https://i.pravatar.cc/150?img=11", 45_200, 2_100_000),
+        ("jamie_w", "Jamie W.", "https://i.pravatar.cc/150?img=12", 6_700, 310_000),
+        ("drew_f", "Drew F.", "https://i.pravatar.cc/150?img=13", 19_300, 980_000),
+        ("taylor_s", "Taylor S.", "https://i.pravatar.cc/150?img=15", 890, 42_000),
+        ("quinn_b", "Quinn B.", "https://i.pravatar.cc/150?img=20", 28_100, 1_450_000)
     ]
 
     private func format(_ n: Int) -> String {
@@ -2231,22 +2244,18 @@ private struct TopMyChannelsSection: View {
                                             .stroke(AppTheme.Colors.primary, lineWidth: 3)
                                             .frame(width: 64, height: 64)
 
-                                        MultiSourceAsyncImage(
-                                            urls: [
-                                                URL(string: creator.avatar),
-                                                URL(string: "https://ui-avatars.com/api/?name=\(creator.name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "channel")&size=128&background=e0e0e0&color=666")
-                                            ].compactMap { $0 },
-                                            content: { img in img.resizable().scaledToFill() },
-                                            placeholder: {
-                                                Circle()
-                                                    .fill(Color(.systemGray5))
-                                                    .overlay(
-                                                        Image(systemName: "person.fill")
-                                                            .font(.system(size: 24))
-                                                            .foregroundColor(Color(.systemGray3))
-                                                    )
+                                        CachedAsyncImage(url: URL(string: creator.avatar)) { image in
+                                            image.resizable().scaledToFill()
+                                        } placeholder: {
+                                            ZStack {
+                                                Circle().fill(AppTheme.Colors.surface)
+                                                Image(systemName: "person.circle.fill")
+                                                    .resizable()
+                                                    .scaledToFit()
+                                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                                                    .padding(12)
                                             }
-                                        )
+                                        }
                                         .frame(width: 58, height: 58)
                                         .clipShape(Circle())
                                     }
@@ -2281,6 +2290,296 @@ private struct TopMyChannelsSection: View {
                 }
                 .padding(.horizontal, 20)
                 .background(AppTheme.Colors.background)
+            }
+        }
+    }
+}
+
+// MARK: - See All List Views (Top Artists / Filmmakers / Channels)
+
+private struct ArtistRowItem: Identifiable {
+    let id = UUID()
+    let name: String
+    let avatar: String
+    let videos: [Video]
+    let totalViews: Int
+}
+
+private struct TopArtistsListView: View {
+    let onDismiss: () -> Void
+    @EnvironmentObject private var appState: AppState
+
+    private var rankings: [ArtistRowItem] {
+        let sourceVideos = FeaturedStore.shared.toVideos() + Video.sampleVideos
+        let grouped = Dictionary(grouping: sourceVideos) { $0.creator.displayName }
+        var ranks = grouped.map { (name, vids) -> ArtistRowItem in
+            let views = vids.reduce(0) { $0 + $1.viewCount }
+            return ArtistRowItem(
+                name: name,
+                avatar: vids.first?.creator.profileImageURL ?? "https://i.pravatar.cc/200?u=\(name)",
+                videos: vids,
+                totalViews: views
+            )
+        }
+        let dynamicFriends = OwnerFriendsStore.shared.friends
+        let pinnedOrder = (OwnerProfile.instagramFriends + dynamicFriends).map { $0.name }
+        for f in (OwnerProfile.instagramFriends + dynamicFriends) {
+            if let idx = ranks.firstIndex(where: { $0.name == f.name }) {
+                let existing = ranks[idx]
+                ranks[idx] = ArtistRowItem(name: existing.name, avatar: f.avatar, videos: existing.videos, totalViews: existing.totalViews)
+            } else {
+                ranks.append(ArtistRowItem(name: f.name, avatar: f.avatar, videos: [], totalViews: 0))
+            }
+        }
+        var sorted = ranks.sorted { $0.totalViews > $1.totalViews }
+        if !pinnedOrder.isEmpty {
+            let pinnedSet = Set(pinnedOrder)
+            let pinnedItems = pinnedOrder.compactMap { name in sorted.first(where: { $0.name == name }) }
+            let nonPinned = sorted.filter { !pinnedSet.contains($0.name) }
+            sorted = pinnedItems + nonPinned
+        }
+        return sorted
+    }
+
+    private func format(_ n: Int) -> String {
+        if n >= 1_000_000 { return String(format: "%.1fM", Double(n)/1_000_000) }
+        if n >= 1_000 { return String(format: "%.1fK", Double(n)/1_000) }
+        return "\(n)"
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(Array(rankings.enumerated()), id: \.element.id) { idx, artist in
+                    NavigationLink {
+                        ArtistDetailView(
+                            name: artist.name,
+                            avatarURL: artist.avatar,
+                            videos: artist.videos.isEmpty ? Array(Video.sampleVideos.prefix(8)) : artist.videos,
+                            totalViews: artist.totalViews
+                        )
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text("#\(idx + 1)")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 28, height: 28)
+                                .background(Capsule().fill(AppTheme.Colors.primary))
+                            AppAsyncImage(url: URL(string: artist.avatar)) { img in
+                                img.resizable().scaledToFill()
+                            } placeholder: { Color.gray.opacity(0.3) }
+                            .frame(width: 44, height: 44)
+                            .clipShape(Circle())
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(artist.name)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                                Text("\(format(artist.totalViews)) total views")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .listStyle(.plain)
+            .navigationTitle("Top Artists")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        HapticManager.shared.impact(style: .light)
+                        onDismiss()
+                    }
+                    .foregroundColor(AppTheme.Colors.primary)
+                }
+            }
+        }
+    }
+}
+
+private struct FilmmakerRowItem: Identifiable {
+    let id = UUID()
+    let name: String
+    let films: [FreeMovie]
+}
+
+private struct TopFilmmakersListView: View {
+    let onDismiss: () -> Void
+
+    private var filmmakers: [FilmmakerRowItem] {
+        let possibleNames = ["TeeCeeAvatar", "TeeCee", "tee_cee", "TeeC eeAvatar", "TeeCee_Avatar"]
+        var teeCeeAvatar = "https://i.pravatar.cc/200?u=tee_cee"
+        for assetName in possibleNames {
+            if UIImage(named: assetName) != nil {
+                teeCeeAvatar = "asset://\(assetName)"
+                break
+            }
+        }
+        let merchHDAvatar: String = UIImage(named: "MerchHDAvatar") != nil ? "asset://MerchHDAvatar" : "https://i.pravatar.cc/200?u=merch_hd"
+        let prosKtAvatar: String = UIImage(named: "ProsKtAvatar") != nil ? "asset://ProsKtAvatar" : "https://i.pravatar.cc/200?u=pros_kt"
+        let names = [
+            "A. Rivers", "N. Carter", "M. Sloan", "J. Patel", "R. Alvarez",
+            "S. Kim", "D. Morgan", "K. O'Neal", "B. Laurent", "T. Ito"
+        ]
+        let extra = names.enumerated().map { idx, n in
+            FilmmakerRowItem(
+                name: n,
+                films: Array(FreeMovie.sampleMovies.shuffled().prefix(Int.random(in: 6...12)))
+            )
+        }
+        let top = [
+            FilmmakerRowItem(name: "Tee Cee", films: Array(FreeMovie.sampleMovies.prefix(24))),
+            FilmmakerRowItem(name: "Merch HD", films: Array(FreeMovie.sampleMovies.prefix(15))),
+            FilmmakerRowItem(name: "Pros Kt", films: Array(FreeMovie.sampleMovies.prefix(18)))
+        ]
+        return (top + extra).sorted { $0.films.count > $1.films.count }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(Array(filmmakers.enumerated()), id: \.element.id) { idx, filmmaker in
+                    NavigationLink {
+                        FilmmakerDetailView(name: filmmaker.name, films: filmmaker.films)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text("#\(idx + 1)")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 28, height: 28)
+                                .background(Capsule().fill(AppTheme.Colors.primary))
+                            Text(filmmaker.name)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.primary)
+                            Spacer()
+                            Text("\(filmmaker.films.count) films")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .listStyle(.plain)
+            .navigationTitle("Top Indie Filmmakers")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        HapticManager.shared.impact(style: .light)
+                        onDismiss()
+                    }
+                    .foregroundColor(AppTheme.Colors.primary)
+                }
+            }
+        }
+    }
+}
+
+private struct ChannelRowItem: Identifiable {
+    let id: String
+    let name: String
+    let avatar: String
+    let subscribers: Int
+    let totalViews: Int
+    let videos: [Video]
+}
+
+private struct TopChannelsListView: View {
+    let onDismiss: () -> Void
+
+    private let featuredCreators: [(id: String, name: String, avatar: String, subscribers: Int, totalViews: Int)] = [
+        ("alex_m", "Alex M.", "https://i.pravatar.cc/150?img=1", 12_400, 890_000),
+        ("jordan_t", "Jordan T.", "https://i.pravatar.cc/150?img=3", 8_200, 420_000),
+        ("sam_r", "Sam R.", "https://i.pravatar.cc/150?img=5", 3_100, 156_000),
+        ("casey_l", "Casey L.", "https://i.pravatar.cc/150?img=9", 22_800, 1_200_000),
+        ("riley_j", "Riley J.", "https://i.pravatar.cc/150?img=10", 1_560, 78_000),
+        ("morgan_k", "Morgan K.", "https://i.pravatar.cc/150?img=11", 45_200, 2_100_000),
+        ("jamie_w", "Jamie W.", "https://i.pravatar.cc/150?img=12", 6_700, 310_000),
+        ("drew_f", "Drew F.", "https://i.pravatar.cc/150?img=13", 19_300, 980_000),
+        ("taylor_s", "Taylor S.", "https://i.pravatar.cc/150?img=15", 890, 42_000),
+        ("quinn_b", "Quinn B.", "https://i.pravatar.cc/150?img=20", 28_100, 1_450_000)
+    ]
+
+    private var channelItems: [ChannelRowItem] {
+        let sourceVideos = FeaturedStore.shared.toVideos() + Video.sampleVideos
+        return featuredCreators.map { c in
+            let vids = sourceVideos.filter { $0.creator.displayName.lowercased().contains(c.name.lowercased()) }
+            return ChannelRowItem(
+                id: c.id,
+                name: c.name,
+                avatar: c.avatar,
+                subscribers: c.subscribers,
+                totalViews: c.totalViews,
+                videos: vids.isEmpty ? Array(Video.sampleVideos.prefix(12)) : vids
+            )
+        }
+    }
+
+    private func format(_ n: Int) -> String {
+        if n >= 1_000_000 { return String(format: "%.1fM", Double(n)/1_000_000) }
+        if n >= 1_000 { return String(format: "%.1fK", Double(n)/1_000) }
+        return "\(n)"
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(Array(channelItems.enumerated()), id: \.element.id) { idx, channel in
+                    NavigationLink {
+                        ChannelDetailView(
+                            name: channel.name,
+                            avatarURL: channel.avatar,
+                            subscribers: channel.subscribers,
+                            totalViews: channel.totalViews,
+                            videos: channel.videos
+                        )
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text("#\(idx + 1)")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 28, height: 28)
+                                .background(Capsule().fill(AppTheme.Colors.primary))
+                            CachedAsyncImage(url: URL(string: channel.avatar)) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: {
+                                Circle().fill(AppTheme.Colors.surface)
+                                    .overlay(Image(systemName: "person.circle.fill").foregroundColor(.secondary))
+                            }
+                            .frame(width: 44, height: 44)
+                            .clipShape(Circle())
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(channel.name)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                                Text("\(format(channel.subscribers)) subs")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .listStyle(.plain)
+            .navigationTitle("Top MyChannels")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        HapticManager.shared.impact(style: .light)
+                        onDismiss()
+                    }
+                    .foregroundColor(AppTheme.Colors.primary)
+                }
             }
         }
     }

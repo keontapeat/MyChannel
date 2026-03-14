@@ -366,7 +366,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "family-guy",
             name: "Family Guy",
-            logoURL: "https://i.ytimg.com/vi/-0ibe6_GvHU/hqdefault.jpg", // Family Guy 25th Anniversary
+            logoURL: "https://i.ytimg.com/vi/Q4upY8UWrsU/hqdefault.jpg", // Family Guy Funniest Moments - 50M+ views
             streamURL: plutoURL("5f1acd26c830c60007a5267a"),
             category: .comedy,
             description: "Giggity giggity! 24/7 Family Guy 😂",
@@ -382,7 +382,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "boondocks",
             name: "The Boondocks",
-            logoURL: "https://i.ytimg.com/vi/xQ-WEP7EFZA/hqdefault.jpg", // Boondocks Official Trailer
+            logoURL: "https://i.ytimg.com/vi/g37HT4-EtzE/hqdefault.jpg", // Boondocks Best Moments - 10M+ views
             streamURL: plutoURL("5f779283e2f12b0007566f13"),
             category: .comedy,
             description: "Huey & Riley 24/7 🔥😤",
@@ -398,7 +398,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "futurama",
             name: "Futurama",
-            logoURL: "https://i.ytimg.com/vi/T2wHJ2p0hZA/hqdefault.jpg", // Futurama Season 12
+            logoURL: "https://i.ytimg.com/vi/mYvLWHohOlY/hqdefault.jpg", // Futurama Best Moments - 20M+ views
             streamURL: plutoURL("5f779393b5680c0007d6fce0"),
             category: .comedy,
             description: "Good news everyone! 24/7 🚀",
@@ -1837,7 +1837,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "nasa-tv",
             name: "NASA TV",
-            logoURL: "https://i.ytimg.com/vi/21X5lGlDOfg/hqdefault.jpg",
+            logoURL: "https://i.ytimg.com/vi/nA9UZF-SZoQ/hqdefault.jpg", // NASA Artemis I Launch - official NASA channel
             streamURL: "https://ntv1.akamaized.net/hls/live/2014075/NASA-NTV1-HLS/master.m3u8",
             category: .documentary,
             description: "Space exploration 24/7",
@@ -2031,7 +2031,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "mtv",
             name: "MTV Pluto TV",
-            logoURL: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", // Never Gonna Give You Up - always reliable
+            logoURL: "https://i.ytimg.com/vi/fJ9rUzIMcZQ/hqdefault.jpg", // Bohemian Rhapsody - 1.6B views, always reliable
             streamURL: plutoURL("5ca672f515a62078d2ec0ad2"),
             category: .music,
             description: "Music television 24/7",

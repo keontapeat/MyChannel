@@ -335,6 +335,10 @@ struct MainTabView: View {
                 globalPlayer.pauseForFlicksEngagement()
             } else {
                 globalPlayer.resumeAfterLeavingFlicks()
+                // Stop Flicks in-feed video/audio when leaving tab (so audio doesn’t keep playing)
+                if selectedTab == .flicks {
+                    NotificationCenter.default.post(name: Notification.Name.pauseFlicksPlayback, object: nil)
+                }
             }
 
             // Switch tabs on the next runloop tick so the focus change doesn't eat the tap

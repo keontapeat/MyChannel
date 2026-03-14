@@ -30,6 +30,11 @@ struct MediaGridPickerView: View {
     @State private var selectedAssets: Set<String> = []
     @State private var showBatchActions = false
     
+    // Album picker (camera roll folders – like YouTube: Recents → select album)
+    @State private var selectedAlbumIdentifier: String? = nil // nil = Recents
+    @State private var showAlbumPicker = false
+    @State private var albumOptions: [AlbumOption] = []
+    
     enum SortOrder: String, CaseIterable {
         case newest = "Newest First"
         case oldest = "Oldest First"
@@ -54,15 +59,10 @@ struct MediaGridPickerView: View {
                 nuclearHeader
                 
                 if authStatus == .authorized || authStatus == .limited {
-                    // 🔥 SEARCH & FILTERS
-                    searchAndFilterBar
+                    // 🔥 ALBUM ROW (tap to pick folder like YouTube – Recents, Favorites, Videos, etc.)
+                    albumPickerRow
                     
-                    // 🔥 QUICK STATS
-                    if !assets.isEmpty {
-                        quickStatsBar
-                    }
-                    
-                    // 🔥 ENHANCED GRID
+                    // 🔥 VIDEO GRID
                     ScrollView {
                         LazyVGrid(columns: gridCols, spacing: 3) {
                             ForEach(filteredAssets, id: \.localIdentifier) { asset in
@@ -106,6 +106,18 @@ struct MediaGridPickerView: View {
                     export(asset: asset)
                 })
             }
+        }
+        .sheet(isPresented: $showAlbumPicker) {
+            AlbumPickerSheet(
+                albums: albumOptions,
+                currentIdentifier: selectedAlbumIdentifier,
+                onSelect: { identifier in
+                    selectedAlbumIdentifier = identifier
+                    showAlbumPicker = false
+                    loadAssets(from: identifier)
+                },
+                onDismiss: { showAlbumPicker = false }
+            )
         }
         .task {
             guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
@@ -184,23 +196,6 @@ struct MediaGridPickerView: View {
                         )
                 }
                 .buttonStyle(.plain)
-                
-                // 🔥 FILTER TOGGLE
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        showFilters.toggle()
-                    }
-                } label: {
-                    Image(systemName: showFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(showFilters ? AppTheme.Colors.primary : .white)
-                        .frame(width: 36, height: 36)
-                        .background(
-                            Circle()
-                                .fill(Color.white.opacity(showFilters ? 0.15 : 0.08))
-                        )
-                }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -214,7 +209,53 @@ struct MediaGridPickerView: View {
         .background(Color(red: 25/255, green: 25/255, blue: 25/255))
     }
     
-    // 🔥 SEARCH & FILTER BAR
+    // 🔥 ALBUM ROW – tap to pick folder (Recents, Favorites, Videos, etc.) like YouTube
+    private var albumPickerRow: some View {
+        Button {
+            HapticManager.shared.impact(style: .light)
+            if albumOptions.isEmpty {
+                loadAlbums()
+            }
+            showAlbumPicker = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.primary)
+                Text(selectedAlbumTitle)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white.opacity(0.06))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+    }
+    
+    private var selectedAlbumTitle: String {
+        if let id = selectedAlbumIdentifier,
+           let opt = albumOptions.first(where: { $0.identifier == id }) {
+            return opt.title
+        }
+        return "Recents"
+    }
+    
+    // 🔥 SEARCH & FILTER BAR (kept for possible future use; not shown in UI)
     private var searchAndFilterBar: some View {
         VStack(spacing: 12) {
             // Search bar
@@ -547,7 +588,8 @@ struct MediaGridPickerView: View {
             await MainActor.run { authStatus = current }
         }
         guard authStatus == .authorized || authStatus == .limited else { return }
-        loadAssets()
+        await MainActor.run { loadAlbums() }
+        loadAssets(from: selectedAlbumIdentifier)
     }
     
     // 🔥 FILTERED ASSETS
@@ -606,11 +648,18 @@ struct MediaGridPickerView: View {
         }
     }
     
-    private func loadAssets() {
+    private func loadAssets(from albumIdentifier: String?) {
         let options = PHFetchOptions()
         options.predicate = NSPredicate(format: "mediaType == %d", PHAssetMediaType.video.rawValue)
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-        let fetch = PHAsset.fetchAssets(with: .video, options: options)
+        
+        let fetch: PHFetchResult<PHAsset>
+        if let id = albumIdentifier, !id.isEmpty,
+           let collections = PHAssetCollection.fetchAssetCollections(withLocalIdentifiers: [id], options: nil).firstObject {
+            fetch = PHAsset.fetchAssets(in: collections, options: options)
+        } else {
+            fetch = PHAsset.fetchAssets(with: .video, options: options)
+        }
         
         var list: [PHAsset] = []
         fetch.enumerateObjects { asset, _, _ in
@@ -622,6 +671,69 @@ struct MediaGridPickerView: View {
         }
         self.assets = list
         preheatThumbnails(for: list)
+    }
+    
+    private func loadAlbums() {
+        var optionsList: [AlbumOption] = []
+        let videoOptions = PHFetchOptions()
+        videoOptions.predicate = NSPredicate(format: "mediaType == %d", PHAssetMediaType.video.rawValue)
+        videoOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        
+        // Recents (all videos) first
+        let allVideos = PHAsset.fetchAssets(with: .video, options: videoOptions)
+        var totalCount = 0
+        var firstAsset: PHAsset?
+        allVideos.enumerateObjects { asset, _, _ in
+            if mode == .flicks {
+                if asset.duration <= 60.5 { totalCount += 1; if firstAsset == nil { firstAsset = asset } }
+            } else {
+                totalCount += 1
+                if firstAsset == nil { firstAsset = asset }
+            }
+        }
+        optionsList.append(AlbumOption(identifier: nil, title: "Recents", count: totalCount, thumbnailAsset: firstAsset))
+        
+        // Smart albums (Videos, Favorites, etc.)
+        let smart = PHAssetCollection.fetchAssetCollections(with: .smartAlbum, subtype: .any, options: nil)
+        smart.enumerateObjects { collection, _, _ in
+            let title = collection.localizedTitle ?? "Album"
+            if title.lowercased() == "recents" || title.lowercased() == "all photos" { return }
+            let fetchIn = PHAsset.fetchAssets(in: collection, options: videoOptions)
+            var count = 0
+            var first: PHAsset?
+            fetchIn.enumerateObjects { asset, _, _ in
+                if mode == .flicks {
+                    if asset.duration <= 60.5 { count += 1; if first == nil { first = asset } }
+                } else {
+                    count += 1
+                    if first == nil { first = asset }
+                }
+            }
+            if count > 0 || title.lowercased() == "videos" || title.lowercased() == "favorites" {
+                optionsList.append(AlbumOption(identifier: collection.localIdentifier, title: title, count: count, thumbnailAsset: first))
+            }
+        }
+        
+        // User albums
+        let user = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: nil)
+        user.enumerateObjects { collection, _, _ in
+            let fetchIn = PHAsset.fetchAssets(in: collection, options: videoOptions)
+            var count = 0
+            var first: PHAsset?
+            fetchIn.enumerateObjects { asset, _, _ in
+                if mode == .flicks {
+                    if asset.duration <= 60.5 { count += 1; if first == nil { first = asset } }
+                } else {
+                    count += 1
+                    if first == nil { first = asset }
+                }
+            }
+            if count > 0 {
+                optionsList.append(AlbumOption(identifier: collection.localIdentifier, title: collection.localizedTitle ?? "Album", count: count, thumbnailAsset: first))
+            }
+        }
+        
+        albumOptions = optionsList
     }
     
     private func preheatThumbnails(for assets: [PHAsset]) {
@@ -654,6 +766,101 @@ struct MediaGridPickerView: View {
                         onPick(tempURL)
                     }
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Album picker (camera roll folders)
+private struct AlbumOption: Identifiable {
+    var id: String { identifier ?? "recents" }
+    let identifier: String?
+    let title: String
+    let count: Int
+    let thumbnailAsset: PHAsset?
+}
+
+private struct AlbumPickerSheet: View {
+    let albums: [AlbumOption]
+    let currentIdentifier: String?
+    let onSelect: (String?) -> Void
+    let onDismiss: () -> Void
+    
+    private let imageManager = PHCachingImageManager()
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(albums) { album in
+                    Button {
+                        HapticManager.shared.impact(style: .light)
+                        onSelect(album.identifier)
+                    } label: {
+                        HStack(spacing: 14) {
+                            AlbumThumbnailView(asset: album.thumbnailAsset, manager: imageManager)
+                                .frame(width: 56, height: 56)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(album.title)
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                Text("\(album.count) items")
+                                    .font(.system(size: 14, weight: .regular))
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            if (album.identifier == nil && currentIdentifier == nil) || (album.identifier == currentIdentifier) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                            }
+                        }
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("Select album")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        onDismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppTheme.Colors.primary)
+                }
+            }
+        }
+    }
+}
+
+private struct AlbumThumbnailView: View {
+    let asset: PHAsset?
+    let manager: PHCachingImageManager
+    @State private var image: UIImage?
+    
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                ZStack {
+                    Color(.systemGray5)
+                    Image(systemName: "video.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(Color(.systemGray3))
+                }
+            }
+        }
+        .onAppear {
+            guard let asset else { return }
+            let size = CGSize(width: 112, height: 112)
+            manager.requestImage(for: asset, targetSize: size, contentMode: .aspectFill, options: nil) { img, _ in
+                DispatchQueue.main.async { image = img }
             }
         }
     }

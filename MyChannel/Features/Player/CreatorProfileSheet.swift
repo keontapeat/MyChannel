@@ -211,10 +211,16 @@ struct CreatorProfileSheet: View {
             loadCreatorVideos()
         }
         .fullScreenCover(isPresented: $showingFullProfile) {
-            // Navigate to full profile view
-            ProfileView()
-                .environmentObject(authManager)
-                .environmentObject(appState)
+            // Show creator's channel (your profile if you're the creator, their public profile otherwise)
+            if creator.id == authManager.currentUser?.id {
+                ProfileView()
+                    .environmentObject(authManager)
+                    .environmentObject(appState)
+            } else {
+                PublicProfileView(user: creator)
+                    .environmentObject(authManager)
+                    .environmentObject(appState)
+            }
         }
     }
     

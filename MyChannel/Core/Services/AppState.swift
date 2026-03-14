@@ -315,22 +315,45 @@ class AppState: ObservableObject {
             if let watchLater = userData["watchLaterVideos"] as? [String] {
                 watchLaterVideos = Set(watchLater)
             }
-            
             if let liked = userData["likedVideos"] as? [String] {
                 likedVideos = Set(liked)
             }
-            
             if let playlists = userData["savedPlaylists"] as? [String] {
                 savedPlaylists = Set(playlists)
             }
-            
             if let subs = userData["subscriptions"] as? [String] {
                 subscriptions = Set(subs)
             }
-            
             if let history = userData["watchHistory"] as? [String] {
                 watchHistory = history
             }
+        }
+        // Load from Firestore too so data persists across devices and after reinstall
+        Task { await loadUserDataFromCloud() }
+    }
+    
+    /// Load user collections (likes, watch history, etc.) from Firestore so they persist across devices and sign-out/sign-in.
+    private func loadUserDataFromCloud() async {
+        guard let userId = currentUser?.id else { return }
+        do {
+            if let data = try await DataPersistenceService.shared.loadDualLayer(
+                UserCollectionsData.self,
+                key: "userData_\(userId)",
+                collectionPath: "userCollections",
+                docId: userId
+            ) {
+                await MainActor.run {
+                    likedVideos = Set(data.likedVideos)
+                    savedPlaylists = Set(data.savedPlaylists)
+                    watchHistory = data.watchHistory
+                    // Watch later & subscriptions come from UserCollectionsFirestoreService subcollections (hydrateCloudCollectionsIfNeeded / listeners)
+                    if !data.watchLaterVideos.isEmpty { watchLaterVideos = Set(data.watchLaterVideos) }
+                    if !data.subscriptions.isEmpty { subscriptions = Set(data.subscriptions) }
+                }
+                print("✅ User collections loaded from cloud: likes=\(data.likedVideos.count), watchHistory=\(data.watchHistory.count)")
+            }
+        } catch {
+            print("⚠️ loadUserDataFromCloud: \(error.localizedDescription)")
         }
     }
     

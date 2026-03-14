@@ -144,7 +144,7 @@ private struct OwnerFeaturedPickerView: View {
                 id: "owner_intro_video",
                 title: "Shot By Keonta Intro",
                 description: "Welcome to MyChannel - Shot By Keonta 🎬🔥",
-                thumbnailURL: "https://i.ytimg.com/vi/YQHsXMglC9A/maxresdefault.jpg",
+                thumbnailURL: "asset://ShotByKeontaThumbnail",
                 videoURL: url.absoluteString,
                 duration: 35,
                 viewCount: 0,

@@ -666,7 +666,7 @@ class FeaturedManager: ObservableObject {
                 .limit(to: maxFeatured)
                 .getDocuments()
             
-            // Load video details
+            // Load video details from Firestore
             var videos: [Video] = []
             for doc in snapshot.documents {
                 if let videoId = doc.data()["videoId"] as? String {
@@ -676,7 +676,16 @@ class FeaturedManager: ObservableObject {
                 }
             }
             
-            featuredVideos = videos
+            // 🔥 FIX: Prepend owner intro video so Edit shows 1/3 (same as Home)
+            let isOwner = [AuthenticationManager.shared.currentUser?.email, AppState.shared.currentUser?.email]
+                .compactMap { $0?.lowercased() }
+                .contains { $0 == "keontapeat@mychannel.live" || $0 == "keontapeat@gmail.com" }
+            if isOwner, let intro = FeaturedStore.ownerIntroVideo() {
+                let withoutIntro = videos.filter { $0.id != FeaturedStore.ownerIntroVideoId }
+                featuredVideos = Array([intro] + withoutIntro).prefix(maxFeatured).map { $0 }
+            } else {
+                featuredVideos = videos
+            }
         } catch {
             errorMessage = "Failed to load featured videos: \(error.localizedDescription)"
             print("❌ Error loading featured videos: \(error)")
@@ -719,6 +728,11 @@ class FeaturedManager: ObservableObject {
     }
     
     func removeFeaturedVideo(_ video: Video) async {
+        // Owner intro is bundled and not in Firestore; only remove from local list (reappears on next load)
+        if video.id == FeaturedStore.ownerIntroVideoId {
+            featuredVideos.removeAll { $0.id == video.id }
+            return
+        }
         #if canImport(FirebaseFirestore)
         do {
             let db = Firestore.firestore()

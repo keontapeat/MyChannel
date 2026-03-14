@@ -22,6 +22,7 @@ struct EditProfileView: View {
     @State private var location: String = ""
     @State private var website: String = ""
     @State private var showWebsiteOnProfile: Bool = false
+    @State private var showOnlineStatus: Bool = false
     @State private var selectedProfileImage: PhotosPickerItem?
     @State private var selectedBannerImage: PhotosPickerItem?
     @State private var selectedBannerVideo: PhotosPickerItem?
@@ -636,8 +637,12 @@ struct EditProfileView: View {
                     title: "Show Online Status",
                     description: "Let others see when you're active",
                     icon: "circle.fill",
-                    isOn: .constant(false)
+                    isOn: $showOnlineStatus
                 )
+                .onChange(of: showOnlineStatus) { _ in
+                    hasUnsavedChanges = true
+                    HapticManager.shared.impact(style: .light)
+                }
                 
                 Divider()
                     .padding(.leading, 56)
@@ -675,6 +680,7 @@ struct EditProfileView: View {
                            location != (user.location ?? "") ||
                            website != (user.website ?? "") ||
                            showWebsiteOnProfile != (user.showWebsiteOnProfile ?? false) ||
+                           showOnlineStatus != (user.showOnlineStatus ?? false) ||
                            selectedProfileUIImage != nil ||
                            selectedBannerUIImage != nil ||
                            selectedDefaultBannerImageURL != nil ||
@@ -699,6 +705,7 @@ struct EditProfileView: View {
         location = user.location ?? ""
         website = user.website ?? ""
         showWebsiteOnProfile = user.showWebsiteOnProfile ?? false
+        showOnlineStatus = user.showOnlineStatus ?? false
         isVideoCover = user.bannerVideoURL != nil
     }
     
@@ -789,6 +796,7 @@ struct EditProfileView: View {
                 location: location.isEmpty ? nil : location,
                 website: website.isEmpty ? nil : website,
                 showWebsiteOnProfile: showWebsiteOnProfile,
+                showOnlineStatus: showOnlineStatus,
                 socialLinks: user.socialLinks,
                 totalViews: user.totalViews,
                 totalEarnings: user.totalEarnings,

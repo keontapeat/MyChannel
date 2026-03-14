@@ -165,7 +165,7 @@ class AuthenticationManager: ObservableObject {
         do {
             let result = try await Auth.auth().signIn(withEmail: email, password: password)
             let fuser = result.user
-            currentUser = User(
+            let basicUser = User(
                 id: fuser.uid,
                 username: email.components(separatedBy: "@").first ?? "user",
                 displayName: fuser.displayName ?? email,
@@ -174,9 +174,12 @@ class AuthenticationManager: ObservableObject {
                 isVerified: fuser.isEmailVerified,
                 isCreator: true
             )
+            currentUser = basicUser
             isAuthenticated = true
             authState = .authenticated
             NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
+            // Load saved profile (Show Website, privacy, etc.) from Firestore so edits stick
+            await loadFullProfileAfterSignIn(uid: fuser.uid, fallback: basicUser)
         } catch {
             authState = .error(error.localizedDescription)
             throw error
@@ -201,7 +204,7 @@ class AuthenticationManager: ObservableObject {
                 change.displayName = display
                 try await change.commitChanges()
             }
-            currentUser = User(
+            let basicUser = User(
                 id: fuser.uid,
                 username: username.lowercased(),
                 displayName: display.isEmpty ? (fuser.displayName ?? username) : display,
@@ -210,10 +213,11 @@ class AuthenticationManager: ObservableObject {
                 isVerified: fuser.isEmailVerified,
                 isCreator: true
             )
+            currentUser = basicUser
             isAuthenticated = true
             authState = .authenticated
             NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
-            
+            await loadFullProfileAfterSignIn(uid: fuser.uid, fallback: basicUser)
             // 🔥 REGISTER REAL USER: Replace mock users with this real user
             if let user = currentUser {
                 Task {
@@ -237,7 +241,7 @@ class AuthenticationManager: ObservableObject {
         if FirebaseAppleAuthService.shared.isAvailable {
             do {
                 let payload = try await FirebaseAppleAuthService.shared.signIn()
-                currentUser = User(
+                let basicUser = User(
                     id: payload.uid,
                     username: payload.email?.components(separatedBy: "@").first ?? "apple_user",
                     displayName: payload.displayName,
@@ -246,10 +250,10 @@ class AuthenticationManager: ObservableObject {
                     isVerified: true,
                     isCreator: true
                 )
+                currentUser = basicUser
                 isAuthenticated = true
                 authState = .authenticated
-                
-                // 🔥 REGISTER REAL USER
+                await loadFullProfileAfterSignIn(uid: payload.uid, fallback: basicUser)
                 if let user = currentUser {
                     Task {
                         await SmartUserSeederService.shared.registerRealUser(user)
@@ -270,7 +274,7 @@ class AuthenticationManager: ObservableObject {
         #if canImport(FirebaseAuth)
         do {
             let payload = try await GoogleAuthService.shared.signIn()
-            currentUser = User(
+            let basicUser = User(
                 id: payload.uid,
                 username: payload.email.components(separatedBy: "@").first ?? "google_user",
                 displayName: payload.displayName,
@@ -279,10 +283,10 @@ class AuthenticationManager: ObservableObject {
                 isVerified: true,
                 isCreator: true
             )
+            currentUser = basicUser
             isAuthenticated = true
             authState = .authenticated
-            
-            // 🔥 REGISTER REAL USER
+            await loadFullProfileAfterSignIn(uid: payload.uid, fallback: basicUser)
             if let user = currentUser {
                 Task {
                     await SmartUserSeederService.shared.registerRealUser(user)
@@ -359,6 +363,8 @@ class AuthenticationManager: ObservableObject {
             createdAt: user.createdAt,
             location: user.location,
             website: user.website,
+            showWebsiteOnProfile: user.showWebsiteOnProfile,
+            showOnlineStatus: user.showOnlineStatus,
             socialLinks: user.socialLinks,
             totalViews: user.totalViews,
             totalEarnings: user.totalEarnings,
@@ -369,6 +375,24 @@ class AuthenticationManager: ObservableObject {
     }
     
     // MARK: - Private Helper Methods
+    
+    /// After sign-in, load full profile from Firestore so Edit Profile choices (Show Website, privacy, etc.) stick across reload and sign-out/sign-in.
+    private func loadFullProfileAfterSignIn(uid: String, fallback: User) async {
+        #if canImport(FirebaseFirestore)
+        do {
+            if let firestoreUser = try await UserFirestoreService.shared.fetchUser(id: uid) {
+                currentUser = firestoreUser
+                AppState.shared.updateUser(firestoreUser)
+                try? await DatabaseService.shared.saveUser(firestoreUser)
+                print("✅ Loaded saved profile from Firestore (showWebsiteOnProfile: \(firestoreUser.showWebsiteOnProfile ?? false))")
+            }
+            // else keep currentUser as fallback; first Edit Profile save will create Firestore doc
+        } catch {
+            print("⚠️ Could not load profile from Firestore: \(error.localizedDescription)")
+        }
+        #endif
+    }
+    
     private func setMockAuthenticatedUser() async { }
     
     private func setMockUserForEmail(_ email: String) async { }
@@ -390,6 +414,8 @@ class AuthenticationManager: ObservableObject {
             createdAt: user.createdAt,
             location: user.location,
             website: user.website,
+            showWebsiteOnProfile: user.showWebsiteOnProfile,
+            showOnlineStatus: user.showOnlineStatus,
             socialLinks: user.socialLinks,
             totalViews: user.totalViews,
             totalEarnings: user.totalEarnings,

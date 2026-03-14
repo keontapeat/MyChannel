@@ -27,11 +27,25 @@ service firebase.storage {
       allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
     }
     
+    // 👤 USER AVATARS - Anyone can read, authenticated users can upload (legacy path)
+    match /user-avatars/{filename} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null;  // Any authenticated user can upload their avatar
+      allow delete: if request.auth != null;  // Any authenticated user
+    }
+    
     // 🎨 BANNER IMAGES - Anyone can read, authenticated users can upload
     match /banner_images/{userId}/{filename} {
       allow read: if true;  // Public read
       allow write: if request.auth != null && request.auth.uid == userId;  // Owner only
       allow delete: if request.auth != null && request.auth.uid == userId;  // Owner only
+    }
+    
+    // 🎨 USER BANNERS - Anyone can read, authenticated users can upload (legacy path)
+    match /user-banners/{filename} {
+      allow read: if true;  // Public read
+      allow write: if request.auth != null;  // Any authenticated user can upload their banner
+      allow delete: if request.auth != null;  // Any authenticated user
     }
     
     // 🎬 BANNER VIDEOS - Anyone can read, authenticated users can upload

@@ -1,14 +1,90 @@
 import SwiftUI
 import UIKit
 
-// 🔥 THERMONUCLEAR: Massive cache for instant image loads
-fileprivate let appAsyncImageCache: NSCache<NSString, UIImage> = {
-    let cache = NSCache<NSString, UIImage>()
-    cache.totalCostLimit = 100_000_000  // 100MB (was unlimited - now enforced!)
-    cache.countLimit = 200  // 200 images max
-    print("⚡ [AppAsyncImage] Cache initialized: 100MB, 200 images")
-    return cache
-}()
+// 🔥🔥🔥 THERMONUCLEAR IMAGE LOADER - REQUEST DEDUPLICATION + CACHING 🔥🔥🔥
+@MainActor
+fileprivate final class ThermonuclearImageLoader {
+    static let shared = ThermonuclearImageLoader()
+    
+    // 🔥 LRU cache with 150MB limit
+    private let cache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.totalCostLimit = 150_000_000  // 150MB
+        cache.countLimit = 300
+        return cache
+    }()
+    
+    // 🔥 In-flight request deduplication
+    private var inFlightRequests: [String: Task<UIImage?, Never>] = [:]
+    
+    // 🔥 Shared high-performance session
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.httpMaximumConnectionsPerHost = 10
+        config.timeoutIntervalForRequest = 8
+        config.timeoutIntervalForResource = 12
+        config.urlCache = nil
+        return URLSession(configuration: config)
+    }()
+    
+    private init() {}
+    
+    func getCached(_ url: URL) -> UIImage? {
+        cache.object(forKey: url.absoluteString as NSString)
+    }
+    
+    func cache(_ image: UIImage, for url: URL) {
+        let cost = Int(image.size.width * image.size.height * 4)
+        cache.setObject(image, forKey: url.absoluteString as NSString, cost: cost)
+    }
+    
+    // 🔥 Load with deduplication - same URL = same request
+    func load(_ url: URL, timeout: TimeInterval = 10) async -> UIImage? {
+        let key = url.absoluteString
+        
+        // 🔥 INSTANT: Check cache first
+        if let cached = getCached(url) {
+            return cached
+        }
+        
+        // 🔥 Check if already loading - wait for existing request
+        if let existing = inFlightRequests[key] {
+            return await existing.value
+        }
+        
+        // 🔥 Start new request (use browser User-Agent for Google CDN so avatars load)
+        let task = Task<UIImage?, Never> {
+            do {
+                var request = URLRequest(url: url)
+                if let host = url.host?.lowercased(), host.contains("googleusercontent.com") || host.contains("ggpht.com") {
+                    request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+                }
+                let (data, response) = try await session.data(for: request)
+                guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else { return nil }
+                
+                // 🔥 Parse on background thread
+                let image = await Task.detached(priority: .userInitiated) {
+                    UIImage(data: data)
+                }.value
+                
+                if let image = image {
+                    await MainActor.run {
+                        self.cache(image, for: url)
+                    }
+                }
+                return image
+            } catch {
+                return nil
+            }
+        }
+        
+        inFlightRequests[key] = task
+        let result = await task.value
+        inFlightRequests.removeValue(forKey: key)
+        
+        return result
+    }
+}
 
 struct AppAsyncImage<Content: View, Placeholder: View>: View {
     let url: URL?
@@ -84,32 +160,33 @@ struct AppAsyncImage<Content: View, Placeholder: View>: View {
         guard let url else {
             if inPreviews() {
                 let image = generatePreviewImage(size: thumbnailTargetSize())
-                await MainActor.run { self.uiImage = image }
+                self.uiImage = image
             }
             return
         }
 
+        // 🔥 Check asset bundle first (instant)
         if let name = assetName(from: url), let img = UIImage(named: name) {
-            await MainActor.run { self.uiImage = img }
+            self.uiImage = img
             return
         }
 
         // If the URL is asset:// and image wasn't found, try a fallback query parameter
         if url.scheme == "asset", let fallback = fallbackURL(from: url) {
-            if let fetched = await tryFetch(url: fallback, timeout: 12.0) {
-                await MainActor.run { self.uiImage = fetched }
+            if let fetched = await ThermonuclearImageLoader.shared.load(fallback, timeout: 12.0) {
+                self.uiImage = fetched
                 return
             }
         }
 
         if inPreviews() {
             // Try fast real fetch; fallback to generated image
-            if let fetched = await tryFetch(url: url, timeout: 2.5) {
-                await MainActor.run { self.uiImage = fetched }
+            if let fetched = await ThermonuclearImageLoader.shared.load(url, timeout: 2.5) {
+                self.uiImage = fetched
                 return
             } else {
                 let image = generatePreviewImage(size: thumbnailTargetSize())
-                await MainActor.run { self.uiImage = image }
+                self.uiImage = image
                 return
             }
         }
@@ -117,45 +194,14 @@ struct AppAsyncImage<Content: View, Placeholder: View>: View {
         // Support local file URLs
         if url.isFileURL {
             if let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
-                await MainActor.run { self.uiImage = image }
+                self.uiImage = image
                 return
             }
         }
 
-        // Memory cache first
-        let cacheKey = NSString(string: url.absoluteString)
-        if let cached = appAsyncImageCache.object(forKey: cacheKey) {
-            await MainActor.run { self.uiImage = cached }
-            return
-        }
-
-        if let fetched = await tryFetch(url: url, timeout: 12.0) {
-            appAsyncImageCache.setObject(fetched, forKey: cacheKey)
-            await MainActor.run { self.uiImage = fetched }
-        }
-    }
-
-    private func tryFetch(url: URL, timeout: TimeInterval) async -> UIImage? {
-        var config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForResource = timeout
-        config.timeoutIntervalForRequest = timeout
-        // Ensure no lingering preview protocol classes intercept
-        if let anyStub = NSClassFromString("PreviewImageURLProtocol") {
-            config.protocolClasses = (config.protocolClasses ?? []).filter { $0 != anyStub }
-        }
-        if let bundleName = Bundle.main.infoDictionary?["CFBundleName"] as? String,
-           let namespacedStub = NSClassFromString("\(bundleName).PreviewImageURLProtocol") {
-            config.protocolClasses = (config.protocolClasses ?? []).filter { $0 != namespacedStub }
-        }
-
-        let session = URLSession(configuration: config)
-
-        do {
-            let (data, response) = try await session.data(from: url)
-            guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else { return nil }
-            return UIImage(data: data)
-        } catch {
-            return nil
+        // 🔥 THERMONUCLEAR: Use deduplicated loader with caching
+        if let fetched = await ThermonuclearImageLoader.shared.load(url) {
+            self.uiImage = fetched
         }
     }
 

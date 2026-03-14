@@ -34,6 +34,13 @@ final class LiveTVService {
     func thermonuclearPrewarm(count: Int = 10) {
         let channels = Array(LiveTVChannel.sampleChannels.prefix(count))
         ThermonuclearPrewarm.prewarmChannels(channels)
+        
+        // 🔥🔥🔥 ALSO prewarm YouTube thumbnails in parallel!
+        let logoURLs = channels.map { $0.logoURL }
+        Task { @MainActor in
+            ThermonuclearYouTubeThumbnailCache.shared.prewarmThumbnails(logoURLs)
+        }
+        
         print("🔥🔥🔥 [THERMONUCLEAR] Prewarmed \(count) channels for INSTANT thumbnails!")
     }
     
@@ -41,7 +48,7 @@ final class LiveTVService {
     func preloadFireChannels(count: Int = 6) async {
         let channels = Array(LiveTVChannel.sampleChannels.prefix(count))
         
-        // 🔥 Also prewarm thumbnails
+        // 🔥 Also prewarm thumbnails (streams + YouTube logos)
         thermonuclearPrewarm(count: count)
         
         await withTaskGroup(of: Void.self) { group in

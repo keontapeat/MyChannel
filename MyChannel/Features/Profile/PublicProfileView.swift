@@ -178,6 +178,7 @@ struct PublicProfileView: View {
             location: user.location,
             website: user.website,
             showWebsiteOnProfile: user.showWebsiteOnProfile,
+            showOnlineStatus: user.showOnlineStatus,
             socialLinks: user.socialLinks,
             followerCount: user.followerCount,
             followingCount: user.followingCount,

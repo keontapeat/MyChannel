@@ -45,6 +45,9 @@ struct LiveTVPlayerView: View {
     // 🔥 Stream error state
     @State private var streamError: StreamError?
     
+    // 🔥 Pluto blocks in-app streams and serves "unavailable" video; we use Apple fallback and show this banner
+    @State private var isPlayingPlutoFallback: Bool = false
+    
     enum StreamError {
         case networkError
         case streamUnavailable
@@ -214,6 +217,25 @@ struct LiveTVPlayerView: View {
                         .padding(.horizontal)
                         .padding(.top, 12)
                     )
+                    
+                    // 🔥 Pluto blocks in-app streams; when using demo fallback, show clear message
+                    if isPlayingPlutoFallback {
+                        HStack(spacing: 8) {
+                            Image(systemName: "info.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white.opacity(0.9))
+                            Text("Pluto TV is not available in this app. For full Pluto TV, use the Pluto TV app or pluto.tv. You're watching a demo stream.")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.9))
+                                .lineLimit(3)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.orange.opacity(0.85))
+                        .padding(.horizontal, 16)
+                        .padding(.top, 4)
+                    }
 
                     // Channel logos row with improved image loading
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -573,32 +595,32 @@ struct LiveTVPlayerView: View {
     }
 
     private func setupPlayer() {
-        // 🔥 Use LiveTVManager to get the best working URL
+        isPlayingPlutoFallback = false
+        // 🔥 Pluto TV blocks third-party apps and serves a "no longer available on this device" stream (spinning logo).
+        // Prefer the working Apple demo stream first for Pluto so users see real playback, with a banner.
         Task { @MainActor in
-            // Try to get a verified working URL first
             let workingURL = await LiveTVManager.shared.getWorkingStreamURL(for: channel)
+            var streamURLs: [String] = []
             
-            // Build fallback chain
-            var streamURLs = [workingURL]
-            
-            // Add the original URL if different
-            if workingURL != channel.streamURL {
-                streamURLs.append(channel.streamURL)
-            }
-            
-            // Add alternative Pluto URL format if this is a Pluto stream
-            if channel.streamURL.contains("pluto.tv") {
+            if channel.streamURL.contains("pluto.tv"), let fallback = channel.previewFallbackURL {
+                // Pluto restricts in-app: use working fallback first so something actually plays
+                streamURLs.append(fallback)
+                streamURLs.append(workingURL)
+                if workingURL != channel.streamURL { streamURLs.append(channel.streamURL) }
                 if let channelId = extractPlutoChannelId(from: channel.streamURL) {
                     let altURL = LiveTVChannel.plutoURLAlt(channelId)
-                    if !streamURLs.contains(altURL) {
-                        streamURLs.append(altURL)
-                    }
+                    if !streamURLs.contains(altURL) { streamURLs.append(altURL) }
                 }
-            }
-            
-            // Add the fallback URL last
-            if let fallback = channel.previewFallbackURL, !streamURLs.contains(fallback) {
-                streamURLs.append(fallback)
+            } else {
+                streamURLs = [workingURL]
+                if workingURL != channel.streamURL { streamURLs.append(channel.streamURL) }
+                if channel.streamURL.contains("pluto.tv"), let channelId = extractPlutoChannelId(from: channel.streamURL) {
+                    let altURL = LiveTVChannel.plutoURLAlt(channelId)
+                    if !streamURLs.contains(altURL) { streamURLs.append(altURL) }
+                }
+                if let fallback = channel.previewFallbackURL, !streamURLs.contains(fallback) {
+                    streamURLs.append(fallback)
+                }
             }
             
             setupPlayerWithURLs(streamURLs)
@@ -693,6 +715,12 @@ struct LiveTVPlayerView: View {
         self.player = player
         isPlaying = true
         retryCount = 0
+        // Show Pluto fallback banner when we're playing the demo stream instead of blocked Pluto content
+        if channel.streamURL.contains("pluto.tv"),
+           let fallback = channel.previewFallbackURL,
+           url.absoluteString == fallback {
+            isPlayingPlutoFallback = true
+        }
 
         configureAudioSession()
         setupTimeObserver()

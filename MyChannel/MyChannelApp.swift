@@ -32,9 +32,12 @@ struct MyChannelApp: App {
             print("🔥 Cleared thumbnail cache for fresh images")
         }
         
-        // 🔥🛡️ NUCLEAR VALIDATION - Crash immediately if any Wikipedia URLs exist
+        // 🔥🛡️ NUCLEAR VALIDATION - Only in DEBUG to avoid slowing launch
         // This prevents broken thumbnails from EVER appearing in the app
-        LiveTVChannel.validateAllChannelURLs()
+        #if DEBUG
+        // Moved to background to speed up launch
+        Task { LiveTVChannel.validateAllChannelURLs() }
+        #endif
         
         // Configure Firebase as early as possible to avoid startup warnings
         FirebaseManager.shared.configureIfPossible()
@@ -74,15 +77,31 @@ struct MyChannelApp: App {
                     print("⚡ [Performance] Monitoring active - shared instance initialized")
                     #endif
                     
-                    // 🔥 INITIALIZE SMART USER SEEDER: Populate app with AI-generated users
-                    Task {
-                        await SmartUserSeederService.shared.initialize()
-                    }
+                    // 🔥 STAGED INITIALIZATION - Delay heavy tasks to speed up launch
                     
-                    // 🔥 INITIALIZE LIVE TV: Fetch fresh channel data for 24/7 reliability
+                    // Stage 1: Critical services (immediate)
                     Task {
                         await LiveTVService.shared.initialize()
                         print("📺 [LiveTV] Initialized with fresh channel data")
+                    }
+                    
+                    // Stage 2: User data (slight delay)
+                    Task {
+                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s delay
+                        await SmartUserSeederService.shared.initialize()
+                    }
+                    
+                    // Stage 3: Prewarming (after UI is stable)
+                    Task {
+                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1s delay
+                        
+                        // Prewarm Live TV channels
+                        await LiveTVService.shared.preloadFireChannels(count: 12)
+                        
+                        // Prewarm video thumbnails
+                        let criticalURLs = Video.sampleVideos.prefix(20).compactMap { $0.posterCandidates.first }
+                        ImagePrefetcher.shared.prewarmCritical(urls: criticalURLs)
+                        print("🔥🔥🔥 [THERMONUCLEAR] Prewarmed \(criticalURLs.count) video thumbnails!")
                     }
                     
                     // Ensure auth state is checked at launch and sync to AppState
