@@ -174,20 +174,35 @@ struct FeaturedHeroCard: View {
         ZStack {
             // Media layer (poster + optional live autoplay)
             ZStack {
-                MultiSourceAsyncImage(
-                    urls: video.posterCandidates,
-                    content: { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    },
-                    placeholder: {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color(.systemGray6))
-                    }
-                )
+                // Use bundled asset for asset:// or Shot By Keonta intro so thumbnail always shows
+                if video.id == "shot_by_keonta_intro" {
+                    Image("ShotByKeontaThumbnail")
+                        .resizable()
+                        .scaledToFill()
+                } else if video.thumbnailURL.hasPrefix("asset://"),
+                          let assetName = video.thumbnailURL.split(separator: "/").last.map(String.init),
+                          !assetName.isEmpty {
+                    Image(assetName)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    MultiSourceAsyncImage(
+                        urls: video.posterCandidates,
+                        content: { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        },
+                        placeholder: {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color(.systemGray6))
+                        }
+                    )
+                }
 
-                if showLivePreview && (!isPreview || allowLiveInPreview) {
+                // Only show live preview overlay for actual live/YouTube content (not local files like Shot By Keonta intro)
+                if showLivePreview && (!isPreview || allowLiveInPreview),
+                   video.isLiveStream || video.contentSource == .youtube {
                     VideoLiveThumbnailView(video: video, cornerRadius: 16)
                         .transition(.opacity)
                         .allowsHitTesting(false)
@@ -265,12 +280,13 @@ struct FeaturedHeroCard: View {
                         Image(systemName: "play.fill")
                             .font(.system(size: 14, weight: .bold))
                         Text("Play")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.system(size: 16, weight: .semibold))
                     }
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .background(Capsule().fill(Color.white))
+                    .foregroundColor(.white)
+                    .frame(height: 48)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.black.opacity(0.7))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)
 
@@ -278,18 +294,22 @@ struct FeaturedHeroCard: View {
                     HapticManager.shared.impact(style: .light)
                     onAddToList()
                 }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: appState.isVideoInWatchLater(video.id) ? "checkmark" : "plus")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("My List")
-                            .font(.system(size: 14, weight: .semibold))
+                    let saved = appState.isVideoInWatchLater(video.id)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.white)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+                        Image(systemName: saved ? "checkmark" : "plus")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(saved ? AppTheme.Colors.primary : .black)
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(Capsule().fill(Color.white.opacity(0.2)))
+                    .frame(width: 48, height: 48)
+                    .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Watch later")
+                .accessibilityHint("Add or remove from your Watch Later")
             }
         }
         .padding(.horizontal, 14)

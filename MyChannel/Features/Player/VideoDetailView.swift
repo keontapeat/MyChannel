@@ -1306,12 +1306,25 @@ struct VideoDetailView: View {
                             return
                         }
                         
+                        // 🔥 ADS OFF BY DEFAULT: Only show video ads if you enable them (e.g. in Settings)
+                        let videoAdsEnabled = UserDefaults.standard.bool(forKey: "preferences.videoAdsEnabled")
+                        guard videoAdsEnabled else {
+                            print("🎬 Video ads disabled - playing directly")
+                            playerManager.setupPlayer(with: video)
+                            playerManager.applyFastStartTuning()
+                            if AppState.shared.preferredVideoQuality != .auto {
+                                playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
+                                videoQuality = AppState.shared.preferredVideoQuality
+                            }
+                            playerManager.requestAutoPlay()
+                            GlobalVideoPlayerManager.shared.registerLocalPlayer(video: video, player: playerManager.player)
+                            return
+                        }
+                        
                         print("🎯 Checking ads for video: \(video.title)")
                         print("💰 Video monetization: \(video.monetization?.isMonetized ?? false)")
                         
-                        // 🔥 YOUTUBE-STYLE ADS: Use new GoogleIMAAdManager for real skippable ads
                         let personalized = UserDefaults.standard.bool(forKey: "preferences.personalizedAdsEnabled")
-                        
                         adManager.requestPreRollAd(for: video, personalized: personalized) { [self] ad in
                             if let ad = ad {
                                 print("✅ [VideoDetailView] Got YouTube-style ad: \(ad.mediaURL)")
@@ -1395,7 +1408,10 @@ struct VideoDetailView: View {
                     // We'll track in the player observer when playback actually starts
                     // Fetch simple VMAP for preroll and pause content while ad plays
                     Task {
-                        // 🔥 NO VMAP ADS ON YOUR OWN VIDEOS
+                        // 🔥 NO VMAP ADS: Skip unless video ads are enabled (same as preroll)
+                        if !UserDefaults.standard.bool(forKey: "preferences.videoAdsEnabled") {
+                            return
+                        }
                         if let currentUser = AuthenticationManager.shared.currentUser,
                            video.creator.id == currentUser.id {
                             print("🎬 Skipping VMAP ads - your video!")

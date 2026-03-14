@@ -120,13 +120,6 @@
 	<string>MyChannel uses motion data to provide immersive viewing experiences, track workout progress during fitness videos, enable AR features, and detect device orientation for video recording.</string>
 	
 	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 📊 USER TRACKING (App Store Requirement) -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>NSUserTrackingUsageDescription</key>
-	<string>MyChannel uses this to provide personalized content recommendations, measure ad performance, and improve your experience. You can opt out anytime.</string>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
 	<!-- 🏥 HEALTH - FITNESS CONTENT -->
 	<!-- ═══════════════════════════════════════════════════════════════ -->
 	
@@ -337,10 +330,6 @@
 		<!-- Bluetooth - External devices -->
 		<string>bluetooth-central</string>
 		<string>bluetooth-peripheral</string>
-		<!-- External accessory - Pro audio/video equipment -->
-		<string>external-accessory</string>
-		<!-- Newsstand downloads (for content preloading) -->
-		<string>newsstand-content</string>
 	</array>
 	
 	<!-- ═══════════════════════════════════════════════════════════════ -->

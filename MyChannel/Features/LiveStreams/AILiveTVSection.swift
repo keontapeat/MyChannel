@@ -375,9 +375,61 @@ struct AILiveTVSection: View {
         _ = await healthCheck
         forYouSection = await recommendations
         
+        // 🔥🔥🔥 THERMONUCLEAR: Prewarm all thumbnails in parallel!
+        if let section = forYouSection {
+            var allURLs: [String] = []
+            allURLs.append(contentsOf: section.personalizedPicks.map { $0.channel.logoURL })
+            allURLs.append(contentsOf: section.trendingNow.map { $0.channel.logoURL })
+            allURLs.append(contentsOf: section.becauseYouWatched.map { $0.recommendedChannel.logoURL })
+            allURLs.append(contentsOf: section.perfectForRightNow.map { $0.channel.logoURL })
+            ThermonuclearYouTubeThumbnailCache.shared.prewarmThumbnails(allURLs)
+        }
+        
         withAnimation(.easeOut(duration: 0.2)) {
             isLoading = false
         }
+    }
+}
+
+// MARK: - Live TV static thumbnail (no stream = no error placeholders)
+private struct LiveTVStaticThumbnail: View {
+    let channel: LiveTVChannel
+    let width: CGFloat
+    let height: CGFloat
+    let cornerRadius: CGFloat
+    
+    init(channel: LiveTVChannel, width: CGFloat = 180, height: CGFloat = 100, cornerRadius: CGFloat = 12) {
+        self.channel = channel
+        self.width = width
+        self.height = height
+        self.cornerRadius = cornerRadius
+    }
+    
+    private var placeholder: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(channel.category.color.opacity(0.35))
+            .overlay(
+                VStack(spacing: 6) {
+                    Image(systemName: "tv.fill")
+                        .font(.system(size: min(width, height) * 0.22))
+                        .foregroundColor(channel.category.color)
+                    Text(channel.name)
+                        .font(.system(size: min(12, width * 0.065), weight: .bold))
+                        .foregroundColor(channel.category.color)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                }
+            )
+    }
+    
+    var body: some View {
+        SmartYouTubeThumbnailView(
+            url: channel.logoURL,
+            placeholder: { placeholder },
+            onLoaded: {}
+        )
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
 
@@ -389,59 +441,14 @@ private struct AIChannelCard: View {
     let confidence: Double
     let onSelect: () -> Void
     
-    @State private var streamReady = false
-    @State private var streamFailed = false
-    
     var body: some View {
-        // 🔥 Always show channel - use static thumbnail as fallback
         Button(action: {
             HapticManager.shared.impact(style: .medium)
             onSelect()
         }) {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
-                    // Thumbnail - show live stream or fallback to static image
-                    if streamFailed {
-                        // Fallback to static logo image
-                        AsyncImage(url: URL(string: channel.logoURL)) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(channel.category.color.opacity(0.3))
-                                .overlay(
-                                    Image(systemName: "tv.fill")
-                                        .font(.system(size: 32))
-                                        .foregroundColor(channel.category.color)
-                                )
-                        }
-                        .frame(width: 180, height: 100)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                    } else {
-                        LiveChannelThumbnailView(
-                            streamURL: channel.streamURL,
-                            posterURL: channel.logoURL,
-                            fallbackStreamURL: channel.previewFallbackURL,
-                            allowPlaybackInPreviews: false,
-                            channelCategory: channel.category,
-                            channelName: channel.name,
-                            channelId: channel.id,
-                            onStreamFailed: {
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    streamFailed = true
-                                }
-                            },
-                            onStreamReady: {
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    streamReady = true
-                                }
-                            }
-                        )
-                        .frame(width: 180, height: 100)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .allowsHitTesting(false)
-                    }
+                    LiveTVStaticThumbnail(channel: channel, width: 180, height: 100, cornerRadius: 12)
                     
                     // LIVE badge
                     VStack {
@@ -518,58 +525,14 @@ private struct TrendingChannelCard: View {
     let item: TrendingChannel
     let onSelect: () -> Void
     
-    @State private var streamReady = false
-    @State private var streamFailed = false
-    
     var body: some View {
-        // 🔥 Always show channel - use static thumbnail as fallback
         Button(action: {
             HapticManager.shared.impact(style: .medium)
             onSelect()
         }) {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
-                    // Thumbnail - show live stream or fallback to static image
-                    if streamFailed {
-                        AsyncImage(url: URL(string: item.channel.logoURL)) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(item.channel.category.color.opacity(0.3))
-                                .overlay(
-                                    Image(systemName: "tv.fill")
-                                        .font(.system(size: 28))
-                                        .foregroundColor(item.channel.category.color)
-                                )
-                        }
-                        .frame(width: 160, height: 90)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                    } else {
-                        LiveChannelThumbnailView(
-                            streamURL: item.channel.streamURL,
-                            posterURL: item.channel.logoURL,
-                            fallbackStreamURL: item.channel.previewFallbackURL,
-                            allowPlaybackInPreviews: false,
-                            channelCategory: item.channel.category,
-                            channelName: item.channel.name,
-                            channelId: item.channel.id,
-                            onStreamFailed: {
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    streamFailed = true
-                                }
-                            },
-                            onStreamReady: {
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    streamReady = true
-                                }
-                            }
-                        )
-                        .frame(width: 160, height: 90)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .allowsHitTesting(false)
-                    }
+                    LiveTVStaticThumbnail(channel: item.channel, width: 160, height: 90, cornerRadius: 12)
                     
                     // Rank badge
                     VStack {
@@ -616,58 +579,14 @@ private struct BecauseYouWatchedCard: View {
     let item: BecauseYouWatchedItem
     let onSelect: () -> Void
     
-    @State private var streamReady = false
-    @State private var streamFailed = false
-    
     var body: some View {
-        // 🔥 Always show channel - use static thumbnail as fallback
         Button(action: {
             HapticManager.shared.impact(style: .medium)
             onSelect()
         }) {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
-                    // Thumbnail - show live stream or fallback to static image
-                    if streamFailed {
-                        AsyncImage(url: URL(string: item.recommendedChannel.logoURL)) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(item.recommendedChannel.category.color.opacity(0.3))
-                                .overlay(
-                                    Image(systemName: "tv.fill")
-                                        .font(.system(size: 28))
-                                        .foregroundColor(item.recommendedChannel.category.color)
-                                )
-                        }
-                        .frame(width: 160, height: 90)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                    } else {
-                        LiveChannelThumbnailView(
-                            streamURL: item.recommendedChannel.streamURL,
-                            posterURL: item.recommendedChannel.logoURL,
-                            fallbackStreamURL: item.recommendedChannel.previewFallbackURL,
-                            allowPlaybackInPreviews: false,
-                            channelCategory: item.recommendedChannel.category,
-                            channelName: item.recommendedChannel.name,
-                            channelId: item.recommendedChannel.id,
-                            onStreamFailed: {
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    streamFailed = true
-                                }
-                            },
-                            onStreamReady: {
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    streamReady = true
-                                }
-                            }
-                        )
-                        .frame(width: 160, height: 90)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .allowsHitTesting(false)
-                    }
+                    LiveTVStaticThumbnail(channel: item.recommendedChannel, width: 160, height: 90, cornerRadius: 12)
                     
                     // LIVE badge
                     VStack {
@@ -706,58 +625,14 @@ private struct TimeBasedCard: View {
     let pick: TimeBasedPick
     let onSelect: () -> Void
     
-    @State private var streamReady = false
-    @State private var streamFailed = false
-    
     var body: some View {
-        // 🔥 Always show channel - use static thumbnail as fallback
         Button(action: {
             HapticManager.shared.impact(style: .medium)
             onSelect()
         }) {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
-                    // Thumbnail - show live stream or fallback to static image
-                    if streamFailed {
-                        AsyncImage(url: URL(string: pick.channel.logoURL)) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(pick.channel.category.color.opacity(0.3))
-                                .overlay(
-                                    Image(systemName: "tv.fill")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(pick.channel.category.color)
-                                )
-                        }
-                        .frame(width: 140, height: 80)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                    } else {
-                        LiveChannelThumbnailView(
-                            streamURL: pick.channel.streamURL,
-                            posterURL: pick.channel.logoURL,
-                            fallbackStreamURL: pick.channel.previewFallbackURL,
-                            allowPlaybackInPreviews: false,
-                            channelCategory: pick.channel.category,
-                            channelName: pick.channel.name,
-                            channelId: pick.channel.id,
-                            onStreamFailed: {
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    streamFailed = true
-                                }
-                            },
-                            onStreamReady: {
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    streamReady = true
-                                }
-                            }
-                        )
-                        .frame(width: 140, height: 80)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .allowsHitTesting(false)
-                    }
+                    LiveTVStaticThumbnail(channel: pick.channel, width: 140, height: 80, cornerRadius: 10)
                     
                     // LIVE badge
                     VStack {

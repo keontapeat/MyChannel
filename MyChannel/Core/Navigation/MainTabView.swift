@@ -14,7 +14,11 @@ struct MainTabView: View {
     @EnvironmentObject private var appState: AppState
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var globalPlayer: GlobalVideoPlayerManager
-    @StateObject private var inbox = NotificationsInboxService.shared
+    @StateObject private var inbox: NotificationsInboxService = {
+        let service = NotificationsInboxService.shared
+        print("📨 [MainTabView] Inbox service initialized")
+        return service
+    }()
     
     @State private var selectedTab: TabItem = .home
     @State private var previousTab: TabItem = .home
@@ -52,7 +56,14 @@ struct MainTabView: View {
         }
         .onAppear {
             setupInitialState()
-            if let uid = authManager.currentUser?.id { inbox.listen(userId: uid) }
+            
+            // 🔥 FIX: Delay inbox listener to prevent crash
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                if let uid = authManager.currentUser?.id {
+                    inbox.listen(userId: uid)
+                    print("📨 [MainTabView] Started inbox listener for user: \(uid)")
+                }
+            }
         }
         .onChange(of: authManager.currentUser) { newValue in
             print("🔄 MainTabView: authManager.currentUser changed to profileImageURL: \(newValue?.profileImageURL ?? "nil")")
@@ -219,9 +230,8 @@ struct MainTabView: View {
                     }
                 }
             
-            // 🔥 FIX: Tab bar properly positioned at bottom
-            VStack {
-                Spacer()
+            // 🔥 FIX: Tab bar at bottom without blocking scroll - only the bar receives touches
+            VStack(spacing: 0) {
                 CustomTabBar(
                     selectedTab: $selectedTab,
                     notificationBadges: notificationBadges,
@@ -235,9 +245,11 @@ struct MainTabView: View {
                 )
                 .padding(.bottom, 8)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .zIndex(1000)
-            .allowsHitTesting(true)
+            .frame(maxWidth: .infinity, alignment: .bottom)
+            .zIndex(10000)
+            .onAppear {
+                print("🎨 [CustomTabBar] Tab bar VStack appeared")
+            }
         }
         .ignoresSafeArea(.keyboard)
         .fullScreenCover(isPresented: $showingUpload) {
@@ -258,17 +270,9 @@ struct MainTabView: View {
         guard !isInitialized else { return }
         
         do {
-            // Clear fullscreen state on app launch
-            print("🔄 [MainTabView] setupInitialState - Clearing fullscreen state")
-            globalPlayer.showingFullscreen = false
+            print("🔄 [MainTabView] setupInitialState - Starting (lightweight)...")
             
-            // 🔥 CRITICAL FIX: If there's a video but no active player, clear the video too
-            if globalPlayer.currentVideo != nil && globalPlayer.player == nil {
-                print("⚠️ [MainTabView] Found stale video with no player - clearing")
-                globalPlayer.currentVideo = nil
-            }
-            
-            // Initialize notification badges safely
+            // Initialize notification badges immediately (lightweight)
             notificationBadges = [
                 .home: 0,
                 .flicks: 2,
@@ -280,12 +284,27 @@ struct MainTabView: View {
             // Sync user state safely
             appState.currentUser = authManager.currentUser
             isInitialized = true
-
-            // Ensure correct initial preview state
-            if selectedTab == .home {
-                NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
-            } else {
-                NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldPause"), object: nil)
+            
+            print("✅ [MainTabView] setupInitialState completed (lightweight ops only)")
+            
+            // 🔥 CRITICAL FIX: Delay heavy operations to prevent crash on launch
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                // Clear fullscreen state on app launch
+                print("🔄 [MainTabView] Delayed init - Clearing fullscreen state")
+                globalPlayer.showingFullscreen = false
+                
+                // 🔥 CRITICAL FIX: If there's a video but no active player, clear the video too
+                if globalPlayer.currentVideo != nil && globalPlayer.player == nil {
+                    print("⚠️ [MainTabView] Found stale video with no player - clearing")
+                    globalPlayer.currentVideo = nil
+                }
+                
+                // Ensure correct initial preview state
+                if selectedTab == .home {
+                    NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
+                } else {
+                    NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldPause"), object: nil)
+                }
             }
         } catch {
             handleError("Failed to initialize app state: \(error.localizedDescription)")
@@ -784,13 +803,13 @@ struct CustomTabBar: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 4)
+            .padding(.vertical, 12)
             .background(
                 ZStack {
                     Capsule()
                         .fill(Color.white)
                     Capsule()
-                        .stroke(AppTheme.Colors.textSecondary.opacity(0.08), lineWidth: 0.5)
+                        .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
                 }
             )
             .shadow(
@@ -820,9 +839,12 @@ struct CustomTabBar: View {
                     removal: .scale.combined(with: .opacity)
                 ))
             }
-        }
-        .padding(.horizontal, 24)
-        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: selectedTab)
+            }
+            .padding(.horizontal, 24)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: selectedTab)
+            .onAppear {
+                print("📱 [CustomTabBar] Tab bar rendered with selected tab: \(selectedTab.title)")
+            }
     }
 }
 
@@ -1337,82 +1359,85 @@ struct TVStaticOverlay: View {
         .preferredColorScheme(.light)
 }
 
-#Preview("MainTabView - Preview Safe") {
-    // Create a minimal version that definitely won't crash
-    VStack {
-        // Header
-        HStack {
-            Image("MyChannel")
-                .resizable()
-                .frame(width: 36, height: 36)
-                .cornerRadius(18)
-            
-            VStack(alignment: .leading) {
-                Text("MyChannel")
-                    .font(AppTheme.Typography.title2)
-                    .fontWeight(.bold)
-                
-                Text("Video Streaming Platform")
-                    .font(AppTheme.Typography.caption)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-            }
-            
-            Spacer()
-        }
-        .padding()
-        
-        Spacer()
-        
-        // Center content
-        VStack(spacing: 20) {
-            Image(systemName: "play.circle.fill")
-                .font(.system(size: 80))
-                .foregroundColor(AppTheme.Colors.primary)
-            
-            Text("MyChannel Tab View")
-                .font(AppTheme.Typography.title1)
-                .fontWeight(.bold)
-            
-            Text("Professional video streaming interface")
-                .font(AppTheme.Typography.body)
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-        }
-        
-        Spacer()
-        
-        // Bottom tab bar preview
-        HStack {
-            ForEach(TabItem.allCases.filter { $0 != .upload }, id: \.self) { tab in
-                VStack(spacing: 4) {
-                    Image(systemName: tab.iconName(isSelected: tab == .home))
+#Preview("Custom Tab Bar - Home Selected") {
+    CustomTabBarPreview(selectedTab: .home)
+}
+
+#Preview("Custom Tab Bar - Profile Selected") {
+    CustomTabBarPreview(selectedTab: .profile)
+}
+
+#Preview("Custom Tab Bar - Search Selected") {
+    CustomTabBarPreview(selectedTab: .search)
+}
+
+// MARK: - Preview Helper View
+private struct CustomTabBarPreview: View {
+    @State var selectedTab: TabItem
+    
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            // Content area
+            VStack {
+                // Header
+                HStack {
+                    Image(systemName: "play.rectangle.fill")
                         .font(.title2)
-                    Text(tab.title)
-                        .font(.caption)
-                }
-                .foregroundColor(tab == .home ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
-                .frame(maxWidth: .infinity)
-                
-                if tab == .flicks {
+                        .foregroundColor(AppTheme.Colors.primary)
+                    
+                    Text("MyChannel")
+                        .font(AppTheme.Typography.title2)
+                        .fontWeight(.bold)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "magnifyingglass")
+                        .font(.title3)
+                    Image(systemName: "bell")
+                        .font(.title3)
                     Circle()
-                        .fill(AppTheme.Colors.primary)
-                        .frame(width: 44, height: 44)
-                        .overlay(
-                            Image(systemName: "plus")
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(.white)
-                        )
-                        .frame(maxWidth: .infinity)
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(width: 32, height: 32)
                 }
+                .padding()
+                
+                // Content placeholder
+                VStack(spacing: 16) {
+                    Image(systemName: selectedTab.iconName(isSelected: true))
+                        .font(.system(size: 60))
+                        .foregroundColor(AppTheme.Colors.primary)
+                    
+                    Text(selectedTab.title)
+                        .font(AppTheme.Typography.title1)
+                        .fontWeight(.bold)
+                    
+                    Text("Tab bar preview - tap tabs to switch")
+                        .font(AppTheme.Typography.body)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .background(AppTheme.Colors.background)
+            
+            // Actual CustomTabBar component
+            VStack {
+                Spacer()
+                CustomTabBar(
+                    selectedTab: $selectedTab,
+                    notificationBadges: [.flicks: 2, .profile: 3],
+                    isHidden: false,
+                    onUploadTap: { print("Upload tapped") },
+                    onTabSelected: { tab in
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            selectedTab = tab
+                        }
+                    }
+                )
+                .padding(.bottom, 8)
             }
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
-        .background(Color.white)
-        .cornerRadius(24)
-        .padding()
+        .preferredColorScheme(.light)
     }
-    .background(AppTheme.Colors.background)
 }
 
 extension UIApplication {

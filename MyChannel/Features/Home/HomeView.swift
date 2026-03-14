@@ -384,12 +384,29 @@ struct HomeView: View {
             isCreator: true
         )
 
-        // Resolve local video in app bundle
-        let localPath = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4")
+        // 🔥 Try to find the local video file (check both names)
+        var localPath: String? = nil
+        
+        // Try simplified name first
+        if let path = Bundle.main.path(forResource: "ShotByKeontaIntro4k", ofType: "mp4") {
+            localPath = path
+            print("📺 ✅ Found video: ShotByKeontaIntro4k.mp4")
+        }
+        // Try original name with spaces
+        else if let path = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4") {
+            localPath = path
+            print("📺 ✅ Found video: Shot By Keonta Intro 4k.MP4")
+        }
+        else {
+            print("📺 ⚠️ Shot By Keonta video NOT found in bundle - using fallback")
+        }
+        
         let videoURL = localPath.map { URL(fileURLWithPath: $0).absoluteString } ?? "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
 
-        // Poster thumbnail
-        let poster = "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
+        // 🔥 Use local thumbnail from Assets.xcassets (extracted from video at 2 seconds)
+        // This ensures the thumbnail always loads instantly and matches the actual video
+        let poster = "asset://ShotByKeontaThumbnail"
+        print("📺 [HomeView] Shot By Keonta intro thumbnail URL: \(poster)")
 
         return Video(
             id: "shot_by_keonta_intro",
@@ -607,7 +624,6 @@ struct MinimalContentSections: View {
     @State private var liveChannelsAPI: [LiveTVChannel] = []
     @State private var showLocalArtistsOnly: Bool = false
     @State private var selectedLiveTVChannel: LiveTVChannel?
-    @State private var showLiveTVPlayer: Bool = false
 
     private var friendVideoId: String { "friend_video_yt_71GJrAY54Ew" }
     private var friendChannelID: String { "UCITAM_FKtyKEq40aHVXFTcQ" }
@@ -664,8 +680,8 @@ struct MinimalContentSections: View {
         let localPath = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4")
         let videoURL = localPath.map { URL(fileURLWithPath: $0).absoluteString } ?? "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
 
-        // Simple poster
-        let poster = "https://picsum.photos/seed/sbkeonta/1280/720"
+        // 🔥 Use local thumbnail from Assets.xcassets (extracted from video at 2 seconds)
+        let poster = "asset://ShotByKeontaThumbnail"
 
         // Monetization flag so ad preview and pre-roll show
         let adBreaks = Video.AdBreaks(preRoll: true, midRoll: false, postRoll: false)
@@ -1010,9 +1026,7 @@ struct MinimalContentSections: View {
             // 🔥🔥🔥 AI-POWERED LIVE TV SECTION - THE BEST IN THE WORLD 🔥🔥🔥
             AILiveTVSection(
                 onSelectChannel: { channel in
-                    // Navigate to player
                     selectedLiveTVChannel = channel
-                    showLiveTVPlayer = true
                 },
                 onSeeAll: { onSeeAllLiveTV() }
             )
@@ -1075,11 +1089,9 @@ struct MinimalContentSections: View {
                 group.addTask { await loadLiveChannelsAPI() }
             }
         }
-        .fullScreenCover(isPresented: $showLiveTVPlayer) {
-            if let channel = selectedLiveTVChannel {
-                LiveTVPlayerView(channel: channel)
-                    .environmentObject(appState)
-            }
+        .fullScreenCover(item: $selectedLiveTVChannel) { channel in
+            LiveTVPlayerView(channel: channel)
+                .environmentObject(appState)
         }
     }
 
@@ -2219,9 +2231,22 @@ private struct TopMyChannelsSection: View {
                                             .stroke(AppTheme.Colors.primary, lineWidth: 3)
                                             .frame(width: 64, height: 64)
 
-                                        AppAsyncImage(url: URL(string: creator.avatar)) { img in
-                                            img.resizable().scaledToFill()
-                                        } placeholder: { Color.white }
+                                        MultiSourceAsyncImage(
+                                            urls: [
+                                                URL(string: creator.avatar),
+                                                URL(string: "https://ui-avatars.com/api/?name=\(creator.name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "channel")&size=128&background=e0e0e0&color=666")
+                                            ].compactMap { $0 },
+                                            content: { img in img.resizable().scaledToFill() },
+                                            placeholder: {
+                                                Circle()
+                                                    .fill(Color(.systemGray5))
+                                                    .overlay(
+                                                        Image(systemName: "person.fill")
+                                                            .font(.system(size: 24))
+                                                            .foregroundColor(Color(.systemGray3))
+                                                    )
+                                            }
+                                        )
                                         .frame(width: 58, height: 58)
                                         .clipShape(Circle())
                                     }

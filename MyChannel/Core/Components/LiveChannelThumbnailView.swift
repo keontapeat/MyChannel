@@ -429,39 +429,50 @@ struct LiveChannelThumbnailView: View {
     
     // 🔥 STATIC POSTER IMAGE - Always shows the channel logo as fallback
     private var staticPosterImage: some View {
-        Group {
-            if let posterURL = posterURL, isValidImageURL(posterURL) {
-                // 🔥 Show the actual logo/poster image
-                AsyncImage(url: URL(string: posterURL)) { phase in
-                    switch phase {
-                    case .success(let image):
+        if let posterURL = posterURL {
+            // 🔥 Handle asset:// URLs (local Assets.xcassets images)
+            if posterURL.hasPrefix("asset://") {
+                let assetName = String(posterURL.dropFirst("asset://".count))
+                print("📸 [LiveChannelThumbnailView] Loading asset: \(assetName)")
+                
+                // 🔥 Use AppAsyncImage for robust asset:// URL handling
+                return AnyView(
+                    AppAsyncImage(url: URL(string: posterURL)) { image in
                         image
                             .resizable()
                             .scaledToFill()
                             .onAppear {
                                 if !posterLoaded {
                                     posterLoaded = true
+                                    print("✅ [LiveChannelThumbnailView] Asset loaded: \(assetName)")
                                 }
                             }
-                    case .failure(_):
-                        // Fallback to gradient placeholder if image fails
-                        categoryGradientPlaceholder
-                    case .empty:
-                        // Show gradient while loading
-                        categoryGradientPlaceholder
-                            .overlay(
-                                ProgressView()
-                                    .scaleEffect(0.6)
-                                    .tint(.white.opacity(0.7))
-                            )
-                    @unknown default:
+                    } placeholder: {
                         categoryGradientPlaceholder
                     }
-                }
+                )
+            } else if isValidImageURL(posterURL) {
+                // 🔥 Use smart image loader that detects YouTube error thumbnails
+                return AnyView(
+                    SmartYouTubeThumbnailView(
+                        url: posterURL,
+                        placeholder: { categoryGradientPlaceholder },
+                        onLoaded: {
+                            if !posterLoaded {
+                                posterLoaded = true
+                            }
+                        }
+                    )
+                )
             } else {
-                // No poster URL provided - show gradient placeholder
-                categoryGradientPlaceholder
+                // Invalid URL - show gradient placeholder
+                print("⚠️ [LiveChannelThumbnailView] Invalid URL: \(posterURL)")
+                return AnyView(categoryGradientPlaceholder)
             }
+        } else {
+            // No poster URL provided - show gradient placeholder
+            print("⚠️ [LiveChannelThumbnailView] No posterURL provided")
+            return AnyView(categoryGradientPlaceholder)
         }
     }
     
@@ -1093,6 +1104,241 @@ private struct ThermonuclearShimmer: View {
             withAnimation(.linear(duration: 1.0).repeatForever(autoreverses: false)) {
                 phase = 1
             }
+        }
+    }
+}
+
+// MARK: - 🔥🔥🔥 THERMONUCLEAR YOUTUBE THUMBNAIL CACHE 🔥🔥🔥
+/// Ultra-fast in-memory cache for validated YouTube thumbnails
+@MainActor
+final class ThermonuclearYouTubeThumbnailCache {
+    static let shared = ThermonuclearYouTubeThumbnailCache()
+    
+    // 🔥 LRU cache with 200 thumbnail limit
+    private var imageCache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 200
+        cache.totalCostLimit = 100 * 1024 * 1024 // 100MB
+        return cache
+    }()
+    
+    // 🔥 Track known-bad URLs (error thumbnails) - never retry these
+    private var badURLs: Set<String> = []
+    
+    // 🔥 In-flight requests to prevent duplicate network calls
+    private var inFlightRequests: [String: Task<UIImage?, Never>] = [:]
+    
+    // 🔥 Shared URLSession for maximum connection reuse
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 5
+        config.timeoutIntervalForResource = 10
+        config.httpMaximumConnectionsPerHost = 10 // 🔥 More parallel connections
+        config.urlCache = nil // No disk cache overhead
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: config)
+    }()
+    
+    private init() {}
+    
+    func getCached(_ url: String) -> UIImage? {
+        imageCache.object(forKey: url as NSString)
+    }
+    
+    func cache(_ image: UIImage, for url: String) {
+        let cost = Int(image.size.width * image.size.height * 4)
+        imageCache.setObject(image, forKey: url as NSString, cost: cost)
+    }
+    
+    func isBadURL(_ url: String) -> Bool {
+        badURLs.contains(url)
+    }
+    
+    func markBadURL(_ url: String) {
+        badURLs.insert(url)
+    }
+    
+    // 🔥🔥🔥 THERMONUCLEAR PREWARM - Load thumbnails in parallel! 🔥🔥🔥
+    func prewarmThumbnails(_ urls: [String]) {
+        Task {
+            await withTaskGroup(of: Void.self) { group in
+                for url in urls.prefix(20) { // Prewarm up to 20 at once
+                    group.addTask {
+                        _ = await self.getOrLoad(url)
+                    }
+                }
+            }
+            print("🔥🔥🔥 [ThermonuclearThumbnails] Prewarmed \(min(urls.count, 20)) thumbnails!")
+        }
+    }
+    
+    func getOrLoad(_ url: String) async -> UIImage? {
+        // 🔥 Check cache first - instant return
+        if let cached = getCached(url) {
+            return cached
+        }
+        
+        // 🔥 Check if known bad URL
+        if isBadURL(url) {
+            return nil
+        }
+        
+        // 🔥 Check if already loading - wait for existing request
+        if let existing = inFlightRequests[url] {
+            return await existing.value
+        }
+        
+        // 🔥 Start new request
+        let task = Task<UIImage?, Never> {
+            await loadAndValidate(url)
+        }
+        inFlightRequests[url] = task
+        
+        let result = await task.value
+        inFlightRequests.removeValue(forKey: url)
+        
+        return result
+    }
+    
+    private func loadAndValidate(_ url: String) async -> UIImage? {
+        guard let imageURL = URL(string: url) else { return nil }
+        
+        do {
+            let (data, _) = try await session.data(from: imageURL)
+            
+            // 🔥 Parse image AND validate on background thread in one shot
+            let result = await Task.detached(priority: .userInitiated) { () -> UIImage? in
+                guard let uiImage = UIImage(data: data) else { return nil }
+                
+                // 🔥 ULTRA-FAST yellow detection
+                if Self.isYouTubeErrorThumbnailFast(uiImage) {
+                    return nil
+                }
+                
+                return uiImage
+            }.value
+            
+            if let validImage = result {
+                cache(validImage, for: url)
+                return validImage
+            } else {
+                markBadURL(url)
+                return nil
+            }
+            
+        } catch {
+            markBadURL(url)
+            return nil
+        }
+    }
+    
+    /// 🔥🔥🔥 ULTRA-FAST YouTube error detection - samples only 4 pixels! 🔥🔥🔥
+    nonisolated private static func isYouTubeErrorThumbnailFast(_ image: UIImage) -> Bool {
+        guard let cgImage = image.cgImage,
+              let dataProvider = cgImage.dataProvider,
+              let data = dataProvider.data,
+              let bytes = CFDataGetBytePtr(data) else {
+            return false
+        }
+        
+        let width = cgImage.width
+        let height = cgImage.height
+        let bytesPerPixel = cgImage.bitsPerPixel / 8
+        let bytesPerRow = cgImage.bytesPerRow
+        let isLittleEndian = cgImage.bitmapInfo.contains(.byteOrder32Little)
+        
+        // 🔥 Sample only 4 strategic pixels - corners of center region
+        let points = [
+            (width / 4, height / 4),
+            (3 * width / 4, height / 4),
+            (width / 4, 3 * height / 4),
+            (3 * width / 4, 3 * height / 4)
+        ]
+        
+        var yellowCount = 0
+        
+        for (x, y) in points {
+            let offset = y * bytesPerRow + x * bytesPerPixel
+            let r = isLittleEndian ? bytes[offset + 2] : bytes[offset]
+            let g = isLittleEndian ? bytes[offset + 1] : bytes[offset + 1]
+            let b = isLittleEndian ? bytes[offset] : bytes[offset + 2]
+            
+            // Yellow: high R (>200), high G (>150), low B (<100)
+            if r > 200 && g > 150 && b < 100 {
+                yellowCount += 1
+            }
+        }
+        
+        // 2+ yellow pixels = error thumbnail (was 3; use 2 so we catch when red circle covers one corner)
+        return yellowCount >= 2
+    }
+    
+    /// Public check so views can reject error thumbnails before displaying (e.g. Live TV cards)
+    nonisolated static func isErrorThumbnail(_ image: UIImage) -> Bool {
+        isYouTubeErrorThumbnailFast(image)
+    }
+}
+
+// MARK: - 🔥🔥🔥 THERMONUCLEAR SMART YOUTUBE THUMBNAIL VIEW 🔥🔥🔥
+/// Blazing fast YouTube thumbnail with error detection and caching
+struct SmartYouTubeThumbnailView<Placeholder: View>: View {
+    let url: String
+    let placeholder: () -> Placeholder
+    let onLoaded: () -> Void
+    
+    @State private var loadedImage: UIImage?
+    @State private var showPlaceholder = false
+    
+    var body: some View {
+        ZStack {
+            if let image = loadedImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else if showPlaceholder {
+                placeholder()
+            } else {
+                // 🔥 Show placeholder immediately while loading (no spinner = faster perceived load)
+                placeholder()
+                    .opacity(0.8)
+            }
+        }
+        .task(id: url) {
+            await loadImage()
+        }
+    }
+    
+    @MainActor
+    private func loadImage() async {
+        // 🔥 INSTANT: Check cache first
+        if let cached = ThermonuclearYouTubeThumbnailCache.shared.getCached(url) {
+            if !ThermonuclearYouTubeThumbnailCache.isErrorThumbnail(cached) {
+                loadedImage = cached
+                onLoaded()
+            } else {
+                ThermonuclearYouTubeThumbnailCache.shared.markBadURL(url)
+                showPlaceholder = true
+            }
+            return
+        }
+        
+        // 🔥 INSTANT: Check if known bad URL
+        if ThermonuclearYouTubeThumbnailCache.shared.isBadURL(url) {
+            showPlaceholder = true
+            return
+        }
+        
+        // 🔥 Load with deduplication; reject error thumbnails so we never show yellow/red
+        if let image = await ThermonuclearYouTubeThumbnailCache.shared.getOrLoad(url) {
+            if ThermonuclearYouTubeThumbnailCache.isErrorThumbnail(image) {
+                ThermonuclearYouTubeThumbnailCache.shared.markBadURL(url)
+                showPlaceholder = true
+            } else {
+                loadedImage = image
+                onLoaded()
+            }
+        } else {
+            showPlaceholder = true
         }
     }
 }
