@@ -15,166 +15,146 @@ struct UniversityHomeView: View {
     @State private var isInitialLoad = true
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.sizeCategory) var sizeCategory
-    
+
     enum UniversityTab: String, CaseIterable, Identifiable {
         case dashboard = "Dashboard"
         case learn = "Learn"
         case certificates = "Certificates"
-        case achievements = "Achievements"
-        
+        case stats = "Stats"
+
         var id: String { rawValue }
         var icon: String {
             switch self {
             case .dashboard: return "chart.bar.fill"
-            case .learn: return "book.fill"
-            case .certificates: return "medal.fill"
-            case .achievements: return "trophy.fill"
-            }
-        }
-        
-        // 🔥 ACCESSIBILITY: Descriptive labels
-        var accessibilityLabel: String {
-            switch self {
-            case .dashboard: return "Dashboard, View your learning progress and active career paths"
-            case .learn: return "Learn, Browse and discover new learning content"
-            case .certificates: return "Certificates, View earned and available certificates"
-            case .achievements: return "Achievements, View badges, milestones, and leaderboard"
+            case .learn: return "play.square.stack.fill"
+            case .certificates: return "seal.fill"
+            case .stats: return "chart.line.uptrend.xyaxis"
             }
         }
     }
-    
+
     var body: some View {
         NavigationStack {
-            ZStack {
-                AppTheme.Colors.background
-                    .ignoresSafeArea()
-                
-                VStack(spacing: 0) {
-                    // Tab Selector
-                    tabSelector
-                    
-                    // Content with Loading State
-                    if viewModel.isLoading && isInitialLoad {
-                        // 🔥 SHIMMER: Show loading state
-                        ScrollView {
-                            VStack(spacing: 24) {
-                                HeroCardSkeleton()
-                                
-                                ForEach(0..<2) { _ in
-                                    CareerPathRowSkeleton()
-                                }
+            VStack(spacing: 0) {
+                tabBar
+                Divider()
+
+                if viewModel.isLoading && isInitialLoad {
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            HeroCardSkeleton()
+                            ForEach(0..<2) { _ in CareerPathRowSkeleton() }
+                        }
+                        .padding(.vertical, 20)
+                    }
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            switch selectedTab {
+                            case .dashboard: dashboardContent
+                            case .learn:     learnContent
+                            case .certificates: certificatesContent
+                            case .stats:     statsContent
                             }
-                            .padding(.vertical, 24)
                         }
-                    } else {
-                        ScrollView {
-                            LazyVStack(spacing: 24) {
-                                switch selectedTab {
-                                case .dashboard:
-                                    dashboardContent
-                                case .learn:
-                                    learnContent
-                                case .certificates:
-                                    certificatesContent
-                                case .achievements:
-                                    achievementsContent
-                                }
-                            }
-                            .padding(.vertical, 24)
-                        }
-                        .refreshable {
-                            await refreshContent()
-                        }
+                        .padding(.bottom, 32)
+                    }
+                    .refreshable { await refreshContent() }
+                }
+            }
+            .background(Color(.systemBackground))
+            .navigationTitle("MCU")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "graduationcap.fill")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(UniversityTheme.Colors.accent)
+                        Text("MyChannel University")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(Color(.label))
                     }
                 }
             }
-            .navigationTitle("MyChannel University")
-            .navigationBarTitleDisplayMode(.inline)
-            // 🔥 ACCESSIBILITY: Navigation title for VoiceOver
-            .accessibilityLabel("MyChannel University, AI-verified learning and certificates")
         }
         .onAppear {
             if isInitialLoad {
                 Task {
                     await viewModel.loadUserProgress()
                     isInitialLoad = false
-                    
-                    // 🔥 ACCESSIBILITY: Announce content loaded
-                    announceContentLoaded()
                 }
             }
         }
     }
-    
-    // MARK: - Refresh Content
-    
+
+    // MARK: - Refresh
+
     private func refreshContent() async {
         await viewModel.loadUserProgress()
-        
-        // 🔥 ACCESSIBILITY: Announce refresh complete
-        UIAccessibility.post(notification: .announcement, argument: "Content refreshed")
     }
-    
-    // MARK: - Accessibility Announcements
-    
-    private func announceContentLoaded() {
-        let hoursText = "\(Int(viewModel.totalUniversityHours)) hours of learning completed"
-        let certificatesText = viewModel.certificatesEarned == 1 ? "1 certificate earned" : "\(viewModel.certificatesEarned) certificates earned"
-        let pathsText = "\(viewModel.activeCareerPathsCount) active career paths"
-        
-        UIAccessibility.post(
-            notification: .announcement,
-            argument: "University dashboard loaded. \(hoursText), \(certificatesText), \(pathsText)"
-        )
-    }
-    
-    // MARK: - Tab Selector
-    private var tabSelector: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(UniversityTab.allCases) { tab in
-                    TabButton(
-                        title: tab.rawValue,
-                        icon: tab.icon,
-                        isSelected: selectedTab == tab
-                    ) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            selectedTab = tab
+
+    // MARK: - Tab Bar (underline style, no pills)
+
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(UniversityTab.allCases) { tab in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { selectedTab = tab }
+                    HapticManager.shared.impact(style: .light)
+                } label: {
+                    VStack(spacing: 6) {
+                        HStack(spacing: 5) {
+                            Image(systemName: tab.icon)
+                                .font(.system(size: 13, weight: .semibold))
+                            Text(tab.rawValue)
+                                .font(.system(size: 13, weight: .semibold))
                         }
-                        HapticManager.shared.impact(style: .light)
+                        .foregroundColor(selectedTab == tab ? Color(.label) : Color(.tertiaryLabel))
+                        .padding(.top, 12)
+
+                        Rectangle()
+                            .frame(height: 2)
+                            .foregroundColor(selectedTab == tab ? UniversityTheme.Colors.accent : Color.clear)
                     }
                 }
+                .frame(maxWidth: .infinity)
+                .buttonStyle(PlainButtonStyle())
             }
-            .padding(.horizontal, 20)
         }
-        .padding(.vertical, 16)
-        .background(.ultraThinMaterial)
+        .background(Color(.systemBackground))
     }
-    
-    // MARK: - Dashboard Content
+
+    // MARK: - Dashboard
+
     private var dashboardContent: some View {
-        VStack(spacing: 24) {
-            // 🔥 NEW: University Hero Card - Total Hours & Certificates
-            revolutionaryHeroCard
-            
-            // 🔥 NEW: Continue Learning Section (Incomplete Videos)
+        VStack(alignment: .leading, spacing: 0) {
+            statsHeroGrid
+                .padding(.top, 20)
+                .padding(.horizontal, 16)
+
+            sectionDivider
+
             if !viewModel.continueLearningVideos.isEmpty {
+                sectionHeader(title: "Continue Watching", icon: "play.fill")
+                    .padding(.horizontal, 16)
                 ContinueLearningSection(videos: viewModel.continueLearningVideos) { video in
-                    // Play video from where user left off
                     viewModel.playVideo(video)
                 }
+                sectionDivider
             }
-            
-            // 🔥 NEW: Certificate Progress Grid
+
             if !viewModel.careerPathsProgress.isEmpty {
+                sectionHeader(title: "Certificate Progress", icon: "seal.fill")
+                    .padding(.horizontal, 16)
                 CertificateProgressGrid(
                     careerPathsProgress: viewModel.careerPathsProgress.map { ($0, $1) }
                 ) { careerPath, progress in
                     viewModel.navigateToCareerPath(careerPath, progress: progress)
                 }
+                sectionDivider
             }
-            
-            // 🔥 NEW: Career Path Video Rows (Netflix Style)
+
             ForEach(viewModel.careerPathsWithVideos, id: \.careerPath.id) { item in
                 CareerPathVideoRow(
                     careerPath: item.careerPath,
@@ -183,407 +163,200 @@ struct UniversityHomeView: View {
                 ) { video in
                     viewModel.playUniversityVideo(video)
                 }
+                sectionDivider
             }
         }
     }
-    
-    // 🔥 NEW: Revolutionary Hero Card - Total University Hours & Career Credentials
-    private var revolutionaryHeroCard: some View {
-        ZStack {
-            // Animated Gradient Background
-            RoundedRectangle(cornerRadius: 24)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.15, green: 0.3, blue: 0.85),
-                            Color(red: 0.25, green: 0.15, blue: 0.65),
-                            Color(red: 0.1, green: 0.2, blue: 0.5)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+
+    // MARK: - Stats Hero Grid (replaces gradient hero card)
+
+    private var statsHeroGrid: some View {
+        VStack(spacing: 12) {
+            // Row 1 — primary stats
+            HStack(spacing: 12) {
+                statTile(
+                    value: "\(Int(viewModel.totalUniversityHours))",
+                    unit: "hrs",
+                    label: "Learning Time",
+                    icon: "clock.fill",
+                    iconColor: Color(.systemBlue)
                 )
-                .frame(height: 220)
-            
-            // Content
-            VStack(alignment: .leading, spacing: 20) {
-                // Header
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.white.opacity(0.2))
-                            .frame(width: 50, height: 50)
-                        
-                        Image(systemName: "graduationcap.fill")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("MyChannel University")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(.white)
-                        
-                        Text("AI-Tracked Career Credentials")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white.opacity(0.85))
-                    }
-                    
-                    Spacer()
-                }
-                
-                // Stats
-                HStack(spacing: 20) {
-                    // Total University Hours (BIG NUMBER)
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "clock.fill")
-                                .font(.system(size: 16, weight: .bold))
-                            Text("\(Int(viewModel.totalUniversityHours))")
-                                .font(.system(size: 36, weight: .bold))
-                            Text("hrs")
-                                .font(.system(size: 18, weight: .semibold))
-                                .offset(y: 8)
-                        }
-                        .foregroundColor(.white)
-                        
-                        Text("Total Learning Time")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                    
-                    Spacer()
-                    
-                    // Certificates Earned
-                    VStack(alignment: .trailing, spacing: 6) {
-                        HStack(spacing: 6) {
-                            Text("\(viewModel.certificatesEarned)")
-                                .font(.system(size: 32, weight: .bold))
-                            Image(systemName: "medal.fill")
-                                .font(.system(size: 18, weight: .bold))
-                        }
-                        .foregroundColor(.yellow)
-                        
-                        Text("Certificates Earned")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                }
-                
-                // Active Career Paths Indicator
-                HStack(spacing: 8) {
-                    Image(systemName: "chart.line.uptrend.xyaxis.circle.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                    
-                    Text("\(viewModel.activeCareerPathsCount) Active Career Paths")
-                        .font(.system(size: 14, weight: .semibold))
-                    
-                    Spacer()
-                    
-                    Text("Average AI Score: \(viewModel.averageAIScore)")
-                        .font(.system(size: 13, weight: .medium))
-                }
-                .foregroundColor(.white.opacity(0.9))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color.white.opacity(0.15))
-                .clipShape(Capsule())
-            }
-            .padding(24)
-        }
-        .shadow(color: Color(red: 0.15, green: 0.3, blue: 0.85).opacity(0.4), radius: 24, x: 0, y: 12)
-        .padding(.horizontal, 20)
-    }
-    
-    private func statBadge(icon: String, value: String, label: String) -> some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .bold))
-                Text(value)
-                    .font(.system(size: 14, weight: .bold))
-            }
-            .foregroundColor(.white)
-            
-            Text(label)
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.8))
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color.white.opacity(0.2))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-    }
-    
-    private var learningStatsCard: some View {
-        VStack(spacing: 20) {
-            HStack {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Your Learning Journey")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                    
-                    Text("Keep learning to unlock certificates")
-                        .font(.system(size: 14))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                }
-                
-                Spacer()
-            }
-            
-            // Progress Grid
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                progressCard(
-                    title: "Watch Time",
-                    value: "\(viewModel.progress.totalWatchHours)",
-                    suffix: "hours",
-                    icon: "play.circle.fill",
-                    color: .blue,
-                    progress: Double(viewModel.progress.totalWatchHours) / 1000.0
-                )
-                
-                progressCard(
-                    title: "Subjects Studied",
-                    value: "\(viewModel.progress.subjectsStudied)",
-                    suffix: "topics",
-                    icon: "books.vertical.fill",
-                    color: .purple,
-                    progress: Double(viewModel.progress.subjectsStudied) / 50.0
-                )
-                
-                progressCard(
-                    title: "Videos Completed",
+                statTile(
                     value: "\(viewModel.progress.videosCompleted)",
-                    suffix: "videos",
+                    unit: "videos",
+                    label: "Completed",
                     icon: "checkmark.circle.fill",
-                    color: .green,
-                    progress: Double(viewModel.progress.videosCompleted) / 500.0
+                    iconColor: UniversityTheme.Colors.verified
                 )
-                
-                progressCard(
-                    title: "AI Verification",
-                    value: "\(viewModel.progress.verificationScore)",
-                    suffix: "%",
+            }
+            // Row 2 — secondary stats
+            HStack(spacing: 12) {
+                statTile(
+                    value: "\(viewModel.certificatesEarned)",
+                    unit: viewModel.certificatesEarned == 1 ? "cert" : "certs",
+                    label: "Certificates",
+                    icon: "seal.fill",
+                    iconColor: UniversityTheme.Colors.certificateGold
+                )
+                statTile(
+                    value: "\(viewModel.streaksAndGoals.currentStreak)",
+                    unit: "days",
+                    label: "Streak",
+                    icon: "flame.fill",
+                    iconColor: Color(.systemOrange)
+                )
+            }
+            // Row 3 — tertiary stats
+            HStack(spacing: 12) {
+                statTile(
+                    value: "\(viewModel.averageAIScore)",
+                    unit: "%",
+                    label: "AI Score",
                     icon: "checkmark.shield.fill",
-                    color: .orange,
-                    progress: Double(viewModel.progress.verificationScore) / 100.0
+                    iconColor: UniversityTheme.Colors.accent
+                )
+                statTile(
+                    value: "#\(viewModel.globalRank)",
+                    unit: "",
+                    label: "Global Rank",
+                    icon: "chart.bar.fill",
+                    iconColor: Color(.systemPurple)
                 )
             }
         }
-        .padding(20)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
-        )
     }
-    
-    private func progressCard(title: String, value: String, suffix: String, icon: String, color: Color, progress: Double) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(color)
-                
-                Spacer()
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(value)
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Text(suffix)
-                    .font(.system(size: 12))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-            }
-            
-            Text(title)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-            
-            // Progress Bar
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(color.opacity(0.2))
-                        .frame(height: 6)
-                    
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(color)
-                        .frame(width: geometry.size.width * min(progress, 1.0), height: 6)
-                        .animation(.spring(response: 1.0, dampingFraction: 0.8), value: progress)
-                }
-            }
-            .frame(height: 6)
-        }
-        .padding(16)
-        .background(color.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(color.opacity(0.2), lineWidth: 1)
-        )
-    }
-    
-    private var activeLearningPaths: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Active Learning Paths")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Spacer()
-                
-                NavigationLink(destination: AllLearningPathsView()) {
-                    Text("See All")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.primary)
-                }
-            }
-            
-            ForEach(viewModel.activePaths) { path in
-                NavigationLink(destination: LearningPathDetailView(path: path)) {
-                    LearningPathCard(path: path)
-                }
-            }
-        }
-    }
-    
-    private var recentActivitySection: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Recent Activity")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Spacer()
-            }
-            
-            VStack(spacing: 12) {
-                ForEach(viewModel.recentActivity) { activity in
-                    ActivityCard(activity: activity)
-                }
-            }
-        }
-    }
-    
-    private var trendingSubjects: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Trending Subjects")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Spacer()
-            }
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(viewModel.trendingSubjects) { subject in
-                        NavigationLink(destination: SubjectDetailView(subject: subject)) {
-                            TrendingSubjectCard(subject: subject)
-                        }
+
+    private func statTile(value: String, unit: String, label: String, icon: String, iconColor: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(iconColor)
+                .frame(width: 32)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(value)
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundColor(Color(.label))
+                    if !unit.isEmpty {
+                        Text(unit)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(Color(.secondaryLabel))
                     }
                 }
+                Text(label)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(Color(.secondaryLabel))
             }
+
+            Spacer()
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .frame(maxWidth: .infinity)
     }
-    
+
+    private func sectionHeader(title: String, icon: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(UniversityTheme.Colors.accent)
+            Text(title)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(Color(.label))
+            Spacer()
+        }
+        .padding(.top, 24)
+        .padding(.bottom, 12)
+    }
+
+    private var sectionDivider: some View {
+        Divider()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+    }
+
     // MARK: - Learn Content
     private var learnContent: some View {
-        VStack(spacing: 24) {
-            // Search Bar
-            searchBar
-            
-            // Browse by Category
+        VStack(alignment: .leading, spacing: 0) {
+            learnSearchBar
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
+                .padding(.bottom, 4)
+
+            sectionDivider
+
+            sectionHeader(title: "Browse by Category", icon: "square.grid.2x2.fill")
+                .padding(.horizontal, 16)
             browseCategoriesSection
-            
-            // Recommended Paths
+                .padding(.horizontal, 16)
+
+            sectionDivider
+
+            sectionHeader(title: "Recommended for You", icon: "sparkles")
+                .padding(.horizontal, 16)
             recommendedPathsSection
-            
-            // All Subjects
+                .padding(.horizontal, 16)
+
+            sectionDivider
+
+            sectionHeader(title: "All Subjects", icon: "books.vertical.fill")
+                .padding(.horizontal, 16)
             allSubjectsGrid
+                .padding(.horizontal, 16)
         }
     }
-    
-    private var searchBar: some View {
-        HStack(spacing: 12) {
+
+    private var learnSearchBar: some View {
+        HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-            
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(Color(.secondaryLabel))
             TextField("Search subjects, skills, topics...", text: $viewModel.searchQuery)
-                .font(.system(size: 16))
-                .foregroundColor(AppTheme.Colors.textPrimary)
+                .font(.system(size: 15))
+                .foregroundColor(Color(.label))
         }
-        .padding(16)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
-        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
-    
+
     private var browseCategoriesSection: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Browse by Category")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Spacer()
-            }
-            
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(SubjectCategory.allCases) { category in
-                    NavigationLink(destination: CategorySubjectsView(category: category)) {
-                        CategoryCard(category: category)
-                    }
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+            ForEach(SubjectCategory.allCases) { category in
+                NavigationLink(destination: CategorySubjectsView(category: category)) {
+                    CategoryCard(category: category)
                 }
             }
         }
+        .padding(.bottom, 8)
     }
-    
+
     private var recommendedPathsSection: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Recommended for You")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Image(systemName: "star.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.yellow)
-                
-                Spacer()
-            }
-            
+        VStack(spacing: 10) {
             ForEach(viewModel.recommendedPaths) { path in
                 NavigationLink(destination: LearningPathDetailView(path: path)) {
                     RecommendedPathCard(path: path)
                 }
             }
         }
+        .padding(.bottom, 8)
     }
-    
+
     private var allSubjectsGrid: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 0) {
             HStack {
-                Text("All Subjects")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
                 Spacer()
-                
                 Text("\(viewModel.allSubjects.count) subjects")
-                    .font(.system(size: 14))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(Color(.secondaryLabel))
             }
-            
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+            .padding(.bottom, 10)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                 ForEach(viewModel.allSubjects) { subject in
                     NavigationLink(destination: SubjectDetailView(subject: subject)) {
                         SubjectCard(subject: subject)
@@ -591,227 +364,189 @@ struct UniversityHomeView: View {
                 }
             }
         }
+        .padding(.bottom, 8)
     }
     
     // MARK: - Certificates Content
     private var certificatesContent: some View {
-        VStack(spacing: 24) {
+        VStack(alignment: .leading, spacing: 0) {
+            if !viewModel.earnedCertificates.isEmpty {
+                sectionHeader(title: "Earned", icon: "checkmark.seal.fill")
+                    .padding(.horizontal, 16)
+                earnedCertificatesSection
+                    .padding(.horizontal, 16)
+                sectionDivider
+            }
+
+            sectionHeader(title: "In Progress", icon: "arrow.triangle.2.circlepath")
+                .padding(.horizontal, 16)
+            availableCertificatesSection
+                .padding(.horizontal, 16)
+
             if viewModel.earnedCertificates.isEmpty {
                 emptyCertificatesState
-            } else {
-                earnedCertificatesSection
+                    .padding(.horizontal, 16)
             }
-            
-            // Available Certificates
-            availableCertificatesSection
         }
+        .padding(.top, 8)
     }
-    
+
     private var emptyCertificatesState: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "medal.fill")
-                .font(.system(size: 80, weight: .light))
-                .foregroundColor(AppTheme.Colors.textTertiary)
-            
-            VStack(spacing: 12) {
+        VStack(spacing: 20) {
+            Image(systemName: "seal")
+                .font(.system(size: 56, weight: .thin))
+                .foregroundColor(Color(.tertiaryLabel))
+                .padding(.top, 40)
+
+            VStack(spacing: 8) {
                 Text("No Certificates Yet")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Text("Complete learning paths to earn AI-verified certificates")
-                    .font(.system(size: 16))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(Color(.label))
+
+                Text("Watch educational videos to earn AI-verified certificates you can share with employers.")
+                    .font(.system(size: 14))
+                    .foregroundColor(Color(.secondaryLabel))
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
             }
-            
+
             Button {
                 selectedTab = .learn
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "book.fill")
-                        .font(.system(size: 16, weight: .bold))
-                    Text("Start Learning")
-                        .font(.system(size: 17, weight: .bold))
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(AppTheme.Colors.primary)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 4)
-            }
-            .padding(.horizontal, 40)
-        }
-        .padding(.vertical, 60)
-    }
-    
-    private var earnedCertificatesSection: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Your Certificates")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Spacer()
-                
-                Text("\(viewModel.earnedCertificates.count)")
-                    .font(.system(size: 16, weight: .bold))
+                Text("Start Learning")
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(AppTheme.Colors.primary)
-                    .clipShape(Capsule())
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 12)
+                    .background(UniversityTheme.Colors.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
             }
-            
-            ForEach(viewModel.earnedCertificates) { certificate in
-                NavigationLink(destination: CertificateDetailView(certificate: certificate)) {
-                    CertificateCard(certificate: certificate)
-                }
-            }
-        }
-    }
-    
-    private var availableCertificatesSection: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Available Certificates")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Spacer()
-            }
-            
-            ForEach(viewModel.availableCertificates) { certificate in
-                NavigationLink(destination: CertificateRequirementsView(certificate: certificate)) {
-                    AvailableCertificateCard(certificate: certificate)
-                }
-            }
-        }
-    }
-    
-    // MARK: - Achievements Content
-    private var achievementsContent: some View {
-        VStack(spacing: 24) {
-            // Achievements Overview
-            achievementsOverview
-            
-            // Badges Earned
-            badgesSection
-            
-            // Milestones
-            milestonesSection
-            
-            // Leaderboard
-            leaderboardSection
-        }
-    }
-    
-    private var achievementsOverview: some View {
-        HStack(spacing: 16) {
-            achievementStat(
-                icon: "trophy.fill",
-                value: "\(viewModel.totalAchievements)",
-                label: "Total",
-                color: .yellow
-            )
-            
-            achievementStat(
-                icon: "star.fill",
-                value: "\(viewModel.totalPoints)",
-                label: "Points",
-                color: .purple
-            )
-            
-            achievementStat(
-                icon: "chart.bar.fill",
-                value: "#\(viewModel.globalRank)",
-                label: "Rank",
-                color: .blue
-            )
-        }
-    }
-    
-    private func achievementStat(icon: String, value: String, label: String, color: Color) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundColor(color)
-            
-            Text(value)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-            
-            Text(label)
-                .font(.system(size: 13))
-                .foregroundColor(AppTheme.Colors.textSecondary)
+            .padding(.bottom, 40)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
-        .background(color.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var earnedCertificatesSection: some View {
+        VStack(spacing: 12) {
+            ForEach(viewModel.earnedCertificates) { certificate in
+                NavigationLink(destination: CertificateDetailView(certificate: certificate)) {
+                    EarnedCertRow(certificate: certificate)
+                }
+            }
+        }
+        .padding(.bottom, 8)
+    }
+
+    private var availableCertificatesSection: some View {
+        VStack(spacing: 12) {
+            ForEach(viewModel.availableCertificates) { certificate in
+                NavigationLink(destination: CertificateRequirementsView(certificate: certificate)) {
+                    InProgressCertRow(certificate: certificate)
+                }
+            }
+        }
+        .padding(.bottom, 8)
     }
     
+    // MARK: - Stats Content
+    private var statsContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Overview stat row
+            statsOverviewRow
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
+
+            sectionDivider
+
+            sectionHeader(title: "Milestones", icon: "flag.fill")
+                .padding(.horizontal, 16)
+            milestonesSection
+                .padding(.horizontal, 16)
+
+            sectionDivider
+
+            sectionHeader(title: "Badges \(viewModel.badges.count)/\(viewModel.totalBadges)", icon: "rosette")
+                .padding(.horizontal, 16)
+            badgesSection
+                .padding(.horizontal, 16)
+
+            sectionDivider
+
+            sectionHeader(title: "Global Leaderboard", icon: "chart.bar.fill")
+                .padding(.horizontal, 16)
+            leaderboardSection
+                .padding(.horizontal, 16)
+        }
+    }
+
+    private var statsOverviewRow: some View {
+        HStack(spacing: 12) {
+            statsOverviewTile(icon: "trophy.fill", value: "\(viewModel.totalAchievements)", label: "Achievements", iconColor: UniversityTheme.Colors.certificateGold)
+            statsOverviewTile(icon: "star.fill", value: "\(viewModel.totalPoints)", label: "Points", iconColor: Color(.systemPurple))
+            statsOverviewTile(icon: "chart.bar.fill", value: "#\(viewModel.globalRank)", label: "Global Rank", iconColor: Color(.systemBlue))
+        }
+    }
+
+    private func statsOverviewTile(icon: String, value: String, label: String, iconColor: Color) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(iconColor)
+            Text(value)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(Color(.label))
+            Text(label)
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(Color(.secondaryLabel))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
     private var badgesSection: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Badges")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Spacer()
-                
-                Text("\(viewModel.badges.count)/\(viewModel.totalBadges)")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-            }
-            
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                ForEach(viewModel.badges) { badge in
-                    BadgeCard(badge: badge)
-                }
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            ForEach(viewModel.badges) { badge in
+                BadgeCard(badge: badge)
             }
         }
+        .padding(.bottom, 8)
     }
-    
+
     private var milestonesSection: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Milestones")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Spacer()
-            }
-            
-            ForEach(viewModel.milestones) { milestone in
-                MilestoneCard(milestone: milestone)
+        VStack(spacing: 0) {
+            ForEach(Array(viewModel.milestones.enumerated()), id: \.element.id) { index, milestone in
+                MilestoneRow(milestone: milestone, isLast: index == viewModel.milestones.count - 1)
             }
         }
+        .padding(.bottom, 8)
     }
-    
+
     private var leaderboardSection: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Global Leaderboard")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Spacer()
-                
-                NavigationLink(destination: GlobalLeaderboardView()) {
-                    Text("View All")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.primary)
+        VStack(spacing: 0) {
+            ForEach(Array(viewModel.topLearners.prefix(5).enumerated()), id: \.element.id) { index, learner in
+                UniversityLeaderboardRow(learner: learner)
+                if index < min(4, viewModel.topLearners.count - 1) {
+                    Divider().padding(.leading, 58)
                 }
             }
-            
-            VStack(spacing: 12) {
-                ForEach(viewModel.topLearners.prefix(5)) { learner in
-                    UniversityLeaderboardRow(learner: learner)
+
+            NavigationLink(destination: GlobalLeaderboardView()) {
+                HStack {
+                    Text("View Full Leaderboard")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(UniversityTheme.Colors.accent)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Color(.tertiaryLabel))
                 }
+                .padding(.vertical, 14)
             }
         }
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.bottom, 8)
     }
 }
 
@@ -819,514 +554,481 @@ struct UniversityHomeView: View {
 
 struct LearningPathCard: View {
     let path: LearningPath
-    
+
     var body: some View {
-        HStack(spacing: 16) {
-            // Icon
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(path.color.opacity(0.15))
-                    .frame(width: 60, height: 60)
-                
-                Image(systemName: path.icon)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundColor(path.color)
-            }
-            
-            // Info
-            VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 14) {
+            Image(systemName: path.icon)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(path.color)
+                .frame(width: 44, height: 44)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+
+            VStack(alignment: .leading, spacing: 4) {
                 Text(path.title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Color(.label))
                     .lineLimit(1)
-                
-                Text("\(path.videosCount) videos • \(path.estimatedHours)h")
+
+                Text("\(path.videosCount) videos · \(path.estimatedHours)h")
                     .font(.system(size: 13))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                
-                // Progress
-                GeometryReader { geometry in
+                    .foregroundColor(Color(.secondaryLabel))
+
+                GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(AppTheme.Colors.cardBackground)
-                            .frame(height: 6)
-                        
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(path.color)
-                            .frame(width: geometry.size.width * path.progress, height: 6)
+                        Capsule().fill(Color(.systemFill)).frame(height: 4)
+                        Capsule().fill(Color(.label).opacity(0.7))
+                            .frame(width: geo.size.width * path.progress, height: 4)
                     }
                 }
-                .frame(height: 6)
+                .frame(height: 4)
             }
-            
+
             Spacer()
-            
-            // Progress %
+
             Text("\(Int(path.progress * 100))%")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(path.color)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(Color(.secondaryLabel))
         }
-        .padding(16)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
-        )
+        .padding(14)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator), lineWidth: 0.5))
     }
 }
 
 struct ActivityCard: View {
     let activity: LearningActivity
-    
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: activity.icon)
-                .font(.system(size: 18, weight: .medium))
-                .foregroundColor(activity.color)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(Color(.label))
                 .frame(width: 36, height: 36)
-                .background(activity.color.opacity(0.15))
+                .background(Color(.secondarySystemBackground))
                 .clipShape(Circle())
-            
-            VStack(alignment: .leading, spacing: 4) {
+
+            VStack(alignment: .leading, spacing: 3) {
                 Text(activity.title)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(Color(.label))
+
                 Text(activity.timeAgo)
-                    .font(.system(size: 13))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(.secondaryLabel))
             }
-            
+
             Spacer()
         }
-        .padding(14)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.vertical, 10)
     }
 }
 
 struct TrendingSubjectCard: View {
     let subject: UniversitySubject
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(subject.color.opacity(0.15))
-                    .frame(width: 160, height: 100)
-                
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(.secondarySystemBackground))
+                    .frame(width: 160, height: 90)
+
                 Image(systemName: subject.icon)
-                    .font(.system(size: 36, weight: .semibold))
-                    .foregroundColor(subject.color)
+                    .font(.system(size: 30, weight: .medium))
+                    .foregroundColor(Color(.secondaryLabel))
             }
-            
-            VStack(alignment: .leading, spacing: 4) {
+
+            VStack(alignment: .leading, spacing: 3) {
                 Text(subject.title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Color(.label))
                     .lineLimit(2)
-                
-                HStack(spacing: 8) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "person.2.fill")
-                            .font(.system(size: 11))
-                        Text("\(subject.learnerCount)")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                    
-                    Text("•")
-                        .foregroundColor(AppTheme.Colors.textTertiary)
-                    
-                    Text("\(subject.videosCount) videos")
-                        .font(.system(size: 12))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                }
+
+                Text("\(subject.videosCount) videos")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(.secondaryLabel))
             }
         }
         .frame(width: 160)
-        .padding(12)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
-        )
+        .padding(10)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator), lineWidth: 0.5))
     }
 }
 
 struct CategoryCard: View {
     let category: SubjectCategory
-    
+
     var body: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(category.color.opacity(0.15))
-                    .frame(width: 56, height: 56)
-                
-                Image(systemName: category.icon)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundColor(category.color)
-            }
-            
+        HStack(spacing: 12) {
+            Image(systemName: category.icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(Color(.label))
+                .frame(width: 36, height: 36)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
             Text(category.rawValue)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
+                .foregroundColor(Color(.label))
                 .lineLimit(1)
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Color(.tertiaryLabel))
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
-        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator), lineWidth: 0.5))
     }
 }
 
 struct SubjectCard: View {
     let subject: UniversitySubject
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(subject.color.opacity(0.15))
-                    .frame(height: 80)
-                
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(.secondarySystemBackground))
+                    .frame(height: 70)
+
                 Image(systemName: subject.icon)
-                    .font(.system(size: 32, weight: .semibold))
-                    .foregroundColor(subject.color)
+                    .font(.system(size: 26, weight: .medium))
+                    .foregroundColor(Color(.secondaryLabel))
             }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(subject.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .lineLimit(2)
-                
-                Text("\(subject.videosCount) videos")
-                    .font(.system(size: 12))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-            }
+
+            Text(subject.title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Color(.label))
+                .lineLimit(2)
+
+            Text("\(subject.videosCount) videos")
+                .font(.system(size: 11))
+                .foregroundColor(Color(.secondaryLabel))
         }
-        .padding(12)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
-        )
+        .padding(10)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator), lineWidth: 0.5))
     }
 }
 
 struct RecommendedPathCard: View {
     let path: LearningPath
-    
+
     var body: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(path.color.opacity(0.15))
-                    .frame(width: 80, height: 80)
-                
-                Image(systemName: path.icon)
-                    .font(.system(size: 32, weight: .semibold))
-                    .foregroundColor(path.color)
-            }
-            
-            VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 14) {
+            Image(systemName: path.icon)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(Color(.label))
+                .frame(width: 52, height: 52)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            VStack(alignment: .leading, spacing: 4) {
                 Text(path.title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .lineLimit(2)
-                
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Color(.label))
+                    .lineLimit(1)
+
                 Text(path.description)
-                    .font(.system(size: 13))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(.secondaryLabel))
                     .lineLimit(2)
-                
-                HStack(spacing: 12) {
-                    Label("\(path.videosCount)", systemImage: "play.circle")
+
+                HStack(spacing: 10) {
+                    Label("\(path.videosCount) videos", systemImage: "play.circle")
                     Label("\(path.estimatedHours)h", systemImage: "clock")
                 }
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(path.color)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(Color(.secondaryLabel))
             }
-            
+
             Spacer()
-            
+
             Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.textTertiary)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Color(.tertiaryLabel))
         }
-        .padding(16)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(path.color.opacity(0.3), lineWidth: 1.5)
-        )
+        .padding(14)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator), lineWidth: 0.5))
     }
 }
 
-struct CertificateCard: View {
-    let certificate: Certificate
-    
-    var body: some View {
-        VStack(spacing: 16) {
-            // Certificate Visual
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(
-                        LinearGradient(
-                            colors: [certificate.color, certificate.color.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(height: 180)
-                
-                VStack(spacing: 12) {
-                    Image(systemName: "seal.fill")
-                        .font(.system(size: 48, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    Text(certificate.title)
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                    
-                    Text("Verified by AI")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
-                }
-                .padding(20)
-            }
-            
-            VStack(spacing: 8) {
-                Text("Earned on \(certificate.earnedDate?.formatted(date: .abbreviated, time: .omitted) ?? "N/A")")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                
-                HStack(spacing: 16) {
-                    Button {
-                        // Share certificate
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "square.and.arrow.up")
-                            Text("Share")
-                        }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.primary)
-                    }
-                    
-                    Button {
-                        // Download certificate
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.down.circle")
-                            Text("Download")
-                        }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.primary)
-                    }
-                }
-            }
-        }
-        .padding(16)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
-        )
-        .shadow(color: certificate.color.opacity(0.2), radius: 15, x: 0, y: 8)
-    }
-}
+// MARK: - Certificate Row Views (clean credential cards)
 
-struct AvailableCertificateCard: View {
+struct EarnedCertRow: View {
     let certificate: Certificate
-    
+
     var body: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(certificate.color.opacity(0.15))
-                    .frame(width: 60, height: 60)
-                
-                Image(systemName: "medal.fill")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundColor(certificate.color)
-            }
-            
-            VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 14) {
+            // Seal icon
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 26, weight: .bold))
+                .foregroundColor(UniversityTheme.Colors.certificateGold)
+                .frame(width: 48, height: 48)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            VStack(alignment: .leading, spacing: 4) {
                 Text(certificate.title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Text("\(certificate.requiredHours)h watch time required")
-                    .font(.system(size: 13))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                
-                // Progress Bar
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(AppTheme.Colors.cardBackground)
-                            .frame(height: 6)
-                        
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(certificate.color)
-                            .frame(width: geometry.size.width * certificate.progress, height: 6)
-                    }
-                }
-                .frame(height: 6)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(Color(.label))
+
+                Text("Earned \(certificate.earnedDate?.formatted(date: .abbreviated, time: .omitted) ?? "N/A")")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(.secondaryLabel))
+
+                Text("AI Score: \(certificate.aiVerificationScore)%")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(UniversityTheme.Colors.verified)
             }
-            
+
             Spacer()
-            
-            VStack(spacing: 4) {
-                Text("\(Int(certificate.progress * 100))%")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(certificate.color)
-                
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(AppTheme.Colors.textTertiary)
+
+            VStack(spacing: 6) {
+                Button { } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(UniversityTheme.Colors.accent)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color(.tertiaryLabel))
             }
         }
-        .padding(16)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
-        )
+        .padding(14)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator), lineWidth: 0.5))
+    }
+}
+
+struct InProgressCertRow: View {
+    let certificate: Certificate
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 14) {
+                Image(systemName: "seal")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundColor(Color(.secondaryLabel))
+                    .frame(width: 44, height: 44)
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(certificate.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Color(.label))
+
+                    Text("\(Int(certificate.progress * 100))% complete · \(certificate.requiredHours)h required")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(.secondaryLabel))
+                }
+
+                Spacer()
+
+                Text("\(Int(certificate.progress * 100))%")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(Color(.label))
+            }
+
+            // Requirements checklist
+            VStack(spacing: 6) {
+                requirementRow(
+                    text: "\(certificate.requiredVideos) videos watched",
+                    done: certificate.progress >= 0.5
+                )
+                requirementRow(
+                    text: "\(certificate.requiredHours)h total watch time",
+                    done: certificate.progress >= 0.7
+                )
+                requirementRow(
+                    text: "AI verification score ≥ 70",
+                    done: certificate.aiVerificationScore >= 70
+                )
+            }
+            .padding(.leading, 58)
+
+            // Progress bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color(.systemFill)).frame(height: 3)
+                    Capsule()
+                        .fill(Color(.label).opacity(0.6))
+                        .frame(width: geo.size.width * certificate.progress, height: 3)
+                }
+            }
+            .frame(height: 3)
+            .padding(.leading, 58)
+        }
+        .padding(14)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator), lineWidth: 0.5))
+    }
+
+    private func requirementRow(text: String, done: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(done ? UniversityTheme.Colors.verified : Color(.tertiaryLabel))
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundColor(done ? Color(.label) : Color(.secondaryLabel))
+            Spacer()
+        }
     }
 }
 
 struct BadgeCard: View {
     let badge: Badge
-    
+
     var body: some View {
-        VStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(badge.color.opacity(0.15))
-                    .frame(width: 70, height: 70)
-                
-                Image(systemName: badge.icon)
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(badge.color)
-            }
-            
+        VStack(spacing: 8) {
+            Image(systemName: badge.isEarned ? badge.icon : "lock.fill")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundColor(badge.isEarned ? Color(.label) : Color(.tertiaryLabel))
+                .frame(width: 56, height: 56)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(Circle())
+                .overlay(
+                    Circle().stroke(
+                        badge.isEarned ? UniversityTheme.Colors.certificateGold.opacity(0.5) : Color.clear,
+                        lineWidth: 1.5
+                    )
+                )
+
             Text(badge.title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(badge.isEarned ? Color(.label) : Color(.tertiaryLabel))
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
         }
-        .padding(12)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(10)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator), lineWidth: 0.5))
     }
 }
 
-struct MilestoneCard: View {
+struct MilestoneRow: View {
     let milestone: Milestone
-    
+    let isLast: Bool
+
     var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: milestone.isCompleted ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundColor(milestone.isCompleted ? .green : AppTheme.Colors.textTertiary)
-            
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .top, spacing: 14) {
+            // Timeline dot
+            VStack(spacing: 0) {
+                Image(systemName: milestone.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(milestone.isCompleted ? UniversityTheme.Colors.verified : Color(.tertiaryLabel))
+
+                if !isLast {
+                    Rectangle()
+                        .fill(Color(.separator))
+                        .frame(width: 1)
+                        .frame(maxHeight: .infinity)
+                        .padding(.top, 4)
+                }
+            }
+            .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 3) {
                 Text(milestone.title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Color(.label))
+
                 Text(milestone.description)
-                    .font(.system(size: 13))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(.secondaryLabel))
+
+                if milestone.isCompleted {
+                    Text("+\(milestone.points) pts")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(UniversityTheme.Colors.verified)
+                }
             }
-            
+            .padding(.bottom, isLast ? 0 : 20)
+
             Spacer()
-            
-            if milestone.isCompleted {
-                Text("+\(milestone.points)")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.green)
-            }
         }
-        .padding(16)
-        .background(milestone.isCompleted ? Color.green.opacity(0.08) : AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(milestone.isCompleted ? Color.green.opacity(0.3) : AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
-        )
+        .padding(.vertical, 4)
     }
 }
 
 struct UniversityLeaderboardRow: View {
     let learner: Learner
-    
+
     var body: some View {
-        HStack(spacing: 16) {
-            // Rank Badge
-            ZStack {
-                Circle()
-                    .fill(rankColor.opacity(0.15))
-                    .frame(width: 36, height: 36)
-                
-                Text("#\(learner.rank)")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(rankColor)
-            }
-            
-            // Avatar
+        HStack(spacing: 14) {
+            Text(rankLabel)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundColor(rankColor)
+                .frame(width: 30)
+
             AsyncImage(url: URL(string: learner.avatarURL)) { image in
-                image.resizable()
+                image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
-                Circle().fill(AppTheme.Colors.cardBackground)
+                Circle().fill(Color(.secondarySystemBackground))
             }
-            .frame(width: 40, height: 40)
+            .frame(width: 36, height: 36)
             .clipShape(Circle())
-            
-            // Info
-            VStack(alignment: .leading, spacing: 4) {
+
+            VStack(alignment: .leading, spacing: 3) {
                 Text(learner.name)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Text("\(learner.certificates) certificates")
-                    .font(.system(size: 12))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Color(.label))
+
+                HStack(spacing: 6) {
+                    Text("\(learner.certificates) certs")
+                    Text("·")
+                    Text("\(learner.watchHours)h")
+                    Text("·")
+                    Label("\(learner.currentStreak)d", systemImage: "flame.fill")
+                }
+                .font(.system(size: 11))
+                .foregroundColor(Color(.secondaryLabel))
             }
-            
+
             Spacer()
-            
-            // Points
+
             Text("\(learner.points)")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(AppTheme.Colors.primary)
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundColor(Color(.label))
         }
-        .padding(14)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
-    
+
+    private var rankLabel: String {
+        switch learner.rank {
+        case 1: return "🥇"
+        case 2: return "🥈"
+        case 3: return "🥉"
+        default: return "#\(learner.rank)"
+        }
+    }
+
     private var rankColor: Color {
         switch learner.rank {
-        case 1: return .yellow
-        case 2: return .gray
-        case 3: return Color(red: 0.8, green: 0.5, blue: 0.2)
-        default: return AppTheme.Colors.primary
+        case 1: return UniversityTheme.Colors.certificateGold
+        case 2: return Color(.systemGray)
+        case 3: return Color(red: 0.72, green: 0.45, blue: 0.2)
+        default: return Color(.secondaryLabel)
         }
     }
 }

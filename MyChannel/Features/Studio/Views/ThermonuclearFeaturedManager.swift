@@ -19,6 +19,7 @@ struct ThermonuclearFeaturedManager: View {
     @State private var searchText = ""
     @State private var allVideos: [Video] = []
     @State private var isLoadingVideos = false
+    @State private var showAllVideos = false
     
     var body: some View {
         NavigationView {
@@ -78,40 +79,35 @@ struct ThermonuclearFeaturedManager: View {
     
     // MARK: - Header
     private var thermonuclearHeader: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(AppTheme.Colors.surface.opacity(0.6))
-                    .frame(width: 44, height: 44)
-                    .overlay(
-                        Image(systemName: "star.circle.fill")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.primary)
-                    )
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Image(systemName: "play.rectangle.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.primary)
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Featured Videos")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.primary)
                     
-                    Text("Pin up to 3 flagship videos on your Home feed")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    Text("Pin up to 20 videos on your Home feed")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(.secondary)
                 }
                 Spacer()
             }
             
-            Text("Keep this reel fresh with your premium drops. Viewers see it first thing on Home.")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundColor(AppTheme.Colors.textSecondary)
+            Text("Viewers see these first. Keep them fresh with your best content.")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundColor(.secondary)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .background(AppTheme.Colors.surface)
+        .padding(.vertical, 14)
+        .background(Color(.systemBackground))
         .overlay(
             Rectangle()
-                .fill(AppTheme.Colors.divider.opacity(0.3))
-                .frame(height: 1),
+                .fill(Color(.separator).opacity(0.5))
+                .frame(height: 0.5),
             alignment: .bottom
         )
     }
@@ -119,23 +115,23 @@ struct ThermonuclearFeaturedManager: View {
     // MARK: - Stats Bar
     private var statsBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 statCard(
-                    title: "Featured",
-                    value: "\(manager.featuredVideos.count)/3",
+                    title: "FEATURED",
+                    value: "\(manager.featuredVideos.count)/20",
                     subtitle: "Live on Home",
                     icon: "star.fill"
                 )
                 
                 statCard(
-                    title: "Slots Open",
-                    value: "\(max(0, 3 - manager.featuredVideos.count))",
+                    title: "SLOTS OPEN",
+                    value: "\(max(0, 20 - manager.featuredVideos.count))",
                     subtitle: "Ready to pin",
                     icon: "plus.circle"
                 )
                 
                 statCard(
-                    title: "Views",
+                    title: "VIEWS",
                     value: manager.totalViews,
                     subtitle: "From featured reel",
                     icon: "eye.fill"
@@ -144,43 +140,35 @@ struct ThermonuclearFeaturedManager: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
         }
-        .background(AppTheme.Colors.background)
+        .background(Color(.systemGroupedBackground))
     }
     
     private func statCard(title: String, value: String, subtitle: String, icon: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(AppTheme.Colors.surface.opacity(0.7))
-                    .frame(width: 32, height: 32)
-                    .overlay(
-                        Image(systemName: icon)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                    )
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.secondary)
                 
-                Text(title.uppercased())
+                Text(title)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .foregroundColor(.secondary)
             }
             
             Text(value)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(.primary)
             
             Text(subtitle)
                 .font(.system(size: 12, weight: .regular))
-                .foregroundColor(AppTheme.Colors.textSecondary)
+                .foregroundColor(.secondary)
         }
-        .padding(16)
-        .frame(width: 180, alignment: .leading)
+        .padding(14)
+        .frame(width: 160, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(AppTheme.Colors.surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1)
-                )
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.black.opacity(0.06), radius: 4, x: 0, y: 2)
         )
     }
     
@@ -216,17 +204,17 @@ struct ThermonuclearFeaturedManager: View {
             showingVideoSelector = true
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 18, weight: .semibold))
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .semibold))
                 Text("Add")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
             }
-            .foregroundColor(manager.canAddMore ? AppTheme.Colors.primary : .gray)
-            .padding(.horizontal, 12)
+            .foregroundColor(manager.canAddMore ? .primary : .secondary)
+            .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(
-                Capsule()
-                    .fill(manager.canAddMore ? AppTheme.Colors.primary.opacity(0.1) : Color.gray.opacity(0.1))
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color(.systemGray5))
             )
         }
         .disabled(!manager.canAddMore)
@@ -234,28 +222,19 @@ struct ThermonuclearFeaturedManager: View {
     
     // MARK: - Empty State
     private var emptyStateView: some View {
-        VStack(spacing: 24) {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(AppTheme.Colors.surface)
-                .frame(width: 120, height: 120)
-                .overlay(
-                    Image(systemName: "rectangle.stack.fill")
-                        .font(.system(size: 36, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1)
-                )
+        VStack(spacing: 20) {
+            Image(systemName: "play.rectangle")
+                .font(.system(size: 44, weight: .light))
+                .foregroundColor(.secondary)
             
-            VStack(spacing: 10) {
-                Text("No Featured Videos Yet")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+            VStack(spacing: 8) {
+                Text("No Featured Videos")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.primary)
                 
-                Text("Pin up to three marquee videos so your audience sees them first.")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                Text("Pin videos to the top of Home so every viewer sees them first.")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
             }
@@ -264,17 +243,17 @@ struct ThermonuclearFeaturedManager: View {
                 showingVideoSelector = true
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 17, weight: .semibold))
-                    Text("Add First Video")
-                        .font(.system(size: 16, weight: .semibold))
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Add Video")
+                        .font(.system(size: 15, weight: .semibold))
                 }
                 .foregroundColor(.white)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 22)
+                .padding(.vertical, 11)
                 .background(
-                    Capsule(style: .continuous)
-                        .fill(AppTheme.Colors.primary)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color(.label))
                 )
             }
         }
@@ -298,42 +277,69 @@ struct ThermonuclearFeaturedManager: View {
     private var videoSelectorSheet: some View {
         NavigationView {
             VStack(spacing: 0) {
-                // Search bar
-                HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+                // Search + scope toggle
+                VStack(spacing: 10) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.secondary)
+                        
+                        TextField(showAllVideos ? "Search all videos..." : "Search your videos...", text: $searchText)
+                            .font(.system(size: 15, weight: .regular))
+                            .autocorrectionDisabled()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(10)
                     
-                    TextField("Search your videos...", text: $searchText)
-                        .font(.system(size: 16, weight: .regular))
-                        .autocorrectionDisabled()
+                    Picker("Source", selection: $showAllVideos) {
+                        Text("My Videos").tag(false)
+                        Text("All Videos").tag(true)
+                    }
+                    .pickerStyle(.segmented)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(AppTheme.Colors.surface)
-                .cornerRadius(12)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .background(Color(.systemBackground))
+                .overlay(
+                    Rectangle()
+                        .fill(Color(.separator).opacity(0.5))
+                        .frame(height: 0.5),
+                    alignment: .bottom
+                )
                 
                 // Videos list
                 if isLoadingVideos {
+                    Spacer()
                     ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Spacer()
+                } else if filteredVideos.isEmpty {
+                    Spacer()
+                    VStack(spacing: 10) {
+                        Image(systemName: "video.slash")
+                            .font(.system(size: 36, weight: .light))
+                            .foregroundColor(.secondary)
+                        Text("No videos found")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 12) {
+                        LazyVStack(spacing: 1) {
                             ForEach(filteredVideos) { video in
                                 SelectableVideoRow(video: video, isSelected: manager.isVideoFeatured(video)) {
                                     await addVideo(video)
                                 }
                             }
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
+                        .padding(.bottom, 20)
                     }
                 }
             }
-            .navigationTitle("Select Video")
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle(showAllVideos ? "All Videos" : "My Videos")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -342,7 +348,7 @@ struct ThermonuclearFeaturedManager: View {
                     }
                 }
             }
-            .task {
+            .task(id: showAllVideos) {
                 await loadUserVideos()
             }
         }
@@ -361,17 +367,23 @@ struct ThermonuclearFeaturedManager: View {
     private func loadUserVideos() async {
         isLoadingVideos = true
         defer { isLoadingVideos = false }
+        allVideos = []
         
-        // Load user's videos from Firestore
         #if canImport(FirebaseFirestore)
         do {
             let db = Firestore.firestore()
-            let snapshot = try await db.collection("videos")
-                .whereField("creatorId", isEqualTo: AuthenticationManager.shared.currentUser?.id ?? "")
-                .order(by: "createdAt", descending: true)
-                .limit(to: 100)
-                .getDocuments()
+            var query = db.collection("videos")
+                .order(by: "viewCount", descending: true)
+                .limit(to: 200)
             
+            if !showAllVideos {
+                query = db.collection("videos")
+                    .whereField("creatorId", isEqualTo: AuthenticationManager.shared.currentUser?.id ?? "")
+                    .order(by: "createdAt", descending: true)
+                    .limit(to: 100)
+            }
+            
+            let snapshot = try await query.getDocuments()
             allVideos = snapshot.documents.compactMap { doc in
                 try? doc.data(as: Video.self)
             }
@@ -440,26 +452,37 @@ struct FeaturedVideoRow: View {
                 
                 // Thumbnail with drag indicator
                 ZStack(alignment: .topTrailing) {
-                    AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Rectangle()
-                            .fill(Color(.systemGray5))
+                    Group {
+                        if video.thumbnailURL.hasPrefix("asset://"),
+                           let assetName = video.thumbnailURL.split(separator: "/").last.map(String.init),
+                           !assetName.isEmpty {
+                            Image(assetName)
+                                .resizable()
+                                .scaledToFill()
+                        } else if !video.thumbnailURL.isEmpty, let url = URL(string: video.thumbnailURL) {
+                            AppAsyncImage(url: url) { img in
+                                img.resizable().scaledToFill()
+                            } placeholder: {
+                                Color(.systemGray5)
+                            }
+                        } else {
+                            Color(.systemGray5)
+                                .overlay(
+                                    Image(systemName: "play.rectangle")
+                                        .font(.system(size: 20, weight: .light))
+                                        .foregroundColor(.secondary)
+                                )
+                        }
                     }
                     .frame(width: 120, height: 68)
-                    .cornerRadius(8)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     
                     // Drag handle
                     Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white)
-                        .padding(6)
-                        .background(
-                            Circle()
-                                .fill(Color.black.opacity(0.45))
-                        )
+                        .padding(5)
+                        .background(Circle().fill(Color.black.opacity(0.5)))
                         .padding(4)
                 }
                 
@@ -573,62 +596,76 @@ struct SelectableVideoRow: View {
             }
         } label: {
             HStack(spacing: 12) {
-                // Thumbnail
-                AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Rectangle()
-                        .fill(Color(.systemGray5))
+                // Thumbnail — handles asset:// and remote URLs
+                Group {
+                    if video.thumbnailURL.hasPrefix("asset://"),
+                       let assetName = video.thumbnailURL.split(separator: "/").last.map(String.init),
+                       !assetName.isEmpty {
+                        Image(assetName)
+                            .resizable()
+                            .scaledToFill()
+                    } else if !video.thumbnailURL.isEmpty, let url = URL(string: video.thumbnailURL) {
+                        AppAsyncImage(url: url) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            Color(.systemGray5)
+                        }
+                    } else {
+                        Color(.systemGray5)
+                            .overlay(
+                                Image(systemName: "play.rectangle")
+                                    .font(.system(size: 18, weight: .light))
+                                    .foregroundColor(.secondary)
+                            )
+                    }
                 }
                 .frame(width: 120, height: 68)
-                .cornerRadius(8)
-                
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
                 // Info
                 VStack(alignment: .leading, spacing: 6) {
                     Text(video.title)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .foregroundColor(.primary)
                         .lineLimit(2)
-                    
+
                     HStack(spacing: 8) {
                         Label(video.formattedViewCount, systemImage: "eye.fill")
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        
+                            .foregroundColor(.secondary)
+
                         Text("•")
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        
+                            .foregroundColor(.secondary)
+
                         Text(video.formattedDuration)
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .foregroundColor(.secondary)
                     }
                 }
-                
+
                 Spacer()
-                
+
                 // Selection indicator
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(.green)
+                        .foregroundColor(.primary)
                 } else if isSelecting {
                     ProgressView()
                         .scaleEffect(0.8)
                 } else {
                     Image(systemName: "plus.circle")
                         .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.primary)
+                        .foregroundColor(.secondary)
                 }
             }
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.green.opacity(0.1) : AppTheme.Colors.surface)
+                    .fill(isSelected ? Color(.systemGray6) : Color(.systemBackground))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.green : AppTheme.Colors.divider.opacity(0.3), lineWidth: isSelected ? 2 : 1)
+                            .stroke(isSelected ? Color(.separator) : Color(.separator).opacity(0.4), lineWidth: 1)
                     )
             )
         }
@@ -643,7 +680,7 @@ class FeaturedManager: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    private let maxFeatured = 3
+    private let maxFeatured = 20
     
     var canAddMore: Bool {
         featuredVideos.count < maxFeatured
@@ -676,7 +713,6 @@ class FeaturedManager: ObservableObject {
                 }
             }
             
-            // 🔥 FIX: Prepend owner intro video so Edit shows 1/3 (same as Home)
             let isOwner = [AuthenticationManager.shared.currentUser?.email, AppState.shared.currentUser?.email]
                 .compactMap { $0?.lowercased() }
                 .contains { $0 == "keontapeat@mychannel.live" || $0 == "keontapeat@gmail.com" }
@@ -695,7 +731,7 @@ class FeaturedManager: ObservableObject {
     
     func addFeaturedVideo(_ video: Video) async {
         guard canAddMore else {
-            errorMessage = "Maximum 3 featured videos allowed"
+            errorMessage = "Maximum 20 featured videos allowed"
             return
         }
         

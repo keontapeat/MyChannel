@@ -180,7 +180,7 @@ struct ModernVideoPlayerView: View {
         globalPlayer.stopImmediately()
         globalPlayer.showingFullscreen = false
         Task { @MainActor in
-            if (try? await StoreKitService.shared.hasActiveSubscription()) == true {
+            if await StoreKitService.shared.hasActiveSubscription() {
                 playerViewModel.setupPlayer(with: video)
                 playerViewModel.play()
                 return
@@ -706,7 +706,7 @@ class VideoPlayerViewModel: ObservableObject {
             print("❌ Invalid video URL: \(video.videoURL)")
             return 
         }
-        resumeKey = (video.id as? String) ?? video.videoURL
+        resumeKey = video.id
         player = AVPlayer(url: url)
         addTimeObserver()
         setupNotifications()
@@ -771,24 +771,40 @@ class VideoPlayerViewModel: ObservableObject {
             forInterval: CMTime(seconds: 0.1, preferredTimescale: 1000),
             queue: .main
         ) { [weak self] time in
-            self?.currentTime = time.seconds
-            
-            if let duration = self?.player?.currentItem?.duration.seconds, duration.isFinite {
-                self?.duration = duration
-                self?.currentProgress = time.seconds / duration
-            }
-            // Persist resume position every ~5s
-            if let s = self {
-                if time.seconds - s.lastResumePersist >= 5 {
-                    s.lastResumePersist = time.seconds
-                    UserDefaults.standard.set(time.seconds, forKey: "resume_\(s.resumeKey)")
+            guard let self else { return }
+            Task { @MainActor in
+                self.currentTime = time.seconds
+                
+                if let duration = self.player?.currentItem?.duration.seconds, duration.isFinite {
+                    self.duration = duration
+                    self.currentProgress = time.seconds / duration
                 }
-                // GA4 quartiles
-                if s.duration > 0 {
-                    let pct = time.seconds / s.duration
-                    if pct >= 0.25 && !s.quartilesFired.contains(25) { s.quartilesFired.insert(25); Task { await AnalyticsService.shared.trackVideoQuartile(videoId: s.resumeKey, quartile: 25) } }
-                    if pct >= 0.50 && !s.quartilesFired.contains(50) { s.quartilesFired.insert(50); Task { await AnalyticsService.shared.trackVideoQuartile(videoId: s.resumeKey, quartile: 50) } }
-                    if pct >= 0.75 && !s.quartilesFired.contains(75) { s.quartilesFired.insert(75); Task { await AnalyticsService.shared.trackVideoQuartile(videoId: s.resumeKey, quartile: 75) } }
+                
+                if time.seconds - self.lastResumePersist >= 5 {
+                    self.lastResumePersist = time.seconds
+                    UserDefaults.standard.set(time.seconds, forKey: "resume_\(self.resumeKey)")
+                    
+                    // Update watch history progress
+                    if let video = self.currentVideo, self.duration > 0 {
+                        let progress = time.seconds / self.duration
+                        AppState.shared.updateHistoryProgress(contentId: video.id, progress: progress, position: time.seconds)
+                    }
+                }
+                
+                if self.duration > 0 {
+                    let pct = time.seconds / self.duration
+                    if pct >= 0.25 && !self.quartilesFired.contains(25) {
+                        self.quartilesFired.insert(25)
+                        Task { await AnalyticsService.shared.trackVideoQuartile(videoId: self.resumeKey, quartile: 25) }
+                    }
+                    if pct >= 0.50 && !self.quartilesFired.contains(50) {
+                        self.quartilesFired.insert(50)
+                        Task { await AnalyticsService.shared.trackVideoQuartile(videoId: self.resumeKey, quartile: 50) }
+                    }
+                    if pct >= 0.75 && !self.quartilesFired.contains(75) {
+                        self.quartilesFired.insert(75)
+                        Task { await AnalyticsService.shared.trackVideoQuartile(videoId: self.resumeKey, quartile: 75) }
+                    }
                 }
             }
         }

@@ -60,7 +60,7 @@ final class FeaturedStore: ObservableObject {
         // Listen to the featured_videos collection (same as ThermonuclearFeaturedManager uses)
         activeListener = db.collection("featured_videos")
             .order(by: "priority", descending: false)
-            .limit(to: 3)
+            .limit(to: 20)
             .addSnapshotListener { [weak self] snap, error in
                 guard let self = self else { return }
                 if let error = error {

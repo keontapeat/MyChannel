@@ -58,25 +58,39 @@ struct NuclearFlicksView: View {
     private let notificationFeedback = UINotificationFeedbackGenerator()
     
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                
-                if viewModel.isLoading && viewModel.flicks.isEmpty {
-                    loadingView
-                } else if let error = viewModel.error {
-                    errorView(error: error)
-                } else {
-                    flicksFeed
-                }
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            if viewModel.isLoading && viewModel.flicks.isEmpty {
+                loadingView
+            } else if let error = viewModel.error {
+                errorView(error: error)
+            } else {
+                flicksFeed
             }
-            .statusBarHidden()
-            .toolbar(.hidden, for: .navigationBar)
-            .sheet(item: $viewModel.commentsFlick) { flick in
-                CommentsModalView(video: flick.toVideo())
-            }
-            .sheet(item: $viewModel.shareFlick) { flick in
-                ShareModalView(video: flick.toVideo())
+        }
+        .ignoresSafeArea()
+        .statusBarHidden()
+        .sheet(item: $viewModel.commentsFlick) { flick in
+            CommentsModalView(video: flick.toVideo())
+        }
+        .sheet(item: $viewModel.shareFlick) { flick in
+            ShareModalView(video: flick.toVideo())
+        }
+        .fullScreenCover(item: $viewModel.selectedCreatorProfile) { user in
+            NavigationStack {
+                PublicProfileView(user: user)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button {
+                                viewModel.selectedCreatorProfile = nil
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                            }
+                        }
+                    }
             }
         }
         .task {
@@ -88,20 +102,25 @@ struct NuclearFlicksView: View {
         .onDisappear {
             GlobalVideoPlayerManager.shared.resumeAfterLeavingFlicks()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshFlicksFeed"))) { _ in
+            Task {
+                await viewModel.loadInitialFlicks()
+            }
+        }
     }
     
     // MARK: - Flicks Feed
     private var flicksFeed: some View {
         GeometryReader { geometry in
-            let w = geometry.size.width
-            let h = geometry.size.height
+            let screenWidth = geometry.size.width
+            let screenHeight = geometry.size.height
             ZStack {
-                // Vertical paging: TabView is horizontal by default, so rotate -90° so swipe-up = next
+                // Vertical paging via TabView with .page style - direct vertical scroll, no rotation trick
                 TabView(selection: $currentIndex) {
                     ForEach(Array(viewModel.flicks.enumerated()), id: \.element.id) { index, flick in
                         flickCard(flick: flick, index: index, geometry: geometry)
-                            .frame(width: h, height: w)
-                            .rotationEffect(.degrees(90))
+                            .frame(width: screenWidth, height: screenHeight)
+                            .ignoresSafeArea()
                             .tag(index)
                             .onAppear {
                                 handleFlickAppear(index: index)
@@ -112,9 +131,8 @@ struct NuclearFlicksView: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(width: h, height: w)
-                .rotationEffect(.degrees(-90))
-                .offset(x: (w - h) / 2, y: (h - w) / 2)
+                .frame(width: screenWidth, height: screenHeight)
+                .ignoresSafeArea()
                 .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 0.85), value: currentIndex)
                 .onChange(of: currentIndex) { newIndex in
                     handleIndexChange(newIndex)
@@ -166,7 +184,10 @@ struct NuclearFlicksView: View {
     
     // MARK: - Flick Card
     private func flickCard(flick: NuclearFlick, index: Int, geometry: GeometryProxy) -> some View {
-        ZStack {
+        let screenWidth = geometry.size.width
+        let screenHeight = geometry.size.height
+        
+        return ZStack {
             // Video player layer
             if index == currentIndex || abs(index - currentIndex) <= 1 {
                 flickVideoPlayer(flick: flick, isActive: index == currentIndex)
@@ -181,7 +202,7 @@ struct NuclearFlicksView: View {
                         Color.gray.opacity(0.3)
                     }
                 )
-                .frame(width: geometry.size.width, height: geometry.size.height)
+                .frame(width: screenWidth, height: screenHeight)
                 .clipped()
             }
             
@@ -206,13 +227,18 @@ struct NuclearFlicksView: View {
                     .transition(.opacity)
             }
         }
-        .frame(width: geometry.size.width, height: geometry.size.height)
+        .frame(width: screenWidth, height: screenHeight)
+        .clipped()
+        .ignoresSafeArea()
         // No DragGesture here so vertical swipes go to TabView for paging; use tap on video area to toggle UI
     }
     
     // MARK: - Video Player
     private func flickVideoPlayer(flick: NuclearFlick, isActive: Bool) -> some View {
-        Group {
+        let screenWidth = UIScreen.main.bounds.width  // video player needs absolute screen size
+        let screenHeight = UIScreen.main.bounds.height
+        
+        return Group {
             if flick.contentSource == Video.ContentSource.youtube, let ytId = flick.externalID {
                 YouTubePlayerView(
                     videoID: ytId,
@@ -222,7 +248,6 @@ struct NuclearFlicksView: View {
                     showControls: false
                 )
                 .background(Color.black)
-                .ignoresSafeArea()
             } else {
                 NuclearVideoPlayerView(
                     flick: flick,
@@ -231,135 +256,145 @@ struct NuclearFlicksView: View {
                 )
             }
         }
+        .frame(width: screenWidth, height: screenHeight)
+        .clipped()
+        .ignoresSafeArea()
     }
     
     // MARK: - UI Overlay
     @ViewBuilder
     private func flickUIOverlay(flick: NuclearFlick, geometry: GeometryProxy) -> some View {
-        let bottomSafeArea = geometry.safeAreaInsets.bottom
-        let horizontalPadding: CGFloat = 20
-        let actionButtonTrailing: CGFloat = 24
-        let infoRightPadding: CGFloat = 120
-        let tabBarReserved: CGFloat = 100
+        // Tab bar = 49pt + home indicator safe area. We read from real device safe area.
+        let bottomSafeArea = max(geometry.safeAreaInsets.bottom, 34)
+        // Total clearance below content so nothing hides behind the custom tab bar
+        let tabBarHeight: CGFloat = 83
+        let bottomInset: CGFloat = bottomSafeArea + tabBarHeight + 32
+        let actionButtonTrailing: CGFloat = 16
+        let infoRightPadding: CGFloat = 96  // leave room for right-side action buttons (width ~80)
         
-        ZStack(alignment: .top) {
-            // Tap on upper ~55% (video area) to hide UI; keeps buttons below clickable
-            Color.clear
-                .frame(maxWidth: .infinity)
-                .frame(height: geometry.size.height * 0.55)
-                .contentShape(Rectangle())
-                .onTapGesture(count: 1) {
-                    toggleUI()
-                }
+        ZStack {
+            // Tap on upper video area to toggle UI visibility
+            VStack {
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                    .frame(height: geometry.size.height * 0.55)
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 1) {
+                        toggleUI()
+                    }
+                Spacer()
+            }
             
+            // Bottom overlay: left info + right action buttons
             VStack(spacing: 0) {
                 Spacer()
                 
                 HStack(alignment: .bottom, spacing: 0) {
-                // Left side - Video info
-                VStack(alignment: .leading, spacing: 12) {
-                    // Creator info - 🔥 PERF: Use cached image
-                    HStack(spacing: 12) {
-                        Button {
-                            viewModel.navigateToCreator(flick.creator)
-                        } label: {
-                            AppAsyncImage(
-                                url: URL(string: flick.creator.profileImageURL ?? ""),
-                                content: { image in
-                                    image.resizable().aspectRatio(contentMode: .fill)
-                                },
-                                placeholder: {
-                                    Circle().fill(Color.white.opacity(0.3))
-                                }
-                            )
-                            .frame(width: 44, height: 44)
-                            .clipShape(Circle())
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white, lineWidth: 2)
-                            )
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 4) {
-                                Text(flick.creator.displayName)
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.white)
-                                
-                                if flick.creator.isVerified {
-                                    Image(systemName: "checkmark.seal.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.blue)
-                                }
+                    // Left side - Video info (title, creator, tags)
+                    VStack(alignment: .leading, spacing: 10) {
+                        // Creator row
+                        HStack(spacing: 10) {
+                            Button {
+                                viewModel.navigateToCreator(flick.creator)
+                            } label: {
+                                AppAsyncImage(
+                                    url: URL(string: flick.creator.profileImageURL),
+                                    content: { image in
+                                        image.resizable().aspectRatio(contentMode: .fill)
+                                    },
+                                    placeholder: {
+                                        Circle().fill(Color.white.opacity(0.3))
+                                    }
+                                )
+                                .frame(width: 40, height: 40)
+                                .clipShape(Circle())
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white, lineWidth: 1.5)
+                                )
                             }
                             
-                            Text("@\(flick.creator.username)")
-                                .font(.system(size: 14, weight: .regular))
-                                .foregroundColor(.white.opacity(0.8))
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    Text(flick.creator.displayName)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(.white)
+                                    
+                                    if flick.creator.isVerified {
+                                        Image(systemName: "checkmark.seal.fill")
+                                            .font(.system(size: 13))
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                                
+                                Text("@\(flick.creator.username)")
+                                    .font(.system(size: 13, weight: .regular))
+                                    .foregroundColor(.white.opacity(0.75))
+                            }
+                            
+                            // Follow button
+                            Button {
+                                viewModel.toggleFollow(creator: flick.creator)
+                                impactMedium.impactOccurred()
+                            } label: {
+                                Text(viewModel.isFollowing(creatorId: flick.creator.id) ? "Following" : "Follow")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 7)
+                                    .background(.ultraThinMaterial)
+                                    .cornerRadius(20)
+                            }
                         }
                         
-                        // Follow button (glassmorphism)
-                        Button {
-                            viewModel.toggleFollow(creator: flick.creator)
-                            impactMedium.impactOccurred()
-                        } label: {
-                            Text(viewModel.isFollowing(creatorId: flick.creator.id) ? "Following" : "Follow")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 8)
-                                .background(.ultraThinMaterial)
-                                .cornerRadius(20)
-                        }
-                    }
-                    
-                    // Video title
-                    Text(flick.title)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.white)
-                        .lineLimit(2)
-                    
-                    // Tags
-                    if !flick.tags.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
+                        // Video title
+                        Text(flick.title)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+                        
+                        // Tags
+                        if !flick.tags.isEmpty {
                             HStack(spacing: 8) {
-                                ForEach(flick.tags.prefix(5), id: \.self) { tag in
+                                ForEach(flick.tags.prefix(4), id: \.self) { tag in
                                     Text("#\(tag)")
-                                        .font(.system(size: 14, weight: .medium))
+                                        .font(.system(size: 13, weight: .medium))
                                         .foregroundColor(.white)
                                 }
                             }
                         }
-                    }
-                    
-                    // Music track
-                    if let musicTrack = flick.musicTrack {
-                        HStack(spacing: 8) {
-                            Image(systemName: "music.note")
-                                .font(.system(size: 12))
-                                .foregroundColor(.white)
-                            
-                            Text("\(musicTrack.title) • \(musicTrack.artist)")
-                                .font(.system(size: 12))
-                                .foregroundColor(.white)
-                                .lineLimit(1)
+                        
+                        // Music track
+                        if let musicTrack = flick.musicTrack {
+                            HStack(spacing: 6) {
+                                Image(systemName: "music.note")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.white)
+                                
+                                Text("\(musicTrack.title) • \(musicTrack.artist)")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+                            }
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.trailing, infoRightPadding)
+                    
+                    // Right side action buttons column
+                    actionButtons(
+                        flick: flick,
+                        bottomSafeArea: 0,
+                        trailingPadding: 0,
+                        tabBarReserved: 0
+                    )
+                    .frame(width: 72, alignment: .center)
                 }
-                .padding(.leading, horizontalPadding)
-                .padding(.trailing, infoRightPadding)
-                
-                Spacer()
-            }
-            .padding(.bottom, bottomSafeArea + tabBarReserved)
+                .padding(.horizontal, 16)
+                .padding(.bottom, bottomInset)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .overlay(alignment: .bottomTrailing) {
-                actionButtons(flick: flick, bottomSafeArea: bottomSafeArea, trailingPadding: actionButtonTrailing, tabBarReserved: tabBarReserved)
-            }
         }
-        .padding(.leading, 20)
-        .padding(.trailing, 16)
     }
     
     // MARK: - Action Buttons (Glassmorphism)
@@ -367,9 +402,9 @@ struct NuclearFlicksView: View {
         flick: NuclearFlick,
         bottomSafeArea: CGFloat,
         trailingPadding: CGFloat,
-        tabBarReserved: CGFloat = 100
+        tabBarReserved: CGFloat = 0
     ) -> some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 20) {
             // Like button
             actionButton(
                 icon: viewModel.isLiked(flickId: flick.id) ? "heart.fill" : "heart",
@@ -431,8 +466,8 @@ struct NuclearFlicksView: View {
                 .rotationEffect(.degrees(viewModel.albumArtRotation))
             }
         }
-        .padding(.trailing, max(trailingPadding, 20))
-        .padding(.bottom, bottomSafeArea + tabBarReserved)
+        .padding(.trailing, trailingPadding)
+        .padding(.bottom, tabBarReserved)
     }
     
     private func actionButton(icon: String, count: String, color: Color, scale: CGFloat = 1.0, action: @escaping () -> Void) -> some View {
@@ -565,11 +600,10 @@ struct NuclearFlicksView: View {
         withAnimation(.easeOut(duration: 0.3)) {
             showUI.toggle()
         }
-        impactLight.impactOccurred()
     }
     
     private func handleIndexChange(_ newIndex: Int) {
-        guard newIndex != previousIndex else { return }
+        guard newIndex != previousIndex, newIndex < viewModel.flicks.count else { return }
         
         // Track previous video watch time
         if let startTime = videoStartTime, previousIndex < viewModel.flicks.count {
@@ -589,6 +623,10 @@ struct NuclearFlicksView: View {
         // Update previous index
         previousIndex = newIndex
         
+        // Add to watch history
+        let flick = viewModel.flicks[newIndex]
+        AppState.shared.addToHistory(video: flick.toVideo(), progress: 1.0, position: flick.duration)
+        
         // Haptic feedback
         impactLight.impactOccurred()
         
@@ -604,7 +642,7 @@ struct NuclearFlicksView: View {
         
         // Track view
         Task {
-            await viewModel.trackView(flick: viewModel.flicks[newIndex])
+            await viewModel.trackView(flick: flick)
         }
     }
     
@@ -734,14 +772,41 @@ struct NuclearVideoPlayerView: View {
     @StateObject private var playerManager = VideoPlayerManager()
     
     var body: some View {
-        ZStack {
-            Color.black
-            
-            if let player = playerManager.player {
-                VideoPlayer(player: player)
-                    .aspectRatio(9/16, contentMode: .fill)
-                    .disabled(true)
+        GeometryReader { geo in
+            ZStack {
+                Color.black
+                
+                // Thumbnail while player is loading or not ready (prevents black screen)
+                AppAsyncImage(
+                    url: URL(string: flick.thumbnailURL),
+                    content: { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    },
+                    placeholder: {
+                        Color.gray.opacity(0.3)
+                    }
+                )
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
+                .opacity(playerManager.player != nil ? 0 : 1)
+                
+                // Video layer - fill entire screen
+                if let player = playerManager.player {
+                    FlicksPlayerLayerView(player: player, videoGravity: .resizeAspectFill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                }
+                
+                // Loading: white spinner only while loading (no orange dot)
+                if playerManager.isLoading {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(1.2)
+                }
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
         .ignoresSafeArea()
         .onAppear {
@@ -790,6 +855,7 @@ class NuclearFlicksViewModel: ObservableObject {
     
     @Published var commentsFlick: NuclearFlick?
     @Published var shareFlick: NuclearFlick?
+    @Published var selectedCreatorProfile: User?
     
     @Published var albumArtRotation: Double = 0
     
@@ -922,7 +988,16 @@ class NuclearFlicksViewModel: ObservableObject {
     }
     
     func navigateToCreator(_ creator: FlickCreator) {
-        // TODO: Navigate to creator profile
+        // Convert FlickCreator to User and navigate to profile
+        let user = User(
+            id: creator.id,
+            username: creator.username,
+            displayName: creator.displayName,
+            email: "",
+            profileImageURL: creator.profileImageURL,
+            isVerified: creator.isVerified
+        )
+        selectedCreatorProfile = user
     }
     
     // MARK: - Preloading
@@ -1066,8 +1141,10 @@ class NuclearFlicksViewModel: ObservableObject {
     
     private func makeDemoFlicks() -> [NuclearFlick] {
         let freeVideos = SeedCatalogService.shared.freeCatalogVideos
-        if !freeVideos.isEmpty {
-            return freeVideos.map { video in
+        let seedVideos = SeedCatalogService.shared.seedVideos
+        let combined = (freeVideos + seedVideos).shuffled()
+        if !combined.isEmpty {
+            return combined.prefix(60).map { video in
                 videoToFlick(video)
             }
         }

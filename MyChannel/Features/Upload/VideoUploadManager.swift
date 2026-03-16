@@ -62,6 +62,9 @@ class VideoUploadManager: ObservableObject {
     private var uploadTask: Task<Video, Error>?
     @Published var isCancelling: Bool = false
     
+    // 🔥 Flicks/Shorts mode - when true, saves to "shorts" collection
+    @Published var isFlicksMode: Bool = false
+    
     // MARK: - Prepare from URL (Grid picker or Camera)
     func prepareVideo(from url: URL) async {
         self.videoURL = url
@@ -287,7 +290,39 @@ class VideoUploadManager: ObservableObject {
                 // 🔥🔥🔥 YOUTUBE PARITY: Refresh home feed so new videos appear IMMEDIATELY!
                 // This is critical for beta testers to see their uploads right away
                 NotificationCenter.default.post(name: NSNotification.Name("RefreshHomeFeed"), object: uploadedVideo)
-                print("📢 [VideoUploadManager] Posted RefreshHomeFeed notification - video should appear on home feed NOW!")
+                
+                // 🔥 CRITICAL: Refresh Creator Studio so uploaded video shows in dashboard immediately
+                NotificationCenter.default.post(name: NSNotification.Name("RefreshCreatorStudio"), object: uploadedVideo)
+                
+                // 🔥 FLICKS: If this is a Flick, save to shorts collection and refresh Flicks feed
+                if self.isFlicksMode {
+                    if let user = AuthenticationManager.shared.currentUser {
+                        do {
+                            _ = try await ShortsFirestoreService.shared.saveFlick(
+                                id: uploadedVideo.id,
+                                title: uploadedVideo.title,
+                                description: uploadedVideo.description,
+                                videoURL: uploadedVideo.videoURL,
+                                thumbnailURL: uploadedVideo.thumbnailURL,
+                                duration: uploadedVideo.duration,
+                                tags: uploadedVideo.tags,
+                                userId: user.id,
+                                username: user.username,
+                                userDisplayName: user.displayName,
+                                userProfileImageURL: user.profileImageURL ?? "",
+                                userIsVerified: user.isVerified
+                            )
+                            print("✅ [VideoUploadManager] Flick saved to shorts collection!")
+                        } catch {
+                            print("⚠️ [VideoUploadManager] Failed to save Flick: \(error)")
+                        }
+                    }
+                    // Refresh Flicks feed
+                    NotificationCenter.default.post(name: NSNotification.Name("RefreshFlicksFeed"), object: uploadedVideo)
+                    print("📢 [VideoUploadManager] Posted RefreshFlicksFeed notification")
+                }
+                
+                print("📢 [VideoUploadManager] Posted RefreshHomeFeed + RefreshCreatorStudio notifications - video should appear everywhere NOW!")
                 
                 // 🔥 AUTO-UPDATE CREATOR STUDIO ANALYTICS: Connect upload to analytics tracking
                 Task {
@@ -417,7 +452,11 @@ class VideoUploadManager: ObservableObject {
     }
     
     private func uploadVideoWithProgress(_ data: Data, metadata: LocalUploadVideoMetadata) async throws -> Video {
-        let creatorUser = AuthenticationManager.shared.currentUser ?? User.defaultUser
+        // 🔥 CRITICAL: Require a real signed-in user so uploads are always tied
+        // to an actual creator profile (never the placeholder Default User).
+        guard let creatorUser = AuthenticationManager.shared.currentUser else {
+            throw UploadError.missingAuthenticatedUser
+        }
         #if canImport(FirebaseStorage)
         // Attempt real upload to Firebase Storage. Falls back to mock if Storage is unavailable.
         do {
@@ -732,6 +771,7 @@ enum UploadError: Error, LocalizedError {
     case noVideoSelected
     case exportFailed
     case networkError(String)
+    case missingAuthenticatedUser
     
     var errorDescription: String? {
         switch self {
@@ -749,6 +789,8 @@ enum UploadError: Error, LocalizedError {
             return "Failed to export video"
         case .networkError(let message):
             return "Network error: \(message)"
+        case .missingAuthenticatedUser:
+            return "You must be signed in to upload a video."
         }
     }
 }

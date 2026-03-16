@@ -18,8 +18,10 @@ struct GoLiveSetupView: View {
     @State private var enableChat: Bool = true
     @State private var saveReplay: Bool = true
     @State private var category: String = "General"
-    @State private var ingestInfo: (id: String, key: String, rtmp: String, hls: String)? = nil
     @State private var isStarting = false
+    @State private var createdStream: FirestoreLiveStream? = nil
+    @State private var showBroadcast = false
+    @State private var errorMessage: String? = nil
     
     private let categories = ["General", "Gaming", "Music", "Education", "Lifestyle", "Sports"]
     
@@ -43,43 +45,33 @@ struct GoLiveSetupView: View {
                     Toggle("Save replay", isOn: $saveReplay)
                 }
                 
-                Section {
-                    if let ingest = ingestInfo {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("RTMP URL").font(.caption).foregroundStyle(.secondary)
-                            HStack {
-                                Text(ingest.rtmp).font(.footnote).lineLimit(1).truncationMode(.middle)
-                                Spacer()
-                                Button("Copy") { UIPasteboard.general.string = ingest.rtmp }
-                            }
-                            Text("Stream Key").font(.caption).foregroundStyle(.secondary)
-                            HStack {
-                                Text(ingest.key).font(.footnote).lineLimit(1).truncationMode(.middle)
-                                Spacer()
-                                Button("Copy") { UIPasteboard.general.string = ingest.key }
-                            }
-                            Text("HLS Preview").font(.caption).foregroundStyle(.secondary)
-                            Text(ingest.hls).font(.footnote).lineLimit(1).truncationMode(.middle)
-                        }
+                if let errorMessage {
+                    Section {
+                        Text(errorMessage)
+                            .foregroundColor(.red)
+                            .font(.footnote)
                     }
+                }
+
+                Section {
                     Button {
                         Task {
                             isStarting = true
-                            let config = LiveConfig(
-                                title: title.isEmpty ? "Untitled Live" : title,
-                                isPublic: isPublic,
-                                enableChat: enableChat,
-                                saveReplay: saveReplay,
-                                category: category
-                            )
+                            errorMessage = nil
                             do {
-                                let uid = AppState.shared.currentUser?.id ?? User.sampleUsers.first?.id ?? ""
-                                let req = LiveControlService.StartRequest(title: config.title, description: nil, category: config.category, isPublic: config.isPublic, enableChat: config.enableChat, saveReplay: config.saveReplay, userId: uid)
-                                let resp = try await LiveControlService.shared.startLive(req)
-                                ingestInfo = (resp.id, resp.streamKey, resp.rtmpUrl, resp.hlsUrl)
+                                let stream = try await LiveStreamManager.shared.goLive(
+                                    title: title.isEmpty ? "Untitled Live" : title,
+                                    category: category,
+                                    isPublic: isPublic,
+                                    enableChat: enableChat,
+                                    saveReplay: saveReplay
+                                )
+                                createdStream = stream
                                 HapticManager.shared.impact(style: .heavy)
-                                onStart(config)
-                            } catch { }
+                                showBroadcast = true
+                            } catch {
+                                errorMessage = error.localizedDescription
+                            }
                             isStarting = false
                         }
                     } label: {
@@ -103,6 +95,21 @@ struct GoLiveSetupView: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
+                    }
+                }
+            }
+            .fullScreenCover(isPresented: $showBroadcast) {
+                if let stream = createdStream {
+                    LiveBroadcastView(stream: stream) {
+                        showBroadcast = false
+                        onStart(LiveConfig(
+                            title: stream.title,
+                            isPublic: stream.isPublic,
+                            enableChat: stream.enableChat,
+                            saveReplay: stream.saveReplay,
+                            category: stream.category
+                        ))
+                        dismiss()
                     }
                 }
             }

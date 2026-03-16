@@ -412,9 +412,9 @@ struct VideoDetailView: View {
         }
         .transition(.opacity)
         .zIndex(200)  // 🔥 FIX: Much higher z-index to ensure controls are above tap area
-        .allowsHitTesting(showVideoControls)  // 🔥 FIX: Only allow hit testing when controls are visible
+        .allowsHitTesting(showVideoControls && !showUpNext)  // 🔥 FIX: Disable hit testing when end screen is showing
         .contentShape(Rectangle())  // 🔥 FIX: Ensure entire control area is tappable
-        .opacity(showVideoControls ? 1.0 : 0.0)  // 🔥 FIX: Use opacity instead of allowsHitTesting
+        .opacity(showVideoControls && !showUpNext ? 1.0 : 0.0)  // 🔥 FIX: Hide controls when end screen is active
     }
     
     @ViewBuilder
@@ -536,24 +536,24 @@ struct VideoDetailView: View {
         .buttonStyle(ScaleButtonStyle())
         .accessibilityLabel("Fullscreen")
         
-        // Minimize to native iOS PiP
+        // Close video completely
         Button(action: { 
-            print("🔘 [VideoDetailView] PiP button tapped!")
-            print("   globalPlayer.currentVideo: \(String(describing: globalPlayer.currentVideo?.title))")
-            print("   globalPlayer.isCleanedUp: \(globalPlayer.isCleanedUp)")
-            print("   globalPlayer.showingFullscreen: \(globalPlayer.showingFullscreen)")
-            // Start native iOS PiP - it will handle dismissing the view
-            globalPlayer.startPiP()
+            print("❌ [VideoDetailView] Close button tapped - exiting video")
+            // Stop playback and cleanup
+            playerManager.pause()
+            globalPlayer.performCleanup()
+            // Dismiss the view completely
+            dismiss()
         }) {
             ZStack {
                 Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                Image(systemName: "pip.enter")
+                Image(systemName: "xmark")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
             }
         }
         .buttonStyle(ScaleButtonStyle())
-        .accessibilityLabel("Minimize to Picture in Picture")
+        .accessibilityLabel("Close video")
     }
     
     @ViewBuilder
@@ -754,18 +754,6 @@ struct VideoDetailView: View {
     @ViewBuilder
     private var quickControls: some View {
         HStack(spacing: 12) {
-            Button(action: { showingQualitySelector = true }) {
-                HStack(spacing: 4) {
-                    Image(systemName: playerManager.selectedQuality.is4K ? "4k.tv" : (playerManager.selectedQuality.isHD ? "hifispeaker.2" : "tv"))
-                    Text(playerManager.selectedQuality == .auto ? "Auto" : playerManager.selectedQuality.rawValue)
-                }
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.white.opacity(0.12), in: Capsule())
-            }
-            .buttonStyle(ScaleButtonStyle())
-            
             Button(action: { showingPlaybackSpeedSelector = true }) {
                 HStack(spacing: 4) {
                     Image(systemName: "gauge.medium")
@@ -939,7 +927,7 @@ struct VideoDetailView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.bottom, 24)
+                .padding(.bottom, 40) // Increased bottom padding to avoid controls overlap
             }
         }
         .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
@@ -947,7 +935,7 @@ struct VideoDetailView: View {
             insertion: .opacity.combined(with: .scale(scale: 0.95)),
             removal: .opacity
         ))
-        .zIndex(50)
+        .zIndex(300) // Increased z-index to be above controls (200)
     }
     
     @ViewBuilder

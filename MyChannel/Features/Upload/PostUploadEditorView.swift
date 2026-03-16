@@ -438,7 +438,7 @@ struct PostUploadEditorView: View {
             HStack(spacing: 12) {
                 Image(systemName: "graduationcap.fill")
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(UniversityTheme.Colors.academicBlue)
+                    .foregroundColor(UniversityTheme.Colors.iosDevelopment)
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("MyChannel University")
@@ -540,7 +540,7 @@ struct PostUploadEditorView: View {
                             Button(action: { viewModel.addSkillTag() }) {
                                 Image(systemName: "plus.circle.fill")
                                     .font(.system(size: 28, weight: .medium))
-                                    .foregroundColor(UniversityTheme.Colors.academicBlue)
+                                    .foregroundColor(UniversityTheme.Colors.iosDevelopment)
                             }
                         }
                         
@@ -557,12 +557,12 @@ struct PostUploadEditorView: View {
                                                 .font(.system(size: 14, weight: .semibold))
                                         }
                                     }
-                                    .foregroundColor(UniversityTheme.Colors.academicBlue)
+                                    .foregroundColor(UniversityTheme.Colors.iosDevelopment)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 7)
                                     .background(
                                         Capsule()
-                                            .fill(UniversityTheme.Colors.academicBlue.opacity(0.1))
+                                            .fill(UniversityTheme.Colors.iosDevelopment.opacity(0.1))
                                     )
                                 }
                             }

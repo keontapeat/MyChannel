@@ -141,6 +141,22 @@ struct ProfileQuickMenu: View {
             // Action Buttons
             VStack(spacing: 0) {
                 MenuButton(
+                    icon: "chart.bar.doc.horizontal.fill",
+                    title: "Creator Studio",
+                    action: {
+                        HapticManager.shared.impact(style: .medium)
+                        isPresented = false
+                        NotificationCenter.default.post(
+                            name: Notification.Name("OpenCreatorStudioDashboard"),
+                            object: user
+                        )
+                    }
+                )
+                
+                Divider()
+                    .padding(.leading, 56)
+                
+                MenuButton(
                     icon: "person.circle.fill",
                     title: "View Channel",
                     action: {

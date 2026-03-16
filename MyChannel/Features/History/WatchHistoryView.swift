@@ -2,7 +2,7 @@
 //  WatchHistoryView.swift
 //  MyChannel
 //
-//  Created by AI Assistant on 8/9/25.
+//  Enhanced with YouTube parity features
 //
 
 import SwiftUI
@@ -13,24 +13,26 @@ struct WatchHistoryView: View {
 
     @State private var selection = Set<String>()
     @State private var query: String = ""
+    @State private var isLoading = false
 
-    private var videos: [Video] {
-        let ids = appState.watchHistory
-        if ids.isEmpty {
-            return Array(Video.sampleVideos.prefix(30))
-        } else {
-            let lookup = Dictionary(uniqueKeysWithValues: Video.sampleVideos.map { ($0.id, $0) })
-            let mapped = ids.compactMap { lookup[$0] }
-            return mapped.isEmpty ? Array(Video.sampleVideos.prefix(30)) : mapped
-        }
+    private var historyItems: [WatchHistoryItem] {
+        appState.watchHistory
     }
 
-    private var filtered: [Video] {
-        guard !query.isEmpty else { return videos }
-        return videos.filter {
+    private var filtered: [WatchHistoryItem] {
+        guard !query.isEmpty else { return historyItems }
+        return historyItems.filter {
             $0.title.localizedCaseInsensitiveContains(query) ||
-            $0.creator.displayName.localizedCaseInsensitiveContains(query) ||
-            $0.tags.contains(where: { $0.localizedCaseInsensitiveContains(query) })
+            $0.creatorName.localizedCaseInsensitiveContains(query)
+        }
+    }
+    
+    private var groupedHistory: [(String, [WatchHistoryItem])] {
+        let sections = Dictionary(grouping: filtered) { $0.watchedAt.historySection }
+        let order = ["Today", "Yesterday", "This Week", "This Month", "Older"]
+        return order.compactMap { section in
+            guard let items = sections[section], !items.isEmpty else { return nil }
+            return (section, items)
         }
     }
 
@@ -57,14 +59,28 @@ struct WatchHistoryView: View {
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                                     appState.watchHistory.removeAll()
                                 }
+                                if let userId = appState.currentUser?.id {
+                                    Task {
+                                        await HistoryService.shared.clearAll(userId: userId)
+                                    }
+                                }
                             } label: {
-                                Label("Clear All", systemImage: "trash")
+                                Label("Clear All History", systemImage: "trash")
                             }
                             if !selection.isEmpty {
                                 Button(role: .destructive) {
                                     withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                        appState.watchHistory.removeAll { selection.contains($0) }
+                                        let itemsToRemove = appState.watchHistory.filter { selection.contains($0.id) }
+                                        appState.watchHistory.removeAll { selection.contains($0.id) }
                                         selection.removeAll()
+                                        
+                                        if let userId = appState.currentUser?.id {
+                                            Task {
+                                                for item in itemsToRemove {
+                                                    await HistoryService.shared.removeItem(itemId: item.id, userId: userId)
+                                                }
+                                            }
+                                        }
                                     }
                                 } label: {
                                     Label("Remove Selected", systemImage: "trash.slash")
@@ -111,28 +127,64 @@ struct WatchHistoryView: View {
                 }
             } else {
                 List(selection: $selection) {
-                    ForEach(filtered) { video in
-                        Button {
-                            HapticManager.shared.impact(style: .light)
-                            NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
-                            dismiss()
-                        } label: {
-                            HistoryRow(video: video)
+                    ForEach(groupedHistory, id: \.0) { section, items in
+                        Section {
+                            ForEach(items) { item in
+                                Button {
+                                    HapticManager.shared.impact(style: .light)
+                                    handleItemTap(item)
+                                } label: {
+                                    HistoryRow(item: item)
+                                }
+                                .buttonStyle(.plain)
+                                .listRowBackground(AppTheme.Colors.background)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        removeItem(item)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                            }
+                        } header: {
+                            Text(section)
+                                .font(.headline)
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                                .textCase(nil)
                         }
-                        .buttonStyle(.plain)
-                        .listRowBackground(AppTheme.Colors.background)
-                    }
-                    .onDelete { idxSet in
-                        let idsToRemove = idxSet.map { filtered[$0].id }
-                        appState.watchHistory.removeAll { idsToRemove.contains($0) }
                     }
                 }
                 .listStyle(.plain)
                 .background(AppTheme.Colors.background)
-                .environment(\.defaultMinListRowHeight, 68)
+                .environment(\.defaultMinListRowHeight, 80)
             }
         }
         .background(AppTheme.Colors.background)
+    }
+    
+    private func handleItemTap(_ item: WatchHistoryItem) {
+        switch item.contentType {
+        case .video, .flick:
+            NotificationCenter.default.post(name: .openVideoFromHistory, object: item)
+            dismiss()
+        case .story:
+            Foundation.NotificationCenter.default.post(name: .openStoryFromHistory, object: item)
+            dismiss()
+        case .liveTV:
+            Foundation.NotificationCenter.default.post(name: .openLiveTVFromHistory, object: item)
+            dismiss()
+        }
+    }
+    
+    private func removeItem(_ item: WatchHistoryItem) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            appState.watchHistory.removeAll { $0.id == item.id }
+        }
+        if let userId = appState.currentUser?.id {
+            Task {
+                await HistoryService.shared.removeItem(itemId: item.id, userId: userId)
+            }
+        }
     }
 
     private var searchBar: some View {
@@ -163,42 +215,73 @@ struct WatchHistoryView: View {
 }
 
 private struct HistoryRow: View {
-    let video: Video
+    let item: WatchHistoryItem
 
     var body: some View {
         HStack(spacing: 12) {
-            AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                Color(.systemGray6)
-            }
-            .frame(width: 120, height: 68)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(alignment: .bottomTrailing) {
-                Text(video.formattedDuration)
-                    .font(.caption2.monospacedDigit())
-                    .foregroundColor(.white)
+            ZStack(alignment: .bottomLeading) {
+                AsyncImage(url: URL(string: item.thumbnailURL)) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Color(.systemGray6)
+                }
+                .frame(width: 130, height: 73)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(alignment: .bottomTrailing) {
+                    HStack(spacing: 4) {
+                        if item.contentType != .video {
+                            Image(systemName: item.contentType.iconName)
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        Text(item.formattedDuration)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundColor(.white)
+                    }
                     .padding(.vertical, 2)
                     .padding(.horizontal, 4)
-                    .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
                     .padding(6)
+                }
+                
+                if item.watchProgress > 0 {
+                    GeometryReader { geo in
+                        Rectangle()
+                            .fill(Color.red)
+                            .frame(width: geo.size.width * item.watchProgress, height: 3)
+                    }
+                    .frame(height: 3)
+                }
             }
+            .frame(width: 130, height: 73)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(video.title)
+                Text(item.title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                     .lineLimit(2)
+                
                 HStack(spacing: 6) {
-                    Text(video.creator.displayName)
+                    Text(item.creatorName)
                         .foregroundStyle(AppTheme.Colors.textSecondary)
-                    Text("•")
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
-                    Text(video.formattedViewCount + " views")
-                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                    if item.watchProgress > 0 {
+                        Text("•")
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                        if item.isCompleted {
+                            Text("Watched")
+                                .foregroundStyle(AppTheme.Colors.textSecondary)
+                        } else {
+                            Text("\(Int(item.watchProgress * 100))% watched")
+                                .foregroundStyle(AppTheme.Colors.textSecondary)
+                        }
+                    }
                 }
                 .font(.caption)
                 .lineLimit(1)
+                
+                Text(item.timeAgo)
+                    .font(.caption2)
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
             }
 
             Spacer()
@@ -215,7 +298,14 @@ private struct HistoryRow: View {
     let state = AppState()
     let _ = {
         state.currentUser = User.sampleUsers.first
-        state.watchHistory = Array(Video.sampleVideos.prefix(10)).map { $0.id }
+        state.watchHistory = Array(Video.sampleVideos.prefix(10)).enumerated().map { index, video in
+            WatchHistoryItem.fromVideo(
+                video,
+                watchedAt: Date().addingTimeInterval(-Double(index) * 3600),
+                progress: Double.random(in: 0.1...1.0),
+                position: video.duration * Double.random(in: 0.1...0.9)
+            )
+        }
     }()
     WatchHistoryView()
         .environmentObject(state)

@@ -138,14 +138,13 @@ class AdvancedVideoStreamingEngine: NSObject, ObservableObject {
     
     // MARK: - Quality Control
     func switchQuality(to quality: VideoQuality) {
-        guard let currentItem = player?.currentItem else { return }
+        guard player?.currentItem != nil else { return }
         
         currentQuality = quality
         
         // In a real implementation, you'd switch to different bitrate streams
         // For now, we'll simulate the quality change
         
-        let currentTime = currentItem.currentTime()
         // Switch to new quality stream while maintaining playback position
     }
     

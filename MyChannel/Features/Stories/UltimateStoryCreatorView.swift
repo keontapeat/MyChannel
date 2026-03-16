@@ -504,11 +504,23 @@ struct UltimateStoryCreatorView: View {
         
         Task {
             do {
+                await MainActor.run {
+                    viewModel.isProcessing = true
+                    viewModel.processingMessage = "Creating your story..."
+                }
                 let story = try await viewModel.createStory()
-                onStoryCreated(story)
-                dismiss()
+                await MainActor.run {
+                    viewModel.isProcessing = false
+                    viewModel.processingMessage = ""
+                    onStoryCreated(story)
+                    dismiss()
+                }
             } catch {
                 print("🚨 Failed to create story: \(error)")
+                await MainActor.run {
+                    viewModel.isProcessing = false
+                    viewModel.processingMessage = ""
+                }
             }
         }
     }

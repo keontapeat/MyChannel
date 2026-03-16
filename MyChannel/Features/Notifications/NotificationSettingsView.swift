@@ -9,8 +9,8 @@ import SwiftUI
 import UserNotifications
 
 struct NotificationSettingsView: View {
-    @StateObject private var notificationService = PushNotificationService()
-    @State private var preferences = NotificationPreferences()
+    @StateObject private var notificationService = PushNotificationService.shared
+    @StateObject private var settingsService = SettingsService.shared
     @State private var showingPermissionAlert = false
     @State private var animateChanges = false
     
@@ -168,7 +168,12 @@ struct NotificationSettingsView: View {
                     icon: "video.circle.fill",
                     title: "Video Uploads",
                     subtitle: "New videos from subscribed channels",
-                    isOn: $preferences.enableVideoUploads,
+                    isOn: Binding(
+                        get: { settingsService.appSettings.notifications.newVideos },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.notifications.newVideos = value }
+                        }
+                    ),
                     color: .blue
                 )
                 
@@ -176,7 +181,12 @@ struct NotificationSettingsView: View {
                     icon: "dot.radiowaves.left.and.right",
                     title: "Live Streams",
                     subtitle: "When creators go live",
-                    isOn: $preferences.enableLiveStreams,
+                    isOn: Binding(
+                        get: { settingsService.appSettings.notifications.liveStreams },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.notifications.liveStreams = value }
+                        }
+                    ),
                     color: .red
                 )
                 
@@ -184,7 +194,15 @@ struct NotificationSettingsView: View {
                     icon: "bubble.left.and.bubble.right.fill",
                     title: "Comments & Replies",
                     subtitle: "Responses to your comments",
-                    isOn: $preferences.enableComments,
+                    isOn: Binding(
+                        get: { settingsService.appSettings.notifications.comments },
+                        set: { value in
+                            settingsService.updateAppSettings {
+                                $0.notifications.comments = value
+                                $0.notifications.replies = value
+                            }
+                        }
+                    ),
                     color: .green
                 )
                 
@@ -192,7 +210,12 @@ struct NotificationSettingsView: View {
                     icon: "heart.circle.fill",
                     title: "Subscriptions",
                     subtitle: "New subscribers and activity",
-                    isOn: $preferences.enableSubscriptions,
+                    isOn: Binding(
+                        get: { settingsService.appSettings.notifications.subscriptions },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.notifications.subscriptions = value }
+                        }
+                    ),
                     color: .pink
                 )
             }
@@ -235,7 +258,15 @@ struct NotificationSettingsView: View {
                         
                         DatePicker(
                             "",
-                            selection: $preferences.quietHoursStart,
+                            selection: Binding(
+                                get: {
+                                    Calendar.current.date(from: DateComponents(hour: settingsService.appSettings.notifications.quietHoursStart, minute: 0)) ?? Date()
+                                },
+                                set: { value in
+                                    let hour = Calendar.current.component(.hour, from: value)
+                                    settingsService.updateAppSettings { $0.notifications.quietHoursStart = hour }
+                                }
+                            ),
                             displayedComponents: .hourAndMinute
                         )
                         .labelsHidden()
@@ -253,7 +284,15 @@ struct NotificationSettingsView: View {
                         
                         DatePicker(
                             "",
-                            selection: $preferences.quietHoursEnd,
+                            selection: Binding(
+                                get: {
+                                    Calendar.current.date(from: DateComponents(hour: settingsService.appSettings.notifications.quietHoursEnd, minute: 0)) ?? Date()
+                                },
+                                set: { value in
+                                    let hour = Calendar.current.component(.hour, from: value)
+                                    settingsService.updateAppSettings { $0.notifications.quietHoursEnd = hour }
+                                }
+                            ),
                             displayedComponents: .hourAndMinute
                         )
                         .labelsHidden()
@@ -322,6 +361,16 @@ struct NotificationSettingsView: View {
     
     private func loadNotificationStatus() async {
         await notificationService.getAuthorizationStatus()
+        notificationService.updateNotificationPreferences(
+            NotificationPreferences(
+                enableVideoUploads: settingsService.appSettings.notifications.newVideos,
+                enableLiveStreams: settingsService.appSettings.notifications.liveStreams,
+                enableComments: settingsService.appSettings.notifications.comments,
+                enableSubscriptions: settingsService.appSettings.notifications.subscriptions,
+                quietHoursStart: Calendar.current.date(from: DateComponents(hour: settingsService.appSettings.notifications.quietHoursStart)) ?? Date(),
+                quietHoursEnd: Calendar.current.date(from: DateComponents(hour: settingsService.appSettings.notifications.quietHoursEnd)) ?? Date()
+            )
+        )
     }
     
     private func openAppSettings() {

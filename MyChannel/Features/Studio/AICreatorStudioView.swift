@@ -98,7 +98,7 @@ struct AICreatorStudioView: View {
             HStack {
                 Image(systemName: "chart.line.uptrend.xyaxis")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.purple)
+                    .foregroundColor(AppTheme.Colors.accent)
                 
                 Text("Viral Predictor")
                     .font(.system(size: 20, weight: .semibold))
@@ -190,7 +190,7 @@ struct AICreatorStudioView: View {
             HStack {
                 Image(systemName: "person.badge.shield.checkmark")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.green)
+                    .foregroundColor(AppTheme.Colors.success)
                 
                 Text("Creator Coach")
                     .font(.system(size: 20, weight: .semibold))
@@ -217,7 +217,7 @@ struct AICreatorStudioView: View {
                         HStack(alignment: .top, spacing: 12) {
                             Image(systemName: "lightbulb.fill")
                                 .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.yellow)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
                             
                             Text(tip)
                                 .font(.system(size: 14, weight: .regular))
@@ -268,7 +268,7 @@ struct AICreatorStudioView: View {
             HStack {
                 Image(systemName: "chart.bar.xaxis")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.blue)
+                    .foregroundColor(AppTheme.Colors.accent)
                 
                 Text("Analytics Insights")
                     .font(.system(size: 20, weight: .semibold))
@@ -351,7 +351,7 @@ struct AICreatorStudioView: View {
             HStack {
                 Image(systemName: "person.3")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.indigo)
+                    .foregroundColor(AppTheme.Colors.accent)
                 
                 Text("Audience Insights")
                     .font(.system(size: 20, weight: .semibold))

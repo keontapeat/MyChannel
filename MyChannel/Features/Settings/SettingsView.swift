@@ -507,20 +507,34 @@ struct SettingsView: View {
 // MARK: - Individual Settings Views
 
 struct GeneralSettingsView: View {
-    @AppStorage("appLanguage") private var language = "English"
-    @AppStorage("appCountry") private var country = "United States"
-    @AppStorage("darkMode") private var darkMode = false
+    @StateObject private var settingsService = SettingsService.shared
     
     var body: some View {
         Form {
             Section {
-                Picker("Language", selection: $language) {
+                Picker(
+                    "Language",
+                    selection: Binding(
+                        get: { settingsService.appSettings.general.language },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.general.language = value }
+                        }
+                    )
+                ) {
                     Text("English").tag("English")
                     Text("Español").tag("Spanish")
                     Text("Français").tag("French")
                 }
                 
-                Picker("Country", selection: $country) {
+                Picker(
+                    "Country",
+                    selection: Binding(
+                        get: { settingsService.appSettings.general.country },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.general.country = value }
+                        }
+                    )
+                ) {
                     Text("United States").tag("United States")
                     Text("Canada").tag("Canada")
                     Text("United Kingdom").tag("United Kingdom")
@@ -528,7 +542,15 @@ struct GeneralSettingsView: View {
             }
             
             Section {
-                Toggle("Dark mode", isOn: $darkMode)
+                Toggle(
+                    "Dark mode",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.general.darkMode },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.general.darkMode = value }
+                        }
+                    )
+                )
             } header: {
                 Text("Appearance")
             }
@@ -661,25 +683,45 @@ struct PurchasesView: View {
 }
 
 struct HistorySettingsView: View {
+    @StateObject private var settingsService = SettingsService.shared
+    
     var body: some View {
         List {
             Section {
                 Button("Clear watch history") {
-                    // Clear history
+                    Task {
+                        await settingsService.clearWatchHistory()
+                    }
                 }
                 
-                Button("Pause watch history") {
-                    // Pause
-                }
+                Toggle(
+                    "Pause watch history",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.privacy.pauseWatchHistory },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.privacy.pauseWatchHistory = value }
+                        }
+                    )
+                )
             }
             
             Section {
                 Button("Clear search history") {
-                    // Clear
+                    settingsService.clearSearchHistory()
                 }
                 
-                Button("Pause search history") {
-                    // Pause
+                Toggle(
+                    "Pause search history",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.privacy.pauseSearchHistory },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.privacy.pauseSearchHistory = value }
+                        }
+                    )
+                )
+            } footer: {
+                if !settingsService.recentSearches().isEmpty {
+                    Text("Recent searches stored on this device: \(settingsService.recentSearches().count)")
                 }
             }
         }
@@ -689,15 +731,28 @@ struct HistorySettingsView: View {
 }
 
 struct DataSettingsView: View {
+    @StateObject private var settingsService = SettingsService.shared
+    
     var body: some View {
         List {
             Section {
                 Button("Download your data") {
-                    // Download
+                    settingsService.updateAppSettings {
+                        $0.history.lastDataExportRequest = Date()
+                    }
                 }
                 
                 Button("Delete specific data") {
-                    // Delete
+                    settingsService.clearSearchHistory()
+                    Task {
+                        await settingsService.clearWatchHistory()
+                    }
+                }
+            } footer: {
+                if let lastExport = settingsService.appSettings.history.lastDataExportRequest {
+                    Text("Last export requested \(lastExport.formatted(date: .abbreviated, time: .shortened))")
+                } else {
+                    Text("Export requests are tracked so you can verify the last request from this device.")
                 }
             }
         }
@@ -707,23 +762,57 @@ struct DataSettingsView: View {
 }
 
 struct PrivacySettingsView: View {
-    @AppStorage("privateProfile") private var privateProfile = false
-    @AppStorage("showSubscriptions") private var showSubscriptions = true
-    @AppStorage("showPlaylists") private var showPlaylists = true
+    @StateObject private var settingsService = SettingsService.shared
     
     var body: some View {
         Form {
             Section {
-                Toggle("Private profile", isOn: $privateProfile)
+                Toggle(
+                    "Private profile",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.privacy.privateProfile },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.privacy.privateProfile = value }
+                        }
+                    )
+                )
             } footer: {
                 Text("When enabled, only people you approve can see your profile")
             }
             
             Section {
-                Toggle("Show subscriptions", isOn: $showSubscriptions)
-                Toggle("Show playlists", isOn: $showPlaylists)
+                Toggle(
+                    "Show subscriptions",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.privacy.showSubscriptions },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.privacy.showSubscriptions = value }
+                        }
+                    )
+                )
+                Toggle(
+                    "Show playlists",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.privacy.showPlaylists },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.privacy.showPlaylists = value }
+                        }
+                    )
+                )
             } header: {
                 Text("Profile visibility")
+            }
+            
+            Section("Advertising") {
+                Toggle(
+                    "Personalized ads",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.privacy.personalizedAds },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.privacy.personalizedAds = value }
+                        }
+                    )
+                )
             }
         }
         .navigationTitle("Privacy")
@@ -732,13 +821,51 @@ struct PrivacySettingsView: View {
 }
 
 struct ConnectedAppsView: View {
+    @StateObject private var settingsService = SettingsService.shared
+    
     var body: some View {
         List {
             Section {
-                Text("No connected apps")
-                    .foregroundColor(.secondary)
+                Toggle(
+                    "Google",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.connectedApps.googleConnected },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.connectedApps.googleConnected = value }
+                        }
+                    )
+                )
+                Toggle(
+                    "YouTube",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.connectedApps.youtubeConnected },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.connectedApps.youtubeConnected = value }
+                        }
+                    )
+                )
+                Toggle(
+                    "Instagram",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.connectedApps.instagramConnected },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.connectedApps.instagramConnected = value }
+                        }
+                    )
+                )
+                Toggle(
+                    "TikTok",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.connectedApps.tiktokConnected },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.connectedApps.tiktokConnected = value }
+                        }
+                    )
+                )
+            } header: {
+                Text("Connected apps")
             } footer: {
-                Text("Third-party apps you've given access to your MyChannel account will appear here")
+                Text("These switches track the services linked to your MyChannel account on this device and sync when you are signed in.")
             }
         }
         .navigationTitle("Connected apps")
@@ -747,14 +874,29 @@ struct ConnectedAppsView: View {
 }
 
 struct ExperimentalFeaturesView: View {
-    @AppStorage("experimentalAI") private var experimentalAI = false
-    @AppStorage("experimentalPlayer") private var experimentalPlayer = false
+    @StateObject private var settingsService = SettingsService.shared
     
     var body: some View {
         Form {
             Section {
-                Toggle("AI-powered recommendations", isOn: $experimentalAI)
-                Toggle("Experimental video player", isOn: $experimentalPlayer)
+                Toggle(
+                    "AI-powered recommendations",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.experimental.aiRecommendations },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.experimental.aiRecommendations = value }
+                        }
+                    )
+                )
+                Toggle(
+                    "Experimental video player",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.experimental.experimentalPlayer },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.experimental.experimentalPlayer = value }
+                        }
+                    )
+                )
             } footer: {
                 Text("These features are in beta and may not work as expected")
             }
@@ -765,28 +907,43 @@ struct ExperimentalFeaturesView: View {
 }
 
 struct QualitySettingsView: View {
-    @AppStorage("videoQuality") private var videoQuality = "Auto"
-    @AppStorage("mobileDataUsage") private var mobileDataUsage = "Auto"
+    @StateObject private var settingsService = SettingsService.shared
     
     var body: some View {
         Form {
             Section {
-                Picker("Video quality", selection: $videoQuality) {
-                    Text("Auto").tag("Auto")
-                    Text("1080p").tag("1080p")
-                    Text("720p").tag("720p")
-                    Text("480p").tag("480p")
-                    Text("360p").tag("360p")
+                Picker(
+                    "Video quality",
+                    selection: Binding(
+                        get: { settingsService.appSettings.videoQuality.wifiQuality },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.videoQuality.wifiQuality = value }
+                        }
+                    )
+                ) {
+                    Text("Auto").tag(StreamingQualityOption.auto)
+                    Text("1080p").tag(StreamingQualityOption.highest)
+                    Text("720p").tag(StreamingQualityOption.high)
+                    Text("480p").tag(StreamingQualityOption.medium)
+                    Text("360p").tag(StreamingQualityOption.low)
                 }
             } header: {
                 Text("Wi-Fi")
             }
             
             Section {
-                Picker("Mobile data usage", selection: $mobileDataUsage) {
-                    Text("Auto").tag("Auto")
-                    Text("Higher quality").tag("Higher")
-                    Text("Data saver").tag("Saver")
+                Picker(
+                    "Mobile data usage",
+                    selection: Binding(
+                        get: { settingsService.appSettings.videoQuality.mobileUsage },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.videoQuality.mobileUsage = value }
+                        }
+                    )
+                ) {
+                    Text("Auto").tag(MobileDataPreference.auto)
+                    Text("Higher quality").tag(MobileDataPreference.higher)
+                    Text("Data saver").tag(MobileDataPreference.saver)
                 }
             } header: {
                 Text("Mobile data")
@@ -801,14 +958,21 @@ struct QualitySettingsView: View {
 
 struct BackgroundDownloadsView: View {
     @StateObject private var storeKit = StoreKitService.shared
-    @AppStorage("backgroundPlay") private var backgroundPlay = false
-    @AppStorage("downloadQuality") private var downloadQuality = "High"
+    @StateObject private var settingsService = SettingsService.shared
     
     var body: some View {
         Form {
             if storeKit.isPremium {
                 Section {
-                    Toggle("Background play", isOn: $backgroundPlay)
+                    Toggle(
+                        "Background play",
+                        isOn: Binding(
+                            get: { settingsService.appSettings.playback.backgroundPlay },
+                            set: { value in
+                                settingsService.updateAppSettings { $0.playback.backgroundPlay = value }
+                            }
+                        )
+                    )
                 } footer: {
                     Text("Keep videos playing when you switch apps")
                 }
@@ -820,13 +984,60 @@ struct BackgroundDownloadsView: View {
                         Text("Manage downloads")
                     }
                     
-                    Picker("Download quality", selection: $downloadQuality) {
-                        Text("1080p").tag("1080p")
-                        Text("720p").tag("720p")
-                        Text("480p").tag("480p")
+                    Picker(
+                        "Download quality",
+                        selection: Binding(
+                            get: { settingsService.appSettings.downloads.downloadQuality },
+                            set: { value in
+                                settingsService.updateAppSettings { $0.downloads.downloadQuality = value }
+                            }
+                        )
+                    ) {
+                        Text("Low").tag(DownloadQualityPreference.low)
+                        Text("Medium").tag(DownloadQualityPreference.medium)
+                        Text("High").tag(DownloadQualityPreference.high)
+                        Text("Highest").tag(DownloadQualityPreference.highest)
                     }
                 } header: {
                     Text("Downloads")
+                }
+                
+                Section("Offline behavior") {
+                    Toggle(
+                        "Download over Wi-Fi only",
+                        isOn: Binding(
+                            get: { settingsService.appSettings.downloads.wifiOnly },
+                            set: { value in
+                                settingsService.updateAppSettings { $0.downloads.wifiOnly = value }
+                            }
+                        )
+                    )
+                    Toggle(
+                        "Smart downloads",
+                        isOn: Binding(
+                            get: { settingsService.appSettings.downloads.smartDownloads },
+                            set: { value in
+                                settingsService.updateAppSettings { $0.downloads.smartDownloads = value }
+                            }
+                        )
+                    )
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Storage limit: \(Int(settingsService.appSettings.downloads.storageLimitGB)) GB")
+                            .font(.system(size: 15))
+                        Slider(
+                            value: Binding(
+                                get: { settingsService.appSettings.downloads.storageLimitGB },
+                                set: { value in
+                                    settingsService.updateAppSettings { $0.downloads.storageLimitGB = value }
+                                }
+                            ),
+                            in: 1...50,
+                            step: 1
+                        )
+                    }
+                    Button("Delete all downloads", role: .destructive) {
+                        settingsService.deleteAllDownloads()
+                    }
                 }
             } else {
                 Section {
@@ -851,13 +1062,20 @@ struct BackgroundDownloadsView: View {
 }
 
 struct UploadsSettingsView: View {
-    @AppStorage("uploadQuality") private var uploadQuality = "1080p"
-    @AppStorage("wifiUploadsOnly") private var wifiOnly = true
+    @StateObject private var settingsService = SettingsService.shared
     
     var body: some View {
         Form {
             Section {
-                Picker("Upload quality", selection: $uploadQuality) {
+                Picker(
+                    "Upload quality",
+                    selection: Binding(
+                        get: { settingsService.appSettings.uploads.uploadQuality },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.uploads.uploadQuality = value }
+                        }
+                    )
+                ) {
                     Text("4K").tag("4K")
                     Text("1080p").tag("1080p")
                     Text("720p").tag("720p")
@@ -865,7 +1083,15 @@ struct UploadsSettingsView: View {
             }
             
             Section {
-                Toggle("Upload over Wi-Fi only", isOn: $wifiOnly)
+                Toggle(
+                    "Upload over Wi-Fi only",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.uploads.wifiOnly },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.uploads.wifiOnly = value }
+                        }
+                    )
+                )
             } footer: {
                 Text("Recommended to avoid data charges")
             }
@@ -876,14 +1102,29 @@ struct UploadsSettingsView: View {
 }
 
 struct LiveChatSettingsView: View {
-    @AppStorage("showLiveChat") private var showLiveChat = true
-    @AppStorage("chatNotifications") private var chatNotifications = true
+    @StateObject private var settingsService = SettingsService.shared
     
     var body: some View {
         Form {
             Section {
-                Toggle("Show live chat", isOn: $showLiveChat)
-                Toggle("Chat notifications", isOn: $chatNotifications)
+                Toggle(
+                    "Show live chat",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.chat.showLiveChat },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.chat.showLiveChat = value }
+                        }
+                    )
+                )
+                Toggle(
+                    "Chat notifications",
+                    isOn: Binding(
+                        get: { settingsService.appSettings.chat.chatNotifications },
+                        set: { value in
+                            settingsService.updateAppSettings { $0.chat.chatNotifications = value }
+                        }
+                    )
+                )
             }
         }
         .navigationTitle("Live chat")

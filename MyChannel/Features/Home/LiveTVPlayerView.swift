@@ -980,6 +980,9 @@ struct LiveTVPlayerView: View {
         // 🔥 AI: Record watch event for the channel we're leaving
         if let previousChannel = currentWatchingChannel, previousChannel.id != newChannel.id {
             let watchDuration = Date().timeIntervalSince(watchStartTime)
+            
+            // Add to watch history
+            AppState.shared.addLiveTVToHistory(channel: previousChannel, duration: watchDuration)
             let userId = appState.currentUser?.id ?? "anonymous"
             liveTVAI.recordWatchEvent(
                 userId: userId,

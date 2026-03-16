@@ -44,6 +44,7 @@ enum FullScreenRoute: Identifiable {
     case filmmakerDetail(name: String, films: [FreeMovie])
     case channelDetail(name: String, avatar: String, subscribers: Int, totalViews: Int, videos: [Video])
     case publicProfile(User)
+    case liveStream(FirestoreLiveStream)
     case custom(String)
 
     var id: String {
@@ -59,6 +60,7 @@ enum FullScreenRoute: Identifiable {
         case .filmmakerDetail(let name, _): return "filmmaker-\(name)"
         case .channelDetail(let name, _, _, _, _): return "channel-\(name)"
         case .publicProfile(let user): return "profile-\(user.id)"
+        case .liveStream(let s): return "live-\(s.id)"
         case .custom(let id): return id
         }
     }
@@ -172,6 +174,9 @@ struct HomeView: View {
                             },
                             onOpenChannelDetail: { name, avatar, subs, total, vids in
                                 route = .channelDetail(name: name, avatar: avatar, subscribers: subs, totalViews: total, videos: vids.isEmpty ? Array(Video.sampleVideos.prefix(12)) : vids)
+                            },
+                            onSelectLiveStream: { stream in
+                                route = .liveStream(stream)
                             }
                         )
 
@@ -180,7 +185,11 @@ struct HomeView: View {
                 }
                 .coordinateSpace(name: "scroll")
                 .onScrollOffsetChange { offset in
-                    scrollOffset = offset
+                    // Clamp and lightly smooth to avoid jitter when snapping back to top
+                    let clamped = max(-2000, min(2000, offset))
+                    // Simple low-pass filter for smoother header updates
+                    let alpha: CGFloat = 0.2
+                    scrollOffset = scrollOffset + alpha * (clamped - scrollOffset)
                 }
 
                 MinimalNavigationHeader(
@@ -216,11 +225,21 @@ struct HomeView: View {
         }
         .sheet(isPresented: $presentStoryCreator) {
             UltimateStoryCreatorView { story in
-                // Dismiss and refresh from authoritative source to avoid duplicates
-                presentStoryCreator = false
+                print("🏠 [HomeView] Story created callback received: \(story.id)")
                 // Notify stories changed so all views refresh
                 NotificationCenter.default.post(name: .storiesDidChange, object: nil)
-                Task { loadUserStories() }
+                // Reload stories immediately
+                Task {
+                    await MainActor.run {
+                        loadUserStories()
+                    }
+                    // Small delay to ensure database write completes
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                    await MainActor.run {
+                        presentStoryCreator = false
+                        print("✅ [HomeView] Story creator dismissed, stories reloaded")
+                    }
+                }
             }
             .environmentObject(appState)
             .preferredColorScheme(.dark)
@@ -230,7 +249,7 @@ struct HomeView: View {
                 ProfileQuickMenu(user: user, isPresented: $showingQuickProfile)
                     .environmentObject(appState)
                     .environmentObject(AuthenticationManager.shared)
-                    .presentationDetents([.height(560)])
+                    .presentationDetents([.height(680)])
                     .presentationDragIndicator(.visible)
             }
         }
@@ -269,6 +288,10 @@ struct HomeView: View {
                 // Navigate to Creator Studio with analytics tab selected
                 route = .custom("creatorStudioAnalytics_\(video.id)")
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenCreatorStudioDashboard"))) { _ in
+            // Open full Creator Studio dashboard with current user
+            route = .custom("creatorStudioDashboard")
         }
         .fullScreenCover(item: $route) { route in
             switch route {
@@ -325,10 +348,18 @@ struct HomeView: View {
             case .publicProfile(let user):
                 PublicProfileView(user: user)
                     .onDisappear { self.route = nil }
+
+            case .liveStream(let stream):
+                LiveViewerView(stream: stream)
+                    .onDisappear { self.route = nil }
             
             case .custom(let id):
                 // Handle Creator Studio navigation
                 if id.starts(with: "creatorStudioAnalytics_") {
+                    ComprehensiveCreatorStudioView()
+                        .environmentObject(appState)
+                        .onDisappear { self.route = nil }
+                } else if id == "creatorStudioDashboard" {
                     ComprehensiveCreatorStudioView()
                         .environmentObject(appState)
                         .onDisappear { self.route = nil }
@@ -629,6 +660,7 @@ struct MinimalContentSections: View {
     let onOpenArtistDetail: (String, String, [Video], Int) -> Void
     let onOpenFilmmakerDetail: (String, [FreeMovie]) -> Void
     let onOpenChannelDetail: (String, String, Int, Int, [Video]) -> Void
+    var onSelectLiveStream: ((FirestoreLiveStream) -> Void)? = nil
 
     @EnvironmentObject private var appState: AppState
     @State private var blockbusterMovies: [FreeMovie] = []
@@ -972,6 +1004,14 @@ struct MinimalContentSections: View {
 
     var body: some View {
         VStack(spacing: 40) {
+            // LIVE NOW - Active live streams from Firestore
+            LiveNowSection { stream in
+                onSelectLiveStream?(stream)
+            }
+            .onAppear {
+                LiveStreamManager.shared.startListening()
+            }
+
             ForYouSection(onPlayVideo: onPlayVideo, onSeeAllExplore: onSeeAllExplore)
 
             if !appState.watchHistory.isEmpty {
@@ -1185,6 +1225,8 @@ private struct MinimalMusicSection: View {
     private var allArtists: [(name: String, avatar: String, views: Int, city: String?)] {
         // 🎵 LOCAL ARTISTS WITH ASSETS - Using local images for fast loading!
         let localArtists: [(String,String,Int,String?)] = [
+            ("Big Mgr Fat Dee", "BigMgrFatDeeAvatar", 285_000, nil),
+            ("Bk Dumpp", "BkDumppAvatar", 285_000, nil),
             ("Super Shoddy", "SuperShoddyAvatar", 285_000, nil),
             ("Mbk Keelan", "MbkKeelanAvatar", 285_000, nil),
             ("Cw Timo", "CwTimoAvatar", 285_000, nil),
@@ -2189,18 +2231,37 @@ private struct TopMyChannelsSection: View {
     var onSeeAll: () -> Void = {}
     
     // Regular MyChannel users with profile pictures (looks like real people who signed up)
-    private let featuredCreators: [(id: String, name: String, avatar: String, subscribers: Int, totalViews: Int)] = [
-        ("alex_m", "Alex M.", "https://i.pravatar.cc/150?img=1", 12_400, 890_000),
-        ("jordan_t", "Jordan T.", "https://i.pravatar.cc/150?img=3", 8_200, 420_000),
-        ("sam_r", "Sam R.", "https://i.pravatar.cc/150?img=5", 3_100, 156_000),
-        ("casey_l", "Casey L.", "https://i.pravatar.cc/150?img=9", 22_800, 1_200_000),
-        ("riley_j", "Riley J.", "https://i.pravatar.cc/150?img=10", 1_560, 78_000),
-        ("morgan_k", "Morgan K.", "https://i.pravatar.cc/150?img=11", 45_200, 2_100_000),
-        ("jamie_w", "Jamie W.", "https://i.pravatar.cc/150?img=12", 6_700, 310_000),
-        ("drew_f", "Drew F.", "https://i.pravatar.cc/150?img=13", 19_300, 980_000),
-        ("taylor_s", "Taylor S.", "https://i.pravatar.cc/150?img=15", 890, 42_000),
-        ("quinn_b", "Quinn B.", "https://i.pravatar.cc/150?img=20", 28_100, 1_450_000)
-    ]
+    private var featuredCreators: [(id: String, name: String, avatar: String, subscribers: Int, totalViews: Int)] {
+        let pinnedCreators: [(id: String, name: String, avatar: String, subscribers: Int, totalViews: Int)] = [
+            (
+                "ktrip_official",
+                "KTrip",
+                "https://i.ytimg.com/vi/xfdydb_3Ra0/hqdefault.jpg",
+                5_000,
+                1_800_000
+            ),
+            (
+                "baby_ju_official",
+                "Baby Ju",
+                "https://i.ytimg.com/vi/JSXmfgZzHqQ/hqdefault.jpg",
+                2_000,
+                1_200_000
+            )
+        ]
+        let communityFavorites: [(id: String, name: String, avatar: String, subscribers: Int, totalViews: Int)] = [
+            ("alex_m", "Alex M.", "https://i.pravatar.cc/150?img=1", 12_400, 890_000),
+            ("jordan_t", "Jordan T.", "https://i.pravatar.cc/150?img=3", 8_200, 420_000),
+            ("sam_r", "Sam R.", "https://i.pravatar.cc/150?img=5", 3_100, 156_000),
+            ("casey_l", "Casey L.", "https://i.pravatar.cc/150?img=9", 22_800, 1_200_000),
+            ("riley_j", "Riley J.", "https://i.pravatar.cc/150?img=10", 1_560, 78_000),
+            ("morgan_k", "Morgan K.", "https://i.pravatar.cc/150?img=11", 45_200, 2_100_000),
+            ("jamie_w", "Jamie W.", "https://i.pravatar.cc/150?img=12", 6_700, 310_000),
+            ("drew_f", "Drew F.", "https://i.pravatar.cc/150?img=13", 19_300, 980_000),
+            ("taylor_s", "Taylor S.", "https://i.pravatar.cc/150?img=15", 890, 42_000),
+            ("quinn_b", "Quinn B.", "https://i.pravatar.cc/150?img=20", 28_100, 1_450_000)
+        ]
+        return pinnedCreators + communityFavorites
+    }
 
     private func format(_ n: Int) -> String {
         if n >= 1_000_000_000 { return String(format: "%.1fB", Double(n)/1_000_000_000) }
@@ -2352,11 +2413,18 @@ private struct TopArtistsListView: View {
             List {
                 ForEach(Array(rankings.enumerated()), id: \.element.id) { idx, artist in
                     NavigationLink {
-                        ArtistDetailView(
-                            name: artist.name,
-                            avatarURL: artist.avatar,
-                            videos: artist.videos.isEmpty ? Array(Video.sampleVideos.prefix(8)) : artist.videos,
-                            totalViews: artist.totalViews
+                        ArtistPageView(
+                            artist: Artist(
+                                id: artist.id.uuidString,
+                                name: artist.name,
+                                slug: artist.name.lowercased().replacingOccurrences(of: " ", with: "-"),
+                                avatarURL: URL(string: artist.avatar),
+                                monthlyListeners: artist.totalViews
+                            ),
+                            topSongs: [],
+                            albums: [],
+                            singles: [],
+                            similarArtists: []
                         )
                     } label: {
                         HStack(spacing: 12) {
@@ -2405,6 +2473,7 @@ private struct FilmmakerRowItem: Identifiable {
     let id = UUID()
     let name: String
     let films: [FreeMovie]
+    let avatar: String
 }
 
 private struct TopFilmmakersListView: View {
@@ -2428,13 +2497,14 @@ private struct TopFilmmakersListView: View {
         let extra = names.enumerated().map { idx, n in
             FilmmakerRowItem(
                 name: n,
-                films: Array(FreeMovie.sampleMovies.shuffled().prefix(Int.random(in: 6...12)))
+                films: Array(FreeMovie.sampleMovies.shuffled().prefix(Int.random(in: 6...12))),
+                avatar: "https://i.pravatar.cc/200?u=indie_\(idx)"
             )
         }
         let top = [
-            FilmmakerRowItem(name: "Tee Cee", films: Array(FreeMovie.sampleMovies.prefix(24))),
-            FilmmakerRowItem(name: "Merch HD", films: Array(FreeMovie.sampleMovies.prefix(15))),
-            FilmmakerRowItem(name: "Pros Kt", films: Array(FreeMovie.sampleMovies.prefix(18)))
+            FilmmakerRowItem(name: "Tee Cee", films: Array(FreeMovie.sampleMovies.prefix(24)), avatar: teeCeeAvatar),
+            FilmmakerRowItem(name: "Merch HD", films: Array(FreeMovie.sampleMovies.prefix(15)), avatar: merchHDAvatar),
+            FilmmakerRowItem(name: "Pros Kt", films: Array(FreeMovie.sampleMovies.prefix(18)), avatar: prosKtAvatar)
         ]
         return (top + extra).sorted { $0.films.count > $1.films.count }
     }
@@ -2452,6 +2522,16 @@ private struct TopFilmmakersListView: View {
                                 .foregroundColor(.white)
                                 .frame(width: 28, height: 28)
                                 .background(Capsule().fill(AppTheme.Colors.primary))
+                            
+                            // Avatar, mirroring Top Artists list style
+                            AppAsyncImage(url: URL(string: filmmaker.avatar)) { img in
+                                img.resizable().scaledToFill()
+                            } placeholder: {
+                                Color.white.opacity(0.3)
+                            }
+                            .frame(width: 36, height: 36)
+                            .clipShape(Circle())
+                            
                             Text(filmmaker.name)
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(AppTheme.Colors.primary)

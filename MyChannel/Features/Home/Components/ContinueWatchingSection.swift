@@ -86,9 +86,33 @@ struct ContinueWatchingSection: View {
             let history = await historyService.fetch(userId: userId, limit: 20)
             
             // Filter to videos that are partially watched (10% - 90% complete)
-            let partiallyWatched = history.compactMap { video -> ContinueWatchingItem? in
-                let progress = historyService.getProgress(for: video.id, userId: userId)
+            let partiallyWatched = history.compactMap { historyItem -> ContinueWatchingItem? in
+                // Only process video content types
+                guard historyItem.contentType == .video || historyItem.contentType == .flick else { return nil }
+                
+                let progress = historyService.getProgress(for: historyItem.id, userId: userId)
                 guard progress > 0.1 && progress < 0.9 else { return nil }
+                
+                // Convert WatchHistoryItem to Video
+                let video = Video(
+                    id: historyItem.contentId,
+                    title: historyItem.title,
+                    description: "",
+                    thumbnailURL: historyItem.thumbnailURL,
+                    videoURL: "",
+                    duration: historyItem.duration,
+                    viewCount: 0,
+                    likeCount: 0,
+                    creator: User(
+                        id: historyItem.creatorId,
+                        username: historyItem.creatorName,
+                        displayName: historyItem.creatorName,
+                        email: "",
+                        profileImageURL: ""
+                    ),
+                    category: .entertainment
+                )
+                
                 return ContinueWatchingItem(video: video, progress: progress)
             }
             

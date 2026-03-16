@@ -133,7 +133,7 @@ struct ViralPredictorCard: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "lightbulb.fill")
                                     .font(.system(size: 12))
-                                    .foregroundColor(.orange)
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
                                 
                                 Text(tip)
                                     .font(.system(size: 13))
@@ -224,21 +224,21 @@ struct ViralPredictorCard: View {
     
     private func color(for score: Int) -> Color {
         switch score {
-        case 0..<30: return .red
-        case 30..<50: return .orange
-        case 50..<70: return .yellow
-        case 70..<85: return .green
-        default: return Color(red: 0.2, green: 0.8, blue: 0.3) // Bright green
+        case 0..<30: return AppTheme.Colors.error
+        case 30..<50: return AppTheme.Colors.warning
+        case 50..<70: return AppTheme.Colors.textSecondary
+        case 70..<85: return AppTheme.Colors.success
+        default: return AppTheme.Colors.primary // Coral red for viral
         }
     }
     
     private func gradientColors(for score: Int) -> [Color] {
         switch score {
-        case 0..<30: return [.red, .orange]
-        case 30..<50: return [.orange, .yellow]
-        case 50..<70: return [.yellow, .green]
-        case 70..<85: return [.green, Color(red: 0.2, green: 0.8, blue: 0.3)]
-        default: return [Color(red: 0.2, green: 0.8, blue: 0.3), Color(red: 0.3, green: 0.9, blue: 0.4)]
+        case 0..<30: return [AppTheme.Colors.error, AppTheme.Colors.warning]
+        case 30..<50: return [AppTheme.Colors.warning, AppTheme.Colors.textSecondary]
+        case 50..<70: return [AppTheme.Colors.textSecondary, AppTheme.Colors.success]
+        case 70..<85: return [AppTheme.Colors.success, AppTheme.Colors.primary]
+        default: return [AppTheme.Colors.primary, AppTheme.Colors.primaryLight]
         }
     }
     

@@ -11,6 +11,7 @@ import UserNotifications
 struct NotificationPreferencesView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var authManager: AuthenticationManager
+    @StateObject private var settingsService = SettingsService.shared
     
     // Push Notification Settings
     @State private var pushNotificationsEnabled: Bool = true
@@ -100,6 +101,7 @@ struct NotificationPreferencesView: View {
             }
             .onAppear {
                 checkNotificationPermissions()
+                loadPersistedSettings()
             }
             .alert("Notifications Disabled", isPresented: $showingPermissionAlert) {
                 Button("Cancel", role: .cancel) { }
@@ -492,12 +494,30 @@ struct NotificationPreferencesView: View {
     private func savePreferences() {
         isLoading = true
         HapticManager.shared.impact(style: .medium)
-        
-        // Simulate API call
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            isLoading = false
-            showingSuccessAlert = true
+
+        settingsService.updateAppSettings { settings in
+            settings.notifications.pushEnabled = pushNotificationsEnabled
+            settings.notifications.newVideos = newVideoNotifications
+            settings.notifications.liveStreams = liveStreamNotifications
+            settings.notifications.comments = commentNotifications
+            settings.notifications.subscriptions = channelUpdatesNotifications || followNotifications
+            settings.notifications.likes = likeNotifications
+            settings.notifications.mentions = mentionNotifications
+            settings.notifications.replies = replyNotifications
+            settings.notifications.watchLaterReminders = watchLaterReminders
+            settings.notifications.subscriptionReminders = subscriptionReminders
+            settings.notifications.trending = trendingNotifications
+            settings.notifications.recommendations = recommendationNotifications
+            settings.notifications.quietHoursEnabled = quietHoursEnabled
+            settings.notifications.quietHoursStart = Calendar.current.component(.hour, from: quietStartTime)
+            settings.notifications.quietHoursEnd = Calendar.current.component(.hour, from: quietEndTime)
+            settings.notifications.weekendNotifications = weekendNotifications
+            settings.notifications.frequency = notificationFrequency.toSettingsFrequency
+            settings.notifications.digestFrequency = digestFrequency.toSettingsDigestFrequency
         }
+
+        isLoading = false
+        showingSuccessAlert = true
     }
     
     private func enableAllNotifications() {
@@ -581,6 +601,30 @@ struct NotificationPreferencesView: View {
         }
         
         HapticManager.shared.impact(style: .light)
+    }
+
+    private func loadPersistedSettings() {
+        let notifications = settingsService.appSettings.notifications
+        pushNotificationsEnabled = notifications.pushEnabled
+        newVideoNotifications = notifications.newVideos
+        liveStreamNotifications = notifications.liveStreams
+        premiumContentNotifications = false
+        channelUpdatesNotifications = notifications.subscriptions
+        commentNotifications = notifications.comments
+        likeNotifications = notifications.likes
+        followNotifications = notifications.subscriptions
+        mentionNotifications = notifications.mentions
+        replyNotifications = notifications.replies
+        watchLaterReminders = notifications.watchLaterReminders
+        subscriptionReminders = notifications.subscriptionReminders
+        trendingNotifications = notifications.trending
+        recommendationNotifications = notifications.recommendations
+        quietHoursEnabled = notifications.quietHoursEnabled
+        quietStartTime = Calendar.current.date(from: DateComponents(hour: notifications.quietHoursStart, minute: 0)) ?? quietStartTime
+        quietEndTime = Calendar.current.date(from: DateComponents(hour: notifications.quietHoursEnd, minute: 0)) ?? quietEndTime
+        weekendNotifications = notifications.weekendNotifications
+        notificationFrequency = NotificationFrequency(settingsFrequency: notifications.frequency)
+        digestFrequency = DigestFrequency(settingsDigestFrequency: notifications.digestFrequency)
     }
 }
 
@@ -817,6 +861,54 @@ enum DigestFrequency: String, CaseIterable, CustomStringConvertible {
         case .weekly: return "Weekly digest on Sunday"
         case .monthly: return "Monthly digest on 1st"
         case .disabled: return "No digest emails"
+        }
+    }
+}
+
+private extension NotificationFrequency {
+    init(settingsFrequency: NotificationDeliveryFrequency) {
+        switch settingsFrequency {
+        case .immediate:
+            self = .immediate
+        case .batched:
+            self = .bundled
+        case .quiet:
+            self = .hourly
+        }
+    }
+    
+    var toSettingsFrequency: NotificationDeliveryFrequency {
+        switch self {
+        case .immediate:
+            return .immediate
+        case .bundled, .daily:
+            return .batched
+        case .hourly:
+            return .quiet
+        }
+    }
+}
+
+private extension DigestFrequency {
+    init(settingsDigestFrequency: SettingsDigestFrequency) {
+        switch settingsDigestFrequency {
+        case .daily:
+            self = .daily
+        case .weekly:
+            self = .weekly
+        case .never:
+            self = .disabled
+        }
+    }
+    
+    var toSettingsDigestFrequency: SettingsDigestFrequency {
+        switch self {
+        case .daily:
+            return .daily
+        case .weekly:
+            return .weekly
+        case .monthly, .disabled:
+            return .never
         }
     }
 }

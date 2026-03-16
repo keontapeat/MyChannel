@@ -270,23 +270,33 @@ class AdvancedAnalyticsService: ObservableObject {
             await MainActor.run { self.channelAnalytics = analytics }
             return analytics
         } catch {
-            // Fallback to sample if backend absent
+            // 🔥 FIX: Fallback to REAL Firestore data instead of random numbers
+            let allVideos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: creatorId, limit: 100)
+            let realTotalViews = allVideos.reduce(0) { $0 + $1.viewCount }
+            let realSubscribers = await MainActor.run { AppState.shared.currentUser?.subscriberCount ?? 0 }
+            let realWatchTimeSeconds = allVideos.reduce(0.0) { $0 + ($1.duration * 0.3 * Double($1.viewCount)) }
+            let avgViewsPerVideo = allVideos.isEmpty ? 0.0 : Double(realTotalViews) / Double(allVideos.count)
+            let estimatedCPM = 2.0 // $2 per 1000 views
+            let estimatedRevenue = Double(realTotalViews) / 1000.0 * estimatedCPM
+            let topVideoIds = allVideos.sorted { $0.viewCount > $1.viewCount }.prefix(5).map { $0.id }
+            
             let analytics = ChannelAnalytics(
-                totalViews: Int.random(in: 10000...1000000),
-                totalSubscribers: Int.random(in: 1000...100000),
-                totalVideos: Int.random(in: 50...500),
-                totalWatchTime: TimeInterval.random(in: 100000...1000000),
-                totalRevenue: Double.random(in: 500...10000),
-                averageViewsPerVideo: Double.random(in: 1000...5000),
-                subscriberGrowthRate: Double.random(in: -5...25),
-                topPerformingVideos: Array(Video.sampleVideos.prefix(5).map { $0.id }),
-                viewsByCountry: ["United States": 2000],
-                viewsByAge: ["25-34": 1200],
-                viewsByGender: ["Male": 2000, "Female": 1500],
-                revenueBySource: ["Ad Revenue": 1200],
+                totalViews: realTotalViews,
+                totalSubscribers: realSubscribers,
+                totalVideos: allVideos.count,
+                totalWatchTime: realWatchTimeSeconds,
+                totalRevenue: estimatedRevenue,
+                averageViewsPerVideo: avgViewsPerVideo,
+                subscriberGrowthRate: 0,
+                topPerformingVideos: Array(topVideoIds),
+                viewsByCountry: [:],
+                viewsByAge: [:],
+                viewsByGender: [:],
+                revenueBySource: estimatedRevenue > 0 ? ["Ad Revenue": estimatedRevenue] : [:],
                 period: .last30Days
             )
             await MainActor.run { self.channelAnalytics = analytics }
+            print("📊 [AdvancedAnalytics] Fallback: \(allVideos.count) videos, \(realTotalViews) views, $\(String(format: "%.2f", estimatedRevenue)) est. revenue")
             return analytics
         }
     }
@@ -320,8 +330,13 @@ class AdvancedAnalyticsService: ObservableObject {
             await MainActor.run { self.videoPerformance = enhanced }
             return enhanced
         } catch {
-            let analytics = Video.sampleVideos.map { video in
-                VideoAnalytics(
+            // 🔥 FIX: Use REAL Firestore video data instead of sampleVideos
+            let realVideos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: creatorId, limit: 50)
+            let analytics = realVideos.map { video in
+                let estimatedCPM = 2.0
+                let revenue = Double(video.viewCount) / 1000.0 * estimatedCPM
+                let engRate = video.viewCount > 0 ? Double(video.likeCount + video.commentCount) / Double(video.viewCount) * 100 : 0
+                return VideoAnalytics(
                     videoId: video.id,
                     views: video.viewCount,
                     uniqueViews: Int(Double(video.viewCount) * 0.8),
@@ -329,15 +344,16 @@ class AdvancedAnalyticsService: ObservableObject {
                     dislikes: video.dislikeCount,
                     comments: video.commentCount,
                     shares: 0,
-                    watchTime: 0,
-                    averageWatchTime: 0,
+                    watchTime: video.duration * 0.3 * Double(video.viewCount),
+                    averageWatchTime: video.duration * 0.3,
                     clickThroughRate: 0,
-                    engagementRate: 0,
-                    revenue: 0
+                    engagementRate: engRate,
+                    revenue: revenue
                 )
             }
             let enhanced = await addAIInsights(to: analytics)
             await MainActor.run { self.videoPerformance = enhanced }
+            print("📊 [AdvancedAnalytics] Video performance fallback: \(realVideos.count) real videos")
             return enhanced
         }
     }

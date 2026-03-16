@@ -32,7 +32,11 @@ struct ExploreHubView: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .onAppear {
-            Task { await exploreService.loadTrending() }
+            isLoading = true
+            Task {
+                await exploreService.loadTrending()
+                isLoading = false
+            }
         }
     }
     
@@ -76,8 +80,12 @@ struct ExploreHubView: View {
                     HapticManager.shared.impact(style: .light)
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         selectedTopic = nil
+                        isLoading = true
                     }
-                    Task { await exploreService.loadTrending() }
+                    Task {
+                        await exploreService.loadTrending()
+                        isLoading = false
+                    }
                 }
                 
                 // Topic chips
@@ -86,8 +94,12 @@ struct ExploreHubView: View {
                         HapticManager.shared.impact(style: .light)
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             selectedTopic = topic
+                            isLoading = true
                         }
-                        Task { await exploreService.loadTopic(topic) }
+                        Task {
+                            await exploreService.loadTopic(topic)
+                            isLoading = false
+                        }
                     }
                 }
             }
@@ -126,17 +138,37 @@ struct ExploreHubView: View {
     // MARK: - Video List
     private var videoList: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(exploreService.videos) { video in
-                    CleanExploreRow(video: video)
+            if exploreService.videos.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "sparkles.tv")
+                        .font(.system(size: 40))
+                        .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.2) : Color.black.opacity(0.15))
                     
-                    // Subtle divider
-                    Divider()
-                        .background(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.08))
-                        .padding(.leading, 148)
+                    Text("No videos yet")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    
+                    Text("Watch a few videos so we can start recommending the best of MyChannel for you.")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.6) : Color.black.opacity(0.6))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, 40)
+            } else {
+                LazyVStack(spacing: 0) {
+                    ForEach(exploreService.videos) { video in
+                        CleanExploreRow(video: video)
+                        
+                        // Subtle divider
+                        Divider()
+                            .background(colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.08))
+                            .padding(.leading, 148)
+                    }
+                }
+                .padding(.top, 8)
             }
-            .padding(.top, 8)
         }
     }
 }

@@ -14,6 +14,7 @@ struct AIRecommendationsSection: View {
     @EnvironmentObject private var appState: AppState
     @State private var recommendedVideos: [Video] = []
     @State private var isLoading = false
+    @State private var lastLoadedUserId: String?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -66,7 +67,7 @@ struct AIRecommendationsSection: View {
             }
         }
         .padding(.vertical, 16)
-        .task {
+        .task(id: appState.currentUser?.id ?? "guest") {
             await loadRecommendations()
         }
     }
@@ -75,6 +76,7 @@ struct AIRecommendationsSection: View {
     
     private func loadRecommendations() async {
         guard !isLoading else { return }
+        // Guest / logged-out: shared recommendations (not personalized)
         guard appState.isAuthenticated, let userId = appState.currentUser?.id else {
             // Not logged in - use sample videos
             await MainActor.run {
@@ -83,35 +85,33 @@ struct AIRecommendationsSection: View {
             return
         }
         
-        isLoading = true
+        // Avoid reloading if we already fetched for this user in this session
+        if lastLoadedUserId == userId, !recommendedVideos.isEmpty {
+            return
+        }
+        
+        await MainActor.run {
+            isLoading = true
+        }
         
         do {
-            // 🔥 AI RECOMMENDER AGENT
-            print("🤖 [Recommender] Getting personalized recommendations for user: \(userId)")
-            
-            let recommendations = try await VertexAIAgentService.shared.getRecommendations(
-                for: userId,
-                sessionHistory: [],
-                limit: 10
-            )
-            
-            print("✅ [Recommender] Got \(recommendations.videoIDs.count) AI recommendations")
-            
-            // Fetch actual video objects from IDs
-            var videos: [Video] = []
-            
-            // For now, use sample videos since there's no fetchVideo method
-            // TODO: Implement fetchVideo(id:) method in VideoFirestoreService
-            videos = Video.sampleVideos.prefix(recommendations.videoIDs.count).map { $0 }
+            // 🔥 Personalized per-user recommendations using watch history + likes
+            let videos = try await PersonalizedFeedService.shared.generateForYou(userId: userId, limit: 12)
             
             // Fallback to sample if AI returns nothing
             if videos.isEmpty {
-                videos = Array(Video.sampleVideos.shuffled().prefix(10))
+                await MainActor.run {
+                    recommendedVideos = Array(Video.sampleVideos.shuffled().prefix(10))
+                    isLoading = false
+                    lastLoadedUserId = userId
+                }
+                return
             }
             
             await MainActor.run {
                 recommendedVideos = videos
                 isLoading = false
+                lastLoadedUserId = userId
             }
             
         } catch {

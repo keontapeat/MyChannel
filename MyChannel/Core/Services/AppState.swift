@@ -32,7 +32,7 @@ class AppState: ObservableObject {
     @Published var likedVideos: Set<String> = []
     @Published var savedPlaylists: Set<String> = []
     @Published var subscriptions: Set<String> = []
-    @Published var watchHistory: [String] = []
+    @Published var watchHistory: [WatchHistoryItem] = []
     
     // MARK: - Network State
     @Published var isConnected = true
@@ -179,14 +179,80 @@ class AppState: ObservableObject {
     func setCurrentVideo(_ video: Video) {
         currentlyPlayingVideo = video
         isVideoPlayerVisible = true
+        addToHistory(video: video)
+    }
+    
+    func addToHistory(video: Video, progress: Double = 0.0, position: TimeInterval = 0.0) {
+        let item = WatchHistoryItem.fromVideo(video, progress: progress, position: position)
         
-        // Add to watch history
-        if !watchHistory.contains(video.id) {
-            watchHistory.insert(video.id, at: 0)
+        if let existingIndex = watchHistory.firstIndex(where: { $0.contentId == video.id }) {
+            watchHistory[existingIndex] = item
+        } else {
+            watchHistory.insert(item, at: 0)
+        }
+        
+        if watchHistory.count > 100 {
+            watchHistory = Array(watchHistory.prefix(100))
+        }
+        
+        if let userId = currentUser?.id {
+            Task {
+                await HistoryService.shared.addOrUpdateHistoryItem(item, userId: userId)
+            }
+        }
+    }
+    
+    func addStoryToHistory(story: Story, creator: User) {
+        let item = WatchHistoryItem.fromStory(story, creator: creator)
+        
+        if let existingIndex = watchHistory.firstIndex(where: { $0.contentId == story.id }) {
+            watchHistory[existingIndex] = item
+        } else {
+            watchHistory.insert(item, at: 0)
+        }
+        
+        if watchHistory.count > 100 {
+            watchHistory = Array(watchHistory.prefix(100))
+        }
+        
+        if let userId = currentUser?.id {
+            Task {
+                await HistoryService.shared.addOrUpdateHistoryItem(item, userId: userId)
+            }
+        }
+    }
+    
+    func addLiveTVToHistory(channel: LiveTVChannel, duration: TimeInterval = 0.0) {
+        let item = WatchHistoryItem.fromLiveTV(channel, duration: duration)
+        
+        if let existingIndex = watchHistory.firstIndex(where: { $0.contentId == channel.id }) {
+            watchHistory[existingIndex] = item
+        } else {
+            watchHistory.insert(item, at: 0)
+        }
+        
+        if watchHistory.count > 100 {
+            watchHistory = Array(watchHistory.prefix(100))
+        }
+        
+        if let userId = currentUser?.id {
+            Task {
+                await HistoryService.shared.addOrUpdateHistoryItem(item, userId: userId)
+            }
+        }
+    }
+    
+    func updateHistoryProgress(contentId: String, progress: Double, position: TimeInterval) {
+        if let index = watchHistory.firstIndex(where: { $0.contentId == contentId }) {
+            var item = watchHistory[index]
+            item.watchProgress = progress
+            item.lastPosition = position
+            watchHistory[index] = item
             
-            // Keep only last 100 videos in history
-            if watchHistory.count > 100 {
-                watchHistory = Array(watchHistory.prefix(100))
+            if let userId = currentUser?.id {
+                Task {
+                    await HistoryService.shared.updateProgress(itemId: item.id, userId: userId, progress: progress, position: position)
+                }
             }
         }
     }
@@ -268,7 +334,7 @@ class AppState: ObservableObject {
         let likedVideos: [String]
         let savedPlaylists: [String]
         let subscriptions: [String]
-        let watchHistory: [String]
+        let watchHistory: [WatchHistoryItem]
     }
     
     private func saveUserData() {
@@ -301,7 +367,7 @@ class AppState: ObservableObject {
                     "likedVideos": Array(likedVideos),
                     "savedPlaylists": Array(savedPlaylists),
                     "subscriptions": Array(subscriptions),
-                    "watchHistory": watchHistory
+                    "watchHistory": try? JSONEncoder().encode(watchHistory)
                 ] as [String : Any]
                 UserDefaults.standard.set(fallbackData, forKey: "userData_\(userId)")
             }
@@ -324,8 +390,12 @@ class AppState: ObservableObject {
             if let subs = userData["subscriptions"] as? [String] {
                 subscriptions = Set(subs)
             }
-            if let history = userData["watchHistory"] as? [String] {
+            if let historyData = userData["watchHistory"] as? Data,
+               let history = try? JSONDecoder().decode([WatchHistoryItem].self, from: historyData) {
                 watchHistory = history
+            } else if let legacyHistory = userData["watchHistory"] as? [String] {
+                // Migrate legacy string array to WatchHistoryItem array
+                watchHistory = []
             }
         }
         // Load from Firestore too so data persists across devices and after reinstall
@@ -381,4 +451,8 @@ extension Notification.Name {
     static let videoDidStart = Notification.Name("videoDidStart")
     static let videoDidEnd = Notification.Name("videoDidEnd")
     static let storiesDidChange = Notification.Name("storiesDidChange")
+    static let openVideoFromHistory = Notification.Name("openVideoFromHistory")
+    static let openStoryFromHistory = Notification.Name("openStoryFromHistory")
+    static let openLiveTVFromHistory = Notification.Name("openLiveTVFromHistory")
+    static let presentSignInSheet = Notification.Name("presentSignInSheet")
 }

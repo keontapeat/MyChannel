@@ -215,18 +215,20 @@ struct MainTabView: View {
             // Main Content
             SafeContentView(selectedTab: selectedTab)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(AppTheme.Colors.background)
+                .background(selectedTab == .flicks ? Color.black : AppTheme.Colors.background)
                 .zIndex(5)
                 .allowsHitTesting(true)
                 .safeAreaInset(edge: .bottom) {
-                    // Reserve space so scrollable content does not sit beneath the flush tab bar
-                    VStack(spacing: 8) {
-                        // Show audio bar when not in fullscreen (PiP doesn't affect layout)
-                        if !globalPlayer.showingFullscreen {
-                            GlobalNowPlayingBar()
+                    // Flicks tab is fullscreen - no inset needed, overlay handles its own bottom clearance
+                    if selectedTab != .flicks {
+                        VStack(spacing: 8) {
+                            // Show audio bar when not in fullscreen (PiP doesn't affect layout)
+                            if !globalPlayer.showingFullscreen {
+                                GlobalNowPlayingBar()
+                            }
+                            // Reserve tab bar space (no mini player padding needed - native PiP floats)
+                            Color.clear.frame(height: tabBarReservedBottomInset)
                         }
-                        // Reserve tab bar space (no mini player padding needed - native PiP floats)
-                        Color.clear.frame(height: tabBarReservedBottomInset)
                     }
                 }
             
@@ -269,45 +271,41 @@ struct MainTabView: View {
     private func setupInitialState() {
         guard !isInitialized else { return }
         
-        do {
-            print("🔄 [MainTabView] setupInitialState - Starting (lightweight)...")
+        print("🔄 [MainTabView] setupInitialState - Starting (lightweight)...")
+        
+        // Initialize notification badges immediately (lightweight)
+        notificationBadges = [
+            .home: 0,
+            .flicks: 2,
+            .upload: 0,
+            .search: 0,
+            .profile: 3
+        ]
+        
+        // Sync user state safely
+        appState.currentUser = authManager.currentUser
+        isInitialized = true
+        
+        print("✅ [MainTabView] setupInitialState completed (lightweight ops only)")
+        
+        // 🔥 CRITICAL FIX: Delay heavy operations to prevent crash on launch
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            // Clear fullscreen state on app launch
+            print("🔄 [MainTabView] Delayed init - Clearing fullscreen state")
+            globalPlayer.showingFullscreen = false
             
-            // Initialize notification badges immediately (lightweight)
-            notificationBadges = [
-                .home: 0,
-                .flicks: 2,
-                .upload: 0,
-                .search: 0,
-                .profile: 3
-            ]
-            
-            // Sync user state safely
-            appState.currentUser = authManager.currentUser
-            isInitialized = true
-            
-            print("✅ [MainTabView] setupInitialState completed (lightweight ops only)")
-            
-            // 🔥 CRITICAL FIX: Delay heavy operations to prevent crash on launch
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                // Clear fullscreen state on app launch
-                print("🔄 [MainTabView] Delayed init - Clearing fullscreen state")
-                globalPlayer.showingFullscreen = false
-                
-                // 🔥 CRITICAL FIX: If there's a video but no active player, clear the video too
-                if globalPlayer.currentVideo != nil && globalPlayer.player == nil {
-                    print("⚠️ [MainTabView] Found stale video with no player - clearing")
-                    globalPlayer.currentVideo = nil
-                }
-                
-                // Ensure correct initial preview state
-                if selectedTab == .home {
-                    NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
-                } else {
-                    NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldPause"), object: nil)
-                }
+            // 🔥 CRITICAL FIX: If there's a video but no active player, clear the video too
+            if globalPlayer.currentVideo != nil && globalPlayer.player == nil {
+                print("⚠️ [MainTabView] Found stale video with no player - clearing")
+                globalPlayer.currentVideo = nil
             }
-        } catch {
-            handleError("Failed to initialize app state: \(error.localizedDescription)")
+            
+            // Ensure correct initial preview state
+            if selectedTab == .home {
+                NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
+            } else {
+                NotificationCenter.default.post(name: NSNotification.Name("LivePreviewsShouldPause"), object: nil)
+            }
         }
     }
     
@@ -321,56 +319,50 @@ struct MainTabView: View {
     private func handleTabSelection(_ tab: TabItem) {
         guard tab != .upload else { return }
         
-        do {
-            // Immediately drop any keyboard/search focus before switching
-            NotificationCenter.default.post(name: NSNotification.Name("SearchLoseFocus"), object: nil)
-            UIApplication.shared.endEditing()
-            
-            let targetTab = tab
-            let wasSameTab = (targetTab == selectedTab)
-            previousTab = selectedTab
+        // Immediately drop any keyboard/search focus before switching
+        NotificationCenter.default.post(name: NSNotification.Name("SearchLoseFocus"), object: nil)
+        UIApplication.shared.endEditing()
+        
+        let targetTab = tab
+        let wasSameTab = (targetTab == selectedTab)
+        previousTab = selectedTab
 
-            // Pause mini-player when entering Flicks; resume when leaving
-            if targetTab == .flicks {
-                globalPlayer.pauseForFlicksEngagement()
-            } else {
-                globalPlayer.resumeAfterLeavingFlicks()
-                // Stop Flicks in-feed video/audio when leaving tab (so audio doesn’t keep playing)
-                if selectedTab == .flicks {
-                    NotificationCenter.default.post(name: Notification.Name.pauseFlicksPlayback, object: nil)
-                }
+        // Pause mini-player when entering Flicks; resume when leaving
+        if targetTab == .flicks {
+            globalPlayer.pauseForFlicksEngagement()
+        } else {
+            globalPlayer.resumeAfterLeavingFlicks()
+            // Stop Flicks in-feed video/audio when leaving tab (so audio doesn't keep playing)
+            if selectedTab == .flicks {
+                NotificationCenter.default.post(name: Notification.Name.pauseFlicksPlayback, object: nil)
             }
+        }
 
-            // Switch tabs on the next runloop tick so the focus change doesn't eat the tap
-            DispatchQueue.main.async {
-                var tx = SwiftUI.Transaction()
-                tx.disablesAnimations = true
-                withTransaction(tx) {
-                    selectedTab = targetTab
-                }
-                
-                // If switching TO search, explicitly focus the field after selection
-                if targetTab == .search {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        NotificationCenter.default.post(name: NSNotification.Name("FocusSearchBar"), object: nil)
-                    }
-                } else if targetTab == .profile && !authManager.isAuthenticated {
-                    // Do not auto-present auth; let ProfileView show the lightweight prompt
-                }
-            }
-
-            // Handle reselection behaviors without blocking the switch
-            if wasSameTab {
-                handleTabReselection(targetTab)
+        // Switch tabs on the next runloop tick so the focus change doesn't eat the tap
+        DispatchQueue.main.async {
+            var tx = SwiftUI.Transaction()
+            tx.disablesAnimations = true
+            withTransaction(tx) {
+                selectedTab = targetTab
             }
             
-            notificationBadges[targetTab] = 0
-            
-            Task { @MainActor in
-                try? await AnalyticsService.shared.trackScreenView(targetTab.title)
+            // If switching TO search, explicitly focus the field after selection
+            if targetTab == .search {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    NotificationCenter.default.post(name: NSNotification.Name("FocusSearchBar"), object: nil)
+                }
             }
-        } catch {
-            handleError("Tab selection error: \(error.localizedDescription)")
+        }
+
+        // Handle reselection behaviors without blocking the switch
+        if wasSameTab {
+            handleTabReselection(targetTab)
+        }
+        
+        notificationBadges[targetTab] = 0
+        
+        Task { @MainActor in
+            await AnalyticsService.shared.trackScreenView(targetTab.title)
         }
     }
     

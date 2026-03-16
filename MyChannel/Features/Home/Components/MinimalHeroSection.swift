@@ -6,6 +6,8 @@
 //
 
 import SwiftUI
+import AVFoundation
+import AVKit
 
 // MARK: - Minimal Hero Section (Pager)
 struct MinimalHeroSection: View {
@@ -48,18 +50,18 @@ struct MinimalHeroSection: View {
                             HapticManager.shared.impact(style: .light)
                             showingFeaturedManager = true
                         } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "pencil.circle.fill")
-                                    .font(.system(size: 16, weight: .semibold))
+                            HStack(spacing: 5) {
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 11, weight: .semibold))
                                 Text("Edit")
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.system(size: 12, weight: .semibold))
                             }
-                            .foregroundColor(AppTheme.Colors.primary)
+                            .foregroundColor(.primary)
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
+                            .padding(.vertical, 7)
                             .background(
-                                Capsule()
-                                    .fill(AppTheme.Colors.primary.opacity(0.1))
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Color(.separator), lineWidth: 1)
                             )
                         }
                     }
@@ -218,6 +220,11 @@ struct FeaturedHeroCard: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             )
+            .overlay(
+                MutedLoopVideoPlayer(videoURL: video.videoURL)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .allowsHitTesting(false)
+            )
 
             // Overlayed content
             VStack(spacing: 12) {
@@ -246,15 +253,13 @@ struct FeaturedHeroCard: View {
 
             Spacer()
 
-            HStack(spacing: 6) {
-                Image(systemName: "clock")
-                Text(video.formattedDuration)
-            }
+            Text(video.formattedDuration)
             .font(.system(size: 12, weight: .semibold))
             .foregroundColor(.white)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Capsule().fill(Color.black.opacity(0.35)))
+            .background(Color.black.opacity(0.75))
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .padding(.horizontal, 14)
         .padding(.top, 14)
@@ -264,9 +269,11 @@ struct FeaturedHeroCard: View {
     @ViewBuilder
     private var bottomContent: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                Label(video.creator.displayName, systemImage: "person.crop.circle")
-                Label("\(video.formattedViewCount) views", systemImage: "eye")
+            HStack(spacing: 10) {
+                Label(video.creator.displayName, systemImage: "person.crop.circle.fill")
+                    .lineLimit(1)
+                Text("·")
+                Label(video.formattedViewCount, systemImage: "eye.fill")
             }
             .font(.system(size: 12, weight: .semibold))
             .foregroundColor(.white.opacity(0.9))
@@ -314,6 +321,75 @@ struct FeaturedHeroCard: View {
         }
         .padding(.horizontal, 14)
         .padding(.bottom, 14)
+    }
+}
+
+// MARK: - Muted Looping Inline Video Player
+struct MutedLoopVideoPlayer: UIViewRepresentable {
+    let videoURL: String
+
+    func makeUIView(context: Context) -> UIView {
+        let view = PlayerContainerView()
+        view.backgroundColor = .clear
+        configure(view: view)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        guard let view = uiView as? PlayerContainerView else { return }
+        if view.currentURL != videoURL {
+            configure(view: view)
+        }
+    }
+
+    private func configure(view: PlayerContainerView) {
+        view.currentURL = videoURL
+        view.player?.pause()
+        view.player = nil
+        view.playerLayer?.removeFromSuperlayer()
+        view.playerLayer = nil
+
+        guard !videoURL.isEmpty, let url = resolvedURL() else { return }
+
+        let player = AVPlayer(url: url)
+        player.isMuted = true
+        player.actionAtItemEnd = .none
+
+        let layer = AVPlayerLayer(player: player)
+        layer.videoGravity = .resizeAspectFill
+        layer.frame = view.bounds
+        view.layer.insertSublayer(layer, at: 0)
+        view.player = player
+        view.playerLayer = layer
+
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: player.currentItem,
+            queue: .main
+        ) { _ in
+            player.seek(to: .zero)
+            player.play()
+        }
+
+        player.play()
+    }
+
+    private func resolvedURL() -> URL? {
+        if videoURL.hasPrefix("file://") || videoURL.hasPrefix("/") {
+            return URL(string: videoURL) ?? URL(fileURLWithPath: videoURL)
+        }
+        return URL(string: videoURL)
+    }
+}
+
+final class PlayerContainerView: UIView {
+    var player: AVPlayer?
+    var playerLayer: AVPlayerLayer?
+    var currentURL: String?
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        playerLayer?.frame = bounds
     }
 }
 

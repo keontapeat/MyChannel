@@ -12,42 +12,46 @@ struct GamingEsportsView: View {
     @State private var selectedTab: GamingTab = .tournaments
     @Environment(\.dismiss) private var dismiss
     
+    @State private var showingCreateMatch = false
+    @State private var joiningTournamentId: String? = nil
+    @State private var acceptingMatchId: String? = nil
+    @State private var joinAlertMessage: String? = nil
+    @State private var showJoinAlert = false
+    
     var body: some View {
-        NavigationView {
-            ZStack {
-                // Background
-                AppTheme.Colors.background
-                    .ignoresSafeArea()
+        ZStack {
+            // Background
+            AppTheme.Colors.background
+                .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Header
+                esportsHeader
                 
-                VStack(spacing: 0) {
-                    // Header
-                    esportsHeader
-                    
-                    // Tab Navigation
-                    tabNavigation
-                    
-                    // Content
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 24) {
-                            switch selectedTab {
-                            case .tournaments:
-                                tournamentsContent
-                            case .vsMatches:
-                                vsMatchesContent
-                            case .leaderboard:
-                                leaderboardContent
-                            case .myEarnings:
-                                myEarningsContent
-                            }
+                // Tab Navigation
+                tabNavigation
+                
+                // Content
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 24) {
+                        switch selectedTab {
+                        case .tournaments:
+                            tournamentsContent
+                        case .vsMatches:
+                            vsMatchesContent
+                        case .leaderboard:
+                            leaderboardContent
+                        case .myEarnings:
+                            myEarningsContent
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 20)
-                        .padding(.bottom, 100)
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 100)
                 }
             }
-            .navigationBarHidden(true)
         }
+        .navigationBarHidden(true)
         .task {
             await viewModel.loadData()
         }
@@ -55,6 +59,12 @@ struct GamingEsportsView: View {
             Task {
                 await viewModel.refreshLeaderboard(for: period)
             }
+        }
+        .sheet(isPresented: $showingCreateMatch) {
+            VersusMatchCreatorView()
+        }
+        .alert(joinAlertMessage ?? "", isPresented: $showJoinAlert) {
+            Button("OK", role: .cancel) {}
         }
     }
     
@@ -296,21 +306,33 @@ struct GamingEsportsView: View {
                     
                     // Join Button
                     Button(action: {
-                        // Join tournament
+                        if let t = viewModel.featuredTournament {
+                            joinTournament(t)
+                        }
                     }) {
-                        Text("JOIN NOW")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                            .background(
-                                LinearGradient(
-                                    colors: [Color(hexString: "#DC143C") ?? .red, Color(hexString: "#8B0000") ?? Color(red: 0.55, green: 0, blue: 0)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                        Group {
+                            if let t = viewModel.featuredTournament, joiningTournamentId == t.id {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .frame(height: 52)
+                            } else {
+                                Text("JOIN NOW")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 52)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(
+                            LinearGradient(
+                                colors: [Color(hexString: "#DC143C") ?? .red, Color(hexString: "#8B0000") ?? Color(red: 0.55, green: 0, blue: 0)],
+                                startPoint: .leading,
+                                endPoint: .trailing
                             )
-                            .cornerRadius(12)
+                        )
+                        .cornerRadius(12)
                     }
                     .padding(.horizontal, 40)
                 }
@@ -421,19 +443,24 @@ struct GamingEsportsView: View {
             
             // Join Button
             Button(action: {
-                // Join tournament
+                joinTournament(tournament)
             }) {
-                Text(tournament.isFull ? "FULL" : "JOIN")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(
-                        tournament.isFull ? Color.gray : AppTheme.Colors.primary
-                    )
-                    .cornerRadius(10)
+                Group {
+                    if joiningTournamentId == tournament.id {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    } else {
+                        Text(tournament.isFull ? "FULL" : "JOIN")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(tournament.isFull ? Color.gray : AppTheme.Colors.primary)
+                .cornerRadius(10)
             }
-            .disabled(tournament.isFull)
+            .disabled(tournament.isFull || joiningTournamentId == tournament.id)
         }
         .padding(16)
         .background(
@@ -452,7 +479,7 @@ struct GamingEsportsView: View {
         VStack(spacing: 24) {
             // Create Match Button
             Button(action: {
-                // Create match
+                showingCreateMatch = true
             }) {
                 HStack(spacing: 12) {
                     Image(systemName: "plus.circle.fill")
@@ -666,16 +693,26 @@ struct GamingEsportsView: View {
     
     private func acceptOrViewButton(match: VSMatch) -> some View {
         Button(action: {
-            // Accept/View match
+            if match.opponent == nil {
+                acceptChallenge(match)
+            }
         }) {
-            Text(match.opponent == nil ? "ACCEPT CHALLENGE" : "VIEW MATCH")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
-                .background(AppTheme.Colors.primary)
-                .cornerRadius(10)
+            Group {
+                if acceptingMatchId == match.id {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                } else {
+                    Text(match.opponent == nil ? "ACCEPT CHALLENGE" : "VIEW MATCH")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(AppTheme.Colors.primary)
+            .cornerRadius(10)
         }
+        .disabled(acceptingMatchId == match.id)
     }
     
     private func cardBackground(match: VSMatch) -> some View {
@@ -1090,6 +1127,64 @@ struct GamingEsportsView: View {
                         .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
                 )
         )
+    }
+    
+    // MARK: - Actions
+    
+    private func joinTournament(_ tournament: EsportsTournament) {
+        guard joiningTournamentId == nil else { return }
+        guard let userId = AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id else {
+            joinAlertMessage = "Sign in to join tournaments."
+            showJoinAlert = true
+            return
+        }
+        guard !tournament.isFull else { return }
+        
+        joiningTournamentId = tournament.id
+        HapticManager.shared.impact(style: .medium)
+        
+        Task {
+            do {
+                try await EsportsTournamentService.shared.joinTournament(
+                    tournamentId: tournament.id,
+                    userId: userId
+                )
+                await viewModel.loadData()
+                joinAlertMessage = "You joined \(tournament.name)! 🏆"
+                HapticManager.shared.notification(type: .success)
+            } catch {
+                joinAlertMessage = "Failed to join: \(error.localizedDescription)"
+                HapticManager.shared.notification(type: .error)
+            }
+            joiningTournamentId = nil
+            showJoinAlert = true
+        }
+    }
+    
+    private func acceptChallenge(_ match: VSMatch) {
+        guard acceptingMatchId == nil else { return }
+        guard let userId = AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id else {
+            joinAlertMessage = "Sign in to accept challenges."
+            showJoinAlert = true
+            return
+        }
+        
+        acceptingMatchId = match.id
+        HapticManager.shared.impact(style: .medium)
+        
+        Task {
+            do {
+                try await VersusMatchService.shared.acceptMatch(matchId: match.id, opponentId: userId)
+                await viewModel.loadData()
+                joinAlertMessage = "Challenge accepted! Get ready to compete. 🎮"
+                HapticManager.shared.notification(type: .success)
+            } catch {
+                joinAlertMessage = "Failed to accept: \(error.localizedDescription)"
+                HapticManager.shared.notification(type: .error)
+            }
+            acceptingMatchId = nil
+            showJoinAlert = true
+        }
     }
 }
 

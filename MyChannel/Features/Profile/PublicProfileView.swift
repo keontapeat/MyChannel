@@ -52,7 +52,7 @@ struct PublicProfileView: View {
                 
                 // Profile Content
                 SafeProfileContentView(
-                    selectedTab: selectedTab,
+                    selectedTab: $selectedTab,
                     user: editableUser,
                     videos: userVideos
                 )

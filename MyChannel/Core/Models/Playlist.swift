@@ -15,6 +15,8 @@ struct Playlist: Identifiable, Codable, Equatable {
     let thumbnailURL: String?
     let creatorId: String
     let videoIds: [String]
+    /// Optional list of Song ids when this playlist is used for MyChannel Music.
+    let songIds: [String]?
     let isPublic: Bool
     let createdAt: Date
     let updatedAt: Date
@@ -28,6 +30,7 @@ struct Playlist: Identifiable, Codable, Equatable {
         thumbnailURL: String? = nil,
         creatorId: String,
         videoIds: [String] = [],
+        songIds: [String]? = nil,
         isPublic: Bool = true,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
@@ -40,6 +43,7 @@ struct Playlist: Identifiable, Codable, Equatable {
         self.thumbnailURL = thumbnailURL
         self.creatorId = creatorId
         self.videoIds = videoIds
+        self.songIds = songIds
         self.isPublic = isPublic
         self.createdAt = createdAt
         self.updatedAt = updatedAt

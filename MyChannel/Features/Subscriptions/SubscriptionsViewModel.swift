@@ -18,6 +18,7 @@ final class SubscriptionsViewModel: ObservableObject {
     @Published var subscribedChannels: [User] = []
     @Published var isLoading = false
     @Published var error: String?
+    @Published var hasNewVideosBadge: Bool = false
     
     // Filters & Sorting
     @Published var filterOption: FilterOption = .all

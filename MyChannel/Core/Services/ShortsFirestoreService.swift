@@ -19,6 +19,63 @@ final class ShortsFirestoreService: ObservableObject {
         #endif
     }
 
+    // MARK: - Helper: Resolve creator from shorts document
+    #if canImport(FirebaseFirestore)
+    private func resolveCreator(from data: [String: Any]) async -> User {
+        let creatorId =
+            (data["creatorId"] as? String) ??
+            (data["userId"] as? String) ??
+            (data["ownerUid"] as? String) ??
+            ""
+        
+        if !creatorId.isEmpty {
+            do {
+                let userDoc = try await db.collection("users").document(creatorId).getDocument()
+                if let userData = userDoc.data() {
+                    return User(
+                        id: creatorId,
+                        username: (userData["username"] as? String) ?? (data["creatorUsername"] as? String) ?? "user",
+                        displayName: (userData["displayName"] as? String) ?? (data["creatorDisplayName"] as? String) ?? "Creator",
+                        email: (userData["email"] as? String) ?? "",
+                        profileImageURL: (userData["profileImageURL"] as? String)
+                            ?? (userData["profileImageUrl"] as? String)
+                            ?? (data["creatorProfileImage"] as? String),
+                        bannerImageURL: (userData["bannerImageURL"] as? String) ?? (userData["bannerImageUrl"] as? String),
+                        bio: userData["bio"] as? String,
+                        subscriberCount: (userData["subscriberCount"] as? Int) ?? 0,
+                        videoCount: (userData["videoCount"] as? Int) ?? 0,
+                        isVerified: (userData["isVerified"] as? Bool) ?? (data["creatorIsVerified"] as? Bool) ?? false,
+                        isCreator: true,
+                        createdAt: (userData["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+                    )
+                }
+            } catch {
+                print("⚠️ [ShortsFirestoreService] Failed to resolve creator \(creatorId): \(error)")
+            }
+        }
+        
+        let fallbackUsername = (data["creatorUsername"] as? String) ?? "user"
+        let fallbackDisplayName = (data["creatorDisplayName"] as? String) ?? "Creator"
+        let profileImage = data["creatorProfileImage"] as? String
+        let verified = (data["creatorIsVerified"] as? Bool) ?? false
+        
+        return User(
+            id: creatorId.isEmpty ? UUID().uuidString : creatorId,
+            username: fallbackUsername,
+            displayName: fallbackDisplayName,
+            email: "",
+            profileImageURL: profileImage,
+            bannerImageURL: nil,
+            bio: nil,
+            subscriberCount: 0,
+            videoCount: 0,
+            isVerified: verified,
+            isCreator: true,
+            createdAt: Date()
+        )
+    }
+    #endif
+
     func fetchNextPage(limit: Int = 10) async -> [Video] {
         #if canImport(FirebaseFirestore)
         do {
@@ -28,9 +85,13 @@ final class ShortsFirestoreService: ObservableObject {
             if let last = lastSnapshot { query = query.start(afterDocument: last) }
             let snap = try await query.getDocuments()
             lastSnapshot = snap.documents.last
-            return snap.documents.compactMap { doc in
+            
+            var results: [Video] = []
+            for doc in snap.documents {
                 let d = doc.data()
-                return Video(
+                let creator = await resolveCreator(from: d)
+                
+                let video = Video(
                     id: doc.documentID,
                     title: d["title"] as? String ?? "",
                     description: d["description"] as? String ?? "",
@@ -39,12 +100,14 @@ final class ShortsFirestoreService: ObservableObject {
                     duration: (d["duration"] as? Double) ?? 0,
                     viewCount: (d["viewCount"] as? Int) ?? 0,
                     likeCount: (d["likeCount"] as? Int) ?? 0,
-                    creator: AppState.shared.currentUser ?? User.defaultUser,
+                    creator: creator,
                     category: .shorts,
                     aspectRatio: .portrait,
                     isLiveStream: false
                 )
+                results.append(video)
             }
+            return results
         } catch {
             return []
         }

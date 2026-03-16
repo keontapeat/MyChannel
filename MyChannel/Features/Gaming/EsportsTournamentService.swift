@@ -43,6 +43,22 @@ final class EsportsTournamentService: ObservableObject {
         #endif
     }
     
+    /// Join a tournament by adding the user to its participants subcollection.
+    func joinTournament(tournamentId: String, userId: String) async throws {
+        #if canImport(FirebaseFirestore)
+        let ref = db.collection("tournaments").document(tournamentId)
+        
+        try await ref.collection("participants").document(userId).setData([
+            "userId": userId,
+            "joinedAt": FieldValue.serverTimestamp()
+        ])
+        
+        try await ref.updateData([
+            "currentPlayers": FieldValue.increment(Int64(1))
+        ])
+        #endif
+    }
+    
     /// Fetch the highest prize pool tournament to feature.
     func fetchFeaturedTournament() async throws -> EsportsTournament? {
         #if canImport(FirebaseFirestore)

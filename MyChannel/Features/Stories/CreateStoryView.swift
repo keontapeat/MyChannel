@@ -140,7 +140,7 @@ struct CreateStoryView: View {
                 
                 // Loading overlay
                 if viewModel.processingState.isProcessing {
-                    ProcessingOverlay()
+                    ProcessingOverlay(viewModel: viewModel)
                 }
             }
         }
@@ -195,12 +195,16 @@ struct CreateStoryView: View {
     }
     
     private func postStory() async {
+        print("📸 [CreateStoryView] Post button tapped, starting story creation...")
         let story = await viewModel.createStory()
+        print("📸 [CreateStoryView] Story created: \(story.id), calling onStoryCreated callback...")
         await MainActor.run {
             onStoryCreated(story)
             NotificationCenter.default.post(name: .storiesDidChange, object: nil)
+            print("📸 [CreateStoryView] Dismissing view...")
             dismiss()
         }
+        print("✅ [CreateStoryView] Story posting flow complete")
     }
 }
 
@@ -617,6 +621,23 @@ struct CaptureButton: View {
 
 // MARK: - Processing Overlay
 struct ProcessingOverlay: View {
+    @ObservedObject var viewModel: CreateStoryViewModel
+    
+    private var progressMessage: String {
+        let progress = viewModel.processingState.uploadProgress
+        if progress < 0.3 {
+            return "Preparing upload..."
+        } else if progress < 0.7 {
+            return "Uploading media..."
+        } else if progress < 0.85 {
+            return "Finalizing..."
+        } else if progress < 1.0 {
+            return "Creating story..."
+        } else {
+            return "Almost done..."
+        }
+    }
+    
     var body: some View {
         ZStack {
             Color.black.opacity(0.6)
@@ -627,9 +648,15 @@ struct ProcessingOverlay: View {
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                     .scaleEffect(1.5)
                 
-                Text("Creating your story...")
+                Text(progressMessage)
                     .font(.headline)
                     .foregroundColor(.white)
+                
+                if viewModel.processingState.uploadProgress > 0 {
+                    Text("\(Int(viewModel.processingState.uploadProgress * 100))%")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.8))
+                }
             }
             .padding(32)
             .background(.black.opacity(0.8))

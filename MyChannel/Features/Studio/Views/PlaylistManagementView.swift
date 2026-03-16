@@ -50,7 +50,7 @@ struct PlaylistManagementView: View {
         HStack(spacing: 12) {
             PlaylistStatsCard(title: "Playlists", value: "\(playlists.count)", icon: "list.bullet.rectangle", color: .blue)
             PlaylistStatsCard(title: "Total Videos", value: "0", icon: "play.rectangle", color: .green)
-            PlaylistStatsCard(title: "Total Views", value: "0", icon: "eye", color: .purple)
+            PlaylistStatsCard(title: "Total Views", value: "0", icon: "eye", color: AppTheme.Colors.accent)
         }
     }
     
@@ -66,7 +66,7 @@ struct PlaylistManagementView: View {
             }
             .foregroundColor(.white)
             .padding(20)
-            .background(LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 16))
+            .background(LinearGradient(colors: [AppTheme.Colors.accent, AppTheme.Colors.primary], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 16))
         }
     }
     
@@ -101,7 +101,7 @@ struct PlaylistManagementView: View {
     private var tipsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: "lightbulb.fill").foregroundColor(.yellow)
+                Image(systemName: "lightbulb.fill").foregroundColor(AppTheme.Colors.textSecondary)
                 Text("Playlist Tips")
                     .font(.system(size: 18, weight: .semibold))
             }

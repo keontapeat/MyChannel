@@ -185,14 +185,11 @@ class DatabaseService: ObservableObject {
     
     // MARK: - Watch History
     func saveToWatchHistory(_ video: Video, watchTime: TimeInterval = 0) async throws {
-        let historyItem = WatchHistoryItem(
-            videoId: video.id,
-            videoTitle: video.title,
-            creatorName: video.creator.displayName,
-            thumbnailURL: video.thumbnailURL,
+        let historyItem = WatchHistoryItem.fromVideo(
+            video,
             watchedAt: Date(),
-            watchTime: watchTime,
-            duration: video.duration
+            progress: video.duration > 0 ? watchTime / video.duration : 0,
+            position: watchTime
         )
         
         if let encoded = try? encoder.encode(historyItem) {
@@ -369,25 +366,7 @@ class DatabaseService: ObservableObject {
 }
 
 // MARK: - Supporting Models
-struct WatchHistoryItem: Identifiable, Codable {
-    let id = UUID()
-    let videoId: String
-    let videoTitle: String
-    let creatorName: String
-    let thumbnailURL: String
-    let watchedAt: Date
-    let watchTime: TimeInterval
-    let duration: TimeInterval
-    
-    var progressPercentage: Double {
-        guard duration > 0 else { return 0 }
-        return min(1.0, watchTime / duration)
-    }
-    
-    enum CodingKeys: String, CodingKey {
-        case videoId, videoTitle, creatorName, thumbnailURL, watchedAt, watchTime, duration
-    }
-}
+// WatchHistoryItem is defined in Core/Models/WatchHistoryItem.swift
 
 struct SavedVideoItem: Identifiable, Codable {
     let id = UUID()

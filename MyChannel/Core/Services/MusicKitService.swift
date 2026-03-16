@@ -200,6 +200,56 @@ final class MusicKitService: ObservableObject {
         }
     }
     
+    /// Map MusicKit.Song to MusicKitTrack
+    private func track(from song: MusicKit.Song) -> MusicKitTrack {
+        MusicKitTrack(
+            id: song.id.rawValue,
+            title: song.title,
+            artistName: song.artistName,
+            albumTitle: song.albumTitle,
+            artworkURL: song.artwork?.url(width: 300, height: 300),
+            highResArtworkURL: song.artwork?.url(width: 1000, height: 1000),
+            duration: song.duration ?? 0,
+            isExplicit: song.contentRating == .explicit,
+            hasLyrics: song.hasLyrics,
+            supportsSpatialAudio: song.audioVariants?.contains(.dolbyAtmos) ?? false,
+            appleMusicID: song.id,
+            previewURL: song.previewAssets?.first?.url,
+            genres: song.genreNames,
+            releaseDate: song.releaseDate
+        )
+    }
+    
+    /// Map MusicKit.Artist to app Artist model
+    private func appArtist(from musicArtist: MusicKit.Artist) -> Artist {
+        let slug = musicArtist.name.lowercased()
+            .replacingOccurrences(of: " ", with: "-")
+            .filter { $0.isLetter || $0.isNumber || $0 == "-" }
+        return Artist(
+            id: musicArtist.id.rawValue,
+            name: musicArtist.name,
+            slug: slug.isEmpty ? musicArtist.id.rawValue : slug,
+            avatarURL: musicArtist.artwork?.url(width: 300, height: 300),
+            heroImageURL: musicArtist.artwork?.url(width: 1000, height: 1000)
+        )
+    }
+    
+    /// Map MusicKit.Album to app Album model
+    private func appAlbum(from musicAlbum: MusicKit.Album) -> Album {
+        Album(
+            id: musicAlbum.id.rawValue,
+            title: musicAlbum.title,
+            artistId: "", // Load .artist relationship for id if needed
+            type: .album,
+            artworkURL: musicAlbum.artwork?.url(width: 300, height: 300),
+            heroArtworkURL: musicAlbum.artwork?.url(width: 1000, height: 1000),
+            releaseDate: musicAlbum.releaseDate,
+            genres: musicAlbum.genreNames,
+            trackIds: [],
+            isExplicit: musicAlbum.contentRating == .explicit
+        )
+    }
+    
     // MARK: - Search
     
     /// Search Apple Music catalog
@@ -208,29 +258,11 @@ final class MusicKitService: ObservableObject {
             throw MusicKitError.notAuthorized
         }
         
-        var request = MusicCatalogSearchRequest(term: term, types: [Song.self])
+        var request = MusicCatalogSearchRequest(term: term, types: [MusicKit.Song.self])
         request.limit = limit
         
         let response = try await request.response()
-        
-        return response.songs.map { song in
-            MusicKitTrack(
-                id: song.id.rawValue,
-                title: song.title,
-                artistName: song.artistName,
-                albumTitle: song.albumTitle,
-                artworkURL: song.artwork?.url(width: 300, height: 300),
-                highResArtworkURL: song.artwork?.url(width: 1000, height: 1000),
-                duration: song.duration ?? 0,
-                isExplicit: song.contentRating == .explicit,
-                hasLyrics: song.hasLyrics,
-                supportsSpatialAudio: song.audioVariants?.contains(.dolbyAtmos) ?? false,
-                appleMusicID: song.id,
-                previewURL: song.previewAssets?.first?.url,
-                genres: song.genreNames,
-                releaseDate: song.releaseDate
-            )
-        }
+        return response.songs.map { track(from: $0) }
     }
     
     /// Search for artists
@@ -239,11 +271,11 @@ final class MusicKitService: ObservableObject {
             throw MusicKitError.notAuthorized
         }
         
-        var request = MusicCatalogSearchRequest(term: term, types: [Artist.self])
+        var request = MusicCatalogSearchRequest(term: term, types: [MusicKit.Artist.self])
         request.limit = limit
         
         let response = try await request.response()
-        return Array(response.artists)
+        return response.artists.map { appArtist(from: $0) }
     }
     
     /// Search for albums
@@ -252,11 +284,11 @@ final class MusicKitService: ObservableObject {
             throw MusicKitError.notAuthorized
         }
         
-        var request = MusicCatalogSearchRequest(term: term, types: [Album.self])
+        var request = MusicCatalogSearchRequest(term: term, types: [MusicKit.Album.self])
         request.limit = limit
         
         let response = try await request.response()
-        return Array(response.albums)
+        return response.albums.map { appAlbum(from: $0) }
     }
     
     /// Get top charts
@@ -265,33 +297,14 @@ final class MusicKitService: ObservableObject {
             throw MusicKitError.notAuthorized
         }
         
-        var request = MusicCatalogChartsRequest(kinds: [.mostPlayed], types: [Song.self])
+        var request = MusicCatalogChartsRequest(kinds: [.mostPlayed], types: [MusicKit.Song.self])
         request.limit = limit
         
         let response = try await request.response()
-        
-        guard let songs = response.songCharts.first?.items else {
+        guard let chartSongs = response.songCharts.first?.items else {
             return []
         }
-        
-        return songs.map { song in
-            MusicKitTrack(
-                id: song.id.rawValue,
-                title: song.title,
-                artistName: song.artistName,
-                albumTitle: song.albumTitle,
-                artworkURL: song.artwork?.url(width: 300, height: 300),
-                highResArtworkURL: song.artwork?.url(width: 1000, height: 1000),
-                duration: song.duration ?? 0,
-                isExplicit: song.contentRating == .explicit,
-                hasLyrics: song.hasLyrics,
-                supportsSpatialAudio: song.audioVariants?.contains(.dolbyAtmos) ?? false,
-                appleMusicID: song.id,
-                previewURL: song.previewAssets?.first?.url,
-                genres: song.genreNames,
-                releaseDate: song.releaseDate
-            )
-        }
+        return chartSongs.prefix(limit).map { track(from: $0) }
     }
     
     /// Get artist's top songs
@@ -300,37 +313,14 @@ final class MusicKitService: ObservableObject {
             throw MusicKitError.notAuthorized
         }
         
-        let request = MusicCatalogResourceRequest<Artist>(matching: \.id, equalTo: artistID)
+        var request = MusicCatalogResourceRequest<MusicKit.Artist>(matching: \MusicKit.Artist.FilterType.id, equalTo: artistID)
+        request.properties = [.topSongs]
         let response = try await request.response()
-        
-        guard let artist = response.items.first else {
+        guard let musicArtist = response.items.first,
+              let topSongs = musicArtist.topSongs else {
             return []
         }
-        
-        let artistWithTopSongs = try await artist.with([.topSongs])
-        
-        guard let topSongs = artistWithTopSongs.topSongs else {
-            return []
-        }
-        
-        return topSongs.prefix(limit).map { song in
-            MusicKitTrack(
-                id: song.id.rawValue,
-                title: song.title,
-                artistName: song.artistName,
-                albumTitle: song.albumTitle,
-                artworkURL: song.artwork?.url(width: 300, height: 300),
-                highResArtworkURL: song.artwork?.url(width: 1000, height: 1000),
-                duration: song.duration ?? 0,
-                isExplicit: song.contentRating == .explicit,
-                hasLyrics: song.hasLyrics,
-                supportsSpatialAudio: song.audioVariants?.contains(.dolbyAtmos) ?? false,
-                appleMusicID: song.id,
-                previewURL: song.previewAssets?.first?.url,
-                genres: song.genreNames,
-                releaseDate: song.releaseDate
-            )
-        }
+        return topSongs.prefix(limit).map { track(from: $0) }
     }
     
     // MARK: - Playback
@@ -350,14 +340,11 @@ final class MusicKitService: ObservableObject {
         }
         
         // Fetch the full song object
-        let request = MusicCatalogResourceRequest<Song>(matching: \.id, equalTo: musicItemID)
+        let request = MusicCatalogResourceRequest<MusicKit.Song>(matching: \MusicKit.Song.FilterType.id, equalTo: musicItemID)
         let response = try await request.response()
-        
         guard let song = response.items.first else {
             throw MusicKitError.trackNotFound
         }
-        
-        // Set the queue and play
         player.queue = [song]
         try await player.play()
         
@@ -391,20 +378,18 @@ final class MusicKitService: ObservableObject {
         }
         
         // Fetch all songs
-        var songs: [Song] = []
+        var musicSongs: [MusicKit.Song] = []
         for id in musicItemIDs {
-            let request = MusicCatalogResourceRequest<Song>(matching: \.id, equalTo: id)
+            let request = MusicCatalogResourceRequest<MusicKit.Song>(matching: \MusicKit.Song.FilterType.id, equalTo: id)
             if let response = try? await request.response(), let song = response.items.first {
-                songs.append(song)
+                musicSongs.append(song)
             }
         }
-        
-        guard !songs.isEmpty else {
+        guard !musicSongs.isEmpty else {
             throw MusicKitError.trackNotFound
         }
-        
-        // Set queue and play
-        player.queue = ApplicationMusicPlayer.Queue(for: songs, startingAt: songs[min(index, songs.count - 1)])
+        let startIndex = min(index, musicSongs.count - 1)
+        player.queue = ApplicationMusicPlayer.Queue(for: musicSongs, startingAt: musicSongs[startIndex])
         try await player.play()
         
         queue = tracks
@@ -537,7 +522,7 @@ final class MusicKitService: ObservableObject {
     // MARK: - Lyrics
     
     /// Fetch synced lyrics for a song
-    private func fetchLyrics(for song: Song) async {
+    private func fetchLyrics(for song: MusicKit.Song) async {
         // MusicKit provides lyrics through the song's lyrics property
         // For now, we'll create placeholder synced lyrics
         // In production, you'd use the actual MusicKit lyrics API

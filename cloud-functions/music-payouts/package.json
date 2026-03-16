@@ -1,0 +1,16 @@
+{
+  "name": "music-payouts",
+  "version": "1.0.0",
+  "description": "MyChannel Music — Stripe Connect payout trigger for artist streams",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "deploy": "gcloud functions deploy payoutArtist --runtime nodejs20 --trigger-http --allow-unauthenticated --set-env-vars STRIPE_SECRET_KEY=$STRIPE_SECRET_KEY,STRIPE_WEBHOOK_SECRET=$STRIPE_WEBHOOK_SECRET"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "stripe": "^14.0.0"
+  }
+}

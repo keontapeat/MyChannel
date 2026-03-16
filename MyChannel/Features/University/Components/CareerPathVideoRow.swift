@@ -26,7 +26,7 @@ struct CareerPathVideoRow: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
                     ForEach(Array(videos.enumerated()), id: \.element.id) { index, video in
-                        CareerPathVideoCard(video: video, careerPathColor: careerPath.color)
+                        CareerPathVideoCard(video: video)
                             .onTapGesture {
                                 HapticManager.shared.impact(style: .light)
                                 onVideoTap(video)
@@ -72,74 +72,33 @@ struct CareerPathVideoRow: View {
     // MARK: - Row Header
     
     private var rowHeader: some View {
-        HStack(alignment: .center, spacing: 12) {
-            // Career Path Icon
-            ZStack {
-                Circle()
-                    .fill(careerPath.color.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                
-                Image(systemName: careerPath.icon)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(careerPath.color)
-            }
-            
-            // Career Info
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: careerPath.icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(Color(.label))
+                .frame(width: 36, height: 36)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 3) {
                 Text(careerPath.name)
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                HStack(spacing: 8) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 12, weight: .medium))
-                        Text("\(progress.videosWatched) videos")
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                    
-                    Text("•")
-                        .foregroundColor(AppTheme.Colors.textTertiary)
-                    
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock.fill")
-                            .font(.system(size: 12, weight: .medium))
-                        Text("\(Int(progress.totalHours))h watched")
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(Color(.label))
+
+                HStack(spacing: 6) {
+                    Text("\(progress.videosWatched) watched")
+                    Text("·")
+                    Text("\(Int(progress.totalHours))h")
+                    Text("·")
+                    Text("\(progress.progressPercentage)% to cert")
                 }
+                .font(.system(size: 12))
+                .foregroundColor(Color(.secondaryLabel))
             }
-            
+
             Spacer()
-            
-            // Certificate Progress Badge
-            if progress.certificateProgress > 0 {
-                certificateProgressBadge
-            }
         }
         .padding(.horizontal, 20)
-    }
-    
-    private var certificateProgressBadge: some View {
-        VStack(spacing: 4) {
-            Text("\(progress.progressPercentage)%")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(careerPath.color)
-            
-            Text("to Certificate")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(careerPath.color.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(careerPath.color.opacity(0.3), lineWidth: 1)
-        )
     }
 }
 
@@ -147,8 +106,7 @@ struct CareerPathVideoRow: View {
 
 struct CareerPathVideoCard: View {
     let video: UniversityVideo
-    let careerPathColor: Color
-    
+
     private let cardWidth: CGFloat = 280
     private let cardHeight: CGFloat = 180
     
@@ -157,27 +115,15 @@ struct CareerPathVideoCard: View {
     @Environment(\.sizeCategory) var sizeCategory
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Thumbnail with progress
+        VStack(alignment: .leading, spacing: 10) {
             thumbnailSection
-            
-            // Video Info
             videoInfoSection
         }
         .frame(width: cardWidth)
-        .padding(12)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
-        )
-        .shadow(
-            color: .black.opacity(isPressed ? 0.12 : 0.08),
-            radius: isPressed ? 16 : 12,
-            x: 0,
-            y: isPressed ? 6 : 4
-        )
+        .padding(10)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator), lineWidth: 0.5))
         .scaleEffect(isPressed ? 0.97 : 1.0)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
         .simultaneousGesture(
@@ -220,156 +166,94 @@ struct CareerPathVideoCard: View {
     
     private var thumbnailSection: some View {
         ZStack(alignment: .bottomLeading) {
-            // Thumbnail Image
             AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+                image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
                 Rectangle()
-                    .fill(AppTheme.Colors.cardBackground)
+                    .fill(Color(.secondarySystemBackground))
                     .overlay(
-                        Image(systemName: "play.rectangle.fill")
-                            .font(.system(size: 32, weight: .light))
-                            .foregroundColor(AppTheme.Colors.textTertiary)
+                        Image(systemName: "play.rectangle")
+                            .font(.system(size: 28, weight: .light))
+                            .foregroundColor(Color(.tertiaryLabel))
                     )
             }
-            .frame(width: cardWidth - 24, height: 157)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            
-            // Gradient Overlay (for better text visibility)
-            LinearGradient(
-                colors: [Color.clear, Color.black.opacity(0.6)],
-                startPoint: .center,
-                endPoint: .bottom
-            )
-            .frame(height: 80)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            
-            // Duration Badge
-            HStack(spacing: 4) {
-                Image(systemName: "clock.fill")
-                    .font(.system(size: 10, weight: .semibold))
-                Text(formatDuration(video.duration))
-                    .font(.system(size: 12, weight: .semibold))
-            }
-            .foregroundColor(.white)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.black.opacity(0.7))
-            .clipShape(Capsule())
-            .padding(8)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            
-            // Watch Progress Bar
-            if video.watchProgress > 0 {
-                watchProgressBar
-            }
-            
-            // Completed Checkmark
-            if video.completed {
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 12, weight: .bold))
-                    Text("Completed")
-                        .font(.system(size: 11, weight: .bold))
-                }
+            .frame(width: cardWidth - 20, height: 148)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            // Duration pill
+            Text(formatDuration(video.duration))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.green.opacity(0.9))
-                .clipShape(Capsule())
-                .padding(8)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Color.black.opacity(0.75))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .padding(6)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+
+            // Completed badge
+            if video.completed {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(UniversityTheme.Colors.verified)
+                    .padding(6)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            }
+
+            // Red YouTube-style progress bar
+            if video.watchProgress > 0 {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Rectangle().fill(Color.white.opacity(0.2)).frame(height: 3)
+                        Rectangle()
+                            .fill(UniversityTheme.Colors.accent)
+                            .frame(width: geo.size.width * video.watchProgress, height: 3)
+                    }
+                }
+                .frame(height: 3)
             }
         }
-    }
-    
-    private var watchProgressBar: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Rectangle()
-                    .fill(Color.white.opacity(0.3))
-                    .frame(height: 4)
-                
-                Rectangle()
-                    .fill(careerPathColor)
-                    .frame(width: geometry.size.width * video.watchProgress, height: 4)
-            }
-        }
-        .frame(height: 4)
-        .padding(.horizontal, 8)
-        .padding(.bottom, 8)
     }
     
     private var videoInfoSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Title
+        VStack(alignment: .leading, spacing: 6) {
             Text(video.title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Color(.label))
                 .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-            
-            // Creator & Stats
-            HStack(spacing: 8) {
-                // Creator Avatar
-                AsyncImage(url: URL(string: video.creatorAvatarURL)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Circle()
-                        .fill(AppTheme.Colors.cardBackground)
-                }
-                .frame(width: 24, height: 24)
-                .clipShape(Circle())
-                
-                // Creator Name
+
+            HStack(spacing: 6) {
                 Text(video.creatorName)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(.secondaryLabel))
                     .lineLimit(1)
-                
+
                 Spacer()
-                
-                // AI Verification Badge
+
                 if let aiScore = video.aiVerificationScore, aiScore >= 70 {
                     HStack(spacing: 3) {
                         Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: 10, weight: .semibold))
                         Text("\(aiScore)")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                     }
-                    .foregroundColor(aiScore >= 90 ? .green : aiScore >= 80 ? .blue : .orange)
+                    .foregroundColor(UniversityTheme.Colors.verified)
                 }
             }
-            
-            // Skill Tags
+
             if !video.skillTags.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(video.skillTags.prefix(3), id: \.self) { skill in
-                            Text(skill)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(careerPathColor)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(careerPathColor.opacity(0.1))
-                                .clipShape(Capsule())
-                        }
+                HStack(spacing: 5) {
+                    ForEach(video.skillTags.prefix(2), id: \.self) { skill in
+                        Text(skill)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(Color(.secondaryLabel))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Color(.secondarySystemBackground))
+                            .clipShape(Capsule())
                     }
                 }
             }
-            
-            // Difficulty Level
-            HStack(spacing: 4) {
-                Image(systemName: video.difficultyLevel.icon)
-                    .font(.system(size: 11, weight: .semibold))
-                Text(video.difficultyLevel.rawValue)
-                    .font(.system(size: 12, weight: .medium))
-            }
-            .foregroundColor(video.difficultyLevel.color)
         }
     }
     
@@ -436,6 +320,6 @@ struct CareerPathVideoCard: View {
             print("Tapped video: \(video.title)")
         }
     }
-    .background(AppTheme.Colors.background)
+    .background(Color(.systemBackground))
 }
 

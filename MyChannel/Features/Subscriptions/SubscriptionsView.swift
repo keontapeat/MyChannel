@@ -80,6 +80,20 @@ struct SubscriptionsView: View {
                 ForEach(SubscriptionsViewModel.SubscriptionTab.allCases, id: \.self) { tab in
                     tabButton(for: tab)
                 }
+                
+                if viewModel.selectedTab == .feed && !viewModel.videos.isEmpty {
+                    Spacer(minLength: 12)
+                    
+                    Text("\(viewModel.filteredVideos.count) videos")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(AppTheme.Colors.surface)
+                        )
+                }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
@@ -145,6 +159,50 @@ struct SubscriptionsView: View {
     // MARK: - 🔥 PREMIUM: Feed Tab with staggered animations
     private var feedTab: some View {
         ScrollView {
+            if !viewModel.subscribedChannels.isEmpty {
+                // Hero row: top subscribed channels with quick actions
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(viewModel.subscribedChannels.prefix(6)) { channel in
+                            Button {
+                                HapticManager.shared.impact(style: .light)
+                                NotificationCenter.default.post(
+                                    name: NSNotification.Name("NavigateToProfile"),
+                                    object: channel.id
+                                )
+                            } label: {
+                                VStack(spacing: 8) {
+                                    CachedAsyncImage(url: URL(string: channel.profileImageURL ?? "")) { image in
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                    } placeholder: {
+                                        Circle()
+                                            .fill(AppTheme.Colors.surface)
+                                            .overlay(
+                                                Image(systemName: "person.fill")
+                                                    .font(.system(size: 20, weight: .medium))
+                                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                                            )
+                                    }
+                                    .frame(width: 54, height: 54)
+                                    .clipShape(Circle())
+                                    
+                                    Text(channel.displayName)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(AppTheme.Colors.textPrimary)
+                                        .lineLimit(1)
+                                }
+                                .frame(width: 72)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                }
+            }
+            
             LazyVStack(spacing: 16) {
                 ForEach(Array(viewModel.filteredVideos.enumerated()), id: \.element.id) { index, video in
                     SubscriptionVideoCard(video: video)
@@ -195,20 +253,38 @@ struct SubscriptionsView: View {
     
     // MARK: - Empty State
     private var emptyStateView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "play.square.stack")
-                .font(.system(size: 60, weight: .thin))
+        VStack(spacing: 24) {
+            Image(systemName: "play.rectangle.on.rectangle")
+                .font(.system(size: 56, weight: .regular))
                 .foregroundColor(AppTheme.Colors.textSecondary)
             
-            Text("No Subscriptions Yet")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
+            VStack(spacing: 8) {
+                Text("No Subscriptions Yet")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Text("Subscribe to channels you love to build your own ad‑free home feed.")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
             
-            Text("Subscribe to your favorite creators to see their latest videos here.")
-                .font(.system(size: 15, weight: .regular))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+            Button {
+                HapticManager.shared.impact(style: .medium)
+                NotificationCenter.default.post(name: NSNotification.Name("OpenExploreFromSubscriptions"), object: nil)
+            } label: {
+                Text("Discover creators")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(
+                        Capsule()
+                            .fill(AppTheme.Colors.primary)
+                    )
+            }
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppTheme.Colors.background)

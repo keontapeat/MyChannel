@@ -142,6 +142,7 @@ struct VideoDetailMetaView: View {
                 .animation(.spring(response: 0.5, dampingFraction: 0.8), value: expandedDescription)
                 .accessibilityLabel("Video title: \(video.title)")
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.top, 12)
     }
@@ -173,7 +174,6 @@ struct VideoDetailMetaView: View {
     
     // MARK: - 🔥 YOUTUBE 2024 EXACT PARITY: Action Buttons Row (Scrollable)
     private var youtubeActionButtons: some View {
-        // 🔥 FIX: Simple SwiftUI ScrollView - works now that it's NOT nested in another ScrollView
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 // 🔥 YOUTUBE EXACT: Combined Like/Dislike Pill with Separator
@@ -240,6 +240,7 @@ struct VideoDetailMetaView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
+        .frame(height: 52)
     }
     
     // MARK: - 🔥 YOUTUBE 2024 STYLE: Subtle Divider

@@ -125,6 +125,21 @@ service cloud.firestore {
     match /ads/{docPath=**} {
       allow read, write: if isAdmin();
     }
+
+    // Live Streams
+    match /live_streams/{streamId} {
+      allow read: if true; // anyone can browse live streams
+      allow create: if isSignedIn() && request.resource.data.creatorId == uid();
+      allow update: if isSignedIn() && (resource.data.creatorId == uid() || isAdmin());
+      allow delete: if isSignedIn() && (resource.data.creatorId == uid() || isAdmin());
+
+      // Live chat messages
+      match /chat/{messageId} {
+        allow read: if true;
+        allow create: if isSignedIn() && request.resource.data.userId == uid();
+        allow delete: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      }
+    }
   }
 }
 

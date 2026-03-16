@@ -447,6 +447,11 @@ struct StoryViewerView: View {
     }
 
     private func nextStory() {
+        // Track current story as watched before moving to next
+        if let creator = currentStory.creator {
+            AppState.shared.addStoryToHistory(story: currentStory, creator: creator)
+        }
+        
         if currentStoryIndex < stories.count - 1 {
             if reduceMotion {
                 currentStoryIndex += 1

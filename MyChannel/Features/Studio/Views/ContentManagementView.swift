@@ -636,15 +636,19 @@ struct ContentManagementView: View {
     // MARK: - 🔥 NUCLEAR: Actions
     
     private func loadVideos() {
-        guard let creatorId = appState.currentUser?.id else { return }
+        guard let creatorId = appState.currentUser?.id else {
+            print("⚠️ [ContentManagement] No current user ID - cannot load videos")
+            isLoading = false
+            return
+        }
         
         Task {
-            do {
-                videos = try await videoService.fetchVideosByCreator(creatorId: creatorId)
+            print("📺 [ContentManagement] Loading videos for creator: \(creatorId)")
+            let fetchedVideos = await videoService.fetchVideosByCreator(creatorId: creatorId)
+            await MainActor.run {
+                videos = fetchedVideos
                 isLoading = false
-            } catch {
-                print("🚨 Error loading videos: \(error)")
-                isLoading = false
+                print("✅ [ContentManagement] Loaded \(fetchedVideos.count) videos")
             }
         }
     }

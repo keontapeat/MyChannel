@@ -16,6 +16,7 @@ struct ComprehensiveCreatorStudioView: View {
     @StateObject private var predictiveEngine = PredictiveAnalyticsEngine.shared
     
     let videoIdToAnalyze: String? // Optional video ID to focus on when opening
+    @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: StudioTab = .dashboard
     @State private var showingUploadModal = false
     @State private var selectedVideoId: String? = nil
@@ -61,56 +62,69 @@ struct ComprehensiveCreatorStudioView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            // 🔥 MOBILE-FIRST CREATOR STUDIO: Always show main content on mobile
-            mainContentArea
-        }
-        .navigationTitle("Creator Studio")
-        .toolbar {
-            ToolbarItemGroup(placement: .navigationBarLeading) {
-                // 🔥 MOBILE NAVIGATION: Studio sections menu
-                Menu {
-                    ForEach(StudioTab.allCases, id: \.self) { tab in
-                        Button(action: { 
-                            selectedTab = tab
+        // 🔥 MOBILE-FIRST CREATOR STUDIO: Always show main content on mobile
+        mainContentArea
+            .navigationTitle("Creator Studio")
+            .toolbar {
+                    ToolbarItemGroup(placement: .navigationBarLeading) {
+                        // Back / close button
+                        Button(action: {
                             HapticManager.shared.impact(style: .light)
+                            dismiss()
                         }) {
-                            Label(tab.rawValue, systemImage: tab.icon)
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 16, weight: .semibold))
+                                Text("Back")
+                                    .font(.system(size: 16, weight: .medium))
+                            }
+                            .foregroundColor(AppTheme.Colors.primary)
+                        }
+                        .accessibilityLabel("Back")
+                        
+                        // 🔥 MOBILE NAVIGATION: Studio sections menu
+                        Menu {
+                            ForEach(StudioTab.allCases, id: \.self) { tab in
+                                Button(action: { 
+                                    selectedTab = tab
+                                    HapticManager.shared.impact(style: .light)
+                                }) {
+                                    Label(tab.rawValue, systemImage: tab.icon)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: selectedTab.icon)
+                                    .font(.system(size: 16, weight: .medium))
+                                Text(selectedTab.rawValue)
+                                    .font(.system(size: 16, weight: .semibold))
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .foregroundColor(AppTheme.Colors.primary)
                         }
                     }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: selectedTab.icon)
-                            .font(.system(size: 16, weight: .medium))
-                        Text(selectedTab.rawValue)
-                            .font(.system(size: 16, weight: .semibold))
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .medium))
+                    
+                    ToolbarItemGroup(placement: .navigationBarTrailing) {
+                        // Upload Button
+                        Button(action: { 
+                            HapticManager.shared.impact(style: .medium)
+                            showingUploadModal = true 
+                        }) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .accessibilityLabel("Upload video")
+                        
+                        // Notifications
+                        NavigationLink(destination: NotificationsView()) {
+                            Image(systemName: "bell")
+                                .font(.system(size: 16))
+                        }
+                        .accessibilityLabel("Notifications")
                     }
-                    .foregroundColor(AppTheme.Colors.primary)
-                }
             }
-            
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                // Upload Button
-                Button(action: { 
-                    HapticManager.shared.impact(style: .medium)
-                    showingUploadModal = true 
-                }) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .semibold))
-                }
-                .accessibilityLabel("Upload video")
-                
-                // Notifications
-                NavigationLink(destination: NotificationsView()) {
-                    Image(systemName: "bell")
-                        .font(.system(size: 16))
-                }
-                .accessibilityLabel("Notifications")
-            }
-        }
-        .fullScreenCover(isPresented: $showingUploadModal) {
+            .fullScreenCover(isPresented: $showingUploadModal) {
             UploadView()
                 .environmentObject(appState)
         }
@@ -358,6 +372,12 @@ struct StudioDashboardView: View {
         .task {
             await loadDashboardData()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshCreatorStudio"))) { _ in
+            Task { await loadDashboardData() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshProfile"))) { _ in
+            Task { await loadDashboardData() }
+        }
     }
     
     private func loadDashboardData() async {
@@ -537,7 +557,7 @@ struct StudioDashboardView: View {
                         Image(systemName: "chart.xyaxis.line")
                             .font(.system(size: 32))
                             .foregroundColor(AppTheme.Colors.textSecondary)
-                        Text("Analytics graph will display here")
+                        Text("Loading analytics...")
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                     }
@@ -1044,7 +1064,7 @@ struct PremieresManagementView: View {
                 
                 // Help Section
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("💡 Premiere Tips")
+                    Text("Premiere Tips")
                         .font(.system(size: 18, weight: .bold))
                     
                     VStack(alignment: .leading, spacing: 10) {
@@ -2131,10 +2151,10 @@ struct DonationCard: View {
     }
     
     private func amountColor(for amount: Double) -> Color {
-        if amount >= 100 { return .purple }
-        else if amount >= 50 { return .pink }
-        else if amount >= 10 { return .orange }
-        else { return .blue }
+        if amount >= 100 { return AppTheme.Colors.primary }
+        else if amount >= 50 { return AppTheme.Colors.accent }
+        else if amount >= 10 { return AppTheme.Colors.warning }
+        else { return AppTheme.Colors.textSecondary }
     }
     
     private func timeAgo(from date: Date) -> String {
@@ -2237,7 +2257,7 @@ struct RevenueAnalyticsView: View {
                 
                 // Payout Info
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("💳 Next Payout")
+                    Text("Next Payout")
                         .font(.system(size: 18, weight: .bold))
                     
                     HStack {
@@ -2382,10 +2402,10 @@ struct MonetizationTopEarningVideoRow: View {
     
     private var rankColor: Color {
         switch rank {
-        case 1: return .yellow
-        case 2: return .gray
-        case 3: return .orange
-        default: return .blue
+        case 1: return Color(hex: "FFD700") ?? .yellow // Gold - acceptable for #1
+        case 2: return AppTheme.Colors.textSecondary
+        case 3: return AppTheme.Colors.textTertiary
+        default: return AppTheme.Colors.textSecondary
         }
     }
 }

@@ -596,134 +596,30 @@ struct UploadView: View {
                 }
                 .padding(.horizontal, 20)
                 
-                VStack(spacing: 20) {
-                    Text("Video Info")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    LazyVGrid(columns: videoInfoColumns, spacing: 12) {
-                        infoChip("Duration", formattedDuration(uploadManager.videoDuration), "clock")
-                        infoChip("Size", String(format: "%.1f MB", uploadManager.fileSizeMB), "externaldrive")
-                        infoChip("Resolution", resolutionText(uploadManager.videoDimensions), "rectangle.on.rectangle")
-                    }
-                }
-                .padding(.horizontal, 20)
+                videoInfoSummary
+                    .padding(.horizontal, 20)
                 
-                // Captions & Dubs
-                VStack(spacing: 14) {
-                    Text("Captions & Dubs")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
+                if uploadManager.videoURL != nil {
                     HStack(spacing: 12) {
-                        Button {
-                            selectedLang = "en"
-                            showCaptionLangDialog = true
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "captions.bubble")
-                                Text("Add Caption (VTT)")
-                            }
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.primary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(AppTheme.Colors.surface)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1))
+                        minimalSecondaryButton(icon: "play.circle", title: "Preview") {
+                            showPreview = true
+                            HapticManager.shared.impact(style: .light)
                         }
-
-                        Button {
-                            selectedLang = "en"
-                            showDubLangDialog = true
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "waveform")
-                                Text("Add Dub (M4A)")
-                            }
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.primary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(AppTheme.Colors.surface)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1))
+                        minimalSecondaryButton(icon: "gear", title: uploadQuality.title) {
+                            showQualitySettings = true
+                            HapticManager.shared.impact(style: .light)
                         }
                     }
-                }
-                .padding(.horizontal, 20)
-
-                if creationMode == .flicks, uploadManager.videoDuration > 60 {
-                    HStack {
-                        Image(systemName: "scissors")
-                        Text("Auto-trim to 60s for Flicks")
-                        Spacer()
-                        Text(formattedDuration(60))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .font(.footnote)
-                    }
-                    .padding()
-                    .background(AppTheme.Colors.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1))
                     .padding(.horizontal, 20)
-                    .onTapGesture {
-                        Task {
-                            try? await uploadManager.autoTrimToFlicksIfNeeded()
-                            HapticManager.shared.impact(style: .medium)
-                        }
-                    }
                 }
-                
-                VStack(spacing: 16) {
-                    Text("Editing Tools")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
-                        // Pro Editor - Full Premiere Pro-style suite
-                        EditingToolCard(
-                            title: "Pro Editor",
-                            subtitle: "Full editing suite",
-                            icon: "cpu",
-                            color: AppTheme.Colors.textSecondary
-                        ) {
-                            // Launch Pro Editor
-                            if let videoURL = uploadManager.videoURL {
-                                NotificationCenter.default.post(
-                                    name: NSNotification.Name("LaunchProEditor"),
-                                    object: videoURL
-                                )
-                            }
-                            HapticManager.shared.impact(style: .heavy)
-                        }
-                        
-                        ForEach(EditingTool.allCases) { tool in
-                            EditingToolCard(
-                                title: tool.title,
-                                subtitle: tool.subtitle,
-                                icon: tool.icon,
-                                color: tool.color
-                            ) {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                    selectedEditingTool = tool
-                                }
-                                HapticManager.shared.impact(style: .medium)
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-                
-                Spacer(minLength: 40)
-                
-                editingActionButtons
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 100) // 🔥 FIX: Add padding to account for tab bar
             }
+            .padding(.bottom, 140)
+        }
+        .safeAreaInset(edge: .bottom) {
+            editingActionBar
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .background(.thinMaterial)
         }
     }
     
@@ -740,6 +636,21 @@ struct UploadView: View {
             
             skipEditingButton
         }
+    }
+
+    private var editingActionBar: some View {
+        VStack(spacing: 12) {
+            editingActionButtons
+        }
+        .padding(.vertical, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
+                )
+        )
     }
     
     private var previewButton: some View {
@@ -829,204 +740,224 @@ struct UploadView: View {
         ScrollView {
             VStack(spacing: 24) {
                 if let thumbnail = uploadManager.thumbnail {
-                    // 🔥 FIX: Clean upload flow - no "Your Video" text
                     Image(uiImage: thumbnail)
                         .resizable()
                         .aspectRatio(16/9, contentMode: .fit)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .frame(maxWidth: 300)
                         .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
                 }
                 
-                VStack(spacing: 12) {
-                    HStack {
-                        Text("Smart Assist")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                        Spacer()
-                        Menu {
-                            Button("Suggest Title") {
-                                uploadManager.title = CreatorAssistService.suggestTitle(
-                                    fromExisting: uploadManager.title,
-                                    category: uploadManager.selectedCategory,
-                                    duration: uploadManager.videoDuration
-                                )
-                                HapticManager.shared.impact(style: .light)
-                            }
-                            Button("Suggest Tags") {
-                                let tags = CreatorAssistService.suggestTags(
-                                    title: uploadManager.title,
-                                    description: uploadManager.description,
-                                    category: uploadManager.selectedCategory
-                                )
-                                uploadManager.selectedTags.formUnion(tags)
-                                HapticManager.shared.impact(style: .light)
-                            }
-                            Button("Suggest Description") {
-                                uploadManager.description = CreatorAssistService.suggestDescription(
-                                    from: uploadManager.title.isEmpty ? "Your Video" : uploadManager.title,
-                                    category: uploadManager.selectedCategory
-                                )
-                                HapticManager.shared.impact(style: .light)
-                            }
-                        } label: {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(AppTheme.Colors.primary, in: Capsule())
-                        }
-                    }
+                detailCard(title: "Details") {
+                    ChannelMentionTextField(
+                        title: "Title",
+                        text: $uploadManager.title,
+                        placeholder: "Give your video a title",
+                        icon: "text.cursor",
+                        isRequired: true,
+                        maxLength: 100
+                    )
                     
-                    HStack {
-                        Button {
-                            do {
-                                let draft = try UploadDraftStorage.shared.saveDraft(from: uploadManager)
-                                restoreDraft = draft
-                                HapticManager.shared.notification(type: .success)
-                            } catch {
-                                HapticManager.shared.notification(type: .warning)
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "tray.and.arrow.down")
-                                Text("Save Draft")
-                            }
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.primary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(AppTheme.Colors.surface, in: Capsule())
-                            .overlay(Capsule().stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1))
-                        }
-                        Spacer()
-                    }
+                    ProfessionalTextEditor(
+                        title: "Description",
+                        text: $uploadManager.description,
+                        placeholder: "Describe your video",
+                        icon: "text.bubble",
+                        maxLength: 500
+                    )
                 }
-                .padding(.horizontal, 20)
                 
-                VStack(spacing: 20) {
-                    // 🔥 YOUTUBE PARITY: Title field with @channel autocomplete
-                    ChannelMentionTextField(title: "Title", text: $uploadManager.title, placeholder: "Give your video a catchy title... (use @ to tag channels)", icon: "text.cursor", isRequired: true, maxLength: 100)
+                detailCard(title: "Category & Tags") {
+                    ProfessionalPicker(
+                        title: "Category",
+                        selection: $uploadManager.selectedCategory,
+                        icon: "folder",
+                        options: VideoCategory.allCases
+                    )
                     
-                    ProfessionalTextEditor(title: "Description", text: $uploadManager.description, placeholder: "Tell viewers what your video is about...", icon: "text.bubble", maxLength: 500)
-                    
-                    ProfessionalPicker(title: "Category", selection: $uploadManager.selectedCategory, icon: "folder", options: VideoCategory.allCases)
-                    
-                    ProfessionalTagInput(title: "Tags", selectedTags: $uploadManager.selectedTags, icon: "tag")
-                    
-                    VStack(spacing: 16) {
-                        Text("Privacy & Settings")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        
-                        VStack(spacing: 12) {
-                            // 🔥 NEW: Full Visibility Options
-                            ProfessionalToggleRow(title: "Public Video", subtitle: "Anyone can search for and view", icon: "globe", isOn: $uploadManager.isPublic)
-                            
-                            // 🔥 NEW: Scheduling
-                            ProfessionalToggleRow(title: "Schedule for later", subtitle: "Publish at a specific time", icon: "calendar", isOn: $uploadManager.isScheduled)
-                            
-                            if uploadManager.isScheduled {
-                                ProfessionalDatePicker(title: "Publish date", date: $uploadManager.scheduledDate, icon: "clock")
-                                
-                                ProfessionalToggleRow(title: "Set as Premiere", subtitle: "Create a live countdown", icon: "play.circle", isOn: $uploadManager.isPremiere)
-                            }
-                            
-                            ProfessionalToggleRow(title: "Enable Comments", subtitle: "Allow viewers to comment", icon: "bubble.left.and.bubble.right", isOn: .constant(true))
-                            ProfessionalToggleRow(title: "Monetization", subtitle: "Earn revenue from this video", icon: "dollarsign.circle", isOn: $uploadManager.monetizationEnabled, isPremium: true)
-                        }
-                    }
-                    
-                    // 🔥 NEW: Advanced Settings
-                    VStack(spacing: 16) {
-                        Text("Advanced Settings")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        
-                        VStack(spacing: 12) {
-                            ProfessionalInputField(title: "Filming Location", text: $uploadManager.filmingLocation, placeholder: "Where was this filmed?", icon: "location", maxLength: 100)
-                            
-                            ProfessionalToggleRow(title: "Age-restricted", subtitle: "Only viewers 18+ can watch", icon: "18.circle", isOn: $uploadManager.ageRestricted)
-                            
-                            ProfessionalToggleRow(title: "Made for kids", subtitle: "Content designed for children", icon: "figure.and.child.holdinghands", isOn: $uploadManager.madeForKids)
-                        }
-                    }
-                    
-                    // 🔥 NEW: Thumbnail Selection
-                    VStack(spacing: 16) {
-                        Text("Thumbnail")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        
-                        ThumbnailSelectionView(
-                            autoThumbnail: uploadManager.thumbnail,
-                            customThumbnails: $uploadManager.customThumbnails,
-                            selectedIndex: $uploadManager.selectedThumbnailIndex
-                        )
-                    }
+                    ProfessionalTagInput(
+                        title: "Tags",
+                        selectedTags: $uploadManager.selectedTags,
+                        icon: "tag"
+                    )
                 }
-                .padding(.horizontal, 20)
                 
-                Spacer(minLength: 40)
-                
-                VStack(spacing: 12) {
-                    Button {
-                        HapticManager.shared.impact(style: .heavy)
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            uploadStep = .uploading
+                detailCard(title: "Visibility & Audience") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Visibility")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        
+                        Picker("Visibility", selection: $uploadManager.isPublic) {
+                            Text("Public").tag(true)
+                            Text("Private").tag(false)
                         }
-                        Task {
-                            await uploadManager.uploadVideo()
-                            if uploadManager.uploadError == nil {
-                                withAnimation(.spring(response: 0.8, dampingFraction: 0.6)) {
-                                    uploadStep = .completed
-                                    showingSuccessAnimation = true
-                                }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                                    withAnimation(.easeOut(duration: 0.5)) {
-                                        showingSuccessAnimation = false
-                                    }
-                                }
-                            } else {
-                                withAnimation {
-                                    uploadStep = .addDetails
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "icloud.and.arrow.up").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
-                            Text("Upload Video").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
-                        .background(uploadManager.title.isEmpty ? AppTheme.Colors.textTertiary : AppTheme.Colors.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: uploadManager.title.isEmpty ? .clear : AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 4)
+                        .pickerStyle(.segmented)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(uploadManager.title.isEmpty)
                     
-                    Text("Make sure your title is engaging to attract more viewers!")
-                        .font(.system(size: 13))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Toggle(isOn: $uploadManager.madeForKids) {
+                        Text("Made for kids")
+                            .font(.system(size: 15, weight: .medium))
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.primary))
+                    
+                    Toggle(isOn: $uploadManager.ageRestricted) {
+                        Text("Age-restricted (18+)")
+                            .font(.system(size: 15, weight: .medium))
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.primary))
+                    
+                    Toggle(isOn: .constant(true)) {
+                        Text("Allow comments")
+                            .font(.system(size: 15, weight: .medium))
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.primary))
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 100) // Add extra bottom padding to prevent tab bar overlap
+                
+                detailCard(title: "Location & Thumbnail") {
+                    ProfessionalInputField(
+                        title: "Location",
+                        text: $uploadManager.filmingLocation,
+                        placeholder: "Where was this filmed?",
+                        icon: "location",
+                        maxLength: 100
+                    )
+                    
+                    ThumbnailSelectionView(
+                        autoThumbnail: uploadManager.thumbnail,
+                        customThumbnails: $uploadManager.customThumbnails,
+                        selectedIndex: $uploadManager.selectedThumbnailIndex
+                    )
+                }
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 24)
+            .padding(.bottom, 160)
         }
         .safeAreaInset(edge: .bottom) {
-            // Ensure upload button is always visible above tab bar
-            Color.clear.frame(height: 0)
+            uploadActionBar
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .background(.thinMaterial)
         }
+    }
+
+    // MARK: - Missing Helpers
+
+    private var videoInfoSummary: some View {
+        HStack(spacing: 16) {
+            if let thumbnail = uploadManager.thumbnail {
+                Image(uiImage: thumbnail)
+                    .resizable()
+                    .aspectRatio(16/9, contentMode: .fill)
+                    .frame(width: 80, height: 48)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(AppTheme.Colors.surface)
+                    .frame(width: 80, height: 48)
+                    .overlay(Image(systemName: "play.rectangle").foregroundColor(AppTheme.Colors.textTertiary))
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(uploadManager.videoDuration > 0 ? formattedTime(uploadManager.videoDuration) : "No video")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                Text("Ready to edit")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+
+            Spacer()
+        }
+        .padding(12)
+        .background(AppTheme.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func minimalSecondaryButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .medium))
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundColor(AppTheme.Colors.textPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(AppTheme.Colors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.Colors.divider, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func detailCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+
+            content()
+        }
+        .padding(16)
+        .background(AppTheme.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1))
+    }
+
+    private var uploadActionBar: some View {
+        VStack(spacing: 12) {
+            Button {
+                HapticManager.shared.impact(style: .heavy)
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                    uploadStep = .uploading
+                }
+                uploadManager.isFlicksMode = (creationMode == .flicks)
+                Task {
+                    await uploadManager.uploadVideo()
+                    if uploadManager.uploadError == nil {
+                        withAnimation(.spring(response: 0.8, dampingFraction: 0.6)) {
+                            uploadStep = .completed
+                        }
+                    } else {
+                        withAnimation {
+                            uploadStep = .addDetails
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "icloud.and.arrow.up")
+                        .font(.system(size: 18, weight: .semibold))
+                    Text("Upload Video")
+                        .font(.system(size: 18, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(uploadManager.title.isEmpty ? AppTheme.Colors.textTertiary : AppTheme.Colors.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .shadow(color: uploadManager.title.isEmpty ? .clear : AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 4)
+            }
+            .buttonStyle(.plain)
+            .disabled(uploadManager.title.isEmpty)
+            
+            Text("Make sure your title is engaging to attract more viewers!")
+                .font(.system(size: 13))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+        }
+        .padding(.vertical, 20)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(AppTheme.Colors.divider.opacity(0.15), lineWidth: 1)
+                )
+        )
     }
     
     // MARK: - Uploading View
@@ -1370,6 +1301,8 @@ struct UploadView: View {
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                         uploadStep = .uploading
                     }
+                    // 🔥 Set Flicks mode before upload
+                    uploadManager.isFlicksMode = (creationMode == .flicks)
                     Task {
                         await uploadManager.uploadVideo()
                         if uploadManager.uploadError == nil {

@@ -31,7 +31,7 @@ struct ProfileView: View {
     @State private var user: User = User.defaultUser
     @State private var isFollowing: Bool = false
     @State private var userVideos: [Video] = []
-    @State private var watchHistory: [Video] = []
+    @State private var watchHistory: [WatchHistoryItem] = []
     @State private var isIncognito: Bool = false
     
     // Video Management
@@ -256,7 +256,7 @@ struct ProfileView: View {
                 
                 // Profile Content
                     SafeProfileContentView(
-                        selectedTab: selectedTab,
+                        selectedTab: $selectedTab,
                         user: user,
                         videos: userVideos,
                         onLoadMore: { await loadMoreVideos() },
@@ -474,13 +474,15 @@ struct ProfileView: View {
                                 destination: ChampionshipHubView()
                             )
                             
-                            // 4. Thumbnail Creator
+                            // 4. Thumbnail Creator - HIDDEN (can be re-enabled later)
+                            /*
                             YouTubeStyleFeatureCard(
                                 icon: "photo.on.rectangle.angled",
                                 title: "Thumbnail Creator",
                                 subtitle: "AI-powered thumbnails",
                                 destination: ThumbnailCreatorView()
                             )
+                            */
                             
                             // 5. Live Shopping
                             YouTubeStyleFeatureCard(
@@ -517,7 +519,7 @@ struct ProfileView: View {
                     // History Section - ALWAYS SHOW
                     ProfileHistorySection(
                         title: "History",
-                        videos: watchHistory
+                        videos: watchHistory.map { $0.toVideo() }
                     ) {
                         NotificationCenter.default.post(name: .openFullHistory, object: nil)
                     }
@@ -1064,7 +1066,7 @@ struct ProfileView: View {
                 Section {
                     // Content under tabs
                     ProfileContentSection(
-                        selectedTab: selectedTab,
+                        selectedTab: $selectedTab,
                         user: user,
                         videos: userVideos,
                         onLoadMore: { await loadMoreVideos() },
@@ -1189,7 +1191,7 @@ private struct ProfileTabsSection: View {
 }
 
 private struct ProfileContentSection: View {
-    let selectedTab: ProfileTab
+    @Binding var selectedTab: ProfileTab
     let user: User
     let videos: [Video]
     var onLoadMore: (() async -> Void)? = nil
@@ -1199,7 +1201,7 @@ private struct ProfileContentSection: View {
 
     var body: some View {
         SafeProfileContentView(
-            selectedTab: selectedTab,
+            selectedTab: $selectedTab,
             user: user,
             videos: videos,
             onLoadMore: onLoadMore,
@@ -1233,8 +1235,6 @@ extension Notification.Name {
     static let openFullHistory = Notification.Name("openFullHistory")
     static let navigateToAccountSwitcher = Notification.Name("navigateToAccountSwitcher")
     static let openGoogleAccount = Notification.Name("openGoogleAccount")
-    static let openVideoFromHistory = Notification.Name("openVideoFromHistory")
-    static let presentSignInSheet = Notification.Name("presentSignInSheet")
 }
 
 // MARK: - Previews

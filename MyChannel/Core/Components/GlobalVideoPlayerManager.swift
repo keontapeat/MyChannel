@@ -149,7 +149,7 @@ class GlobalVideoPlayerManager: ObservableObject {
     
     private func sendViewHeartbeat() async {
         guard let sessionId = currentViewSessionId,
-              let video = currentVideo else { return }
+              currentVideo != nil else { return }
         
         await viewTracker.updateViewHeartbeat(
             sessionId: sessionId,

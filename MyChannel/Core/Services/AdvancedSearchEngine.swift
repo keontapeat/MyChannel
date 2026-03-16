@@ -490,7 +490,7 @@ final class AdvancedSearchEngine: ObservableObject {
     private func getPersonalizedSuggestions(query: String, userId: String) async -> [SearchSuggestion] {
         // Get suggestions based on user's watch history and preferences
         let history = await HistoryService.shared.fetch(userId: userId, limit: 50)
-        let preferredCategories = Array(Set(history.map { $0.category.rawValue }))
+        let preferredCategories = Array(Set(history.compactMap { VideoCategory(rawValue: $0.contentType.rawValue) }.map { $0.rawValue }))
         
         var suggestions: [SearchSuggestion] = []
         
@@ -515,8 +515,8 @@ final class AdvancedSearchEngine: ObservableObject {
         
         // Get user preferences
         let history = await HistoryService.shared.fetch(userId: userId, limit: 100)
-        let preferredCategories = Set(history.map { $0.category })
-        let preferredCreators = Set(history.map { $0.creator.id })
+        let preferredCategories = Set(history.compactMap { VideoCategory(rawValue: $0.contentType.rawValue) })
+        let preferredCreators = Set(history.map { $0.creatorId })
         
         // Boost scores based on preferences
         let boostedResults = results.map { result -> SearchResult in

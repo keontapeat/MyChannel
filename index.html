@@ -640,7 +640,7 @@
         
         .video-duration {
             position: absolute;
-            top: 8px;
+            top: 12px;
             right: 8px;
             background: rgba(0,0,0,0.75);
             color: #fff;
@@ -732,7 +732,7 @@
             flex-direction: column;
             align-items: center;
             gap: 2px;
-            padding: 4px 8px;
+            padding: 6px 8px 8px 8px;
             color: #aaa;
             text-decoration: none;
             transition: color 0.2s ease;
@@ -1350,7 +1350,7 @@
             </section>
 
             <section id="featured-section" style="margin:12px 0 16px 0;">
-                <h2 class="section-title">Featured</h2>
+                <h2 class="section-title" style="margin:0; display:flex; align-items:center; gap:8px; color:#000;">⭐ Featured</h2>
                 <div id="heroCarousel" style="position:relative; border-radius:12px; overflow:hidden; background:#000;">
                     <!-- Slides will be injected dynamically -->
                 </div>
@@ -1838,7 +1838,7 @@
                 </div>
                 
                 <!-- Center Play/Pause Button -->
-                <div class="center-controls" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; pointer-events: auto;">
+                <div class="center-controls" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; pointer-events: auto; padding-bottom: 12px;">
                     <div id="centerPlayButton" onclick="togglePlayPause()" style="width: 80px; height: 80px; border-radius: 16px; background: rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s ease; backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1);" onmouseover="this.style.background='rgba(255,255,255,0.25)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">
                         <svg id="centerPlayIcon" width="24" height="24" viewBox="0 0 24 24" fill="white" stroke="none">
                             <polygon points="8,5 19,12 8,19"></polygon>
@@ -1883,7 +1883,7 @@
                         </div>
                         
                         <!-- Right Side - Settings -->
-                        <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 12px; padding-bottom: 8px;">
                             <div onclick="toggleMute()" style="width: 36px; height: 36px; border-radius: 8px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">
                                 <svg id="volumeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <polygon points="11,5 6,9 2,9 2,15 6,15 11,19"></polygon>

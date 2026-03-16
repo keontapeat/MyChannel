@@ -8,47 +8,45 @@
 
 import SwiftUI
 
-/// 🎓 UNIVERSITY THEME: Modern Academic Design System
-/// Professional colors, typography, and styling for premium educational experience
+/// 🎓 UNIVERSITY THEME: Clean Adaptive Design System
+/// Neutral system colors — serious, professional, dark/light adaptive
 struct UniversityTheme {
     
     // MARK: - Colors
     
-    /// Academic color palette - professional and sophisticated
+    /// Neutral adaptive palette — no color blobs, system-adaptive
     struct Colors {
-        // Primary Academic Colors
-        static let academicBlue = Color(red: 0.15, green: 0.3, blue: 0.85)      // Deep academic blue
-        static let scholarPurple = Color(red: 0.25, green: 0.15, blue: 0.65)    // Rich scholar purple
-        static let knowledgeNavy = Color(red: 0.1, green: 0.2, blue: 0.5)       // Knowledge navy
+        // Primary Accent — YouTube-red, used sparingly for CTAs only
+        static let accent = Color(red: 1.0, green: 0.18, blue: 0.18)
         
-        // Career Path Colors (Muted & Professional)
-        static let iosDevelopment = Color(red: 0.0, green: 0.5, blue: 0.9)      // Tech blue
-        static let webDevelopment = Color(red: 0.2, green: 0.6, blue: 0.4)      // Digital green
-        static let dataScience = Color(red: 0.6, green: 0.3, blue: 0.8)         // Analytics purple
-        static let uxDesign = Color(red: 0.9, green: 0.4, blue: 0.3)            // Creative coral
-        static let digitalMarketing = Color(red: 0.3, green: 0.7, blue: 0.9)    // Marketing cyan
-        static let businessAnalytics = Color(red: 0.7, green: 0.5, blue: 0.2)   // Business gold
-        static let projectManagement = Color(red: 0.5, green: 0.6, blue: 0.3)   // Management olive
-        static let graphicDesign = Color(red: 0.8, green: 0.3, blue: 0.6)       // Design magenta
+        // Career Path Colors — kept for progress rings & category icons only (muted)
+        static let iosDevelopment = Color(red: 0.0, green: 0.48, blue: 1.0)
+        static let webDevelopment = Color(red: 0.18, green: 0.58, blue: 0.35)
+        static let dataScience = Color(red: 0.55, green: 0.27, blue: 0.75)
+        static let uxDesign = Color(red: 0.88, green: 0.38, blue: 0.28)
+        static let digitalMarketing = Color(red: 0.2, green: 0.65, blue: 0.88)
+        static let businessAnalytics = Color(red: 0.65, green: 0.48, blue: 0.18)
+        static let projectManagement = Color(red: 0.45, green: 0.58, blue: 0.25)
+        static let graphicDesign = Color(red: 0.75, green: 0.28, blue: 0.55)
         
-        // Semantic Colors
-        static let certificateGold = Color(red: 0.85, green: 0.65, blue: 0.13)  // Achievement gold
-        static let progressGreen = Color(red: 0.2, green: 0.7, blue: 0.3)       // Progress green
-        static let learningOrange = Color(red: 0.9, green: 0.5, blue: 0.2)      // Active learning
+        // Semantic — minimal, purposeful
+        static let certificateGold = Color(red: 0.85, green: 0.65, blue: 0.13)
+        static let verified = Color(red: 0.2, green: 0.7, blue: 0.3)
         
-        // Neutral Academic
-        static let textPrimary = Color(red: 0.1, green: 0.1, blue: 0.15)        // Deep charcoal
-        static let textSecondary = Color(red: 0.4, green: 0.4, blue: 0.45)      // Muted gray
-        static let textTertiary = Color(red: 0.6, green: 0.6, blue: 0.65)       // Light gray
+        // Adaptive neutrals — use these everywhere instead of fixed colors
+        static let textPrimary = Color(.label)
+        static let textSecondary = Color(.secondaryLabel)
+        static let textTertiary = Color(.tertiaryLabel)
         
-        // Backgrounds
-        static let backgroundPrimary = Color(red: 0.98, green: 0.98, blue: 0.99) // Clean white
-        static let backgroundSecondary = Color(red: 0.95, green: 0.95, blue: 0.97) // Soft gray
-        static let surface = Color.white
+        // Adaptive backgrounds
+        static let backgroundPrimary = Color(.systemBackground)
+        static let backgroundSecondary = Color(.secondarySystemBackground)
+        static let surface = Color(.systemBackground)
+        static let cardSurface = Color(.secondarySystemBackground)
         
         // UI Elements
-        static let divider = Color(red: 0.85, green: 0.85, blue: 0.88)
-        static let shadow = Color.black.opacity(0.08)
+        static let divider = Color(.separator)
+        static let shadow = Color.black.opacity(0.06)
         
         /// Get career path color by ID
         static func careerPathColor(for id: String) -> Color {
@@ -61,7 +59,7 @@ struct UniversityTheme {
             case "business-analytics": return businessAnalytics
             case "project-management": return projectManagement
             case "graphic-design": return graphicDesign
-            default: return academicBlue
+            default: return accent
             }
         }
     }
@@ -230,21 +228,11 @@ struct UniversityButtonModifier: ViewModifier {
     }
 }
 
-/// Apply university hero gradient
+/// Apply university hero background — clean adaptive surface
 struct UniversityHeroGradientModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .background(
-                LinearGradient(
-                    colors: [
-                        UniversityTheme.Colors.academicBlue,
-                        UniversityTheme.Colors.scholarPurple,
-                        UniversityTheme.Colors.knowledgeNavy
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+            .background(Color(.systemBackground))
     }
 }
 
@@ -252,12 +240,12 @@ struct UniversityHeroGradientModifier: ViewModifier {
 
 extension View {
     /// Apply university card style
-    func universityCard(color: Color = UniversityTheme.Colors.academicBlue) -> some View {
+    func universityCard(color: Color = UniversityTheme.Colors.accent) -> some View {
         modifier(UniversityCardModifier(color: color))
     }
     
     /// Apply university button style
-    func universityButton(color: Color = UniversityTheme.Colors.academicBlue, isSecondary: Bool = false) -> some View {
+    func universityButton(color: Color = UniversityTheme.Colors.accent, isSecondary: Bool = false) -> some View {
         modifier(UniversityButtonModifier(color: color, isSecondary: isSecondary))
     }
     
@@ -274,11 +262,11 @@ extension UniversityTheme {
     static func progressRingColors(for percentage: Double) -> (start: Color, end: Color) {
         switch percentage {
         case 0..<25:
-            return (Colors.learningOrange.opacity(0.7), Colors.learningOrange)
+            return (Color(.systemOrange).opacity(0.7), Color(.systemOrange))
         case 25..<50:
-            return (Colors.progressGreen.opacity(0.7), Colors.progressGreen)
+            return (Colors.verified.opacity(0.7), Colors.verified)
         case 50..<75:
-            return (Colors.academicBlue.opacity(0.7), Colors.academicBlue)
+            return (Color(.systemBlue).opacity(0.7), Color(.systemBlue))
         case 75..<100:
             return (Colors.certificateGold.opacity(0.7), Colors.certificateGold)
         default:
@@ -294,11 +282,11 @@ extension UniversityTheme {
     static func difficultyColor(_ level: UniversityVideo.DifficultyLevel) -> Color {
         switch level {
         case .beginner:
-            return Colors.progressGreen
+            return Colors.verified
         case .intermediate:
-            return Colors.academicBlue
+            return Color(.systemBlue)
         case .advanced:
-            return Colors.scholarPurple
+            return Color(.systemOrange)
         case .expert:
             return Colors.certificateGold
         }

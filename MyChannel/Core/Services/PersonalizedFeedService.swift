@@ -12,11 +12,47 @@ final class PersonalizedFeedService: ObservableObject {
     private var db: Firestore { Firestore.firestore() }
     #endif
 
+    // MARK: - Helper: Resolve creator user from Firestore
+    #if canImport(FirebaseFirestore)
+    private func resolveCreator(from data: [String: Any]) async -> User {
+        // Prefer explicit userId stored on the video
+        let creatorId = data["userId"] as? String ?? ""
+        
+        // If we have a creatorId, try to fetch the real user document
+        if !creatorId.isEmpty {
+            do {
+                let userDoc = try await db.collection("users").document(creatorId).getDocument()
+                if let userData = userDoc.data() {
+                    return User(
+                        id: creatorId,
+                        username: userData["username"] as? String ?? "user",
+                        displayName: userData["displayName"] as? String ?? "Creator",
+                        email: userData["email"] as? String ?? "",
+                        profileImageURL: userData["profileImageURL"] as? String ?? userData["profileImageUrl"] as? String,
+                        bannerImageURL: userData["bannerImageURL"] as? String ?? userData["bannerImageUrl"] as? String,
+                        bio: userData["bio"] as? String,
+                        subscriberCount: (userData["subscriberCount"] as? Int) ?? 0,
+                        videoCount: (userData["videoCount"] as? Int) ?? 0,
+                        isVerified: (userData["isVerified"] as? Bool) ?? false,
+                        isCreator: true,
+                        createdAt: (userData["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+                    )
+                }
+            } catch {
+                print("⚠️ [PersonalizedFeedService] Failed to resolve creator for video: \(error)")
+            }
+        }
+        
+        // Fallback: use current user if available, otherwise defaultUser
+        return AppState.shared.currentUser ?? User.defaultUser
+    }
+    #endif
+
     func generateForYou(userId: String, limit: Int = 20) async -> [Video] {
         // 1. Fetch user's history + likes for signals
         let history = await HistoryService.shared.fetch(userId: userId, limit: 50)
-        let likedCategories = history.map { $0.category }.uniqued()
-        let likedCreators = history.map { $0.creator.id }.uniqued()
+        let likedCategories = history.compactMap { VideoCategory(rawValue: $0.contentType.rawValue) }.uniqued()
+        let likedCreators = history.map { $0.creatorId }.uniqued()
 
         // 2. Fetch candidates from Firestore based on signals
         var candidates: [Video] = []
@@ -31,9 +67,11 @@ final class PersonalizedFeedService: ObservableObject {
                     .order(by: "createdAt", descending: true)
                     .limit(to: 10)
                     .getDocuments()
-                candidates += snap.documents.compactMap { doc in
+                
+                for doc in snap.documents {
                     let d = doc.data()
-                    return Video(
+                    let creator = await resolveCreator(from: d)
+                    let video = Video(
                         id: doc.documentID,
                         title: d["title"] as? String ?? "",
                         description: d["description"] as? String ?? "",
@@ -42,9 +80,10 @@ final class PersonalizedFeedService: ObservableObject {
                         duration: (d["duration"] as? Double) ?? 0,
                         viewCount: (d["viewCount"] as? Int) ?? 0,
                         likeCount: (d["likeCount"] as? Int) ?? 0,
-                        creator: AppState.shared.currentUser ?? User.defaultUser,
+                        creator: creator,
                         category: category
                     )
+                    candidates.append(video)
                 }
             }
 
@@ -56,9 +95,11 @@ final class PersonalizedFeedService: ObservableObject {
                     .order(by: "createdAt", descending: true)
                     .limit(to: 5)
                     .getDocuments()
-                candidates += snap.documents.compactMap { doc in
+                
+                for doc in snap.documents {
                     let d = doc.data()
-                    return Video(
+                    let creator = await resolveCreator(from: d)
+                    let video = Video(
                         id: doc.documentID,
                         title: d["title"] as? String ?? "",
                         description: d["description"] as? String ?? "",
@@ -67,9 +108,10 @@ final class PersonalizedFeedService: ObservableObject {
                         duration: (d["duration"] as? Double) ?? 0,
                         viewCount: (d["viewCount"] as? Int) ?? 0,
                         likeCount: (d["likeCount"] as? Int) ?? 0,
-                        creator: AppState.shared.currentUser ?? User.defaultUser,
+                        creator: creator,
                         category: .entertainment
                     )
+                    candidates.append(video)
                 }
             }
         } catch { }
@@ -110,9 +152,10 @@ final class PersonalizedFeedService: ObservableObject {
                 .limit(to: limit)
                 .getDocuments()
             
-            videos = snap.documents.compactMap { doc in
+            for doc in snap.documents {
                 let d = doc.data()
-                return Video(
+                let creator = await resolveCreator(from: d)
+                let video = Video(
                     id: doc.documentID,
                     title: d["title"] as? String ?? "",
                     description: d["description"] as? String ?? "",
@@ -121,9 +164,10 @@ final class PersonalizedFeedService: ObservableObject {
                     duration: (d["duration"] as? Double) ?? 0,
                     viewCount: (d["viewCount"] as? Int) ?? 0,
                     likeCount: (d["likeCount"] as? Int) ?? 0,
-                    creator: AppState.shared.currentUser ?? User.defaultUser,
+                    creator: creator,
                     category: VideoCategory(rawValue: d["category"] as? String ?? "entertainment") ?? .entertainment
                 )
+                videos.append(video)
             }
         } catch {
             print("Error fetching home feed videos: \(error)")

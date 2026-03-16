@@ -49,7 +49,7 @@ class NativePiPController: NSObject, ObservableObject {
         lastPlayer = player
         
         // 🔥 PERF: Setup controller immediately without async
-        if let controller = try? AVPictureInPictureController(playerLayer: playerLayer!) {
+        if let controller = AVPictureInPictureController(playerLayer: playerLayer!) {
             // 🔥 PERF: Invalidate old observer before creating new one
             pipPossibleObservation?.invalidate()
             

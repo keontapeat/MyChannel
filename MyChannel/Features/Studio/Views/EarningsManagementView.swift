@@ -145,7 +145,7 @@ struct EarningsManagementView: View {
                     title: "Pending",
                     amount: analyticsService.channelAnalytics?.totalRevenue ?? 0 * 0.2,
                     icon: "clock",
-                    color: .orange,
+                    color: AppTheme.Colors.warning,
                     action: "View"
                 ) {}
             }
@@ -188,7 +188,7 @@ struct EarningsManagementView: View {
             ActionButton(
                 icon: "chart.bar.fill",
                 title: "Report",
-                color: .purple
+                color: AppTheme.Colors.accent
             ) {}
             
             ActionButton(
@@ -230,24 +230,8 @@ struct EarningsManagementView: View {
                     title: "Ad Revenue",
                     amount: (analyticsService.channelAnalytics?.totalRevenue ?? 0) * 0.70,
                     percentage: 70,
-                    icon: "play.rectangle.fill",
-                    color: .red
-                )
-                
-                EarningsRevenueSourceRow(
-                    title: "Memberships",
-                    amount: (analyticsService.channelAnalytics?.totalRevenue ?? 0) * 0.15,
-                    percentage: 15,
-                    icon: "person.badge.plus.fill",
-                    color: .purple
-                )
-                
-                EarningsRevenueSourceRow(
-                    title: "Super Chat",
-                    amount: (analyticsService.channelAnalytics?.totalRevenue ?? 0) * 0.10,
-                    percentage: 10,
                     icon: "heart.fill",
-                    color: .pink
+                    color: AppTheme.Colors.primary
                 )
                 
                 EarningsRevenueSourceRow(
@@ -345,7 +329,7 @@ struct EarningsManagementView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Image(systemName: "lightbulb.fill")
-                    .foregroundColor(.yellow)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
                 Text("Revenue Optimization Tips")
                     .font(.system(size: 20, weight: .semibold))
             }
