@@ -32,6 +32,9 @@ struct MusicHubView: View {
     @State private var showConcerts: Bool = false
     @State private var showMerch: Bool = false
     @State private var showDiscover: Bool = false
+    @State private var showUploadSheet: Bool = false
+    @State private var showArtistCTA: Bool = true
+    @StateObject private var discoveryFeed = MusicDiscoveryFeedService.shared
     
     enum Segment: String, CaseIterable { case songs = "Songs", artists = "Artists", albums = "Albums" }
     
@@ -47,8 +50,18 @@ struct MusicHubView: View {
                             // Quick Actions Row
                             quickActionsRow
                             
+                            // 🎵 Artist Upload CTA
+                            if showArtistCTA {
+                                artistUploadCTA
+                            }
+                            
                             // 🔥 FLINT ARTISTS - 810 REPRESENT (TOP PRIORITY!)
                             FlintArtistsSection()
+                            
+                            // 🆕 New Artist Drops
+                            if !discoveryFeed.newDrops.isEmpty {
+                                newArtistDropsSection
+                            }
                             
                             // 🔥 Curated Playlists
                             curatedPlaylistsSection
@@ -59,7 +72,12 @@ struct MusicHubView: View {
                             // 🔥 Discover Weekly & For You
                             discoverSection
                             
-                            // 🔥 Friend Activity
+                            // � Trending on MyChannel (creator uploads)
+                            if !discoveryFeed.trendingUploads.isEmpty {
+                                trendingOnMyChannelSection
+                            }
+                            
+                            // � Friend Activity
                             friendActivitySection
                             
                             // 🔥 Concerts & Events
@@ -112,9 +130,10 @@ struct MusicHubView: View {
                 }
                 // Global Now Playing Bar is injected via MainTabView; no local bar here
             }
-            .background(musicBackground)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .navigationTitle("Music")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { try? awaitBack() }) {
@@ -216,41 +235,51 @@ struct MusicHubView: View {
                     MusicSettingsView()
                 }
             }
+            .sheet(isPresented: $showUploadSheet) {
+                MusicUploadSheet()
+            }
         }
     }
     
-    // MARK: - 🔥 Hero Section (Apple Music Style)
+    // MARK: - Hero Section (Apple Music Light Style)
     
     private var heroSection: some View {
         ZStack(alignment: .bottomLeading) {
-            // Dynamic gradient background
+            // Blurred artwork background from first trending song
+            if let artURL = trending.first?.artworkUrl, let url = URL(string: artURL) {
+                AppAsyncImage(url: url) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: { Color.clear }
+                .frame(height: 300)
+                .clipped()
+                .blur(radius: 40)
+                .opacity(0.55)
+            }
+            
+            // Gradient overlay: vibrant top → white/clear at bottom (Apple Music style)
             LinearGradient(
                 colors: [
-                    Color(red: 0.9, green: 0.2, blue: 0.3),
-                    Color(red: 0.6, green: 0.1, blue: 0.4),
-                    Color(red: 0.1, green: 0.1, blue: 0.15)
+                    Color(red: 0.88, green: 0.15, blue: 0.25).opacity(0.85),
+                    Color(red: 0.58, green: 0.08, blue: 0.38).opacity(0.75),
+                    Color(.systemGroupedBackground)
                 ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+                startPoint: .top,
+                endPoint: .bottom
             )
-            .frame(height: 280)
+            .frame(height: 300)
             
-            // Animated music waves overlay
-            GeometryReader { geo in
-                ForEach(0..<5, id: \.self) { i in
+            // Subtle wave overlay
+            GeometryReader { _ in
+                ForEach(0..<4, id: \.self) { i in
                     MusicWavePath()
-                        .stroke(
-                            Color.white.opacity(0.1 - Double(i) * 0.015),
-                            lineWidth: 2
-                        )
-                        .offset(y: CGFloat(i) * 15)
+                        .stroke(Color.white.opacity(0.06 - Double(i) * 0.01), lineWidth: 1.5)
+                        .offset(y: CGFloat(i) * 20)
                 }
             }
-            .frame(height: 280)
+            .frame(height: 300)
             
             // Content
-            VStack(alignment: .leading, spacing: 12) {
-                // Premium badges
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     PremiumBadge(icon: "airpodspro", text: "Spatial")
                     PremiumBadge(icon: "waveform", text: "Lossless")
@@ -260,33 +289,36 @@ struct MusicHubView: View {
                 .offset(y: animateHero ? 0 : 10)
                 
                 Text("MyChannel\nMusic")
-                    .font(.system(size: 42, weight: .black, design: .rounded))
+                    .font(.system(size: 44, weight: .black, design: .rounded))
                     .foregroundColor(.white)
-                    .lineSpacing(-4)
                     .opacity(animateHero ? 1 : 0)
                     .offset(y: animateHero ? 0 : 20)
                 
                 Text("100 million songs. Zero ads.")
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(.white.opacity(0.92))
                     .opacity(animateHero ? 1 : 0)
                     .offset(y: animateHero ? 0 : 15)
             }
             .padding(.horizontal, 24)
-            .padding(.bottom, 24)
+            .padding(.bottom, 28)
         }
+        .frame(height: 300)
+        .clipped()
     }
     
     // MARK: - Quick Actions Row
     
     private var quickActionsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                QuickActionButton(icon: "shuffle", title: "Shuffle All") {
-                    // Shuffle all trending
+            HStack(spacing: 16) {
+                QuickActionButton(icon: "arrow.up.circle.fill", title: "Upload") {
+                    showUploadSheet = true
+                    HapticManager.shared.impact(style: .medium)
+                }
+                QuickActionButton(icon: "shuffle", title: "Shuffle") {
                     if !trending.isEmpty {
-                        let shuffled = trending.shuffled()
-                        let items: [PreviewQueueItem] = shuffled.compactMap { s in
+                        let items: [PreviewQueueItem] = trending.shuffled().compactMap { s in
                             guard let p = s.previewUrl, let u = URL(string: p) else { return nil }
                             return PreviewQueueItem(trackId: String(s.id), url: u, title: s.title, artist: s.artist, artworkURL: URL(string: s.artworkUrl ?? ""))
                         }
@@ -294,55 +326,135 @@ struct MusicHubView: View {
                     }
                     HapticManager.shared.impact(style: .medium)
                 }
-                
                 QuickActionButton(icon: "chart.bar.fill", title: "My Stats") {
                     showListeningStats = true
                     HapticManager.shared.impact(style: .medium)
                 }
-                
-                QuickActionButton(icon: "clock.arrow.circlepath", title: "Recently Played") {
+                QuickActionButton(icon: "clock.arrow.circlepath", title: "History") {
                     HapticManager.shared.impact(style: .light)
                 }
-                
                 QuickActionButton(icon: "heart.fill", title: "Favorites") {
                     HapticManager.shared.impact(style: .light)
                 }
-                
                 QuickActionButton(icon: "antenna.radiowaves.left.and.right", title: "Radio") {
                     HapticManager.shared.impact(style: .light)
                 }
-                
-                QuickActionButton(icon: "music.mic", title: "Live Lyrics") {
+                QuickActionButton(icon: "music.mic", title: "Lyrics") {
                     showNowPlaying = true
                     HapticManager.shared.impact(style: .light)
                 }
-                
                 QuickActionButton(icon: "waveform", title: "Shazam") {
                     showShazam = true
                     HapticManager.shared.impact(style: .medium)
                 }
-                
                 QuickActionButton(icon: "arrow.down.circle.fill", title: "Downloads") {
                     showDownloads = true
                     HapticManager.shared.impact(style: .light)
                 }
-                
                 QuickActionButton(icon: "music.note.list", title: "Library") {
                     showLibrary = true
                     HapticManager.shared.impact(style: .light)
                 }
-                
                 QuickActionButton(icon: "ticket.fill", title: "Concerts") {
                     showConcerts = true
                     HapticManager.shared.impact(style: .light)
                 }
-                
-                QuickActionButton(icon: "bag.fill", title: "Merch") {
-                    showMerch = true
-                    HapticManager.shared.impact(style: .light)
-                }
             }
             .padding(.horizontal, 20)
+        }
+    }
+    
+    // MARK: - Artist Upload CTA Banner
+    
+    private var artistUploadCTA: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(LinearGradient(colors: [Color(red: 0.88, green: 0.15, blue: 0.25), Color(red: 0.58, green: 0.08, blue: 0.38)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 48, height: 48)
+                Image(systemName: "music.mic")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Are you an artist?")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.primary)
+                Text("Upload your music & get paid")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Button {
+                showUploadSheet = true
+                HapticManager.shared.impact(style: .medium)
+            } label: {
+                Text("Upload")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(LinearGradient(colors: [Color(red: 0.88, green: 0.15, blue: 0.25), Color(red: 0.58, green: 0.08, blue: 0.38)], startPoint: .leading, endPoint: .trailing))
+                    .clipShape(Capsule())
+            }
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) { showArtistCTA = false }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+                .shadow(color: .black.opacity(0.07), radius: 8, x: 0, y: 2)
+        )
+        .padding(.horizontal, 20)
+    }
+    
+    // MARK: - New Artist Drops Section
+    
+    private var newArtistDropsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MusicSectionHeader(
+                title: "New Artist Drops",
+                subtitle: "Fresh uploads from creators",
+                icon: "music.note.list",
+                iconColor: Color(red: 0.88, green: 0.15, blue: 0.25),
+                showSeeAll: true
+            )
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 12) {
+                    ForEach(discoveryFeed.newDrops) { track in
+                        ArtistTrackCard(track: track)
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+    
+    // MARK: - Trending on MyChannel Section
+    
+    private var trendingOnMyChannelSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MusicSectionHeader(
+                title: "Trending on MyChannel",
+                subtitle: "Most streamed creator tracks",
+                icon: "flame.fill",
+                iconColor: .orange,
+                showSeeAll: true
+            )
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 12) {
+                    ForEach(discoveryFeed.trendingUploads) { track in
+                        ArtistTrackCard(track: track)
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
         }
     }
     
@@ -688,22 +800,10 @@ struct MusicHubView: View {
         }
     }
     
-    // MARK: - Music Background
+    // MARK: - Music Background (kept for legacy, background now set inline)
     
     private var musicBackground: some View {
-        ZStack {
-            AppTheme.Colors.background
-            
-            // Subtle gradient overlay
-            LinearGradient(
-                colors: [
-                    Color(red: 0.9, green: 0.2, blue: 0.3).opacity(0.05),
-                    Color.clear
-                ],
-                startPoint: .top,
-                endPoint: .center
-            )
-        }
+        Color(.systemGroupedBackground)
     }
 
     // MARK: - Back helper
@@ -1257,7 +1357,7 @@ struct PremiumBadge: View {
     }
 }
 
-// MARK: - Quick Action Button
+// MARK: - Quick Action Button (Apple Music Light Style)
 struct QuickActionButton: View {
     let icon: String
     let title: String
@@ -1265,29 +1365,30 @@ struct QuickActionButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 ZStack {
-                    Circle()
-                        .fill(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color(.secondarySystemGroupedBackground))
+                        .frame(width: 52, height: 52)
+                        .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
+                    
+                    Image(systemName: icon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(
                             LinearGradient(
-                                colors: [AppTheme.Colors.primary, AppTheme.Colors.primary.opacity(0.7)],
+                                colors: [Color(red: 0.88, green: 0.15, blue: 0.25), Color(red: 0.58, green: 0.08, blue: 0.38)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 56, height: 56)
-                    
-                    Image(systemName: icon)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(.white)
                 }
                 
                 Text(title)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.primary)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.secondary)
                     .lineLimit(1)
             }
-            .frame(width: 70)
+            .frame(width: 62)
         }
         .buttonStyle(ScaleButtonStyle())
     }

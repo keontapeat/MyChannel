@@ -51,59 +51,170 @@ struct MusicUploadSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                trackInfoSection
-                artworkSection
-                audioSection
-                settingsSection
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Hero artwork picker
+                    artworkHero
+                    
+                    // Track info card
+                    uploadCard {
+                        uploadSectionLabel("TRACK INFO")
+                        uploadField("Song Title", text: $trackTitle, required: true)
+                        Divider().padding(.leading, 16)
+                        uploadField("Artist Name", text: $artistName, required: true)
+                        Divider().padding(.leading, 16)
+                        uploadField("Album / Project", text: $albumName, required: false)
+                        Divider().padding(.leading, 16)
+                        // Genre picker row
+                        HStack {
+                            Text("Genre")
+                                .font(.system(size: 15))
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Picker("", selection: $selectedGenre) {
+                                ForEach(genres, id: \.self) { Text($0).tag($0) }
+                            }
+                            .pickerStyle(.menu)
+                            .accentColor(Color(red: 0.88, green: 0.15, blue: 0.25))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
 
-                if uploadState == .uploading {
-                    Section {
+                    // Audio file card
+                    uploadCard {
+                        uploadSectionLabel("AUDIO FILE")
+                        Button { showAudioPicker = true } label: {
+                            HStack(spacing: 14) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(selectedAudioURL != nil
+                                              ? Color(red: 0.88, green: 0.15, blue: 0.25).opacity(0.12)
+                                              : Color(.systemGray5))
+                                        .frame(width: 44, height: 44)
+                                    Image(systemName: selectedAudioURL != nil ? "waveform" : "music.note.list")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundColor(Color(red: 0.88, green: 0.15, blue: 0.25))
+                                }
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(audioFileName.isEmpty ? "Choose Audio File" : audioFileName)
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(audioFileName.isEmpty ? Color(red: 0.88, green: 0.15, blue: 0.25) : .primary)
+                                        .lineLimit(1)
+                                    Text("MP3 · WAV · M4A · AAC")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                if selectedAudioURL != nil {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                        .font(.system(size: 20))
+                                }
+                            }
+                            .padding(16)
+                        }
+                        .buttonStyle(.plain)
+                        .fileImporter(
+                            isPresented: $showAudioPicker,
+                            allowedContentTypes: [.audio, UTType("public.mp3")!, UTType("com.apple.m4a-audio")!,
+                                                  UTType("com.apple.coreaudio-format")!, .wav],
+                            allowsMultipleSelection: false
+                        ) { result in
+                            switch result {
+                            case .success(let urls):
+                                if let url = urls.first {
+                                    selectedAudioURL = url
+                                    audioFileName = url.lastPathComponent
+                                }
+                            case .failure(let err):
+                                errorMessage = "Could not load audio: \(err.localizedDescription)"
+                            }
+                        }
+                    }
+
+                    // Settings card
+                    uploadCard {
+                        uploadSectionLabel("SETTINGS")
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                                .font(.system(size: 15))
+                            Text("Explicit Content")
+                                .font(.system(size: 15))
+                            Spacer()
+                            Toggle("", isOn: $isExplicit)
+                                .tint(Color(red: 0.88, green: 0.15, blue: 0.25))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
+
+                    // Upload progress
+                    if uploadState == .uploading {
                         VStack(spacing: 8) {
                             ProgressView(value: uploadProgress)
-                                .tint(AppTheme.Colors.primary)
-                            Text("\(Int(uploadProgress * 100))% uploaded")
-                                .font(.system(size: 13))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                .tint(Color(red: 0.88, green: 0.15, blue: 0.25))
+                                .scaleEffect(x: 1, y: 1.5)
+                            Text("Uploading… \(Int(uploadProgress * 100))%")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.secondary)
                         }
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 20)
                     }
-                }
 
-                if let error = errorMessage {
-                    Section {
-                        Text(error)
-                            .font(.system(size: 13))
-                            .foregroundColor(.red)
+                    // Error message
+                    if let error = errorMessage {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .foregroundColor(.red)
+                            Text(error)
+                                .font(.system(size: 13))
+                                .foregroundColor(.red)
+                        }
+                        .padding(.horizontal, 20)
                     }
-                }
 
-                Section {
+                    // Upload button
                     Button {
                         Task { await uploadTrack() }
                     } label: {
-                        HStack {
-                            Spacer()
+                        HStack(spacing: 10) {
                             if uploadState == .uploading {
-                                ProgressView()
-                                    .tint(.white)
+                                ProgressView().tint(.white)
                             } else {
                                 Image(systemName: "arrow.up.circle.fill")
+                                    .font(.system(size: 18, weight: .semibold))
                                 Text("Upload Track")
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(.system(size: 16, weight: .bold))
                             }
-                            Spacer()
                         }
                         .foregroundColor(.white)
-                        .padding(.vertical, 6)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            Group {
+                                if canUpload {
+                                    LinearGradient(
+                                        colors: [Color(red: 0.88, green: 0.15, blue: 0.25), Color(red: 0.58, green: 0.08, blue: 0.38)],
+                                        startPoint: .leading, endPoint: .trailing
+                                    )
+                                } else {
+                                    LinearGradient(colors: [Color.gray, Color.gray], startPoint: .leading, endPoint: .trailing)
+                                }
+                            }
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .shadow(color: canUpload ? Color(red: 0.88, green: 0.15, blue: 0.25).opacity(0.35) : .clear,
+                                radius: 10, x: 0, y: 4)
                     }
-                    .listRowBackground(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(canUpload ? AppTheme.Colors.primary : Color.gray)
-                    )
                     .disabled(!canUpload || uploadState == .uploading)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 30)
                 }
+                .padding(.top, 8)
             }
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .navigationTitle("Upload Track")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -112,10 +223,10 @@ struct MusicUploadSheet: View {
                         HapticManager.shared.impact(style: .light)
                         dismiss()
                     }
-                    .foregroundColor(AppTheme.Colors.primary)
+                    .foregroundColor(Color(red: 0.88, green: 0.15, blue: 0.25))
                 }
             }
-            .alert("Track Uploaded!", isPresented: $showSuccess) {
+            .alert("Track Uploaded! 🎵", isPresented: $showSuccess) {
                 Button("Done") { dismiss() }
             } message: {
                 Text("Your track is live on MyChannel Music. Streams will start counting toward your earnings.")
@@ -131,107 +242,108 @@ struct MusicUploadSheet: View {
         }
     }
 
-    // MARK: - Form Sections
+    // MARK: - Artwork Hero
 
-    private var trackInfoSection: some View {
-        Section(header: Text("Track Info")) {
-            TextField("Track Title *", text: $trackTitle)
-            TextField("Artist Name *", text: $artistName)
-            TextField("Album / Project (optional)", text: $albumName)
-            Picker("Genre", selection: $selectedGenre) {
-                ForEach(genres, id: \.self) { Text($0).tag($0) }
-            }
-        }
-    }
-
-    private var artworkSection: some View {
-        Section(header: Text("Artwork")) {
-            PhotosPicker(selection: $selectedArtworkItem, matching: .images) {
-                HStack(spacing: 14) {
-                    if let img = artworkImage {
-                        Image(uiImage: img)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 64, height: 64)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    } else {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(AppTheme.Colors.surface)
-                            .frame(width: 64, height: 64)
-                            .overlay(
-                                Image(systemName: "photo.badge.plus")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(AppTheme.Colors.primary)
+    private var artworkHero: some View {
+        PhotosPicker(selection: $selectedArtworkItem, matching: .images) {
+            ZStack {
+                if let img = artworkImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 180, height: 180)
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .shadow(color: .black.opacity(0.2), radius: 16, x: 0, y: 8)
+                } else {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(red: 0.88, green: 0.15, blue: 0.25).opacity(0.15),
+                                         Color(red: 0.58, green: 0.08, blue: 0.38).opacity(0.1)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
                             )
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(artworkImage == nil ? "Add Artwork" : "Change Artwork")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.primary)
-                        Text("Recommended: 3000×3000px")
-                            .font(.system(size: 12))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                }
-                .padding(.vertical, 4)
-            }
-        }
-    }
-
-    private var audioSection: some View {
-        Section(header: Text("Audio File")) {
-            Button {
-                showAudioPicker = true
-            } label: {
-                HStack(spacing: 14) {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(selectedAudioURL != nil ? AppTheme.Colors.primary.opacity(0.15) : AppTheme.Colors.surface)
-                        .frame(width: 48, height: 48)
-                        .overlay(
-                            Image(systemName: selectedAudioURL != nil ? "waveform" : "music.note.list")
-                                .font(.system(size: 20))
-                                .foregroundColor(AppTheme.Colors.primary)
                         )
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(audioFileName.isEmpty ? "Select Audio File *" : audioFileName)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(audioFileName.isEmpty ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
-                            .lineLimit(1)
-                        Text("MP3, M4A, AAC, WAV supported")
-                            .font(.system(size: 12))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
+                        .frame(width: 180, height: 180)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .strokeBorder(
+                                    LinearGradient(
+                                        colors: [Color(red: 0.88, green: 0.15, blue: 0.25).opacity(0.4),
+                                                 Color(red: 0.58, green: 0.08, blue: 0.38).opacity(0.4)],
+                                        startPoint: .topLeading, endPoint: .bottomTrailing
+                                    ),
+                                    style: StrokeStyle(lineWidth: 1.5, dash: [6, 3])
+                                )
+                        )
+                        .overlay(
+                            VStack(spacing: 8) {
+                                Image(systemName: "photo.badge.plus")
+                                    .font(.system(size: 30, weight: .medium))
+                                    .foregroundColor(Color(red: 0.88, green: 0.15, blue: 0.25))
+                                Text("Add Cover Art")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(Color(red: 0.88, green: 0.15, blue: 0.25))
+                            }
+                        )
+                }
+
+                // Edit badge
+                VStack {
                     Spacer()
-                    if selectedAudioURL != nil {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
+                    HStack {
+                        Spacer()
+                        ZStack {
+                            Circle()
+                                .fill(Color(red: 0.88, green: 0.15, blue: 0.25))
+                                .frame(width: 32, height: 32)
+                            Image(systemName: "pencil")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        .offset(x: 6, y: 6)
                     }
                 }
-                .padding(.vertical, 4)
-            }
-            .buttonStyle(.plain)
-            .fileImporter(
-                isPresented: $showAudioPicker,
-                allowedContentTypes: [.audio, UTType("public.mp3")!, UTType("com.apple.m4a-audio")!,
-                                      UTType("com.apple.coreaudio-format")!, .wav],
-                allowsMultipleSelection: false
-            ) { result in
-                switch result {
-                case .success(let urls):
-                    if let url = urls.first {
-                        selectedAudioURL = url
-                        audioFileName = url.lastPathComponent
-                    }
-                case .failure(let error):
-                    errorMessage = "Could not load audio: \(error.localizedDescription)"
-                }
+                .frame(width: 180, height: 180)
             }
         }
+        .padding(.top, 12)
     }
 
-    private var settingsSection: some View {
-        Section(header: Text("Settings")) {
-            Toggle("Explicit Content", isOn: $isExplicit)
+    // MARK: - Reusable Card Components
+
+    @ViewBuilder
+    private func uploadCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+        )
+        .padding(.horizontal, 20)
+    }
+
+    private func uploadSectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 6)
+    }
+
+    private func uploadField(_ placeholder: String, text: Binding<String>, required: Bool) -> some View {
+        HStack {
+            TextField(required ? "\(placeholder) *" : placeholder, text: text)
+                .font(.system(size: 15))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 13)
+            if required && !text.wrappedValue.isEmpty {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                    .font(.system(size: 16))
+                    .padding(.trailing, 16)
+            }
         }
     }
 
