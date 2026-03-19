@@ -23,11 +23,13 @@ final class RealMLAgentsService: ObservableObject {
     @Published var lastError: String?
     
     private init() {
-        // Use Cloud Run URL in production, localhost for development
         #if DEBUG
-        self.baseURL = ProcessInfo.processInfo.environment["ML_AGENTS_URL"] ?? "http://localhost:8000"
+        self.baseURL = ProcessInfo.processInfo.environment["ML_AGENTS_URL"]
+            ?? AppConfig.API.mlAgentsURL
+            ?? CloudRunAgentRouter.url(for: .mlAgents).absoluteString
         #else
-        self.baseURL = AppConfig.API.mlAgentsURL ?? "https://ml-agents-xxxxx.run.app"
+        self.baseURL = AppConfig.API.mlAgentsURL
+            ?? CloudRunAgentRouter.url(for: .mlAgents).absoluteString
         #endif
     }
     

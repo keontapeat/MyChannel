@@ -91,6 +91,22 @@ description: MyChannel project rules for Windsurf AI coding assistant
 - When changing caching strategy, always bump the SW version (`mychannel-vX.Y.Z`) AND the registration query string in `index.html` (`/sw.js?v=NNN`)
 - After any deploy, verify SW version matches on both `mychannel.live` and `mychannel-ca26d.web.app`
 
+## Live ML Agents — PRODUCTION (190+ Services)
+- MyChannel has 190+ real ML agent services **live and running** on Google Cloud Run (GCP project `mychannel-ca26d`, `us-central1`)
+- All service URLs follow pattern: `https://<service-name>-fkri6ifojq-uc.a.run.app`
+- **DO NOT treat these as mock/demo/placeholder** — they are real deployed endpoints
+- Key live agents include:
+  - `three-strike-review` — content moderation strikes
+  - `recommendations`, `viral-prediction`, `watch-time-predictor`, `trending-ml`
+  - `fraud-detection`, `spam-detection`, `sentiment-analysis`, `content-moderation`
+  - `thumbnail-generator`, `search-ranking`, `top-rank-ml`, `feed-personalization`
+  - `rtb-bidding-predictor`, `ad-network-ml`, `subscription-pricing`, `churn-predictor`
+  - `quantum-ai`, `singularity-ai`, `super-ai-team` — advanced AI orchestration
+  - 150+ additional specialized agents (gaming, partnerships, creator tools, etc.)
+- When wiring iOS/web features to ML, always call the live Cloud Run endpoint — never stub or mock
+- Always pass auth headers when calling internal services
+- Services scale to zero when idle — first call may have cold start (~2-3s), handle with loading states
+
 ## Cloud Run & GCP Rules
 - Cloud Run service endpoints are in `DEV_CONTEXT.md` — always reference before hardcoding URLs
 - Never deploy Cloud Run services without using `gcloud builds submit` via the cloudbuild YAML configs in `services/`

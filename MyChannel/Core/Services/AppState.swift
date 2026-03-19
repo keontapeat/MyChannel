@@ -39,6 +39,10 @@ class AppState: ObservableObject {
     @Published var hasError = false
     @Published var errorMessage: String?
     
+    // MARK: - Appearance
+    /// nil = follow system (YouTube default). Set to .dark / .light to override.
+    @Published var overrideColorScheme: ColorScheme? = nil
+    
     // MARK: - Preferences
     @Published var preferredVideoQuality: VideoQuality = .auto
     @Published var autoPlayEnabled = true
@@ -83,6 +87,8 @@ class AppState: ObservableObject {
                     Task { await self?.hydrateCloudCollectionsIfNeeded() }
                     self?.loadUserData()
                     self?.attachCloudListeners()
+                    // Start ML agent notification bridge for this user
+                    MLAgentNotificationBridge.shared.start(userId: user.id)
                 }
             }
             .store(in: &cancellables)
@@ -93,6 +99,8 @@ class AppState: ObservableObject {
                 self?.isAuthenticated = false
                 self?.resetState()
                 self?.firestoreListeners = nil
+                // Stop ML agent notification bridge on logout
+                MLAgentNotificationBridge.shared.stop()
             }
             .store(in: &cancellables)
         

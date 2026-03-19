@@ -6,13 +6,14 @@
 //
 
 import SwiftUI
+import UIKit
 
 // MARK: - App Theme
 struct AppTheme {
     
-    // MARK: - Premium Colors (Sleeker than YouTube)
+    // MARK: - Premium Colors (Adaptive Light/Dark — YouTube-parity)
     struct Colors {
-        // Primary brand - refined coral with depth
+        // Primary brand - refined coral with depth (same in both modes)
         static let primary = Color(hexString: "E85D5D")
         static let primaryLight = Color(hexString: "FF8A8A")
         static let primaryDark = Color(hexString: "C94444")
@@ -25,34 +26,91 @@ struct AppTheme {
         static let accent = Color(hexString: "3D9FE0")
         static let accentGlow = Color(hexString: "3D9FE0").opacity(0.4)
         
-        // Backgrounds - refined neutrals with subtle warmth
-        static let background = Color(hexString: "FAFBFC")
-        static let backgroundDark = Color(hexString: "0A0A0C")  // OLED-optimized
-        static let surface = Color(hexString: "F4F5F7")
+        // MARK: Adaptive Backgrounds (light → dark)
+        // background: #FAFBFC (light) / #0A0A0C OLED-black (dark)
+        static let background = Color(uiColor: UIColor(dynamicProvider: { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.039, green: 0.039, blue: 0.047, alpha: 1) // #0A0A0C
+                : UIColor(red: 0.980, green: 0.984, blue: 0.988, alpha: 1) // #FAFBFC
+        }))
+        // Legacy alias kept for any call-sites that used backgroundDark directly
+        static let backgroundDark = Color(hexString: "0A0A0C")
+
+        // surface: #F4F5F7 (light) / #161618 (dark)
+        static let surface = Color(uiColor: UIColor(dynamicProvider: { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.086, green: 0.086, blue: 0.094, alpha: 1) // #161618
+                : UIColor(red: 0.957, green: 0.961, blue: 0.969, alpha: 1) // #F4F5F7
+        }))
         static let surfaceDark = Color(hexString: "161618")
-        static let cardBackground = Color(hexString: "FFFFFF")
+
+        // cardBackground: #FFFFFF (light) / #1C1C1E (dark)
+        static let cardBackground = Color(uiColor: UIColor(dynamicProvider: { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.110, green: 0.110, blue: 0.118, alpha: 1) // #1C1C1E
+                : UIColor(red: 1.000, green: 1.000, blue: 1.000, alpha: 1) // #FFFFFF
+        }))
         static let cardBackgroundDark = Color(hexString: "1C1C1E")
-        static let backgroundSecondary = Color(hexString: "EBEDF0")
-        static let backgroundTertiary = Color(hexString: "E4E6E9")
+
+        // backgroundSecondary: #EBEDF0 (light) / #1C1C1E (dark)
+        static let backgroundSecondary = Color(uiColor: UIColor(dynamicProvider: { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.110, green: 0.110, blue: 0.118, alpha: 1) // #1C1C1E
+                : UIColor(red: 0.922, green: 0.929, blue: 0.941, alpha: 1) // #EBEDF0
+        }))
+
+        // backgroundTertiary: #E4E6E9 (light) / #2C2C2E (dark)
+        static let backgroundTertiary = Color(uiColor: UIColor(dynamicProvider: { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.173, green: 0.173, blue: 0.180, alpha: 1) // #2C2C2E
+                : UIColor(red: 0.894, green: 0.902, blue: 0.914, alpha: 1) // #E4E6E9
+        }))
         
-        // Elevated surfaces (for modals, sheets)
-        static let elevated = Color(hexString: "FFFFFF")
+        // elevated: #FFFFFF (light) / #2C2C2E (dark)
+        static let elevated = Color(uiColor: UIColor(dynamicProvider: { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.173, green: 0.173, blue: 0.180, alpha: 1) // #2C2C2E
+                : UIColor(red: 1.000, green: 1.000, blue: 1.000, alpha: 1) // #FFFFFF
+        }))
         static let elevatedDark = Color(hexString: "2C2C2E")
-        
-        // Text - refined hierarchy with proper contrast
-        static let textPrimary = Color(hexString: "0F1419")
+
+        // MARK: Adaptive Text
+        // textPrimary: #0F1419 (light) / #F5F5F7 (dark)
+        static let textPrimary = Color(uiColor: UIColor(dynamicProvider: { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.961, green: 0.961, blue: 0.969, alpha: 1) // #F5F5F7
+                : UIColor(red: 0.059, green: 0.078, blue: 0.098, alpha: 1) // #0F1419
+        }))
         static let textPrimaryDark = Color(hexString: "F5F5F7")
-        static let textSecondary = Color(hexString: "536471")
+
+        // textSecondary: #536471 (light) / #8E8E93 (dark)
+        static let textSecondary = Color(uiColor: UIColor(dynamicProvider: { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.557, green: 0.557, blue: 0.576, alpha: 1) // #8E8E93
+                : UIColor(red: 0.325, green: 0.392, blue: 0.443, alpha: 1) // #536471
+        }))
         static let textSecondaryDark = Color(hexString: "8E8E93")
-        static let textTertiary = Color(hexString: "8899A6")
+
+        // textTertiary: #8899A6 (light) / #636366 (dark)
+        static let textTertiary = Color(uiColor: UIColor(dynamicProvider: { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.388, green: 0.388, blue: 0.400, alpha: 1) // #636366
+                : UIColor(red: 0.533, green: 0.600, blue: 0.651, alpha: 1) // #8899A6
+        }))
         static let textTertiaryDark = Color(hexString: "636366")
+
         static let textMuted = Color(hexString: "B0BEC5")
         
-        // Dividers - subtle and refined
-        static let divider = Color(hexString: "EFF3F4")
+        // MARK: Adaptive Divider
+        // divider: #EFF3F4 (light) / #2F2F31 (dark)
+        static let divider = Color(uiColor: UIColor(dynamicProvider: { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.184, green: 0.184, blue: 0.192, alpha: 1) // #2F2F31
+                : UIColor(red: 0.937, green: 0.953, blue: 0.957, alpha: 1) // #EFF3F4
+        }))
         static let dividerDark = Color(hexString: "2F2F31")
         
-        // Status colors - balanced and professional
+        // MARK: Status colors - same in both modes
         static let success = Color(hexString: "00BA7C")
         static let successLight = Color(hexString: "00BA7C").opacity(0.15)
         static let warning = Color(hexString: "FFB800")

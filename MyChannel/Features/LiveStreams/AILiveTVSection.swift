@@ -30,15 +30,9 @@ struct AILiveTVSection: View {
         case categories = "Categories"
     }
     
-    // Check if we have any ready channels to show
-    private var hasReadyChannels: Bool {
-        !loadingTracker.readyChannels.isEmpty
-    }
-    
-    // Check if we're still in initial loading phase
-    private var isInitialLoading: Bool {
-        !loadingTracker.isInitialLoadComplete && loadingTracker.readyChannels.isEmpty
-    }
+    // Always show channels - sampleChannels are always available
+    private var hasReadyChannels: Bool { true }
+    private var isInitialLoading: Bool { false }
     
     var body: some View {
         // 🔥 ALWAYS show the Live TV section - never hide it completely
@@ -178,19 +172,11 @@ struct AILiveTVSection: View {
             if isLoading {
                 loadingView
             } else if let section = forYouSection {
-                // Personalized Picks
-                if !section.personalizedPicks.isEmpty {
-                    personalizedPicksRow(section.personalizedPicks)
-                }
-                
                 // Because You Watched
                 if !section.becauseYouWatched.isEmpty {
                     becauseYouWatchedRow(section.becauseYouWatched)
-                }
-                
-                // Perfect for Right Now
-                if !section.perfectForRightNow.isEmpty {
-                    perfectForNowRow(section.perfectForRightNow)
+                } else if !section.personalizedPicks.isEmpty {
+                    personalizedPicksRow(section.personalizedPicks)
                 }
             }
         }
@@ -198,21 +184,6 @@ struct AILiveTVSection: View {
     
     private func personalizedPicksRow(_ picks: [LiveTVRecommendation]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("🎯 Picked for You")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Spacer()
-                
-                if let topPick = picks.first {
-                    Text("\(Int(topPick.aiConfidence * 100))% match")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.green)
-                }
-            }
-            .padding(.horizontal, 20)
-            
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
                     ForEach(picks) { recommendation in
@@ -231,11 +202,6 @@ struct AILiveTVSection: View {
     
     private func becauseYouWatchedRow(_ items: [BecauseYouWatchedItem]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("📺 Because You Watched")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-                .padding(.horizontal, 20)
-            
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
                     ForEach(items) { item in
@@ -252,21 +218,6 @@ struct AILiveTVSection: View {
     
     private func perfectForNowRow(_ picks: [TimeBasedPick]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("⏰ Perfect for Right Now")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Spacer()
-                
-                if let first = picks.first {
-                    Text(first.timeLabel)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                }
-            }
-            .padding(.horizontal, 20)
-            
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
                     ForEach(picks) { pick in
@@ -285,11 +236,6 @@ struct AILiveTVSection: View {
     
     private var trendingContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("🔥 Trending Now")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-                .padding(.horizontal, 20)
-            
             if isLoading {
                 loadingView
             } else if let trending = forYouSection?.trendingNow {
@@ -312,11 +258,6 @@ struct AILiveTVSection: View {
     
     private var categoriesContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("📂 Browse by Category")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-                .padding(.horizontal, 20)
-            
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
                     ForEach(LiveTVChannel.ChannelCategory.allCases, id: \.self) { category in
@@ -363,17 +304,9 @@ struct AILiveTVSection: View {
     private func loadAIRecommendations() async {
         isLoading = true
         
-        // 🔥 Run health check and AI recommendations in parallel!
-        async let healthCheck: Void = StreamHealthMLAgent.shared.isInitialized ? () : Task { 
-            _ = await StreamHealthMLAgent.shared.filterHealthyChannels(Array(LiveTVChannel.sampleChannels.prefix(20)))
-        }.value
-        
+        // Load AI recommendations - health checks run in background only
         let userId = appState.currentUser?.id ?? "anonymous"
-        async let recommendations = aiAgent.getForYouSection(userId: userId)
-        
-        // Wait for both
-        _ = await healthCheck
-        forYouSection = await recommendations
+        forYouSection = await aiAgent.getForYouSection(userId: userId)
         
         // 🔥🔥🔥 THERMONUCLEAR: Prewarm all thumbnails in parallel!
         if let section = forYouSection {

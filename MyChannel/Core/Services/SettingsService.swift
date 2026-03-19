@@ -162,6 +162,12 @@ final class SettingsService: ObservableObject {
         AppState.shared.notificationsEnabled = appSettings.notifications.pushEnabled
         AppState.shared.autoPiPEnabled = appSettings.playback.autoPictureInPicture
         AppState.shared.preferredVideoQuality = appSettings.videoQuality.preferredAppStateQuality
+        // Push appearance mode so WindowGroup can apply .preferredColorScheme
+        switch appSettings.general.appearanceMode {
+        case .dark:   AppState.shared.overrideColorScheme = .dark
+        case .light:  AppState.shared.overrideColorScheme = .light
+        case .system: AppState.shared.overrideColorScheme = nil
+        }
     }
 
     private func persistLegacyAppKeys() {
@@ -169,6 +175,7 @@ final class SettingsService: ObservableObject {
         userDefaults.set(appSettings.general.country, forKey: "appCountry")
         userDefaults.set(appSettings.general.darkMode, forKey: "darkMode")
         userDefaults.set(appSettings.general.darkMode, forKey: "appearance.darkModeEnabled")
+        userDefaults.set(appSettings.general.appearanceMode.rawValue, forKey: "appearanceMode")
         userDefaults.set(appSettings.playback.autoplay, forKey: "preferences.autoPlayEnabled")
         userDefaults.set(appSettings.notifications.pushEnabled, forKey: "preferences.notificationsEnabled")
         userDefaults.set(appSettings.privacy.personalizedAds, forKey: "preferences.personalizedAdsEnabled")
@@ -231,6 +238,13 @@ struct AppSettings: Codable, Equatable {
         settings.general.language = userDefaults.string(forKey: "appLanguage") ?? settings.general.language
         settings.general.country = userDefaults.string(forKey: "appCountry") ?? settings.general.country
         settings.general.darkMode = userDefaults.bool(forKey: "darkMode")
+        // Migrate legacy Bool → AppearanceMode if no saved mode exists
+        if let savedMode = userDefaults.string(forKey: "appearanceMode"),
+           let mode = AppearanceMode(rawValue: savedMode) {
+            settings.general.appearanceMode = mode
+        } else {
+            settings.general.appearanceMode = settings.general.darkMode ? .dark : .system
+        }
         settings.notifications.pushEnabled = userDefaults.object(forKey: "preferences.notificationsEnabled") as? Bool ?? settings.notifications.pushEnabled
         settings.playback.autoplay = userDefaults.object(forKey: "preferences.autoPlayEnabled") as? Bool ?? settings.playback.autoplay
         settings.playback.autoPictureInPicture = userDefaults.object(forKey: "autoPiPEnabled") as? Bool ?? settings.playback.autoPictureInPicture
@@ -279,10 +293,27 @@ struct StudioSettings: Codable, Equatable {
     }
 }
 
+// MARK: - Appearance Mode (YouTube-style: System / Light / Dark)
+enum AppearanceMode: String, Codable, CaseIterable {
+    case system = "system"
+    case light  = "light"
+    case dark   = "dark"
+
+    var displayName: String {
+        switch self {
+        case .system: return "Use device theme"
+        case .light:  return "Light theme"
+        case .dark:   return "Dark theme"
+        }
+    }
+}
+
 struct GeneralSettings: Codable, Equatable {
     var language = "English"
     var country = "United States"
+    // Legacy Bool kept for UserDefaults migration; prefer appearanceMode
     var darkMode = false
+    var appearanceMode: AppearanceMode = .system
 }
 
 struct NotificationSettingsPayload: Codable, Equatable {

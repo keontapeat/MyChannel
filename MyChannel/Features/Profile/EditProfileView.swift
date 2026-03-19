@@ -899,6 +899,11 @@ struct EditProfileView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showingSaveConfirmation = false }
             }
+            // Invalidate cache so the fresh Firestore profile is served on next load
+            await MainActor.run {
+                ProfileCacheService.shared.clearCache()
+            }
+            
             // Post notification to refresh all profile views
             print("📢 Posting userProfileUpdated notification with profileImageURL: \(updatedUser.profileImageURL ?? "nil")")
             NotificationCenter.default.post(name: .userProfileUpdated, object: updatedUser)

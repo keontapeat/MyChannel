@@ -488,8 +488,379 @@ struct AGIAgentCatalog {
             estimatedBuildTime: "4 weeks"
         ),
         
-        // Additional agents (17-30) would follow the same pattern...
-        // For brevity, showing the structure. Full implementation would include all 30.
+        // 🛡️ PHASE 3: SAFETY & MODERATION (4 agents)
+        AGIAgentConfig(
+            id: "agent-017-comment-moderation",
+            name: "Comment Moderation AI",
+            category: .safety,
+            status: .planned,
+            description: "Auto-moderate comments: remove hate, spam, harassment in real-time",
+            impactDescription: "+95% toxic comment removal, -90% manual review",
+            estimatedRevenue: "Save $4M/year",
+            vertexAIAgentId: nil,
+            promptTemplate: """
+            You are the Comment Moderation AI for MyChannel. Review this comment and decide if it should be removed.
+            
+            Comment: {{comment}}
+            Author History: {{authorHistory}}
+            Video Context: {{videoContext}}
+            
+            Return: {action: "approve"|"remove"|"flag", reason: string, confidence: number}
+            """,
+            requiredDataSources: ["Comment Text", "User History", "Platform Policies"],
+            outputFormat: "JSON moderation decision",
+            isEnabled: false,
+            priority: 12,
+            estimatedBuildTime: "2 weeks",
+            runInterval: 30
+        ),
+        
+        AGIAgentConfig(
+            id: "agent-018-nsfw-detector",
+            name: "NSFW Content Detector",
+            category: .safety,
+            status: .planned,
+            description: "Detect and filter adult/graphic content before it goes live",
+            impactDescription: "99.9% NSFW detection, App Store compliance",
+            estimatedRevenue: "Save $2M/year + App Store compliance",
+            vertexAIAgentId: nil,
+            promptTemplate: """
+            You are the NSFW Content Detector. Analyze video metadata and thumbnail for policy violations.
+            
+            Video Metadata: {{videoMetadata}}
+            Thumbnail Description: {{thumbnailDescription}}
+            Creator History: {{creatorHistory}}
+            
+            Detect: nudity, graphic violence, dangerous content. Return confidence score per category.
+            """,
+            requiredDataSources: ["Video Metadata", "Thumbnail", "Creator History", "Content Policies"],
+            outputFormat: "JSON: {categories: {nudity: number, violence: number, dangerous: number}, action: string}",
+            isEnabled: false,
+            priority: 13,
+            estimatedBuildTime: "3 weeks",
+            runInterval: 60
+        ),
+        
+        AGIAgentConfig(
+            id: "agent-019-copyright-guardian",
+            name: "Copyright Guardian AI",
+            category: .safety,
+            status: .planned,
+            description: "Detect copyright violations and auto-apply Content ID matching",
+            impactDescription: "-80% DMCA takedowns, +$5M music licensing revenue",
+            estimatedRevenue: "+$5M ARR",
+            vertexAIAgentId: nil,
+            promptTemplate: """
+            You are the Copyright Guardian. Check this video for copyrighted material.
+            
+            Audio Fingerprint: {{audioFingerprint}}
+            Visual Fingerprint: {{visualFingerprint}}
+            Rights Database: {{rightsDatabase}}
+            
+            Match against known copyrighted content. Return match confidence and recommended action.
+            """,
+            requiredDataSources: ["Audio Fingerprint", "Visual Fingerprint", "Rights Database", "Licensing Data"],
+            outputFormat: "JSON: {hasMatch: boolean, confidence: number, rightsHolder: string, action: string}",
+            isEnabled: false,
+            priority: 14,
+            estimatedBuildTime: "4 weeks",
+            runInterval: 120
+        ),
+        
+        AGIAgentConfig(
+            id: "agent-020-crisis-response",
+            name: "Crisis Response AI",
+            category: .safety,
+            status: .planned,
+            description: "Detect and respond to platform crises: outages, viral harm, PR emergencies",
+            impactDescription: "-70% crisis response time, prevent $10M+ damage",
+            estimatedRevenue: "Save $10M/year",
+            vertexAIAgentId: nil,
+            promptTemplate: """
+            You are the Crisis Response AI. Monitor platform health and public sentiment.
+            
+            Platform Metrics: {{platformMetrics}}
+            Social Signals: {{socialSignals}}
+            Error Rates: {{errorRates}}
+            
+            Identify crises and recommend immediate response actions.
+            """,
+            requiredDataSources: ["Platform Metrics", "Social Media", "Error Logs", "User Complaints"],
+            outputFormat: "JSON: {crisisLevel: 0-5, type: string, immediateActions: array, escalate: boolean}",
+            isEnabled: false,
+            priority: 15,
+            estimatedBuildTime: "2 weeks",
+            runInterval: 60
+        ),
+        
+        // 📊 PHASE 4: ANALYTICS & INTELLIGENCE (4 agents)
+        AGIAgentConfig(
+            id: "agent-021-trend-analyzer",
+            name: "Trend Analyzer AI",
+            category: .analytics,
+            status: .planned,
+            description: "Identify emerging trends 48 hours before they peak — give creators an edge",
+            impactDescription: "+200% creator trend adoption, +$12M ARR",
+            estimatedRevenue: "+$12M ARR",
+            vertexAIAgentId: nil,
+            promptTemplate: """
+            You are the Trend Analyzer AI. Identify content trends that are about to go viral.
+            
+            Current Trending Topics: {{trendingTopics}}
+            Social Signals: {{socialSignals}}
+            Historical Patterns: {{historicalPatterns}}
+            Platform Data: {{platformData}}
+            
+            Predict: top 5 emerging trends in next 48 hours, confidence score, best content format.
+            """,
+            requiredDataSources: ["Social Media Trends", "Search Data", "Platform Analytics", "Creator Activity"],
+            outputFormat: "JSON array of trend predictions with confidence and format recommendations",
+            isEnabled: false,
+            priority: 16,
+            estimatedBuildTime: "3 weeks",
+            runInterval: 900
+        ),
+        
+        AGIAgentConfig(
+            id: "agent-022-search-optimizer",
+            name: "Search & Discovery AI",
+            category: .analytics,
+            status: .planned,
+            description: "Optimize search ranking so the best content surfaces first",
+            impactDescription: "+35% search-to-watch conversion, +$8M ARR",
+            estimatedRevenue: "+$8M ARR",
+            vertexAIAgentId: nil,
+            promptTemplate: """
+            You are the Search & Discovery AI. Optimize search results for maximum relevance and engagement.
+            
+            Query: {{query}}
+            User Context: {{userContext}}
+            Available Results: {{availableResults}}
+            
+            Rerank results by predicted engagement. Explain top 3 ranking decisions.
+            """,
+            requiredDataSources: ["Search Queries", "Video Metadata", "User Engagement", "Click-Through Rates"],
+            outputFormat: "JSON: ranked results with scores and reasoning",
+            isEnabled: false,
+            priority: 17,
+            estimatedBuildTime: "3 weeks",
+            runInterval: 300
+        ),
+        
+        AGIAgentConfig(
+            id: "agent-023-revenue-forecaster",
+            name: "Revenue Intelligence AI",
+            category: .analytics,
+            status: .planned,
+            description: "Forecast revenue 30/60/90 days out with 95% accuracy",
+            impactDescription: "+25% budget efficiency, $20M better allocation",
+            estimatedRevenue: "+$20M ARR",
+            vertexAIAgentId: nil,
+            promptTemplate: """
+            You are the Revenue Intelligence AI. Forecast MyChannel platform revenue.
+            
+            Historical Revenue: {{historicalRevenue}}
+            Growth Metrics: {{growthMetrics}}
+            Market Data: {{marketData}}
+            Ad Pipeline: {{adPipeline}}
+            
+            Forecast revenue for next 30, 60, 90 days with confidence intervals.
+            """,
+            requiredDataSources: ["Revenue History", "User Metrics", "Ad Revenue", "Market Data"],
+            outputFormat: "JSON: {30day: {low, mid, high}, 60day: ..., 90day: ..., keyRisks: array}",
+            isEnabled: false,
+            priority: 18,
+            estimatedBuildTime: "4 weeks",
+            runInterval: 3600
+        ),
+        
+        AGIAgentConfig(
+            id: "agent-024-competitor-spy",
+            name: "Competitor Intelligence AI",
+            category: .analytics,
+            status: .planned,
+            description: "Monitor YouTube, TikTok, Twitch — find gaps MyChannel can win",
+            impactDescription: "+$15M from strategic differentiation",
+            estimatedRevenue: "+$15M ARR",
+            vertexAIAgentId: nil,
+            promptTemplate: """
+            You are the Competitor Intelligence AI. Analyze competitor platforms and find MyChannel's winning opportunities.
+            
+            Competitor Data: {{competitorData}}
+            MyChannel Strengths: {{myChannelStrengths}}
+            Market Gaps: {{marketGaps}}
+            
+            Identify top 3 opportunities where MyChannel can outcompete in next 90 days.
+            """,
+            requiredDataSources: ["Competitor Metrics", "Social Listening", "App Store Reviews", "Industry Reports"],
+            outputFormat: "JSON: {opportunities: array, threats: array, recommendations: array}",
+            isEnabled: false,
+            priority: 19,
+            estimatedBuildTime: "3 weeks",
+            runInterval: 3600
+        ),
+        
+        // 🚀 PHASE 5: SCALE & INFRASTRUCTURE (3 agents)
+        AGIAgentConfig(
+            id: "agent-025-cdn-optimizer",
+            name: "CDN & Delivery AI",
+            category: .scale,
+            status: .planned,
+            description: "Optimize video delivery globally — reduce buffering by 90%",
+            impactDescription: "-90% buffering, +20% watch time, save $3M CDN costs",
+            estimatedRevenue: "Save $3M/year",
+            vertexAIAgentId: nil,
+            promptTemplate: """
+            You are the CDN & Delivery AI. Optimize video delivery for maximum performance.
+            
+            User Location: {{userLocation}}
+            Network Conditions: {{networkConditions}}
+            CDN Node Status: {{cdnNodeStatus}}
+            Video Quality: {{videoQuality}}
+            
+            Route video to optimal CDN node and recommend adaptive bitrate settings.
+            """,
+            requiredDataSources: ["CDN Metrics", "User Location", "Network Data", "Video Analytics"],
+            outputFormat: "JSON: {optimalNode: string, bitrateProfile: array, predictedBuffering: number}",
+            isEnabled: false,
+            priority: 20,
+            estimatedBuildTime: "4 weeks",
+            runInterval: 120
+        ),
+        
+        AGIAgentConfig(
+            id: "agent-026-load-predictor",
+            name: "Infrastructure Scaling AI",
+            category: .scale,
+            status: .planned,
+            description: "Predict traffic spikes and auto-scale infrastructure before they hit",
+            impactDescription: "99.99% uptime, save $5M in over-provisioning",
+            estimatedRevenue: "Save $5M/year",
+            vertexAIAgentId: nil,
+            promptTemplate: """
+            You are the Infrastructure Scaling AI. Predict and prepare for traffic spikes.
+            
+            Current Load: {{currentLoad}}
+            Historical Patterns: {{historicalPatterns}}
+            Upcoming Events: {{upcomingEvents}}
+            
+            Predict traffic for next 1/4/24 hours and recommend scaling actions.
+            """,
+            requiredDataSources: ["Server Metrics", "Traffic History", "Event Calendar", "Geographic Data"],
+            outputFormat: "JSON: {predictions: array, scalingActions: array, estimatedCost: number}",
+            isEnabled: false,
+            priority: 21,
+            estimatedBuildTime: "3 weeks",
+            runInterval: 300
+        ),
+        
+        AGIAgentConfig(
+            id: "agent-027-cost-optimizer",
+            name: "Cost Optimization AI",
+            category: .scale,
+            status: .planned,
+            description: "Continuously reduce cloud infrastructure costs without hurting performance",
+            impactDescription: "-30% infrastructure costs = save $8M/year",
+            estimatedRevenue: "Save $8M/year",
+            vertexAIAgentId: nil,
+            promptTemplate: """
+            You are the Cost Optimization AI. Find ways to reduce MyChannel's cloud costs.
+            
+            Current Spend: {{currentSpend}}
+            Resource Utilization: {{resourceUtilization}}
+            Service Catalog: {{serviceCatalog}}
+            
+            Identify top 5 cost reduction opportunities with estimated savings and implementation effort.
+            """,
+            requiredDataSources: ["Cloud Billing", "Resource Utilization", "Service Catalog", "Pricing APIs"],
+            outputFormat: "JSON: {opportunities: array sorted by savings, totalPotentialSavings: number}",
+            isEnabled: false,
+            priority: 22,
+            estimatedBuildTime: "2 weeks",
+            runInterval: 3600
+        ),
+        
+        // 🎮 PHASE 6: GAMING & COMPETITION (3 agents)
+        AGIAgentConfig(
+            id: "agent-028-tournament-ai",
+            name: "Tournament Bracket AI",
+            category: .gaming,
+            status: .planned,
+            description: "Create perfectly balanced tournaments and optimize prize structures",
+            impactDescription: "+300% tournament participation, +$10M gaming revenue",
+            estimatedRevenue: "+$10M ARR",
+            vertexAIAgentId: nil,
+            promptTemplate: """
+            You are the Tournament Bracket AI. Design and manage competitive tournaments.
+            
+            Player Pool: {{playerPool}}
+            Skill Ratings: {{skillRatings}}
+            Prize Budget: {{prizeBudget}}
+            Tournament Type: {{tournamentType}}
+            
+            Create optimal bracket ensuring fair competition and maximum engagement.
+            """,
+            requiredDataSources: ["Player Profiles", "Skill Ratings", "Historical Match Data", "Prize Catalog"],
+            outputFormat: "JSON: {bracket: object, prizeStructure: array, expectedParticipation: number}",
+            isEnabled: false,
+            priority: 23,
+            estimatedBuildTime: "4 weeks",
+            runInterval: 1800
+        ),
+        
+        AGIAgentConfig(
+            id: "agent-029-reward-optimizer",
+            name: "Reward & Loyalty AI",
+            category: .gaming,
+            status: .planned,
+            description: "Optimize rewards and loyalty programs to maximize engagement and spending",
+            impactDescription: "+40% user spending, +30% retention via optimal rewards",
+            estimatedRevenue: "+$12M ARR",
+            vertexAIAgentId: nil,
+            promptTemplate: """
+            You are the Reward & Loyalty AI. Optimize the MyChannel rewards program.
+            
+            User Behavior: {{userBehavior}}
+            Current Rewards: {{currentRewards}}
+            Spend Data: {{spendData}}
+            Engagement Metrics: {{engagementMetrics}}
+            
+            Recommend reward triggers, amounts, and types to maximize engagement and monetization.
+            """,
+            requiredDataSources: ["User Activity", "Purchase History", "Reward Catalog", "Competitor Rewards"],
+            outputFormat: "JSON: {rewardTriggers: array, personalizedOffers: array, expectedLift: object}",
+            isEnabled: false,
+            priority: 24,
+            estimatedBuildTime: "3 weeks",
+            runInterval: 900
+        ),
+        
+        AGIAgentConfig(
+            id: "agent-030-community-builder",
+            name: "Community Builder AI",
+            category: .gaming,
+            status: .planned,
+            description: "Build and nurture creator communities that drive organic growth",
+            impactDescription: "+5M community members, +$18M creator economy revenue",
+            estimatedRevenue: "+$18M ARR",
+            vertexAIAgentId: nil,
+            promptTemplate: """
+            You are the Community Builder AI. Grow and activate MyChannel creator communities.
+            
+            Creator: {{creatorData}}
+            Community Stats: {{communityStats}}
+            Engagement Patterns: {{engagementPatterns}}
+            Top Fans: {{topFans}}
+            
+            Recommend community-building actions: events, challenges, collaborations, fan rewards.
+            """,
+            requiredDataSources: ["Creator Analytics", "Fan Profiles", "Community Activity", "Platform Events"],
+            outputFormat: "JSON: {actions: array, predictedGrowth: number, topOpportunities: array}",
+            isEnabled: false,
+            priority: 25,
+            estimatedBuildTime: "3 weeks",
+            runInterval: 1800
+        )
     ]
     
     // MARK: - Helper Methods

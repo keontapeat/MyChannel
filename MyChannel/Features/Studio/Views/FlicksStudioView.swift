@@ -61,7 +61,7 @@ struct FlicksStudioView: View {
     
     private var flicksStatsHeader: some View {
         HStack(spacing: 12) {
-            FlicksStatsCard(title: "Total Flicks", value: "\(flicks.count)", icon: "rectangle.portrait.fill", color: .purple)
+            FlicksStatsCard(title: "Total Flicks", value: "\(flicks.count)", icon: "rectangle.portrait.fill", color: AppTheme.Colors.primary)
             FlicksStatsCard(title: "Total Views", value: formatNumber(flicks.reduce(0) { $0 + $1.viewCount }), icon: "eye.fill", color: .blue)
             FlicksStatsCard(title: "Avg Watch", value: "92%", icon: "chart.line.uptrend.xyaxis", color: .green)
         }
@@ -91,11 +91,7 @@ struct FlicksStudioView: View {
             .foregroundColor(.white)
             .padding(20)
             .background(
-                LinearGradient(
-                    colors: [.purple, .blue],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
+                AppTheme.Colors.primary,
                 in: RoundedRectangle(cornerRadius: 16)
             )
         }
@@ -141,7 +137,7 @@ struct FlicksStudioView: View {
                     .padding(.horizontal, 32)
                     .padding(.vertical, 14)
                     .background(
-                        LinearGradient(colors: [.purple, .blue], startPoint: .leading, endPoint: .trailing),
+                        AppTheme.Colors.primary,
                         in: RoundedRectangle(cornerRadius: 25)
                     )
             }
@@ -331,7 +327,7 @@ struct FlickUploadSheet: View {
                 VStack(spacing: 16) {
                     Image(systemName: "rectangle.portrait.and.arrow.forward")
                         .font(.system(size: 60))
-                        .foregroundColor(.purple)
+                        .foregroundColor(AppTheme.Colors.primary)
                     
                     Text("Create a Flick")
                         .font(.system(size: 24, weight: .bold))
@@ -354,7 +350,7 @@ struct FlickUploadSheet: View {
                         .foregroundColor(.white)
                         .padding(18)
                         .background(
-                            LinearGradient(colors: [.purple, .blue], startPoint: .leading, endPoint: .trailing),
+                            AppTheme.Colors.primary,
                             in: RoundedRectangle(cornerRadius: 14)
                         )
                     }

@@ -10,6 +10,18 @@ import Foundation
 import FirebaseFirestore
 #endif
 
+enum CommentError: LocalizedError {
+    case spamDetected
+    case postFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .spamDetected: return "Your comment was flagged as spam and could not be posted."
+        case .postFailed(let msg): return "Failed to post comment: \(msg)"
+        }
+    }
+}
+
 @MainActor
 final class CommentsFirestoreService: ObservableObject {
     static let shared = CommentsFirestoreService()
@@ -62,6 +74,27 @@ final class CommentsFirestoreService: ObservableObject {
     }
 
     func post(videoId: String, userId: String, text: String, parentId: String? = nil) async throws {
+        // 🤖 SPAM DETECTION: Check comment before posting
+        struct SpamRequest: Encodable {
+            let text: String
+            let user_id: String
+            let video_id: String
+        }
+        struct SpamResponse: Decodable {
+            let is_spam: Bool?
+            let confidence: Double?
+            let reason: String?
+        }
+        if let spamResult = try? await CloudRunAgentRouter.post(
+            CloudRunService.spamDetection,
+            path: "/predict",
+            body: SpamRequest(text: text, user_id: userId, video_id: videoId)
+        ) as SpamResponse, spamResult.is_spam == true {
+            let confidence = Int((spamResult.confidence ?? 1.0) * 100)
+            print("🚫 [SpamDetection] Blocked comment (\(confidence)% confidence): \(spamResult.reason ?? "spam")")
+            throw CommentError.spamDetected
+        }
+
         #if canImport(FirebaseFirestore)
         let ref = db.collection("videos").document(videoId).collection("comments").document()
         try await ref.setData([

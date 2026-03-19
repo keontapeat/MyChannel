@@ -109,6 +109,7 @@ struct PostUploadEditorView: View {
     }
     
     // MARK: - Video Preview Section
+    @ViewBuilder
     private var videoPreviewSection: some View {
         VStack(spacing: 16) {
             if let thumbnail = viewModel.thumbnail {

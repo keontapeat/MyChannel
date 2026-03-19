@@ -79,59 +79,53 @@ class AuthenticationManager: ObservableObject {
         }
         #endif
         if let fuser = Auth.auth().currentUser {
-            // 🔥 LOAD SAVED USER DATA: Restore complete user profile including banner video
+            // 🔥 FIX: Prioritize complete Firestore profile over basic auth data
             Task {
+                var loadedUser: User? = nil
+                
                 do {
-                    // Try to load from local storage first (instant)
-                    if let savedUser = try await DatabaseService.shared.fetchUser(id: fuser.uid) {
+                    // 1. Try Firestore first (has complete profile with custom displayName, username, etc.)
+                    if let firestoreUser = try await UserFirestoreService.shared.fetchUser(id: fuser.uid) {
+                        loadedUser = firestoreUser
+                        // Save locally for next time
+                        try? await DatabaseService.shared.saveUser(firestoreUser)
+                        print("✅ [Auth] Loaded complete profile from Firestore: \(firestoreUser.displayName) (@\(firestoreUser.username))")
+                    } else {
+                        // 2. Try local storage as backup
+                        if let savedUser = try await DatabaseService.shared.fetchUser(id: fuser.uid) {
+                            loadedUser = savedUser
+                            print("✅ [Auth] Restored user from local storage: \(savedUser.displayName)")
+                        }
+                    }
+                    
+                    // 3. Set the loaded user or fallback to basic auth data
+                    if let user = loadedUser {
                         await MainActor.run {
-                            self.currentUser = savedUser
+                            self.currentUser = user
                             self.isAuthenticated = true
                             self.authState = .authenticated
                         }
-                        print("✅ Restored user from local storage: \(savedUser.displayName), bannerVideo: \(savedUser.bannerVideoURL ?? "nil")")
-                        
-                        // Refresh from Firestore in background (keep data fresh)
-                        if let firestoreUser = try? await UserFirestoreService.shared.fetchUser(id: fuser.uid) {
-                            await MainActor.run {
-                                self.currentUser = firestoreUser
-                            }
-                            // Save updated data locally
-                            try? await DatabaseService.shared.saveUser(firestoreUser)
-                            print("✅ Refreshed user from Firestore: \(firestoreUser.displayName), bannerVideo: \(firestoreUser.bannerVideoURL ?? "nil")")
-                        }
                     } else {
-                        // No saved data, fetch from Firestore
-                        if let firestoreUser = try? await UserFirestoreService.shared.fetchUser(id: fuser.uid) {
-                            await MainActor.run {
-                                self.currentUser = firestoreUser
-                                self.isAuthenticated = true
-                                self.authState = .authenticated
-                            }
-                            // Save locally for next time
-                            try? await DatabaseService.shared.saveUser(firestoreUser)
-                            print("✅ Loaded user from Firestore: \(firestoreUser.displayName), bannerVideo: \(firestoreUser.bannerVideoURL ?? "nil")")
-                        } else {
-                            // Fallback to basic Firebase Auth data
-                            let basicUser = User(
-                                id: fuser.uid,
-                                username: fuser.email?.components(separatedBy: "@").first ?? "user",
-                                displayName: fuser.displayName ?? (fuser.email ?? "User"),
-                                email: fuser.email ?? "",
-                                profileImageURL: fuser.photoURL?.absoluteString,
-                                isVerified: fuser.isEmailVerified,
-                                isCreator: true
-                            )
-                            await MainActor.run {
-                                self.currentUser = basicUser
-                                self.isAuthenticated = true
-                                self.authState = .authenticated
-                            }
+                        // Fallback to basic Firebase Auth data only if no Firestore profile exists
+                        let basicUser = User(
+                            id: fuser.uid,
+                            username: fuser.email?.components(separatedBy: "@").first ?? "user",
+                            displayName: fuser.displayName ?? (fuser.email ?? "User"),
+                            email: fuser.email ?? "",
+                            profileImageURL: fuser.photoURL?.absoluteString,
+                            isVerified: fuser.isEmailVerified,
+                            isCreator: true
+                        )
+                        await MainActor.run {
+                            self.currentUser = basicUser
+                            self.isAuthenticated = true
+                            self.authState = .authenticated
                         }
+                        print("⚠️ [Auth] Using basic auth data as fallback: \(basicUser.displayName)")
                     }
                 } catch {
-                    print("🚨 Error loading user data: \(error)")
-                    // Fallback to basic Firebase Auth data
+                    print("🚨 [Auth] Error loading user data: \(error)")
+                    // Final fallback to basic Firebase Auth data
                     let basicUser = User(
                         id: fuser.uid,
                         username: fuser.email?.components(separatedBy: "@").first ?? "user",
@@ -177,9 +171,10 @@ class AuthenticationManager: ObservableObject {
             currentUser = basicUser
             isAuthenticated = true
             authState = .authenticated
-            NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
-            // Load saved profile (Show Website, privacy, etc.) from Firestore so edits stick
+            // Load complete Firestore profile FIRST, then post login notification
+            // so AppState receives the custom profile (not basic auth data)
             await loadFullProfileAfterSignIn(uid: fuser.uid, fallback: basicUser)
+            NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
         } catch {
             authState = .error(error.localizedDescription)
             throw error
@@ -216,8 +211,9 @@ class AuthenticationManager: ObservableObject {
             currentUser = basicUser
             isAuthenticated = true
             authState = .authenticated
-            NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
+            // Load complete Firestore profile FIRST, then post login notification
             await loadFullProfileAfterSignIn(uid: fuser.uid, fallback: basicUser)
+            NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
             // 🔥 REGISTER REAL USER: Replace mock users with this real user
             if let user = currentUser {
                 Task {
@@ -274,19 +270,30 @@ class AuthenticationManager: ObservableObject {
         #if canImport(FirebaseAuth)
         do {
             let payload = try await GoogleAuthService.shared.signIn()
-            let basicUser = User(
-                id: payload.uid,
-                username: payload.email.components(separatedBy: "@").first ?? "google_user",
-                displayName: payload.displayName,
-                email: payload.email,
-                profileImageURL: payload.photoURL,
-                isVerified: true,
-                isCreator: true
-            )
-            currentUser = basicUser
+            
+            // 🔥 FIX: Try to load complete Firestore profile FIRST before showing basic auth data
+            if let firestoreUser = try? await UserFirestoreService.shared.fetchUser(id: payload.uid) {
+                // Use complete Firestore profile (has custom displayName, username, etc.)
+                currentUser = firestoreUser
+                print("✅ [GoogleAuth] Loaded complete profile: \(firestoreUser.displayName) (@\(firestoreUser.username))")
+            } else {
+                // Fallback to basic Google Auth data if no Firestore profile exists
+                let basicUser = User(
+                    id: payload.uid,
+                    username: payload.email.components(separatedBy: "@").first ?? "google_user",
+                    displayName: payload.displayName,
+                    email: payload.email,
+                    profileImageURL: payload.photoURL,
+                    isVerified: true,
+                    isCreator: true
+                )
+                currentUser = basicUser
+                print("⚠️ [GoogleAuth] Using basic auth data: \(basicUser.displayName)")
+            }
+            
             isAuthenticated = true
             authState = .authenticated
-            await loadFullProfileAfterSignIn(uid: payload.uid, fallback: basicUser)
+            
             if let user = currentUser {
                 Task {
                     await SmartUserSeederService.shared.registerRealUser(user)

@@ -43,6 +43,33 @@ class VideoPreloadManager: ObservableObject {
         isPreloading = false
     }
     
+    /// Preload a single video by URL and ID (convenience for non-Video callers)
+    func preloadVideo(url: URL, videoId: String) {
+        guard preloadedItems[videoId] == nil else { return }
+
+        print("📥 [Preload] Preloading: \(videoId)")
+
+        let asset = AVURLAsset(url: url, options: [
+            AVURLAssetPreferPreciseDurationAndTimingKey: true
+        ])
+        asset.resourceLoader.preloadsEligibleContentKeys = true
+
+        let playerItem = AVPlayerItem(asset: asset)
+        playerItem.preferredForwardBufferDuration = 3.0
+
+        preloadedItems[videoId] = playerItem
+        preloadOrder.append(videoId)
+
+        if preloadedItems.count > maxPreloadItems {
+            if let oldestId = preloadOrder.first {
+                preloadedItems.removeValue(forKey: oldestId)
+                preloadOrder.removeFirst()
+            }
+        }
+
+        print("✅ [Preload] Cached item for: \(videoId)")
+    }
+
     /// Preload a single video
     func preloadVideo(_ video: Video) {
         // Skip if already preloaded

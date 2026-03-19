@@ -195,12 +195,9 @@ final class FeaturedStore: ObservableObject {
     /// Canonical ID for the bundled Shot By Keonta intro video (used by Home and FeaturedManager).
     static let ownerIntroVideoId = "owner_intro_video"
 
-    /// Returns the owner intro video if the bundle resource exists. Uses current user as creator so profile/subscribe work. Use this for Home hero and Featured Edit so counts match.
+    /// Returns the owner intro video from Firebase Storage. Uses current user as creator so profile/subscribe work.
     static func ownerIntroVideo() -> Video? {
-        let path = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4")
-            ?? Bundle.main.path(forResource: "ShotByKeontaIntro4k", ofType: "mp4")
-        guard let path = path else { return nil }
-        let url = URL(fileURLWithPath: path).absoluteString
+        let url = "https://firebasestorage.googleapis.com/v0/b/mychannel-ca26d.firebasestorage.app/o/Shot%20By%20Keonta%20Intro%204k.MP4?alt=media&token=88e366e2-efde-4631-9707-d7e9fadc9568"
         let currentUser = AppState.shared.currentUser ?? AuthenticationManager.shared.currentUser
         let me = currentUser ?? User(
             id: "sbkeonta_owner",
@@ -255,38 +252,32 @@ final class FeaturedStore: ObservableObject {
                 return
             }
         }
-        // Build video from bundle if present
-        if let path = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4") {
-            let url = URL(fileURLWithPath: path).absoluteString
-            
-            // 🔥 USE CURRENT USER as creator so it links to YOUR profile
-            let currentUser = AppState.shared.currentUser ?? AuthenticationManager.shared.currentUser
-            let me = currentUser ?? User(
-                id: "sbkeonta_owner",
-                username: "sbkeonta_",
-                displayName: "Shot By Keonta",
-                email: "keontapeat@mychannel.live",
-                profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop",
-                isVerified: true,
-                isCreator: true
-            )
-            
-            let vid = Video(
-                id: introId,
-                title: "Shot By Keonta Intro",
-                description: "Welcome to MyChannel - Shot By Keonta 🎬🔥",
-                thumbnailURL: "asset://ShotByKeontaThumbnail",
-                videoURL: url,
-                duration: 35,
-                viewCount: 0,
-                likeCount: 0,
-                creator: me,
-                category: .entertainment,
-                tags: ["intro", "keonta", "mychannel"],
-                isPublic: true
-            )
-            add(vid)
-        }
+        // Add intro video from Firebase Storage
+        let currentUser = AppState.shared.currentUser ?? AuthenticationManager.shared.currentUser
+        let me = currentUser ?? User(
+            id: "sbkeonta_owner",
+            username: "sbkeonta_",
+            displayName: "Shot By Keonta",
+            email: "keontapeat@mychannel.live",
+            profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop",
+            isVerified: true,
+            isCreator: true
+        )
+        let vid = Video(
+            id: introId,
+            title: "Shot By Keonta Intro",
+            description: "Welcome to MyChannel - Shot By Keonta 🎬🔥",
+            thumbnailURL: "asset://ShotByKeontaThumbnail",
+            videoURL: "https://firebasestorage.googleapis.com/v0/b/mychannel-ca26d.firebasestorage.app/o/Shot%20By%20Keonta%20Intro%204k.MP4?alt=media&token=8089de3e-be70-44bf-96a9-93663a63c2b0",
+            duration: 35,
+            viewCount: 0,
+            likeCount: 0,
+            creator: me,
+            category: .entertainment,
+            tags: ["intro", "keonta", "mychannel"],
+            isPublic: true
+        )
+        add(vid)
     }
 
     // MARK: - Add From Local (Camera Roll / Files)

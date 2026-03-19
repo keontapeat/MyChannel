@@ -633,7 +633,8 @@ struct ProfileVideoCard: View {
             VideoMoreOptionsSheet(
                 video: video,
                 isSubscribed: $isSubscribedLocal,
-                isWatchLater: $isWatchLaterLocal
+                isWatchLater: $isWatchLaterLocal,
+                ownerId: ownerId
             )
             .onChange(of: isWatchLaterLocal) { _ in
                 appState.toggleWatchLater(for: video.id)
@@ -1735,7 +1736,8 @@ private struct FullWidthVideoCard: View {
             VideoMoreOptionsSheet(
                 video: video,
                 isSubscribed: $isSubscribedLocal,
-                isWatchLater: $isWatchLaterLocal
+                isWatchLater: $isWatchLaterLocal,
+                ownerId: ownerId
             )
             .onChange(of: isWatchLaterLocal) { _ in
                 appState.toggleWatchLater(for: video.id)
@@ -1974,7 +1976,8 @@ struct PremiumPinnedVideoCard: View {
             VideoMoreOptionsSheet(
                 video: video,
                 isSubscribed: $isSubscribedLocal,
-                isWatchLater: $isWatchLaterLocal
+                isWatchLater: $isWatchLaterLocal,
+                ownerId: userId
             )
         }
         .accessibilityLabel("Pinned video: \(video.title)")

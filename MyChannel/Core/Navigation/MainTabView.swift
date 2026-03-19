@@ -232,8 +232,9 @@ struct MainTabView: View {
                     }
                 }
             
-            // 🔥 FIX: Tab bar at bottom without blocking scroll - only the bar receives touches
-            VStack(spacing: 0) {
+            // Tab bar fixed at bottom
+            VStack {
+                Spacer()
                 CustomTabBar(
                     selectedTab: $selectedTab,
                     notificationBadges: notificationBadges,
@@ -247,10 +248,22 @@ struct MainTabView: View {
                 )
                 .padding(.bottom, 8)
             }
-            .frame(maxWidth: .infinity, alignment: .bottom)
-            .zIndex(10000)
-            .onAppear {
-                print("🎨 [CustomTabBar] Tab bar VStack appeared")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .zIndex(999)
+            .allowsHitTesting(true)
+
+            // 🔥 Floating mini player — large draggable card above everything
+            if globalPlayer.currentVideo != nil,
+               !globalPlayer.showingFullscreen,
+               globalPlayer.player != nil,
+               selectedTab != .flicks {
+                SafeFloatingMiniPlayer()
+                    .environmentObject(globalPlayer)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(2000)
+                    .animation(.easeInOut(duration: 0.25), value: globalPlayer.currentVideo?.id)
             }
         }
         .ignoresSafeArea(.keyboard)
@@ -1433,6 +1446,12 @@ private struct CustomTabBarPreview: View {
             }
         }
         .preferredColorScheme(.light)
+    }
+}
+
+struct SafeFloatingMiniPlayer: View {
+    var body: some View {
+        FloatingMiniPlayer()
     }
 }
 

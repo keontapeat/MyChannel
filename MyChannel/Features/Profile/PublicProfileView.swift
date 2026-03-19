@@ -99,6 +99,11 @@ struct PublicProfileView: View {
     }
 
     private func load() async {
+        // 🔥 FIX: Refresh complete profile from Firestore (passed-in user may be stale feed-card data)
+        if let freshUser = try? await UserFirestoreService.shared.fetchUser(id: user.id) {
+            await MainActor.run { editableUser = freshUser }
+        }
+        
         // ⚡ YOUTUBE-STYLE: Show prefetched videos immediately if available
         if !prefetchedVideos.isEmpty {
             await MainActor.run {
@@ -159,36 +164,11 @@ struct PublicProfileView: View {
     
     // 🔥 Update user video count to match ACTUAL videos displayed
     private func updateUserVideoCount(_ videos: [Video]) {
-        let actualVideoCount = videos.count
-        let totalViews = videos.reduce(0) { $0 + $1.viewCount }
-        
-        editableUser = User(
-            id: user.id,
-            username: user.username,
-            displayName: user.displayName,
-            email: user.email,
-            profileImageURL: user.profileImageURL,
-            bannerImageURL: user.bannerImageURL,
-            bio: user.bio,
-            subscriberCount: user.subscriberCount,
-            videoCount: actualVideoCount, // 🔥 EXACT COUNT - matches videos.count
-            isVerified: user.isVerified,
-            isCreator: user.isCreator,
-            createdAt: user.createdAt,
-            location: user.location,
-            website: user.website,
-            showWebsiteOnProfile: user.showWebsiteOnProfile,
-            showOnlineStatus: user.showOnlineStatus,
-            socialLinks: user.socialLinks,
-            followerCount: user.followerCount,
-            followingCount: user.followingCount,
-            joinDate: user.joinDate,
-            totalViews: totalViews, // 🔥 REAL TOTAL VIEWS from actual videos
-            totalEarnings: user.totalEarnings,
-            membershipTiers: user.membershipTiers,
-            bannerVideoURL: user.bannerVideoURL,
-            bannerVideoMuted: user.bannerVideoMuted,
-            bannerVideoContentMode: user.bannerVideoContentMode
+        // 🔥 FIX: Use editableUser (has fresh Firestore data) not original user param
+        let base = editableUser
+        editableUser = base.updating(
+            videoCount: videos.count,
+            totalViews: videos.reduce(0) { $0 + $1.viewCount }
         )
     }
 }

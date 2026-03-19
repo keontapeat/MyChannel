@@ -203,18 +203,4 @@ class FlicksChallengesViewModel: ObservableObject {
     }
 }
 
-extension Int {
-    var abbreviated: String {
-        let number = Double(self)
-        if number >= 1_000_000_000 {
-            return String(format: "%.1fB", number / 1_000_000_000)
-        } else if number >= 1_000_000 {
-            return String(format: "%.1fM", number / 1_000_000)
-        } else if number >= 1_000 {
-            return String(format: "%.1fK", number / 1_000)
-        } else {
-            return "\(self)"
-        }
-    }
-}
 

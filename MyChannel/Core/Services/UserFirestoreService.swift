@@ -82,6 +82,14 @@ final class UserFirestoreService: ObservableObject {
             userData["bannerVideoContentMode"] = bannerVideoContentMode.rawValue
         }
         
+        // Social links
+        if !user.socialLinks.isEmpty {
+            let linksData = user.socialLinks.map { link -> [String: Any] in
+                ["id": link.id, "platform": link.platform.rawValue, "url": link.url, "displayName": link.displayName]
+            }
+            userData["socialLinks"] = linksData
+        }
+        
         // Verification meta
         if let badge = user.verificationBadge {
             userData["verificationStatus"] = badge.status.rawValue
@@ -148,7 +156,7 @@ final class UserFirestoreService: ObservableObject {
             website: data["website"] as? String,
             showWebsiteOnProfile: data["showWebsiteOnProfile"] as? Bool,
             showOnlineStatus: data["showOnlineStatus"] as? Bool,
-            socialLinks: [], // TODO: Parse social links if needed
+            socialLinks: Self.parseSocialLinks(from: data),
             followerCount: data["followerCount"] as? Int,
             followingCount: data["followingCount"] as? Int ?? 0,
             joinDate: (data["joinDate"] as? Timestamp)?.dateValue(),
@@ -180,6 +188,19 @@ final class UserFirestoreService: ObservableObject {
 
 #if canImport(FirebaseFirestore)
 private extension UserFirestoreService {
+    static func parseSocialLinks(from data: [String: Any]) -> [SocialLink] {
+        guard let linksArray = data["socialLinks"] as? [[String: Any]] else { return [] }
+        return linksArray.compactMap { dict -> SocialLink? in
+            guard let platformRaw = dict["platform"] as? String,
+                  let platform = SocialPlatform(rawValue: platformRaw),
+                  let url = dict["url"] as? String,
+                  !url.isEmpty else { return nil }
+            let id = dict["id"] as? String ?? UUID().uuidString
+            let displayName = dict["displayName"] as? String ?? platformRaw
+            return SocialLink(id: id, platform: platform, url: url, displayName: displayName)
+        }
+    }
+    
     static func makeVerificationBadge(from data: [String: Any]) -> VerificationBadge? {
         guard let statusRaw = data["verificationStatus"] as? String,
               let status = VerificationStatus(rawValue: statusRaw) else {

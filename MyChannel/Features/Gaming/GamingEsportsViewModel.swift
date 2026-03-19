@@ -40,6 +40,13 @@ final class GamingEsportsViewModel: ObservableObject {
     
     @Published var isLoading = false
     @Published var error: Error?
+
+    // MARK: - AI State (live from GamingAIOrchestrator)
+    @Published var aiAgentsOnlineCount: Int = 0
+    @Published var aiTotalPredictionsCount: Int = 0
+    @Published var aiBracketInsight: AIBracketInsight? = nil
+    @Published var aiRankingConfidence: Double = 0.0
+    @Published var isAIRefreshingRankings: Bool = false
     
     // MARK: - Services
     
@@ -86,6 +93,63 @@ final class GamingEsportsViewModel: ObservableObject {
             let period = self.selectedPeriod
             group.addTask { await self.loadLeaderboard(for: period) }
             group.addTask { await self.loadEarnings() }
+            group.addTask { await self.syncAIAgentStatus() }
+        }
+    }
+
+    // MARK: - 🤖 AI Agent Sync
+
+    /// Pull live AI agent counts + run bracket analysis on featured tournament
+    private func syncAIAgentStatus() async {
+        aiAgentsOnlineCount = aiOrchestrator.agentsActive
+        aiTotalPredictionsCount = aiOrchestrator.totalPredictions
+
+        // Track gaming view opened
+        if let userId = currentUserId {
+            await aiOrchestrator.trackChampionshipEvent(userId: userId, event: .hubOpened)
+        }
+
+        // Analyse featured tournament bracket with AI
+        if let featured = featuredTournament {
+            let insight = await aiOrchestrator.analyzeBracketFairness(
+                tournamentId: featured.id,
+                playerIds: (0..<featured.currentPlayers).map { "player-\($0)" }
+            )
+            aiBracketInsight = insight
+        }
+
+        // Refresh AI agent counts after analysis
+        aiAgentsOnlineCount = aiOrchestrator.agentsActive
+        aiTotalPredictionsCount = aiOrchestrator.totalPredictions
+    }
+
+    /// Trigger AI ranking refresh for the leaderboard — called when switching periods
+    func refreshLeaderboardWithAI(for period: LeaderboardPeriod) async {
+        isAIRefreshingRankings = true
+        defer { isAIRefreshingRankings = false }
+
+        await loadLeaderboard(for: period)
+
+        let userIds = leaderboardUsers.map { $0.id }
+        guard !userIds.isEmpty else { return }
+
+        let result = await aiOrchestrator.refreshRankingsWithAI(
+            division: period.title,
+            currentUserIds: userIds
+        )
+        aiRankingConfidence = result.avgConfidence
+
+        // Re-sort leaderboard using AI ELO order
+        let aiOrderMap = Dictionary(uniqueKeysWithValues: result.sortedPlayerIds.enumerated().map { ($1, $0) })
+        leaderboardUsers = leaderboardUsers.sorted {
+            (aiOrderMap[$0.id] ?? Int.max) < (aiOrderMap[$1.id] ?? Int.max)
+        }
+
+        aiAgentsOnlineCount = aiOrchestrator.agentsActive
+        aiTotalPredictionsCount = aiOrchestrator.totalPredictions
+
+        if let userId = currentUserId {
+            await aiOrchestrator.trackChampionshipEvent(userId: userId, event: .rankingViewed)
         }
     }
     
@@ -311,6 +375,71 @@ final class GamingEsportsViewModel: ObservableObject {
     }
 }
 
+// MARK: - 🔥 AI-Powered Methods
+
+extension GamingEsportsViewModel {
+    /// Create a fair VS match using AI orchestration
+    func createAIOptimizedMatch(
+        opponentId: String,
+        wagerAmount: Double,
+        category: String
+    ) async throws -> AIMatchCreationResult {
+        guard let userId = currentUserId else {
+            throw MatchError.userNotLoggedIn
+        }
+        
+        return try await aiOrchestrator.createFairMatch(
+            challengerId: userId,
+            opponentId: opponentId,
+            wagerAmount: wagerAmount,
+            category: category
+        )
+    }
+    
+    /// Generate AI-optimized tournament bracket
+    func generateAITournamentBracket(
+        players: [String],
+        prizePool: Double,
+        format: TournamentFormat
+    ) async throws -> AITournamentBracket {
+        return try await aiOrchestrator.generateTournamentBracket(
+            players: players,
+            prizePool: prizePool,
+            format: format
+        )
+    }
+    
+    /// Verify match result with AI
+    func verifyMatchWithAI(
+        matchId: String,
+        player1VideoURL: String,
+        player2VideoURL: String,
+        player1Score: Int,
+        player2Score: Int
+    ) async throws -> AIMatchVerificationResult {
+        return try await aiOrchestrator.verifyMatchResult(
+            matchId: matchId,
+            player1VideoURL: player1VideoURL,
+            player2VideoURL: player2VideoURL,
+            player1Score: player1Score,
+            player2Score: player2Score
+        )
+    }
+    
+    /// Get AI status for display
+    var aiAgentsOnline: Int {
+        aiOrchestrator.agentsActive
+    }
+    
+    var aiTotalPredictions: Int {
+        aiOrchestrator.totalPredictions
+    }
+    
+    var isAIOnline: Bool {
+        aiOrchestrator.isOnline
+    }
+}
+
 // MARK: - Sample Helpers
 
 private extension GamingEsportsViewModel {
@@ -416,69 +545,6 @@ private extension GamingEsportsViewModel {
         case .refund: return "Refund"
         case .fee: return "Platform Fee"
         }
-    }
-    
-    // MARK: - 🔥 AI-Powered Methods
-    
-    /// Create a fair VS match using AI orchestration
-    func createAIOptimizedMatch(
-        opponentId: String,
-        wagerAmount: Double,
-        category: String
-    ) async throws -> AIMatchCreationResult {
-        guard let userId = currentUserId else {
-            throw MatchError.userNotLoggedIn
-        }
-        
-        return try await aiOrchestrator.createFairMatch(
-            challengerId: userId,
-            opponentId: opponentId,
-            wagerAmount: wagerAmount,
-            category: category
-        )
-    }
-    
-    /// Generate AI-optimized tournament bracket
-    func generateAITournamentBracket(
-        players: [String],
-        prizePool: Double,
-        format: TournamentFormat
-    ) async throws -> AITournamentBracket {
-        return try await aiOrchestrator.generateTournamentBracket(
-            players: players,
-            prizePool: prizePool,
-            format: format
-        )
-    }
-    
-    /// Verify match result with AI
-    func verifyMatchWithAI(
-        matchId: String,
-        player1VideoURL: String,
-        player2VideoURL: String,
-        player1Score: Int,
-        player2Score: Int
-    ) async throws -> AIMatchVerificationResult {
-        return try await aiOrchestrator.verifyMatchResult(
-            matchId: matchId,
-            player1VideoURL: player1VideoURL,
-            player2VideoURL: player2VideoURL,
-            player1Score: player1Score,
-            player2Score: player2Score
-        )
-    }
-    
-    /// Get AI status for display
-    internal var aiAgentsOnline: Int {
-        aiOrchestrator.agentsActive
-    }
-    
-    internal var aiTotalPredictions: Int {
-        aiOrchestrator.totalPredictions
-    }
-    
-    internal var isAIOnline: Bool {
-        aiOrchestrator.isOnline
     }
 }
 

@@ -162,15 +162,6 @@ struct CustomPullToRefresh<Content: View>: View {
     }
 }
 
-// MARK: - Scroll Offset Preference Key
-private struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 // MARK: - View Extension
 extension View {
     /// Adds pull-to-refresh with haptic feedback

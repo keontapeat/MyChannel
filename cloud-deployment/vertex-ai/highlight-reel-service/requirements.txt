@@ -1,0 +1,4 @@
+flask==3.0.0
+google-generativeai==0.5.4
+gunicorn==21.2.0
+gevent==24.2.1

@@ -118,6 +118,16 @@ struct SettingsView: View {
             }
             
             NavigationLink {
+                AppearanceSettingsView()
+            } label: {
+                settingsRow(
+                    icon: "moon.circle",
+                    title: "Appearance",
+                    iconColor: .primary
+                )
+            }
+            
+            NavigationLink {
                 GeneralSettingsView()
             } label: {
                 settingsRow(
@@ -541,22 +551,180 @@ struct GeneralSettingsView: View {
                 }
             }
             
+            // MARK: Appearance — YouTube-style 3-option picker
             Section {
-                Toggle(
-                    "Dark mode",
-                    isOn: Binding(
-                        get: { settingsService.appSettings.general.darkMode },
-                        set: { value in
-                            settingsService.updateAppSettings { $0.general.darkMode = value }
+                ForEach(AppearanceMode.allCases, id: \.self) { mode in
+                    AppearanceModeRow(
+                        mode: mode,
+                        isSelected: settingsService.appSettings.general.appearanceMode == mode,
+                        onSelect: {
+                            HapticManager.shared.impact(style: .light)
+                            settingsService.updateAppSettings {
+                                $0.general.appearanceMode = mode
+                                $0.general.darkMode = (mode == .dark)
+                            }
                         }
                     )
-                )
+                }
             } header: {
                 Text("Appearance")
+            } footer: {
+                Text("Choose how MyChannel looks. \"Use device theme\" follows your iOS system setting.")
             }
         }
         .navigationTitle("General")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Appearance Mode Row (YouTube-style checkmark selection)
+struct AppearanceModeRow: View {
+    let mode: AppearanceMode
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    private var icon: String {
+        switch mode {
+        case .system: return "iphone"
+        case .light:  return "sun.max"
+        case .dark:   return "moon.fill"
+        }
+    }
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundColor(isSelected ? AppTheme.Colors.primary : .secondary)
+                    .frame(width: 24)
+
+                Text(mode.displayName)
+                    .font(.system(size: 16))
+                    .foregroundColor(.primary)
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Appearance Settings View (YouTube-style dedicated screen)
+struct AppearanceSettingsView: View {
+    @StateObject private var settingsService = SettingsService.shared
+
+    var body: some View {
+        List {
+            // Visual preview card
+            Section {
+                AppearancePreviewCard(
+                    mode: settingsService.appSettings.general.appearanceMode
+                )
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            }
+
+            Section {
+                ForEach(AppearanceMode.allCases, id: \.self) { mode in
+                    AppearanceModeRow(
+                        mode: mode,
+                        isSelected: settingsService.appSettings.general.appearanceMode == mode,
+                        onSelect: {
+                            HapticManager.shared.impact(style: .light)
+                            settingsService.updateAppSettings {
+                                $0.general.appearanceMode = mode
+                                $0.general.darkMode = (mode == .dark)
+                            }
+                        }
+                    )
+                }
+            } footer: {
+                Text("\"Use device theme\" automatically matches your iOS system appearance setting.")
+            }
+        }
+        .navigationTitle("Appearance")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Appearance Preview Card
+struct AppearancePreviewCard: View {
+    let mode: AppearanceMode
+
+    private var isDark: Bool {
+        switch mode {
+        case .dark:   return true
+        case .light:  return false
+        case .system: return UITraitCollection.current.userInterfaceStyle == .dark
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Light preview
+            appearanceSample(dark: false, label: "Light")
+                .frame(maxWidth: .infinity)
+                .overlay(alignment: .topTrailing) {
+                    if mode == .light {
+                        selectedBadge
+                    }
+                }
+
+            Divider().frame(height: 120)
+
+            // Dark preview
+            appearanceSample(dark: true, label: "Dark")
+                .frame(maxWidth: .infinity)
+                .overlay(alignment: .topTrailing) {
+                    if mode == .dark {
+                        selectedBadge
+                    }
+                }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(16)
+    }
+
+    private var selectedBadge: some View {
+        Image(systemName: "checkmark.circle.fill")
+            .font(.system(size: 20))
+            .foregroundColor(AppTheme.Colors.primary)
+            .padding(8)
+    }
+
+    private func appearanceSample(dark: Bool, label: String) -> some View {
+        VStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(dark ? Color(hexString: "0A0A0C") : Color(hexString: "FAFBFC"))
+                .frame(height: 80)
+                .overlay(
+                    VStack(spacing: 4) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(dark ? Color(hexString: "1C1C1E") : Color.white)
+                            .frame(width: 60, height: 10)
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(dark ? Color(hexString: "2C2C2E") : Color(hexString: "EBEDF0"))
+                            .frame(width: 80, height: 8)
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(dark ? Color(hexString: "2C2C2E") : Color(hexString: "EBEDF0"))
+                            .frame(width: 70, height: 8)
+                    }
+                )
+
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+        }
+        .padding(8)
+        .background(dark ? Color(hexString: "161618") : Color(hexString: "F4F5F7"))
     }
 }
 

@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct DownloadButton: View {
+struct PremiumDownloadButton: View {
     let video: Video
     let size: DownloadButtonSize
     @StateObject private var premiumService = PremiumService.shared

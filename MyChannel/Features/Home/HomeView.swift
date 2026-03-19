@@ -412,10 +412,16 @@ struct HomeView: View {
         featuredContent = content
         heroVideoIndex = 0
         
+        // ⚡ PRE-WARM: Touch the asset cache for every featured video so Firebase Storage
+        // starts downloading before the hero card renders — no cold-start lag on autoplay.
+        for video in content where !video.videoURL.isEmpty {
+            _ = LoopAssetCache.shared.asset(for: video.videoURL)
+        }
+        
         print("📺 Featured content loaded: \(featuredContent.count) videos")
     }
     
-    // 🔥 Shot By Keonta intro video - Fallback when bundle path differs; use current user as creator so profile/subscribe work
+    // 🔥 Shot By Keonta intro video - Streams from Firebase Storage
     private func shotByKeontaIntro() -> Video {
         let currentUser = AppState.shared.currentUser ?? AuthenticationManager.shared.currentUser
         let keontaUser = currentUser ?? User(
@@ -428,29 +434,8 @@ struct HomeView: View {
             isCreator: true
         )
 
-        // 🔥 Try to find the local video file (check both names)
-        var localPath: String? = nil
-        
-        // Try simplified name first
-        if let path = Bundle.main.path(forResource: "ShotByKeontaIntro4k", ofType: "mp4") {
-            localPath = path
-            print("📺 ✅ Found video: ShotByKeontaIntro4k.mp4")
-        }
-        // Try original name with spaces
-        else if let path = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4") {
-            localPath = path
-            print("📺 ✅ Found video: Shot By Keonta Intro 4k.MP4")
-        }
-        else {
-            print("📺 ⚠️ Shot By Keonta video NOT found in bundle - using fallback")
-        }
-        
-        let videoURL = localPath.map { URL(fileURLWithPath: $0).absoluteString } ?? "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-
-        // 🔥 Use local thumbnail from Assets.xcassets (extracted from video at 2 seconds)
-        // This ensures the thumbnail always loads instantly and matches the actual video
+        let videoURL = "https://firebasestorage.googleapis.com/v0/b/mychannel-ca26d.firebasestorage.app/o/Shot%20By%20Keonta%20Intro%204k.MP4?alt=media&token=88e366e2-efde-4631-9707-d7e9fadc9568"
         let poster = "asset://ShotByKeontaThumbnail"
-        print("📺 [HomeView] Shot By Keonta intro thumbnail URL: \(poster)")
 
         return Video(
             id: FeaturedStore.ownerIntroVideoId,
@@ -1145,6 +1130,7 @@ struct MinimalContentSections: View {
         .fullScreenCover(item: $selectedLiveTVChannel) { channel in
             LiveTVPlayerView(channel: channel)
                 .environmentObject(appState)
+                .background(Color.black)
         }
     }
 
@@ -2246,6 +2232,13 @@ private struct TopMyChannelsSection: View {
                 "https://i.ytimg.com/vi/JSXmfgZzHqQ/hqdefault.jpg",
                 2_000,
                 1_200_000
+            ),
+            (
+                "mbk_cari_official",
+                "Mbk Cari",
+                "https://i.ytimg.com/vi/JSXmfgZzHqQ/hqdefault.jpg",
+                1_500,
+                195_000
             )
         ]
         let communityFavorites: [(id: String, name: String, avatar: String, subscribers: Int, totalViews: Int)] = [
@@ -2717,8 +2710,29 @@ struct ForYouSection: View {
     
     private func loadForYou(userId: String) async {
         isLoading = true
-        
-        // 🚀 NEW: Use fair discovery engine for new creators
+
+        // 🤖 AI RECOMMENDATIONS: Try Cloud Run agent first
+        if let recResponse = try? await RealMLAgentsService.shared.getRecommendations(
+            userId: userId,
+            watchedVideos: [],
+            likedVideos: [],
+            preferredCategories: [],
+            count: 20
+        ), !recResponse.recommendations.isEmpty {
+            let videoIds = recResponse.recommendations.map { $0.video_id }
+            print("🤖 [HomeView] AI recommendations: \(videoIds.count) videos (personalization: \(Int(recResponse.personalization_score * 100))%)")
+            // Fetch actual video objects for those IDs (falls through to fair feed if empty)
+            let recVideos = (try? await VideoFirestoreService.shared.fetchMultipleVideos(videoIds: Array(videoIds.prefix(20)))) ?? []
+            if !recVideos.isEmpty {
+                await MainActor.run {
+                    forYouVideos = recVideos
+                    isLoading = false
+                }
+                return
+            }
+        }
+
+        // 🚀 Fallback: Use fair discovery engine for new creators
         let fairFeedVideos = await NewUserDiscoveryEngine.shared.generateFairFeed(
             limit: 20,
             userId: userId,
@@ -2732,7 +2746,7 @@ struct ForYouSection: View {
             return
         }
         
-        // Fallback: Use home feed that includes uploaded videos
+        // Final fallback: Use home feed that includes uploaded videos
         var feed = await personalizedService.generateHomeFeed(limit: 12)
         
         // Add featured video "Juicy Booty Banger" at the beginning (fake video - thumbnail only)

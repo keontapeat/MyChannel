@@ -386,10 +386,45 @@ struct SearchView: View {
                 await trendingService.trackSearch(term: searchText)
                 
                 let _ = try await searchService.search(query: searchText, filters: searchFilters)
-                
+
                 // Check if task was cancelled
                 guard !Task.isCancelled else { return }
-                
+
+                // 🤖 SEARCH RANKING AI: Re-rank results using Cloud Run agent (non-blocking)
+                let querySnapshot = searchText
+                let resultIds = searchService.searchResults.compactMap { result -> String? in
+                    if case .video(let r) = result { return r.video.id }
+                    return nil
+                }
+                if !resultIds.isEmpty {
+                    Task {
+                        struct RankRequest: Encodable {
+                            let query: String
+                            let video_ids: [String]
+                            let user_id: String?
+                        }
+                        struct RankResponse: Decodable {
+                            let ranked_ids: [String]?
+                        }
+                        if let ranked = try? await CloudRunAgentRouter.post(
+                            CloudRunService.searchRanking,
+                            path: "/predict",
+                            body: RankRequest(query: querySnapshot, video_ids: resultIds, user_id: nil)
+                        ) as RankResponse, let ids = ranked.ranked_ids, !ids.isEmpty {
+                            let reordered = ids.compactMap { id in
+                                searchService.searchResults.first { result in
+                                    if case .video(let r) = result { return r.video.id == id }
+                                    return false
+                                }
+                            }
+                            if !reordered.isEmpty {
+                                await MainActor.run { searchService.searchResults = reordered }
+                                print("🤖 [SearchRanking] Re-ranked \(reordered.count) results for '\(querySnapshot)'")
+                            }
+                        }
+                    }
+                }
+
                 await MainActor.run {
                     // Add to recent searches
                     if !recentSearches.contains(searchText) {

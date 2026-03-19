@@ -58,9 +58,15 @@ final class GoogleAuthService {
     private func topViewController(base: UIViewController? = nil) -> UIViewController? {
         #if canImport(UIKit)
         let baseVC: UIViewController? = base ?? {
-            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController { return root }
-            return UIApplication.shared.windows.first(where: { $0.isKeyWindow })?.rootViewController
+            let windowScene = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first(where: { $0.activationState == .foregroundActive })
+                ?? UIApplication.shared.connectedScenes
+                    .compactMap { $0 as? UIWindowScene }
+                    .first
+            let keyWindow = windowScene?.windows.first(where: { $0.isKeyWindow })
+                ?? windowScene?.windows.first
+            return keyWindow?.rootViewController
         }()
         if let nav = baseVC as? UINavigationController { return topViewController(base: nav.visibleViewController) }
         if let tab = baseVC as? UITabBarController { return topViewController(base: tab.selectedViewController) }

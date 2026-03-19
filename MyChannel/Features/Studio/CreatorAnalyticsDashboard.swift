@@ -180,21 +180,21 @@ struct CreatorAnalyticsDashboard: View {
             
             if let analytics = creatorAnalytics {
                 VStack(spacing: 16) {
-                    MetricRow(
+                    AnalyticsMetricRow(
                         title: "Average View Duration",
                         value: formatSeconds(analytics.avgViewDuration),
                         icon: "clock",
                         color: .blue
                     )
                     
-                    MetricRow(
+                    AnalyticsMetricRow(
                         title: "Engagement Rate",
                         value: "\(Int(analytics.engagement * 100))%",
                         icon: "hand.thumbsup",
                         color: .green
                     )
                     
-                    MetricRow(
+                    AnalyticsMetricRow(
                         title: "Growth Rate",
                         value: "+\(Int(analytics.growth * 100))%",
                         icon: "chart.line.uptrend.xyaxis",
@@ -617,7 +617,7 @@ struct LoadingStatCard: View {
     }
 }
 
-struct MetricRow: View {
+struct AnalyticsMetricRow: View {
     let title: String
     let value: String
     let icon: String

@@ -53,6 +53,11 @@ struct UploadView: View {
     // Pro Editor
     @State private var showProEditor = false
     @State private var proEditorVideoURL: URL?
+
+    // AI Title/Description optimizer
+    @State private var isLoadingAISuggestions = false
+    @State private var aiTitleSuggestion: String? = nil
+    @State private var aiDescriptionSuggestion: String? = nil
     
     enum UploadStep {
         case selectMedia
@@ -756,7 +761,7 @@ struct UploadView: View {
                         isRequired: true,
                         maxLength: 100
                     )
-                    
+
                     ProfessionalTextEditor(
                         title: "Description",
                         text: $uploadManager.description,
@@ -764,6 +769,78 @@ struct UploadView: View {
                         icon: "text.bubble",
                         maxLength: 500
                     )
+
+                    // 🤖 AI Title/Description Optimizer
+                    VStack(alignment: .leading, spacing: 8) {
+                        Button {
+                            Task { await fetchAITitleSuggestions() }
+                        } label: {
+                            HStack(spacing: 6) {
+                                if isLoadingAISuggestions {
+                                    ProgressView().scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "sparkles")
+                                }
+                                Text(isLoadingAISuggestions ? "Optimizing..." : "AI Optimize Title & Description")
+                                    .font(.system(size: 14, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                            .background(
+                                LinearGradient(colors: [Color.purple, Color.blue], startPoint: .leading, endPoint: .trailing)
+                            )
+                            .clipShape(Capsule())
+                        }
+                        .disabled(isLoadingAISuggestions || uploadManager.title.isEmpty)
+
+                        if let suggestion = aiTitleSuggestion {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Suggested Title:")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                HStack {
+                                    Text(suggestion)
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Button("Use") {
+                                        uploadManager.title = suggestion
+                                        aiTitleSuggestion = nil
+                                    }
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                                }
+                                .padding(10)
+                                .background(Color(.secondarySystemBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+
+                        if let suggestion = aiDescriptionSuggestion {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Suggested Description:")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                HStack(alignment: .top) {
+                                    Text(suggestion)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(3)
+                                    Spacer()
+                                    Button("Use") {
+                                        uploadManager.description = suggestion
+                                        aiDescriptionSuggestion = nil
+                                    }
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                                }
+                                .padding(10)
+                                .background(Color(.secondarySystemBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+                    }
                 }
                 
                 detailCard(title: "Category & Tags") {
@@ -890,6 +967,57 @@ struct UploadView: View {
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.Colors.divider, lineWidth: 1))
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - AI Title/Description Optimization
+
+    private func fetchAITitleSuggestions() async {
+        isLoadingAISuggestions = true
+        defer { isLoadingAISuggestions = false }
+
+        let currentTitle = uploadManager.title
+        let currentDesc = uploadManager.description
+        let category = uploadManager.selectedCategory.rawValue
+
+        struct TitleRequest: Encodable {
+            let title: String
+            let description: String
+            let category: String
+        }
+        struct TitleResponse: Decodable {
+            let optimized_title: String?
+            let suggested_title: String?
+        }
+        struct DescRequest: Encodable {
+            let title: String
+            let category: String
+        }
+        struct DescResponse: Decodable {
+            let description: String?
+            let optimized_description: String?
+        }
+
+        async let titleResult: TitleResponse? = try? CloudRunAgentRouter.post(
+            CloudRunService.titleOptimizer,
+            path: "/predict",
+            body: TitleRequest(title: currentTitle, description: currentDesc, category: category)
+        )
+        async let descResult: DescResponse? = try? CloudRunAgentRouter.post(
+            CloudRunService.descriptionWriter,
+            path: "/predict",
+            body: DescRequest(title: currentTitle, category: category)
+        )
+
+        let (titleRes, descRes) = await (titleResult, descResult)
+
+        if let t = titleRes?.optimized_title ?? titleRes?.suggested_title, !t.isEmpty {
+            aiTitleSuggestion = t
+            print("🤖 [TitleOptimizer] Suggestion: \(t)")
+        }
+        if let d = descRes?.description ?? descRes?.optimized_description, !d.isEmpty {
+            aiDescriptionSuggestion = d
+            print("🤖 [DescriptionWriter] Suggestion ready")
+        }
     }
 
     private func detailCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {

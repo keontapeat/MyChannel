@@ -7,151 +7,390 @@
 
 import SwiftUI
 
+// MARK: - NotificationsView
+
 struct NotificationsView: View {
-    @State private var notifications: [NotificationItem] = NotificationItem.sampleNotifications
+    @StateObject private var store = NotificationsStore.shared
     @State private var selectedFilter: NotificationFilter = .all
     @State private var hasAppeared = false
-    
-    var filteredNotifications: [NotificationItem] {
-        if selectedFilter == .all {
-            return notifications
-        } else {
-            return notifications.filter { $0.type.rawValue == selectedFilter.rawValue }
-        }
+    @State private var showingSettings = false
+
+    // MARK: Filtered + grouped
+
+    private var filtered: [StoreNotificationItem] {
+        guard selectedFilter != .all else { return store.items }
+        return store.items.filter { $0.type.rawValue == selectedFilter.rawValue }
     }
-    
-    // 🔥 PREMIUM: Count of unread notifications
-    private var unreadCount: Int {
-        notifications.filter { !$0.isRead }.count
+
+    private var todayItems: [StoreNotificationItem] {
+        filtered.filter { Calendar.current.isDateInToday($0.timestamp) }
     }
-    
+
+    private var earlierItems: [StoreNotificationItem] {
+        filtered.filter { !Calendar.current.isDateInToday($0.timestamp) }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // 🔥 PREMIUM: YouTube-style filter tabs with haptics
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(NotificationFilter.allCases, id: \.self) { filter in
-                            Button(action: {
-                                // 🔥 PREMIUM: Haptic on filter change
-                                HapticManager.shared.impact(style: .light)
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    selectedFilter = filter
-                                }
-                            }) {
-                                VStack(spacing: 0) {
-                                    Text(filter.displayName)
-                                        .font(.system(size: 15, weight: selectedFilter == filter ? .semibold : .regular))
-                                        .foregroundColor(
-                                            selectedFilter == filter ? AppTheme.Colors.textPrimary : AppTheme.Colors.textSecondary
-                                        )
-                                        .padding(.horizontal, 16)
-                                        .frame(height: 48)
-                                    
-                                    // Bottom border indicator
-                                    Rectangle()
-                                        .fill(AppTheme.Colors.primary)
-                                        .frame(height: 2)
-                                        .scaleEffect(x: selectedFilter == filter ? 1.0 : 0.0, y: 1.0, anchor: .center)
-                                }
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-                .frame(height: 50)
-                .background(AppTheme.Colors.background)
-                
-                Divider()
-                    .background(AppTheme.Colors.divider.opacity(0.1))
-                
-                // Notifications list
-                if filteredNotifications.isEmpty {
-                    NotificationsEmptyState()
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(Array(filteredNotifications.enumerated()), id: \.element.id) { index, notification in
-                                NotificationCard(
-                                    notification: notification,
-                                    onTap: {
-                                        // 🔥 PREMIUM: Haptic on tap
-                                        HapticManager.shared.impact(style: .light)
-                                        markAsRead(notification.id)
-                                    },
-                                    onSwipeDelete: {
-                                        // 🔥 PREMIUM: Haptic on delete
-                                        HapticManager.shared.notification(type: .warning)
-                                        deleteNotification(notification.id)
-                                    }
-                                )
-                                // 🔥 PREMIUM: Staggered appear animation
-                                .opacity(hasAppeared ? 1 : 0)
-                                .offset(y: hasAppeared ? 0 : 20)
-                                .animation(
-                                    .spring(response: 0.4, dampingFraction: 0.8)
-                                    .delay(Double(index) * 0.05),
-                                    value: hasAppeared
-                                )
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 16)
-                    }
-                }
-                
-                Spacer()
+                filterTabBar
+                Divider().opacity(0.12)
+                contentBody
             }
-            .background(AppTheme.Colors.background)
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Mark all read") {
-                        // 🔥 PREMIUM: Success haptic
-                        HapticManager.shared.notification(type: .success)
-                        markAllAsRead()
-                    }
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.primary)
-                }
+            .background(Color(.systemBackground))
+            .navigationTitle("Notifications")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { toolbarContent }
+            .sheet(isPresented: $showingSettings) {
+                NotificationSettingsView()
             }
             .onAppear {
-                // 🔥 PREMIUM: Trigger staggered animation on appear
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    hasAppeared = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    withAnimation { hasAppeared = true }
                 }
             }
         }
     }
-    
-    private func markAllAsRead() {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-            notifications = notifications.map { notification in
-                var updated = notification
-                updated.isRead = true
-                return updated
+
+    // MARK: - Filter Tab Bar
+
+    private var filterTabBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(NotificationFilter.allCases, id: \.self) { filter in
+                    filterChip(filter)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .background(Color(.systemBackground))
+    }
+
+    @ViewBuilder
+    private func filterChip(_ filter: NotificationFilter) -> some View {
+        let isSelected = selectedFilter == filter
+        Button {
+            HapticManager.shared.impact(style: .light)
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                selectedFilter = filter
+            }
+        } label: {
+            Text(filter.displayName)
+                .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                .foregroundColor(isSelected ? .white : .primary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule().fill(isSelected ? AppTheme.Colors.primary : Color(.systemGray5))
+                )
+        }
+        .buttonStyle(.plain)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
+    }
+
+    // MARK: - Content
+
+    @ViewBuilder
+    private var contentBody: some View {
+        if filtered.isEmpty {
+            NotificationsEmptyState()
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                    if !todayItems.isEmpty {
+                        notifSection(title: "Today", items: todayItems, offset: 0)
+                    }
+                    if !earlierItems.isEmpty {
+                        notifSection(title: "Earlier", items: earlierItems, offset: todayItems.count)
+                    }
+                }
+                .padding(.bottom, 32)
             }
         }
     }
-    
-    private func markAsRead(_ id: String) {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            if let index = notifications.firstIndex(where: { $0.id == id }) {
-                notifications[index].isRead = true
+
+    @ViewBuilder
+    private func notifSection(title: String, items: [StoreNotificationItem], offset: Int) -> some View {
+        Section {
+            ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
+                StoreNotificationCard(
+                    item: item,
+                    onTap: {
+                        HapticManager.shared.impact(style: .light)
+                        store.markRead(item.id)
+                    },
+                    onDelete: {
+                        HapticManager.shared.notification(type: .warning)
+                        store.delete(item.id)
+                    }
+                )
+                .opacity(hasAppeared ? 1 : 0)
+                .offset(y: hasAppeared ? 0 : 16)
+                .animation(
+                    .spring(response: 0.38, dampingFraction: 0.82)
+                    .delay(Double(offset + idx) * 0.04),
+                    value: hasAppeared
+                )
+
+                if idx < items.count - 1 {
+                    Divider()
+                        .padding(.leading, 72)
+                        .opacity(0.08)
+                }
             }
+        } header: {
+            HStack {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                Spacer()
+            }
+            .background(Color(.systemBackground).opacity(0.95))
         }
     }
-    
-    private func deleteNotification(_ id: String) {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-            notifications.removeAll { $0.id == id }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarTrailing) {
+            HStack(spacing: 14) {
+                if store.unreadCount > 0 {
+                    Button {
+                        HapticManager.shared.notification(type: .success)
+                        store.markAllRead()
+                    } label: {
+                        Text("Mark all read")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.primary)
+                    }
+                }
+                Button {
+                    showingSettings = true
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.primary)
+                }
+            }
         }
     }
 }
 
-// MARK: - 🔥 PREMIUM: Notification Card with Animations
+// MARK: - StoreNotificationCard (ML Agent connected, YouTube-level)
+
+struct StoreNotificationCard: View {
+    let item: StoreNotificationItem
+    let onTap: () -> Void
+    let onDelete: () -> Void
+
+    @State private var swipeOffset: CGFloat = 0
+    @State private var isSwiping = false
+    @State private var isPressed = false
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            // Delete reveal layer
+            HStack {
+                Spacer()
+                VStack(spacing: 4) {
+                    Image(systemName: "trash.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text("Delete")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                .frame(width: 72)
+                .frame(maxHeight: .infinity)
+                .background(Color.red)
+            }
+            .opacity(swipeOffset < -8 ? 1 : 0)
+
+            // Card
+            Button {
+                guard !isSwiping else { return }
+                onTap()
+            } label: {
+                HStack(alignment: .top, spacing: 14) {
+                    // Icon with source color
+                    ZStack {
+                        Circle()
+                            .fill(sourceColor(item.source).opacity(0.12))
+                            .frame(width: 46, height: 46)
+                        Image(systemName: iconName(item.type, source: item.source))
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(sourceColor(item.source))
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        // Title row
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(item.title)
+                                .font(.system(size: 15, weight: item.isRead ? .regular : .semibold))
+                                .foregroundColor(item.isRead ? .secondary : .primary)
+                                .lineLimit(2)
+                            Spacer(minLength: 0)
+                        }
+
+                        // Message
+                        Text(item.message)
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                            .lineLimit(2)
+
+                        // Footer: time + smart badges
+                        HStack(spacing: 6) {
+                            Text(item.timestamp.timeAgoDisplay)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary.opacity(0.7))
+                            // ML source badge (Trending / New for you)
+                            sourceBadge(item.source)
+                            // Grouped count badge (e.g. "5 likes")
+                            groupBadge(count: item.groupCount, type: item.type)
+                        }
+                    }
+
+                    // Unread dot
+                    VStack {
+                        if !item.isRead {
+                            Circle()
+                                .fill(AppTheme.Colors.primary)
+                                .frame(width: 8, height: 8)
+                        }
+                        Spacer()
+                    }
+                    .frame(width: 10)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    item.isRead
+                        ? Color(.systemBackground)
+                        : AppTheme.Colors.primary.opacity(0.03)
+                )
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .scaleEffect(isPressed ? 0.985 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.75), value: isPressed)
+            .offset(x: swipeOffset)
+            .gesture(
+                DragGesture(minimumDistance: 15)
+                    .onChanged { val in
+                        isSwiping = true
+                        if val.translation.width < 0 {
+                            swipeOffset = max(val.translation.width, -80)
+                        }
+                    }
+                    .onEnded { val in
+                        if val.translation.width < -55 {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                                swipeOffset = -400
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                                onDelete()
+                            }
+                        } else {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                swipeOffset = 0
+                            }
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                            isSwiping = false
+                        }
+                    }
+            )
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in isPressed = true }
+                    .onEnded { _ in isPressed = false }
+            )
+        }
+        .clipped()
+    }
+
+    // MARK: - Helpers
+
+    /// Small "🔥 Trending" badge shown only for ML-sourced items
+    @ViewBuilder
+    private func sourceBadge(_ source: NotificationSource) -> some View {
+        switch source {
+        case .viralAgent:
+            Label("Trending", systemImage: "flame.fill")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(.orange)
+                .padding(.horizontal, 5).padding(.vertical, 2)
+                .background(Capsule().fill(Color.orange.opacity(0.12)))
+        case .recommendAgent:
+            Label("New for you", systemImage: "sparkles")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(.blue)
+                .padding(.horizontal, 5).padding(.vertical, 2)
+                .background(Capsule().fill(Color.blue.opacity(0.12)))
+        default:
+            EmptyView()
+        }
+    }
+
+    /// Grouped count chip: "3 likes"
+    @ViewBuilder
+    private func groupBadge(count: Int, type: NotificationItem.NotificationType) -> some View {
+        if count > 1 {
+            Text("\(count) \(groupLabel(type))")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(typeColor(type))
+                .padding(.horizontal, 5).padding(.vertical, 2)
+                .background(Capsule().fill(typeColor(type).opacity(0.12)))
+        }
+    }
+
+    private func groupLabel(_ type: NotificationItem.NotificationType) -> String {
+        switch type {
+        case .like:    return "likes"
+        case .comment: return "comments"
+        case .follow:  return "follows"
+        case .upload:  return "videos"
+        case .live:    return "live"
+        case .system:  return "alerts"
+        }
+    }
+
+    private func iconName(_ type: NotificationItem.NotificationType, source: NotificationSource) -> String {
+        switch source {
+        case .viralAgent:     return "flame.fill"
+        case .liveAgent:      return "dot.radiowaves.left.and.right"
+        case .recommendAgent: return "sparkles"
+        case .user:           return type.iconName
+        }
+    }
+
+    private func typeColor(_ type: NotificationItem.NotificationType) -> Color {
+        switch type {
+        case .like:    return AppTheme.Colors.primary
+        case .comment: return .blue
+        case .follow:  return .green
+        case .upload:  return .purple
+        case .live:    return .red
+        case .system:  return .secondary
+        }
+    }
+
+    private func sourceColor(_ source: NotificationSource) -> Color {
+        switch source {
+        case .user:           return typeColor(item.type)
+        case .viralAgent:     return .orange
+        case .liveAgent:      return .red
+        case .recommendAgent: return .blue
+        }
+    }
+}
+
+// MARK: - Legacy NotificationCard (kept for backward compat)
+
 struct NotificationCard: View {
     let notification: NotificationItem
     let onTap: () -> Void

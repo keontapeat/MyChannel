@@ -39,6 +39,8 @@ struct GamingEsportsView: View {
                             tournamentsContent
                         case .vsMatches:
                             vsMatchesContent
+                        case .bracket:
+                            bracketContent
                         case .leaderboard:
                             leaderboardContent
                         case .myEarnings:
@@ -473,6 +475,221 @@ struct GamingEsportsView: View {
         )
     }
     
+    // MARK: - 3D Bracket Content
+
+    private var bracketContent: some View {
+        VStack(spacing: 20) {
+            // Section header
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(red:1,green:0.84,blue:0), Color(red:1,green:0.55,blue:0)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "trophy.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("LIVE BRACKET")
+                        .font(.system(size: 18, weight: .black))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .tracking(0.5)
+                    Text("3D interactive tournament bracket")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                Spacer()
+                if viewModel.hasLiveTournaments {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 7, height: 7)
+                        Text("LIVE")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.red)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(Color.red.opacity(0.12)))
+                }
+            }
+            .padding(.horizontal, 4)
+
+            // Featured bracket
+            if let featured = viewModel.featuredTournament {
+                TournamentBracket3DView(tournament: Bracket3DTournament(
+                    id: featured.id,
+                    name: featured.name,
+                    rounds: Bracket3DTournament.sample.rounds,
+                    startDate: featured.startDate,
+                    endDate: featured.startDate.addingTimeInterval(604800),
+                    prizePool: featured.prizePool
+                ))
+                .padding(.horizontal, -20)
+            } else {
+                TournamentBracket3DView(tournament: .sample)
+                    .padding(.horizontal, -20)
+            }
+
+            // AI Bracket Insight Card
+            if let insight = viewModel.aiBracketInsight {
+                aiBracketInsightCard(insight: insight)
+            }
+
+            // Browse all active tournaments
+            if viewModel.activeTournaments.count > 1 {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("ALL ACTIVE BRACKETS")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .tracking(1.4)
+                        .padding(.horizontal, 4)
+
+                    ForEach(viewModel.activeTournaments.dropFirst()) { tournament in
+                        Button(action: {
+                            HapticManager.shared.impact(style: .light)
+                        }) {
+                            HStack(spacing: 14) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(AppTheme.Colors.primary.opacity(0.12))
+                                        .frame(width: 44, height: 44)
+                                    Image(systemName: "gamecontroller.fill")
+                                        .font(.system(size: 18, weight: .medium))
+                                        .foregroundColor(AppTheme.Colors.primary)
+                                }
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(tournament.name)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(AppTheme.Colors.textPrimary)
+                                    Text(tournament.gameName)
+                                        .font(.system(size: 12))
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 3) {
+                                    Text(tournament.formattedPrizePool)
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(Color(red:1,green:0.84,blue:0))
+                                    if tournament.isLive {
+                                        Text("LIVE")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Capsule().fill(Color.red))
+                                    }
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            }
+                            .padding(14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(AppTheme.Colors.surface)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .strokeBorder(AppTheme.Colors.divider.opacity(0.15), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+            }
+        }
+    }
+
+    private func aiBracketInsightCard(insight: AIBracketInsight) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(red:0.4,green:0.2,blue:1.0), Color(red:0.2,green:0.8,blue:0.6)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 38, height: 38)
+                Image(systemName: "brain.head.profile")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text("AI Bracket Analysis")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    Text("\(Int(insight.fairnessScore * 100))% fair")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule().fill(
+                                insight.fairnessScore > 0.8
+                                    ? Color.green
+                                    : insight.fairnessScore > 0.6
+                                        ? Color.orange
+                                        : AppTheme.Colors.primary
+                            )
+                        )
+                }
+                Text(insight.insight)
+                    .font(.system(size: 12))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .lineLimit(2)
+                if let champion = insight.predictedChampion {
+                    HStack(spacing: 4) {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 9))
+                            .foregroundColor(Color(red:1,green:0.84,blue:0))
+                        Text("Predicted: @\(champion.prefix(8))")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                }
+            }
+
+            Spacer()
+
+            VStack(spacing: 2) {
+                Text("\(Int(insight.confidence * 100))%")
+                    .font(.system(size: 15, weight: .black))
+                    .foregroundColor(Color(red:0.4,green:0.2,blue:1.0))
+                Text("conf.")
+                    .font(.system(size: 9))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+        }
+        .padding(14)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(AppTheme.Colors.surface)
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(red:0.4,green:0.2,blue:1.0).opacity(0.07), Color.clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(Color(red:0.4,green:0.2,blue:1.0).opacity(0.18), lineWidth: 1)
+            }
+        )
+    }
+
     // MARK: - VS Matches Content
     
     private var vsMatchesContent: some View {
@@ -736,6 +953,9 @@ struct GamingEsportsView: View {
     
     private var leaderboardContent: some View {
         VStack(spacing: 24) {
+            // AI Status strip
+            aiLeaderboardBanner
+
             // Filter Tabs
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
@@ -766,9 +986,76 @@ struct GamingEsportsView: View {
         }
     }
     
+    // MARK: - AI Status Banner (Leaderboard)
+
+    private var aiLeaderboardBanner: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(red:0.4,green:0.2,blue:1.0), Color(red:0.2,green:0.6,blue:1.0)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 32, height: 32)
+                Image(systemName: "brain.head.profile")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("AI-Ranked Leaderboard")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    if viewModel.isAIRefreshingRankings {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
+                            .scaleEffect(0.65)
+                    }
+                }
+                Text("\(viewModel.aiAgentsOnlineCount)/7 agents online · \(viewModel.aiTotalPredictionsCount) predictions made")
+                    .font(.system(size: 11))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+
+            Spacer()
+
+            if viewModel.aiRankingConfidence > 0 {
+                VStack(spacing: 2) {
+                    Text("\(Int(viewModel.aiRankingConfidence * 100))%")
+                        .font(.system(size: 14, weight: .black))
+                        .foregroundColor(Color(red:0.4,green:0.2,blue:1.0))
+                    Text("ELO conf.")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(AppTheme.Colors.surface)
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(red:0.4,green:0.2,blue:1.0).opacity(0.08), Color.clear],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                    )
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(Color(red:0.4,green:0.2,blue:1.0).opacity(0.2), lineWidth: 1)
+            }
+        )
+    }
+
     private func periodButton(period: LeaderboardPeriod) -> some View {
         Button(action: {
             viewModel.selectedPeriod = period
+            Task { await viewModel.refreshLeaderboardWithAI(for: period) }
         }) {
             Text(period.title)
                 .font(.system(size: 14, weight: viewModel.selectedPeriod == period ? .semibold : .regular))
@@ -1193,6 +1480,7 @@ struct GamingEsportsView: View {
 enum GamingTab: String, CaseIterable, Identifiable {
     case tournaments
     case vsMatches
+    case bracket
     case leaderboard
     case myEarnings
     
@@ -1202,6 +1490,7 @@ enum GamingTab: String, CaseIterable, Identifiable {
         switch self {
         case .tournaments: return "Tournaments"
         case .vsMatches: return "VS Matches"
+        case .bracket: return "3D Bracket"
         case .leaderboard: return "Leaderboard"
         case .myEarnings: return "My Earnings"
         }
@@ -1211,6 +1500,7 @@ enum GamingTab: String, CaseIterable, Identifiable {
         switch self {
         case .tournaments: return "trophy.fill"
         case .vsMatches: return "person.2.fill"
+        case .bracket: return "square.grid.3x1.below.line.grid.1x2"
         case .leaderboard: return "chart.bar.fill"
         case .myEarnings: return "dollarsign.circle.fill"
         }

@@ -17,91 +17,152 @@ struct AccountSwitcherView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    ForEach(users) { user in
-                        HStack(spacing: 12) {
-                            AsyncImage(url: URL(string: user.profileImageURL ?? "")) { image in
-                                image.resizable().scaledToFill()
-                            } placeholder: {
-                                Circle().fill(Color(.systemGray5))
-                            }
-                            .frame(width: 42, height: 42)
-                            .clipShape(Circle())
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack(spacing: 6) {
-                                    Text(user.displayName)
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundColor(AppTheme.Colors.textPrimary)
-                                    if user.isVerified {
-                                        Image(systemName: "checkmark.seal.fill")
-                                            .foregroundColor(.blue)
-                                            .font(.caption)
-                                    }
-                                }
-                                Text("@\(user.username)")
-                                    .font(.caption)
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                            }
-
-                            Spacer()
-
-                            if user.id == auth.currentUser?.id {
-                                Text("Current")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.green)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 4)
-                                    .background(Capsule().fill(Color.green.opacity(0.15)))
-                            } else {
-                                Button {
-                                    switchTo(user)
-                                } label: {
-                                    Text("Switch")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 8)
-                                        .background(Capsule().fill(AppTheme.Colors.primary))
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(isProcessing)
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Accounts list card
+                    VStack(spacing: 0) {
+                        ForEach(Array(users.enumerated()), id: \.element.id) { index, user in
+                            accountRow(user)
+                            if index < users.count - 1 {
+                                Divider()
+                                    .padding(.leading, 70)
                             }
                         }
-                        .listRowBackground(AppTheme.Colors.background)
                     }
-                }
+                    .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 14))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
 
-                Section {
-                    Button {
-                        Task { await createNewAccount() }
-                    } label: {
-                        Label("Add another account", systemImage: "person.badge.plus")
-                    }
-                    .disabled(isProcessing)
-
-                    if auth.isAuthenticated {
-                        Button(role: .destructive) {
-                            try? auth.signOut()
-                            appState.clearUser()
-                            dismiss()
+                    // Actions card
+                    VStack(spacing: 0) {
+                        Button {
+                            Task { await createNewAccount() }
                         } label: {
-                            Label("Sign out of current account", systemImage: "rectangle.portrait.and.arrow.right")
+                            HStack(spacing: 14) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color(.systemGray5))
+                                        .frame(width: 38, height: 38)
+                                    Image(systemName: "person.badge.plus")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(AppTheme.Colors.textPrimary)
+                                }
+                                Text("Add another account")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isProcessing)
+
+                        if auth.isAuthenticated {
+                            Divider()
+                                .padding(.leading, 68)
+
+                            Button {
+                                try? auth.signOut()
+                                appState.clearUser()
+                                dismiss()
+                            } label: {
+                                HStack(spacing: 14) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.red.opacity(0.1))
+                                            .frame(width: 38, height: 38)
+                                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundColor(.red)
+                                    }
+                                    Text("Sign out of current account")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(.red)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
-                }
-                .listRowBackground(AppTheme.Colors.background)
-            }
-            .listStyle(.insetGrouped)
-            .navigationTitle("Switch account")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 14))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 32)
                 }
             }
             .background(AppTheme.Colors.background.ignoresSafeArea())
+            .navigationTitle("Switch account")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .fontWeight(.semibold)
+                }
+            }
         }
+    }
+
+    @ViewBuilder
+    private func accountRow(_ user: User) -> some View {
+        HStack(spacing: 14) {
+            AsyncImage(url: URL(string: user.profileImageURL ?? "")) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Circle().fill(Color(.systemGray5))
+            }
+            .frame(width: 44, height: 44)
+            .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) {
+                    Text(user.displayName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    if user.isVerified {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundColor(.blue)
+                            .font(.system(size: 12))
+                    }
+                }
+                Text("@\(user.username)")
+                    .font(.system(size: 13))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+
+            Spacer()
+
+            if user.id == auth.currentUser?.id {
+                HStack(spacing: 5) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .font(.system(size: 13))
+                    Text("Active")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.green)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color.green.opacity(0.1), in: Capsule())
+            } else {
+                Button {
+                    switchTo(user)
+                } label: {
+                    Text("Switch")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(AppTheme.Colors.primary, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(isProcessing)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private func switchTo(_ user: User) {

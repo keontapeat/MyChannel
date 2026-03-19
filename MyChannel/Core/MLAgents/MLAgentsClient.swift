@@ -30,27 +30,28 @@ final class MLAgentsClient: ObservableObject {
     @Published var decisionsToday = 0
     
     private init() {
-        self.baseURL = "https://\(region)-\(projectID).cloudfunctions.net"
+        self.baseURL = "https://\(region)-run.googleapis.com/\(projectID)"
     }
-    
+
     // MARK: - Core API Methods
-    
-    /// Call any ML agent by name
-    func callAgent<T: Decodable>(_ name: String, parameters: [String: Any]) async throws -> T {
-        let url = URL(string: "\(baseURL)/\(name)")!
+
+    /// Call any ML agent by Cloud Run service name
+    func callAgent<T: Decodable>(_ serviceName: String, parameters: [String: Any]) async throws -> T {
+        let cloudRunURL = "https://\(serviceName)-fkri6ifojq-uc.a.run.app/predict"
+        let url = URL(string: cloudRunURL)!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
         request.timeoutInterval = 30
-        
+
         let (data, response) = try await URLSession.shared.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
             throw MLAgentError.requestFailed
         }
-        
+
         decisionsToday += 1
         return try JSONDecoder().decode(T.self, from: data)
     }

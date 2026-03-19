@@ -1,0 +1,9 @@
+google-cloud-bigquery
+google-cloud-storage
+scikit-learn==1.3.2
+pandas
+numpy
+joblib
+db-dtypes
+pyarrow
+pandas-gbq

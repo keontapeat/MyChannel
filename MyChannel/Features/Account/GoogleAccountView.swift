@@ -16,79 +16,136 @@ struct GoogleAccountView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                header
-
-                VStack(spacing: 16) {
-                    HStack(spacing: 12) {
-                        AsyncImage(url: URL(string: auth.currentUser?.profileImageURL ?? "")) { image in
-                            image.resizable().scaledToFill()
-                        } placeholder: {
-                            Circle().fill(Color(.systemGray5))
-                        }
-                        .frame(width: 56, height: 56)
-                        .clipShape(Circle())
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(auth.currentUser?.displayName ?? "Not signed in")
-                                .font(.headline)
-                                .foregroundStyle(AppTheme.Colors.textPrimary)
-                            Text(auth.currentUser?.email ?? "Sign in to manage your Google account")
-                                .font(.subheadline)
-                                .foregroundStyle(AppTheme.Colors.textSecondary)
-                        }
-
-                        Spacer()
-                    }
-
-                    HStack(spacing: 12) {
-                        Button {
-                            showSafari = true
-                        } label: {
-                            Label("Manage account", systemImage: "globe")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundColor(.white)
-                                .padding(.vertical, 12)
-                                .padding(.horizontal, 16)
-                                .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.Colors.primary))
-                        }
-                        .buttonStyle(.plain)
-
-                        if auth.isAuthenticated {
-                            Button(role: .destructive) {
-                                try? auth.signOut()
-                                HapticManager.shared.impact(style: .light)
-                            } label: {
-                                Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right.fill")
-                                    .font(.subheadline.weight(.semibold))
-                                    .padding(.vertical, 12)
-                                    .padding(.horizontal, 16)
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Account card
+                    VStack(spacing: 0) {
+                        // Avatar + name row
+                        HStack(spacing: 16) {
+                            AsyncImage(url: URL(string: auth.currentUser?.profileImageURL ?? "")) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: {
+                                ZStack {
+                                    Circle().fill(Color(.systemGray5))
+                                    Image(systemName: "person.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(Color(.systemGray3))
+                                }
                             }
-                            .buttonStyle(.bordered)
+                            .frame(width: 60, height: 60)
+                            .clipShape(Circle())
+                            .overlay(Circle().strokeBorder(Color(.systemGray4), lineWidth: 0.5))
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(auth.currentUser?.displayName ?? "Not signed in")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                                Text(auth.currentUser?.email ?? "No account connected")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                            }
+
+                            Spacer()
+                        }
+                        .padding(16)
+
+                        Divider()
+                            .padding(.horizontal, 16)
+
+                        // Action buttons
+                        if auth.isAuthenticated {
+                            HStack(spacing: 10) {
+                                Button {
+                                    showSafari = true
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "person.circle")
+                                            .font(.system(size: 15, weight: .semibold))
+                                        Text("Manage account")
+                                            .font(.system(size: 14, weight: .semibold))
+                                    }
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(AppTheme.Colors.primary, in: RoundedRectangle(cornerRadius: 10))
+                                }
+                                .buttonStyle(.plain)
+
+                                Button {
+                                    try? auth.signOut()
+                                    HapticManager.shared.impact(style: .light)
+                                    dismiss()
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                                            .font(.system(size: 15, weight: .semibold))
+                                        Text("Sign out")
+                                            .font(.system(size: 14, weight: .semibold))
+                                    }
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(Color(.systemGray5), in: RoundedRectangle(cornerRadius: 10))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(16)
                         } else {
                             Button {
                                 Task { await signInWithGoogle() }
                             } label: {
-                                HStack(spacing: 8) {
+                                HStack(spacing: 10) {
                                     Image(systemName: "g.circle.fill")
+                                        .font(.system(size: 18))
                                     Text(isLoading ? "Signing in..." : "Sign in with Google")
+                                        .font(.system(size: 15, weight: .semibold))
                                 }
-                                .font(.subheadline.weight(.semibold))
                                 .foregroundColor(.white)
-                                .padding(.vertical, 12)
-                                .padding(.horizontal, 16)
-                                .background(RoundedRectangle(cornerRadius: 12).fill(.black))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 13)
+                                .background(Color(red: 0.18, green: 0.18, blue: 0.18), in: RoundedRectangle(cornerRadius: 10))
                             }
                             .buttonStyle(.plain)
                             .disabled(isLoading)
+                            .padding(16)
                         }
                     }
-                }
-                .padding()
-                .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.Colors.surface))
-                .padding(.horizontal, 20)
+                    .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 14))
+                    .padding(.horizontal, 16)
 
-                Spacer()
+                    // Info rows card
+                    VStack(spacing: 0) {
+                        infoRow(
+                            icon: "shield.checkered",
+                            iconColor: .blue,
+                            title: "Privacy & Security",
+                            subtitle: "Manage your data and permissions"
+                        ) { showSafari = true }
+
+                        Divider().padding(.leading, 60)
+
+                        infoRow(
+                            icon: "bell.badge",
+                            iconColor: AppTheme.Colors.primary,
+                            title: "Notifications",
+                            subtitle: "Manage notification preferences"
+                        ) { showSafari = true }
+
+                        Divider().padding(.leading, 60)
+
+                        infoRow(
+                            icon: "key.fill",
+                            iconColor: .orange,
+                            title: "Account security",
+                            subtitle: "2-Step Verification and more"
+                        ) { showSafari = true }
+                    }
+                    .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 14))
+                    .padding(.horizontal, 16)
+
+                    Spacer(minLength: 32)
+                }
+                .padding(.top, 20)
             }
             .background(AppTheme.Colors.background.ignoresSafeArea())
             .navigationTitle("Google Account")
@@ -96,6 +153,7 @@ struct GoogleAccountView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
+                        .fontWeight(.semibold)
                 }
             }
             .sheet(isPresented: $showSafari) {
@@ -104,20 +162,35 @@ struct GoogleAccountView: View {
         }
     }
 
-    private var header: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "person.crop.circle.badge.checkmark")
-                .font(.system(size: 42))
-                .foregroundStyle(AppTheme.Colors.primary)
-            Text("Manage your Google account")
-                .font(.title2.weight(.bold))
-            Text("Connect, manage, or sign out of your Google account to personalize your experience.")
-                .font(.subheadline)
-                .foregroundStyle(AppTheme.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
+    @ViewBuilder
+    private func infoRow(icon: String, iconColor: Color, title: String, subtitle: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(iconColor.opacity(0.12))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: icon)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(iconColor)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Color(.systemGray3))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 13)
         }
-        .padding(.top, 20)
+        .buttonStyle(.plain)
     }
 
     private func signInWithGoogle() async {

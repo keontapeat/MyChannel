@@ -123,39 +123,30 @@ private struct OwnerFeaturedPickerView: View {
     }
 
     private func ownerIntroVideo() -> Video? {
-        // Points to bundled intro at MyChannel/images/Shot By Keonta Intro 4k.MP4 if present
-        let name = "Shot By Keonta Intro 4k"
-        if let path = Bundle.main.path(forResource: name, ofType: "MP4") {
-            let url = URL(fileURLWithPath: path)
-            
-            // 🔥 USE CURRENT USER as creator so it links to YOUR profile
-            let currentUser = AppState.shared.currentUser ?? AuthenticationManager.shared.currentUser
-            let me = currentUser ?? User(
-                id: "sbkeonta_owner",
-                username: "sbkeonta_",
-                displayName: "Shot By Keonta",
-                email: "keontapeat@mychannel.live",
-                profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop",
-                isVerified: true,
-                isCreator: true
-            )
-            
-            return Video(
-                id: "owner_intro_video",
-                title: "Shot By Keonta Intro",
-                description: "Welcome to MyChannel - Shot By Keonta 🎬🔥",
-                thumbnailURL: "asset://ShotByKeontaThumbnail",
-                videoURL: url.absoluteString,
-                duration: 35,
-                viewCount: 0,
-                likeCount: 0,
-                creator: me,
-                category: .entertainment,
-                tags: ["intro", "keonta", "mychannel"],
-                isPublic: true
-            )
-        }
-        return nil
+        let currentUser = AppState.shared.currentUser ?? AuthenticationManager.shared.currentUser
+        let me = currentUser ?? User(
+            id: "sbkeonta_owner",
+            username: "sbkeonta_",
+            displayName: "Shot By Keonta",
+            email: "keontapeat@mychannel.live",
+            profileImageURL: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop",
+            isVerified: true,
+            isCreator: true
+        )
+        return Video(
+            id: "owner_intro_video",
+            title: "Shot By Keonta Intro",
+            description: "Welcome to MyChannel - Shot By Keonta 🎬🔥",
+            thumbnailURL: "asset://ShotByKeontaThumbnail",
+            videoURL: "https://firebasestorage.googleapis.com/v0/b/mychannel-ca26d.firebasestorage.app/o/Shot%20By%20Keonta%20Intro%204k.MP4?alt=media&token=88e366e2-efde-4631-9707-d7e9fadc9568",
+            duration: 35,
+            viewCount: 0,
+            likeCount: 0,
+            creator: me,
+            category: .entertainment,
+            tags: ["intro", "keonta", "mychannel"],
+            isPublic: true
+        )
     }
 
     var body: some View {

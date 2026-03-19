@@ -211,6 +211,33 @@ class VideoUploadManager: ObservableObject {
                 let savedCount = await RealtimeViewTracker.shared.getViewCount(for: uploadedVideo.id)
                 print("📊 [VideoUploadManager] Verified viewCount after save: \(savedCount)")
                 
+                // 🤖 AI CONTENT MODERATION: Run in background, non-blocking
+                let moderationVideoId = uploadedVideo.id
+                let moderationTitle = uploadedVideo.title
+                let moderationDesc = uploadedVideo.description
+                Task {
+                    struct ModerationRequest: Encodable {
+                        let video_id: String
+                        let title: String
+                        let description: String
+                    }
+                    struct ModerationResponse: Decodable {
+                        let decision: String?
+                        let confidence: Double?
+                        let flags: [String]?
+                    }
+                    if let result = try? await CloudRunAgentRouter.post(
+                        CloudRunService.contentModeration,
+                        path: "/predict",
+                        body: ModerationRequest(video_id: moderationVideoId, title: moderationTitle, description: moderationDesc)
+                    ) as ModerationResponse {
+                        print("🛡️ [ContentModeration] Decision: \(result.decision ?? "ok") (confidence: \(result.confidence ?? 0))")
+                        if let flags = result.flags, !flags.isEmpty {
+                            print("🚩 [ContentModeration] Flags: \(flags.joined(separator: ", "))")
+                        }
+                    }
+                }
+                
                 // Persist to local profile and refresh AppState
                 try? await DatabaseService.shared.saveVideo(uploadedVideo)
                 

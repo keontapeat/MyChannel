@@ -40,50 +40,23 @@ final class ProfileViewModel: ObservableObject {
         isLoading = true
         errorMessage = ""
 
-        let current = appState?.currentUser ?? authManager?.currentUser ?? User.defaultUser
-        user = current
+        let authUser = appState?.currentUser ?? authManager?.currentUser ?? User.defaultUser
 
-        // 🔥 LOAD ONLY REAL UPLOADED VIDEOS: No mock/fallback data
+        // 🔥 FIX: Fetch complete Firestore profile first, fall back to auth object
+        if let firestoreUser = try? await UserFirestoreService.shared.fetchUser(id: authUser.id) {
+            user = firestoreUser
+        } else {
+            user = authUser
+        }
+
         do {
-            let uploadedVideos = try await VideoFirestoreService.shared.getUserVideos(userId: current.id)
-            // Only show real videos - NO mock data
+            let uploadedVideos = try await VideoFirestoreService.shared.getUserVideos(userId: user.id)
             userVideos = uploadedVideos
             watchHistory = Array(uploadedVideos.reversed())
-            
-            // Update user video count to match actual count
-            var updatedUser = current
-            updatedUser = User(
-                id: current.id,
-                username: current.username,
-                displayName: current.displayName,
-                email: current.email,
-                profileImageURL: current.profileImageURL,
-                bannerImageURL: current.bannerImageURL,
-                bio: current.bio,
-                subscriberCount: current.subscriberCount,
-                videoCount: uploadedVideos.count, // 🔥 EXACT COUNT from real videos
-                isVerified: current.isVerified,
-                isCreator: current.isCreator,
-                createdAt: current.createdAt,
-                location: current.location,
-                website: current.website,
-                showWebsiteOnProfile: current.showWebsiteOnProfile,
-                showOnlineStatus: current.showOnlineStatus,
-                socialLinks: current.socialLinks,
-                followerCount: current.followerCount,
-                followingCount: current.followingCount,
-                joinDate: current.joinDate,
-                totalViews: uploadedVideos.reduce(0) { $0 + $1.viewCount }, // 🔥 REAL TOTAL VIEWS
-                totalEarnings: current.totalEarnings,
-                membershipTiers: current.membershipTiers,
-                bannerVideoURL: current.bannerVideoURL,
-                bannerVideoMuted: current.bannerVideoMuted,
-                bannerVideoContentMode: current.bannerVideoContentMode
-            )
-            user = updatedUser
+            user = user.updating(videoCount: uploadedVideos.count,
+                                  totalViews: uploadedVideos.reduce(0) { $0 + $1.viewCount })
         } catch {
             print("❌ Error loading user videos: \(error)")
-            // NO FALLBACK - Show empty if no videos exist
             userVideos = []
             watchHistory = []
         }

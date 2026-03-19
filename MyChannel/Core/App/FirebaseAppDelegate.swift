@@ -64,6 +64,22 @@ final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
         Task { @MainActor in
             AdMobManager.shared.initialize()
         }
+        
+        // 🛡️ Start Platform Monitor Service — 24/7 fraud + content scanning
+        Task { @MainActor in
+            PlatformMonitorService.shared.start()
+        }
+        
+        // 🤖 Start AGI Agent Scheduler — all agents improving the app daily
+        Task { @MainActor in
+            let manager = AGIAgentManager.shared
+            // Auto-start scheduler if agents are already deployed
+            let liveCount = manager.agents.filter { $0.status == .live && $0.isEnabled }.count
+            if liveCount > 0 {
+                manager.startScheduler()
+                print("⚡ [AppLaunch] AGI Scheduler started with \(liveCount) live agents")
+            }
+        }
         // Set notification center delegate early (only if push notifications are available)
         // Note: Push notifications require a paid Apple Developer Program membership
         #if canImport(FirebaseMessaging)

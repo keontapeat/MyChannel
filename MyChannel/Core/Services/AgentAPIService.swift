@@ -19,6 +19,11 @@
 import Foundation
 import Combine
 
+private struct _AgentPromptRequest: Encodable {
+    let prompt: String
+    let agent: String
+}
+
 /// Master service for calling all 30 Vertex AI agents
 @MainActor
 class AgentAPIService: ObservableObject {
@@ -539,49 +544,79 @@ class AgentAPIService: ObservableObject {
     }
     
     // MARK: - 🔧 Core Agent Call Logic
-    
-    /// Generic agent call with retry logic
-    private func callAgent<T: Decodable>(
+
+    /// Agent name → CloudRunService mapping
+    private static let agentServiceMap: [String: CloudRunService] = [
+        "Dynamic Pricing AI":           .dynamicPricing,
+        "Ad Placement Genius":          .placementOptimization,
+        "Fraud Detection AI":           .fraudDetection,
+        "Upsell & Cross-Sell AI":       .upsellAI,
+        "Match Fairness Referee":       .matchFairness,
+        "Viral Content Predictor":      .viralPrediction,
+        "User Retention Doctor":        .retentionOptimizer,
+        "SEO Discovery Booster":        .titleOptimizer,
+        "Match Orchestrator AI":        .vsMatchAI,
+        "Prize Pool Manager AI":        .myChannelPrizePool,
+        "Anti-Cheat Guardian AI":       .myChannelAntiCheat,
+        "Tournament Scheduler AI":      .myChannelTournamentBracket,
+        "Leaderboard Calculator AI":    .tournamentRanking,
+        "Copyright Protector AI":       .copyrightDetection,
+        "Spam Destroyer AI":            .spamDetection,
+        "Toxicity Filter AI":           .contentModeration,
+        "Real-Time Report Handler AI":  .reportContent,
+        "Creator Analytics Pro AI":     .analyticsPredictor,
+        "Audience Insights AI":         .audienceSegmentation,
+        "Revenue Attribution AI":       .revenueMaximizer,
+        "Trend Forecaster AI":          .trendForecaster,
+        "Competitor Intelligence AI":   .competitorIntelligence,
+        "Scale Master AI":              .autoScaler,
+    ]
+
+    /// Generic agent call with structured Encodable body + retry logic
+    private func callAgent<B: Encodable, T: Decodable>(
         name: String,
-        prompt: String,
+        body: B,
         maxRetries: Int = 3
     ) async throws -> T {
         let startTime = Date()
         isProcessing = true
         defer { isProcessing = false }
-        
+
+        guard let service = AgentAPIService.agentServiceMap[name] else {
+            throw AgentAPIError.notImplemented(name)
+        }
+
         var lastError: Error?
-        
         for attempt in 1...maxRetries {
             do {
-                // Call agent (this would use VertexAIAgentService internally)
-                // For now, we'll throw a placeholder error
-                // TODO: Implement actual agent calls
-                
+                let result: T = try await CloudRunAgentRouter.post(service, path: "/predict", body: body)
                 let responseTime = Date().timeIntervalSince(startTime)
                 trackResponseTime(responseTime)
                 totalAgentCalls += 1
-                
                 print("✅ [AgentAPI] \(name) responded in \(String(format: "%.2f", responseTime * 1000))ms")
-                
-                // Placeholder: throw error for now
-                throw AgentAPIError.notImplemented(name)
-                
+                return result
             } catch {
                 lastError = error
-                
                 if attempt < maxRetries {
-                    let delay = pow(2.0, Double(attempt)) // Exponential backoff: 2s, 4s, 8s
-                    print("⚠️ [AgentAPI] \(name) failed (attempt \(attempt)/\(maxRetries)). Retrying in \(delay)s...")
+                    let delay = pow(2.0, Double(attempt))
+                    print("⚠️ [AgentAPI] \(name) failed (\(attempt)/\(maxRetries)). Retry in \(delay)s…")
                     try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 } else {
                     totalErrors += 1
-                    print("🚨 [AgentAPI] \(name) failed after \(maxRetries) attempts")
+                    print("🚨 [AgentAPI] \(name) failed after \(maxRetries) attempts: \(error.localizedDescription)")
                 }
             }
         }
-        
         throw lastError ?? AgentAPIError.unknownError
+    }
+
+    /// Convenience overload: plain-string prompt wrapped in {prompt, agent} JSON
+    private func callAgent<T: Decodable>(
+        name: String,
+        prompt: String,
+        maxRetries: Int = 3
+    ) async throws -> T {
+        return try await callAgent(name: name, body: _AgentPromptRequest(prompt: prompt, agent: name), maxRetries: maxRetries)
     }
     
     // MARK: - 📊 Performance Tracking

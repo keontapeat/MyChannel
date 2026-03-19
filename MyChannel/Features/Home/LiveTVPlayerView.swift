@@ -596,35 +596,14 @@ struct LiveTVPlayerView: View {
 
     private func setupPlayer() {
         isPlayingPlutoFallback = false
-        // 🔥 Pluto TV blocks third-party apps and serves a "no longer available on this device" stream (spinning logo).
-        // Prefer the working Apple demo stream first for Pluto so users see real playback, with a banner.
-        Task { @MainActor in
-            let workingURL = await LiveTVManager.shared.getWorkingStreamURL(for: channel)
-            var streamURLs: [String] = []
-            
-            if channel.streamURL.contains("pluto.tv"), let fallback = channel.previewFallbackURL {
-                // Pluto restricts in-app: use working fallback first so something actually plays
-                streamURLs.append(fallback)
-                streamURLs.append(workingURL)
-                if workingURL != channel.streamURL { streamURLs.append(channel.streamURL) }
-                if let channelId = extractPlutoChannelId(from: channel.streamURL) {
-                    let altURL = LiveTVChannel.plutoURLAlt(channelId)
-                    if !streamURLs.contains(altURL) { streamURLs.append(altURL) }
-                }
-            } else {
-                streamURLs = [workingURL]
-                if workingURL != channel.streamURL { streamURLs.append(channel.streamURL) }
-                if channel.streamURL.contains("pluto.tv"), let channelId = extractPlutoChannelId(from: channel.streamURL) {
-                    let altURL = LiveTVChannel.plutoURLAlt(channelId)
-                    if !streamURLs.contains(altURL) { streamURLs.append(altURL) }
-                }
-                if let fallback = channel.previewFallbackURL, !streamURLs.contains(fallback) {
-                    streamURLs.append(fallback)
-                }
-            }
-            
-            setupPlayerWithURLs(streamURLs)
+        // Start playback immediately — no async health check, no delay.
+        // Build URL list: primary stream first, then fallback. AVPlayer tries each on failure.
+        var streamURLs: [String] = []
+        streamURLs.append(channel.streamURL)
+        if let fallback = channel.previewFallbackURL, fallback != channel.streamURL {
+            streamURLs.append(fallback)
         }
+        setupPlayerWithURLs(streamURLs)
     }
     
     /// Extract Pluto channel ID from stream URL

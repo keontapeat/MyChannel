@@ -8,8 +8,14 @@
 //
 
 import SwiftUI
+import PhotosUI
+import AVFoundation
+import AVKit
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
+#endif
+#if canImport(FirebaseStorage)
+import FirebaseStorage
 #endif
 
 struct ThermonuclearFeaturedManager: View {
@@ -20,6 +26,15 @@ struct ThermonuclearFeaturedManager: View {
     @State private var allVideos: [Video] = []
     @State private var isLoadingVideos = false
     @State private var showAllVideos = false
+    
+    // Camera Roll upload state
+    @State private var showingCameraRollPicker = false
+    @State private var cameraRollPickerItem: PhotosPickerItem?
+    @State private var showingUploadSheet = false
+    @State private var pendingUploadURL: URL?
+    @State private var pendingUploadThumbnail: UIImage?
+    @State private var pendingUploadDuration: TimeInterval = 0
+    @StateObject private var cameraRollUploader = CameraRollFeaturedUploader()
     
     var body: some View {
         NavigationView {
@@ -61,6 +76,35 @@ struct ThermonuclearFeaturedManager: View {
             }
             .sheet(isPresented: $showingVideoSelector) {
                 videoSelectorSheet
+            }
+            .photosPicker(
+                isPresented: $showingCameraRollPicker,
+                selection: $cameraRollPickerItem,
+                matching: .videos,
+                photoLibrary: .shared()
+            )
+            .sheet(isPresented: $showingUploadSheet) {
+                if let url = pendingUploadURL {
+                    CameraRollUploadSheet(
+                        videoURL: url,
+                        thumbnail: pendingUploadThumbnail,
+                        duration: pendingUploadDuration,
+                        uploader: cameraRollUploader
+                    ) { video in
+                        Task { await manager.addFeaturedVideo(video) }
+                        showingUploadSheet = false
+                        pendingUploadURL = nil
+                        pendingUploadThumbnail = nil
+                    } onCancel: {
+                        showingUploadSheet = false
+                        pendingUploadURL = nil
+                        pendingUploadThumbnail = nil
+                    }
+                }
+            }
+            .onChange(of: cameraRollPickerItem) { item in
+                guard let item else { return }
+                Task { await loadCameraRollVideo(item: item) }
             }
             .task {
                 await manager.loadFeaturedVideos()
@@ -200,8 +244,17 @@ struct ThermonuclearFeaturedManager: View {
     
     // MARK: - Add Button
     private var addButton: some View {
-        Button {
-            showingVideoSelector = true
+        Menu {
+            Button {
+                showingVideoSelector = true
+            } label: {
+                Label("Add from my videos", systemImage: "play.rectangle")
+            }
+            Button {
+                showingCameraRollPicker = true
+            } label: {
+                Label("Upload from Camera Roll", systemImage: "photo.on.rectangle.angled")
+            }
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "plus")
@@ -239,22 +292,41 @@ struct ThermonuclearFeaturedManager: View {
                     .padding(.horizontal, 40)
             }
             
-            Button {
-                showingVideoSelector = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text("Add Video")
-                        .font(.system(size: 15, weight: .semibold))
+            HStack(spacing: 12) {
+                Button {
+                    showingVideoSelector = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "play.rectangle")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("My Videos")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 11)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color(.label))
+                    )
                 }
-                .foregroundColor(.white)
-                .padding(.horizontal, 22)
-                .padding(.vertical, 11)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color(.label))
-                )
+                Button {
+                    showingCameraRollPicker = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Camera Roll")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 11)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color(.systemGray5))
+                    )
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -396,6 +468,54 @@ struct ThermonuclearFeaturedManager: View {
     private func addVideo(_ video: Video) async {
         await manager.addFeaturedVideo(video)
         showingVideoSelector = false
+    }
+    
+    // MARK: - Camera Roll Load
+    private func loadCameraRollVideo(item: PhotosPickerItem) async {
+        do {
+            guard let movie = try await item.loadTransferable(type: CameraRollMovie.self) else { return }
+            let url = movie.url
+            
+            // Read duration + generate thumbnail
+            let asset = AVAsset(url: url)
+            let duration = try await asset.load(.duration)
+            let durationSecs = CMTimeGetSeconds(duration)
+            
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 640, height: 360)
+            let thumbTime = CMTime(seconds: min(1.0, durationSecs * 0.1), preferredTimescale: 600)
+            var thumbnail: UIImage?
+            if let cgImg = try? await generator.image(at: thumbTime).image {
+                thumbnail = UIImage(cgImage: cgImg)
+            }
+            
+            await MainActor.run {
+                self.pendingUploadURL = url
+                self.pendingUploadThumbnail = thumbnail
+                self.pendingUploadDuration = durationSecs
+                self.cameraRollPickerItem = nil
+                self.showingUploadSheet = true
+            }
+        } catch {
+            print("❌ [CameraRoll] Failed to load video: \(error)")
+        }
+    }
+}
+
+// MARK: - Transferable wrapper for PHPickerItem → URL
+struct CameraRollMovie: Transferable {
+    let url: URL
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(contentType: .movie) { movie in
+            SentTransferredFile(movie.url)
+        } importing: { received in
+            let dest = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension(received.file.pathExtension)
+            try FileManager.default.copyItem(at: received.file, to: dest)
+            return CameraRollMovie(url: dest)
+        }
     }
 }
 

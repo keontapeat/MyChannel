@@ -7,57 +7,134 @@
 
 import Foundation
 import SwiftUI
+import FirebaseFirestore
+
+// MARK: - Download Quality
+
+enum DownloadVideoQuality: String, Codable, CaseIterable {
+    case low = "360p"
+    case medium = "480p"
+    case high = "720p"
+    case hd = "1080p"
+    case highest = "1440p"
+
+    var displayName: String {
+        switch self {
+        case .low:     return "Low (360p)"
+        case .medium:  return "Medium (480p)"
+        case .high:    return "High (720p)"
+        case .hd:      return "HD (1080p)"
+        case .highest: return "Highest (1440p)"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .low:     return .gray
+        case .medium:  return .blue
+        case .high:    return .green
+        case .hd:      return .purple
+        case .highest: return .orange
+        }
+    }
+
+    var estimatedSize: String {
+        switch self {
+        case .low:     return "~50MB per hour"
+        case .medium:  return "~100MB per hour"
+        case .high:    return "~200MB per hour"
+        case .hd:      return "~400MB per hour"
+        case .highest: return "~600MB per hour"
+        }
+    }
+}
+
+// MARK: - Typealiases for backward compatibility
+typealias DownloadQuality = DownloadVideoQuality
 
 // MARK: - Downloaded Video Model
+
 struct DownloadedVideo: Identifiable, Codable {
-    let id: String
+    @DocumentID var id: String?
+
+    let videoId: String
     let title: String
     let channelName: String
-    let thumbnailURL: String
-    let duration: Int // in seconds
-    let quality: DownloadQuality
-    let fileSize: Int64 // in bytes
+    let channelId: String
+    let thumbnailUrl: String
+    let duration: TimeInterval
+    let viewCount: Int
+    let localFilePath: String
     let downloadDate: Date
-    let isWatched: Bool
-    
+    let fileSize: Int64
+    let quality: DownloadVideoQuality
+    var lastWatchedPosition: TimeInterval?
+    var isWatched: Bool
+
+    // MARK: Nested typealias so call sites can write DownloadedVideo.VideoQuality
+    typealias VideoQuality = DownloadVideoQuality
+
+    // MARK: Backward-compatible computed properties
+    var thumbnailURL: String { thumbnailUrl }
+
     init(
-        id: String = UUID().uuidString,
+        id: String? = nil,
+        videoId: String,
         title: String,
         channelName: String,
-        thumbnailURL: String,
-        duration: Int,
-        quality: DownloadQuality,
-        fileSize: Int64,
+        channelId: String = "",
+        thumbnailUrl: String,
+        duration: TimeInterval,
+        viewCount: Int = 0,
+        localFilePath: String = "",
         downloadDate: Date = Date(),
+        fileSize: Int64 = 0,
+        quality: DownloadVideoQuality = .high,
+        lastWatchedPosition: TimeInterval? = nil,
         isWatched: Bool = false
     ) {
         self.id = id
+        self.videoId = videoId
         self.title = title
         self.channelName = channelName
-        self.thumbnailURL = thumbnailURL
+        self.channelId = channelId
+        self.thumbnailUrl = thumbnailUrl
         self.duration = duration
-        self.quality = quality
-        self.fileSize = fileSize
+        self.viewCount = viewCount
+        self.localFilePath = localFilePath
         self.downloadDate = downloadDate
+        self.fileSize = fileSize
+        self.quality = quality
+        self.lastWatchedPosition = lastWatchedPosition
         self.isWatched = isWatched
     }
-    
+
     var formattedDuration: String {
-        let minutes = duration / 60
-        let seconds = duration % 60
-        if minutes >= 60 {
-            let hours = minutes / 60
-            let remainingMinutes = minutes % 60
-            return String(format: "%d:%02d:%02d", hours, remainingMinutes, seconds)
+        let total = Int(duration)
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
         } else {
             return String(format: "%d:%02d", minutes, seconds)
         }
     }
-    
+
     var formattedFileSize: String {
         ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .binary)
     }
-    
+
+    var formattedViewCount: String {
+        if viewCount >= 1_000_000 {
+            return String(format: "%.1fM views", Double(viewCount) / 1_000_000)
+        } else if viewCount >= 1_000 {
+            return String(format: "%.1fK views", Double(viewCount) / 1_000)
+        } else {
+            return "\(viewCount) views"
+        }
+    }
+
     var downloadTimeAgo: String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
@@ -65,140 +142,102 @@ struct DownloadedVideo: Identifiable, Codable {
     }
 }
 
-// MARK: - Download Quality Enum (using the one from OfflineDownloadService)
+// MARK: - Recommended Download
+
+struct RecommendedDownload: Codable, Identifiable {
+    var id: String { videoId }
+    let videoId: String
+    let title: String
+    let channelName: String
+    let channelId: String
+    let thumbnailUrl: String
+    let duration: TimeInterval
+    let viewCount: Int
+    let mlScore: Double
+    let recommendationReason: String
+
+    var formattedDuration: String {
+        let total = Int(duration)
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            return String(format: "%d:%02d", minutes, seconds)
+        }
+    }
+
+    var formattedViewCount: String {
+        if viewCount >= 1_000_000 {
+            return String(format: "%.1fM views", Double(viewCount) / 1_000_000)
+        } else if viewCount >= 1_000 {
+            return String(format: "%.1fK views", Double(viewCount) / 1_000)
+        } else {
+            return "\(viewCount) views"
+        }
+    }
+}
 
 // MARK: - Sample Data
+
 extension DownloadedVideo {
     static var sampleDownloads: [DownloadedVideo] {
-        return [
+        [
             DownloadedVideo(
-                id: "1",
+                videoId: "1",
                 title: "Swift UI Advanced Techniques",
                 channelName: "Tech Channel",
-                thumbnailURL: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=500&h=281&fit=crop",
+                thumbnailUrl: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=500&h=281&fit=crop",
                 duration: 1200,
-                quality: .high,
-                fileSize: 250 * 1024 * 1024, // 250 MB
-                downloadDate: Date(),
-                isWatched: false
+                viewCount: 45000,
+                fileSize: 250 * 1024 * 1024,
+                quality: .high
             ),
             DownloadedVideo(
-                id: "2",
+                videoId: "2",
                 title: "iOS Development Best Practices",
                 channelName: "Developer Hub",
-                thumbnailURL: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=500&h=281&fit=crop",
+                thumbnailUrl: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=500&h=281&fit=crop",
                 duration: 900,
+                viewCount: 120000,
+                fileSize: 180 * 1024 * 1024,
                 quality: .medium,
-                fileSize: 180 * 1024 * 1024, // 180 MB
-                downloadDate: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date(),
                 isWatched: true
             ),
             DownloadedVideo(
-                id: "3",
+                videoId: "3",
                 title: "Building Modern Apps with SwiftUI",
                 channelName: "Code Masters",
-                thumbnailURL: "https://images.unsplash.com/photo-1517077304055-6e89abbf09b0?w=500&h=281&fit=crop",
+                thumbnailUrl: "https://images.unsplash.com/photo-1517077304055-6e89abbf09b0?w=500&h=281&fit=crop",
                 duration: 1800,
-                quality: .highest,
-                fileSize: 450 * 1024 * 1024, // 450 MB
-                downloadDate: Calendar.current.date(byAdding: .day, value: -2, to: Date()) ?? Date(),
-                isWatched: false
+                viewCount: 88000,
+                fileSize: 450 * 1024 * 1024,
+                quality: .hd
             ),
             DownloadedVideo(
-                id: "4",
+                videoId: "4",
                 title: "EPIC Gaming Moments Compilation",
                 channelName: "Pro Gamer Elite",
-                thumbnailURL: "https://images.unsplash.com/photo-1552820728-8b83bb6b773f?w=500&h=281&fit=crop",
+                thumbnailUrl: "https://images.unsplash.com/photo-1552820728-8b83bb6b773f?w=500&h=281&fit=crop",
                 duration: 900,
+                viewCount: 2_400_000,
+                fileSize: 320 * 1024 * 1024,
                 quality: .high,
-                fileSize: 320 * 1024 * 1024, // 320 MB
-                downloadDate: Calendar.current.date(byAdding: .hour, value: -12, to: Date()) ?? Date(),
-                isWatched: false
+                downloadDate: Calendar.current.date(byAdding: .hour, value: -12, to: Date()) ?? Date()
             ),
             DownloadedVideo(
-                id: "5",
+                videoId: "5",
                 title: "Chill Beats for Study & Relax",
                 channelName: "Chill Vibes Music",
-                thumbnailURL: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&h=281&fit=crop",
+                thumbnailUrl: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&h=281&fit=crop",
                 duration: 3600,
+                viewCount: 5_100_000,
+                fileSize: 280 * 1024 * 1024,
                 quality: .medium,
-                fileSize: 280 * 1024 * 1024, // 280 MB
                 downloadDate: Calendar.current.date(byAdding: .day, value: -3, to: Date()) ?? Date(),
                 isWatched: true
             )
         ]
     }
-}
-
-#Preview {
-    ScrollView {
-        LazyVStack(spacing: 12) {
-            Text("Downloaded Videos")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-                .padding(.top)
-            
-            ForEach(DownloadedVideo.sampleDownloads) { video in
-                HStack(spacing: 12) {
-                    AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Rectangle()
-                            .fill(Color(.systemGray4))
-                            .overlay(
-                                Image(systemName: "play.rectangle.fill")
-                                    .font(.title2)
-                                    .foregroundColor(.secondary)
-                            )
-                    }
-                    .frame(width: 80, height: 45)
-                    .cornerRadius(8)
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(video.title)
-                            .font(.headline)
-                            .lineLimit(2)
-                        
-                        Text(video.channelName)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        HStack {
-                            Text(video.quality.displayName)
-                                .font(.caption)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(video.quality.color.opacity(0.2))
-                                .foregroundColor(video.quality.color)
-                                .cornerRadius(4)
-                            
-                            Text(video.formattedFileSize)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            Text(video.formattedDuration)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            if video.isWatched {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.caption)
-                                    .foregroundColor(.green)
-                            }
-                        }
-                    }
-                    
-                    Spacer()
-                }
-                .padding()
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
-                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
-            }
-        }
-        .padding()
-    }
-    .background(Color(.systemGroupedBackground))
 }

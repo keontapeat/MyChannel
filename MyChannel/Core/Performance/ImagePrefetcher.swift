@@ -157,7 +157,7 @@ class ImageCache {
     static let shared = ImageCache()
     
     // 🔥 Larger cache for more instant hits
-    private let cache = NSCache<NSURL, UIImage>()
+    let cache = NSCache<NSURL, UIImage>()
     private let maxCacheSize = 150 * 1024 * 1024 // 150MB (was 100MB)
     
     // 🔥 Track cache stats for debugging

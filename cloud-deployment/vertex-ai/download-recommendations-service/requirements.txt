@@ -1,0 +1,5 @@
+flask==3.0.0
+google-cloud-firestore==2.14.0
+google-cloud-aiplatform==1.38.1
+numpy==1.24.3
+gunicorn==21.2.0

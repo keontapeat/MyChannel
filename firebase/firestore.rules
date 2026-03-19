@@ -1,6 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ── Auth helpers ──────────────────────────────────────────────────────
     function isSignedIn() {
       return request.auth != null;
     }
@@ -16,55 +18,122 @@ service cloud.firestore {
     function isAdmin() { return hasRole('admin'); }
     function isOwner(ownerId) { return isSignedIn() && ownerId == uid(); }
 
-    // Users
-    match /users/{userId} {
-      allow read: if true; // public profiles
-      allow create: if isSignedIn() && userId == uid();
-      allow update, delete: if isOwner(userId) || isAdmin();
+    // ── Security helpers ──────────────────────────────────────────────────
 
-      // Subscriptions owned by the user
+    // Block suspended / permanently-banned accounts
+    function isNotBanned() {
+      return isSignedIn() && (
+        !exists(/databases/$(database)/documents/security_bans/$(request.auth.uid)) ||
+        get(/databases/$(database)/documents/security_bans/$(request.auth.uid)).data.active == false
+      );
+    }
+
+    // Reject strings longer than maxLen to prevent oversized payloads
+    function strLen(val, maxLen) {
+      return val is string && val.size() <= maxLen;
+    }
+
+    // Validate that a string field does NOT contain obvious script-injection markers
+    function noScript(val) {
+      return val is string
+        && !val.matches('(?i).*<script.*')
+        && !val.matches('(?i).*javascript:.*')
+        && !val.matches('(?i).*onerror\\s*=.*')
+        && !val.matches('(?i).*onload\\s*=.*');
+    }
+
+    // Combined safe text: bounded length + no XSS
+    function safeText(val, maxLen) {
+      return strLen(val, maxLen) && noScript(val);
+    }
+
+    // Only allow known visibility values
+    function validVisibility(v) {
+      return v == 'public' || v == 'private' || v == 'unlisted';
+    }
+
+    // ── Users ─────────────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isNotBanned() && userId == uid()
+        && safeText(request.resource.data.get('displayName', ''), 100)
+        && safeText(request.resource.data.get('bio', ''), 500);
+      allow update: if (isOwner(userId) || isAdmin()) && isNotBanned()
+        && safeText(request.resource.data.get('displayName', ''), 100)
+        && safeText(request.resource.data.get('bio', ''), 500)
+        // Prevent uid spoofing
+        && request.resource.data.uid == resource.data.uid;
+      allow delete: if (isOwner(userId) || isAdmin()) && isNotBanned();
+
       match /subscriptions/{channelId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId) && request.resource.data.ownerUid == uid();
+        allow create: if isOwner(userId) && isNotBanned()
+          && request.resource.data.ownerUid == uid();
         allow delete: if isOwner(userId) || isAdmin();
       }
 
-      // Subscribers (fan set); only the fan can add/remove their own doc
       match /subscribers/{fanUid} {
         allow read: if true;
-        allow create: if isSignedIn() && fanUid == uid();
+        allow create: if isSignedIn() && isNotBanned() && fanUid == uid();
         allow delete: if isSignedIn() && (fanUid == uid() || isAdmin());
       }
     }
 
-    // Channels
-    match /channels/{channelId} {
-      allow read: if resource.data.visibility == 'public' || isOwner(resource.data.ownerUid) || isAdmin();
-      allow create: if isSignedIn() && request.resource.data.ownerUid == uid();
-      allow update, delete: if isOwner(resource.data.ownerUid) || isAdmin();
+    // ── Security bans (admin-write, no self-read) ─────────────────────────
+    match /security_bans/{banUid} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
     }
 
-    // Videos
+    // ── Security threat log (Cloud Functions write only) ──────────────────
+    match /security_events/{eventId} {
+      allow read: if isAdmin();
+      allow write: if false; // only Cloud Functions can write
+    }
+
+    // ── Channels ──────────────────────────────────────────────────────────
+    match /channels/{channelId} {
+      allow read: if resource.data.visibility == 'public' || isOwner(resource.data.ownerUid) || isAdmin();
+      allow create: if isSignedIn() && isNotBanned()
+        && request.resource.data.ownerUid == uid()
+        && safeText(request.resource.data.get('name', ''), 100)
+        && safeText(request.resource.data.get('description', ''), 2000)
+        && validVisibility(request.resource.data.get('visibility', 'public'));
+      allow update: if (isOwner(resource.data.ownerUid) || isAdmin()) && isNotBanned()
+        && safeText(request.resource.data.get('name', ''), 100)
+        && safeText(request.resource.data.get('description', ''), 2000);
+      allow delete: if (isOwner(resource.data.ownerUid) || isAdmin()) && isNotBanned();
+    }
+
+    // ── Videos ────────────────────────────────────────────────────────────
     match /videos/{videoId} {
       allow read: if resource.data.visibility == 'public' || isOwner(resource.data.ownerUid) || isAdmin();
-      allow create: if isSignedIn() && request.resource.data.ownerUid == uid();
-      // Protect adSettings from non-admin writers
-      allow update: if (
+      allow create: if isSignedIn() && isNotBanned()
+        && request.resource.data.ownerUid == uid()
+        && safeText(request.resource.data.get('title', ''), 200)
+        && safeText(request.resource.data.get('description', ''), 5000)
+        && validVisibility(request.resource.data.get('visibility', 'public'));
+      allow update: if isNotBanned() && (
         isAdmin() || (
-          isOwner(resource.data.ownerUid) &&
-          (request.resource.data.adSettings == resource.data.adSettings)
+          isOwner(resource.data.ownerUid)
+          && request.resource.data.adSettings == resource.data.adSettings
+          && safeText(request.resource.data.get('title', ''), 200)
+          && safeText(request.resource.data.get('description', ''), 5000)
         )
       );
-      allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
+      allow delete: if (isOwner(resource.data.ownerUid) || isAdmin()) && isNotBanned();
 
       // Comments
       match /comments/{commentId} {
         function parentIsPublic() {
           return get(/databases/$(database)/documents/videos/$(videoId)).data.visibility == 'public';
         }
-        allow read: if parentIsPublic() || isAdmin() || isOwner(get(/databases/$(database)/documents/videos/$(videoId)).data.ownerUid);
-        allow create: if isSignedIn() && parentIsPublic() && request.resource.data.authorUid == uid();
-        allow update, delete: if isSignedIn() && (
+        allow read: if parentIsPublic() || isAdmin()
+          || isOwner(get(/databases/$(database)/documents/videos/$(videoId)).data.ownerUid);
+        allow create: if isSignedIn() && isNotBanned() && parentIsPublic()
+          && request.resource.data.authorUid == uid()
+          && safeText(request.resource.data.get('text', ''), 2000);
+        allow update, delete: if isSignedIn() && isNotBanned() && (
           request.resource.data.authorUid == uid() ||
           resource.data.authorUid == uid() ||
           isAdmin()
@@ -74,71 +143,97 @@ service cloud.firestore {
       // Likes
       match /likes/{likeUid} {
         allow read: if true;
-        allow create: if isSignedIn() && likeUid == uid();
+        allow create: if isSignedIn() && isNotBanned() && likeUid == uid();
         allow delete: if isSignedIn() && (likeUid == uid() || isAdmin());
       }
 
-      // View shards (write-only from server or via callable; deny client writes by default)
+      // View shards (Cloud Functions only)
       match /view_shards/{shardId} {
         allow read: if false;
-        allow write: if false; // Only Cloud Functions should update
+        allow write: if false;
       }
     }
 
-    // Shorts
+    // ── Shorts ────────────────────────────────────────────────────────────
     match /shorts/{shortId} {
       allow read: if resource.data.visibility == 'public' || isOwner(resource.data.ownerUid) || isAdmin();
-      allow create: if isSignedIn() && request.resource.data.ownerUid == uid();
-      allow update, delete: if isOwner(resource.data.ownerUid) || isAdmin();
+      allow create: if isSignedIn() && isNotBanned()
+        && request.resource.data.ownerUid == uid()
+        && safeText(request.resource.data.get('title', ''), 200)
+        && validVisibility(request.resource.data.get('visibility', 'public'));
+      allow update, delete: if (isOwner(resource.data.ownerUid) || isAdmin()) && isNotBanned();
     }
 
-    // Playlists
+    // ── Playlists ─────────────────────────────────────────────────────────
     match /playlists/{playlistId} {
       allow read: if resource.data.visibility == 'public' || isOwner(resource.data.ownerUid) || isAdmin();
-      allow create: if isSignedIn() && request.resource.data.ownerUid == uid();
-      allow update, delete: if isOwner(resource.data.ownerUid) || isAdmin();
+      allow create: if isSignedIn() && isNotBanned()
+        && request.resource.data.ownerUid == uid()
+        && safeText(request.resource.data.get('title', ''), 200)
+        && validVisibility(request.resource.data.get('visibility', 'public'));
+      allow update, delete: if (isOwner(resource.data.ownerUid) || isAdmin()) && isNotBanned();
 
       match /videos/{videoId} {
-        allow read: if get(/databases/$(database)/documents/playlists/$(playlistId)).data.visibility == 'public' || isOwner(get(/databases/$(database)/documents/playlists/$(playlistId)).data.ownerUid) || isAdmin();
-        allow write: if isOwner(get(/databases/$(database)/documents/playlists/$(playlistId)).data.ownerUid) || isAdmin();
+        allow read: if get(/databases/$(database)/documents/playlists/$(playlistId)).data.visibility == 'public'
+          || isOwner(get(/databases/$(database)/documents/playlists/$(playlistId)).data.ownerUid)
+          || isAdmin();
+        allow write: if (isOwner(get(/databases/$(database)/documents/playlists/$(playlistId)).data.ownerUid) || isAdmin()) && isNotBanned();
       }
     }
 
-    // Reports (abuse/DMCA/copyright): write by any signed-in user; read admin only
+    // ── Reports ───────────────────────────────────────────────────────────
     match /reports/{reportId} {
-      allow create: if isSignedIn();
+      allow create: if isSignedIn() && isNotBanned()
+        && safeText(request.resource.data.get('reason', ''), 1000);
       allow read, update, delete: if isAdmin();
     }
 
-    // Earnings: creator can read their channel earnings; admin full
+    // ── Earnings ──────────────────────────────────────────────────────────
     match /earnings/{channelId} {
       allow read: if isAdmin() || (isSignedIn() && uid() == get(/databases/$(database)/documents/channels/$(channelId)).data.ownerUid);
       allow write: if isAdmin();
     }
 
-    // Growth configs (admin only)
+    // ── Growth configs (admin only) ───────────────────────────────────────
     match /growth/{docPath=**} {
       allow read, write: if isAdmin();
     }
 
-    // Ads configs (admin only)
+    // ── Ads configs (admin only) ──────────────────────────────────────────
     match /ads/{docPath=**} {
       allow read, write: if isAdmin();
     }
 
-    // Live Streams
+    // ── Live Streams ──────────────────────────────────────────────────────
     match /live_streams/{streamId} {
-      allow read: if true; // anyone can browse live streams
-      allow create: if isSignedIn() && request.resource.data.creatorId == uid();
-      allow update: if isSignedIn() && (resource.data.creatorId == uid() || isAdmin());
+      allow read: if true;
+      allow create: if isSignedIn() && isNotBanned()
+        && request.resource.data.creatorId == uid()
+        && safeText(request.resource.data.get('title', ''), 200);
+      allow update: if isSignedIn() && isNotBanned() && (resource.data.creatorId == uid() || isAdmin());
       allow delete: if isSignedIn() && (resource.data.creatorId == uid() || isAdmin());
 
-      // Live chat messages
       match /chat/{messageId} {
         allow read: if true;
-        allow create: if isSignedIn() && request.resource.data.userId == uid();
+        allow create: if isSignedIn() && isNotBanned()
+          && request.resource.data.userId == uid()
+          && safeText(request.resource.data.get('text', ''), 500);
         allow delete: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
       }
+    }
+
+    // ── Stories ───────────────────────────────────────────────────────────
+    match /stories/{storyId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isNotBanned()
+        && request.resource.data.creatorId == uid();
+      allow update, delete: if isSignedIn() && (resource.data.creatorId == uid() || isAdmin());
+    }
+
+    // ── Notifications (user-scoped, read-only to owner) ───────────────────
+    match /notifications/{userId}/items/{itemId} {
+      allow read: if isSignedIn() && uid() == userId;
+      allow write: if false; // Cloud Functions only
     }
   }
 }

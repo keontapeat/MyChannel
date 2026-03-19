@@ -62,16 +62,10 @@ final class StoreKitService: ObservableObject {
     
     /// Purchase using SubscriptionPlan enum
     func purchase(plan: SubscriptionPlan) async throws -> Bool {
-        #if DEBUG
-        // 🔥 DEBUG MODE: Mock successful purchase for testing
-        print("🛍️ [StoreKit] DEBUG MODE: Simulating successful purchase for \(plan.displayName)")
-        
-        // Simulate loading delay
-        try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-        
-        // Mock the purchase as successful
-        purchasedProductIDs.insert(plan.productID)
-        
+        #if DEBUG && targetEnvironment(simulator)
+        // Simulator-only mock: avoids StoreKit sandbox requirement on simulators
+        print("🛍️ [StoreKit] SIMULATOR: Simulating purchase for \(plan.displayName)")
+        try await Task.sleep(nanoseconds: 500_000_000)
         return true
         #else
         // First, load products if not already loaded

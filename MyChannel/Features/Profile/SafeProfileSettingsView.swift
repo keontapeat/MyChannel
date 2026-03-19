@@ -29,12 +29,25 @@ struct ProfileSettingsView: View {
     
     @AppStorage("preferences.notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("preferences.autoPlayEnabled") private var autoPlayEnabled = true
-    @AppStorage("appearance.darkModeEnabled") private var darkModeEnabled = false
     @AppStorage("preferences.personalizedAdsEnabled") private var personalizedAdsEnabled = true
+    @StateObject private var settingsService = SettingsService.shared
+
+    private var darkModeBinding: Binding<Bool> {
+        Binding(
+            get: { settingsService.appSettings.general.appearanceMode == .dark },
+            set: { on in
+                settingsService.updateAppSettings {
+                    $0.general.appearanceMode = on ? .dark : .system
+                    $0.general.darkMode = on
+                }
+            }
+        )
+    }
     @State private var qualityPreference = "Auto"
     @State private var showingAccountDeletion = false
     @State private var showingSignOutConfirmation = false
     @State private var showingDataExport = false
+    @State private var showingBlockedUsers = false
     @State private var analyticsEnabled: Bool = FirebaseManager.shared.isAnalyticsEnabled()
     
     private let qualityOptions = ["Auto", "720p", "1080p", "4K"]
@@ -101,6 +114,10 @@ struct ProfileSettingsView: View {
         }
         .sheet(isPresented: $showingDataExport) {
             DataExportView()
+        }
+        .sheet(isPresented: $showingBlockedUsers) {
+            BlockedUsersView()
+                .environmentObject(AuthenticationManager.shared)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenLanguageSettings"))) { _ in
             UIApplication.shared.topMostController()?.present(UIHostingController(rootView: LanguageSettingsView()), animated: true)
@@ -195,19 +212,22 @@ struct ProfileSettingsView: View {
                 FirebaseManager.shared.setAnalyticsEnabled(newValue)
             }
 
-            HStack {
-                SettingsIcon(systemName: "moon.fill", color: .indigo)
-                
-                Text("Dark Mode")
-                    .font(.system(size: 16))
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
-                
-                Spacer()
-                
-                Toggle("", isOn: $darkModeEnabled)
-                    .tint(AppTheme.Colors.primary)
+            // MARK: Appearance — YouTube-style inline picker
+            NavigationLink(destination: ProfileAppearanceView()) {
+                HStack(spacing: 12) {
+                    SettingsIcon(systemName: "moon.circle.fill", color: .indigo)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Appearance")
+                            .font(.system(size: 16))
+                            .foregroundStyle(AppTheme.Colors.textPrimary)
+                        Text(settingsService.appSettings.general.appearanceMode.displayName)
+                            .font(.system(size: 13))
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, 2)
             }
-            .padding(.vertical, 2)
             
             HStack {
                 SettingsIcon(systemName: "video", color: .purple)
@@ -404,7 +424,7 @@ struct ProfileSettingsView: View {
                 title: "Blocked Users",
                 iconColor: .red
             ) {
-                // Handle blocked users
+                showingBlockedUsers = true
             }
             
             ProfileSettingsRow(
@@ -577,6 +597,111 @@ struct ProfileSettingsView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+}
+
+// MARK: - Profile Appearance View (YouTube-style full screen)
+struct ProfileAppearanceView: View {
+    @StateObject private var settingsService = SettingsService.shared
+
+    private func modeIcon(_ mode: AppearanceMode) -> String {
+        switch mode {
+        case .system: return "iphone"
+        case .light:  return "sun.max"
+        case .dark:   return "moon.fill"
+        }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                HStack(spacing: 0) {
+                    miniPreview(dark: false, label: "Light",
+                                selected: settingsService.appSettings.general.appearanceMode == .light)
+                        .frame(maxWidth: .infinity)
+                    Divider().frame(height: 120)
+                    miniPreview(dark: true, label: "Dark",
+                                selected: settingsService.appSettings.general.appearanceMode == .dark)
+                        .frame(maxWidth: .infinity)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(.vertical, 8)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+
+            Section {
+                ForEach(AppearanceMode.allCases, id: \.self) { mode in
+                    Button {
+                        HapticManager.shared.impact(style: .light)
+                        settingsService.updateAppSettings {
+                            $0.general.appearanceMode = mode
+                            $0.general.darkMode = (mode == .dark)
+                        }
+                    } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: modeIcon(mode))
+                                .font(.system(size: 17, weight: .medium))
+                                .foregroundColor(
+                                    settingsService.appSettings.general.appearanceMode == mode
+                                        ? AppTheme.Colors.primary : .secondary
+                                )
+                                .frame(width: 24)
+                            Text(mode.displayName)
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if settingsService.appSettings.general.appearanceMode == mode {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } footer: {
+                Text("\"Use device theme\" automatically matches your iOS system appearance setting.")
+            }
+        }
+        .navigationTitle("Appearance")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func miniPreview(dark: Bool, label: String, selected: Bool) -> some View {
+        VStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(dark ? Color(hexString: "0A0A0C") : Color(hexString: "FAFBFC"))
+                .frame(height: 80)
+                .overlay(
+                    VStack(spacing: 5) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(dark ? Color(hexString: "1C1C1E") : Color.white)
+                            .frame(width: 60, height: 10)
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(dark ? Color(hexString: "2C2C2E") : Color(hexString: "EBEDF0"))
+                            .frame(width: 80, height: 8)
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(dark ? Color(hexString: "2C2C2E") : Color(hexString: "EBEDF0"))
+                            .frame(width: 70, height: 8)
+                    }
+                )
+                .overlay(alignment: .topTrailing) {
+                    if selected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(AppTheme.Colors.primary)
+                            .padding(6)
+                    }
+                }
+
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+        }
+        .padding(8)
+        .background(dark ? Color(hexString: "161618") : Color(hexString: "F4F5F7"))
     }
 }
 

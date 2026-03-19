@@ -18,8 +18,10 @@ class PiPPlayerManager: NSObject, AVPictureInPictureControllerDelegate {
     private var pipPossibleObservation: NSKeyValueObservation?
     private var playerLayer: AVPlayerLayer?  // 🔥 PERF: Reusable layer
     private var lastPlayer: AVPlayer?  // 🔥 PERF: Track for skip redundant setup
-    private var isPiPPossible = false  // 🔥 PERF: Cached state
+    var isPiPPossible = false  // 🔥 PERF: Cached state (internal access for chevron check)
     private var retryWorkItem: DispatchWorkItem?  // 🔥 PERF: Cancellable retry
+    var onPiPStarted: (() -> Void)?  // 🔥 Callback fired when PiP actually begins
+    var onPiPFailed: (() -> Void)?   // 🔥 Callback fired when PiP fails
     
     private override init() {
         super.init()
@@ -48,11 +50,16 @@ class PiPPlayerManager: NSObject, AVPictureInPictureControllerDelegate {
             playerLayer = AVPlayerLayer()
         }
         playerLayer?.player = player
-        playerLayer?.frame = CGRect(x: 0, y: 0, width: 1, height: 1)
         
-        // 🔥 PERF: Add layer only if needed
-        if let view = playerViewController.view, playerLayer?.superlayer == nil {
-            view.layer.addSublayer(playerLayer!)
+        // Attach at full bounds so iOS treats this as a real inline player
+        // and isPiPPossible becomes true (a 1x1 hidden layer never qualifies)
+        if let vcView = playerViewController.view {
+            playerLayer?.frame = vcView.bounds
+            if playerLayer?.superlayer == nil {
+                vcView.layer.insertSublayer(playerLayer!, at: 0)
+            } else {
+                playerLayer?.frame = vcView.bounds
+            }
         }
         
         // 🔥 PERF: Setup controller without delay
@@ -77,44 +84,49 @@ class PiPPlayerManager: NSObject, AVPictureInPictureControllerDelegate {
         }
     }
     
-    /// 🔥 THERMONUCLEAR: Instant PiP start
-    func startPiP() {
-        guard let pipController = pipController else { return }
+    /// Start native iOS PiP. onStarted fires when PiP bubble appears; onFailed fires if it can't start.
+    func startPiP(onStarted: (() -> Void)? = nil, onFailed: (() -> Void)? = nil) {
+        onPiPStarted = onStarted
+        onPiPFailed = onFailed
+        
+        guard let pipController = pipController else {
+            print("⚠️ [PiPPlayerManager] No pipController — PiP not set up")
+            onFailed?()
+            return
+        }
         guard !pipController.isPictureInPictureActive else { return }
         
-        // 🔥 PERF: Immediate start if possible
         if isPiPPossible {
             pipController.startPictureInPicture()
             print("⚡ [PiPPlayerManager] PiP started INSTANTLY")
             return
         }
         
-        // 🔥 PERF: Fast retry (100ms intervals, not 500ms)
         retryWorkItem?.cancel()
         var retryCount = 0
         let maxRetries = 10
         
         func tryStart() {
-            guard retryCount < maxRetries else { return }
-            
+            guard retryCount < maxRetries else {
+                print("⚠️ [PiPPlayerManager] PiP not possible after retries")
+                DispatchQueue.main.async { onFailed?() }
+                return
+            }
             let workItem = DispatchWorkItem { [weak self] in
                 guard let self = self,
                       let controller = self.pipController,
                       !controller.isPictureInPictureActive else { return }
-                
                 if controller.isPictureInPicturePossible {
                     controller.startPictureInPicture()
-                    print("✅ [PiPPlayerManager] PiP started after retry \(retryCount)")
+                    print("✅ [PiPPlayerManager] PiP started after \(retryCount) retries")
                 } else {
                     retryCount += 1
                     tryStart()
                 }
             }
-            
             self.retryWorkItem = workItem
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
         }
-        
         tryStart()
     }
     
@@ -141,6 +153,10 @@ class PiPPlayerManager: NSObject, AVPictureInPictureControllerDelegate {
     
     func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
         print("✅ [PiPPlayerManager] PiP STARTED")
+        let cb = onPiPStarted
+        onPiPStarted = nil
+        onPiPFailed = nil
+        cb?()
     }
     
     func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
@@ -149,6 +165,10 @@ class PiPPlayerManager: NSObject, AVPictureInPictureControllerDelegate {
     
     func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
         print("❌ [PiPPlayerManager] Failed: \(error.localizedDescription)")
+        let cb = onPiPFailed
+        onPiPStarted = nil
+        onPiPFailed = nil
+        cb?()
     }
     
     func pictureInPictureController(

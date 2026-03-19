@@ -138,6 +138,31 @@ final class TipPaymentService: ObservableObject {
             "timestamp": FieldValue.serverTimestamp()
         ], forDocument: transactionRef)
         
+        // 🤖 FRAUD DETECTION: Check before committing payment
+        do {
+            let fraudResult = try await RealMLAgentsService.shared.detectFraud(
+                clickId: tipId,
+                ipAddress: "0.0.0.0",
+                userAgent: "MyChannel-iOS",
+                timeOnPage: 30.0,
+                mouseEntropy: 0.8,
+                scrollDepth: 0.5,
+                clicksFromIP: 1,
+                isVPN: false
+            )
+            if fraudResult.should_block {
+                print("🚫 [TipPaymentService] Fraud detected — blocking tip: \(fraudResult.fraud_type)")
+                throw TipError.processingFailed("Transaction flagged for security review.")
+            }
+            if fraudResult.should_review {
+                print("⚠️ [TipPaymentService] Tip flagged for review (risk: \(Int(fraudResult.risk_score * 100))%)")
+            }
+        } catch let tipError as TipError {
+            throw tipError
+        } catch {
+            print("⚠️ [TipPaymentService] Fraud check unavailable, proceeding: \(error.localizedDescription)")
+        }
+
         // Commit all changes
         do {
             try await batch.commit()

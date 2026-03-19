@@ -1,13 +1,325 @@
 /**
  * MyChannel Cloud Functions
  * 🔥 Auto-Delete Expired Stories + Orphaned Media Cleanup
+ * 🔒 Security Guard — ML-powered threat detection & auto-ban
  */
 
 import {onSchedule} from 'firebase-functions/v2/scheduler';
 import {onDocumentCreated} from 'firebase-functions/v2/firestore';
+import {onCall, HttpsError, onRequest} from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import {GoogleAuth} from 'google-auth-library';
 
 admin.initializeApp();
+
+const googleAuth = new GoogleAuth();
+
+const SECURITY_AI_SERVICE = 'cybersecurity-ai';
+const SECURITY_AI_BASE = `https://${SECURITY_AI_SERVICE}-fkri6ifojq-uc.a.run.app`;
+
+async function getIdToken(targetUrl: string): Promise<string> {
+  const client = await googleAuth.getIdTokenClient(targetUrl);
+  const headers = await client.getRequestHeaders(targetUrl);
+  return (headers['Authorization'] as string).replace('Bearer ', '');
+}
+
+async function callSecurityAI(path: string, body: object): Promise<Record<string, unknown>> {
+  const url = `${SECURITY_AI_BASE}${path}`;
+  const token = await getIdToken(url);
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`SecurityAI ${res.status}: ${await res.text()}`);
+  return res.json() as Promise<Record<string, unknown>>;
+}
+
+async function logSecurityEvent(event: object): Promise<void> {
+  await admin.firestore().collection('security_events').add({
+    ...event,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+async function banUser(uid: string, reason: string, threatScore: number): Promise<void> {
+  await admin.firestore().collection('security_bans').doc(uid).set({
+    uid,
+    reason,
+    threatScore,
+    active: true,
+    bannedAt: admin.firestore.FieldValue.serverTimestamp(),
+    bannedBy: 'security-ai-auto',
+  });
+  try {
+    await admin.auth().updateUser(uid, {disabled: true});
+  } catch (err) {
+    console.error(`[securityGuard] Failed to disable Firebase Auth user ${uid}:`, err);
+  }
+}
+
+// ============================================
+// 🔒 SECURITY GUARD — Callable
+// Analyzes a request/behavior payload through
+// the CyberSecurity AI agent and enforces bans.
+//
+// Call from iOS/web with:
+//   service: "request" | "behavior" | "content"
+//   payload: { ip, uid, user_agent, endpoint, ... }
+// ============================================
+
+export const securityGuard = onCall(
+  {
+    region: 'us-central1',
+    timeoutSeconds: 30,
+    memory: '256MiB',
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+
+    const data = request.data as {service?: string; payload?: Record<string, unknown>};
+    const service = data.service ?? 'request';
+    const payload = data.payload ?? {};
+
+    // Always stamp caller UID into payload
+    payload['uid'] = payload['uid'] ?? request.auth.uid;
+
+    const validServices = ['request', 'behavior', 'content'];
+    if (!validServices.includes(service)) {
+      throw new HttpsError('invalid-argument', `Invalid service. Use: ${validServices.join(', ')}`);
+    }
+
+    let result: Record<string, unknown>;
+    try {
+      const aiResult = await callSecurityAI(`/predict/${service}`, payload);
+      const predictions = aiResult['predictions'] as Array<Record<string, unknown>>;
+      result = predictions?.[0] ?? aiResult;
+    } catch (err) {
+      console.error('[securityGuard] AI call failed:', err);
+      // Fail-open to not block legit users if AI is down
+      return {threat_score: 0, threat_level: 'CLEAN', action: 'ALLOW', blocked: false};
+    }
+
+    const threatLevel = result['threat_level'] as string;
+    const action = result['action'] as string;
+    const threatScore = (result['threat_score'] as number) ?? 0;
+    const uid = payload['uid'] as string;
+    const signals = result['signals'] as string[];
+
+    // Log all non-clean events
+    if (threatLevel !== 'CLEAN') {
+      await logSecurityEvent({
+        uid,
+        ip: payload['ip'] ?? null,
+        threatLevel,
+        threatScore,
+        action,
+        signals,
+        service,
+        endpoint: payload['endpoint'] ?? null,
+      });
+    }
+
+    // Auto-ban on CRITICAL or SUSPEND_ACCOUNT
+    if (uid && (threatLevel === 'CRITICAL' || action === 'SUSPEND_ACCOUNT')) {
+      await banUser(uid, `Auto-ban: ${action} - signals: ${(signals ?? []).join(', ')}`, threatScore);
+      result['auto_banned'] = true;
+    }
+
+    return result;
+  }
+);
+
+// ============================================
+// 🔒 SECURITY WEBHOOK — Internal HTTP endpoint
+// Called by Cloud Armor / Load Balancer / other
+// GCP services to report threats server-side.
+// Protected by Google ID token verification.
+// ============================================
+
+export const securityWebhook = onRequest(
+  {
+    region: 'us-central1',
+    timeoutSeconds: 30,
+    memory: '256MiB',
+  },
+  async (req, res) => {
+    // Verify caller is internal (has valid Google ID token from GCP)
+    const authHeader = req.headers['authorization'] ?? '';
+    if (!authHeader.toString().startsWith('Bearer ')) {
+      res.status(401).json({error: 'Unauthorized'});
+      return;
+    }
+
+    if (req.method !== 'POST') {
+      res.status(405).json({error: 'Method not allowed'});
+      return;
+    }
+
+    const body = req.body as Record<string, unknown>;
+    const service = (body['service'] as string) ?? 'request';
+    const payload = (body['payload'] as Record<string, unknown>) ?? {};
+
+    let result: Record<string, unknown>;
+    try {
+      const aiResult = await callSecurityAI(`/predict/${service}`, payload);
+      const predictions = aiResult['predictions'] as Array<Record<string, unknown>>;
+      result = predictions?.[0] ?? aiResult;
+    } catch (err) {
+      console.error('[securityWebhook] AI call failed:', err);
+      res.status(503).json({error: 'Security AI unavailable'});
+      return;
+    }
+
+    const threatLevel = result['threat_level'] as string;
+    const action = result['action'] as string;
+    const threatScore = (result['threat_score'] as number) ?? 0;
+    const uid = payload['uid'] as string;
+    const signals = result['signals'] as string[];
+
+    if (threatLevel !== 'CLEAN') {
+      await logSecurityEvent({
+        uid: uid ?? null,
+        ip: payload['ip'] ?? null,
+        threatLevel,
+        threatScore,
+        action,
+        signals,
+        service,
+        source: 'webhook',
+      });
+    }
+
+    if (uid && (threatLevel === 'CRITICAL' || action === 'SUSPEND_ACCOUNT')) {
+      await banUser(uid, `Webhook auto-ban: ${action}`, threatScore);
+      result['auto_banned'] = true;
+    }
+
+    res.status(200).json(result);
+  }
+);
+
+// ============================================
+// 🔒 SCAN EXISTING USER (Admin callable)
+// Admins can trigger a full behavioral scan
+// on any user manually from the admin panel.
+// ============================================
+
+export const adminScanUser = onCall(
+  {
+    region: 'us-central1',
+    timeoutSeconds: 60,
+    memory: '256MiB',
+  },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.');
+
+    const token = await admin.auth().getUser(request.auth.uid);
+    const claims = token.customClaims ?? {};
+    if (claims['role'] !== 'admin' && !((claims['roles'] as string[] | undefined)?.includes('admin'))) {
+      throw new HttpsError('permission-denied', 'Admin only.');
+    }
+
+    const data = request.data as {uid?: string; behaviorPayload?: Record<string, unknown>};
+    const targetUid = data.uid;
+    if (!targetUid) throw new HttpsError('invalid-argument', 'Missing uid.');
+
+    const payload = {uid: targetUid, ...(data.behaviorPayload ?? {})};
+
+    const aiResult = await callSecurityAI('/predict/behavior', payload);
+    const predictions = aiResult['predictions'] as Array<Record<string, unknown>>;
+    const result = predictions?.[0] ?? aiResult;
+
+    await logSecurityEvent({
+      uid: targetUid,
+      threatLevel: result['threat_level'],
+      threatScore: result['threat_score'],
+      action: result['action'],
+      signals: result['signals'],
+      service: 'behavior',
+      source: 'admin_manual_scan',
+      scannedBy: request.auth.uid,
+    });
+
+    if ((result['action'] as string) === 'SUSPEND_ACCOUNT') {
+      await banUser(targetUid, `Admin scan auto-ban`, (result['threat_score'] as number) ?? 1.0);
+      result['auto_banned'] = true;
+    }
+
+    return result;
+  }
+);
+
+// ============================================
+// 🤖 CLOUD RUN AGENT PROXY (Callable)
+// iOS Firebase SDK calls this with automatic
+// auth. The function fetches a Google Identity
+// Token and forwards to the target Cloud Run
+// service. Bypasses org allUsers restriction.
+//
+// iOS call: Functions.functions().httpsCallable("agentProxy")
+//   .call(["service": "ml-agents", "path": "/predict", "body": {...}])
+// ============================================
+
+export const agentProxy = onCall(
+  {
+    region: 'us-central1',
+    timeoutSeconds: 60,
+    memory: '256MiB',
+  },
+  async (request) => {
+    // 1. Must be authenticated
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+
+    // 2. Parse params
+    const data = request.data as {service?: string; path?: string; body?: unknown; method?: string};
+    const service = data.service ?? '';
+    const path = data.path ?? '/predict';
+    const method = data.method ?? 'POST';
+    if (!service) {
+      throw new HttpsError('invalid-argument', 'Missing service param.');
+    }
+
+    const targetURL = `https://${service}-fkri6ifojq-uc.a.run.app${path}`;
+
+    // 3. Get Google Identity Token for Cloud Run
+    let idToken: string;
+    try {
+      const client = await googleAuth.getIdTokenClient(targetURL);
+      const headers = await client.getRequestHeaders(targetURL);
+      idToken = (headers['Authorization'] as string).replace('Bearer ', '');
+    } catch (err) {
+      console.error('[agentProxy] Identity token error:', err);
+      throw new HttpsError('internal', 'Failed to get identity token.');
+    }
+
+    // 4. Forward to Cloud Run
+    try {
+      const fetchRes = await fetch(targetURL, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: method !== 'GET' ? JSON.stringify(data.body ?? {}) : undefined,
+      });
+      if (!fetchRes.ok) {
+        const errText = await fetchRes.text();
+        console.error(`[agentProxy] Upstream ${fetchRes.status}: ${errText}`);
+        throw new HttpsError('unavailable', `Agent returned ${fetchRes.status}`);
+      }
+      return await fetchRes.json();
+    } catch (err) {
+      if (err instanceof HttpsError) throw err;
+      console.error('[agentProxy] Upstream error:', err);
+      throw new HttpsError('unavailable', 'Agent unavailable.');
+    }
+  }
+);
 
 // ============================================
 // 🔥 DELETE EXPIRED STORIES - Runs Every Hour

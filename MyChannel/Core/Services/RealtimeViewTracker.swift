@@ -140,7 +140,24 @@ class RealtimeViewTracker: ObservableObject {
             value: watchDuration,
             tags: ["video_id": session.videoId, "completion": String(format: "%.1f", (session.currentTime / (session.videoDuration ?? 1)) * 100)]
         )
-        
+
+        // 🤖 WATCH TIME OPTIMIZER: Send watch data to Cloud Run agent (non-blocking)
+        let wtVideoId = session.videoId
+        let wtDuration = Int(session.videoDuration ?? watchDuration)
+        let wtCategory = "Entertainment"
+        Task {
+            if let _ = try? await RealMLAgentsService.shared.predictWatchTime(
+                videoId: wtVideoId,
+                title: "",
+                durationSeconds: wtDuration,
+                category: wtCategory,
+                subscriberCount: 0,
+                hasChapters: false
+            ) {
+                print("🤖 [WatchTimeOptimizer] Watch data sent for \(wtVideoId) (\(Int(watchDuration))s watched)")
+            }
+        }
+
         print("👋 [ViewTracker] Ended view session: \(session.videoId) - \(String(format: "%.0f", watchDuration))s watched")
     }
     

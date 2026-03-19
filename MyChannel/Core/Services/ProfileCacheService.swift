@@ -34,9 +34,24 @@ final class ProfileCacheService: ObservableObject {
     
     // MARK: - Public API
     
-    /// Get cached user (instant)
+    /// Get cached user (instant) - only return if it's a complete profile
     func getCachedUser() -> User? {
-        return memoryUserCache
+        guard let user = memoryUserCache else { return nil }
+        
+        // 🔥 FIX: Only return cached user if it has custom profile data (not basic Google Auth data)
+        // Check if this is a complete Firestore profile vs basic auth data
+        let hasCustomProfile = user.username != user.email.components(separatedBy: "@").first &&
+                              !user.username.isEmpty &&
+                              user.username != "user" &&
+                              user.username != "google_user" &&
+                              user.username != "apple_user"
+        
+        if hasCustomProfile {
+            return user
+        } else {
+            print("⚠️ [ProfileCache] Cached user appears to be basic auth data, not returning: \(user.displayName) (@\(user.username))")
+            return nil
+        }
     }
     
     /// Get cached videos (instant)
@@ -50,19 +65,34 @@ final class ProfileCacheService: ObservableObject {
         return Date().timeIntervalSince(lastCache) < memoryCacheValidity
     }
     
-    /// Cache user and videos
+    /// Cache user and videos - only cache complete profiles
     func cacheProfile(user: User, videos: [Video]) {
-        // Memory cache (instant)
-        memoryUserCache = user
-        memoryVideosCache = videos
-        lastCacheTime = Date()
+        // 🔥 FIX: Only cache complete Firestore profiles, not basic auth data
+        let hasCustomProfile = user.username != user.email.components(separatedBy: "@").first &&
+                              !user.username.isEmpty &&
+                              user.username != "user" &&
+                              user.username != "google_user" &&
+                              user.username != "apple_user"
         
-        // Disk cache (background, for app restart)
-        Task.detached(priority: .background) { [weak self] in
-            await self?.saveToDisk(user: user, videos: videos)
+        if hasCustomProfile {
+            // Memory cache (instant)
+            memoryUserCache = user
+            memoryVideosCache = videos
+            lastCacheTime = Date()
+            
+            // Disk cache (background, for app restart)
+            Task.detached(priority: .background) { [weak self] in
+                await self?.saveToDisk(user: user, videos: videos)
+            }
+            
+            print("✅ [ProfileCache] Cached complete profile: \(user.displayName) (@\(user.username)) with \(videos.count) videos")
+        } else {
+            // Don't cache basic auth data - only cache videos
+            memoryVideosCache = videos
+            lastCacheTime = Date()
+            
+            print("⚠️ [ProfileCache] Skipped caching basic auth data, only cached \(videos.count) videos")
         }
-        
-        print("✅ [ProfileCache] Cached \(videos.count) videos for \(user.displayName)")
     }
     
     /// Update just the videos (keeps user cached)
@@ -138,15 +168,19 @@ final class ProfileCacheService: ObservableObject {
     }
     
     private func loadFromDisk() {
-        // Check timestamp first
-        if let timestamp = UserDefaults.standard.object(forKey: cacheTimestampKey) as? Date {
-            // Skip if cache is too old
-            if Date().timeIntervalSince(timestamp) > diskCacheValidity {
-                print("⏰ [ProfileCache] Disk cache expired")
-                return
-            }
-            lastCacheTime = timestamp
+        // Require a valid, non-expired timestamp before loading anything
+        guard let timestamp = UserDefaults.standard.object(forKey: cacheTimestampKey) as? Date else {
+            print("⏰ [ProfileCache] No disk cache timestamp — skipping load")
+            return
         }
+        guard Date().timeIntervalSince(timestamp) <= diskCacheValidity else {
+            print("⏰ [ProfileCache] Disk cache expired — clearing")
+            UserDefaults.standard.removeObject(forKey: userCacheKey)
+            UserDefaults.standard.removeObject(forKey: videosCacheKey)
+            UserDefaults.standard.removeObject(forKey: cacheTimestampKey)
+            return
+        }
+        lastCacheTime = timestamp
         
         // Load user
         if let userData = UserDefaults.standard.data(forKey: userCacheKey) {

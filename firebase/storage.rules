@@ -4,45 +4,114 @@ service firebase.storage {
     function isSignedIn() { return request.auth != null; }
     function uid() { return isSignedIn() ? request.auth.uid : null; }
 
-    // User avatars/banners
+    // ── Size & type helpers ───────────────────────────────────────────────
+    function maxSize(bytes) {
+      return request.resource.size <= bytes;
+    }
+    function isImageType() {
+      return request.resource.contentType.matches('image/(jpeg|jpg|png|webp|gif)');
+    }
+    function isVideoType() {
+      return request.resource.contentType.matches('video/(mp4|webm|mov|quicktime|x-msvideo)')
+          || request.resource.contentType == 'application/x-mpegURL'   // HLS
+          || request.resource.contentType == 'video/MP2T';              // TS segments
+    }
+    function isAudioType() {
+      return request.resource.contentType.matches('audio/(mp4|mpeg|aac|x-m4a|m4a|webm|ogg)');
+    }
+    function isCaptionType() {
+      return request.resource.contentType.matches('text/(vtt|plain)')
+          || request.resource.contentType == 'application/octet-stream';
+    }
+    // Reject known executable MIME types
+    function notExecutable() {
+      return !request.resource.contentType.matches(
+        '(application/(x-msdownload|x-executable|x-sh|x-bat|java-archive|zip|x-rar|x-7z|x-tar)|text/x-php|text/x-python)'
+      );
+    }
+
+    // ── Root-level files: lock down — no client writes ────────────────────
+    match /{fileName} {
+      allow read: if true;
+      allow write: if false; // Cloud Functions / admin SDK only
+    }
+
+    // ── User avatars ──────────────────────────────────────────────────────
     match /user-avatars/{userId}.jpg {
       allow read: if true;
-      allow write: if isSignedIn() && uid() == userId;
+      allow write: if isSignedIn() && uid() == userId
+        && isImageType()
+        && maxSize(5 * 1024 * 1024)   // 5 MB max
+        && notExecutable();
     }
+
+    // ── User banners ──────────────────────────────────────────────────────
     match /user-banners/{userId}/{file} {
       allow read: if true;
-      allow write: if isSignedIn() && uid() == userId;
+      allow write: if isSignedIn() && uid() == userId
+        && isImageType()
+        && maxSize(10 * 1024 * 1024)  // 10 MB max
+        && notExecutable();
     }
 
-    // Video assets
-    match /videos/{channelId}/{videoId}/{rest=**} {
-      // HLS segments should be served via CDN signed URLs; allow read for now (can be tightened with token-based rules + CDN)
+    // ── Story media ───────────────────────────────────────────────────────
+    match /stories/{userId}/{file} {
       allow read: if true;
-      allow write: if isSignedIn() && uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+      allow write: if isSignedIn() && uid() == userId
+        && (isImageType() || isVideoType())
+        && maxSize(100 * 1024 * 1024)  // 100 MB max for story videos
+        && notExecutable();
+      allow delete: if isSignedIn() && uid() == userId;
     }
 
-    // Thumbnails
+    // ── Video assets ──────────────────────────────────────────────────────
+    match /videos/{channelId}/{videoId}/{rest=**} {
+      allow read: if true;
+      allow write: if isSignedIn()
+        && uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid
+        && (isVideoType() || isImageType())
+        && maxSize(5 * 1024 * 1024 * 1024)  // 5 GB max per segment/file
+        && notExecutable();
+    }
+
+    // ── Thumbnails ────────────────────────────────────────────────────────
     match /thumbnails/{channelId}/{videoId}/{file} {
       allow read: if true;
-      allow write: if isSignedIn() && uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+      allow write: if isSignedIn()
+        && uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid
+        && isImageType()
+        && maxSize(5 * 1024 * 1024)  // 5 MB
+        && notExecutable();
     }
 
-    // Captions
+    // ── Captions ──────────────────────────────────────────────────────────
     match /captions/{videoId}/{lang}.vtt {
       allow read: if true;
-      allow write: if isSignedIn() && uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+      allow write: if isSignedIn()
+        && uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid
+        && isCaptionType()
+        && maxSize(2 * 1024 * 1024)   // 2 MB
+        && notExecutable();
     }
 
-    // Dubs
+    // ── Dubs ──────────────────────────────────────────────────────────────
     match /dubs/{videoId}/{lang}.m4a {
       allow read: if true;
-      allow write: if isSignedIn() && uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid;
+      allow write: if isSignedIn()
+        && uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid
+        && isAudioType()
+        && maxSize(500 * 1024 * 1024) // 500 MB
+        && notExecutable();
     }
 
-    // Playlist thumbnails
+    // ── Playlist thumbnails ───────────────────────────────────────────────
     match /playlist-thumbs/{playlistId}.jpg {
       allow read: if true;
-      allow write: if isSignedIn() && uid() == get(/databases/(default)/documents/playlists/$(playlistId)).data.ownerUid;
+      allow write: if isSignedIn()
+        && uid() == get(/databases/(default)/documents/playlists/$(playlistId)).data.ownerUid
+        && isImageType()
+        && maxSize(5 * 1024 * 1024)
+        && notExecutable();
     }
   }
 }

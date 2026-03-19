@@ -211,14 +211,12 @@ class GlobalVideoPlayerManager: ObservableObject {
         wasPlayingBeforeBackground = false
     }
     
-    // 🔥 YOUTUBE PARITY: Configure audio session for background playback
     private func configureAudioSession() {
         do {
             let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay])
+            try audioSession.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers, .allowAirPlay])
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-            UIApplication.shared.beginReceivingRemoteControlEvents()
-            print("✅ [GlobalVideoPlayerManager] Audio session configured for background playback")
+            print("✅ [GlobalVideoPlayerManager] Audio session configured")
         } catch {
             print("⚠️ [GlobalVideoPlayerManager] Failed to configure audio session: \(error)")
         }
@@ -569,9 +567,21 @@ class GlobalVideoPlayerManager: ObservableObject {
             queueIndex = 0
         }
         
-        playerManager?.setupPlayer(with: video)
-        playerManager?.requestAutoPlay()
-        
+        // ⚡ Use pre-buffered asset if it matches this video's URL (instant start)
+        if let preloaded = preloadedAsset,
+           let videoURL = URL(string: video.videoURL),
+           preloaded.url == videoURL {
+            let playerItem = AVPlayerItem(asset: preloaded)
+            playerItem.preferredForwardBufferDuration = 10.0
+            playerManager?.player?.replaceCurrentItem(with: playerItem)
+            playerManager?.requestAutoPlay()
+            preloadedAsset = nil
+            print("⚡ [GlobalPlayer] Playing from pre-buffered asset — INSTANT: \(video.title)")
+        } else {
+            playerManager?.setupPlayer(with: video)
+            playerManager?.requestAutoPlay()
+        }
+
         // 🔥 YOUTUBE PARITY: Setup native PiP for this player
         if let player = player {
             pipController.setup(with: player)
@@ -636,6 +646,39 @@ class GlobalVideoPlayerManager: ObservableObject {
         HapticManager.shared.impact(style: .medium)
     }
     
+    // MARK: - Public pre-buffer API
+
+    /// Call this as soon as you know a video URL will be played soon (e.g. profile load).
+    /// Warms the AVURLAsset and fills PlayerPoolManager's cache so first-frame is instant.
+    func preloadVideo(url: String) {
+        guard !isCleanedUp, let assetURL = URL(string: url) else { return }
+
+        preloadTask?.cancel()
+        preloadTask = Task { [weak self] in
+            guard let self = self else { return }
+
+            let options: [String: Any] = [
+                AVURLAssetPreferPreciseDurationAndTimingKey: false,  // faster for streaming
+                "AVURLAssetHTTPHeaderFieldsKey": ["Range": "bytes=0-524287"]  // prefetch first 512 KB
+            ]
+            let asset = AVURLAsset(url: assetURL, options: options)
+            asset.resourceLoader.preloadsEligibleContentKeys = true
+
+            async let tracks = asset.load(.tracks)
+            async let isPlayable = asset.load(.isPlayable)
+            _ = try? await (tracks, isPlayable)
+
+            await MainActor.run { [weak self] in
+                guard let self = self, !self.isCleanedUp else { return }
+                self.preloadedAsset = asset
+                print("⚡ [GlobalPlayer] Pre-buffered intro: \(assetURL.lastPathComponent)")
+            }
+        }
+
+        // Also warm PlayerPoolManager so the player is ready to go
+        PlayerPoolManager.shared.preloadAsset(for: url)
+    }
+
     // 🔥🔥🔥 THERMONUCLEAR: Pre-load next video for INSTANT playback (<100ms)
     private func preloadNextVideo() {
         guard hasNextVideo else {

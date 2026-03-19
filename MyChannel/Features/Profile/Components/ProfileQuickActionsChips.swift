@@ -17,27 +17,28 @@ struct ProfileQuickActionsChips: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 ActionChip(
                     title: "Switch account",
-                    systemImage: "person.crop.circle",
+                    systemImage: "person.crop.circle.fill",
                     action: switchAccountAction
                 )
 
                 ActionChip(
                     title: "Google Account",
-                    systemImage: "globe",
+                    systemImage: "g.circle.fill",
                     action: googleAccountAction
                 )
 
                 ActionChip(
-                    title: isIncognito ? "Incognito On" : "Turn on Incognito",
-                    systemImage: isIncognito ? "eye.slash.circle.fill" : "eye.slash",
+                    title: isIncognito ? "Incognito On" : "Incognito",
+                    systemImage: isIncognito ? "eye.slash.circle.fill" : "eye.slash.circle",
                     isHighlighted: isIncognito,
                     action: toggleIncognitoAction
                 )
             }
-            .padding(.vertical, 6)
+            .padding(.vertical, 4)
+            .padding(.horizontal, 2)
         }
         .overlay(alignment: .trailing) {
             LinearGradient(
@@ -48,7 +49,8 @@ struct ProfileQuickActionsChips: View {
                 startPoint: .leading,
                 endPoint: .trailing
             )
-            .frame(width: 16)
+            .frame(width: 20)
+            .allowsHitTesting(false)
         }
     }
 }
@@ -63,27 +65,32 @@ struct ActionChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(isHighlighted ? Color.white : AppTheme.Colors.textPrimary)
                 Text(title)
-                    .font(.callout.weight(.semibold))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(isHighlighted ? Color.white : AppTheme.Colors.textPrimary)
             }
-            .foregroundStyle(isHighlighted ? Color.white : AppTheme.Colors.textPrimary)
-            .padding(.vertical, 8)
+            .padding(.vertical, 9)
             .padding(.horizontal, 14)
-            .background(
+            .background {
                 Capsule()
-                    .fill(isHighlighted ? AppTheme.Colors.primary : AppTheme.Colors.backgroundSecondary.opacity(0.6))
-            )
-            .overlay(
+                    .fill(isHighlighted
+                        ? AppTheme.Colors.primary
+                        : Color(.systemBackground))
+                    .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 1)
+            }
+            .overlay {
                 Capsule()
-                    .stroke(isHighlighted ? AppTheme.Colors.primary : AppTheme.Colors.backgroundSecondary, lineWidth: 0.5)
-            )
+                    .strokeBorder(
+                        isHighlighted ? Color.clear : Color(.systemGray4),
+                        lineWidth: 1
+                    )
+            }
         }
         .buttonStyle(.plain)
-        .contentShape(Rectangle())
-        .shadow(color: Color.black.opacity(isHighlighted ? 0.12 : 0.06), radius: 8, x: 0, y: 3)
         .animation(.spring(response: 0.28, dampingFraction: 0.9), value: isHighlighted)
     }
 }

@@ -23,7 +23,10 @@ struct VideoDetailMetaView: View {
     let onComment: () -> Void
     var onChapters: (() -> Void)? = nil
     var onProfileTap: (() -> Void)? = nil
-    var dynamicViewCount: Int? = nil // 🔥 REAL-TIME: Override view count for live updates
+    var dynamicViewCount: Int? = nil
+    
+    // MARK: - Services for Firestore persistence
+    @StateObject private var appState = AppState.shared
     
     // MARK: - Animation States
     @State private var likeAnimationScale: CGFloat = 1.0
@@ -86,6 +89,10 @@ struct VideoDetailMetaView: View {
         .background(AppTheme.Colors.background)
         .onAppear {
             impactFeedback.prepare()
+            // Sync initial state from AppState (loaded from Firestore/UserDefaults)
+            isLiked = appState.likedVideos.contains(video.id)
+            isSubscribed = appState.subscriptions.contains(video.creator.id)
+            isWatchLater = appState.watchLaterVideos.contains(video.id)
         }
         .sheet(isPresented: $showingTipSheet) {
             TipSheet(video: video)
@@ -443,29 +450,21 @@ struct VideoDetailMetaView: View {
         .padding(.top, 24)
     }
     
-    // MARK: - 🔥 PREMIUM: Action Methods with Enhanced Haptics
+    // MARK: - Action Methods (Firestore-backed)
     private func performLikeAction() {
-        // 🔥 PREMIUM: Enhanced bounce animation
         withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
             likeAnimationScale = 1.4
             isLiked.toggle()
             if isLiked { isDisliked = false }
         }
-        
-        // 🔥 PREMIUM: Double bounce for satisfying feel
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
-                likeAnimationScale = 0.9
-            }
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) { likeAnimationScale = 0.9 }
         }
-        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                likeAnimationScale = 1.0
-            }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { likeAnimationScale = 1.0 }
         }
-        
-        // 🔥 PREMIUM: Stronger haptic for like, lighter for unlike
+        // Persist to Firestore via AppState
+        appState.toggleLike(for: video.id)
         if isLiked {
             HapticManager.shared.notification(type: .success)
         } else {
@@ -476,7 +475,13 @@ struct VideoDetailMetaView: View {
     private func performDislikeAction() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             isDisliked.toggle()
-            if isDisliked { isLiked = false }
+            if isDisliked {
+                isLiked = false
+                // Remove like from Firestore if it was liked
+                if appState.likedVideos.contains(video.id) {
+                    appState.toggleLike(for: video.id)
+                }
+            }
         }
         HapticManager.shared.impact(style: .medium)
     }
@@ -492,6 +497,14 @@ struct VideoDetailMetaView: View {
             isWatchLater.toggle()
         }
         impactFeedback.impactOccurred(intensity: 0.7)
+        // Persist to Firestore
+        if let uid = appState.currentUser?.id {
+            Task {
+                await UserCollectionsFirestoreService.shared.toggleWatchLater(
+                    userId: uid, videoId: video.id, add: isWatchLater
+                )
+            }
+        }
     }
     
     @State private var showingDownloadQualitySheet: Bool = false
@@ -533,20 +546,29 @@ struct VideoDetailMetaView: View {
     }
     
     private func performSubscribeAction() {
-        // 🔥 PREMIUM: Enhanced subscribe animation with celebratory bounce
         withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
             subscribeButtonScale = isSubscribed ? 0.9 : 1.15
             isSubscribed.toggle()
         }
-        
-        // 🔥 PREMIUM: Bounce back
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.65)) {
                 subscribeButtonScale = 1.0
             }
         }
-        
-        // 🔥 PREMIUM: Celebration haptic for subscribe, subtle for unsubscribe
+        // Persist to Firestore
+        if let uid = appState.currentUser?.id {
+            Task {
+                await UserCollectionsFirestoreService.shared.toggleSubscription(
+                    userId: uid, creatorId: video.creator.id, add: isSubscribed
+                )
+            }
+            // Update local AppState subscriptions set
+            if isSubscribed {
+                appState.subscriptions.insert(video.creator.id)
+            } else {
+                appState.subscriptions.remove(video.creator.id)
+            }
+        }
         if isSubscribed {
             HapticManager.shared.notification(type: .success)
         } else {

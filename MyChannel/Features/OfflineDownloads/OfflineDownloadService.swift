@@ -61,22 +61,22 @@ class OfflineDownloadService: ObservableObject {
         
         // Check if already downloaded or in queue
         if downloads.contains(where: { $0.videoId == video.id }) {
-            throw DownloadError.alreadyDownloaded
+            throw OfflineDownloadError.alreadyDownloaded
         }
         
         if downloadQueue.contains(where: { $0.download.videoId == video.id }) {
-            throw DownloadError.alreadyInQueue
+            throw OfflineDownloadError.alreadyInQueue
         }
         
         // Check storage availability
         let estimatedSize = estimateDownloadSize(quality: quality ?? downloadQuality)
         if usedStorage + estimatedSize > maxStorageLimit {
-            throw DownloadError.insufficientStorage
+            throw OfflineDownloadError.insufficientStorage
         }
         
         // Check network conditions
         if downloadOnlyOnWiFi && !isOnWiFi() {
-            throw DownloadError.wifiRequired
+            throw OfflineDownloadError.wifiRequired
         }
         
         let download = OfflineDownload(
@@ -129,7 +129,7 @@ class OfflineDownloadService: ObservableObject {
     /// Delete downloaded video
     func deleteDownload(_ downloadId: String) async throws {
         guard let downloadIndex = downloads.firstIndex(where: { $0.id == downloadId }) else {
-            throw DownloadError.downloadNotFound
+            throw OfflineDownloadError.downloadNotFound
         }
         
         let download = downloads[downloadIndex]
@@ -427,40 +427,6 @@ struct DownloadQueueItem: Identifiable {
     let addedAt: Date
 }
 
-enum DownloadQuality: String, CaseIterable, Codable {
-    case low = "360p"
-    case medium = "720p"
-    case high = "1080p"
-    case highest = "1440p"
-    
-    var displayName: String {
-        switch self {
-        case .low: return "Low (360p)"
-        case .medium: return "Medium (720p)"
-        case .high: return "High (1080p)"
-        case .highest: return "Highest (1440p)"
-        }
-    }
-    
-    var estimatedSize: String {
-        switch self {
-        case .low: return "~50MB per hour"
-        case .medium: return "~150MB per hour"
-        case .high: return "~300MB per hour"
-        case .highest: return "~500MB per hour"
-        }
-    }
-    
-    var color: Color {
-        switch self {
-        case .low: return .orange
-        case .medium: return .blue
-        case .high: return .purple
-        case .highest: return .red
-        }
-    }
-}
-
 enum DownloadStatus: String, Codable {
     case queued, downloading, completed, failed, paused
 }
@@ -469,7 +435,7 @@ enum OfflineDownloadPriority: Int {
     case low = 1, normal = 2, high = 3
 }
 
-enum DownloadError: LocalizedError {
+enum OfflineDownloadError: LocalizedError {
     case alreadyDownloaded
     case alreadyInQueue
     case insufficientStorage

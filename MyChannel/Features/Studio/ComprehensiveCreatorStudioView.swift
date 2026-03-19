@@ -65,6 +65,7 @@ struct ComprehensiveCreatorStudioView: View {
         // 🔥 MOBILE-FIRST CREATOR STUDIO: Always show main content on mobile
         mainContentArea
             .navigationTitle("Creator Studio")
+            .navigationBarBackButtonHidden(true)
             .toolbar {
                     ToolbarItemGroup(placement: .navigationBarLeading) {
                         // Back / close button

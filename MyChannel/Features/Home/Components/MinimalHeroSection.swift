@@ -324,6 +324,29 @@ struct FeaturedHeroCard: View {
     }
 }
 
+// MARK: - Asset cache so Firebase Storage video is only downloaded once
+final class LoopAssetCache {
+    static let shared = LoopAssetCache()
+    private var cache: [String: AVURLAsset] = [:]
+    private var warmTasks: [String: Task<Void, Never>] = [:]
+    private init() {}
+
+    func asset(for urlString: String) -> AVURLAsset {
+        if let cached = cache[urlString] { return cached }
+        let url = URL(string: urlString) ?? URL(fileURLWithPath: urlString)
+        let asset = AVURLAsset(url: url, options: [
+            AVURLAssetPreferPreciseDurationAndTimingKey: false
+        ])
+        cache[urlString] = asset
+        // Warm in background — load tracks + isPlayable so first frame is instant
+        warmTasks[urlString] = Task.detached(priority: .utility) { [weak asset] in
+            guard let asset else { return }
+            _ = try? await asset.load(.tracks, .isPlayable)
+        }
+        return asset
+    }
+}
+
 // MARK: - Muted Looping Inline Video Player
 struct MutedLoopVideoPlayer: UIViewRepresentable {
     let videoURL: String
@@ -345,15 +368,21 @@ struct MutedLoopVideoPlayer: UIViewRepresentable {
     private func configure(view: PlayerContainerView) {
         view.currentURL = videoURL
         view.player?.pause()
-        view.player = nil
         view.playerLayer?.removeFromSuperlayer()
+        view.player = nil
         view.playerLayer = nil
 
-        guard !videoURL.isEmpty, let url = resolvedURL() else { return }
+        guard !videoURL.isEmpty else { return }
 
-        let player = AVPlayer(url: url)
+        // Reuse cached asset — no re-download on repeat appearances
+        let asset = LoopAssetCache.shared.asset(for: videoURL)
+        let item = AVPlayerItem(asset: asset)
+        item.preferredForwardBufferDuration = 8.0
+
+        let player = AVPlayer(playerItem: item)
         player.isMuted = true
         player.actionAtItemEnd = .none
+        player.automaticallyWaitsToMinimizeStalling = false  // start ASAP, don't wait
 
         let layer = AVPlayerLayer(player: player)
         layer.videoGravity = .resizeAspectFill
@@ -364,21 +393,14 @@ struct MutedLoopVideoPlayer: UIViewRepresentable {
 
         NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
-            object: player.currentItem,
+            object: item,
             queue: .main
-        ) { _ in
-            player.seek(to: .zero)
-            player.play()
+        ) { [weak player] _ in
+            player?.seek(to: .zero)
+            player?.play()
         }
 
         player.play()
-    }
-
-    private func resolvedURL() -> URL? {
-        if videoURL.hasPrefix("file://") || videoURL.hasPrefix("/") {
-            return URL(string: videoURL) ?? URL(fileURLWithPath: videoURL)
-        }
-        return URL(string: videoURL)
     }
 }
 

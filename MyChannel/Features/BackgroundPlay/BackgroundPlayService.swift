@@ -161,9 +161,9 @@ class BackgroundPlayService: ObservableObject {
     // MARK: - Private Setup Methods
     
     private func setupBackgroundPlayback() {
-        // Load saved preference and default to enabled if never set (YouTube parity)
+        // Default to disabled - requires explicit user opt-in (premium feature only)
         if UserDefaults.standard.object(forKey: "backgroundPlayEnabled") == nil {
-            UserDefaults.standard.set(true, forKey: "backgroundPlayEnabled")
+            UserDefaults.standard.set(false, forKey: "backgroundPlayEnabled")
         }
         isBackgroundPlayEnabled = UserDefaults.standard.bool(forKey: "backgroundPlayEnabled")
         

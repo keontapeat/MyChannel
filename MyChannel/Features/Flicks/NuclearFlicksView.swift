@@ -143,13 +143,7 @@ struct NuclearFlicksView: View {
                 if doubleTapHeartVisible {
                     Image(systemName: "heart.fill")
                         .font(.system(size: 120, weight: .bold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.red, .pink],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .foregroundColor(.red)
                         .shadow(color: .black.opacity(0.5), radius: 20)
                         .scaleEffect(doubleTapHeartVisible ? 1.2 : 0.5)
                         .opacity(doubleTapHeartVisible ? 1 : 0)
@@ -173,7 +167,7 @@ struct NuclearFlicksView: View {
                                 .font(.system(size: 14, weight: .medium))
                         }
                         .padding()
-                        .background(.ultraThinMaterial)
+                        .background(Color.black.opacity(0.65))
                         .cornerRadius(20)
                         .padding(.bottom, 100)
                     }
@@ -205,14 +199,6 @@ struct NuclearFlicksView: View {
                 .frame(width: screenWidth, height: screenHeight)
                 .clipped()
             }
-            
-            // Gradient overlays
-            LinearGradient(
-                colors: [.black.opacity(0.4), .clear, .black.opacity(0.7)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .allowsHitTesting(false)
             
             // 🔥 Tap layer UNDER the overlay so buttons receive taps first (like, comment, share, etc.)
             Color.clear
@@ -475,7 +461,7 @@ struct NuclearFlicksView: View {
             VStack(spacing: 6) {
                 ZStack {
                     Circle()
-                        .fill(.ultraThinMaterial)
+                        .fill(Color.black.opacity(0.55))
                         .frame(width: 52, height: 52)
                     
                     Image(systemName: icon)
@@ -507,7 +493,7 @@ struct NuclearFlicksView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(.ultraThinMaterial)
+                            .fill(Color.black.opacity(0.55))
                             .frame(width: 44, height: 44)
                         
                         Image(systemName: flicksMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
@@ -567,7 +553,7 @@ struct NuclearFlicksView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 32)
                     .padding(.vertical, 12)
-                    .background(.ultraThinMaterial)
+                    .background(Color.white.opacity(0.15))
                     .cornerRadius(24)
             }
         }
@@ -862,6 +848,8 @@ class NuclearFlicksViewModel: ObservableObject {
     private var lastDocument: DocumentSnapshot?
     private var preloadedIndices: Set<Int> = []
     private var rotationTimer: Timer?
+    private var recommendationsEnabled = false
+    private var servedRecommendationIDs: Set<String> = []
     
     init() {
         startAlbumArtRotation()
@@ -876,7 +864,14 @@ class NuclearFlicksViewModel: ObservableObject {
     func loadInitialFlicks() async {
         isLoading = true
         error = nil
+        recommendationsEnabled = false
+        servedRecommendationIDs.removeAll()
         defer { isLoading = false }
+        
+        if await loadRecommendedFeedIfAvailable(limit: 20) {
+            print("✅ [NuclearFlicks] Loaded Vertex AI recommendations")
+            return
+        }
         
         #if canImport(FirebaseFirestore)
         do {
@@ -914,10 +909,38 @@ class NuclearFlicksViewModel: ObservableObject {
         #endif
     }
     
+    private func loadRecommendedFeedIfAvailable(limit: Int) async -> Bool {
+        guard let userId = AppState.shared.currentUser?.id else { return false }
+        do {
+            let sessionHistory = Array(AppState.shared.watchHistory.prefix(25).map { $0.contentId })
+            let ids = try await AgentAPIService.shared.getRecommendations(
+                userId: userId,
+                sessionHistory: sessionHistory,
+                limit: limit
+            )
+            let freshIds = ids.filter { !servedRecommendationIDs.contains($0) }
+            let flickResults = await fetchFlicks(for: freshIds)
+            guard !flickResults.isEmpty else { return false }
+            flicks = flickResults
+            servedRecommendationIDs.formUnion(flickResults.map { $0.id })
+            recommendationsEnabled = true
+            lastDocument = nil
+            return true
+        } catch {
+            print("⚠️ [NuclearFlicks] Recommendation load failed: \(error)")
+            return false
+        }
+    }
+
     func loadMoreFlicks() async {
         guard !isLoadingMore else { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
+        
+        if recommendationsEnabled {
+            let appended = await appendAdditionalRecommendations(limit: 10)
+            if appended { return }
+        }
         
         #if canImport(FirebaseFirestore)
         guard let lastDoc = lastDocument else { return }
@@ -1178,6 +1201,40 @@ class NuclearFlicksViewModel: ObservableObject {
                 contentSource: Video.ContentSource.userUploaded,
                 externalID: nil as String?
             )
+        }
+    }
+
+    private func fetchFlicks(for videoIds: [String]) async -> [NuclearFlick] {
+        guard !videoIds.isEmpty else { return [] }
+        do {
+            let videos = try await VideoFirestoreService.shared.fetchMultipleVideos(videoIds: videoIds)
+            guard !videos.isEmpty else { return [] }
+            let flickMap = Dictionary(uniqueKeysWithValues: videos.map { ($0.id, videoToFlick($0)) })
+            return videoIds.compactMap { flickMap[$0] }
+        } catch {
+            print("⚠️ [NuclearFlicks] Failed to hydrate recommended IDs: \(error)")
+            return []
+        }
+    }
+    
+    private func appendAdditionalRecommendations(limit: Int) async -> Bool {
+        guard let userId = AppState.shared.currentUser?.id else { return false }
+        do {
+            let sessionHistory = Array(AppState.shared.watchHistory.prefix(30).map { $0.contentId })
+            let ids = try await AgentAPIService.shared.getRecommendations(
+                userId: userId,
+                sessionHistory: sessionHistory,
+                limit: limit
+            )
+            let newIds = ids.filter { !servedRecommendationIDs.contains($0) }
+            let flickResults = await fetchFlicks(for: newIds)
+            guard !flickResults.isEmpty else { return false }
+            flicks.append(contentsOf: flickResults)
+            servedRecommendationIDs.formUnion(flickResults.map { $0.id })
+            return true
+        } catch {
+            print("⚠️ [NuclearFlicks] Failed to append recommendations: \(error)")
+            return false
         }
     }
 

@@ -320,13 +320,21 @@ struct MyChannelPlusView: View {
                 .padding(.horizontal, 10)
             
             HStack(spacing: 20) {
-                Button("Terms of Service") {}
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.primary)
+                Button("Terms of Service") {
+                    if let url = URL(string: "https://mychannel.live/terms") {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.primary)
                 
-                Button("Privacy Policy") {}
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.primary)
+                Button("Privacy Policy") {
+                    if let url = URL(string: "https://mychannel.live/privacy") {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.primary)
             }
         }
     }

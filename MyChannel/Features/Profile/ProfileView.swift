@@ -63,9 +63,18 @@ struct ProfileView: View {
     @State private var hasError: Bool = false
     @State private var errorMessage: String = ""
     
+    // Debounce double-fire: authManager + appState both publish when user changes
+    @State private var userChangeTask: Task<Void, Never>? = nil
+    
     // Video Analytics Navigation
     @State private var showingVideoAnalytics: Bool = false
     @State private var videoToAnalyze: Video?
+
+    // AI Agent Insights (background-loaded from Cloud Run)
+    @State private var aiViralScore: Double? = nil
+    @State private var aiChurnRisk: Double? = nil
+    @State private var aiRetentionActions: [String] = []
+    @State private var aiCreatorInsights: [String] = []
     
     // Premium & Downloads Navigation
     @State private var showingDownloads = false
@@ -92,15 +101,7 @@ struct ProfileView: View {
     // 🔥 OWNER INTRO VIDEO: First video on profile with reliable YouTube thumbnail
     private func ownerIntroVideo() -> Video? {
         let introId = "owner_intro_video"
-        // Check if bundled intro video exists
-        guard let path = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4") else {
-            return nil
-        }
-        // 🔥 FIX: Use file:// URL format for local video playback
-        let fileURL = URL(fileURLWithPath: path)
-        let url = fileURL.absoluteString
-        
-        // 🔥 Use local thumbnail from Assets.xcassets (extracted from video at 2 seconds)
+        let url = "https://firebasestorage.googleapis.com/v0/b/mychannel-ca26d.firebasestorage.app/o/Shot%20By%20Keonta%20Intro%204k.MP4?alt=media&token=88e366e2-efde-4631-9707-d7e9fadc9568"
         let thumbnailURL = "asset://ShotByKeontaThumbnail"
         
         return Video(
@@ -112,7 +113,7 @@ struct ProfileView: View {
             duration: 35,
             viewCount: 0,
             likeCount: 0,
-            creator: user, // Use current profile user as creator
+            creator: user,
             category: .entertainment,
             tags: ["intro", "keonta", "mychannel"],
             isPublic: true
@@ -505,8 +506,26 @@ struct ProfileView: View {
                                 YouTubeStyleFeatureCard(
                                     icon: "brain.head.profile",
                                     title: "AGI Agent Dashboard",
-                                    subtitle: "Manage all 30 AI agents",
+                                    subtitle: "\(AGIAgentManager.shared.agents.filter { $0.status == .live }.count) of 30 agents live",
                                     destination: AGIAgentDashboardView(),
+                                    isAdmin: true
+                                )
+                                
+                                // 8. 3-Strike Review Queue (Admin Only)
+                                YouTubeStyleFeatureCard(
+                                    icon: "bolt.fill",
+                                    title: "⚖️ 3-Strike Review",
+                                    subtitle: "You decide — warn, strike, suspend or ban",
+                                    destination: StrikeReviewView(),
+                                    isAdmin: true
+                                )
+
+                                // 9. Owner Command Center (Admin Only)
+                                YouTubeStyleFeatureCard(
+                                    icon: "antenna.radiowaves.left.and.right",
+                                    title: "⚡ Command Center",
+                                    subtitle: "Users · Fraud · Content · Daily Reports",
+                                    destination: OwnerCommandCenterView(),
                                     isAdmin: true
                                 )
                             }
@@ -627,11 +646,10 @@ struct ProfileView: View {
     // MARK: - Helpers
 
     private func loadProfileSafely() {
-        // ⚡ THERMONUCLEAR PERFORMANCE: Instant profile loading
-        // Step 1: Show cached data IMMEDIATELY (0ms delay)
-        user = currentUser
+        // 🔥 FIX: Load complete Firestore profile FIRST to prevent showing basic Google Auth data
+        isLoading = true
         
-        // Step 2: Check cache for instant video display
+        // Step 1: Check cache for instant video display
         let cachedVideos = profileCache.getCachedVideos()
         if !cachedVideos.isEmpty && profileCache.isCacheValid() {
             // 🔥 INSTANT: Show cached videos immediately
@@ -649,8 +667,34 @@ struct ProfileView: View {
             print("⏳ [ProfileView] No cache - showing skeleton")
         }
         
-        // Step 3: Background refresh with fresh data (non-blocking)
+        // Step 2: Load complete profile data (Cache first, then Firestore, then fallback)
         Task { @MainActor in
+            let userId = currentUser.id
+            
+            // 🔥 FIX: Check cache for complete profile FIRST
+            if let cachedUser = profileCache.getCachedUser() {
+                user = cachedUser
+                print("⚡ [ProfileView] Using cached complete profile: \(cachedUser.displayName) (@\(cachedUser.username))")
+            } else {
+                // Try to load complete profile from Firestore
+                do {
+                    if let firestoreUser = try await UserFirestoreService.shared.fetchUser(id: userId) {
+                        // Use complete Firestore profile (has custom displayName, username, etc.)
+                        user = firestoreUser
+                        print("✅ [ProfileView] Loaded complete profile from Firestore: \(firestoreUser.displayName) (@\(firestoreUser.username))")
+                    } else {
+                        // Fallback to current user if no Firestore profile exists
+                        user = currentUser
+                        print("⚠️ [ProfileView] No Firestore profile found, using basic auth data: \(currentUser.displayName)")
+                    }
+                } catch {
+                    // Fallback to current user on error
+                    user = currentUser
+                    print("🚨 [ProfileView] Error loading Firestore profile: \(error), using basic auth data")
+                }
+            }
+            
+            isLoading = false
             let creatorId = user.id
             
             // ⚡ PERFORMANCE: Load only first page (24 videos) for faster initial load
@@ -672,6 +716,9 @@ struct ProfileView: View {
                     videosWithIntro.insert(intro, at: 0)
                     // Auto-pin the intro video
                     PinnedVideosStore.shared.pin(intro.id, for: user.id)
+                    // ⚡ PRE-BUFFER: Start downloading intro from Firebase Storage NOW
+                    // so it's ready the instant the user taps play — no cold-start lag
+                    GlobalVideoPlayerManager.shared.preloadVideo(url: intro.videoURL)
                 }
                 
                 userVideos = videosWithIntro
@@ -679,7 +726,7 @@ struct ProfileView: View {
                 hasMoreVideos = result.videos.count == videosPerPage
                 isLoadingVideos = false
                 
-                // Update cache for next time
+                // Update cache for next time (only if we have complete profile data)
                 profileCache.cacheProfile(user: user, videos: videosWithIntro)
                 
                 // Check local storage as backup only if Firestore is empty
@@ -687,6 +734,7 @@ struct ProfileView: View {
                     if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: creatorId), !localVids.isEmpty {
                         userVideos = Array(localVids.prefix(videosPerPage))
                         hasMoreVideos = localVids.count > videosPerPage
+                        // Only update video cache, don't cache basic user data
                         profileCache.updateCachedVideos(userVideos)
                     }
                 }
@@ -694,10 +742,35 @@ struct ProfileView: View {
                 print("✅ [ProfileView] Loaded \(result.videos.count) videos from Firestore")
             } catch {
                 print("🚨 [ProfileView] Error loading videos: \(error)")
-                // Keep cached videos if available, otherwise empty
+                
+                // 🔥 FIX: Better error handling with fallback options
+                // Try local storage as backup if Firestore fails
+                do {
+                    let localVids = try await DatabaseService.shared.fetchVideosByCreator(creatorId: creatorId)
+                    if !localVids.isEmpty {
+                        userVideos = Array(localVids.prefix(videosPerPage))
+                        hasMoreVideos = localVids.count > videosPerPage
+                        isLoadingVideos = false
+                        print("✅ [ProfileView] Loaded \(userVideos.count) videos from local storage as fallback")
+                        return // Success with local data
+                    }
+                } catch {
+                    print("⚠️ [ProfileView] Local storage fallback also failed: \(error)")
+                }
+                
+                // Keep cached videos if available, otherwise show empty state
                 if userVideos.isEmpty {
                     userVideos = []
+                    // Don't show error for empty profile - it's normal for new users
+                    if !cachedVideos.isEmpty {
+                        // Only show error if we had cached data but couldn't refresh
+                        setProfileError("Unable to refresh videos. Showing cached content.")
+                    }
+                } else {
+                    // We have cached videos, just couldn't refresh
+                    print("⚡ [ProfileView] Using cached videos due to refresh failure")
                 }
+                
                 hasMoreVideos = false
                 isLoadingVideos = false
             }
@@ -718,6 +791,69 @@ struct ProfileView: View {
                     }
                 }
             }
+
+            // Fire AI agents in background (non-blocking, own profile only)
+            if isViewingOwnProfile {
+                let snapshotUser = user
+                let snapshotVideos = userVideos
+                Task {
+                    await loadProfileAIInsights(userId: creatorId, snapshotUser: snapshotUser, snapshotVideos: snapshotVideos)
+                }
+            }
+        }
+    }
+
+    // MARK: - AI Agent Insights
+
+    private func loadProfileAIInsights(userId: String, snapshotUser: User, snapshotVideos: [Video]) async {
+        let mlAgents = RealMLAgentsService.shared
+        let agentAPI = AgentAPIService.shared
+
+        // 1. Viral prediction on most recent video
+        if let topVideo = snapshotVideos.first {
+            let avgViews = Double((snapshotUser.totalViews ?? 0) / max(snapshotUser.videoCount, 1))
+            if let result = try? await mlAgents.predictViral(
+                title: topVideo.title,
+                durationSeconds: Int(topVideo.duration),
+                thumbnailScore: 0.7,
+                subscriberCount: snapshotUser.subscriberCount,
+                avgViews: avgViews,
+                category: topVideo.category.rawValue,
+                isShorts: topVideo.duration < 60
+            ) {
+                aiViralScore = result.viral_probability
+                print("🤖 [ProfileAI] Viral score for \(topVideo.title): \(Int(result.viral_probability * 100))%")
+            }
+        }
+
+        // 2. Churn/retention risk for this creator's audience
+        let accountAgeDays = max(Int(Date().timeIntervalSince(snapshotUser.createdAt) / 86400), 1)
+        let totalViewCount = snapshotUser.totalViews ?? 0
+        let isPremium = !(snapshotUser.membershipTiers?.isEmpty ?? true)
+        if let result = try? await mlAgents.predictChurn(
+            userId: userId,
+            daysSinceSignup: accountAgeDays,
+            daysSinceLastVisit: 1,
+            totalWatchTimeHours: Double(totalViewCount) * 0.05,
+            avgSessionMinutes: 12.0,
+            sessionsLast7Days: 7,
+            sessionsLast30Days: 25,
+            videosLast7Days: max(snapshotUser.videoCount / 4, 1),
+            videosLast30Days: max(snapshotUser.videoCount, 1),
+            isPremium: isPremium
+        ) {
+            aiChurnRisk = result.churn_probability
+            aiRetentionActions = result.retention_actions
+            print("🤖 [ProfileAI] Churn risk: \(result.risk_level) (\(Int(result.churn_probability * 100))%)")
+        }
+
+        // 3. Creator analytics agent
+        if let result = try? await agentAPI.getCreatorAnalytics(
+            creatorId: userId,
+            timeRange: "30d"
+        ) {
+            aiCreatorInsights = result.insights
+            print("🤖 [ProfileAI] Creator insights loaded: \(result.insights.count) tips")
         }
     }
 
@@ -748,8 +884,6 @@ struct ProfileView: View {
 
     @MainActor
     private func handleUserChange(_ newUser: User?) {
-        print("🔄 handleUserChange called with profileImageURL: \(newUser?.profileImageURL ?? "nil")")
-        
         guard let newUser else {
             user = User.defaultUser
             userVideos = []
@@ -758,70 +892,84 @@ struct ProfileView: View {
             return
         }
         
-        print("🔄 Setting user state to new user with profileImageURL: \(newUser.profileImageURL ?? "nil")")
-        user = newUser
-        
-        // ⚡ PERFORMANCE: Show cached videos instantly while loading fresh
-        let cachedVideos = profileCache.getCachedVideos()
-        if !cachedVideos.isEmpty {
-            userVideos = cachedVideos
-        }
-        isLoadingVideos = true
-        
-        Task {
-            // ⚡ PERFORMANCE: Load only first page (24 videos)
+        // � FIX: Debounce — both authManager and appState fire at the same time.
+        // Cancel the previous pending task so we only run once per actual user change.
+        userChangeTask?.cancel()
+        userChangeTask = Task { @MainActor in
+            // Small yield so any second fire in the same runloop cancels this before we start
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+            guard !Task.isCancelled else { return }
+            
+            // Show cached videos instantly
+            let cachedVideos = profileCache.getCachedVideos()
+            if !cachedVideos.isEmpty { userVideos = cachedVideos }
+            isLoadingVideos = true
+            
+            // 🔥 FIX: Always fetch complete Firestore profile — don't use basic auth object
+            do {
+                if let firestoreUser = try await UserFirestoreService.shared.fetchUser(id: newUser.id) {
+                    user = firestoreUser
+                } else {
+                    user = newUser
+                }
+            } catch {
+                user = newUser
+            }
+            guard !Task.isCancelled else { return }
+            
+            // Load videos for this user
             do {
                 let result = try await VideoFirestoreService.shared.fetchVideosByCreatorPaginated(
-                    creatorId: newUser.id,
+                    creatorId: user.id,
                     limit: videosPerPage,
                     lastDocument: nil
                 )
                 
-                // 🔥 ENSURE OWNER'S INTRO VIDEO IS FIRST
                 var videosWithIntro = result.videos
                 if isViewingOwnProfile, let intro = ownerIntroVideo() {
                     videosWithIntro.removeAll { $0.id == intro.id }
                     videosWithIntro.insert(intro, at: 0)
-                    PinnedVideosStore.shared.pin(intro.id, for: newUser.id)
+                    PinnedVideosStore.shared.pin(intro.id, for: user.id)
                 }
                 
                 userVideos = videosWithIntro
                 lastVideoDocument = result.lastDocument
                 hasMoreVideos = result.videos.count == videosPerPage
                 isLoadingVideos = false
+                profileCache.cacheProfile(user: user, videos: videosWithIntro)
                 
-                // Update cache
-                profileCache.cacheProfile(user: newUser, videos: videosWithIntro)
-                
-                // Check local storage as backup only if Firestore is empty
-                if userVideos.isEmpty {
-                    if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: newUser.id), !localVids.isEmpty {
-                        userVideos = Array(localVids.prefix(videosPerPage))
-                        hasMoreVideos = localVids.count > videosPerPage
-                        profileCache.updateCachedVideos(userVideos)
-                    }
+                if userVideos.isEmpty,
+                   let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: user.id),
+                   !localVids.isEmpty {
+                    userVideos = Array(localVids.prefix(videosPerPage))
+                    hasMoreVideos = localVids.count > videosPerPage
+                    profileCache.updateCachedVideos(userVideos)
                 }
             } catch {
-                print("🚨 [ProfileView] Error loading videos: \(error)")
-                // Keep cached videos if available
-                if userVideos.isEmpty {
-                    userVideos = []
-                }
+                print("🚨 [ProfileView] handleUserChange video load error: \(error)")
+                if userVideos.isEmpty { userVideos = [] }
                 hasMoreVideos = false
                 isLoadingVideos = false
             }
             
             recalculateUserStats()
-            watchHistory = []
         }
     }
 
-    @MainActor
-    private func handleError(_ message: String) {
+    private func setProfileError(_ message: String) {
         errorMessage = message
         hasError = true
         isLoading = false
         print("❌ Profile error: \(message)")
+        
+        // 🔥 FIX: Auto-retry after 3 seconds for network errors
+        if message.contains("network") || message.contains("connection") || message.contains("timeout") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                guard self.hasError else { return }
+                print("🔄 [ProfileView] Auto-retrying after network error...")
+                self.retryLoadProfile()
+            }
+        }
     }
 
     private func retryLoadProfile() {

@@ -600,7 +600,7 @@ private struct DefaultProfileBanner: Identifiable, Hashable {
             title: "Abstract Flow",
             subtitle: "Minimal gradient waves",
             kind: .image,
-            assetURL: "https://images.unsplash.com/photo-154988033865ddcdfd017b?w=1600&q=80",
+            assetURL: "https://images.unsplash.com/photo-1557683316-973673baf926?w=1600&q=80",
             previewURL: nil
         ),
         DefaultProfileBanner(

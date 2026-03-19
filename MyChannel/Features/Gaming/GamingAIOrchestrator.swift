@@ -366,7 +366,6 @@ final class GamingAIOrchestrator: ObservableObject {
     /// Start real-time monitoring for a live match
     func startLiveMatchMonitoring(matchId: String) async {
         print("🤖 [GamingAI] Starting real-time match monitoring...")
-        
         await antiCheatGuardianAI.startRealTimeMonitoring(matchId: matchId)
     }
     
@@ -374,6 +373,162 @@ final class GamingAIOrchestrator: ObservableObject {
     func stopLiveMatchMonitoring(matchId: String) async {
         await antiCheatGuardianAI.stopRealTimeMonitoring(matchId: matchId)
     }
+
+    // MARK: - 🏆 CHAMPIONSHIP TRACKING
+
+    /// Track any championship event (view opened, medal tapped, division switched, defense scheduled)
+    /// Persists to Firestore so AI agents can learn from engagement patterns
+    func trackChampionshipEvent(
+        userId: String,
+        event: ChampionshipAIEvent
+    ) async {
+        totalPredictions += 1
+        print("📊 [GamingAI] Championship event: \(event.rawValue) for user: \(userId.prefix(8))")
+
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        let payload: [String: Any] = [
+            "userId": userId,
+            "event": event.rawValue,
+            "timestamp": FieldValue.serverTimestamp(),
+            "agentsActive": agentsActive,
+            "source": "championship_hub"
+        ]
+        try? await db.collection("ai_championship_events").addDocument(data: payload)
+        #endif
+    }
+
+    /// AI refreshes rankings for a division using PerformancePredictor + LeaderboardCalculator
+    /// Called when user opens ChampionshipHubView or switches divisions
+    func refreshRankingsWithAI(
+        division: String,
+        currentUserIds: [String]
+    ) async -> AIRankingRefreshResult {
+        print("🤖 [GamingAI] AI refreshing \(division) rankings for \(currentUserIds.count) players...")
+        let start = Date()
+
+        // Analyze each player skill in parallel
+        var skills: [String: PlayerSkillAnalysis] = [:]
+        await withTaskGroup(of: (String, PlayerSkillAnalysis).self) { group in
+            for uid in currentUserIds {
+                group.addTask {
+                    let skill = await self.performancePredictorAI.analyzePlayerSkill(playerId: uid)
+                    return (uid, skill)
+                }
+            }
+            for await (uid, skill) in group {
+                skills[uid] = skill
+            }
+        }
+
+        // Sort by ELO for AI-suggested ranking order
+        let sorted = currentUserIds.sorted {
+            (skills[$0]?.eloRating ?? 1000) > (skills[$1]?.eloRating ?? 1000)
+        }
+
+        let avgConfidence = skills.values.map { $0.dataConfidence }.reduce(0, +) / Double(max(skills.count, 1))
+        let latencyMs = Date().timeIntervalSince(start) * 1000
+        totalPredictions += currentUserIds.count
+
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        try? await db.collection("ai_ranking_refreshes").addDocument(data: [
+            "division": division,
+            "playerCount": currentUserIds.count,
+            "avgConfidence": avgConfidence,
+            "latencyMs": latencyMs,
+            "timestamp": FieldValue.serverTimestamp()
+        ])
+        #endif
+
+        print("✅ [GamingAI] Rankings refreshed in \(Int(latencyMs))ms — avg confidence: \(Int(avgConfidence * 100))%")
+        return AIRankingRefreshResult(
+            sortedPlayerIds: sorted,
+            skillMap: skills,
+            avgConfidence: avgConfidence,
+            latencyMs: latencyMs
+        )
+    }
+
+    /// AI analyses a tournament bracket for fairness and surfaces insights
+    func analyzeBracketFairness(
+        tournamentId: String,
+        playerIds: [String]
+    ) async -> AIBracketInsight {
+        print("🤖 [GamingAI] Analyzing bracket fairness for tournament: \(tournamentId.prefix(8))")
+
+        guard !playerIds.isEmpty else {
+            return AIBracketInsight(fairnessScore: 1.0, topSeed: nil, predictedChampion: nil, insight: "No players yet", confidence: 0)
+        }
+
+        var skills: [String: PlayerSkillAnalysis] = [:]
+        await withTaskGroup(of: (String, PlayerSkillAnalysis).self) { group in
+            for uid in playerIds.prefix(16) {
+                group.addTask {
+                    let skill = await self.performancePredictorAI.analyzePlayerSkill(playerId: uid)
+                    return (uid, skill)
+                }
+            }
+            for await (uid, skill) in group {
+                skills[uid] = skill
+            }
+        }
+
+        let sorted = playerIds.sorted { (skills[$0]?.eloRating ?? 1000) > (skills[$1]?.eloRating ?? 1000) }
+        let topSeed = sorted.first
+        let predictedChampion = sorted.first
+
+        let eloValues = skills.values.map { $0.eloRating }
+        let avgElo = eloValues.reduce(0, +) / Double(max(eloValues.count, 1))
+        let variance = eloValues.map { pow($0 - avgElo, 2) }.reduce(0, +) / Double(max(eloValues.count, 1))
+        let stdDev = sqrt(variance)
+        let fairnessScore = max(0.4, 1.0 - (stdDev / 600.0))
+
+        let insight: String
+        if fairnessScore > 0.85 {
+            insight = "Highly competitive bracket — evenly matched field"
+        } else if fairnessScore > 0.65 {
+            insight = "Moderate skill spread — upsets likely"
+        } else {
+            insight = "Wide skill gap — top seeds heavily favored"
+        }
+
+        totalPredictions += playerIds.count
+        return AIBracketInsight(
+            fairnessScore: fairnessScore,
+            topSeed: topSeed,
+            predictedChampion: predictedChampion,
+            insight: insight,
+            confidence: skills.values.map { $0.dataConfidence }.reduce(0, +) / Double(max(skills.count, 1))
+        )
+    }
+}
+
+// MARK: - Championship AI Supporting Types
+
+enum ChampionshipAIEvent: String {
+    case hubOpened          = "hub_opened"
+    case divisionSwitched   = "division_switched"
+    case medalTapped        = "medal_tapped"
+    case rankingViewed      = "ranking_viewed"
+    case defenseViewed      = "defense_viewed"
+    case victoryViewed      = "victory_viewed"
+    case podiumViewed       = "podium_viewed"
+}
+
+struct AIRankingRefreshResult {
+    let sortedPlayerIds: [String]
+    let skillMap: [String: PlayerSkillAnalysis]
+    let avgConfidence: Double
+    let latencyMs: Double
+}
+
+struct AIBracketInsight {
+    let fairnessScore: Double
+    let topSeed: String?
+    let predictedChampion: String?
+    let insight: String
+    let confidence: Double
 }
 
 // MARK: - 1️⃣ Match Fairness AI Agent

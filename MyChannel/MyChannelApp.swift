@@ -18,43 +18,44 @@ struct MyChannelApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     @StateObject private var authManager: AuthenticationManager = AuthenticationManager.shared
-    @StateObject private var appState: AppState = AppState()
+    @StateObject private var appState: AppState = AppState.shared
     @StateObject private var globalPlayerManager: GlobalVideoPlayerManager = GlobalVideoPlayerManager.shared
+    @ObservedObject private var settingsService: SettingsService = SettingsService.shared
     
     init() {
+        let initStartTime = Date()
         print("🚀 MyChannelApp init started...")
         
-        // 🔥 Clear cached thumbnails to fix any stale/broken images (v2.1 fix)
-        let cacheVersion = "thumbnail_cache_v2.1"
-        if UserDefaults.standard.string(forKey: "thumbnail_cache_version") != cacheVersion {
-            URLCache.shared.removeAllCachedResponses()
-            UserDefaults.standard.set(cacheVersion, forKey: "thumbnail_cache_version")
-            print("🔥 Cleared thumbnail cache for fresh images")
-        }
-        
-        // 🔥🛡️ NUCLEAR VALIDATION - Only in DEBUG to avoid slowing launch
-        // This prevents broken thumbnails from EVER appearing in the app
-        #if DEBUG
-        // Moved to background to speed up launch
-        Task { LiveTVChannel.validateAllChannelURLs() }
-        #endif
-        
-        // Configure Firebase as early as possible to avoid startup warnings
-        FirebaseManager.shared.configureIfPossible()
+        // 🔥 PERFORMANCE: Only critical synchronous operations in init
         setupAppearance()
         configureAudioSession()
-        
-        // 🔐 SECURITY: Migrate API keys from Info.plist to Keychain (App Store requirement)
-        Task { @MainActor in
-            if !UserDefaults.standard.bool(forKey: "keychain_migration_complete") {
-                KeychainManager.shared.migrateFromInfoPlist()
-            }
-        }
         
         // Force onboarding to be completed - we don't want onboarding flow anymore
         UserDefaults.standard.set(true, forKey: "didCompleteOnboarding")
         
-        print("✅ MyChannelApp init completed")
+        // 🔥 DEFERRED: Move all heavy operations to background
+        Task { @MainActor in
+            // Clear cache in background
+            let cacheVersion = "thumbnail_cache_v2.1"
+            if UserDefaults.standard.string(forKey: "thumbnail_cache_version") != cacheVersion {
+                URLCache.shared.removeAllCachedResponses()
+                UserDefaults.standard.set(cacheVersion, forKey: "thumbnail_cache_version")
+                print("🔥 Cleared thumbnail cache for fresh images")
+            }
+            
+            // 🔐 SECURITY: Migrate API keys in background
+            if !UserDefaults.standard.bool(forKey: "keychain_migration_complete") {
+                KeychainManager.shared.migrateFromInfoPlist()
+            }
+            
+            #if DEBUG
+            // Validation in background
+            Task { LiveTVChannel.validateAllChannelURLs() }
+            #endif
+        }
+        
+        let initTime = Date().timeIntervalSince(initStartTime)
+        print("✅ MyChannelApp init completed in \(Int(initTime * 1000))ms")
     }
     
     var body: some SwiftUI.Scene {
@@ -63,46 +64,23 @@ struct MyChannelApp: App {
                 .environmentObject(authManager)
                 .environmentObject(appState)
                 .environmentObject(globalPlayerManager)
+                .preferredColorScheme(appState.overrideColorScheme)
                 .onAppear {
                     print("📱 App appeared with MC logo splash!")
                     
-                    // 🏥 Start MyChannel Doctor 24/7 monitoring
-                    MyChannelDoctorService.shared.startMonitoring()
-                    
-                    // Start performance optimization after UI is ready
-                    PerformanceOptimizer.shared.optimizeAppLaunch()
+                    // 🚀 LAZY SERVICE MANAGER: Optimized initialization
+                    Task {
+                        await LazyServiceManager.shared.initializeApp()
+                        
+                        // Print statistics after initialization
+                        try? await Task.sleep(nanoseconds: 3_000_000_000) // 3s delay
+                        LazyServiceManager.shared.printStatistics()
+                    }
                     
                     // Performance monitoring automatically starts in debug builds
                     #if DEBUG
                     print("⚡ [Performance] Monitoring active - shared instance initialized")
                     #endif
-                    
-                    // 🔥 STAGED INITIALIZATION - Delay heavy tasks to speed up launch
-                    
-                    // Stage 1: Critical services (immediate)
-                    Task {
-                        await LiveTVService.shared.initialize()
-                        print("📺 [LiveTV] Initialized with fresh channel data")
-                    }
-                    
-                    // Stage 2: User data (slight delay)
-                    Task {
-                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s delay
-                        await SmartUserSeederService.shared.initialize()
-                    }
-                    
-                    // Stage 3: Prewarming (after UI is stable)
-                    Task {
-                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1s delay
-                        
-                        // Prewarm Live TV channels
-                        await LiveTVService.shared.preloadFireChannels(count: 12)
-                        
-                        // Prewarm video thumbnails
-                        let criticalURLs = Video.sampleVideos.prefix(20).compactMap { $0.posterCandidates.first }
-                        ImagePrefetcher.shared.prewarmCritical(urls: criticalURLs)
-                        print("🔥🔥🔥 [THERMONUCLEAR] Prewarmed \(criticalURLs.count) video thumbnails!")
-                    }
                     
                     // Ensure auth state is checked at launch and sync to AppState
                     authManager.checkAuthenticationStatus()
@@ -155,39 +133,46 @@ struct MyChannelApp: App {
     }
     
     private func setupAppearance() {
+        // Use adaptive system colors so nav/tab bars automatically switch with dark mode
+        let adaptiveBg = UIColor.systemBackground
+        let adaptiveLabel = UIColor.label
+        let brandRed = UIColor(red: 0.910, green: 0.365, blue: 0.365, alpha: 1) // #E85D5D
+
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor(AppTheme.Colors.background)
+        appearance.backgroundColor = adaptiveBg
         appearance.titleTextAttributes = [
-            .foregroundColor: UIColor(AppTheme.Colors.textPrimary),
+            .foregroundColor: adaptiveLabel,
             .font: UIFont.systemFont(ofSize: 18, weight: .semibold)
         ]
         appearance.largeTitleTextAttributes = [
-            .foregroundColor: UIColor(AppTheme.Colors.textPrimary),
+            .foregroundColor: adaptiveLabel,
             .font: UIFont.systemFont(ofSize: 34, weight: .bold)
         ]
-        
+
         UINavigationBar.appearance().standardAppearance = appearance
         UINavigationBar.appearance().scrollEdgeAppearance = appearance
         UINavigationBar.appearance().compactAppearance = appearance
-        
+        UINavigationBar.appearance().tintColor = brandRed
+
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithOpaqueBackground()
-        tabBarAppearance.backgroundColor = UIColor(AppTheme.Colors.background)
-        
+        tabBarAppearance.backgroundColor = adaptiveBg
+
         UITabBar.appearance().standardAppearance = tabBarAppearance
         UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
-        
-        UITextField.appearance().tintColor = UIColor(AppTheme.Colors.primary)
-        UITextView.appearance().tintColor = UIColor(AppTheme.Colors.primary)
+        UITabBar.appearance().tintColor = brandRed
+
+        UITextField.appearance().tintColor = brandRed
+        UITextView.appearance().tintColor = brandRed
     }
     
     private func configureAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .moviePlayback, options: [.allowBluetoothA2DP, .allowAirPlay])
+            try session.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
             try session.setActive(true)
-            print("✅ [MyChannelApp] Audio session configured for background playback")
+            print("✅ [MyChannelApp] Audio session configured for foreground playback")
         } catch {
             print("⚠️ [MyChannelApp] Failed to configure audio session: \(error.localizedDescription)")
         }
