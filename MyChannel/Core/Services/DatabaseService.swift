@@ -9,6 +9,12 @@ import Foundation
 import CoreData
 import Combine
 import SwiftUI
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
 
 // MARK: - Database Service
 @MainActor
@@ -145,9 +151,32 @@ class DatabaseService: ObservableObject {
 
     // MARK: - Story Management
     func saveStory(_ story: Story) async throws {
+        // 1. Cache locally for instant UI
         if let encoded = try? encoder.encode(story) {
             userDefaults.set(encoded, forKey: "story_\(story.id)")
         }
+        // 2. Persist to Firestore so all users/devices see the story
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        let expiresAt = story.expiresAt
+        let data: [String: Any] = [
+            "id": story.id,
+            "creatorId": story.creatorId,
+            "mediaURL": story.mediaURL,
+            "mediaType": story.mediaType.rawValue,
+            "duration": story.duration,
+            "caption": story.caption as Any,
+            "text": story.text as Any,
+            "backgroundColor": story.backgroundColor as Any,
+            "textColor": story.textColor as Any,
+            "audience": story.audience ?? "public",
+            "viewCount": story.viewCount,
+            "isLive": false,
+            "createdAt": Timestamp(date: story.createdAt),
+            "expiresAt": Timestamp(date: expiresAt),
+        ]
+        try await db.collection("stories").document(story.id).setData(data, merge: true)
+        #endif
     }
     
     func fetchStoriesByCreator(creatorId: String, includeExpired: Bool = false) async throws -> [Story] {

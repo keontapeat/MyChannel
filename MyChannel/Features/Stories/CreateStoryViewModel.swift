@@ -392,7 +392,8 @@ class CreateStoryViewModel: ObservableObject {
                 backgroundColor: storyType == .text ? colorToHex(backgroundGradient.first ?? .blue) : nil,
                 textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
                 music: storyMusic,
-                stickers: storyStickers
+                stickers: storyStickers,
+                audience: audience.rawValue
             )
         }
         

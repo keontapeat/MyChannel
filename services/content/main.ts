@@ -2,12 +2,17 @@ import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import admin from 'firebase-admin';
+import { Storage } from '@google-cloud/storage';
 
 // Initialize Firebase Admin (Application Default Credentials or service account)
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 const db = admin.firestore();
+const storage = new Storage();
+const STORIES_BUCKET = process.env.STORIES_BUCKET || 'mychannel-ingest';
+
+const app = express();
 
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
@@ -446,6 +451,175 @@ app.get('/v1/videos/:id/related', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// ── Stories ───────────────────────────────────────────────────────────────────
+
+// Helper: verify Firebase ID token and return uid
+async function verifyToken(authHeader: string | undefined): Promise<string | null> {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  try {
+    const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+    return decoded.uid;
+  } catch {
+    return null;
+  }
+}
+
+// GET /v1/stories/following — fetch active stories from followed creators
+app.get('/v1/stories/following', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 24, 50);
+    const now = admin.firestore.Timestamp.now();
+
+    const snap = await db.collection('stories')
+      .where('expiresAt', '>', now)
+      .orderBy('expiresAt', 'desc')
+      .limit(limit)
+      .get();
+
+    const stories = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json({ stories });
+  } catch (error) {
+    console.error('Stories fetch error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/stories/signed-url — get a GCS signed URL for story media upload
+app.post('/v1/stories/signed-url', async (req, res) => {
+  try {
+    const uid = await verifyToken(req.headers.authorization);
+    if (!uid) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { filename, contentType } = req.body || {};
+    if (!filename) return res.status(400).json({ error: 'filename required' });
+
+    const objectName = `stories/${uid}/${filename}`;
+    const file = storage.bucket(STORIES_BUCKET).file(objectName);
+
+    const [url] = await file.getSignedUrl({
+      action: 'write',
+      version: 'v4',
+      expires: Date.now() + 15 * 60 * 1000,
+    });
+    const [getUrl] = await file.getSignedUrl({
+      action: 'read',
+      version: 'v4',
+      expires: Date.now() + 25 * 60 * 60 * 1000,
+    });
+
+    return res.json({
+      url,
+      method: 'PUT',
+      bucket: STORIES_BUCKET,
+      object: objectName,
+      getUrl,
+    });
+  } catch (e: any) {
+    console.error('Stories signed-url error:', e);
+    return res.status(500).json({ error: e?.message || 'internal' });
+  }
+});
+
+// POST /v1/stories/finalize — set content-type metadata, return public URL
+app.post('/v1/stories/finalize', async (req, res) => {
+  try {
+    const uid = await verifyToken(req.headers.authorization);
+    if (!uid) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { object, bucket, contentType } = req.body || {};
+    const bkt = String(bucket || STORIES_BUCKET);
+    const obj = String(object || '').trim();
+    if (!obj) return res.status(400).json({ error: 'object required' });
+
+    const file = storage.bucket(bkt).file(obj);
+    if (contentType) {
+      try { await file.setMetadata({ contentType: String(contentType) }); } catch {}
+    }
+
+    const [publicUrl] = await file.getSignedUrl({
+      action: 'read',
+      version: 'v4',
+      expires: Date.now() + 25 * 60 * 60 * 1000,
+    });
+
+    return res.json({ url: publicUrl, publicUrl, bucket: bkt, object: obj, contentType: contentType || null });
+  } catch (e: any) {
+    console.error('Stories finalize error:', e);
+    return res.status(500).json({ error: e?.message || 'internal' });
+  }
+});
+
+// POST /v1/stories — create a story record in Firestore
+app.post('/v1/stories', async (req, res) => {
+  try {
+    const uid = await verifyToken(req.headers.authorization);
+    if (!uid) return res.status(401).json({ error: 'Unauthorized' });
+
+    const {
+      mediaUrl, mediaType, duration, caption, text,
+      backgroundColor, textColor, music, stickers, audience
+    } = req.body || {};
+
+    if (!mediaUrl || !mediaType) {
+      return res.status(400).json({ error: 'mediaUrl and mediaType are required' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000);
+
+    const storyData: Record<string, any> = {
+      creatorId: uid,
+      mediaURL: mediaUrl,
+      mediaType,
+      duration: duration || 15,
+      caption: caption || null,
+      text: text || null,
+      backgroundColor: backgroundColor || null,
+      textColor: textColor || null,
+      music: music || null,
+      stickers: stickers || [],
+      audience: audience || 'public',
+      viewCount: 0,
+      isLive: false,
+      createdAt: now,
+      expiresAt,
+    };
+
+    const docRef = await db.collection('stories').add(storyData);
+
+    const story = {
+      id: docRef.id,
+      creatorId: uid,
+      mediaURL: mediaUrl,
+      mediaType,
+      duration: duration || 15,
+      caption: caption || null,
+      text: text || null,
+      backgroundColor: backgroundColor || null,
+      textColor: textColor || null,
+      music: music || null,
+      stickers: stickers || [],
+      polls: [],
+      links: [],
+      content: [],
+      audience: audience || 'public',
+      viewCount: 0,
+      isViewed: false,
+      isLive: false,
+      thumbnail: null,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    };
+
+    return res.status(201).json({ story });
+  } catch (e: any) {
+    console.error('Create story error:', e);
+    return res.status(500).json({ error: e?.message || 'internal' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {

@@ -34,6 +34,7 @@ struct Story: Identifiable, Codable, Equatable {
     let stickers: [StorySticker]
     let polls: [StoryPoll]
     let links: [StoryLink]
+    let audience: String?
     
     init(
         id: String = UUID().uuidString,
@@ -55,7 +56,8 @@ struct Story: Identifiable, Codable, Equatable {
         music: StoryMusic? = nil,
         stickers: [StorySticker] = [],
         polls: [StoryPoll] = [],
-        links: [StoryLink] = []
+        links: [StoryLink] = [],
+        audience: String? = "public"
     ) {
         self.id = id
         self.creatorId = creatorId
@@ -77,8 +79,33 @@ struct Story: Identifiable, Codable, Equatable {
         self.stickers = stickers
         self.polls = polls
         self.links = links
+        self.audience = audience
     }
     
+    enum CodingKeys: String, CodingKey {
+        case id
+        case creatorId
+        case mediaURL
+        case mediaType
+        case duration
+        case caption
+        case text
+        case createdAt
+        case expiresAt
+        case viewCount
+        case isViewed
+        case thumbnail
+        case isLive
+        case content
+        case backgroundColor
+        case textColor
+        case music
+        case stickers
+        case polls
+        case links
+        case audience
+    }
+
     enum MediaType: String, Codable, CaseIterable {
         case image = "image"
         case video = "video"
