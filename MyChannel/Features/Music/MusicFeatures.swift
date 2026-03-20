@@ -32,8 +32,8 @@ struct DownloadedTrack: Identifiable, Codable {
 }
 
 @MainActor
-final class DownloadManager: ObservableObject {
-    static let shared = DownloadManager()
+final class MusicDownloadManager: ObservableObject {
+    static let shared = MusicDownloadManager()
     
     @Published var downloads: [DownloadedTrack] = []
     @Published var downloadingTracks: Set<String> = []
@@ -122,7 +122,7 @@ final class DownloadManager: ObservableObject {
 // MARK: - Music Downloads View
 
 struct MusicDownloadsView: View {
-    @StateObject private var downloadManager = DownloadManager.shared
+    @StateObject private var downloadManager = MusicDownloadManager.shared
     @State private var showDeleteAlert: Bool = false
     
     var body: some View {

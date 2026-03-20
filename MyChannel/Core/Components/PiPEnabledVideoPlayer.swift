@@ -198,7 +198,7 @@ struct PiPEnabledVideoPlayer: UIViewControllerRepresentable {
         
         // 🔥 ENABLE Picture-in-Picture
         controller.allowsPictureInPicturePlayback = true
-        controller.canStartPictureInPictureAutomaticallyFromInline = false
+        controller.canStartPictureInPictureAutomaticallyFromInline = true
         
         // Disable auto-fullscreen
         controller.entersFullScreenWhenPlaybackBegins = false
@@ -223,7 +223,7 @@ struct PiPEnabledVideoPlayer: UIViewControllerRepresentable {
         }
         
         controller.allowsPictureInPicturePlayback = true
-        controller.canStartPictureInPictureAutomaticallyFromInline = false
+        controller.canStartPictureInPictureAutomaticallyFromInline = true
     }
 }
 

@@ -1429,34 +1429,42 @@ struct VideoDetailView: View {
             playerControlsTimer?.invalidate()
             controlsHideTimer?.invalidate()
             
-            // If native PiP is active (chevron button path), the video is already
-            // playing in the system floating bubble — nothing else to do.
+            // If native PiP is active (chevron button path or auto-PiP), the video is
+            // already playing in the system floating bubble — nothing else to do.
             let nativePiPActive = PiPPlayerManager.shared.pipController?.isPictureInPictureActive ?? false
             guard !nativePiPActive else {
-                print("✅ [VideoDetailView] Native PiP active — skipping in-app mini player adoption")
+                print("✅ [VideoDetailView] Native PiP active — no action needed")
                 return
             }
             
             // When dismissed by swipe-to-dismiss or back gesture (not chevron),
-            // hand off to the floating mini player — always clear fullscreen first.
+            // start native PiP so the video continues in a floating system window.
             if !isYouTube {
                 Task { @MainActor in
                     let wasPlaying = playerManager.isPlaying
-                    // Adopt the local player so the FloatingMiniPlayer can render it
+                    // Adopt player into global manager so PiP controller has a reference
                     await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
-                    // CRITICAL: must be false so FloatingMiniPlayer condition passes
                     globalPlayer.showingFullscreen = false
-                    if wasPlaying, let player = globalPlayer.player, player.rate == 0 {
-                        player.play()
-                        globalPlayer.isPlaying = true
+                    if wasPlaying {
+                        // Ensure playback continues
+                        if let player = globalPlayer.player, player.rate == 0 {
+                            player.play()
+                            globalPlayer.isPlaying = true
+                        }
+                        // Start native PiP floating window
+                        globalPlayer.startPiP()
                     }
                 }
             }
         }
         .onChange(of: scenePhase) { newPhase in
-            if newPhase == .background || newPhase == .inactive {
-                if playerManager.isPlaying {
-                    playerManager.pause()
+            // Don't pause on background — native PiP needs playback to continue
+            // so the system floating window can appear automatically.
+            if newPhase == .active {
+                // Restore inline playback if PiP was stopped by returning to app
+                let pipActive = PiPPlayerManager.shared.pipController?.isPictureInPictureActive ?? false
+                if !pipActive && !playerManager.isPlaying {
+                    print("🔄 [VideoDetailView] Returned to foreground, PiP not active")
                 }
             }
         }
@@ -1649,20 +1657,26 @@ struct VideoDetailView: View {
 
     @MainActor
     private func minimizeToMiniPlayer() async {
-        print("🔄 [VideoDetailView] Minimizing to in-app mini player")
+        print("🔄 [VideoDetailView] Minimizing to native PiP")
         let wasPlaying = playerManager.isPlaying
         
-        // Hand the player off to GlobalVideoPlayerManager so the mini player can render it
+        // Hand the player off to GlobalVideoPlayerManager so PiP controller has a reference
         await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
-        
-        // Mark as NOT fullscreen — this causes the in-app mini player to appear in MainTabView
         globalPlayer.showingFullscreen = false
         
-        // Keep playback going
+        // Keep playback going and start native PiP
         if wasPlaying, let player = globalPlayer.player, player.rate == 0 {
             player.play()
             globalPlayer.isPlaying = true
         }
+        
+        // Start native iOS PiP floating window, then dismiss
+        PiPPlayerManager.shared.startPiP(
+            onStarted: { [weak globalPlayer] in
+                globalPlayer?.showingFullscreen = false
+            },
+            onFailed: nil
+        )
         
         // Dismiss the VideoDetailView
         dismiss()

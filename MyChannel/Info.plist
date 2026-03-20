@@ -199,6 +199,8 @@
 	
 	<key>UIBackgroundModes</key>
 	<array>
+		<!-- Audio - Required for Picture-in-Picture and background playback -->
+		<string>audio</string>
 		<!-- Background fetch - Sync subscriptions, preload content -->
 		<string>fetch</string>
 		<!-- Remote notifications - Push notifications -->

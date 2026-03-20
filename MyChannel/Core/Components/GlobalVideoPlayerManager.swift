@@ -174,38 +174,39 @@ class GlobalVideoPlayerManager: ObservableObject {
         configureAudioSession()
         wasPlayingBeforeBackground = isPlaying
         
-        // 🔥 YOUTUBE PARITY: Start native iOS PiP when backgrounding
+        // 🔥 YOUTUBE PARITY: Native PiP auto-starts via canStartPictureInPictureAutomaticallyFromInline.
+        // If player is active, PiP controller will automatically show the floating window.
+        // As a fallback, explicitly start PiP if it hasn't auto-started.
         if wasPlayingBeforeBackground && allowSystemPictureInPicture {
-            print("▶️ [GlobalPlayer] Starting native PiP for background playback")
+            print("▶️ [GlobalPlayer] Background with active playback — PiP will auto-start")
             
-            // Setup PiP controller if needed
+            // Ensure PiP controller is set up
             if let player = player {
                 pipController.setup(with: player)
-                
-                // Start PiP
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                    self?.pipController.startPiP()
+            }
+            
+            // Fallback: explicitly start PiP if auto-start didn't trigger
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                guard let self = self else { return }
+                if !self.pipController.isActive {
+                    self.pipController.startPiP()
                 }
             }
-        } else {
-            playerManager?.pause()
         }
+        // Don't pause — let PiP continue playback in the floating window
     }
     
     private func handleAppWillEnterForeground() {
-        print("🎧 [GlobalPlayer] App entering foreground - restoring mini player state")
+        print("🎧 [GlobalPlayer] App entering foreground")
         guard currentVideo != nil else { return }
         
-        // 🔥 YOUTUBE PARITY: Stop native PiP when foregrounding
-        if pipController.isActive {
-            print("⏹️ [GlobalPlayer] Stopping native PiP - app in foreground")
-            pipController.stopPiP()
-        }
-        
-        if wasPlayingBeforeBackground,
-           let player = player,
-           player.timeControlStatus != .playing {
-            player.play()
+        // Native PiP will stop automatically when the user taps the restore button
+        // on the PiP window. The restoreUserInterface delegate handles expansion.
+        // Only resume playback if PiP stopped and player was paused.
+        if !pipController.isActive && wasPlayingBeforeBackground {
+            if let player = player, player.timeControlStatus != .playing {
+                player.play()
+            }
         }
         
         wasPlayingBeforeBackground = false
@@ -214,7 +215,7 @@ class GlobalVideoPlayerManager: ObservableObject {
     private func configureAudioSession() {
         do {
             let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers, .allowAirPlay])
+            try audioSession.setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay])
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
             print("✅ [GlobalVideoPlayerManager] Audio session configured")
         } catch {

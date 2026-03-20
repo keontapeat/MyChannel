@@ -222,9 +222,9 @@ extension DownloadedVideo {
                 thumbnailUrl: "https://images.unsplash.com/photo-1552820728-8b83bb6b773f?w=500&h=281&fit=crop",
                 duration: 900,
                 viewCount: 2_400_000,
+                downloadDate: Calendar.current.date(byAdding: .hour, value: -12, to: Date()) ?? Date(),
                 fileSize: 320 * 1024 * 1024,
-                quality: .high,
-                downloadDate: Calendar.current.date(byAdding: .hour, value: -12, to: Date()) ?? Date()
+                quality: .high
             ),
             DownloadedVideo(
                 videoId: "5",
@@ -233,9 +233,9 @@ extension DownloadedVideo {
                 thumbnailUrl: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&h=281&fit=crop",
                 duration: 3600,
                 viewCount: 5_100_000,
+                downloadDate: Calendar.current.date(byAdding: .day, value: -3, to: Date()) ?? Date(),
                 fileSize: 280 * 1024 * 1024,
                 quality: .medium,
-                downloadDate: Calendar.current.date(byAdding: .day, value: -3, to: Date()) ?? Date(),
                 isWatched: true
             )
         ]

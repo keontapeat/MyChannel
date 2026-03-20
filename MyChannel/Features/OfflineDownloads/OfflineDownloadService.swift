@@ -302,6 +302,7 @@ class OfflineDownloadService: ObservableObject {
         case .low: return 50 * 1024 * 1024 // 50MB
         case .medium: return 150 * 1024 * 1024 // 150MB
         case .high: return 300 * 1024 * 1024 // 300MB
+        case .hd: return 400 * 1024 * 1024 // 400MB
         case .highest: return 500 * 1024 * 1024 // 500MB
         }
     }

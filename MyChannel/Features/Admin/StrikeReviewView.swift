@@ -16,7 +16,6 @@ struct StrikeReviewView: View {
     @StateObject private var vm = StrikeViewModel()
     @State private var selectedFilter: StrikeFilter = .pending
     @State private var selectedCase: StrikeCase?
-    @State private var showReviewSheet = false
     @State private var pulseAnimation = false
 
     enum StrikeFilter: String, CaseIterable {
@@ -54,7 +53,6 @@ struct StrikeReviewView: View {
                         ForEach(filteredCases) { strikeCase in
                             StrikeCaseRow(strikeCase: strikeCase) {
                                 selectedCase = strikeCase
-                                showReviewSheet = true
                             }
                         }
                     }
@@ -71,10 +69,10 @@ struct StrikeReviewView: View {
             }
         }
         .onDisappear { vm.stopListening() }
-        .sheet(isPresented: $showReviewSheet) {
-            if let c = selectedCase {
-                StrikeCaseReviewSheet(strikeCase: c, vm: vm)
-            }
+        .sheet(item: $selectedCase) { c in
+            StrikeCaseReviewSheet(strikeCase: c, vm: vm)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .refreshable { vm.startListening() }
     }
@@ -164,7 +162,7 @@ private struct StrikeCaseRow: View {
                 HStack(spacing: 10) {
                     // Strike badges
                     HStack(spacing: 4) {
-                        ForEach(0..<3) { i in
+                        ForEach(0..<3, id: \.self) { i in
                             Image(systemName: "bolt.fill")
                                 .font(.system(size: 12))
                                 .foregroundColor(i < strikeCase.strikeCount ? strikeColor(strikeCase.strikeCount) : Color(.systemGray5))
@@ -336,77 +334,173 @@ struct StrikeCaseReviewSheet: View {
     @State private var showConfirmation = false
     @State private var userVideos: [UserVideo] = []
     @State private var loadingVideos = true
+    @State private var profileImageURL: URL? = nil
+    @State private var reporterCount: Int = 0
+    @State private var flaggedContentImages: [FlaggedContent] = []
+    @State private var loadingFlagged = true
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+        NavigationStack {
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 18) {
 
-                // Drag handle
-                Capsule()
-                    .fill(Color(.systemGray4))
-                    .frame(width: 36, height: 4)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 10)
+                    // Risk Banner at top
+                    riskBanner
 
-                // Header row
-                HStack {
-                    Text("⚖️ REVIEW CASE")
-                        .font(.system(size: 16, weight: .black, design: .monospaced))
-                    Spacer()
+                    // Account Header with profile pic
+                    accountHeader.padding(.horizontal, 20)
+
+                    Divider().padding(.horizontal, 20)
+
+                    // Flagged Content Evidence — the actual images/videos they uploaded
+                    flaggedContentSection.padding(.horizontal, 20)
+
+                    Divider().padding(.horizontal, 20)
+
+                    // Strike Timeline
+                    strikeTimeline.padding(.horizontal, 20)
+
+                    Divider().padding(.horizontal, 20)
+
+                    // Violation History
+                    violationHistory.padding(.horizontal, 20)
+
+                    Divider().padding(.horizontal, 20)
+
+                    // User's Other Posted Videos
+                    userVideosSection.padding(.horizontal, 20)
+
+                    Divider().padding(.horizontal, 20)
+
+                    // AI Risk Assessment Section
+                    aiAssessmentSection.padding(.horizontal, 20)
+
+                    Divider().padding(.horizontal, 20)
+
+                    // Owner Message to User
+                    ownerMessageSection.padding(.horizontal, 20)
+
+                    // Action Buttons
+                    actionButtons.padding(.horizontal, 20)
+
+                    Spacer(minLength: 60)
+                }
+                .padding(.top, 10)
+            }
+            .background(Color(.systemBackground))
+            .navigationTitle("Review Case")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.blue)
                 }
-                .padding(.horizontal, 20)
-
-                // Account Header
-                accountHeader.padding(.horizontal, 20)
-
-                Divider().padding(.horizontal, 20)
-
-                // User's Posted Videos
-                userVideosSection.padding(.horizontal, 20)
-
-                Divider().padding(.horizontal, 20)
-
-                // Strike Timeline
-                strikeTimeline.padding(.horizontal, 20)
-
-                Divider().padding(.horizontal, 20)
-
-                // Violation History
-                violationHistory.padding(.horizontal, 20)
-
-                Divider().padding(.horizontal, 20)
-
-                // AI Risk Assessment Section
-                aiAssessmentSection.padding(.horizontal, 20)
-
-                Divider().padding(.horizontal, 20)
-
-                // Owner Message to User
-                ownerMessageSection.padding(.horizontal, 20)
-
-                // Action Buttons
-                actionButtons.padding(.horizontal, 20)
-
-                Spacer(minLength: 40)
             }
-        }
-        .background(Color(.systemBackground))
-        .onAppear { loadUserVideos() }
-        .alert("Confirm Action", isPresented: $showConfirmation) {
-            Button("Confirm", role: .destructive) {
+            .onAppear {
+                loadUserVideos()
+                loadProfileImage()
+                loadFlaggedContent()
+                loadReporterCount()
+            }
+            .alert("Confirm Action", isPresented: $showConfirmation) {
+                Button("Confirm", role: .destructive) {
+                    if let action = selectedAction {
+                        submitDecision(action)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
                 if let action = selectedAction {
-                    submitDecision(action)
+                    Text(action.confirmationMessage(username: strikeCase.username))
                 }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            if let action = selectedAction {
-                Text(action.confirmationMessage(username: strikeCase.username))
+            .overlay {
+                if isSubmitting {
+                    ZStack {
+                        Color.black.opacity(0.3).ignoresSafeArea()
+                        VStack(spacing: 12) {
+                            ProgressView().scaleEffect(1.4)
+                            Text("Applying decision...")
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                .foregroundColor(.white)
+                        }
+                        .padding(24)
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(16)
+                    }
+                }
             }
         }
+    }
+
+    // MARK: - Load Profile Image from Firestore
+
+    private func loadProfileImage() {
+        let db = Firestore.firestore()
+        db.collection("users").document(strikeCase.userId).getDocument { snap, _ in
+            guard let data = snap?.data() else { return }
+            if let urlStr = data["profileImageURL"] as? String ?? data["photoURL"] as? String,
+               let url = URL(string: urlStr) {
+                DispatchQueue.main.async { profileImageURL = url }
+            }
+        }
+    }
+
+    // MARK: - Load Flagged Content from Firestore
+
+    private func loadFlaggedContent() {
+        loadingFlagged = true
+        let db = Firestore.firestore()
+        db.collection("flaggedContent")
+            .whereField("userId", isEqualTo: strikeCase.userId)
+            .order(by: "flaggedAt", descending: true)
+            .limit(to: 10)
+            .getDocuments { snap, _ in
+                DispatchQueue.main.async {
+                    loadingFlagged = false
+                    guard let docs = snap?.documents else { return }
+                    flaggedContentImages = docs.compactMap { doc -> FlaggedContent? in
+                        let d = doc.data()
+                        return FlaggedContent(
+                            id: doc.documentID,
+                            imageURL: d["imageURL"] as? String ?? d["thumbnailURL"] as? String ?? d["mediaURL"] as? String,
+                            videoURL: d["videoURL"] as? String,
+                            title: d["title"] as? String ?? "Flagged content",
+                            reason: d["reason"] as? String ?? d["violationType"] as? String ?? "Policy violation",
+                            flaggedAt: (d["flaggedAt"] as? Timestamp)?.dateValue() ?? Date(),
+                            reportCount: d["reportCount"] as? Int ?? 1
+                        )
+                    }
+                    // If no flaggedContent collection docs, try pulling from violation thumbnails
+                    if flaggedContentImages.isEmpty {
+                        flaggedContentImages = strikeCase.violations.compactMap { v -> FlaggedContent? in
+                            guard v.thumbnailURL != nil || v.videoTitle != nil else { return nil }
+                            return FlaggedContent(
+                                id: v.id,
+                                imageURL: v.thumbnailURL,
+                                videoURL: nil,
+                                title: v.videoTitle ?? v.type,
+                                reason: v.type,
+                                flaggedAt: v.date,
+                                reportCount: 1
+                            )
+                        }
+                    }
+                }
+            }
+    }
+
+    // MARK: - Load Reporter Count
+
+    private func loadReporterCount() {
+        let db = Firestore.firestore()
+        db.collection("reports")
+            .whereField("reportedUserId", isEqualTo: strikeCase.userId)
+            .getDocuments { snap, _ in
+                DispatchQueue.main.async {
+                    reporterCount = snap?.documents.count ?? 0
+                }
+            }
     }
 
     // MARK: - Load User Videos from Firestore
@@ -438,6 +532,254 @@ struct StrikeCaseReviewSheet: View {
             }
     }
 
+    // MARK: - Risk Banner
+
+    private var riskBanner: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: riskIcon)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+                Text(riskLabel)
+                    .font(.system(size: 12, weight: .black, design: .monospaced))
+                    .foregroundColor(.white)
+                Spacer()
+                Text("\(strikeCase.strikeCount)/3 STRIKES")
+                    .font(.system(size: 11, weight: .black, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.9))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.2))
+                    .cornerRadius(6)
+            }
+            HStack(spacing: 12) {
+                Label("\(strikeCase.violations.count) violation\(strikeCase.violations.count == 1 ? "" : "s")", systemImage: "doc.text.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white.opacity(0.85))
+                if reporterCount > 0 {
+                    Label("\(reporterCount) report\(reporterCount == 1 ? "" : "s")", systemImage: "person.2.fill")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white.opacity(0.85))
+                }
+                Spacer()
+                Text(strikeCase.lastActivity, style: .relative)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+        }
+        .padding(14)
+        .background(
+            LinearGradient(
+                colors: riskGradient,
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .cornerRadius(0)
+    }
+
+    private var riskIcon: String {
+        if strikeCase.aiRiskScore >= 80 { return "exclamationmark.octagon.fill" }
+        if strikeCase.aiRiskScore >= 50 { return "exclamationmark.triangle.fill" }
+        return "info.circle.fill"
+    }
+
+    private var riskLabel: String {
+        if strikeCase.aiRiskScore >= 90 { return "MAXIMUM RISK" }
+        if strikeCase.aiRiskScore >= 80 { return "CRITICAL RISK" }
+        if strikeCase.aiRiskScore >= 60 { return "HIGH RISK" }
+        if strikeCase.aiRiskScore >= 40 { return "MODERATE RISK" }
+        return "LOW RISK"
+    }
+
+    private var riskGradient: [Color] {
+        if strikeCase.aiRiskScore >= 80 { return [Color.red, Color.red.opacity(0.8)] }
+        if strikeCase.aiRiskScore >= 50 { return [Color.orange, Color.orange.opacity(0.8)] }
+        return [Color.yellow.opacity(0.8), Color.yellow.opacity(0.6)]
+    }
+
+    // MARK: - Account Header
+
+    private var accountHeader: some View {
+        HStack(spacing: 14) {
+            // Profile Image from Firestore
+            ZStack {
+                Circle()
+                    .fill(strikeCase.strikeCount >= 3 ? Color.red.opacity(0.2) : Color.orange.opacity(0.15))
+                    .frame(width: 64, height: 64)
+                if let url = profileImageURL {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let img):
+                            img.resizable().scaledToFill()
+                                .frame(width: 60, height: 60)
+                                .clipShape(Circle())
+                        case .failure:
+                            avatarFallback
+                        default:
+                            ProgressView().frame(width: 60, height: 60)
+                        }
+                    }
+                } else {
+                    avatarFallback
+                }
+                // Strike badge overlay
+                if strikeCase.strikeCount > 0 {
+                    ZStack {
+                        Circle().fill(strikeCase.strikeCount >= 3 ? Color.red : Color.orange)
+                            .frame(width: 22, height: 22)
+                        Text("\(strikeCase.strikeCount)")
+                            .font(.system(size: 11, weight: .black))
+                            .foregroundColor(.white)
+                    }
+                    .offset(x: 22, y: 22)
+                }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(strikeCase.username)
+                    .font(.system(size: 18, weight: .bold))
+                Text(strikeCase.email)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Label("\(strikeCase.videoCount)", systemImage: "video.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.secondary)
+                    Text("|").foregroundColor(.secondary).font(.system(size: 10))
+                    Label("\(strikeCase.followerCount)", systemImage: "person.2.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.secondary)
+                    Text("|").foregroundColor(.secondary).font(.system(size: 10))
+                    Label("Joined \(strikeCase.joinDate, style: .date)", systemImage: "calendar")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+            }
+            Spacer()
+            StrikeStatusBadge(status: strikeCase.status)
+        }
+    }
+
+    private var avatarFallback: some View {
+        Text(String(strikeCase.username.prefix(2)).uppercased())
+            .font(.system(size: 22, weight: .bold))
+            .foregroundColor(strikeCase.strikeCount >= 3 ? .red : .orange)
+            .frame(width: 60, height: 60)
+    }
+
+    // MARK: - Flagged Content Evidence
+
+    private var flaggedContentSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.red).font(.system(size: 12))
+                Text("FLAGGED CONTENT EVIDENCE")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+
+            if loadingFlagged {
+                HStack(spacing: 8) {
+                    ProgressView().scaleEffect(0.8)
+                    Text("Loading evidence...")
+                        .font(.system(size: 12)).foregroundColor(.secondary)
+                }
+                .padding(.vertical, 8)
+            } else if flaggedContentImages.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .foregroundColor(.secondary)
+                    Text("No flagged media on record — violations may be text/behavioral")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.vertical, 8)
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(flaggedContentImages) { item in
+                        VStack(alignment: .leading, spacing: 8) {
+                            // Evidence image/thumbnail
+                            if let urlStr = item.imageURL, let url = URL(string: urlStr) {
+                                ZStack(alignment: .topLeading) {
+                                    AsyncImage(url: url) { phase in
+                                        switch phase {
+                                        case .success(let img):
+                                            img.resizable().scaledToFill()
+                                                .frame(maxWidth: .infinity)
+                                                .frame(height: 180)
+                                                .clipped()
+                                                .cornerRadius(10)
+                                        case .failure:
+                                            evidencePlaceholder
+                                        default:
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .fill(Color(.systemGray5))
+                                                .frame(height: 180)
+                                                .overlay(ProgressView())
+                                        }
+                                    }
+                                    // Violation badge
+                                    Text("VIOLATION")
+                                        .font(.system(size: 8, weight: .black, design: .monospaced))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(Color.red)
+                                        .cornerRadius(4)
+                                        .padding(8)
+                                }
+                            } else {
+                                evidencePlaceholder
+                            }
+
+                            // Evidence details
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(item.title)
+                                    .font(.system(size: 13, weight: .bold))
+                                    .lineLimit(2)
+                                HStack(spacing: 8) {
+                                    Label(item.reason, systemImage: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(.red)
+                                    Spacer()
+                                    if item.reportCount > 1 {
+                                        Label("\(item.reportCount) reports", systemImage: "flag.fill")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundColor(.orange)
+                                    }
+                                }
+                                Text(item.flaggedAt, style: .relative)
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(10)
+                        .background(Color.red.opacity(0.04))
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.red.opacity(0.2), lineWidth: 1))
+                    }
+                }
+            }
+        }
+    }
+
+    private var evidencePlaceholder: some View {
+        RoundedRectangle(cornerRadius: 10)
+            .fill(Color(.systemGray5))
+            .frame(height: 120)
+            .overlay(
+                VStack(spacing: 6) {
+                    Image(systemName: "eye.slash.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(.secondary)
+                    Text("Content removed or unavailable")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            )
+    }
+
     // MARK: - User Videos Section
 
     private var userVideosSection: some View {
@@ -463,7 +805,7 @@ struct StrikeCaseReviewSheet: View {
                     .foregroundColor(.secondary)
                     .padding(.vertical, 8)
             } else {
-                LazyVStack(spacing: 8) {
+                VStack(spacing: 8) {
                     ForEach(userVideos) { video in
                         HStack(spacing: 10) {
                             ZStack {
@@ -529,41 +871,6 @@ struct StrikeCaseReviewSheet: View {
         }
     }
 
-    // MARK: - Account Header
-
-    private var accountHeader: some View {
-        HStack(spacing: 14) {
-            // Avatar placeholder
-            ZStack {
-                Circle()
-                    .fill(strikeCase.strikeCount >= 3 ? Color.red.opacity(0.2) : Color.orange.opacity(0.15))
-                    .frame(width: 56, height: 56)
-                Text(String(strikeCase.username.prefix(2)).uppercased())
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(strikeCase.strikeCount >= 3 ? .red : .orange)
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(strikeCase.username)
-                    .font(.system(size: 20, weight: .bold))
-                Text(strikeCase.email)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.secondary)
-                HStack(spacing: 8) {
-                    Text("Joined: \(strikeCase.joinDate, style: .date)")
-                        .font(.system(size: 11)).foregroundColor(.secondary)
-                    Text("·")
-                    Text("\(strikeCase.videoCount) videos")
-                        .font(.system(size: 11)).foregroundColor(.secondary)
-                    Text("·")
-                    Text("\(strikeCase.followerCount) followers")
-                        .font(.system(size: 11)).foregroundColor(.secondary)
-                }
-            }
-            Spacer()
-            StrikeStatusBadge(status: strikeCase.status)
-        }
-    }
-
     // MARK: - Strike Timeline
 
     private var strikeTimeline: some View {
@@ -573,7 +880,7 @@ struct StrikeCaseReviewSheet: View {
                 .foregroundColor(.secondary)
 
             HStack(spacing: 0) {
-                ForEach(0..<3) { i in
+                ForEach(0..<3, id: \.self) { i in
                     VStack(spacing: 6) {
                         ZStack {
                             Circle()
@@ -594,6 +901,7 @@ struct StrikeCaseReviewSheet: View {
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
                             .foregroundColor(i < strikeCase.strikeCount ? strikeCountColor(i + 1) : .secondary)
                             .multilineTextAlignment(.center)
+                            .frame(width: 80)
                     }
                     .frame(maxWidth: .infinity)
 
@@ -625,9 +933,12 @@ struct StrikeCaseReviewSheet: View {
 
     private var violationHistory: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("VIOLATION RECORD")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(.secondary)
+            HStack {
+                Image(systemName: "doc.text.fill").foregroundColor(.orange).font(.system(size: 12))
+                Text("VIOLATION RECORD (\(strikeCase.violations.count))")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
 
             if strikeCase.violations.isEmpty {
                 Text("No violations on record").font(.system(size: 13)).foregroundColor(.secondary)
@@ -658,19 +969,14 @@ struct StrikeCaseReviewSheet: View {
                         .foregroundColor(.secondary)
                     Spacer()
                     Text("\(strikeCase.aiRiskScore)%")
-                        .font(.system(size: 18, weight: .black))
+                        .font(.system(size: 22, weight: .black))
                         .foregroundColor(riskColor(strikeCase.aiRiskScore))
                 }
 
                 // Risk bar
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 3).fill(Color(.systemGray5)).frame(height: 6)
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(riskColor(strikeCase.aiRiskScore))
-                            .frame(width: geo.size.width * Double(strikeCase.aiRiskScore) / 100, height: 6)
-                    }
-                }.frame(height: 6)
+                ProgressView(value: Double(strikeCase.aiRiskScore), total: 100)
+                    .tint(riskColor(strikeCase.aiRiskScore))
+                    .scaleEffect(y: 1.5)
 
                 if !strikeCase.aiRiskSummary.isEmpty {
                     Text(strikeCase.aiRiskSummary)
@@ -684,11 +990,18 @@ struct StrikeCaseReviewSheet: View {
 
                 // AI Recommendation
                 HStack(spacing: 6) {
-                    Image(systemName: "lightbulb.fill").foregroundColor(.yellow).font(.system(size: 12))
-                    Text("AI RECOMMENDS: \(strikeCase.aiRecommendation.uppercased())")
+                    Image(systemName: "lightbulb.fill").foregroundColor(.yellow).font(.system(size: 14))
+                    Text("AI RECOMMENDS:")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    Text(strikeCase.aiRecommendation.uppercased())
+                        .font(.system(size: 10, weight: .black, design: .monospaced))
                         .foregroundColor(.yellow)
                 }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.yellow.opacity(0.08))
+                .cornerRadius(8)
             }
             .padding(12)
             .background(Color.cyan.opacity(0.05))
@@ -707,10 +1020,13 @@ struct StrikeCaseReviewSheet: View {
 
     private var ownerMessageSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("YOUR MESSAGE TO USER (OPTIONAL)")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(.secondary)
-            Text("They will see this message in their app — ask a question, give a warning, or explain your decision.")
+            HStack {
+                Image(systemName: "message.fill").foregroundColor(.blue).font(.system(size: 12))
+                Text("YOUR MESSAGE TO USER (OPTIONAL)")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            Text("They will see this in their app — ask a question, give a warning, or explain your decision.")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
             TextEditor(text: $ownerMessage)
@@ -726,10 +1042,14 @@ struct StrikeCaseReviewSheet: View {
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
-        VStack(spacing: 12) {
-            Text("YOUR DECISION")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(.secondary)
+        VStack(spacing: 10) {
+            HStack {
+                Image(systemName: "gavel.fill").foregroundColor(.primary).font(.system(size: 12))
+                Text("YOUR DECISION")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             // Give Another Chance
             DecisionButton(
@@ -817,6 +1137,18 @@ struct UserVideo: Identifiable {
     let views: Int
     let createdAt: Date
     let flagged: Bool
+}
+
+// MARK: - Flagged Content Model
+
+struct FlaggedContent: Identifiable {
+    let id: String
+    let imageURL: String?
+    let videoURL: String?
+    let title: String
+    let reason: String
+    let flaggedAt: Date
+    let reportCount: Int
 }
 
 // MARK: - Decision Button

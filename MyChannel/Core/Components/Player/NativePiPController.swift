@@ -54,7 +54,7 @@ class NativePiPController: NSObject, ObservableObject {
             pipPossibleObservation?.invalidate()
             
             controller.delegate = self
-            controller.canStartPictureInPictureAutomaticallyFromInline = false
+            controller.canStartPictureInPictureAutomaticallyFromInline = true
             pipController = controller
             
             // 🔥 PERF: Cache initial state

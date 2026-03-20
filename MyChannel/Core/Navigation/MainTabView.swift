@@ -252,19 +252,9 @@ struct MainTabView: View {
             .zIndex(999)
             .allowsHitTesting(true)
 
-            // 🔥 Floating mini player — large draggable card above everything
-            if globalPlayer.currentVideo != nil,
-               !globalPlayer.showingFullscreen,
-               globalPlayer.player != nil,
-               selectedTab != .flicks {
-                SafeFloatingMiniPlayer()
-                    .environmentObject(globalPlayer)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .ignoresSafeArea()
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(2000)
-                    .animation(.easeInOut(duration: 0.25), value: globalPlayer.currentVideo?.id)
-            }
+            // Native iOS PiP replaces the custom mini player bar.
+            // When user swipes down or backgrounds the app, the system PiP
+            // floating window appears automatically — no custom overlay needed.
         }
         .ignoresSafeArea(.keyboard)
         .fullScreenCover(isPresented: $showingUpload) {
@@ -1449,9 +1439,11 @@ private struct CustomTabBarPreview: View {
     }
 }
 
+// SafeFloatingMiniPlayer removed — native iOS PiP replaces the custom mini-player.
+// Kept as empty stub in case any other file references it.
 struct SafeFloatingMiniPlayer: View {
     var body: some View {
-        FloatingMiniPlayer()
+        EmptyView()
     }
 }
 
