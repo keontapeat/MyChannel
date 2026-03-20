@@ -103,6 +103,27 @@ struct VideoDetailView: View {
     @State private var showingCinemaMode = false
     @State private var showingCreatorProfile = false
     @State private var showingQueueSidebar = false  // 🔥 YOUTUBE PARITY: Queue sidebar
+    
+    // MARK: - YouTube Parity: Long-Press 2x Speed
+    @State private var isLongPressSpeedUp = false  // 🔥 YOUTUBE PARITY: Hold-to-2x active
+    @State private var savedPlaybackRate: Float = 1.0  // 🔥 Rate before long-press
+    @State private var showSpeedUpIndicator = false
+    
+    // MARK: - YouTube Parity: Horizontal Swipe-to-Seek
+    @State private var isHorizontalSeeking = false
+    @State private var seekStartTime: TimeInterval = 0
+    @State private var seekDeltaSeconds: TimeInterval = 0
+    @State private var showSeekOverlay = false
+    
+    // MARK: - YouTube Parity: Loop Toggle
+    @State private var isLooping = false
+    
+    // MARK: - YouTube Parity: Brightness / Volume Swipe
+    @State private var currentBrightness: CGFloat = UIScreen.main.brightness
+    @State private var currentVolume: Float = 0.5
+    @State private var showBrightnessOverlay = false
+    @State private var showVolumeOverlay = false
+    @State private var verticalSwipeStartY: CGFloat = 0
 
     // MARK: - Video Player Section (Extracted to fix compiler timeout)
     @ViewBuilder
@@ -306,6 +327,85 @@ struct VideoDetailView: View {
         if playerManager.hasError, let errorMsg = playerManager.errorMessage {
             errorOverlay(message: errorMsg)
         }
+        
+        // 🔥 YOUTUBE PARITY: Long-press 2x speed indicator
+        if showSpeedUpIndicator {
+            HStack(spacing: 6) {
+                Image(systemName: "forward.fill")
+                    .font(.system(size: 12, weight: .bold))
+                Text("2x")
+                    .font(.system(size: 14, weight: .bold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(Color.black.opacity(0.7)))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.top, 60)
+            .zIndex(350)
+            .transition(.scale.combined(with: .opacity))
+            .allowsHitTesting(false)
+        }
+        
+        // 🔥 YOUTUBE PARITY: Horizontal swipe-to-seek overlay
+        if showSeekOverlay {
+            let targetTime = max(0, min(playerManager.duration, seekStartTime + seekDeltaSeconds))
+            VStack(spacing: 4) {
+                Text(formatTime(targetTime))
+                    .font(.system(size: 28, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                HStack(spacing: 4) {
+                    Image(systemName: seekDeltaSeconds >= 0 ? "forward.fill" : "backward.fill")
+                        .font(.system(size: 11))
+                    Text("\(seekDeltaSeconds >= 0 ? "+" : "")\(Int(seekDeltaSeconds))s")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundColor(.white.opacity(0.8))
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.7)))
+            .zIndex(350)
+            .allowsHitTesting(false)
+        }
+        
+        // 🔥 YOUTUBE PARITY: Brightness overlay (left side vertical swipe)
+        if showBrightnessOverlay {
+            HStack(spacing: 8) {
+                Image(systemName: UIScreen.main.brightness > 0.5 ? "sun.max.fill" : "sun.min.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                ProgressView(value: Double(UIScreen.main.brightness), total: 1.0)
+                    .progressViewStyle(LinearProgressViewStyle(tint: .white))
+                    .frame(width: 100)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Capsule().fill(Color.black.opacity(0.7)))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .padding(.leading, 20)
+            .zIndex(350)
+            .allowsHitTesting(false)
+        }
+        
+        // 🔥 YOUTUBE PARITY: Volume overlay (right side vertical swipe)
+        if showVolumeOverlay {
+            HStack(spacing: 8) {
+                Image(systemName: (playerManager.player?.volume ?? 0) > 0.5 ? "speaker.wave.3.fill" : "speaker.wave.1.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                ProgressView(value: Double(playerManager.player?.volume ?? 0), total: 1.0)
+                    .progressViewStyle(LinearProgressViewStyle(tint: .white))
+                    .frame(width: 100)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Capsule().fill(Color.black.opacity(0.7)))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            .padding(.trailing, 20)
+            .zIndex(350)
+            .allowsHitTesting(false)
+        }
     }
     
     @ViewBuilder
@@ -351,37 +451,127 @@ struct VideoDetailView: View {
                 }
             }
         )
-        // 🔥 YOUTUBE PARITY: Speed gestures (swipe up/down on right edge to change playback speed)
+        // 🔥 YOUTUBE PARITY: Long-press to 2x speed (hold → 2x, release → restore)
         .simultaneousGesture(
-            DragGesture(minimumDistance: 20, coordinateSpace: .local)
+            LongPressGesture(minimumDuration: 0.4)
+                .sequenced(before: DragGesture(minimumDistance: 0))
                 .onChanged { value in
-                    let screenWidth = UIScreen.main.bounds.width
-                    let tapX = value.startLocation.x
-                    
-                    if tapX > screenWidth * 0.8 {
-                        let verticalSwipe = value.translation.height
-                        if abs(verticalSwipe) > 30 {
-                            let speedChange = verticalSwipe < 0 ? 0.25 : -0.25
-                            let newSpeed = max(0.25, min(2.0, playbackRate + Float(speedChange)))
-                            
-                            if abs(newSpeed - playbackRate) >= 0.25 {
-                                playbackRate = newSpeed
-                                playerManager.setPlaybackRate(newSpeed)
-                                HapticManager.shared.impact(style: .light)
-                                print("⚡ Speed changed to: \(newSpeed)x")
-                            }
+                    switch value {
+                    case .second(true, _):
+                        // Long press recognized — activate 2x speed
+                        if !isLongPressSpeedUp {
+                            savedPlaybackRate = playbackRate
+                            playbackRate = 2.0
+                            playerManager.setPlaybackRate(2.0)
+                            isLongPressSpeedUp = true
+                            withAnimation(.spring(response: 0.2)) { showSpeedUpIndicator = true }
+                            HapticManager.shared.impact(style: .medium)
+                            print("⚡ [YouTube] Long-press 2x speed activated")
                         }
+                    default:
+                        break
+                    }
+                }
+                .onEnded { _ in
+                    // Finger lifted — restore original speed
+                    if isLongPressSpeedUp {
+                        playbackRate = savedPlaybackRate
+                        playerManager.setPlaybackRate(savedPlaybackRate)
+                        isLongPressSpeedUp = false
+                        withAnimation(.spring(response: 0.2)) { showSpeedUpIndicator = false }
+                        HapticManager.shared.impact(style: .light)
+                        print("⚡ [YouTube] Long-press released — back to \(savedPlaybackRate)x")
                     }
                 }
         )
+        // 🔥 YOUTUBE PARITY: Horizontal swipe-to-seek + Brightness/Volume vertical swipe + Swipe up/down for fullscreen/PiP
         .simultaneousGesture(
             DragGesture(minimumDistance: 12, coordinateSpace: .local)
-                .onEnded { value in
-                    if value.translation.height > 60 {
-                        Task { await minimizeToMiniPlayer() }
-                    } else if value.translation.height < -60 {
-                        presentFullscreenPlayer()
+                .onChanged { value in
+                    let screenWidth = UIScreen.main.bounds.width
+                    let playerHeight = UIScreen.main.bounds.width * 9.0 / 16.0
+                    let startX = value.startLocation.x
+                    let dx = value.translation.width
+                    let dy = value.translation.height
+                    
+                    // Determine gesture direction on first significant movement
+                    if !isHorizontalSeeking && !showBrightnessOverlay && !showVolumeOverlay {
+                        if abs(dx) > abs(dy) && abs(dx) > 20 {
+                            // Horizontal → seek
+                            isHorizontalSeeking = true
+                            seekStartTime = playerManager.currentTime
+                            seekDeltaSeconds = 0
+                        } else if abs(dy) > abs(dx) && abs(dy) > 20 {
+                            // Vertical → brightness (left) or volume (right)
+                            let isLeftSide = startX < screenWidth * 0.5
+                            if isLeftSide {
+                                showBrightnessOverlay = true
+                                currentBrightness = UIScreen.main.brightness
+                            } else {
+                                showVolumeOverlay = true
+                            }
+                            verticalSwipeStartY = value.startLocation.y
+                        }
                     }
+                    
+                    // 🔥 Horizontal seek: 1pt = ~0.15s (whole screen swipe ≈ 60s)
+                    if isHorizontalSeeking {
+                        let seekScale = min(playerManager.duration, 60.0) / screenWidth
+                        seekDeltaSeconds = Double(dx) * seekScale
+                        withAnimation(.easeOut(duration: 0.1)) { showSeekOverlay = true }
+                    }
+                    
+                    // 🔥 Brightness (left side vertical swipe)
+                    if showBrightnessOverlay {
+                        let deltaY = verticalSwipeStartY - value.location.y
+                        let brightnessChange = deltaY / playerHeight
+                        let newBrightness = max(0, min(1, currentBrightness + brightnessChange))
+                        UIScreen.main.brightness = newBrightness
+                    }
+                    
+                    // 🔥 Volume (right side vertical swipe)
+                    if showVolumeOverlay {
+                        let deltaY = verticalSwipeStartY - value.location.y
+                        let volumeChange = Float(deltaY / playerHeight)
+                        let newVolume = max(0, min(1, currentVolume + volumeChange))
+                        playerManager.player?.volume = newVolume
+                    }
+                }
+                .onEnded { value in
+                    // 🔥 Finalize horizontal seek
+                    if isHorizontalSeeking {
+                        let targetTime = max(0, min(playerManager.duration, seekStartTime + seekDeltaSeconds))
+                        let progress = playerManager.duration > 0 ? targetTime / playerManager.duration : 0
+                        playerManager.seek(to: progress)
+                        HapticManager.shared.impact(style: .light)
+                        print("⏩ [YouTube] Swipe-seek to \(Int(targetTime))s (delta: \(Int(seekDeltaSeconds))s)")
+                    }
+                    
+                    // 🔥 Finalize brightness
+                    if showBrightnessOverlay {
+                        currentBrightness = UIScreen.main.brightness
+                    }
+                    
+                    // 🔥 Finalize volume
+                    if showVolumeOverlay {
+                        currentVolume = playerManager.player?.volume ?? 0.5
+                    }
+                    
+                    // 🔥 Swipe down → PiP, Swipe up → fullscreen (only if not seeking/adjusting)
+                    if !isHorizontalSeeking && !showBrightnessOverlay && !showVolumeOverlay {
+                        if value.translation.height > 60 {
+                            Task { await minimizeToMiniPlayer() }
+                        } else if value.translation.height < -60 {
+                            presentFullscreenPlayer()
+                        }
+                    }
+                    
+                    // Reset all gesture states
+                    isHorizontalSeeking = false
+                    seekDeltaSeconds = 0
+                    withAnimation { showSeekOverlay = false }
+                    showBrightnessOverlay = false
+                    showVolumeOverlay = false
                 }
         )
         .zIndex(1)
@@ -766,6 +956,18 @@ struct VideoDetailView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Color.white.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(ScaleButtonStyle())
+            
+            // 🔥 YOUTUBE PARITY: Loop toggle
+            Button(action: {
+                isLooping.toggle()
+                HapticManager.shared.impact(style: .light)
+                print("🔁 [YouTube] Loop \(isLooping ? "ON" : "OFF")")
+            }) {
+                Image(systemName: "repeat")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(isLooping ? AppTheme.Colors.primary : .white)
             }
             .buttonStyle(ScaleButtonStyle())
             
@@ -1442,6 +1644,13 @@ struct VideoDetailView: View {
             playerControlsTimer?.invalidate()
             controlsHideTimer?.invalidate()
             
+            // 🔥 YOUTUBE PARITY: Save watch progress when leaving
+            WatchProgressService.shared.saveProgress(
+                videoId: video.id,
+                currentTime: playerManager.currentTime,
+                duration: playerManager.duration
+            )
+            
             // 🔥 YOUTUBE PARITY: If user explicitly closed (X button), don't start PiP
             guard !userExplicitlyClosed else {
                 print("❌ [VideoDetailView] User explicitly closed — no PiP")
@@ -1499,6 +1708,18 @@ struct VideoDetailView: View {
             print("🎵 Player state changed to: \(newValue ? "Playing" : "Paused")")
         }
         .onChange(of: playerManager.currentTime) { newTime in
+            // 🔥 YOUTUBE PARITY: Save watch progress every ~5 seconds
+            if playerManager.duration > 0 {
+                let roundedTime = Int(newTime)
+                if roundedTime % 5 == 0 && roundedTime > 0 {
+                    WatchProgressService.shared.saveProgress(
+                        videoId: video.id,
+                        currentTime: newTime,
+                        duration: playerManager.duration
+                    )
+                }
+            }
+            
             // Update watch progress
             if playerManager.duration > 0 {
                 watchProgress = newTime / playerManager.duration
@@ -1572,7 +1793,14 @@ struct VideoDetailView: View {
             // CRITICAL FIX: Only trigger endscreen if this is OUR player item, not other players (banners, previews, etc)
             if let item = notification.object as? AVPlayerItem,
                item == playerManager.player?.currentItem {
-            beginEndscreen()
+                // 🔥 YOUTUBE PARITY: Loop video if enabled
+                if isLooping {
+                    playerManager.seek(to: 0)
+                    playerManager.play()
+                    print("🔁 [YouTube] Looping video")
+                } else {
+                    beginEndscreen()
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowTranscript"))) { _ in
@@ -1619,10 +1847,21 @@ struct VideoDetailView: View {
                 playerManager.seek(to: progress)
             }
         }
-        // 🔥 YOUTUBE PARITY: Auto quality selection when video loads
-        .onChange(of: playerManager.duration) { _ in
-            if playerManager.duration > 0 && playerManager.selectedQuality == .auto {
+        // 🔥 YOUTUBE PARITY: Auto quality selection + Resume playback position when video loads
+        .onChange(of: playerManager.duration) { newDuration in
+            if newDuration > 0 && playerManager.selectedQuality == .auto {
                 playerManager.autoSelectQuality()
+            }
+            
+            // 🔥 YOUTUBE PARITY: Resume from saved position
+            if newDuration > 0, let savedPosition = WatchProgressService.shared.getSavedPosition(videoId: video.id) {
+                let fraction = savedPosition / newDuration
+                if fraction > 0.02 && fraction < 0.95 {
+                    print("▶️ [YouTube] Resuming from \(Int(savedPosition))s / \(Int(newDuration))s")
+                    playerManager.seek(to: fraction)
+                }
+                // Only resume once — clear after seeking
+                WatchProgressService.shared.clearProgress(videoId: video.id)
             }
         }
         // 🔥 YOUTUBE PARITY: Queue sidebar
