@@ -288,6 +288,12 @@ class GlobalVideoPlayerManager: ObservableObject {
         
         print("🧹 Cleaning up GlobalVideoPlayerManager")
         
+        // 🔥 YOUTUBE PARITY: Stop ALL PiP before cleanup
+        if pipController.isActive { pipController.stopPiP() }
+        if PiPPlayerManager.shared.pipController?.isPictureInPictureActive == true {
+            PiPPlayerManager.shared.stopPiP()
+        }
+        
         UIApplication.shared.endReceivingRemoteControlEvents()
         
         // 🔥 APPLE BEST PRACTICE: Invalidate KVO observers before cleanup
@@ -453,6 +459,14 @@ class GlobalVideoPlayerManager: ObservableObject {
 
     // Stop current playback immediately (used when switching videos fast)
     func stopImmediately() {
+        // 🔥 YOUTUBE PARITY: Kill ALL PiP before stopping playback
+        if pipController.isActive {
+            pipController.stopPiP()
+        }
+        if PiPPlayerManager.shared.pipController?.isPictureInPictureActive == true {
+            PiPPlayerManager.shared.stopPiP()
+        }
+        
         playerManager?.pause()
         playerManager?.player?.replaceCurrentItem(with: nil)
         isPlaying = false
@@ -791,10 +805,13 @@ class GlobalVideoPlayerManager: ObservableObject {
         print("   state BEFORE expand → showingFullscreen=\(showingFullscreen)")
         print("   PiP active: \(pipController.isActive)")
         
-        // 🔥 FIX: Stop PiP if active
-        if pipController.isActive {
-            print("⏹️ [GlobalPlayer] Stopping native PiP before expanding")
+        // 🔥 YOUTUBE PARITY: Stop ALL PiP sources before expanding
+        let anyPiPActive = pipController.isActive || (PiPPlayerManager.shared.pipController?.isPictureInPictureActive == true)
+        
+        if anyPiPActive {
+            print("⏹️ [GlobalPlayer] Stopping ALL PiP before expanding")
             pipController.stopPiP()
+            PiPPlayerManager.shared.stopPiP()
             
             // Wait briefly for PiP to stop
             Task { @MainActor in
@@ -838,9 +855,12 @@ class GlobalVideoPlayerManager: ObservableObject {
         
         print("🔥 [GlobalPlayer] closePlayer() called")
         
-        // 🔥 YOUTUBE PARITY: Stop native PiP if active
+        // 🔥 YOUTUBE PARITY: Stop ALL PiP if active
         if pipController.isActive {
             pipController.stopPiP()
+        }
+        if PiPPlayerManager.shared.pipController?.isPictureInPictureActive == true {
+            PiPPlayerManager.shared.stopPiP()
         }
         
         // 🔥 REAL-TIME VIEW TRACKING: End view session
@@ -872,9 +892,12 @@ class GlobalVideoPlayerManager: ObservableObject {
             await endViewTracking()
         }
         
-        // 🔥 YOUTUBE PARITY: Stop native PiP if active
+        // 🔥 YOUTUBE PARITY: Stop ALL PiP if active
         if pipController.isActive {
             pipController.stopPiP()
+        }
+        if PiPPlayerManager.shared.pipController?.isPictureInPictureActive == true {
+            PiPPlayerManager.shared.stopPiP()
         }
         
         // Destroy player

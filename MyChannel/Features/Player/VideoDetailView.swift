@@ -97,6 +97,7 @@ struct VideoDetailView: View {
     @State private var showingPlaylist = false
     @State private var currentPlaylistIndex = 0
     @State private var showingMiniPlayer = false
+    @State private var userExplicitlyClosed = false  // 🔥 YOUTUBE PARITY: Track explicit close vs swipe dismiss
     @State private var watchProgress: Double = 0.0
     @State private var hasWatchedThreshold = false
     @State private var showingCinemaMode = false
@@ -540,9 +541,10 @@ struct VideoDetailView: View {
         // Close video completely
         Button(action: { 
             print("❌ [VideoDetailView] Close button tapped - exiting video")
+            userExplicitlyClosed = true
             // Stop playback and cleanup
             playerManager.pause()
-            globalPlayer.performCleanup()
+            globalPlayer.closePlayer()
             // Dismiss the view completely
             dismiss()
         }) {
@@ -991,6 +993,7 @@ struct VideoDetailView: View {
                     
                     Button(action: {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                            userExplicitlyClosed = true
                             globalPlayer.closePlayer()
                             dismiss()
                         }
@@ -1011,6 +1014,7 @@ struct VideoDetailView: View {
             
             Button(action: {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    userExplicitlyClosed = true
                     globalPlayer.closePlayer()
                     dismiss()
                 }
@@ -1220,21 +1224,30 @@ struct VideoDetailView: View {
                 print("📱 Is YouTube: \(isYouTube)")
                 print("💰 Video monetized: \(video.monetization?.isMonetized ?? false)")
                 
-                // 🔥 FIX: Check if global player already has this video playing (from mini player)
+                // 🔥 YOUTUBE PARITY: Check if this video is already playing in PiP / global player
                 let globalPlayer = GlobalVideoPlayerManager.shared
-                let isFromMiniPlayer = globalPlayer.currentVideo?.id == video.id && globalPlayer.player != nil
+                let isSameVideoInGlobal = globalPlayer.currentVideo?.id == video.id && globalPlayer.player != nil
+                let isPiPActive = PiPPlayerManager.shared.pipController?.isPictureInPictureActive == true
+                    || NativePiPController.shared.isActive
                 
-                if isFromMiniPlayer {
-                    print("✅ [VideoDetailView] Video already playing in global player - using global player")
-                    // Use the global player's manager instead of creating a new one
-                    // This prevents white screen and ensures smooth transition
-                    if let existingManager = globalPlayer.exposedPlayerManager {
-                        // 🔥 FIX: Use the existing player manager from global player
-                        // We can't reassign @StateObject, but we can use the global player's player directly
-                        // The VideoPlayer view will use globalPlayer.player
+                // 🔥 YOUTUBE PARITY: ALWAYS stop PiP when opening VideoDetailView
+                // YouTube never shows PiP and fullscreen at the same time
+                if isPiPActive {
+                    print("⏹️ [VideoDetailView] Stopping PiP — fullscreen player taking over")
+                    PiPPlayerManager.shared.stopPiP()
+                    NativePiPController.shared.stopPiP()
+                }
+                
+                // 🔥 YOUTUBE PARITY: If same video was in PiP/global, adopt it seamlessly
+                if isSameVideoInGlobal {
+                    print("✅ [VideoDetailView] Same video from PiP/global — adopting player seamlessly")
+                    if let _ = globalPlayer.exposedPlayerManager {
                         isPlayerReady = true
                         showPlayer = true
                         isViewAppeared = true
+                        
+                        // Mark as fullscreen so PiP doesn't re-trigger
+                        globalPlayer.showingFullscreen = true
                         
                         // Update view count
                         Task {
@@ -1242,21 +1255,21 @@ struct VideoDetailView: View {
                             currentViewCount = latestCount
                         }
                         
-                        // Sync playback state
+                        // Sync playback state — ensure video keeps playing
                         if let player = globalPlayer.player {
                             playbackRate = player.rate
-                            // Note: Playback state is managed by globalPlayer.isPlaying
+                            if player.timeControlStatus != .playing && globalPlayer.isPlaying {
+                                player.play()
+                            }
                         }
                         
-                        print("✅ [VideoDetailView] Adopted global player - ready to display")
+                        print("✅ [VideoDetailView] Adopted global player — seamless transition from PiP")
                         return
                     }
                 }
                 
-                // 🔥 FIX: Only stop if not from mini player (to prevent interrupting playback)
-                if !isFromMiniPlayer {
-                    GlobalVideoPlayerManager.shared.stopImmediately()
-                }
+                // 🔥 Different video — stop everything and start fresh
+                GlobalVideoPlayerManager.shared.stopImmediately()
                 
                 if !isYouTube {
                     // 🔥 ADD ADS LOGIC: Check for ads before playing video
@@ -1429,16 +1442,22 @@ struct VideoDetailView: View {
             playerControlsTimer?.invalidate()
             controlsHideTimer?.invalidate()
             
-            // If native PiP is active (chevron button path or auto-PiP), the video is
-            // already playing in the system floating bubble — nothing else to do.
-            let nativePiPActive = PiPPlayerManager.shared.pipController?.isPictureInPictureActive ?? false
-            guard !nativePiPActive else {
-                print("✅ [VideoDetailView] Native PiP active — no action needed")
+            // 🔥 YOUTUBE PARITY: If user explicitly closed (X button), don't start PiP
+            guard !userExplicitlyClosed else {
+                print("❌ [VideoDetailView] User explicitly closed — no PiP")
                 return
             }
             
-            // When dismissed by swipe-to-dismiss or back gesture (not chevron),
-            // start native PiP so the video continues in a floating system window.
+            // If native PiP is already active (chevron button started it), nothing to do
+            let nativePiPActive = PiPPlayerManager.shared.pipController?.isPictureInPictureActive == true
+                || NativePiPController.shared.isActive
+            guard !nativePiPActive else {
+                print("✅ [VideoDetailView] Native PiP already active — no action needed")
+                return
+            }
+            
+            // 🔥 YOUTUBE PARITY: Swipe-dismiss or back gesture → start PiP
+            // Video continues in floating window while user browses the app
             if !isYouTube {
                 Task { @MainActor in
                     let wasPlaying = playerManager.isPlaying
