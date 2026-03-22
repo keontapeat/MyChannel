@@ -648,8 +648,8 @@ class GlobalVideoPlayerManager: ObservableObject {
             // Clear pre-loaded asset
             self.preloadedAsset = nil
         } else {
-            // Fallback to regular setup
-            stopImmediately()
+            // Fallback to regular setup (don't call stopImmediately — it clears currentVideo)
+            playerManager?.pause()
             playerManager?.setupPlayer(with: nextVideo)
             playerManager?.requestAutoPlay()
             print("▶️ [GlobalVideoPlayerManager] Playing next video: \(nextVideo.title)")

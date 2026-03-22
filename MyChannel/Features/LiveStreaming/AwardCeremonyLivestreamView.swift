@@ -90,7 +90,7 @@ struct AwardCeremonyLivestreamView: View {
     private var livestreamPlayerView: some View {
         ZStack {
             if let streamURL = ceremonyManager.streamURL {
-                VideoPlayer(player: AVPlayer(url: streamURL))
+                RawPlayerLayerView(player: AVPlayer(url: streamURL), videoGravity: .resizeAspect)
                     .frame(height: 240)
             } else {
                 placeholderStreamView

@@ -2,7 +2,7 @@
 //  ArtistPageView.swift
 //  MyChannel
 //
-//  Premium artist profile similar to Spotify / Apple Music.
+//  MyChannel Custom Artist Profile — Full-bleed hero, stats, popular tracks, latest drops.
 //
 
 import SwiftUI
@@ -32,22 +32,52 @@ struct ArtistPageView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
-                header
-                if isOwnProfile {
-                    artistToolbar
+            VStack(spacing: 0) {
+                // Full-bleed hero
+                artistHero
+                
+                VStack(spacing: 24) {
+                    // Location + genre pills
+                    locationGenrePills
+                    
+                    // Action buttons row
+                    actionButtonsRow
+                    
+                    // Artist toolbar (own profile only)
+                    if isOwnProfile {
+                        artistToolbar
+                    }
+                    
+                    // Popular Tracks
+                    popularTracksSection
+                    
+                    // Latest Drops (horizontal)
+                    latestDropsSection
+                    
+                    // Albums
+                    albumsSection
+                    
+                    // Singles & EPs
+                    singlesSection
+                    
+                    // Stats bar
+                    statsBar
+                    
+                    // On MyChannel
+                    onMyChannelSection
+                    
+                    // Similar Artists
+                    similarArtistsSection
+                    
+                    // About
+                    aboutSection
                 }
-                topSongsSection
-                albumsSection
-                singlesSection
-                onMyChannelSection
-                similarArtistsSection
-                aboutSection
+                .padding(.top, 20)
+                .padding(.bottom, 40)
             }
-            .padding(.bottom, 40)
         }
         .background(AppTheme.Colors.background.ignoresSafeArea())
-        .navigationTitle(artist.name)
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showUploadSheet) {
             MusicUploadSheet()
@@ -55,6 +85,194 @@ struct ArtistPageView: View {
         .navigationDestination(isPresented: $showEarnings) {
             ArtistEarningsView(artistId: artist.id, artistName: artist.name)
         }
+    }
+    
+    // MARK: - Full-Bleed Hero Image
+    
+    private var artistHero: some View {
+        ZStack(alignment: .bottomLeading) {
+            // Hero image - edge to edge
+            if let url = artist.heroImageURL ?? artist.avatarURL {
+                AppAsyncImage(
+                    url: url,
+                    content: { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    },
+                    placeholder: {
+                        AppTheme.Colors.surface
+                    }
+                )
+                .frame(height: 360)
+                .clipped()
+            } else {
+                AppTheme.Colors.surface
+                    .frame(height: 360)
+                    .overlay(
+                        Image(systemName: "music.mic")
+                            .font(.system(size: 60))
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+                    )
+            }
+            
+            // Bottom gradient for text readability
+            LinearGradient(
+                colors: [
+                    .clear,
+                    .clear,
+                    AppTheme.Colors.background.opacity(0.6),
+                    AppTheme.Colors.background
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 360)
+            
+            // Name + verified + follower count
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(artist.name)
+                        .font(.system(size: 32, weight: .black))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(AppTheme.Colors.verificationBlue)
+                }
+                
+                HStack(spacing: 16) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 12))
+                        Text("\(artist.followerCount.formatted()) followers")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 12))
+                        Text("\(artist.monthlyListeners.formatted()) plays")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
+        }
+        .frame(height: 360)
+        .clipped()
+    }
+    
+    // MARK: - Location + Genre Pills
+    
+    private var locationGenrePills: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                if let location = artist.location, !location.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 12))
+                        Text(location)
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(AppTheme.Colors.surface)
+                    .clipShape(Capsule())
+                }
+                
+                Text("Hip-Hop")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(AppTheme.Colors.primary.opacity(0.12))
+                    .clipShape(Capsule())
+                
+                Text("Michigan Rap")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(AppTheme.Colors.primary.opacity(0.12))
+                    .clipShape(Capsule())
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+    
+    // MARK: - Action Buttons Row
+    
+    private var actionButtonsRow: some View {
+        HStack(spacing: 10) {
+            // Play All (filled)
+            Button {
+                HapticManager.shared.impact(style: .medium)
+                if let first = topSongs.first {
+                    musicPlayer.play(song: first, inQueue: topSongs)
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 14, weight: .bold))
+                    Text("Play All")
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(AppTheme.Colors.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            
+            // Follow (outline)
+            Button {
+                HapticManager.shared.impact(style: .light)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Follow")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(AppTheme.Colors.divider, lineWidth: 1.5)
+                )
+            }
+            
+            // Support (heart)
+            Button {
+                HapticManager.shared.impact(style: .light)
+            } label: {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(AppTheme.Colors.primary)
+                    .frame(width: 44, height: 44)
+                    .background(AppTheme.Colors.primary.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            
+            // Share
+            Button {
+                HapticManager.shared.impact(style: .light)
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 16))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .frame(width: 44, height: 44)
+                    .background(AppTheme.Colors.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+        }
+        .padding(.horizontal, 20)
     }
     
     // MARK: - Artist Toolbar (own profile only)
@@ -104,156 +322,185 @@ struct ArtistPageView: View {
         .padding(.horizontal, 20)
     }
 
-    // MARK: - Header
+    // MARK: - Popular Tracks (numbered with play counts + trending badge)
     
-    private var header: some View {
-        ZStack(alignment: .bottomLeading) {
-            LinearGradient(
-                colors: [AppTheme.Colors.primary, AppTheme.Colors.background],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .frame(height: 260)
+    private var popularTracksSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Popular Tracks")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                Spacer()
+                Text("See All")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.primary)
+            }
+            .padding(.horizontal, 20)
             
-            VStack(alignment: .leading, spacing: 12) {
-                if let url = artist.heroImageURL ?? artist.avatarURL {
-                    AppAsyncImage(
-                        url: url,
-                        content: { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        },
-                        placeholder: {
-                            Color.black.opacity(0.2)
-                        }
-                    )
-                    .frame(width: 120, height: 120)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.white.opacity(0.8), lineWidth: 3))
-                    .shadow(radius: 10)
-                }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(artist.name)
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    Text("\(artist.monthlyListeners) monthly listeners")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.8))
-                }
-                
-                HStack(spacing: 12) {
-                    Button {
-                        HapticManager.shared.impact(style: .medium)
-                        if let first = topSongs.first {
-                            musicPlayer.play(song: first, inQueue: topSongs)
-                        }
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 18, weight: .bold))
-                            Text("Play")
-                                .font(.system(size: 16, weight: .semibold))
-                        }
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 10)
-                        .background(Color.white)
-                        .clipShape(Capsule())
-                    }
+            VStack(spacing: 2) {
+                ForEach(Array(topSongs.prefix(5).enumerated()), id: \.element.id) { index, song in
+                    let isCurrentlyPlaying = musicPlayer.currentSong?.id == song.id && musicPlayer.isPlaying
                     
                     Button {
                         HapticManager.shared.impact(style: .light)
-                        // Follow action hook – integrate with SocialMusicService later.
+                        musicPlayer.play(song: song, inQueue: topSongs)
                     } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "plus")
-                            Text("Follow")
+                        HStack(spacing: 12) {
+                            // Rank number
+                            Text("\(index + 1)")
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                .foregroundColor(index < 3 ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
+                                .frame(width: 24, alignment: .center)
+                            
+                            // Artwork
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(AppTheme.Colors.surface)
+                                .frame(width: 50, height: 50)
+                                .overlay(
+                                    Group {
+                                        if let url = song.artworkURL {
+                                            AppAsyncImage(
+                                                url: url,
+                                                content: { image in
+                                                    image.resizable().scaledToFill()
+                                                },
+                                                placeholder: { Color.gray.opacity(0.2) }
+                                            )
+                                        } else {
+                                            Image(systemName: "music.note")
+                                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                        }
+                                    }
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                )
+                            
+                            // Title + play count
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack(spacing: 6) {
+                                    Text(song.title)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(isCurrentlyPlaying ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
+                                        .lineLimit(1)
+                                    
+                                    if index == 0 {
+                                        Text("Trending")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(AppTheme.Colors.primary)
+                                            .clipShape(Capsule())
+                                    }
+                                }
+                                
+                                Text("\(song.playCount.formatted()) plays")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            }
+                            
+                            Spacer()
+                            
+                            // Play button
+                            Image(systemName: isCurrentlyPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(isCurrentlyPlaying ? .white : AppTheme.Colors.textPrimary)
+                                .frame(width: 32, height: 32)
+                                .background(isCurrentlyPlaying ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+                                .clipShape(Circle())
+                            
+                            // More menu
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppTheme.Colors.textTertiary)
                         }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
                         .background(
-                            Capsule()
-                                .stroke(Color.white.opacity(0.8), lineWidth: 1)
+                            isCurrentlyPlaying
+                                ? AppTheme.Colors.primary.opacity(0.08)
+                                : Color.clear
                         )
                     }
+                    .buttonStyle(.plain)
                 }
-                .padding(.top, 4)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 24)
         }
+    }
+    
+    // MARK: - Latest Drops (horizontal dark cards)
+    
+    private var latestDropsSection: some View {
+        let allDrops = (albums + singles).sorted { ($0.releaseDate ?? .distantPast) > ($1.releaseDate ?? .distantPast) }
+        if allDrops.isEmpty { return AnyView(EmptyView()) }
+        return AnyView(
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Latest Drops")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .padding(.horizontal, 20)
+                
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 14) {
+                        ForEach(allDrops.prefix(8), id: \.id) { album in
+                            NavigationLink {
+                                AlbumDetailView(album: album, tracks: [])
+                            } label: {
+                                AlbumTileView(album: album)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+            }
+        )
+    }
+    
+    // MARK: - Stats Bar
+    
+    private var statsBar: some View {
+        HStack(spacing: 0) {
+            statItem(value: "\(artist.followerCount.formatted())", label: "Fans")
+            
+            Divider()
+                .frame(height: 30)
+                .background(AppTheme.Colors.divider)
+            
+            statItem(value: "\(artist.monthlyListeners.formatted())", label: "Monthly Listeners")
+            
+            Divider()
+                .frame(height: 30)
+                .background(AppTheme.Colors.divider)
+            
+            VStack(spacing: 4) {
+                Text("Subscribe")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.primary)
+                Text("$4.99/mo")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.vertical, 16)
+        .background(AppTheme.Colors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 20)
+    }
+    
+    private func statItem(value: String, label: String) -> some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
     }
     
     // MARK: - Sections
-    
-    private var topSongsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Popular")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-            
-            ForEach(Array(topSongs.enumerated()), id: \.element.id) { index, song in
-                Button {
-                    HapticManager.shared.impact(style: .light)
-                    musicPlayer.play(song: song, inQueue: topSongs)
-                } label: {
-                    HStack(spacing: 12) {
-                        Text("\(index + 1)")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .frame(width: 24)
-                        
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(AppTheme.Colors.surface)
-                            .frame(width: 54, height: 54)
-                            .overlay(
-                                Group {
-                                    if let url = song.artworkURL {
-                                        AppAsyncImage(
-                                            url: url,
-                                            content: { image in
-                                                image.resizable().scaledToFill()
-                                            },
-                                            placeholder: { Color.gray.opacity(0.2) }
-                                        )
-                                    } else {
-                                        Image(systemName: "music.note")
-                                            .foregroundColor(AppTheme.Colors.textSecondary)
-                                    }
-                                }
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            )
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(song.title)
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(AppTheme.Colors.textPrimary)
-                                .lineLimit(1)
-                            
-                            Text(song.genre ?? "Song")
-                                .font(.system(size: 12, weight: .regular))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Text(song.formattedDuration)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textTertiary)
-                    }
-                    .padding(.vertical, 4)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
-    }
     
     private var albumsSection: some View {
         if albums.isEmpty { return AnyView(EmptyView()) }
@@ -262,6 +509,7 @@ struct ArtistPageView: View {
                 Text("Albums")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
+                    .padding(.horizontal, 20)
                 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 14) {
@@ -277,7 +525,6 @@ struct ArtistPageView: View {
                     .padding(.horizontal, 20)
                 }
             }
-            .padding(.top, 12)
         )
     }
     
@@ -288,6 +535,7 @@ struct ArtistPageView: View {
                 Text("Singles & EPs")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
+                    .padding(.horizontal, 20)
                 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 14) {
@@ -303,7 +551,6 @@ struct ArtistPageView: View {
                     .padding(.horizontal, 20)
                 }
             }
-            .padding(.top, 4)
         )
     }
     
@@ -318,7 +565,6 @@ struct ArtistPageView: View {
                 .foregroundColor(AppTheme.Colors.textSecondary)
         }
         .padding(.horizontal, 20)
-        .padding(.top, 12)
     }
     
     private var similarArtistsSection: some View {
@@ -328,6 +574,7 @@ struct ArtistPageView: View {
                 Text("Fans also like")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
+                    .padding(.horizontal, 20)
                 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 14) {
@@ -365,7 +612,6 @@ struct ArtistPageView: View {
                     .padding(.horizontal, 20)
                 }
             }
-            .padding(.top, 16)
         )
     }
     
@@ -386,7 +632,6 @@ struct ArtistPageView: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 12)
     }
 }
 

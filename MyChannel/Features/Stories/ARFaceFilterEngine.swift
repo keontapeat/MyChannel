@@ -5,10 +5,33 @@
 //  🎭 AR FACE FILTER ENGINE
 //  Real-time face tracking with AR effects (like Snapchat/Instagram)
 //
+//  ⚠️ DISABLED by default to exclude TrueDepth APIs from the binary
+//  (App Store Guideline 2.5.1). To enable, add ENABLE_AR_FACE_FILTERS
+//  to your Swift Active Compilation Conditions in Build Settings.
+//
 
 import SwiftUI
+#if canImport(ARKit) && ENABLE_AR_FACE_FILTERS
 import ARKit
 import SceneKit
+#endif
+
+// MARK: - Face Filter Model (always available)
+struct FaceFilter: Identifiable, Codable {
+    let id: String
+    let name: String
+    let category: FilterCategory
+    let iconName: String
+    
+    enum FilterCategory: String, Codable {
+        case accessory
+        case animal
+        case beauty
+        case effect
+    }
+}
+
+#if canImport(ARKit) && ENABLE_AR_FACE_FILTERS
 
 @MainActor
 class ARFaceFilterEngine: NSObject, ObservableObject {
@@ -426,18 +449,19 @@ extension ARFaceFilterEngine {
     }
 }
 
-// MARK: - Face Filter Model
-struct FaceFilter: Identifiable, Codable {
-    let id: String
-    let name: String
-    let category: FilterCategory
-    let iconName: String
+#else
+
+// MARK: - Stub when AR Face Filters are disabled (TrueDepth excluded)
+@MainActor
+class ARFaceFilterEngine: ObservableObject {
+    @Published var isFaceDetected = false
+    @Published var selectedFilter: FaceFilter?
+    @Published var faceBounds: CGRect = .zero
+    @Published var landmarks: [String: CGPoint] = [:]
+    let availableFilters: [FaceFilter] = []
     
-    enum FilterCategory: String, Codable {
-        case accessory
-        case animal
-        case beauty
-        case effect
-    }
+    func applyFilter(_ filter: FaceFilter) {}
+    func removeFilter() {}
 }
 
+#endif

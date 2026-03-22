@@ -370,7 +370,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannelApp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannel;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -416,7 +416,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTMDB_KEY_PRESENT";
-				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannelApp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannel;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;

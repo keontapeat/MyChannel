@@ -120,6 +120,7 @@ class VideoPlayerManager: ObservableObject {
         autoPlayTask = nil
         pendingAutoPlay = false
         hasRequestedPreroll = false
+        hasSetupRemoteCommands = false
         
         // Pause and clear player
         player?.pause()
@@ -476,8 +477,11 @@ class VideoPlayerManager: ObservableObject {
         
         NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
+            .sink { [weak self] notification in
                 guard let self = self, !self.isCleanedUp else { return }
+                // 🔥 FIX: Only handle end-of-playback for OUR player item, not all players
+                if let endedItem = notification.object as? AVPlayerItem,
+                   endedItem !== self.player?.currentItem { return }
                 self.isPlaying = false
                 self.seek(to: 0)
             }
@@ -753,8 +757,11 @@ class VideoPlayerManager: ObservableObject {
         if shouldLoop {
             NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)
                 .receive(on: DispatchQueue.main)
-                .sink { [weak self] _ in
+                .sink { [weak self] notification in
                     guard let self = self, !self.isCleanedUp else { return }
+                    // 🔥 FIX: Only loop OUR player item, not every player in the app
+                    if let endedItem = notification.object as? AVPlayerItem,
+                       endedItem !== self.player?.currentItem { return }
                     self.player?.seek(to: .zero)
                     self.player?.play()
                 }
@@ -803,6 +810,8 @@ class VideoPlayerManager: ObservableObject {
         }
     }
 
+    private var hasSetupRemoteCommands = false
+    
     private func updateNowPlayingInfo() {
         guard let currentVideo = currentVideo else { return }
         let info: [String: Any] = [
@@ -813,12 +822,17 @@ class VideoPlayerManager: ObservableObject {
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0
         ]
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-        UIApplication.shared.beginReceivingRemoteControlEvents()
-        let commandCenter = MPRemoteCommandCenter.shared()
-        commandCenter.playCommand.isEnabled = true
-        commandCenter.pauseCommand.isEnabled = true
-        commandCenter.playCommand.addTarget { [weak self] _ in self?.play(); return .success }
-        commandCenter.pauseCommand.addTarget { [weak self] _ in self?.pause(); return .success }
+        
+        // 🔥 FIX: Only register remote commands ONCE — addTarget accumulates closures
+        if !hasSetupRemoteCommands {
+            hasSetupRemoteCommands = true
+            UIApplication.shared.beginReceivingRemoteControlEvents()
+            let commandCenter = MPRemoteCommandCenter.shared()
+            commandCenter.playCommand.isEnabled = true
+            commandCenter.pauseCommand.isEnabled = true
+            commandCenter.playCommand.addTarget { [weak self] _ in self?.play(); return .success }
+            commandCenter.pauseCommand.addTarget { [weak self] _ in self?.pause(); return .success }
+        }
     }
 
     // MARK: - Resume Position Persistence

@@ -9,6 +9,12 @@ import SwiftUI
 import AVFoundation
 import Photos
 import Combine
+#if canImport(FirebaseStorage)
+import FirebaseStorage
+#endif
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
 
 @MainActor
 class CreateStoryViewModel: ObservableObject {
@@ -343,21 +349,7 @@ class CreateStoryViewModel: ObservableObject {
     }
     
     private func simulateMediaCapture(type: MediaItem.MediaType) async {
-        // Simulate capture delay
-        try? await Task.sleep(nanoseconds: 500_000_000)
-        
-        // Create a mock media item
-        let mockURL = URL(string: "https://picsum.photos/400/800?random=\(Int.random(in: 1...100))")!
-        let mediaItem = MediaItem(
-            url: mockURL,
-            type: type,
-            duration: type == .video ? Double.random(in: 5...15) : nil
-        )
-        
-        await MainActor.run {
-            self.selectedMedia = mediaItem
-            self.storyType = type == .image ? .photo : .video
-        }
+        print("⚠️ [CreateStoryViewModel] simulateMediaCapture called - media should come from ModernCameraView callback")
     }
     
     func createStory() async -> Story {
@@ -373,7 +365,12 @@ class CreateStoryViewModel: ObservableObject {
         let storyContent = createStoryContent()
         let storyStickers = createStoryStickers()
         let storyMusic = createStoryMusic()
-        let creatorId = AuthenticationManager.shared.currentUser?.id ?? User.sampleUsers.first?.id ?? "user1"
+        // Use Firebase Auth UID directly to match Firestore security rules
+        #if canImport(FirebaseAuth)
+        let creatorId = Auth.auth().currentUser?.uid ?? AuthenticationManager.shared.currentUser?.id ?? "user1"
+        #else
+        let creatorId = AuthenticationManager.shared.currentUser?.id ?? "user1"
+        #endif
         print("📸 [Story Upload] Creator ID: \(creatorId)")
         var created: Story? = nil
         let currentMedia = selectedMedia
@@ -397,101 +394,39 @@ class CreateStoryViewModel: ObservableObject {
             )
         }
         
-        // Get media data: from file URL (photo library) or remote URL (camera mock)
+        // Upload media to Firebase Storage then save story to Firestore
         if let media = currentMedia {
             print("📸 [Story Upload] Media found: \(media.url)")
-            let data: Data?
-            let scheme = media.url.scheme?.lowercased()
-            print("📸 [Story Upload] URL scheme: \(scheme ?? "nil")")
-            
-            if scheme == "file" {
-                // Photo picker: read from local file
-                print("📸 [Story Upload] Reading from local file...")
-                data = try? Data(contentsOf: media.url)
-                if let data = data {
-                    print("📸 [Story Upload] File read successful: \(data.count) bytes")
-                } else {
-                    print("🚨 [Story Upload] Failed to read file")
-                }
-            } else if scheme == "http" || scheme == "https" {
-                // Remote URL: fetch (e.g. camera mock URLs)
-                print("📸 [Story Upload] Fetching from remote URL...")
-                data = try? await NetworkOptimizer.shared.optimizedRequest(
-                    for: media.url,
-                    priority: .high,
-                    cachePolicy: .returnCacheDataElseLoad
+            do {
+                let mediaURL = try await uploadMediaToFirebaseStorage(media)
+                print("✅ [Story Upload] Media uploaded, public URL: \(mediaURL)")
+                processingState.uploadProgress = 0.8
+
+                let s = Story(
+                    creatorId: creatorId,
+                    mediaURL: mediaURL,
+                    mediaType: getStoryMediaType(),
+                    duration: getStoryDuration(),
+                    caption: caption.isEmpty ? nil : caption,
+                    text: textOverlay?.text,
+                    content: [storyContent],
+                    backgroundColor: storyType == .text ? colorToHex(backgroundGradient.first ?? .blue) : nil,
+                    textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
+                    music: storyMusic,
+                    stickers: storyStickers,
+                    audience: audience.rawValue
                 )
-                if let data = data {
-                    print("📸 [Story Upload] Remote fetch successful: \(data.count) bytes")
-                } else {
-                    print("🚨 [Story Upload] Failed to fetch remote URL")
-                }
-            } else {
-                print("🚨 [Story Upload] Unsupported URL scheme: \(scheme ?? "nil")")
-                data = nil
-            }
-            
-            if let data = data, !data.isEmpty {
-                print("📸 [Story Upload] Starting API upload flow...")
-                do {
-                    let filename = "story_\(UUID().uuidString).\(media.type == .video ? "mp4" : "jpg")"
-                    let contentType = media.type == .video ? "video/mp4" : "image/jpeg"
-                    print("📸 [Story Upload] Step 1: Getting signed URL for \(filename)...")
-                    
-                    let signed = try await StoryAPIService.shared.getSignedUploadUrl(filename: filename, contentType: contentType)
-                    print("✅ [Story Upload] Got signed URL: \(signed.url)")
-                    processingState.uploadProgress = 0.3
-                    
-                    print("📸 [Story Upload] Step 2: Uploading media (\(data.count) bytes)...")
-                    try await StoryAPIService.shared.uploadMedia(data: data, to: signed.url, contentType: contentType)
-                    print("✅ [Story Upload] Media uploaded successfully")
-                    processingState.uploadProgress = 0.7
-                    
-                    print("📸 [Story Upload] Step 3: Finalizing upload...")
-                    let finalized = try await StoryAPIService.shared.finalize(object: signed.object, bucket: signed.bucket, contentType: contentType)
-                    print("✅ [Story Upload] Finalized. Public URL: \(finalized.publicUrl)")
-                    processingState.uploadProgress = 0.85
-                    
-                    print("📸 [Story Upload] Step 4: Creating story record...")
-                    let s = try await StoryAPIService.shared.createStory(
-                        mediaUrl: finalized.publicUrl,
-                        mediaType: getStoryMediaType(),
-                        duration: getStoryDuration(),
-                        caption: caption.isEmpty ? nil : caption,
-                        text: textOverlay?.text,
-                        backgroundColor: storyType == .text ? colorToHex(backgroundGradient.first ?? .blue) : nil,
-                        textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
-                        music: storyMusic,
-                        stickers: storyStickers,
-                        audience: audience.rawValue
-                    )
-                    print("✅ [Story Upload] Story created successfully: \(s.id)")
-                    created = s
-                    processingState.uploadProgress = 1.0
-                    
-                    print("📸 [Story Upload] Saving to local database...")
-                    try? await DatabaseService.shared.saveStory(s)
-                    print("✅ [Story Upload] Complete! Story posted successfully.")
-                } catch {
-                    print("🚨 [Story Upload] API Error: \(error)")
-                    print("🚨 [Story Upload] Error details: \(error.localizedDescription)")
-                    if let apiError = error as? APIError {
-                        print("🚨 [Story Upload] API Error type: \(apiError)")
-                    }
-                    showError("Couldn't upload to server. Story saved locally.")
-                    created = makeFallbackStory(mediaURL: media.url.absoluteString)
-                    if let c = created {
-                        print("📸 [Story Upload] Saving fallback story locally...")
-                        try? await DatabaseService.shared.saveStory(c)
-                        print("✅ [Story Upload] Fallback story saved")
-                    }
-                }
-            } else {
-                print("🚨 [Story Upload] No data available, creating local-only story")
-                created = makeFallbackStory()
+                print("📸 [Story Upload] Saving story to Firestore...")
+                try await DatabaseService.shared.saveStory(s)
+                print("✅ [Story Upload] Story saved to Firestore: \(s.id)")
+                created = s
+                processingState.uploadProgress = 1.0
+            } catch {
+                print("🚨 [Story Upload] Error: \(error.localizedDescription)")
+                showError(error.localizedDescription)
+                created = makeFallbackStory(mediaURL: media.url.absoluteString)
                 if let c = created {
                     try? await DatabaseService.shared.saveStory(c)
-                    print("✅ [Story Upload] Local-only story saved")
                 }
             }
         } else {
@@ -508,6 +443,45 @@ class CreateStoryViewModel: ObservableObject {
         return finalStory
     }
     
+    private func uploadMediaToFirebaseStorage(_ media: MediaItem) async throws -> String {
+        #if canImport(FirebaseStorage) && canImport(FirebaseAuth)
+        guard let userId = Auth.auth().currentUser?.uid else {
+            throw StoryError.processingFailed("Not signed in. Please log in and try again.")
+        }
+        let storage = Storage.storage()
+        let storageRef = storage.reference()
+
+        switch media.type {
+        case .image:
+            let rawData = try Data(contentsOf: media.url)
+            let imageData: Data
+            if let uiImage = UIImage(data: rawData), let compressed = uiImage.jpegData(compressionQuality: 0.8) {
+                imageData = compressed
+            } else {
+                imageData = rawData
+            }
+            let path = "stories/\(userId)/\(UUID().uuidString).jpg"
+            let ref = storageRef.child(path)
+            let metadata = StorageMetadata()
+            metadata.contentType = "image/jpeg"
+            _ = try await ref.putDataAsync(imageData, metadata: metadata)
+            let url = try await ref.downloadURL()
+            return url.absoluteString
+
+        case .video:
+            let path = "stories/\(userId)/\(UUID().uuidString).mp4"
+            let ref = storageRef.child(path)
+            let metadata = StorageMetadata()
+            metadata.contentType = "video/mp4"
+            _ = try await ref.putFileAsync(from: media.url, metadata: metadata)
+            let url = try await ref.downloadURL()
+            return url.absoluteString
+        }
+        #else
+        throw StoryError.processingFailed("Firebase Storage not available")
+        #endif
+    }
+
     private func createStoryContent() -> StoryContent {
         return StoryContent(
             url: selectedMedia?.url.absoluteString ?? "",

@@ -16,7 +16,7 @@ struct NoPiPVideoPlayer: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let controller = AVPlayerViewController()
         controller.player = player
-        controller.showsPlaybackControls = true
+        controller.showsPlaybackControls = false
         
         // 🔥 CRITICAL: Disable Picture-in-Picture
         controller.allowsPictureInPicturePlayback = false

@@ -151,14 +151,12 @@ class SearchSuggestionService: ObservableObject {
             }
     }
     
-    // MARK: - AI Suggestions (Claude)
+    // MARK: - AI Suggestions (VertexAI)
     private func generateAISuggestions(_ query: String) async -> [SearchSuggestion] {
         // Only generate AI suggestions for queries 3+ characters
         guard query.count >= 3 else { return [] }
         
-        // Use Claude to generate smart suggestions
-        // Prompt reserved for future AI integration
-        _ = """
+        let prompt = """
         Given the search query: "\(query)"
         
         Generate 3 smart search suggestions that a user might be looking for.
@@ -171,26 +169,27 @@ class SearchSuggestionService: ObservableObject {
         Return only the suggestions, one per line, no explanations.
         """
         
-        // TODO: Integrate with AI service (Claude/OpenAI) for AI-powered suggestions
-        // For now, return empty array until ClaudeService is implemented
-        return []
-        
-        // Commented out until ClaudeService is available:
-        // let suggestions = try await ClaudeService.shared.generateText(prompt: prompt)
-        // let lines = suggestions.components(separatedBy: "\n")
-        //     .filter { !$0.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty }
-        //     .prefix(3)
-        // 
-        // return lines.map { suggestion in
-        //     SearchSuggestion(
-        //         id: UUID().uuidString,
-        //         text: suggestion.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines),
-        //         subtitle: "AI suggestion",
-        //         icon: "star.fill",
-        //         isAIGenerated: true,
-        //         score: 0.95
-        //     )
-        // }
+        do {
+            let suggestions = try await VertexAIService.shared.generateWithGemini(prompt)
+            let lines = suggestions.components(separatedBy: "\n")
+                .map { $0.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .prefix(3)
+            
+            return lines.map { suggestion in
+                SearchSuggestion(
+                    id: UUID().uuidString,
+                    text: suggestion,
+                    subtitle: "AI suggestion",
+                    icon: "star.fill",
+                    isAIGenerated: true,
+                    score: 0.95
+                )
+            }
+        } catch {
+            print("🚨 [SearchSuggestion] AI generation failed: \(error)")
+            return []
+        }
     }
     
     // MARK: - Trending Matches

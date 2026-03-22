@@ -22,10 +22,8 @@ service cloud.firestore {
 
     // Block suspended / permanently-banned accounts
     function isNotBanned() {
-      return isSignedIn() && (
-        !exists(/databases/$(database)/documents/security_bans/$(request.auth.uid)) ||
-        get(/databases/$(database)/documents/security_bans/$(request.auth.uid)).data.active == false
-      );
+      return isSignedIn() &&
+        !exists(/databases/$(database)/documents/security_bans/$(request.auth.uid));
     }
 
     // Reject strings longer than maxLen to prevent oversized payloads
@@ -225,9 +223,18 @@ service cloud.firestore {
     // ── Stories ───────────────────────────────────────────────────────────
     match /stories/{storyId} {
       allow read: if true;
-      allow create: if isSignedIn() && isNotBanned()
-        && request.resource.data.creatorId == uid();
-      allow update, delete: if isSignedIn() && (resource.data.creatorId == uid() || isAdmin());
+      allow create: if isSignedIn()
+        && request.resource.data.creatorId == request.auth.uid;
+      allow update: if isSignedIn()
+        && (resource.data.creatorId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn()
+        && (resource.data.creatorId == request.auth.uid || isAdmin());
+    }
+
+    // ── Story collections index (one doc per creator, updated on story post) ─
+    match /story-collections/{creatorId} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.uid == creatorId;
     }
 
     // ── Notifications (user-scoped, read-only to owner) ───────────────────

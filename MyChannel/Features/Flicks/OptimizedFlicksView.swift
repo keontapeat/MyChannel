@@ -136,9 +136,8 @@ struct FlickPlayerView: View {
     var body: some View {
         ZStack {
             if let player = player {
-                VideoPlayer(player: player)
+                RawPlayerLayerView(player: player, videoGravity: .resizeAspectFill)
                     .ignoresSafeArea()
-                    .disabled(true)
             } else {
                 // Loading placeholder
                 AsyncImage(url: flick.thumbnailURL) { image in

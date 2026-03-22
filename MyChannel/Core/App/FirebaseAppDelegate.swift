@@ -45,8 +45,15 @@ final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        let appLaunchStart = Date()
+        
         configureAppCheckIfAvailable()
         FirebaseManager.shared.configureIfPossible()
+        
+        // Track app launch performance
+        let launchTime = Date().timeIntervalSince(appLaunchStart)
+        PerformanceMonitoringManager.shared.trackAppLaunch(launchTime: launchTime)
+        
         // Ensure GoogleSignIn has client ID configured very early
         #if canImport(GoogleSignIn)
         if GIDSignIn.sharedInstance.configuration == nil,
@@ -54,6 +61,22 @@ final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
             GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientId)
         }
         #endif
+        
+        // Initialize enhanced Firebase services
+        Task { @MainActor in
+            // Fetch remote config early
+            await RemoteConfigManager.shared.fetchAndActivate()
+            
+            // Start monitoring dashboard
+            MonitoringDashboardManager.shared.updateMetric("app_launches", value: 1.0)
+            
+            // Set up analytics user properties
+            EnhancedAnalyticsManager.shared.setUserProperty(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown", forName: "app_version")
+            EnhancedAnalyticsManager.shared.setUserProperty(UIDevice.current.model, forName: "device_model")
+            
+            print("✅ [AppLaunch] Enhanced Firebase services initialized")
+        }
+        
         // ChannelBoost install log (non-blocking)
         Task { @MainActor in
             let locale = Locale.current.identifier
@@ -80,6 +103,7 @@ final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
                 print("⚡ [AppLaunch] AGI Scheduler started with \(liveCount) live agents")
             }
         }
+        
         // Set notification center delegate early (only if push notifications are available)
         // Note: Push notifications require a paid Apple Developer Program membership
         #if canImport(FirebaseMessaging)
@@ -88,6 +112,7 @@ final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
         #else
         print("⚠️ Push notifications disabled - requires paid Apple Developer Program membership")
         #endif
+        
         return true
     }
 

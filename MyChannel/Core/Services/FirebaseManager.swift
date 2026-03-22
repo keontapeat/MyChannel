@@ -24,6 +24,7 @@ final class FirebaseManager {
         if isConfigured { return }
         if FirebaseApp.app() != nil {
             isConfigured = true
+            configureAdditionalServices()
             return
         }
         // Ensure GoogleService-Info.plist exists before configuring to avoid runtime crashes
@@ -41,6 +42,8 @@ final class FirebaseManager {
         }
 
         FirebaseApp.configure()
+        configureAdditionalServices()
+        
         #if canImport(FirebaseAnalytics)
         if UserDefaults.standard.bool(forKey: analyticsEnabledKey) {
             Analytics.logEvent("app_launch", parameters: [
@@ -52,6 +55,22 @@ final class FirebaseManager {
         #else
         isConfigured = false
         #endif
+    }
+    
+    private func configureAdditionalServices() {
+        // Configure Performance Monitoring
+        PerformanceMonitoringManager.shared.configure()
+        
+        // Configure Remote Config
+        RemoteConfigManager.shared.configure()
+        
+        // Configure A/B Testing
+        ABTestingManager.shared.configure()
+        
+        // Configure Error Reporting
+        ErrorReportingManager.shared.configure()
+        
+        print("✅ [Firebase] All enhanced services configured")
     }
 
     func logEvent(_ name: String, parameters: [String: Any] = [:]) {

@@ -283,7 +283,14 @@ struct VideoMoreOptionsSheet: View {
     }
     
     private func deleteVideo() async {
+        // 🔥 FIX: Delete from Firestore first (was missing — video kept reappearing)
+        try? await VideoFirestoreService.shared.deleteVideo(videoId: video.id)
         try? await DatabaseService.shared.deleteVideo(id: video.id)
+        // Also unpin and remove from cache
+        if let uid = resolvedOwnerId {
+            PinnedVideosStore.shared.unpin(video.id, for: uid)
+        }
+        ProfileCacheService.shared.removeVideoFromCache(video.id)
         NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: NSNotification.Name("ShowToast"), object: "Video deleted successfully")

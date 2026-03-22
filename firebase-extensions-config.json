@@ -1,0 +1,76 @@
+{
+  "extensions": [
+    {
+      "name": "storage-resize-images",
+      "publisher": "firebase",
+      "version": "latest",
+      "params": {
+        "IMG_BUCKET": "gs://mychannel-ca26d.appspot.com",
+        "IMG_SIZES": "200x200,400x400,800x800,1200x1200",
+        "RESIZED_IMAGES_PATH": "thumbnails/{originalImagePath}_{width}x{height}",
+        "DELETE_ORIGINAL_FILE": "false",
+        "CACHE_CONTROL_HEADER": "max-age=31536000"
+      }
+    },
+    {
+      "name": "firestore-translate-text",
+      "publisher": "firebase",
+      "version": "latest",
+      "params": {
+        "COLLECTION_PATH": "videos,comments,stories",
+        "INPUT_FIELD_NAME": "title,content,description",
+        "OUTPUT_FIELD_NAME": "translations",
+        "LANGUAGES": "es,fr,de,ja,ko,zh,pt,ru,ar,hi"
+      }
+    },
+    {
+      "name": "firestore-send-email",
+      "publisher": "firebase",
+      "version": "latest",
+      "params": {
+        "MAIL_COLLECTION": "mail",
+        "SMTP_CONNECTION_URI": "${param:SMTP_CONNECTION_URI}",
+        "DEFAULT_FROM": "noreply@mychannel.live",
+        "DEFAULT_REPLY_TO": "support@mychannel.live"
+      }
+    },
+    {
+      "name": "storage-moderate-images",
+      "publisher": "firebase",
+      "version": "latest",
+      "params": {
+        "BUCKET_NAME": "gs://mychannel-ca26d.appspot.com",
+        "MODERATION_COLLECTION": "moderation_results",
+        "CONFIDENCE_THRESHOLD": "0.7",
+        "QUARANTINE_BUCKET": "gs://mychannel-ca26d-quarantine.appspot.com"
+      }
+    },
+    {
+      "name": "firestore-counter",
+      "publisher": "firebase",
+      "version": "latest",
+      "params": {
+        "INTERNAL_STATE_PATH": "_counter_state_",
+        "DOCUMENT_COUNT_FIELD": "count"
+      }
+    }
+  ],
+  "configuration": {
+    "project_id": "mychannel-ca26d",
+    "region": "us-central1",
+    "billing_required": true,
+    "apis_required": [
+      "cloudbuild.googleapis.com",
+      "cloudresourcemanager.googleapis.com",
+      "translate.googleapis.com",
+      "vision.googleapis.com"
+    ]
+  },
+  "deployment_notes": [
+    "Image resizing will automatically generate thumbnails for uploaded content",
+    "Translation service will provide multi-language support for global reach",
+    "Email service enables transactional emails for notifications and marketing",
+    "Image moderation helps maintain content safety standards",
+    "Counter extension provides efficient counting for likes, views, etc."
+  ]
+}

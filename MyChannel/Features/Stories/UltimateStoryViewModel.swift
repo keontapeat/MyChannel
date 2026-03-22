@@ -15,6 +15,12 @@ import FirebaseCore
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
+#if canImport(FirebaseStorage)
+import FirebaseStorage
+#endif
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
 
 // MARK: - Ultimate Story ViewModel
 @MainActor
@@ -248,7 +254,16 @@ class UltimateStoryViewModel: ObservableObject {
         processingProgress = 0.0
         
         // 1. Upload media (20%)
-        let mediaURL = try await uploadMedia(media)
+        print("📸 [CreateStory] Step 1: Uploading media...")
+        let mediaURL: String
+        do {
+            mediaURL = try await uploadMedia(media)
+            print("✅ [CreateStory] Step 1 DONE: Media uploaded to \(mediaURL)")
+        } catch {
+            print("🚨 [CreateStory] Step 1 FAILED (upload): \(error)")
+            print("🚨 [CreateStory] Error type: \(type(of: error))")
+            throw error
+        }
         processingProgress = 0.2
         
         // 2. Process elements (40%)
@@ -318,7 +333,15 @@ class UltimateStoryViewModel: ObservableObject {
         processingProgress = 0.8
         
         // 4. Save to Firestore (100%)
-        try await storyService.saveStory(story)
+        print("📸 [CreateStory] Step 4: Saving to Firestore...")
+        do {
+            try await storyService.saveStory(story)
+            print("✅ [CreateStory] Step 4 DONE: Saved to Firestore")
+        } catch {
+            print("🚨 [CreateStory] Step 4 FAILED (Firestore): \(error)")
+            print("🚨 [CreateStory] Error type: \(type(of: error))")
+            throw error
+        }
         processingProgress = 1.0
         
         isProcessing = false
@@ -328,65 +351,40 @@ class UltimateStoryViewModel: ObservableObject {
     }
     
     private func uploadMedia(_ media: CapturedMedia) async throws -> String {
-        let storyAPI = StoryAPIService.shared
+        #if canImport(FirebaseStorage) && canImport(FirebaseAuth)
+        guard let userId = Auth.auth().currentUser?.uid else {
+            throw StoryError.processingFailed("Not signed in. Please log in and try again.")
+        }
+        let storage = Storage.storage()
+        let storageRef = storage.reference()
         
         switch media {
         case .image(let image):
-            // Compress image for upload
             guard let imageData = image.jpegData(compressionQuality: 0.8) else {
                 throw StoryError.processingFailed("Failed to compress image")
             }
-            
-            // Get signed URL for upload
-            let filename = "story_\(UUID().uuidString).jpg"
-            let signedUrlResponse = try await storyAPI.getSignedUploadUrl(
-                filename: filename,
-                contentType: "image/jpeg"
-            )
-            
-            // Upload to signed URL
-            try await storyAPI.uploadMedia(
-                data: imageData,
-                to: signedUrlResponse.url,
-                contentType: "image/jpeg"
-            )
-            
-            // Finalize and get public URL
-            let finalizeResponse = try await storyAPI.finalize(
-                object: signedUrlResponse.object,
-                bucket: signedUrlResponse.bucket,
-                contentType: "image/jpeg"
-            )
-            
-            return finalizeResponse.publicUrl
+            let imagePath = "stories/\(userId)/\(UUID().uuidString).jpg"
+            let imageRef = storageRef.child(imagePath)
+            let metadata = StorageMetadata()
+            metadata.contentType = "image/jpeg"
+            _ = try await imageRef.putDataAsync(imageData, metadata: metadata)
+            let downloadURL = try await imageRef.downloadURL()
+            print("✅ [UltimateStory] Image uploaded: \(downloadURL.absoluteString)")
+            return downloadURL.absoluteString
             
         case .video(let url):
-            // Read video data
-            let videoData = try Data(contentsOf: url)
-            
-            // Get signed URL for upload
-            let filename = "story_\(UUID().uuidString).mov"
-            let signedUrlResponse = try await storyAPI.getSignedUploadUrl(
-                filename: filename,
-                contentType: "video/quicktime"
-            )
-            
-            // Upload to signed URL
-            try await storyAPI.uploadMedia(
-                data: videoData,
-                to: signedUrlResponse.url,
-                contentType: "video/quicktime"
-            )
-            
-            // Finalize and get public URL
-            let finalizeResponse = try await storyAPI.finalize(
-                object: signedUrlResponse.object,
-                bucket: signedUrlResponse.bucket,
-                contentType: "video/quicktime"
-            )
-            
-            return finalizeResponse.publicUrl
+            let videoPath = "stories/\(userId)/\(UUID().uuidString).mp4"
+            let videoRef = storageRef.child(videoPath)
+            let metadata = StorageMetadata()
+            metadata.contentType = "video/mp4"
+            _ = try await videoRef.putFileAsync(from: url, metadata: metadata)
+            let downloadURL = try await videoRef.downloadURL()
+            print("✅ [UltimateStory] Video uploaded: \(downloadURL.absoluteString)")
+            return downloadURL.absoluteString
         }
+        #else
+        throw StoryError.processingFailed("Firebase Storage not available")
+        #endif
     }
     
     private func processElements() async throws -> [ProcessedElement] {
@@ -406,11 +404,14 @@ class UltimateStoryViewModel: ObservableObject {
     }
     
     private func getCurrentUserId() -> String {
-        // Get from AppState - check for authenticated user
+        #if canImport(FirebaseAuth)
+        if let uid = Auth.auth().currentUser?.uid {
+            return uid
+        }
+        #endif
         if let userId = AppState.shared.currentUser?.id {
             return userId
         }
-        // Fallback - should not happen in production
         return UUID().uuidString
     }
     
@@ -725,17 +726,25 @@ class StoryService {
     static let shared = StoryService()
     
     func saveStory(_ story: Story) async throws {
-        #if canImport(FirebaseFirestore)
+        #if canImport(FirebaseFirestore) && canImport(FirebaseAuth)
         guard FirebaseApp.app() != nil else {
             throw StoryError.processingFailed("Firebase is not configured")
         }
+        
+        // Ensure the creatorId is always the real Firebase Auth UID
+        guard let authUID = Auth.auth().currentUser?.uid else {
+            throw StoryError.processingFailed("Not signed in. Please log in and try again.")
+        }
+        
+        // Build story with correct UID — never trust passed-in creatorId
+        let verifiedCreatorId = authUID
         
         let db = Firestore.firestore()
         let storiesRef = db.collection("stories").document(story.id)
         
         var data: [String: Any] = [
             "id": story.id,
-            "creatorId": story.creatorId,
+            "creatorId": verifiedCreatorId,
             "mediaURL": story.mediaURL,
             "mediaType": story.mediaType.rawValue,
             "duration": story.duration,
@@ -819,14 +828,19 @@ class StoryService {
             return linkData
         }
         
+        print("📝 [StoryService] Writing to /stories/\(story.id) with creatorId=\(story.creatorId)")
+        print("📝 [StoryService] Firebase Auth uid=\(Auth.auth().currentUser?.uid ?? "nil")")
         try await storiesRef.setData(data)
+        print("✅ [StoryService] /stories/\(story.id) written successfully")
         
-        let collectionRef = db.collection("story-collections").document(story.creatorId)
+        let collectionRef = db.collection("story-collections").document(verifiedCreatorId)
+        print("📝 [StoryService] Writing to /story-collections/\(verifiedCreatorId)")
         try await collectionRef.setData([
-            "creatorId": story.creatorId,
+            "creatorId": verifiedCreatorId,
             "latestStoryId": story.id,
             "updatedAt": FieldValue.serverTimestamp()
         ], merge: true)
+        print("✅ [StoryService] /story-collections/\(story.creatorId) written successfully")
         #else
         print("⚠️ Firestore not available - skipping save for story \(story.id)")
         #endif

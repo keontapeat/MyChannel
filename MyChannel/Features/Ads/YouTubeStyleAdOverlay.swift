@@ -240,9 +240,8 @@ struct YouTubeStyleAdPlayerView: View {
             
             // Ad video player
             if let player = adManager.adPlayer {
-                VideoPlayer(player: player)
+                RawPlayerLayerView(player: player, videoGravity: .resizeAspect)
                     .aspectRatio(16/9, contentMode: .fit)
-                    .disabled(true)  // Prevent interaction with video controls
                     .onAppear {
                         print("🎥 [YouTubeStyleAdPlayerView] VideoPlayer appeared, rate: \(player.rate)")
                         // Ensure video is playing when view appears

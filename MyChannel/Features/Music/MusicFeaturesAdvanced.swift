@@ -443,7 +443,7 @@ struct MerchStoreView: View {
         MerchItem(id: "2", artistName: "Rio Da Yung OG", name: "Flint Made Hoodie", description: "Premium heavyweight hoodie", price: 65.00, imageURL: nil, sizes: ["S", "M", "L", "XL"], category: .clothing, isFavorite: true),
         MerchItem(id: "3", artistName: "RMC Mike", name: "810 Chain", description: "Gold plated pendant", price: 120.00, imageURL: nil, sizes: nil, category: .accessories, isFavorite: false),
         MerchItem(id: "4", artistName: "YN Jay", name: "Coochie Chronicles Vinyl", description: "Limited edition pressing", price: 30.00, imageURL: nil, sizes: nil, category: .vinyl, isFavorite: false),
-        MerchItem(id: "5", artistName: "Flint Artists", name: "810 Poster Set", description: "3 poster bundle", price: 25.00, imageURL: nil, sizes: nil, category: .posters, isFavorite: false)
+        MerchItem(id: "5", artistName: "810 Artists", name: "810 Poster Set", description: "3 poster bundle", price: 25.00, imageURL: nil, sizes: nil, category: .posters, isFavorite: false)
     ]
     @State private var cartItems: [String] = []
     @State private var showCart: Bool = false
@@ -719,7 +719,7 @@ struct DiscoverView: View {
         case daily = "Daily Mix"
         case weekly = "Discover Weekly"
         case release = "Release Radar"
-        case flint = "810 Mix"
+        case localMix = "810 Mix"
     }
     
     var body: some View {
@@ -833,7 +833,7 @@ struct MixCard: View {
         case .daily: return [.orange, .pink]
         case .weekly: return [.purple, .blue]
         case .release: return [.green, .teal]
-        case .flint: return [.red, .orange]
+        case .localMix: return [.red, .orange]
         }
     }
     

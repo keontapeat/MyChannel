@@ -10,6 +10,7 @@ import SwiftUI
 struct SplashContainer: View {
     @State private var showSplash = true
     @State private var showLaunchMask = false
+    @State private var hasAcceptedEULA = UserDefaults.standard.bool(forKey: "hasAcceptedEULA")
 
     private var isRunningInPreviews: Bool {
         ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
@@ -48,6 +49,10 @@ struct SplashContainer: View {
                         }
                         .transition(.opacity)
                         .zIndex(1)
+                    } else if !hasAcceptedEULA {
+                        // 🔒 EULA Gate (Guideline 1.2): Must accept terms before UGC access
+                        EULAAcceptanceView(hasAcceptedEULA: $hasAcceptedEULA)
+                            .transition(.opacity)
                     } else {
                         // Always start unauthenticated unless user signs in (fresh TestFlight behavior)
                         MainTabView()

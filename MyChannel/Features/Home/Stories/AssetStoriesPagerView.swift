@@ -1,16 +1,25 @@
 import SwiftUI
 import AVKit
 
+// MARK: - Instagram-Style Stories Pager
+// Groups stories by user. Progress bars = one per story within current user.
+// After last story of a user → auto-advance to next user.
+// Swipe left/right = jump between users. Tap left/right = prev/next story.
+// Swipe down = dismiss. Long press = pause. Double-tap = like.
+
 struct AssetStoriesPagerView: View {
-    let stories: [AssetStory]
-    let initialIndex: Int
+    let allStories: [AssetStory]
+    let userGroups: [UserStoryGroup]
+    let initialUserIndex: Int
     let onDismiss: () -> Void
 
-    @State private var index: Int
+    @State private var userIndex: Int
+    @State private var storyIndex: Int = 0
     @State private var progress: Double = 0
     @State private var isPaused: Bool = false
     @State private var dragOffset: CGSize = .zero
     @State private var timer: Timer?
+    @State private var transitionDirection: Int = 0 // -1 left, 0 none, 1 right
 
     // UX
     @State private var showHeart: Bool = false
@@ -24,11 +33,39 @@ struct AssetStoriesPagerView: View {
     private let imageDuration: TimeInterval = 5.0
     private let videoDuration: TimeInterval = 8.0
 
+    // Legacy init (flat story list, single user)
     init(stories: [AssetStory], initialIndex: Int = 0, onDismiss: @escaping () -> Void) {
-        self.stories = stories
-        self.initialIndex = min(max(0, initialIndex), stories.count - 1)
+        self.allStories = stories
+        self.userGroups = UserStoryGroup.group(from: stories)
+        self.initialUserIndex = 0
         self.onDismiss = onDismiss
-        _index = State(initialValue: self.initialIndex)
+        _userIndex = State(initialValue: 0)
+        _storyIndex = State(initialValue: min(max(0, initialIndex), max(stories.count - 1, 0)))
+    }
+
+    // Instagram-style init (grouped by user)
+    init(userGroups: [UserStoryGroup], initialUserIndex: Int = 0, onDismiss: @escaping () -> Void) {
+        self.allStories = userGroups.flatMap { $0.stories }
+        self.userGroups = userGroups
+        let safeIdx = min(max(0, initialUserIndex), max(userGroups.count - 1, 0))
+        self.initialUserIndex = safeIdx
+        self.onDismiss = onDismiss
+        _userIndex = State(initialValue: safeIdx)
+    }
+
+    private var currentGroup: UserStoryGroup? {
+        guard userIndex >= 0 && userIndex < userGroups.count else { return nil }
+        return userGroups[userIndex]
+    }
+
+    private var currentStory: AssetStory? {
+        guard let group = currentGroup,
+              storyIndex >= 0 && storyIndex < group.stories.count else { return nil }
+        return group.stories[storyIndex]
+    }
+
+    private var storiesInCurrentGroup: Int {
+        currentGroup?.stories.count ?? 1
     }
 
     var body: some View {
@@ -36,11 +73,18 @@ struct AssetStoriesPagerView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                currentContent
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .clipped()
-                    .scaleEffect(isPaused ? 1.02 : 1.0)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isPaused)
+                if let story = currentStory {
+                    storyContentView(for: story)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                        .scaleEffect(isPaused ? 1.02 : 1.0)
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isPaused)
+                        .id("\(userIndex)-\(storyIndex)")
+                        .transition(.asymmetric(
+                            insertion: .move(edge: transitionDirection >= 0 ? .trailing : .leading).combined(with: .opacity),
+                            removal: .move(edge: transitionDirection >= 0 ? .leading : .trailing).combined(with: .opacity)
+                        ))
+                }
 
                 // Top overlays: progress + header
                 VStack(spacing: 12) {
@@ -63,23 +107,6 @@ struct AssetStoriesPagerView: View {
                     .ignoresSafeArea()
                     .frame(maxHeight: .infinity, alignment: .top)
                 )
-                // Scrub overlay over progress bars
-                .overlay(alignment: .top) {
-                    Color.clear
-                        .frame(height: 28)
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { value in
-                                    pause()
-                                    scrub(atX: value.location.x, totalWidth: geo.size.width)
-                                }
-                                .onEnded { _ in
-                                    resume()
-                                }
-                        )
-                        .padding(.top, 12)
-                }
 
                 // Bottom gradient + actions
                 VStack(spacing: 0) {
@@ -100,18 +127,18 @@ struct AssetStoriesPagerView: View {
                     .frame(maxHeight: .infinity, alignment: .bottom)
                 )
 
-                // Invisible tap regions (prev/next)
+                // Invisible tap regions (prev/next) — Instagram: left = prev story, right = next story
                 HStack(spacing: 0) {
                     Rectangle().fill(.clear)
                         .contentShape(Rectangle())
-                        .onTapGesture { previous() }
+                        .onTapGesture { previousStory() }
                     Rectangle().fill(.clear)
                         .contentShape(Rectangle())
-                        .onTapGesture { next() }
+                        .onTapGesture { nextStory() }
                 }
                 .allowsHitTesting(true)
 
-                // Double‑tap like
+                // Double-tap like
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) {
@@ -138,6 +165,7 @@ struct AssetStoriesPagerView: View {
                         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7), value: heartScale)
                 }
             }
+            // Swipe gesture — Instagram: horizontal = next/prev USER, vertical down = dismiss
             .gesture(
                 DragGesture()
                     .onChanged { value in
@@ -151,10 +179,11 @@ struct AssetStoriesPagerView: View {
                             onDismiss()
                             return
                         }
+                        // Swipe left/right = jump between USERS (Instagram cube transition)
                         if value.translation.width < -80 {
-                            next()
+                            nextUser()
                         } else if value.translation.width > 80 {
-                            previous()
+                            previousUser()
                         }
                     }
             )
@@ -168,16 +197,11 @@ struct AssetStoriesPagerView: View {
             }
             .onAppear {
                 startTimer()
-                preloadAdjacentImages()
             }
             .onDisappear { stopTimer() }
         }
         .statusBarHidden()
         .ignoresSafeArea()
-        .onChange(of: index) { _ in
-            resetProgress()
-            preloadAdjacentImages()
-        }
         .onChange(of: scenePhase) { newValue in
             switch newValue {
             case .active: resume()
@@ -188,19 +212,29 @@ struct AssetStoriesPagerView: View {
     }
 
     // MARK: - Content
-    private var currentContent: some View {
-        Group {
-            switch stories[index].media {
-            case .image(let name):
-                if let ui = UIImage(named: name) {
-                    Image(uiImage: ui)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .transition(.opacity.combined(with: .scale))
-                } else {
-                    AsyncImage(url: URL(string: "https://picsum.photos/600/1200?random=\(abs(stories[index].id.hashValue))")) { img in
-                        img.resizable().aspectRatio(contentMode: .fit)
-                    } placeholder: {
+    @ViewBuilder
+    private func storyContentView(for story: AssetStory) -> some View {
+        switch story.media {
+        case .image(let name):
+            if let remoteURL = URL(string: name), remoteURL.scheme == "https" || remoteURL.scheme == "http" {
+                AsyncImage(url: remoteURL) { phase in
+                    switch phase {
+                    case .success(let img):
+                        img.resizable().aspectRatio(contentMode: .fill)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .clipped()
+                    case .failure:
+                        ZStack {
+                            Color.black
+                            VStack(spacing: 12) {
+                                Image(systemName: "photo")
+                                    .font(.system(size: 48))
+                                    .foregroundStyle(.white.opacity(0.5))
+                                Text("Could not load image")
+                                    .foregroundStyle(.white.opacity(0.7))
+                            }
+                        }
+                    case .empty:
                         ZStack {
                             LinearGradient(
                                 colors: [.gray.opacity(0.3), .gray.opacity(0.15)],
@@ -208,46 +242,67 @@ struct AssetStoriesPagerView: View {
                             )
                             ProgressView().tint(.white)
                         }
+                    @unknown default:
+                        EmptyView()
                     }
                 }
-            case .video(let resource):
-                if let url = Bundle.main.url(forResource: resource, withExtension: nil) {
-                    VideoPlayer(player: AVPlayer(url: url))
-                        .transition(.opacity)
-                } else {
-                    ZStack {
-                        LinearGradient(
-                            colors: [.purple.opacity(0.7), .blue.opacity(0.7)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                        VStack(spacing: 12) {
-                            Image(systemName: "play.circle.fill")
-                                .font(.system(size: 72))
-                                .foregroundStyle(.white)
-                            Text("Video not found")
-                                .foregroundStyle(.white.opacity(0.9))
-                        }
+            } else if let ui = UIImage(named: name) {
+                Image(uiImage: ui)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+            } else {
+                ZStack {
+                    Color.black
+                    VStack(spacing: 12) {
+                        Image(systemName: "photo")
+                            .font(.system(size: 48))
+                            .foregroundStyle(.white.opacity(0.5))
+                        Text("Image not found")
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+            }
+        case .video(let resource):
+            if let remoteURL = URL(string: resource), remoteURL.scheme == "https" || remoteURL.scheme == "http" {
+                RawPlayerLayerView(player: AVPlayer(url: remoteURL), videoGravity: .resizeAspectFill)
+                    .transition(.opacity)
+            } else if let url = Bundle.main.url(forResource: resource, withExtension: nil) {
+                RawPlayerLayerView(player: AVPlayer(url: url), videoGravity: .resizeAspectFill)
+                    .transition(.opacity)
+            } else {
+                ZStack {
+                    LinearGradient(
+                        colors: [.purple.opacity(0.7), .blue.opacity(0.7)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                    VStack(spacing: 12) {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 72))
+                            .foregroundStyle(.white)
+                        Text("Video not found")
+                            .foregroundStyle(.white.opacity(0.9))
                     }
                 }
             }
         }
-        .onChange(of: stories[index].media) { _ in
-            resetProgress()
-        }
     }
 
-    // MARK: - Overlays
+    // MARK: - Progress Bars (per story within current user)
     private var progressBars: some View {
         HStack(spacing: 4) {
-            ForEach(0..<stories.count, id: \.self) { i in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.25))
-                    Capsule()
-                        .fill(Color.white)
-                        .frame(width: fillWidth(for: i, totalWidth: (UIScreen.main.bounds.width - 16 - CGFloat(stories.count - 1) * 4) / CGFloat(stories.count)))
-                        .animation(reduceMotion ? nil : .linear(duration: 0.05), value: progress)
+            ForEach(0..<storiesInCurrentGroup, id: \.self) { i in
+                GeometryReader { barGeo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.white.opacity(0.25))
+                        Capsule()
+                            .fill(Color.white)
+                            .frame(width: fillWidth(for: i, totalWidth: barGeo.size.width))
+                            .animation(reduceMotion ? nil : .linear(duration: 0.05), value: progress)
+                    }
                 }
-                .frame(height: 3)
+                .frame(height: 2.5)
             }
         }
     }
@@ -255,11 +310,11 @@ struct AssetStoriesPagerView: View {
     private var header: some View {
         HStack {
             HStack(spacing: 10) {
-                storyAvatar(for: stories[index])
+                storyAvatar(for: currentGroup)
                     .frame(width: 34, height: 34)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                Text(stories[index].username)
+                Text(currentGroup?.username ?? "")
                     .foregroundStyle(.white)
                     .font(.system(size: 15, weight: .semibold))
                     .lineLimit(1)
@@ -327,26 +382,39 @@ struct AssetStoriesPagerView: View {
         }
     }
 
-    private func storyAvatar(for story: AssetStory) -> some View {
+    private func storyAvatar(for group: UserStoryGroup?) -> some View {
         Group {
-            if let img = UIImage(named: story.authorImageName) {
-                Image(uiImage: img).resizable().scaledToFill()
-            } else {
-                AsyncImage(url: URL(string: "https://picsum.photos/200/200?random=\(abs(story.id.hashValue))")) { phase in
+            let imgName = group?.authorImageName ?? ""
+            if let remoteURL = URL(string: imgName), remoteURL.scheme == "https" || remoteURL.scheme == "http" {
+                AsyncImage(url: remoteURL) { phase in
                     switch phase {
                     case .success(let img): img.resizable().scaledToFill()
                     default:
                         Circle().fill(Color.white.opacity(0.25))
-                            .overlay(Image(systemName: "person.fill").foregroundStyle(.white.opacity(0.8)))
+                            .overlay(
+                                Text(String((group?.username ?? "").prefix(2)).uppercased())
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(.white)
+                            )
                     }
                 }
+            } else if let img = UIImage(named: imgName) {
+                Image(uiImage: img).resizable().scaledToFill()
+            } else {
+                Circle().fill(Color.white.opacity(0.25))
+                    .overlay(
+                        Text(String((group?.username ?? "").prefix(2)).uppercased())
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                    )
             }
         }
     }
 
     // MARK: - Timing
     private func durationForCurrent() -> TimeInterval {
-        switch stories[index].media {
+        guard let story = currentStory else { return imageDuration }
+        switch story.media {
         case .image: return imageDuration
         case .video: return videoDuration
         }
@@ -358,7 +426,7 @@ struct AssetStoriesPagerView: View {
             guard !isPaused else { return }
             let step = 0.05 / max(0.2, durationForCurrent())
             progress += step
-            if progress >= 1.0 { next() }
+            if progress >= 1.0 { nextStory() }
         }
     }
 
@@ -388,38 +456,95 @@ struct AssetStoriesPagerView: View {
         }
     }
 
-    // MARK: - Navigation
-    private func next() {
-        if index < stories.count - 1 {
+    // MARK: - Navigation (Instagram logic)
+
+    /// Tap right / timer expires → next story within user, or next user if last story
+    private func nextStory() {
+        let count = storiesInCurrentGroup
+        if storyIndex < count - 1 {
+            // Next story within same user
+            transitionDirection = 1
             if reduceMotion {
-                index += 1
+                storyIndex += 1
             } else {
-                withAnimation(.easeInOut(duration: 0.25)) { index += 1 }
+                withAnimation(.easeInOut(duration: 0.2)) { storyIndex += 1 }
             }
             HapticManager.shared.selection()
+            resetProgress()
+        } else {
+            // Last story of this user → mark as seen, advance to next user
+            markCurrentUserSeen()
+            nextUser()
+        }
+    }
+
+    /// Tap left → previous story within user, or previous user if first story
+    private func previousStory() {
+        if storyIndex > 0 {
+            transitionDirection = -1
+            if reduceMotion {
+                storyIndex -= 1
+            } else {
+                withAnimation(.easeInOut(duration: 0.2)) { storyIndex -= 1 }
+            }
+            HapticManager.shared.selection()
+            resetProgress()
+        } else {
+            previousUser()
+        }
+    }
+
+    /// Swipe left / auto-advance → next user
+    private func nextUser() {
+        markCurrentUserSeen()
+        if userIndex < userGroups.count - 1 {
+            transitionDirection = 1
+            if reduceMotion {
+                userIndex += 1
+                storyIndex = 0
+            } else {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    userIndex += 1
+                    storyIndex = 0
+                }
+            }
+            HapticManager.shared.impact(style: .light)
+            resetProgress()
+        } else {
+            // Last user → dismiss (Instagram behavior)
+            onDismiss()
+        }
+    }
+
+    /// Swipe right → previous user (start from their first story)
+    private func previousUser() {
+        if userIndex > 0 {
+            transitionDirection = -1
+            if reduceMotion {
+                userIndex -= 1
+                storyIndex = 0
+            } else {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    userIndex -= 1
+                    storyIndex = 0
+                }
+            }
+            HapticManager.shared.impact(style: .light)
             resetProgress()
         } else {
             onDismiss()
         }
     }
 
-    private func previous() {
-        if index > 0 {
-            if reduceMotion {
-                index -= 1
-            } else {
-                withAnimation(.easeInOut(duration: 0.25)) { index -= 1 }
-            }
-            HapticManager.shared.selection()
-            resetProgress()
-        } else {
-            onDismiss()
-        }
+    /// Mark the current user's stories as seen
+    private func markCurrentUserSeen() {
+        guard let group = currentGroup else { return }
+        StorySeenTracker.shared.markSeen(username: group.username)
     }
 
     private func fillWidth(for barIndex: Int, totalWidth: CGFloat) -> CGFloat {
-        if barIndex < index { return totalWidth }
-        if barIndex > index { return 0 }
+        if barIndex < storyIndex { return totalWidth }
+        if barIndex > storyIndex { return 0 }
         return totalWidth * CGFloat(min(1.0, max(0.0, progress)))
     }
 
@@ -442,41 +567,12 @@ struct AssetStoriesPagerView: View {
             }
         }
     }
-
-    private func preloadAdjacentImages() {
-        let candidates: [Int] = [index - 1, index + 1].filter { $0 >= 0 && $0 < stories.count }
-        for i in candidates {
-            if case let .image(name) = stories[i].media, UIImage(named: name) == nil {
-                _ = URL(string: "https://picsum.photos/10/10?preload=\(abs(stories[i].id.hashValue))")
-            }
-        }
-    }
-
-    // MARK: - Scrubbing
-    private func scrub(atX x: CGFloat, totalWidth: CGFloat) {
-        let spacing: CGFloat = 4
-        let bars = max(1, stories.count)
-        let innerWidth = totalWidth - 16 - CGFloat(bars - 1) * spacing
-        let step = innerWidth / CGFloat(bars)
-        let clampedX = max(0, min(x - 8, innerWidth + CGFloat(bars - 1) * spacing))
-        let newIndex = Int(clampedX / (step + spacing))
-        let remainder = clampedX - CGFloat(newIndex) * (step + spacing)
-        let localProgress = max(0, min(1, remainder / step))
-
-        if newIndex != index {
-            index = newIndex
-            progress = Double(localProgress)
-            startTimer()
-        } else {
-            progress = Double(localProgress)
-        }
-    }
 }
 
 #Preview("Asset Stories Pager") {
     AssetStoriesPagerView(
         stories: AssetStory.sampleStories,
-        initialIndex: 2,
+        initialIndex: 0,
         onDismiss: {}
     )
 }

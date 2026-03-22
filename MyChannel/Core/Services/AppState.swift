@@ -57,6 +57,7 @@ class AppState: ObservableObject {
     
     private var cancellables = Set<AnyCancellable>()
     private var firestoreListeners: Any?
+    private var isSavingFromListener = false
     
     // MARK: - Singleton
     static let shared = AppState()
@@ -105,17 +106,20 @@ class AppState: ObservableObject {
             .store(in: &cancellables)
         
         // Auto-save user data when collections change
+        // 🔥 FIX: Skip save when the change came from a Firestore listener to prevent save loops
         $watchLaterVideos
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
             .sink { [weak self] _ in
-                self?.saveUserData()
+                guard let self = self, !self.isSavingFromListener else { return }
+                self.saveUserData()
             }
             .store(in: &cancellables)
         
         $likedVideos
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
             .sink { [weak self] _ in
-                self?.saveUserData()
+                guard let self = self, !self.isSavingFromListener else { return }
+                self.saveUserData()
             }
             .store(in: &cancellables)
     }
@@ -124,10 +128,11 @@ class AppState: ObservableObject {
         guard let uid = currentUser?.id else { return }
         let wl = await UserCollectionsFirestoreService.shared.fetchWatchLater(userId: uid)
         let subs = await UserCollectionsFirestoreService.shared.fetchSubscriptions(userId: uid)
-        await MainActor.run {
-            self.watchLaterVideos = wl
-            self.subscriptions = subs
-        }
+        // 🔥 FIX: Mark as listener update to prevent save loop
+        isSavingFromListener = true
+        self.watchLaterVideos = wl
+        self.subscriptions = subs
+        isSavingFromListener = false
     }
 
     private func attachCloudListeners() {
@@ -135,10 +140,19 @@ class AppState: ObservableObject {
         firestoreListeners = UserCollectionsFirestoreService.shared.listen(
             userId: uid,
             onWatchLaterChanged: { [weak self] set in
-                Task { @MainActor in self?.watchLaterVideos = set }
+                Task { @MainActor in
+                    // 🔥 FIX: Mark as listener update to prevent save loop
+                    self?.isSavingFromListener = true
+                    self?.watchLaterVideos = set
+                    self?.isSavingFromListener = false
+                }
             },
             onSubscriptionsChanged: { [weak self] set in
-                Task { @MainActor in self?.subscriptions = set }
+                Task { @MainActor in
+                    self?.isSavingFromListener = true
+                    self?.subscriptions = set
+                    self?.isSavingFromListener = false
+                }
             }
         )
     }
@@ -420,14 +434,15 @@ class AppState: ObservableObject {
                 collectionPath: "userCollections",
                 docId: userId
             ) {
-                await MainActor.run {
-                    likedVideos = Set(data.likedVideos)
-                    savedPlaylists = Set(data.savedPlaylists)
-                    watchHistory = data.watchHistory
-                    // Watch later & subscriptions come from UserCollectionsFirestoreService subcollections (hydrateCloudCollectionsIfNeeded / listeners)
-                    if !data.watchLaterVideos.isEmpty { watchLaterVideos = Set(data.watchLaterVideos) }
-                    if !data.subscriptions.isEmpty { subscriptions = Set(data.subscriptions) }
-                }
+                // 🔥 FIX: Mark as listener update to prevent save loop when hydrating from cloud
+                isSavingFromListener = true
+                likedVideos = Set(data.likedVideos)
+                savedPlaylists = Set(data.savedPlaylists)
+                watchHistory = data.watchHistory
+                // Watch later & subscriptions come from UserCollectionsFirestoreService subcollections (hydrateCloudCollectionsIfNeeded / listeners)
+                if !data.watchLaterVideos.isEmpty { watchLaterVideos = Set(data.watchLaterVideos) }
+                if !data.subscriptions.isEmpty { subscriptions = Set(data.subscriptions) }
+                isSavingFromListener = false
                 print("✅ User collections loaded from cloud: likes=\(data.likedVideos.count), watchHistory=\(data.watchHistory.count)")
             }
         } catch {

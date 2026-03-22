@@ -37,10 +37,11 @@ enum FullScreenRoute: Identifiable {
     case movie(FreeMovie)
     case search
     case stories(AssetStory)
-    case allMovies
+    case allMovies([FreeMovie])
     case allLiveTV
     case trending
     case artistDetail(name: String, avatar: String, videos: [Video], totalViews: Int)
+    case artistMusicProfile(CatalogArtist)
     case filmmakerDetail(name: String, films: [FreeMovie])
     case channelDetail(name: String, avatar: String, subscribers: Int, totalViews: Int, videos: [Video])
     case publicProfile(User)
@@ -57,6 +58,7 @@ enum FullScreenRoute: Identifiable {
         case .allLiveTV: return "allLiveTV"
         case .trending: return "trending"
         case .artistDetail(let name, _, _, _): return "artist-\(name)"
+        case .artistMusicProfile(let a): return "artistMusic-\(a.id)"
         case .filmmakerDetail(let name, _): return "filmmaker-\(name)"
         case .channelDetail(let name, _, _, _, _): return "channel-\(name)"
         case .publicProfile(let user): return "profile-\(user.id)"
@@ -90,7 +92,8 @@ struct HomeView: View {
     @State private var featuredContent: [Video] = []
     @State private var heroVideoIndex: Int = 0
     @State private var showingStories: Bool = true
-    @State private var assetStories: [AssetStory] = []
+    @State private var assetStories: [AssetStory] = []  // One per user (for bubble row)
+    @State private var allAssetStories: [AssetStory] = []  // All stories (for pager)
     @Namespace private var storiesNS
 
     private var activeStoriesHeroId: UUID? {
@@ -158,7 +161,7 @@ struct HomeView: View {
                         MinimalContentSections(
                             onPlayVideo: { video in openVideo(video) },
                             onSelectMovie: { movie in route = .movie(movie) },
-                            onSeeAllFreeMovies: { route = .allMovies },
+                            onSeeAllFreeMovies: { movies in route = .allMovies(movies) },
                             onSeeAllLiveTV: { route = .allLiveTV },
                             onSeeAllTrending: { route = .trending },
                             onSeeAllMusic: { route = .custom("musicHub") },
@@ -168,6 +171,9 @@ struct HomeView: View {
                             onSeeAllChannels: { route = .custom("topChannels") },
                             onOpenArtistDetail: { name, avatar, vids, total in
                                 route = .artistDetail(name: name, avatar: avatar, videos: vids.isEmpty ? Array(Video.sampleVideos.prefix(8)) : vids, totalViews: total)
+                            },
+                            onOpenArtistMusicProfile: { catalogArtist in
+                                route = .artistMusicProfile(catalogArtist)
                             },
                             onOpenFilmmakerDetail: { name, films in
                                 route = .filmmakerDetail(name: name, films: films)
@@ -214,6 +220,7 @@ struct HomeView: View {
         .onAppear {
             setupContent()
             loadUserStories()
+            loadWatchHistoryFromFirestore()
         }
         .refreshable { await refreshContent() }
         .onChange(of: appState.isAuthenticated) { newValue in
@@ -308,16 +315,21 @@ struct HomeView: View {
                     .onDisappear { self.route = nil }
 
             case .stories(let story):
+                // Instagram-style: group ALL stories by user, open at tapped user, auto-advance to next
+                let groups = UserStoryGroup.group(from: allAssetStories)
+                let sortedGroups = UserStoryGroup.sorted(groups)
+                let tappedKey = story.username.lowercased()
+                let startIdx = sortedGroups.firstIndex(where: { $0.id == tappedKey }) ?? 0
                 AssetStoriesPagerView(
-                    stories: assetStories,
-                    initialIndex: assetStories.firstIndex(where: { $0.id == story.id }) ?? 0
+                    userGroups: sortedGroups,
+                    initialUserIndex: startIdx
                 ) {
                     self.route = nil
                 }
                 .onDisappear { self.route = nil }
 
-            case .allMovies:
-                ImprovedMoviesView()
+            case .allMovies(let preloaded):
+                ImprovedMoviesView(initialMovies: preloaded)
                     .environmentObject(appState)
                     .background(Color(.systemBackground).ignoresSafeArea())
                     .onDisappear { self.route = nil }
@@ -336,6 +348,12 @@ struct HomeView: View {
             case .artistDetail(let name, let avatar, let videos, let total):
                 ArtistDetailView(name: name, avatarURL: avatar, videos: videos, totalViews: total)
                     .onDisappear { self.route = nil }
+
+            case .artistMusicProfile(let catalogArtist):
+                NavigationView {
+                    ArtistProfileView(artist: catalogArtist)
+                }
+                .onDisappear { self.route = nil }
 
             case .filmmakerDetail(let name, let films):
                 FilmmakerDetailView(name: name, films: films)
@@ -461,15 +479,38 @@ struct HomeView: View {
 
     private func refreshContent() async {
         isRefreshing = true
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        
+        // 1. Reload featured content
         setupContent()
+        
+        // 2. Reload stories
         loadUserStories()
+        
+        // 3. Reload watch history + collections from Firestore
+        if let userId = appState.currentUser?.id {
+            let history = await HistoryService.shared.fetch(userId: userId, limit: 100)
+            await MainActor.run {
+                appState.watchHistory = history
+            }
+            // Re-hydrate cloud collections (watch later, subscriptions, likes)
+            let wl = await UserCollectionsFirestoreService.shared.fetchWatchLater(userId: userId)
+            let subs = await UserCollectionsFirestoreService.shared.fetchSubscriptions(userId: userId)
+            await MainActor.run {
+                appState.watchLaterVideos = wl
+                appState.subscriptions = subs
+            }
+        }
+        
+        // 4. Notify Continue Watching and other sections to refresh
+        NotificationCenter.default.post(name: .videoProgressUpdated, object: nil)
+        
         isRefreshing = false
     }
     
     private func loadUserStories() {
         // Clear existing stories first
         assetStories = []
+        allAssetStories = []
         
         // Don't show stories for unauthenticated users - keep it clean like YouTube
         guard appState.isAuthenticated, let currentUser = appState.currentUser else {
@@ -477,83 +518,86 @@ struct HomeView: View {
         }
         
         Task { @MainActor in
-            // Prefer backend stories if available
-            if let backendStories = try? await StoryAPIService.shared.fetchFollowingStories(limit: 24), !backendStories.isEmpty {
-                let mapped = backendStories.map { s -> AssetStory in
+            print("📖 [HomeView] loadUserStories started for user: \(currentUser.username) (id: \(currentUser.id))")
+            var collected: [AssetStory] = []
+
+            // 1. Load current user's own stories
+            if let mine = try? await DatabaseService.shared.fetchStoriesByCreator(creatorId: currentUser.id), !mine.isEmpty {
+                print("📖 [HomeView] Found \(mine.count) own stories")
+                let mapped = mine.map { s -> AssetStory in
                     let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
-                    let name = s.creator?.username ?? s.creatorId
-                    return AssetStory(media: media, username: name, authorImageName: s.creator?.profileImageURL ?? "")
+                    return AssetStory(media: media, username: currentUser.username, authorImageName: currentUser.profileImageURL ?? "")
                 }
-                self.assetStories = normalizeStories(mapped, excludingSelfUsername: currentUser.username)
+                collected.append(contentsOf: mapped)
             } else {
-                // Fallback to local cache
-                if let mine = try? await DatabaseService.shared.fetchStoriesByCreator(creatorId: currentUser.id), !mine.isEmpty {
-                    let mapped = mine.map { s -> AssetStory in
-                        let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
-                        return AssetStory(media: media, username: currentUser.username, authorImageName: currentUser.profileImageURL ?? "")
-                    }
-                    self.assetStories.insert(contentsOf: normalizeStories(mapped, excludingSelfUsername: currentUser.username), at: 0)
-                }
-                if !appState.subscriptions.isEmpty {
-                    let followed = Array(appState.subscriptions)
-                    if let stories = try? await DatabaseService.shared.fetchActiveStoriesForCreators(followed), !stories.isEmpty {
-                        var mapped: [AssetStory] = []
-                        for s in stories {
-                            let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
-                            let user = try? await DatabaseService.shared.fetchUser(id: s.creatorId)
-                            let name = user?.username ?? s.creatorId
-                            mapped.append(AssetStory(media: media, username: name, authorImageName: user?.profileImageURL ?? ""))
-                        }
-                        self.assetStories.append(contentsOf: normalizeStories(mapped, excludingSelfUsername: currentUser.username))
-                    }
-                }
-                self.assetStories = normalizeStories(self.assetStories, excludingSelfUsername: currentUser.username)
+                print("📖 [HomeView] No own stories found")
             }
+
+            // 2. Load stories from followed creators
+            if !appState.subscriptions.isEmpty {
+                let followed = Array(appState.subscriptions)
+                print("📖 [HomeView] Fetching stories from \(followed.count) followed creators")
+                if let stories = try? await DatabaseService.shared.fetchActiveStoriesForCreators(followed), !stories.isEmpty {
+                    for s in stories {
+                        let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
+                        let user = try? await DatabaseService.shared.fetchUser(id: s.creatorId)
+                        let name = user?.username ?? s.creatorId
+                        collected.append(AssetStory(media: media, username: name, authorImageName: user?.profileImageURL ?? ""))
+                    }
+                }
+            } else {
+                print("📖 [HomeView] No subscriptions — skipping followed stories")
+            }
+
+            // 3. If no stories from others, fetch all active stories for discovery
+            let hasOtherStories = collected.contains { $0.username.lowercased() != currentUser.username.lowercased() }
+            if !hasOtherStories {
+                print("📖 [HomeView] No stories from others — fetching all active stories")
+                if let allStories = try? await DatabaseService.shared.fetchAllActiveStories(limit: 24), !allStories.isEmpty {
+                    print("📖 [HomeView] Got \(allStories.count) stories from fetchAllActiveStories")
+                    for s in allStories {
+                        let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
+                        let user = try? await DatabaseService.shared.fetchUser(id: s.creatorId)
+                        let name = user?.username ?? s.creatorId
+                        collected.append(AssetStory(media: media, username: name, authorImageName: user?.profileImageURL ?? ""))
+                    }
+                }
+            }
+
+            // Store ALL stories (multiple per user) for the pager
+            self.allAssetStories = collected
+            // Store one-per-user for the bubble row (most recent first per user)
+            self.assetStories = uniqueStoriesPerUser(collected)
+            print("✅ [HomeView] loadUserStories complete — \(self.allAssetStories.count) total stories, \(self.assetStories.count) user bubbles")
         }
     }
 
-    private func normalizeStories(_ input: [AssetStory], excludingSelfUsername: String?) -> [AssetStory] {
+    /// Returns one representative story per user (first occurrence, which is the most recent)
+    private func uniqueStoriesPerUser(_ input: [AssetStory]) -> [AssetStory] {
         var seen = Set<String>()
         var out: [AssetStory] = []
         for s in input {
             let key = s.username.lowercased()
-            if let me = excludingSelfUsername, key == me.lowercased() { continue }
             if seen.insert(key).inserted { out.append(s) }
         }
         return out
     }
     
-    private func loadStoriesFromFollowedUsers() {
-        // This would be replaced with a real API call
-        // For now, we'll simulate loading stories only if user has subscriptions
-        
-        // Example: Only show stories from users the current user actually follows
-        _ = appState.subscriptions
-        
-        // In a real implementation, this would query the backend for active stories
-        // from the followed users within the last 24 hours
-        
-        // For demonstration, we'll leave this empty to show the authentic experience
-        // where new users who don't follow anyone see no stories
-        
-        // Real implementation would look like:
-        // Task {
-        //     let stories = try await APIService.shared.getStoriesFromFollowedUsers(followedUserIds)
-        //     await MainActor.run {
-        //         self.assetStories = stories.map { story in
-        //             AssetStory(
-        //                 media: story.mediaType == .video ? .video(story.mediaURL) : .image(story.mediaURL),
-        //                 username: story.creator.username,
-        //                 authorImageName: story.creator.profileImageURL ?? ""
-        //             )
-        //         }
-        //     }
-        // }
-    }
 
     // MARK: - Action Methods
     private func showStoryCreator() {
         presentStoryCreator = true
+    }
+
+    private func loadWatchHistoryFromFirestore() {
+        guard let userId = appState.currentUser?.id else { return }
+        Task {
+            let history = await HistoryService.shared.fetch(userId: userId, limit: 100)
+            await MainActor.run {
+                appState.watchHistory = history
+                print("📺 [HomeView] Loaded \(history.count) watch history items from Firestore")
+            }
+        }
     }
 
     private func toggleWatchLater(_ video: Video) {
@@ -634,7 +678,7 @@ extension Video {
 struct MinimalContentSections: View {
     let onPlayVideo: (Video) -> Void
     let onSelectMovie: (FreeMovie) -> Void
-    let onSeeAllFreeMovies: () -> Void
+    let onSeeAllFreeMovies: ([FreeMovie]) -> Void
     let onSeeAllLiveTV: () -> Void
     let onSeeAllTrending: () -> Void
     let onSeeAllMusic: () -> Void
@@ -643,11 +687,13 @@ struct MinimalContentSections: View {
     let onSeeAllFilmmakers: () -> Void
     let onSeeAllChannels: () -> Void
     let onOpenArtistDetail: (String, String, [Video], Int) -> Void
+    let onOpenArtistMusicProfile: (CatalogArtist) -> Void
     let onOpenFilmmakerDetail: (String, [FreeMovie]) -> Void
     let onOpenChannelDetail: (String, String, Int, Int, [Video]) -> Void
     var onSelectLiveStream: ((FirestoreLiveStream) -> Void)? = nil
 
     @EnvironmentObject private var appState: AppState
+    @ObservedObject private var rankService = TopRankMLService.shared
     @State private var blockbusterMovies: [FreeMovie] = []
     @State private var loadingBlockbusters: Bool = false
     @State private var friendChannelVideos: [Video] = []
@@ -999,20 +1045,11 @@ struct MinimalContentSections: View {
 
             ForYouSection(onPlayVideo: onPlayVideo, onSeeAllExplore: onSeeAllExplore)
 
-            if !appState.watchHistory.isEmpty {
-                MinimalSection(
-                    title: "Continue Watching",
-                    seeAllAction: nil
-                ) {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: 16) {
-                            ForEach(Video.sampleVideos.prefix(5)) { video in
-                                MinimalVideoCard(video: video, action: { onPlayVideo(video) })
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                    }
-                }
+            // 🔥 REAL Continue Watching — pulls from Firestore watch history with actual progress
+            if appState.isAuthenticated {
+                ContinueWatchingSection(onVideoTap: { video in
+                    onPlayVideo(video)
+                })
             }
 
             MinimalSection(
@@ -1045,7 +1082,7 @@ struct MinimalContentSections: View {
 
             // MUSIC – artist carousel, placed above Categories
                         MinimalMusicSection(
-                            onOpenArtistDetail: onOpenArtistDetail,
+                            onOpenArtistMusicProfile: onOpenArtistMusicProfile,
                             appState: _appState,
                             onSeeAll: { onSeeAllMusic() }
                         )
@@ -1074,7 +1111,7 @@ struct MinimalContentSections: View {
 
             MinimalSection(
                 title: "Movies",
-                seeAllAction: { onSeeAllFreeMovies() }
+                seeAllAction: { onSeeAllFreeMovies(blockbusterMovies) }
             ) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 16) {
@@ -1094,6 +1131,7 @@ struct MinimalContentSections: View {
             }
 
             TopArtistsSection(
+                rankings: rankService.topArtists,
                 sourceVideos: detroitFlintArtistsTrending() + [makeFriendTrendingVideo()] + Video.sampleVideos,
                 onSelect: { name, avatar, vids, total in
                     onOpenArtistDetail(name, avatar, vids, total)
@@ -1101,7 +1139,9 @@ struct MinimalContentSections: View {
                 onSeeAll: onSeeAllArtists
             )
             .padding(.horizontal, 20)
+
             TopIndieFilmmakersSection(
+                rankings: rankService.topFilmmakers,
                 onSeeAll: onSeeAllFilmmakers,
                 onSelect: { name, films in
                     onOpenFilmmakerDetail(name, films)
@@ -1110,6 +1150,7 @@ struct MinimalContentSections: View {
             .padding(.horizontal, 20)
 
             TopMyChannelsSection(
+                rankings: rankService.topChannels,
                 sourceVideos: detroitFlintArtistsTrending() + gamingCOD() + Video.sampleVideos,
                 onSelect: { name, avatar, subs, total, vids in
                     onOpenChannelDetail(name, avatar, subs, total, vids)
@@ -1126,6 +1167,8 @@ struct MinimalContentSections: View {
                 group.addTask { await loadFriendChannelVideos() }
                 group.addTask { await loadLiveChannelsAPI() }
             }
+            // Start real-time ML-powered rankings
+            rankService.startRealTimeRanking()
         }
         .fullScreenCover(item: $selectedLiveTVChannel) { channel in
             LiveTVPlayerView(channel: channel)
@@ -1204,13 +1247,56 @@ struct MinimalContentSections: View {
 
 // MARK: - Music Section (Artists Carousel)
 private struct MinimalMusicSection: View {
-    var onOpenArtistDetail: (String, String, [Video], Int) -> Void
+    var onOpenArtistMusicProfile: (CatalogArtist) -> Void
     @EnvironmentObject var appState: AppState
     var onSeeAll: (() -> Void)? = nil
+    
+    // Artist name → Apple Music ID mapping for navigation
+    private static let artistAppleMusicIds: [String: Int] = [
+        "Lil Donny": 1857859662,
+        "MIA Ghost": 1582746406,
+        "Mia Ghost": 1582746406,
+        "Mia Getem": 1798000837,
+        "Bk Dumpp": 1709296525,
+        "Hotboy Curry": 1771099410,
+        "Ysr Loski": 1511351716,
+        "Luh Monti": 1656612386,
+        "Babyfxce E": 1573432856,
+        "3200 Tre": 1491631657,
+        "Ktrip": 1484873437,
+        "Báby Ju": 1649723396,
+        "Baby Ju": 1649723396,
+        "Ftos Twan": 1527300992,
+        "Scatz": 904008025,
+        "Scatz Ripky": 904008025,
+        "Baby Ghost": 1507813989,
+        "Way P": 1524383650,
+        "Yn Jay": 1484873437,
+        "Krispylife Kidd": 1565580889,
+    ]
+    
+    private func catalogArtistFor(name: String, avatar: String) -> CatalogArtist {
+        let appleMusicId = Self.artistAppleMusicIds[name] ?? abs(name.hashValue % 9_000_000 + 1_000_000)
+        let artworkUrl: String?
+        if avatar.hasPrefix("http") {
+            artworkUrl = avatar
+        } else if let _ = UIImage(named: avatar) {
+            artworkUrl = "asset://\(avatar)"
+        } else {
+            artworkUrl = nil
+        }
+        return CatalogArtist(
+            id: appleMusicId,
+            name: name,
+            linkUrl: "https://music.apple.com/us/artist/\(appleMusicId)",
+            artworkUrl: artworkUrl
+        )
+    }
 
     private var allArtists: [(name: String, avatar: String, views: Int, city: String?)] {
         // 🎵 LOCAL ARTISTS WITH ASSETS - Using local images for fast loading!
         let localArtists: [(String,String,Int,String?)] = [
+            ("Lil Donny", "LilDonnyAvatar", 290_000, nil),
             ("Big Mgr Fat Dee", "BigMgrFatDeeAvatar", 285_000, nil),
             ("Bk Dumpp", "BkDumppAvatar", 285_000, nil),
             ("Super Shoddy", "SuperShoddyAvatar", 285_000, nil),
@@ -1351,7 +1437,8 @@ private struct MinimalMusicSection: View {
                 LazyHStack(alignment: .top, spacing: 16) {
                     ForEach(Array(artists.enumerated()), id: \.offset) { _, a in
                         Button {
-                            onOpenArtistDetail(a.name, a.avatar, [], a.views)
+                            let artist = catalogArtistFor(name: a.name, avatar: a.avatar)
+                            onOpenArtistMusicProfile(artist)
                         } label: {
                             VStack(alignment: .leading, spacing: 8) {
                                 // Check if it's a local asset or URL
@@ -1875,62 +1962,12 @@ private struct MinimalCategoriesSection: View {
     }
 }
 
-// MARK: - Top Artists Section
+// MARK: - Top Artists Section (ML-Powered Real-Time Rankings)
 private struct TopArtistsSection: View {
+    let rankings: [TopRankedUser]
     let sourceVideos: [Video]
     var onSelect: (String, String, [Video], Int) -> Void = { _,_,_,_  in }
     var onSeeAll: () -> Void = {}
-
-    private var rankings: [ArtistRank] {
-        let grouped = Dictionary(grouping: sourceVideos) { $0.creator.displayName }
-        var ranks = grouped.map { (name, vids) -> ArtistRank in
-            let views = vids.reduce(0) { $0 + $1.viewCount }
-            return ArtistRank(
-                name: name,
-                views: views,
-                avatar: vids.first?.creator.profileImageURL ?? "https://i.pravatar.cc/200?u=\(name)"
-            )
-        }
-        // Promote IG friends if provided (dedup by name) and pin their order at the front
-        let dynamicFriends = OwnerFriendsStore.shared.friends
-        let pinnedOrder = (OwnerProfile.instagramFriends + dynamicFriends).map { $0.name }
-        for f in (OwnerProfile.instagramFriends + dynamicFriends) {
-            if let idx = ranks.firstIndex(where: { $0.name == f.name }) {
-                // Update avatar if we already have this artist from videos
-                let existing = ranks[idx]
-                ranks[idx] = ArtistRank(name: existing.name, views: existing.views, avatar: f.avatar)
-            } else {
-                ranks.append(ArtistRank(name: f.name, views: 0, avatar: f.avatar))
-            }
-        }
-
-        var sorted = ranks.sorted { $0.views > $1.views }
-
-        // Pin in the specified order so the first friend becomes #1
-        if !pinnedOrder.isEmpty {
-            let pinnedSet = Set(pinnedOrder)
-            let pinnedItems = pinnedOrder.compactMap { name in
-                sorted.first(where: { $0.name == name })
-            }
-            let nonPinned = sorted.filter { !pinnedSet.contains($0.name) }
-            sorted = pinnedItems + nonPinned
-        }
-
-        return Array(sorted.prefix(10))
-    }
-
-    struct ArtistRank: Identifiable {
-        let id = UUID()
-        let name: String
-        let views: Int
-        let avatar: String
-    }
-
-    private func format(_ n: Int) -> String {
-        if n >= 1_000_000 { return String(format: "%.1fM", Double(n)/1_000_000) }
-        if n >= 1_000 { return String(format: "%.1fK", Double(n)/1_000) }
-        return "\(n)"
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1954,49 +1991,12 @@ private struct TopArtistsSection: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    ForEach(Array(rankings.enumerated()), id: \.offset) { idx, a in
+                    ForEach(Array(rankings.enumerated()), id: \.element.id) { idx, a in
                         Button {
                             let vids = sourceVideos.filter { $0.creator.displayName == a.name }
-                            onSelect(a.name, a.avatar, vids, a.views)
+                            onSelect(a.name, a.avatar, vids, a.totalViews)
                         } label: {
-                            VStack(alignment: .center, spacing: 8) {
-                                ZStack(alignment: .topLeading) {
-                                    ZStack {
-                                        Circle()
-                                            .stroke(AppTheme.Colors.primary, lineWidth: 3)
-                                            .frame(width: 64, height: 64)
-
-                                        AppAsyncImage(url: URL(string: a.avatar)) { img in
-                                            img.resizable().scaledToFill()
-                                        } placeholder: { Color.white }
-                                        .frame(width: 58, height: 58)
-                                        .clipShape(Circle())
-                                    }
-
-                                    Text("#\(idx + 1)")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Capsule().fill(AppTheme.Colors.primary))
-                                        .padding(.top, 2)
-                                        .padding(.leading, 2)
-                                }
-
-                                VStack(alignment: .center, spacing: 2) {
-                                    Text(a.name)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.primary)
-                                        .lineLimit(1)
-                                        .frame(width: 110)
-                                    Text("\(format(a.views)) total views")
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.secondary)
-                                        .lineLimit(1)
-                                        .frame(width: 110)
-                                }
-                            }
-                            .frame(width: 120)
+                            RankCardView(user: a, index: idx)
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
@@ -2008,100 +2008,10 @@ private struct TopArtistsSection: View {
     }
 }
 
-// MARK: - Top Indie Filmmakers Section
+// MARK: - Top Indie Filmmakers Section (ML-Powered Real-Time Rankings)
 private struct TopIndieFilmmakersSection: View {
-    struct Filmmaker: Identifiable {
-        let id = UUID()
-        let name: String
-        let films: Int
-        let score: Int
-        let avatar: String
-    }
-    
+    let rankings: [TopRankedUser]
     var onSeeAll: () -> Void = {}
-
-    private var filmmakers: [Filmmaker] {
-        // Tee Cee as #1 top filmmaker
-        // Check multiple possible asset names (case-sensitive)
-        let possibleNames = ["TeeCeeAvatar", "TeeCee", "tee_cee", "TeeC eeAvatar", "TeeCee_Avatar"]
-        var teeCeeAvatar = "https://i.pravatar.cc/200?u=tee_cee" // Default
-        var foundAssetName: String? = nil
-        
-        for assetName in possibleNames {
-            if UIImage(named: assetName) != nil {
-                foundAssetName = assetName
-                teeCeeAvatar = "asset://\(assetName)" // 🔥 FIX: Use asset:// prefix like Merch HD
-                print("✅ Found Tee Cee asset: \(assetName)")
-                break
-            }
-        }
-        
-        if foundAssetName == nil {
-            print("⚠️ Tee Cee assets not found. Checked: \(possibleNames.joined(separator: ", "))")
-            print("💡 Make sure the image is added to Assets.xcassets with exact name 'TeeCeeAvatar'")
-            print("💡 Asset names are case-sensitive - check spelling exactly")
-        }
-        
-        let teeCee = Filmmaker(
-            name: "Tee Cee",
-            films: 24,
-            score: 100, // Highest score for #1 position
-            avatar: teeCeeAvatar
-        )
-        
-        // Merch HD as #2 filmmaker
-        let merchHDAssetName = "MerchHDAvatar"
-        let merchHDAvatar: String
-        if UIImage(named: merchHDAssetName) != nil {
-            merchHDAvatar = "asset://\(merchHDAssetName)"
-            print("✅ Found Merch HD asset: \(merchHDAssetName)")
-        } else {
-            merchHDAvatar = "https://i.pravatar.cc/200?u=merch_hd"
-            print("⚠️ Merch HD asset '\(merchHDAssetName)' not found - using placeholder")
-        }
-        
-        let merchHD = Filmmaker(
-            name: "Merch HD",
-            films: 15,
-            score: 99, // Second highest score for #2 position
-            avatar: merchHDAvatar
-        )
-        
-        // Pros Kt as #3 filmmaker
-        let prosKtAssetName = "ProsKtAvatar"
-        let prosKtAvatar: String
-        if UIImage(named: prosKtAssetName) != nil {
-            prosKtAvatar = "asset://\(prosKtAssetName)"
-            print("✅ Found Pros Kt asset: \(prosKtAssetName)")
-        } else {
-            prosKtAvatar = "https://i.pravatar.cc/200?u=pros_kt"
-            print("⚠️ Pros Kt asset '\(prosKtAssetName)' not found - using placeholder")
-        }
-        
-        let prosKt = Filmmaker(
-            name: "Pros Kt",
-            films: 18,
-            score: 98, // Third highest score for #3 position
-            avatar: prosKtAvatar
-        )
-        
-        let names = [
-            "A. Rivers", "N. Carter", "M. Sloan", "J. Patel", "R. Alvarez",
-            "S. Kim", "D. Morgan", "K. O'Neal", "B. Laurent", "T. Ito"
-        ]
-        let items = names.enumerated().map { idx, n in
-            Filmmaker(
-                name: n,
-                films: Int.random(in: 2...12),
-                score: Int.random(in: 60...97), // Max 97 to stay below Pros Kt
-                avatar: "https://i.pravatar.cc/200?u=indie_\(idx)"
-            )
-        }
-        
-        let all = [teeCee, merchHD, prosKt] + items
-        return all.sorted { $0.score > $1.score }
-    }
-
     var onSelect: (String, [FreeMovie]) -> Void = { _,_ in }
 
     var body: some View {
@@ -2126,79 +2036,11 @@ private struct TopIndieFilmmakersSection: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    ForEach(Array(filmmakers.enumerated()), id: \.offset) { idx, f in
+                    ForEach(Array(rankings.enumerated()), id: \.element.id) { idx, f in
                         Button {
                             onSelect(f.name, Array(FreeMovie.sampleMovies.shuffled().prefix(Int.random(in: 6...10))))
                         } label: {
-                            VStack(alignment: .center, spacing: 8) {
-                                ZStack(alignment: .topLeading) {
-                                    ZStack {
-                                        Circle()
-                                            .stroke(AppTheme.Colors.primary, lineWidth: 3)
-                                            .frame(width: 64, height: 64)
-
-                                        // 🔥 FIX: Check for asset images first (for Tee Cee and Merch HD)
-                                        if f.avatar.hasPrefix("asset://") {
-                                            let assetName = String(f.avatar.dropFirst(8)) // Remove "asset://" prefix
-                                            if let assetImage = UIImage(named: assetName) {
-                                                Image(uiImage: assetImage)
-                                                    .resizable()
-                                                    .scaledToFill()
-                                                    .frame(width: 58, height: 58)
-                                                    .clipShape(Circle())
-                                            } else {
-                                                // Fallback if asset not found - try AppAsyncImage
-                                                if let url = URL(string: f.avatar) {
-                                                    AppAsyncImage(url: url) { img in
-                                                        img.resizable().scaledToFill()
-                                                    } placeholder: { 
-                                                        Color.white
-                                                    }
-                                                    .frame(width: 58, height: 58)
-                                                    .clipShape(Circle())
-                                                } else {
-                                                    Color.white
-                                                        .frame(width: 58, height: 58)
-                                                        .clipShape(Circle())
-                                                }
-                                            }
-                                        } else if let url = URL(string: f.avatar) {
-                                            AppAsyncImage(url: url) { img in
-                                                img.resizable().scaledToFill()
-                                            } placeholder: { Color.white }
-                                            .frame(width: 58, height: 58)
-                                            .clipShape(Circle())
-                                        } else {
-                                            Color.white
-                                                .frame(width: 58, height: 58)
-                                                .clipShape(Circle())
-                                        }
-                                    }
-
-                                    Text("#\(idx + 1)")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Capsule().fill(AppTheme.Colors.primary))
-                                        .padding(.top, 2)
-                                        .padding(.leading, 2)
-                                }
-
-                                VStack(alignment: .center, spacing: 2) {
-                                    Text(f.name)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.primary)
-                                        .lineLimit(1)
-                                        .frame(width: 110)
-                                    Text("\(f.films) films • Score \(f.score)")
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.secondary)
-                                        .lineLimit(1)
-                                        .frame(width: 110)
-                                }
-                            }
-                            .frame(width: 120)
+                            RankCardView(user: f, index: idx, subtitle: "\(f.videoCount) films • Score \(Int(f.overallScore))")
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
@@ -2210,58 +2052,12 @@ private struct TopIndieFilmmakersSection: View {
     }
 }
 
-// MARK: - Top MyChannels Section (Simple Style - Matches Other Top Sections)
+// MARK: - Top MyChannels Section (ML-Powered Real-Time Rankings)
 private struct TopMyChannelsSection: View {
+    let rankings: [TopRankedUser]
     let sourceVideos: [Video]
     var onSelect: (String, String, Int, Int, [Video]) -> Void = { _,_,_,_,_ in }
     var onSeeAll: () -> Void = {}
-    
-    // Regular MyChannel users with profile pictures (looks like real people who signed up)
-    private var featuredCreators: [(id: String, name: String, avatar: String, subscribers: Int, totalViews: Int)] {
-        let pinnedCreators: [(id: String, name: String, avatar: String, subscribers: Int, totalViews: Int)] = [
-            (
-                "ktrip_official",
-                "KTrip",
-                "https://i.ytimg.com/vi/xfdydb_3Ra0/hqdefault.jpg",
-                5_000,
-                1_800_000
-            ),
-            (
-                "baby_ju_official",
-                "Baby Ju",
-                "https://i.ytimg.com/vi/JSXmfgZzHqQ/hqdefault.jpg",
-                2_000,
-                1_200_000
-            ),
-            (
-                "mbk_cari_official",
-                "Mbk Cari",
-                "https://i.ytimg.com/vi/JSXmfgZzHqQ/hqdefault.jpg",
-                1_500,
-                195_000
-            )
-        ]
-        let communityFavorites: [(id: String, name: String, avatar: String, subscribers: Int, totalViews: Int)] = [
-            ("alex_m", "Alex M.", "https://i.pravatar.cc/150?img=1", 12_400, 890_000),
-            ("jordan_t", "Jordan T.", "https://i.pravatar.cc/150?img=3", 8_200, 420_000),
-            ("sam_r", "Sam R.", "https://i.pravatar.cc/150?img=5", 3_100, 156_000),
-            ("casey_l", "Casey L.", "https://i.pravatar.cc/150?img=9", 22_800, 1_200_000),
-            ("riley_j", "Riley J.", "https://i.pravatar.cc/150?img=10", 1_560, 78_000),
-            ("morgan_k", "Morgan K.", "https://i.pravatar.cc/150?img=11", 45_200, 2_100_000),
-            ("jamie_w", "Jamie W.", "https://i.pravatar.cc/150?img=12", 6_700, 310_000),
-            ("drew_f", "Drew F.", "https://i.pravatar.cc/150?img=13", 19_300, 980_000),
-            ("taylor_s", "Taylor S.", "https://i.pravatar.cc/150?img=15", 890, 42_000),
-            ("quinn_b", "Quinn B.", "https://i.pravatar.cc/150?img=20", 28_100, 1_450_000)
-        ]
-        return pinnedCreators + communityFavorites
-    }
-
-    private func format(_ n: Int) -> String {
-        if n >= 1_000_000_000 { return String(format: "%.1fB", Double(n)/1_000_000_000) }
-        if n >= 1_000_000 { return String(format: "%.1fM", Double(n)/1_000_000) }
-        if n >= 1_000 { return String(format: "%.1fK", Double(n)/1_000) }
-        return "\(n)"
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2285,59 +2081,13 @@ private struct TopMyChannelsSection: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    ForEach(Array(featuredCreators.enumerated()), id: \.element.id) { idx, creator in
+                    ForEach(Array(rankings.enumerated()), id: \.element.id) { idx, channel in
                         Button {
                             HapticManager.shared.impact(style: .medium)
-                            let vids = sourceVideos.filter { $0.creator.displayName.lowercased().contains(creator.name.lowercased()) }
-                            onSelect(creator.name, creator.avatar, creator.subscribers, creator.totalViews, vids)
+                            let vids = sourceVideos.filter { $0.creator.displayName.lowercased().contains(channel.name.lowercased()) }
+                            onSelect(channel.name, channel.avatar, channel.subscribers, channel.totalViews, vids)
                         } label: {
-                            VStack(alignment: .center, spacing: 8) {
-                                ZStack(alignment: .topLeading) {
-                                    ZStack {
-                                        Circle()
-                                            .stroke(AppTheme.Colors.primary, lineWidth: 3)
-                                            .frame(width: 64, height: 64)
-
-                                        CachedAsyncImage(url: URL(string: creator.avatar)) { image in
-                                            image.resizable().scaledToFill()
-                                        } placeholder: {
-                                            ZStack {
-                                                Circle().fill(AppTheme.Colors.surface)
-                                                Image(systemName: "person.circle.fill")
-                                                    .resizable()
-                                                    .scaledToFit()
-                                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                                    .padding(12)
-                                            }
-                                        }
-                                        .frame(width: 58, height: 58)
-                                        .clipShape(Circle())
-                                    }
-
-                                    Text("#\(idx + 1)")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Capsule().fill(AppTheme.Colors.primary))
-                                        .padding(.top, 2)
-                                        .padding(.leading, 2)
-                                }
-
-                                VStack(alignment: .center, spacing: 2) {
-                                    Text(creator.name)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.primary)
-                                        .lineLimit(1)
-                                        .frame(width: 110)
-                                    Text("\(format(creator.subscribers)) subs")
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.secondary)
-                                        .lineLimit(1)
-                                        .frame(width: 110)
-                                }
-                            }
-                            .frame(width: 120)
+                            RankCardView(user: channel, index: idx, subtitle: "\(TopRankMLService.formatCount(channel.subscribers)) subs")
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
@@ -2349,66 +2099,21 @@ private struct TopMyChannelsSection: View {
     }
 }
 
-// MARK: - See All List Views (Top Artists / Filmmakers / Channels)
-
-private struct ArtistRowItem: Identifiable {
-    let id = UUID()
-    let name: String
-    let avatar: String
-    let videos: [Video]
-    let totalViews: Int
-}
+// MARK: - See All List Views (ML-Powered — Top Artists / Filmmakers / Channels)
 
 private struct TopArtistsListView: View {
     let onDismiss: () -> Void
     @EnvironmentObject private var appState: AppState
-
-    private var rankings: [ArtistRowItem] {
-        let sourceVideos = FeaturedStore.shared.toVideos() + Video.sampleVideos
-        let grouped = Dictionary(grouping: sourceVideos) { $0.creator.displayName }
-        var ranks = grouped.map { (name, vids) -> ArtistRowItem in
-            let views = vids.reduce(0) { $0 + $1.viewCount }
-            return ArtistRowItem(
-                name: name,
-                avatar: vids.first?.creator.profileImageURL ?? "https://i.pravatar.cc/200?u=\(name)",
-                videos: vids,
-                totalViews: views
-            )
-        }
-        let dynamicFriends = OwnerFriendsStore.shared.friends
-        let pinnedOrder = (OwnerProfile.instagramFriends + dynamicFriends).map { $0.name }
-        for f in (OwnerProfile.instagramFriends + dynamicFriends) {
-            if let idx = ranks.firstIndex(where: { $0.name == f.name }) {
-                let existing = ranks[idx]
-                ranks[idx] = ArtistRowItem(name: existing.name, avatar: f.avatar, videos: existing.videos, totalViews: existing.totalViews)
-            } else {
-                ranks.append(ArtistRowItem(name: f.name, avatar: f.avatar, videos: [], totalViews: 0))
-            }
-        }
-        var sorted = ranks.sorted { $0.totalViews > $1.totalViews }
-        if !pinnedOrder.isEmpty {
-            let pinnedSet = Set(pinnedOrder)
-            let pinnedItems = pinnedOrder.compactMap { name in sorted.first(where: { $0.name == name }) }
-            let nonPinned = sorted.filter { !pinnedSet.contains($0.name) }
-            sorted = pinnedItems + nonPinned
-        }
-        return sorted
-    }
-
-    private func format(_ n: Int) -> String {
-        if n >= 1_000_000 { return String(format: "%.1fM", Double(n)/1_000_000) }
-        if n >= 1_000 { return String(format: "%.1fK", Double(n)/1_000) }
-        return "\(n)"
-    }
+    @ObservedObject private var rankService = TopRankMLService.shared
 
     var body: some View {
         NavigationStack {
             List {
-                ForEach(Array(rankings.enumerated()), id: \.element.id) { idx, artist in
+                ForEach(Array(rankService.topArtists.enumerated()), id: \.element.id) { idx, artist in
                     NavigationLink {
                         ArtistPageView(
                             artist: Artist(
-                                id: artist.id.uuidString,
+                                id: artist.id,
                                 name: artist.name,
                                 slug: artist.name.lowercased().replacingOccurrences(of: " ", with: "-"),
                                 avatarURL: URL(string: artist.avatar),
@@ -2420,28 +2125,7 @@ private struct TopArtistsListView: View {
                             similarArtists: []
                         )
                     } label: {
-                        HStack(spacing: 12) {
-                            Text("#\(idx + 1)")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(width: 28, height: 28)
-                                .background(Capsule().fill(AppTheme.Colors.primary))
-                            AppAsyncImage(url: URL(string: artist.avatar)) { img in
-                                img.resizable().scaledToFill()
-                            } placeholder: { Color.gray.opacity(0.3) }
-                            .frame(width: 44, height: 44)
-                            .clipShape(Circle())
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(artist.name)
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(AppTheme.Colors.primary)
-                                Text("\(format(artist.totalViews)) total views")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                        }
-                        .padding(.vertical, 4)
+                        RankListRow(user: artist, index: idx)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
@@ -2462,78 +2146,25 @@ private struct TopArtistsListView: View {
     }
 }
 
-private struct FilmmakerRowItem: Identifiable {
-    let id = UUID()
-    let name: String
-    let films: [FreeMovie]
-    let avatar: String
-}
-
 private struct TopFilmmakersListView: View {
     let onDismiss: () -> Void
-
-    private var filmmakers: [FilmmakerRowItem] {
-        let possibleNames = ["TeeCeeAvatar", "TeeCee", "tee_cee", "TeeC eeAvatar", "TeeCee_Avatar"]
-        var teeCeeAvatar = "https://i.pravatar.cc/200?u=tee_cee"
-        for assetName in possibleNames {
-            if UIImage(named: assetName) != nil {
-                teeCeeAvatar = "asset://\(assetName)"
-                break
-            }
-        }
-        let merchHDAvatar: String = UIImage(named: "MerchHDAvatar") != nil ? "asset://MerchHDAvatar" : "https://i.pravatar.cc/200?u=merch_hd"
-        let prosKtAvatar: String = UIImage(named: "ProsKtAvatar") != nil ? "asset://ProsKtAvatar" : "https://i.pravatar.cc/200?u=pros_kt"
-        let names = [
-            "A. Rivers", "N. Carter", "M. Sloan", "J. Patel", "R. Alvarez",
-            "S. Kim", "D. Morgan", "K. O'Neal", "B. Laurent", "T. Ito"
-        ]
-        let extra = names.enumerated().map { idx, n in
-            FilmmakerRowItem(
-                name: n,
-                films: Array(FreeMovie.sampleMovies.shuffled().prefix(Int.random(in: 6...12))),
-                avatar: "https://i.pravatar.cc/200?u=indie_\(idx)"
-            )
-        }
-        let top = [
-            FilmmakerRowItem(name: "Tee Cee", films: Array(FreeMovie.sampleMovies.prefix(24)), avatar: teeCeeAvatar),
-            FilmmakerRowItem(name: "Merch HD", films: Array(FreeMovie.sampleMovies.prefix(15)), avatar: merchHDAvatar),
-            FilmmakerRowItem(name: "Pros Kt", films: Array(FreeMovie.sampleMovies.prefix(18)), avatar: prosKtAvatar)
-        ]
-        return (top + extra).sorted { $0.films.count > $1.films.count }
-    }
+    @ObservedObject private var rankService = TopRankMLService.shared
 
     var body: some View {
         NavigationStack {
             List {
-                ForEach(Array(filmmakers.enumerated()), id: \.element.id) { idx, filmmaker in
+                ForEach(Array(rankService.topFilmmakers.enumerated()), id: \.element.id) { idx, filmmaker in
                     NavigationLink {
-                        FilmmakerDetailView(name: filmmaker.name, films: filmmaker.films)
+                        FilmmakerDetailView(
+                            name: filmmaker.name,
+                            films: Array(FreeMovie.sampleMovies.shuffled().prefix(filmmaker.videoCount > 0 ? filmmaker.videoCount : 8))
+                        )
                     } label: {
-                        HStack(spacing: 12) {
-                            Text("#\(idx + 1)")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(width: 28, height: 28)
-                                .background(Capsule().fill(AppTheme.Colors.primary))
-                            
-                            // Avatar, mirroring Top Artists list style
-                            AppAsyncImage(url: URL(string: filmmaker.avatar)) { img in
-                                img.resizable().scaledToFill()
-                            } placeholder: {
-                                Color.white.opacity(0.3)
-                            }
-                            .frame(width: 36, height: 36)
-                            .clipShape(Circle())
-                            
-                            Text(filmmaker.name)
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(AppTheme.Colors.primary)
-                            Spacer()
-                            Text("\(filmmaker.films.count) films")
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.vertical, 4)
+                        RankListRow(
+                            user: filmmaker,
+                            index: idx,
+                            subtitle: "\(filmmaker.videoCount) films • Score \(Int(filmmaker.overallScore))"
+                        )
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
@@ -2554,90 +2185,28 @@ private struct TopFilmmakersListView: View {
     }
 }
 
-private struct ChannelRowItem: Identifiable {
-    let id: String
-    let name: String
-    let avatar: String
-    let subscribers: Int
-    let totalViews: Int
-    let videos: [Video]
-}
-
 private struct TopChannelsListView: View {
     let onDismiss: () -> Void
-
-    private let featuredCreators: [(id: String, name: String, avatar: String, subscribers: Int, totalViews: Int)] = [
-        ("alex_m", "Alex M.", "https://i.pravatar.cc/150?img=1", 12_400, 890_000),
-        ("jordan_t", "Jordan T.", "https://i.pravatar.cc/150?img=3", 8_200, 420_000),
-        ("sam_r", "Sam R.", "https://i.pravatar.cc/150?img=5", 3_100, 156_000),
-        ("casey_l", "Casey L.", "https://i.pravatar.cc/150?img=9", 22_800, 1_200_000),
-        ("riley_j", "Riley J.", "https://i.pravatar.cc/150?img=10", 1_560, 78_000),
-        ("morgan_k", "Morgan K.", "https://i.pravatar.cc/150?img=11", 45_200, 2_100_000),
-        ("jamie_w", "Jamie W.", "https://i.pravatar.cc/150?img=12", 6_700, 310_000),
-        ("drew_f", "Drew F.", "https://i.pravatar.cc/150?img=13", 19_300, 980_000),
-        ("taylor_s", "Taylor S.", "https://i.pravatar.cc/150?img=15", 890, 42_000),
-        ("quinn_b", "Quinn B.", "https://i.pravatar.cc/150?img=20", 28_100, 1_450_000)
-    ]
-
-    private var channelItems: [ChannelRowItem] {
-        let sourceVideos = FeaturedStore.shared.toVideos() + Video.sampleVideos
-        return featuredCreators.map { c in
-            let vids = sourceVideos.filter { $0.creator.displayName.lowercased().contains(c.name.lowercased()) }
-            return ChannelRowItem(
-                id: c.id,
-                name: c.name,
-                avatar: c.avatar,
-                subscribers: c.subscribers,
-                totalViews: c.totalViews,
-                videos: vids.isEmpty ? Array(Video.sampleVideos.prefix(12)) : vids
-            )
-        }
-    }
-
-    private func format(_ n: Int) -> String {
-        if n >= 1_000_000 { return String(format: "%.1fM", Double(n)/1_000_000) }
-        if n >= 1_000 { return String(format: "%.1fK", Double(n)/1_000) }
-        return "\(n)"
-    }
+    @ObservedObject private var rankService = TopRankMLService.shared
 
     var body: some View {
         NavigationStack {
             List {
-                ForEach(Array(channelItems.enumerated()), id: \.element.id) { idx, channel in
+                ForEach(Array(rankService.topChannels.enumerated()), id: \.element.id) { idx, channel in
                     NavigationLink {
                         ChannelDetailView(
                             name: channel.name,
                             avatarURL: channel.avatar,
                             subscribers: channel.subscribers,
                             totalViews: channel.totalViews,
-                            videos: channel.videos
+                            videos: []
                         )
                     } label: {
-                        HStack(spacing: 12) {
-                            Text("#\(idx + 1)")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(width: 28, height: 28)
-                                .background(Capsule().fill(AppTheme.Colors.primary))
-                            CachedAsyncImage(url: URL(string: channel.avatar)) { image in
-                                image.resizable().scaledToFill()
-                            } placeholder: {
-                                Circle().fill(AppTheme.Colors.surface)
-                                    .overlay(Image(systemName: "person.circle.fill").foregroundColor(.secondary))
-                            }
-                            .frame(width: 44, height: 44)
-                            .clipShape(Circle())
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(channel.name)
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(AppTheme.Colors.primary)
-                                Text("\(format(channel.subscribers)) subs")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                        }
-                        .padding(.vertical, 4)
+                        RankListRow(
+                            user: channel,
+                            index: idx,
+                            subtitle: "\(TopRankMLService.formatCount(channel.subscribers)) subs"
+                        )
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
@@ -2655,6 +2224,99 @@ private struct TopChannelsListView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Reusable Row for See All Lists
+
+private struct RankListRow: View {
+    let user: TopRankedUser
+    let index: Int
+    var subtitle: String? = nil
+
+    private var displaySubtitle: String {
+        subtitle ?? "\(TopRankMLService.formatCount(user.totalViews)) total views"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Rank badge
+            HStack(spacing: 2) {
+                Text("#\(index + 1)")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                if user.rankChange > 0 {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.green)
+                } else if user.rankChange < 0 {
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.red)
+                }
+            }
+            .frame(width: 36, height: 28)
+            .background(Capsule().fill(AppTheme.Colors.primary))
+
+            // Avatar
+            if user.avatar.hasPrefix("asset://") {
+                let assetName = String(user.avatar.dropFirst(8))
+                if let img = UIImage(named: assetName) {
+                    Image(uiImage: img)
+                        .resizable().scaledToFill()
+                        .frame(width: 44, height: 44)
+                        .clipShape(Circle())
+                } else {
+                    defaultAvatar
+                }
+            } else {
+                AppAsyncImage(url: URL(string: user.avatar)) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: { Color.gray.opacity(0.3) }
+                .frame(width: 44, height: 44)
+                .clipShape(Circle())
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(user.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                    if user.isVerified {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.blue)
+                    }
+                }
+                Text(displaySubtitle)
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+
+            // Score indicator
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(Int(user.overallScore))")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.primary)
+                Text("score")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: user.rank)
+    }
+
+    private var defaultAvatar: some View {
+        ZStack {
+            Circle().fill(Color(.systemGray5))
+            Image(systemName: "person.circle.fill")
+                .resizable().scaledToFit()
+                .foregroundColor(.secondary)
+                .padding(10)
+        }
+        .frame(width: 44, height: 44)
     }
 }
 

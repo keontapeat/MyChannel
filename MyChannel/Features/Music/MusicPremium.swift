@@ -52,9 +52,9 @@ final class PodcastService: ObservableObject {
     
     private func loadSampleData() {
         trendingPodcasts = [
-            Podcast(id: "1", title: "The Flint Perspective", author: "810 Media", artworkURL: nil, description: "Stories from the heart of Flint", category: "Culture", episodeCount: 45, isSubscribed: false, isExplicit: false),
+            Podcast(id: "1", title: "The 810 Perspective", author: "810 Media", artworkURL: nil, description: "Stories from the heart of the 810", category: "Culture", episodeCount: 45, isSubscribed: false, isExplicit: false),
             Podcast(id: "2", title: "Behind the Bars", author: "YN Jay", artworkURL: "https://i.ytimg.com/vi/pnQ0BXTfBjk/hqdefault.jpg", description: "Breaking down the hottest verses", category: "Music", episodeCount: 28, isSubscribed: true, isExplicit: true),
-            Podcast(id: "3", title: "810 Uncensored", author: "Flint Legends", artworkURL: nil, description: "Raw conversations with Flint artists", category: "Music", episodeCount: 67, isSubscribed: false, isExplicit: true),
+            Podcast(id: "3", title: "810 Uncensored", author: "810 Legends", artworkURL: nil, description: "Raw conversations with 810 artists", category: "Music", episodeCount: 67, isSubscribed: false, isExplicit: true),
             Podcast(id: "4", title: "Grind Talk", author: "Rio Da Yung OG", artworkURL: "https://i.ytimg.com/vi/6DZSh9vqlWc/hqdefault.jpg", description: "Entrepreneurship and hustle mentality", category: "Business", episodeCount: 32, isSubscribed: true, isExplicit: true),
             Podcast(id: "5", title: "Michigan Music History", author: "Detroit Sound", artworkURL: nil, description: "The evolution of Michigan hip-hop", category: "Music", episodeCount: 89, isSubscribed: false, isExplicit: false)
         ]
@@ -62,9 +62,9 @@ final class PodcastService: ObservableObject {
         subscribedPodcasts = trendingPodcasts.filter { $0.isSubscribed }
         
         recentEpisodes = [
-            PodcastEpisode(id: "e1", title: "How Flint Changed Hip-Hop", description: "The unique sound of the 810", duration: 3600, publishedDate: Date(), artworkURL: nil, audioURL: "", playbackProgress: 0.3, isDownloaded: false),
+            PodcastEpisode(id: "e1", title: "How 810 Changed Hip-Hop", description: "The unique sound of the 810", duration: 3600, publishedDate: Date(), artworkURL: nil, audioURL: "", playbackProgress: 0.3, isDownloaded: false),
             PodcastEpisode(id: "e2", title: "Interview with YN Jay", description: "Exclusive conversation", duration: 4500, publishedDate: Date().addingTimeInterval(-86400), artworkURL: "https://i.ytimg.com/vi/pnQ0BXTfBjk/hqdefault.jpg", audioURL: "", playbackProgress: 0, isDownloaded: true),
-            PodcastEpisode(id: "e3", title: "Making It Out", description: "Stories of success from Flint", duration: 2700, publishedDate: Date().addingTimeInterval(-172800), artworkURL: nil, audioURL: "", playbackProgress: 1.0, isDownloaded: false)
+            PodcastEpisode(id: "e3", title: "Making It Out", description: "Stories of success from the 810", duration: 2700, publishedDate: Date().addingTimeInterval(-172800), artworkURL: nil, audioURL: "", playbackProgress: 1.0, isDownloaded: false)
         ]
     }
     

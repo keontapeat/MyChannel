@@ -86,6 +86,12 @@ struct MyChannelPlusView: View {
         } message: {
             Text(errorMessage)
         }
+        .task {
+            // Pre-load products so purchase button works immediately
+            if storeKit.products.isEmpty {
+                await storeKit.loadProducts()
+            }
+        }
     }
     
     // MARK: - Header
@@ -313,6 +319,27 @@ struct MyChannelPlusView: View {
     
     private var footer: some View {
         VStack(spacing: 16) {
+            // Restore Purchases (required by Apple)
+            Button {
+                Task {
+                    isPurchasing = true
+                    await storeKit.restore()
+                    isPurchasing = false
+                    if storeKit.isPremium {
+                        showingPurchaseSuccess = true
+                        HapticManager.shared.successPattern()
+                    }
+                }
+            } label: {
+                Text("Restore Purchases")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(Color(uiColor: .secondarySystemBackground))
+                    .cornerRadius(12)
+            }
+            
             Text("By subscribing, you agree to our Terms of Service and acknowledge our Privacy Policy. Free trial available for new subscribers only. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)

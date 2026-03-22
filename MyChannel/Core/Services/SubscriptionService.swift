@@ -10,9 +10,11 @@ class SubscriptionService: ObservableObject {
     @Published var isPlusSubscriber = false
     @Published var subscriptionStatus: SubscriptionStatus = .free
     @Published var subscriptionEndDate: Date?
+    @Published var activeProductID: String?
     
     private let db = Firestore.firestore()
     private var listener: ListenerRegistration?
+    private var authListener: AuthStateDidChangeListenerHandle?
     
     enum SubscriptionStatus: String {
         case free
@@ -23,6 +25,21 @@ class SubscriptionService: ObservableObject {
     
     private init() {
         setupSubscriptionListener()
+        
+        // Re-setup listener when auth state changes (login/logout)
+        authListener = Auth.auth().addStateDidChangeListener { [weak self] _, user in
+            Task { @MainActor in
+                self?.listener?.remove()
+                if user != nil {
+                    self?.setupSubscriptionListener()
+                } else {
+                    self?.isPlusSubscriber = false
+                    self?.subscriptionStatus = .free
+                    self?.subscriptionEndDate = nil
+                    self?.activeProductID = nil
+                }
+            }
+        }
     }
     
     func setupSubscriptionListener() {
@@ -31,19 +48,21 @@ class SubscriptionService: ObservableObject {
             return
         }
         
+        listener?.remove()
         listener = db.collection("users").document(userId)
             .addSnapshotListener { [weak self] snapshot, error in
                 guard let self = self else { return }
                 
                 Task { @MainActor in
                     if let error = error {
-                        print("Error listening to subscription: \(error)")
+                        print("⚠️ [Subscription] Listener error: \(error)")
                         return
                     }
                     
                     guard let data = snapshot?.data() else { return }
                     
                     self.isPlusSubscriber = data["isPlusSubscriber"] as? Bool ?? false
+                    self.activeProductID = data["activeProductID"] as? String
                     
                     if let statusString = data["subscriptionStatus"] as? String,
                        let status = SubscriptionStatus(rawValue: statusString) {
@@ -53,6 +72,8 @@ class SubscriptionService: ObservableObject {
                     if let timestamp = data["subscriptionEndDate"] as? Timestamp {
                         self.subscriptionEndDate = timestamp.dateValue()
                     }
+                    
+                    print("👑 [Subscription] Firestore sync — isPlusSubscriber: \(self.isPlusSubscriber), status: \(self.subscriptionStatus)")
                 }
             }
     }
@@ -66,57 +87,84 @@ class SubscriptionService: ObservableObject {
             let doc = try await db.collection("users").document(userId).getDocument()
             let isPlusSubscriber = doc.data()?["isPlusSubscriber"] as? Bool ?? false
             
-            await MainActor.run {
-                self.isPlusSubscriber = isPlusSubscriber
-            }
-            
+            self.isPlusSubscriber = isPlusSubscriber
             return isPlusSubscriber
         } catch {
-            print("Error checking subscription: \(error)")
+            print("⚠️ [Subscription] Check error: \(error)")
             return false
         }
     }
+    
+    // MARK: - Activate (called by StoreKitService after verified purchase)
     
     func activatePlusSubscription() async throws {
         guard let userId = Auth.auth().currentUser?.uid else {
             throw SubscriptionError.notAuthenticated
         }
         
-        let subscriptionData: [String: Any] = [
+        // Get the real expiry from StoreKit if available
+        let expiryDate = await StoreKitService.shared.currentSubscriptionExpiry()
+        let productID = StoreKitService.shared.activeSubscriptionProductID
+        
+        var subscriptionData: [String: Any] = [
             "isPlusSubscriber": true,
             "subscriptionStatus": SubscriptionStatus.active.rawValue,
             "subscriptionStartDate": Timestamp(date: Date()),
-            "subscriptionEndDate": Timestamp(date: Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()),
             "lastUpdated": Timestamp(date: Date())
         ]
         
-        try await db.collection("users").document(userId).updateData(subscriptionData)
-        
-        await MainActor.run {
-            self.isPlusSubscriber = true
-            self.subscriptionStatus = .active
+        // Use real StoreKit expiry or fallback to +1 month
+        if let expiry = expiryDate {
+            subscriptionData["subscriptionEndDate"] = Timestamp(date: expiry)
+        } else {
+            subscriptionData["subscriptionEndDate"] = Timestamp(date: Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date())
         }
+        
+        if let productID = productID {
+            subscriptionData["activeProductID"] = productID
+        }
+        
+        // Use merge so it works even if these fields don't exist yet
+        try await db.collection("users").document(userId).setData(subscriptionData, merge: true)
+        
+        self.isPlusSubscriber = true
+        self.subscriptionStatus = .active
+        self.activeProductID = productID
+        if let expiry = expiryDate {
+            self.subscriptionEndDate = expiry
+        }
+        
+        print("✅ [Subscription] Activated in Firestore for user \(userId)")
     }
+    
+    // MARK: - Cancel / Expire (called by StoreKitService when entitlements are lost)
     
     func cancelSubscription() async throws {
         guard let userId = Auth.auth().currentUser?.uid else {
             throw SubscriptionError.notAuthenticated
         }
         
-        try await db.collection("users").document(userId).updateData([
+        let cancelData: [String: Any] = [
             "isPlusSubscriber": false,
             "subscriptionStatus": SubscriptionStatus.expired.rawValue,
+            "activeProductID": FieldValue.delete(),
             "lastUpdated": Timestamp(date: Date())
-        ])
+        ]
         
-        await MainActor.run {
-            self.isPlusSubscriber = false
-            self.subscriptionStatus = .expired
-        }
+        try await db.collection("users").document(userId).updateData(cancelData)
+        
+        self.isPlusSubscriber = false
+        self.subscriptionStatus = .expired
+        self.activeProductID = nil
+        
+        print("🚫 [Subscription] Cancelled in Firestore for user \(userId)")
     }
     
     deinit {
         listener?.remove()
+        if let authListener = authListener {
+            Auth.auth().removeStateDidChangeListener(authListener)
+        }
     }
 }
 

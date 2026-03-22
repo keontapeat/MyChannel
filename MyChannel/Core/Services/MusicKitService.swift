@@ -70,9 +70,9 @@ struct MusicKitTrack: Identifiable, Equatable {
     let genres: [String]
     let releaseDate: Date?
     
-    // For Flint artists
-    var isFlintArtist: Bool = false
-    var flintArtistID: String?
+    // For Featured artists
+    var isFeaturedArtist: Bool = false
+    var featuredArtistID: String?
     
     static func == (lhs: MusicKitTrack, rhs: MusicKitTrack) -> Bool {
         lhs.id == rhs.id

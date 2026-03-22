@@ -12,11 +12,13 @@ struct ProfileQuickMenu: View {
     let user: User
     @Binding var isPresented: Bool
     @EnvironmentObject private var authManager: AuthenticationManager
+    @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
     
     // 🔥 REAL-TIME STATS: Fetch fresh data from analytics
     @State private var realtimeStats: ChannelStats = ChannelStats()
     @State private var isLoadingStats = true
+    @State private var showingSignOutConfirm = false
     
     struct ChannelStats {
         var subscribers: Int = 0
@@ -29,225 +31,199 @@ struct ProfileQuickMenu: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Header with Avatar & Name
-            VStack(spacing: 12) {
-                ProfileAvatarView(urlString: user.profileImageURL, size: 64)
-                    .overlay(Circle().stroke(.white, lineWidth: 3))
-                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+            // MARK: - Profile Header
+            VStack(spacing: 14) {
+                ProfileAvatarView(urlString: user.profileImageURL, size: 72)
+                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 3))
+                    .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 4)
                 
                 VStack(spacing: 4) {
                     HStack(spacing: 6) {
                         Text(user.displayName)
-                            .font(.title3.weight(.bold))
+                            .font(.system(size: 20, weight: .bold))
                             .foregroundColor(.primary)
                         
                         if user.isVerified {
                             Image(systemName: "checkmark.seal.fill")
-                                .font(.body)
+                                .font(.system(size: 16))
                                 .foregroundColor(.blue)
                         }
                     }
                     
                     Text("@\(user.username)")
-                        .font(.subheadline)
+                        .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
             }
-            .padding(.top, 24)
+            .padding(.top, 20)
             .padding(.bottom, 20)
             
-            // Stats Row - REAL DATA
+            // MARK: - Stats Card
             if isLoadingStats {
                 ProgressView()
                     .padding(.vertical, 30)
             } else {
-                VStack(spacing: 12) {
-                    // Top Row - Main Stats
+                VStack(spacing: 0) {
+                    // Top Row - Subscribers / Videos / Views
                     HStack(spacing: 0) {
-                        StatColumn(
+                        ProfileStatCell(
                             value: formatCount(realtimeStats.subscribers),
-                            label: "Subscribers",
-                            isLive: true
+                            label: "Subscribers"
                         )
                         
-                        Divider()
-                            .frame(height: 50)
-                        
-                        StatColumn(
+                        ProfileStatCell(
                             value: formatCount(realtimeStats.videos),
-                            label: "Videos",
-                            isLive: true
+                            label: "Videos"
                         )
                         
-                        Divider()
-                            .frame(height: 50)
-                        
-                        StatColumn(
+                        ProfileStatCell(
                             value: formatCount(realtimeStats.views),
-                            label: "Views",
-                            isLive: true
+                            label: "Views"
                         )
                     }
+                    .padding(.vertical, 14)
                     
                     Divider()
+                        .padding(.horizontal, 16)
                     
-                    // Bottom Row - Performance Metrics
+                    // Bottom Row - Watch Time / Engagement / Revenue
                     HStack(spacing: 0) {
-                        StatColumn(
+                        ProfileStatCell(
                             value: formatWatchTime(realtimeStats.watchTime),
-                            label: "Watch Time",
-                            isLive: false
+                            label: "Watch Time"
                         )
                         
-                        Divider()
-                            .frame(height: 40)
-                        
-                        StatColumn(
+                        ProfileStatCell(
                             value: String(format: "%.1f%%", realtimeStats.engagement),
-                            label: "Engagement",
-                            isLive: false
+                            label: "Engagement"
                         )
                         
-                        Divider()
-                            .frame(height: 40)
-                        
-                        StatColumn(
+                        ProfileStatCell(
                             value: formatRevenue(realtimeStats.revenue),
-                            label: "Revenue",
-                            isLive: false
+                            label: "Revenue"
                         )
                     }
+                    .padding(.vertical, 14)
                 }
-                .padding(16)
-                .background(
-                    LinearGradient(
-                        colors: [Color(.systemGray6), Color(.systemGray5)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .background(Color(.systemGray6))
                 .cornerRadius(16)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color(.systemGray4), lineWidth: 1)
+                        .stroke(Color(.systemGray4).opacity(0.5), lineWidth: 0.5)
                 )
-                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
                 .padding(.horizontal, 20)
-                .padding(.bottom, 20)
+                .padding(.bottom, 24)
             }
             
-            Divider()
-            
-            // Action Buttons
+            // MARK: - Menu Items
             VStack(spacing: 0) {
-                MenuButton(
-                    icon: "chart.bar.doc.horizontal.fill",
+                ProfileSheetMenuRow(
+                    icon: "doc.text.fill",
                     title: "Creator Studio",
                     action: {
                         HapticManager.shared.impact(style: .medium)
                         isPresented = false
-                        NotificationCenter.default.post(
-                            name: Notification.Name("OpenCreatorStudioDashboard"),
-                            object: user
-                        )
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            NotificationCenter.default.post(
+                                name: Notification.Name("OpenCreatorStudioDashboard"),
+                                object: user
+                            )
+                        }
                     }
                 )
                 
-                Divider()
-                    .padding(.leading, 56)
-                
-                MenuButton(
+                ProfileSheetMenuRow(
                     icon: "person.circle.fill",
                     title: "View Channel",
                     action: {
                         isPresented = false
-                        // Navigate to full profile
-                        NotificationCenter.default.post(
-                            name: Notification.Name("OpenFullProfile"),
-                            object: user
-                        )
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            NotificationCenter.default.post(
+                                name: Notification.Name("OpenFullProfile"),
+                                object: user
+                            )
+                        }
                     }
                 )
                 
-                Divider()
-                    .padding(.leading, 56)
-                
-                MenuButton(
+                ProfileSheetMenuRow(
                     icon: "gearshape.fill",
                     title: "Settings",
                     action: {
                         isPresented = false
-                        NotificationCenter.default.post(
-                            name: Notification.Name("OpenSettings"),
-                            object: nil
-                        )
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            NotificationCenter.default.post(
+                                name: Notification.Name("OpenSettings"),
+                                object: nil
+                            )
+                        }
                     }
                 )
                 
-                Divider()
-                    .padding(.leading, 56)
-                
-                MenuButton(
+                ProfileSheetMenuRow(
                     icon: "person.2.fill",
                     title: "Switch Profile",
                     action: {
                         isPresented = false
-                        NotificationCenter.default.post(
-                            name: Notification.Name("ShowSwitchProfile"),
-                            object: nil
-                        )
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            NotificationCenter.default.post(
+                                name: Notification.Name("ShowSwitchProfile"),
+                                object: nil
+                            )
+                        }
                     }
                 )
                 
-                Divider()
-                    .padding(.leading, 56)
-                
-                MenuButton(
-                    icon: "arrow.right.square.fill",
+                ProfileSheetMenuRow(
+                    icon: "rectangle.portrait.and.arrow.forward.fill",
                     title: "Sign Out",
                     isDestructive: true,
                     action: {
                         HapticManager.shared.impact(style: .medium)
-                        try? authManager.signOut()
-                        isPresented = false
+                        showingSignOutConfirm = true
                     }
                 )
             }
-            .padding(.vertical, 8)
+            .padding(.top, 4)
             
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemBackground))
+        .confirmationDialog("Sign Out", isPresented: $showingSignOutConfirm) {
+            Button("Sign Out", role: .destructive) {
+                try? authManager.signOut()
+                isPresented = false
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Are you sure you want to sign out?")
+        }
         .task {
-            // 🔥 LOAD REAL ANALYTICS DATA
             await loadRealtimeStats()
         }
     }
     
+    // MARK: - Data Loading
     private func loadRealtimeStats() async {
         isLoadingStats = true
         
-        // Try to fetch analytics from AdvancedAnalyticsService
         let analytics = AdvancedAnalyticsService.shared
         
         do {
-            // Try to get channel analytics
             if let channelAnalytics = try? await analytics.getChannelAnalytics(for: user.id) {
                 await MainActor.run {
                     realtimeStats.subscribers = channelAnalytics.totalSubscribers
                     realtimeStats.videos = channelAnalytics.totalVideos
                     realtimeStats.views = channelAnalytics.totalViews
-                    realtimeStats.watchTime = Int(channelAnalytics.totalWatchTime / 60) // Convert to minutes
-                    // Calculate engagement rate: (watch time / total views) * 100
+                    realtimeStats.watchTime = Int(channelAnalytics.totalWatchTime / 60)
                     let engagementRate = channelAnalytics.totalViews > 0 
                         ? (channelAnalytics.totalWatchTime / Double(channelAnalytics.totalViews)) * 100 
                         : 0
-                    realtimeStats.engagement = min(engagementRate, 100) // Cap at 100%
+                    realtimeStats.engagement = min(engagementRate, 100)
                     realtimeStats.revenue = channelAnalytics.totalRevenue
                 }
             } else {
-                // Fallback to user model data
                 await MainActor.run {
                     realtimeStats.subscribers = user.subscriberCount
                     realtimeStats.videos = user.videoCount
@@ -258,7 +234,6 @@ struct ProfileQuickMenu: View {
                 }
             }
         } catch {
-            // Error fetching analytics, use user model data
             await MainActor.run {
                 realtimeStats.subscribers = user.subscriberCount
                 realtimeStats.videos = user.videoCount
@@ -272,6 +247,7 @@ struct ProfileQuickMenu: View {
         isLoadingStats = false
     }
     
+    // MARK: - Formatters
     private func formatCount(_ count: Int) -> String {
         if count >= 1_000_000 {
             return String(format: "%.1fM", Double(count) / 1_000_000.0)
@@ -283,7 +259,9 @@ struct ProfileQuickMenu: View {
     }
     
     private func formatWatchTime(_ minutes: Int) -> String {
-        if minutes >= 60 {
+        if minutes >= 1440 {
+            return "\(minutes / 1440)d"
+        } else if minutes >= 60 {
             return "\(minutes / 60)h"
         }
         return "\(minutes)m"
@@ -294,37 +272,33 @@ struct ProfileQuickMenu: View {
     }
 }
 
-// MARK: - Stat Column
-private struct StatColumn: View {
+// MARK: - Profile Stat Cell (matches screenshot: red dot + bold value + label)
+private struct ProfileStatCell: View {
     let value: String
     let label: String
-    var isLive: Bool = false
     
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             HStack(spacing: 4) {
-                if isLive {
-                    Circle()
-                        .fill(.red)
-                        .frame(width: 6, height: 6)
-                        .shadow(color: .red, radius: 3)
-                }
+                Circle()
+                    .fill(.red)
+                    .frame(width: 6, height: 6)
                 
                 Text(value)
-                    .font(.title2.weight(.bold))
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.primary)
             }
             
             Text(label)
-                .font(.caption)
+                .font(.system(size: 11))
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
     }
 }
 
-// MARK: - Menu Button
-private struct MenuButton: View {
+// MARK: - Profile Sheet Menu Row (matches screenshot: icon + title + chevron)
+private struct ProfileSheetMenuRow: View {
     let icon: String
     let title: String
     var isDestructive: Bool = false
@@ -337,24 +311,24 @@ private struct MenuButton: View {
         }) {
             HStack(spacing: 16) {
                 Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundColor(isDestructive ? .red : AppTheme.Colors.primary)
-                    .frame(width: 24)
+                    .font(.system(size: 18))
+                    .foregroundColor(isDestructive ? .red : .primary.opacity(0.7))
+                    .frame(width: 28, height: 28)
                 
                 Text(title)
-                    .font(.body)
+                    .font(.system(size: 16))
                     .foregroundColor(isDestructive ? .red : .primary)
                 
                 Spacer()
                 
                 if !isDestructive {
                     Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Color(.systemGray3))
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 16)
+            .padding(.vertical, 15)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -367,5 +341,6 @@ private struct MenuButton: View {
         isPresented: .constant(true)
     )
     .environmentObject(AuthenticationManager.shared)
+    .environmentObject(AppState())
 }
 

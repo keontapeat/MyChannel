@@ -194,48 +194,6 @@ struct EnhancedVideoCard: View {
     }
 }
 
-// MARK: - Watch Progress Service
-@MainActor
-class WatchProgressService: ObservableObject {
-    static let shared = WatchProgressService()
-    
-    @Published private var progressCache: [String: Double] = [:]
-    
-    private init() {
-        loadFromStorage()
-    }
-    
-    func getProgress(for videoId: String) -> Double? {
-        return progressCache[videoId]
-    }
-    
-    func setProgress(_ progress: Double, for videoId: String) {
-        progressCache[videoId] = progress
-        saveToStorage()
-        
-        // Notify observers
-        NotificationCenter.default.post(name: .videoProgressUpdated, object: videoId)
-    }
-    
-    func clearProgress(for videoId: String) {
-        progressCache.removeValue(forKey: videoId)
-        saveToStorage()
-    }
-    
-    private func loadFromStorage() {
-        if let data = UserDefaults.standard.data(forKey: "watchProgressCache"),
-           let decoded = try? JSONDecoder().decode([String: Double].self, from: data) {
-            progressCache = decoded
-        }
-    }
-    
-    private func saveToStorage() {
-        if let encoded = try? JSONEncoder().encode(progressCache) {
-            UserDefaults.standard.set(encoded, forKey: "watchProgressCache")
-        }
-    }
-}
-
 #Preview("Progress Indicator") {
     VStack(spacing: 20) {
         WatchProgressIndicator(progress: 0.3)

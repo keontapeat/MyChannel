@@ -192,11 +192,14 @@ final class DataPersistenceService: ObservableObject {
         // Sync user collections (watch later, liked, etc.)
         if let userId = AuthenticationManager.shared.currentUser?.id {
             do {
-                // Get local data
-                if let localData: [String: Any] = userDefaults.dictionary(forKey: "userData_\(userId)") {
-                    // Sync to Firestore
+                // 🔥 FIX: Read the Codable-encoded data that saveDualLayer wrote,
+                // NOT the raw UserDefaults dictionary — format must match loadDualLayer.
+                let key = "userData_\(userId)"
+                if let localData = userDefaults.data(forKey: key) {
                     #if canImport(FirebaseFirestore)
-                    try await db.collection("userCollections").document(userId).setData(localData, merge: true)
+                    // Re-serialize from Codable Data → JSON dict so Firestore gets the right format
+                    let dict = try JSONSerialization.jsonObject(with: localData, options: []) as? [String: Any] ?? [:]
+                    try await db.collection("userCollections").document(userId).setData(dict, merge: true)
                     #endif
                 }
                 

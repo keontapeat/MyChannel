@@ -2,13 +2,12 @@
 //  LiveShoppingView.swift
 //  MyChannel
 //
-//  LIVE SHOPPING NETWORK - Shop during live streams
+//  LIVE SHOPPING NETWORK - Premium YouTube-style merch selling
 //  AR try-on, instant checkout, creator commissions
 //  Created for MyChannel by AI Assistant
 //
 
 import SwiftUI
-import ARKit
 
 struct LiveShoppingView: View {
     @StateObject private var viewModel = LiveShoppingViewModel()
@@ -16,27 +15,87 @@ struct LiveShoppingView: View {
     @State private var showARTryOn = false
     @State private var showCheckout = false
     @State private var selectedFilter: LiveShoppingFilter = .live
+    @State private var animateMetrics = false
+    @Environment(\.dismiss) private var dismiss
     
     private let metrics = ShoppingMetric.defaultMetrics
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(spacing: 28) {
-                    heroSection
-                    metricsSection
-                    filtersSection
-                    trendingProductsSection
-                    categoriesSection
-                    creatorSpotlightSection
-                    flashDealsSection
+            ZStack(alignment: .bottom) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 0) {
+                        // Premium Header
+                        liveShoppingHeader
+                        
+                        // Live Now Hero
+                        heroSection
+                            .padding(.top, 8)
+                        
+                        // Real-time Metrics Dashboard
+                        metricsSection
+                            .padding(.top, 24)
+                        
+                        // Quick Filters
+                        filtersSection
+                            .padding(.top, 28)
+                        
+                        // Trending Merch
+                        trendingProductsSection
+                            .padding(.top, 24)
+                        
+                        // Shop by Category
+                        categoriesSection
+                            .padding(.top, 28)
+                        
+                        // Creator Spotlight
+                        creatorSpotlightSection
+                            .padding(.top, 28)
+                        
+                        // Flash Deals
+                        flashDealsSection
+                            .padding(.top, 28)
+                        
+                        // Go Live CTA for creators
+                        goLiveCTA
+                            .padding(.top, 32)
+                        
+                        Spacer(minLength: 100)
+                    }
+                    .padding(.horizontal, 16)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 24)
+                .background(AppTheme.Colors.background.ignoresSafeArea())
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button { dismiss() } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                                .frame(width: 36, height: 36)
+                                .background(AppTheme.Colors.surface, in: Circle())
+                        }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        HStack(spacing: 12) {
+                            Button { } label: {
+                                Image(systemName: "bell.badge.fill")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                    .frame(width: 36, height: 36)
+                                    .background(AppTheme.Colors.surface, in: Circle())
+                            }
+                            Button { } label: {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                    .frame(width: 36, height: 36)
+                                    .background(AppTheme.Colors.surface, in: Circle())
+                            }
+                        }
+                    }
+                }
             }
-            .background(AppTheme.Colors.background.ignoresSafeArea())
-            .navigationTitle("Live Shopping")
-            .navigationBarTitleDisplayMode(.large)
         }
         .sheet(item: $selectedProduct) { product in
             ProductDetailSheet(product: product, showARTryOn: $showARTryOn, showCheckout: $showCheckout)
@@ -50,57 +109,106 @@ struct LiveShoppingView: View {
             Task {
                 await viewModel.loadLiveShops()
             }
+            withAnimation(.easeOut(duration: 0.6).delay(0.3)) {
+                animateMetrics = true
+            }
         }
     }
     
-    // MARK: - Sections
-    private var heroSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(Color.red)
-                    .frame(width: 10, height: 10)
-                Text("Live now")
-                    .font(AppTheme.Typography.headline)
+    // MARK: - Premium Header
+    private var liveShoppingHeader: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 10) {
+                Image(systemName: "bag.fill")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(AppTheme.Colors.premiumGradient)
+                
+                Text("Live Shopping")
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.Colors.textPrimary)
+                
                 Spacer()
-                Text("\(viewModel.liveShows.count) shows")
+            }
+            
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 7, height: 7)
+                Text("Sell merch live to your audience")
                     .font(AppTheme.Typography.caption)
                     .foregroundColor(AppTheme.Colors.textSecondary)
+                Spacer()
+            }
+        }
+        .padding(.top, 4)
+    }
+    
+    // MARK: - Hero Section
+    private var heroSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                        .overlay(
+                            Circle()
+                                .fill(Color.red.opacity(0.4))
+                                .frame(width: 16, height: 16)
+                        )
+                    Text("Live now")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                }
+                
+                Spacer()
+                
+                Text("\(viewModel.liveShows.count) shows")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(AppTheme.Colors.surface, in: Capsule())
             }
             
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
+                HStack(spacing: 14) {
                     ForEach(viewModel.liveShows) { show in
                         LiveShowHeroCard(show: show)
                     }
                 }
+                .padding(.vertical, 2)
             }
         }
     }
     
+    // MARK: - Metrics Dashboard
     private var metricsSection: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-            ForEach(metrics) { metric in
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+            ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
                 ShoppingMetricCard(metric: metric)
+                    .opacity(animateMetrics ? 1 : 0)
+                    .offset(y: animateMetrics ? 0 : 20)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(Double(index) * 0.08), value: animateMetrics)
             }
         }
     }
     
+    // MARK: - Filters
     private var filtersSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             Text("Discover")
-                .font(AppTheme.Typography.title3)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundColor(AppTheme.Colors.textPrimary)
             
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     ForEach(LiveShoppingFilter.allCases) { filter in
                         QuickFilterPill(
                             filter: filter,
                             isSelected: filter == selectedFilter
                         ) {
-                            withAnimation(AppTheme.AnimationPresets.easeInOut) {
+                            withAnimation(AppTheme.AnimationPresets.spring) {
                                 selectedFilter = filter
                             }
                         }
@@ -110,12 +218,13 @@ struct LiveShoppingView: View {
         }
     }
     
+    // MARK: - Trending Products
     private var trendingProductsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
+            HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Trending right now")
-                        .font(AppTheme.Typography.title3)
+                    Text("Trending merch")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                     Text("Curated drops updated hourly")
                         .font(AppTheme.Typography.caption)
@@ -127,31 +236,37 @@ struct LiveShoppingView: View {
                 Button {
                     // TODO: navigate to full catalog
                 } label: {
-                    Text("View all")
-                        .font(AppTheme.Typography.caption)
-                        .foregroundColor(AppTheme.Colors.primary)
+                    HStack(spacing: 4) {
+                        Text("View all")
+                            .font(.system(size: 13, weight: .semibold))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundColor(AppTheme.Colors.primary)
                 }
             }
             
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
+                HStack(spacing: 14) {
                     ForEach(viewModel.featuredProducts) { product in
                         ProductHighlightCard(product: product) {
                             selectedProduct = product
                         }
                     }
                 }
+                .padding(.vertical, 2)
             }
         }
     }
     
+    // MARK: - Categories
     private var categoriesSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Shop by category")
-                .font(AppTheme.Typography.title3)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundColor(AppTheme.Colors.textPrimary)
             
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 4), spacing: 16) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 14) {
                 ForEach(ShoppingCategory.allCases) { category in
                     CategoryButton(category: category) {
                         // TODO: route to category storefront
@@ -161,45 +276,64 @@ struct LiveShoppingView: View {
         }
     }
     
+    // MARK: - Creator Spotlight
     private var creatorSpotlightSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("Creator spotlight")
-                    .font(AppTheme.Typography.title3)
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.Colors.textPrimary)
                 Spacer()
                 Button {
                     // TODO: navigate
                 } label: {
-                    Text("Browse all")
-                        .font(AppTheme.Typography.caption)
-                        .foregroundColor(AppTheme.Colors.primary)
+                    HStack(spacing: 4) {
+                        Text("Browse all")
+                            .font(.system(size: 13, weight: .semibold))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundColor(AppTheme.Colors.primary)
                 }
             }
             
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
+                HStack(spacing: 14) {
                     ForEach(viewModel.creatorShops) { shop in
                         CreatorSpotlightCard(shop: shop)
                     }
                 }
+                .padding(.vertical, 2)
             }
         }
     }
     
+    // MARK: - Flash Deals
     private var flashDealsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Flash deals")
-                    .font(AppTheme.Typography.title3)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+                HStack(spacing: 8) {
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.orange)
+                    Text("Flash deals")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                }
                 Spacer()
-                Label(viewModel.flashSaleTimeRemaining, systemImage: "clock.badge.exclamationmark")
-                    .font(AppTheme.Typography.caption)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                HStack(spacing: 6) {
+                    Image(systemName: "clock.fill")
+                        .font(.system(size: 11))
+                    Text(viewModel.flashSaleTimeRemaining)
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                }
+                .foregroundColor(AppTheme.Colors.error)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(AppTheme.Colors.error.opacity(0.1), in: Capsule())
             }
             
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 ForEach(viewModel.flashSaleProducts) { product in
                     FlashDealCard(product: product) {
                         selectedProduct = product
@@ -208,108 +342,207 @@ struct LiveShoppingView: View {
             }
         }
     }
+    
+    // MARK: - Go Live CTA
+    private var goLiveCTA: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 8) {
+                Image(systemName: "video.badge.plus")
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundStyle(AppTheme.Colors.premiumGradient)
+                
+                Text("Start selling live")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Text("Go live and showcase your merch to fans in real-time")
+                    .font(AppTheme.Typography.footnote)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+            }
+            
+            Button {
+                // TODO: launch go-live flow
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "video.fill")
+                        .font(.system(size: 15, weight: .bold))
+                    Text("Go Live Now")
+                        .font(.system(size: 16, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(AppTheme.Colors.premiumGradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 6)
+            }
+            .padding(.horizontal, 24)
+        }
+        .padding(.vertical, 28)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(AppTheme.Colors.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 0.8)
+        )
+    }
 }
 
-// MARK: - Supporting Views
+// MARK: - Live Show Hero Card
 
 struct LiveShowHeroCard: View {
     let show: LiveShoppingShow
+    @State private var pulse = false
     
     var body: some View {
         NavigationLink(destination: LiveShoppingStreamView(show: show)) {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
+                // Thumbnail with overlays
                 ZStack(alignment: .bottomLeading) {
                     AsyncImage(url: URL(string: show.thumbnailURL)) { image in
                         image
                             .resizable()
                             .scaledToFill()
                     } placeholder: {
-                        Rectangle()
-                            .fill(AppTheme.Colors.cardBackground)
+                        LinearGradient(
+                            colors: [
+                                Color(hexString: "2C2C2E") ?? .gray,
+                                Color(hexString: "1C1C1E") ?? .black
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     }
-                    .frame(height: 180)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .frame(height: 190)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                     
+                    // Gradient overlay
                     LinearGradient(
-                        colors: [.black.opacity(0.05), .black.opacity(0.8)],
-                        startPoint: .top,
+                        colors: [.clear, .black.opacity(0.7)],
+                        startPoint: .center,
                         endPoint: .bottom
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                     
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 10) {
-                            Label("Live", systemImage: "dot.radiowaves.left.and.right")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(AppTheme.Colors.error, in: Capsule())
-                            
-                            HStack(spacing: 4) {
-                                Image(systemName: "eye.fill")
-                                Text("\(show.viewerCount.abbreviated)")
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 8) {
+                            // Pulsing LIVE badge
+                            HStack(spacing: 5) {
+                                Image(systemName: "dot.radiowaves.left.and.right")
+                                    .font(.system(size: 10, weight: .bold))
+                                Text("LIVE")
+                                    .font(.system(size: 11, weight: .heavy))
                             }
-                            .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white)
                             .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(Color.black.opacity(0.4), in: Capsule())
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule()
+                                    .fill(Color.red)
+                                    .shadow(color: .red.opacity(0.5), radius: pulse ? 8 : 4, x: 0, y: 0)
+                            )
+                            
+                            // Viewer count
+                            HStack(spacing: 4) {
+                                Image(systemName: "eye.fill")
+                                    .font(.system(size: 10))
+                                Text("\(show.viewerCount.abbreviated)")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(.ultraThinMaterial, in: Capsule())
                         }
                         
                         Text(show.title)
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.system(size: 17, weight: .bold))
                             .foregroundColor(.white)
                             .lineLimit(2)
+                            .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
                     }
-                    .padding(16)
+                    .padding(14)
                 }
                 
-                HStack(spacing: 12) {
-                    AsyncImage(url: URL(string: show.creator.avatarURL)) { image in
-                        image.resizable()
-                    } placeholder: {
-                        Circle().fill(AppTheme.Colors.backgroundSecondary)
+                // Creator row
+                HStack(spacing: 10) {
+                    ZStack(alignment: .bottomTrailing) {
+                        AsyncImage(url: URL(string: show.creator.avatarURL)) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [AppTheme.Colors.primary, AppTheme.Colors.secondary],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .overlay(
+                                    Text(String(show.creator.name.prefix(1)))
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundColor(.white)
+                                )
+                        }
+                        .frame(width: 40, height: 40)
+                        .clipShape(Circle())
+                        
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 10, height: 10)
+                            .overlay(Circle().stroke(AppTheme.Colors.surface, lineWidth: 2))
+                            .offset(x: 2, y: 2)
                     }
-                    .frame(width: 42, height: 42)
-                    .clipShape(Circle())
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(show.creator.name)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(AppTheme.Colors.textPrimary)
                         Text("Streaming now")
-                            .font(AppTheme.Typography.caption)
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                     }
                     
                     Spacer()
                     
-                    HStack(spacing: 6) {
+                    // Watch button
+                    HStack(spacing: 5) {
                         Image(systemName: "play.fill")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.system(size: 11, weight: .bold))
                         Text("Watch")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 13, weight: .bold))
                     }
                     .foregroundColor(AppTheme.Colors.primary)
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(AppTheme.Colors.primary.opacity(0.12), in: Capsule())
+                    .background(AppTheme.Colors.primary.opacity(0.1), in: Capsule())
                 }
             }
-            .frame(width: 300)
-            .padding(16)
-            .background(AppTheme.Colors.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .frame(width: 310)
+            .padding(14)
+            .background(AppTheme.Colors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 24)
-                    .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 0.8)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 0.8)
             )
-            .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 6)
+            .shadow(color: .black.opacity(0.06), radius: 12, x: 0, y: 6)
+            .shadow(color: .black.opacity(0.03), radius: 3, x: 0, y: 2)
         }
         .buttonStyle(.plain)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        }
     }
 }
+
+// MARK: - Product Highlight Card
 
 struct ProductHighlightCard: View {
     let product: ShoppingProduct
@@ -317,75 +550,97 @@ struct ProductHighlightCard: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
                 ZStack(alignment: .topTrailing) {
                     AsyncImage(url: URL(string: product.imageURL)) { image in
                         image
                             .resizable()
                             .scaledToFill()
                     } placeholder: {
-                        Rectangle().fill(AppTheme.Colors.cardBackground)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(AppTheme.Colors.backgroundSecondary)
+                            .overlay(
+                                Image(systemName: "tshirt.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                            )
                     }
-                    .frame(height: 160)
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .frame(height: 170)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     
-                    if product.hasARTryOn {
-                        Image(systemName: "arkit")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(AppTheme.Colors.primary, in: Circle())
-                            .padding(10)
+                    VStack(spacing: 6) {
+                        if product.hasARTryOn {
+                            Image(systemName: "arkit")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(7)
+                                .background(AppTheme.Colors.accent, in: Circle())
+                        }
+                        
+                        if product.discount > 0 {
+                            Text("-\(product.discount)%")
+                                .font(.system(size: 10, weight: .heavy))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(AppTheme.Colors.error, in: Capsule())
+                        }
                     }
+                    .padding(8)
                 }
                 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 5) {
                     Text(product.brand.uppercased())
-                        .font(AppTheme.Typography.caption)
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                        .tracking(0.8)
                     
                     Text(product.name)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                         .lineLimit(2)
                     
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         Text("$\(String(format: "%.2f", product.price))")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(AppTheme.Colors.primary)
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
                         
                         if product.discount > 0 {
                             Text("$\(product.originalPrice)")
-                                .font(AppTheme.Typography.caption)
-                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(AppTheme.Colors.textTertiary)
                                 .strikethrough()
                         }
                     }
                     
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3) {
                         Image(systemName: "star.fill")
-                            .foregroundColor(.yellow)
-                            .font(.system(size: 11))
+                            .foregroundColor(.orange)
+                            .font(.system(size: 10))
                         Text(String(format: "%.1f", product.rating))
-                            .font(AppTheme.Typography.caption)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
                         Text("(\(product.reviews))")
-                            .font(AppTheme.Typography.caption)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .font(.system(size: 11))
+                            .foregroundColor(AppTheme.Colors.textTertiary)
                     }
                 }
             }
-            .padding(16)
-            .frame(width: 220)
-            .background(AppTheme.Colors.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .padding(12)
+            .frame(width: 200)
+            .background(AppTheme.Colors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 24)
-                    .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 0.8)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 0.8)
             )
+            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
         }
         .buttonStyle(.plain)
     }
 }
+
+// MARK: - Category Button
 
 struct CategoryButton: View {
     let category: ShoppingCategory
@@ -393,16 +648,23 @@ struct CategoryButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 10) {
+            VStack(spacing: 8) {
                 Image(systemName: category.icon)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
-                    .frame(width: 52, height: 52)
-                    .background(category.color, in: RoundedRectangle(cornerRadius: 14))
+                    .frame(width: 54, height: 54)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(category.color)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 0.5)
+                    )
                 
                 Text(category.rawValue)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity)
@@ -411,60 +673,101 @@ struct CategoryButton: View {
     }
 }
 
+// MARK: - Creator Spotlight Card
+
 struct CreatorSpotlightCard: View {
     let shop: CreatorShop
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
-                AsyncImage(url: URL(string: shop.creator.avatarURL)) { image in
-                    image.resizable()
-                } placeholder: {
-                    Circle().fill(AppTheme.Colors.backgroundSecondary)
+                ZStack(alignment: .bottomTrailing) {
+                    AsyncImage(url: URL(string: shop.creator.avatarURL)) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [AppTheme.Colors.accent, AppTheme.Colors.secondary],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .overlay(
+                                Text(String(shop.creator.name.prefix(1)))
+                                    .font(.system(size: 22, weight: .bold))
+                                    .foregroundColor(.white)
+                            )
+                    }
+                    .frame(width: 52, height: 52)
+                    .clipShape(Circle())
+                    
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(AppTheme.Colors.verificationBlue)
+                        .background(Circle().fill(AppTheme.Colors.cardBackground).frame(width: 16, height: 16))
+                        .offset(x: 2, y: 2)
                 }
-                .frame(width: 56, height: 56)
-                .clipShape(Circle())
                 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(shop.creator.name)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
-                    Text("\(shop.productCount) products • \(shop.rating, specifier: "%.1f") ★")
-                        .font(AppTheme.Typography.caption)
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    
+                    HStack(spacing: 4) {
+                        Text("\(shop.productCount) products")
+                            .font(.system(size: 12, weight: .medium))
+                        Text("•")
+                        HStack(spacing: 2) {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 9))
+                                .foregroundColor(.orange)
+                            Text(String(format: "%.1f", shop.rating))
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                    }
+                    .foregroundColor(AppTheme.Colors.textSecondary)
                 }
             }
             
+            Divider()
+                .foregroundColor(AppTheme.Colors.divider.opacity(0.5))
+            
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text("Total sales")
-                        .font(AppTheme.Typography.caption)
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textTertiary)
                     Text("$\(shop.totalSales.formatted(.number.notation(.compactName)))")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                 }
                 
                 Spacer()
                 
-                Label("Follow", systemImage: "plus.circle.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.primary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(AppTheme.Colors.primary.opacity(0.12), in: Capsule())
+                Button { } label: {
+                    Text("Visit Shop")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(AppTheme.Colors.textPrimary, in: Capsule())
+                }
             }
         }
-        .frame(width: 260)
-        .padding(16)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .frame(width: 270)
+        .padding(14)
+        .background(AppTheme.Colors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 0.8)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 0.8)
         )
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
     }
 }
+
+// MARK: - Flash Deal Card
 
 struct FlashDealCard: View {
     let product: ShoppingProduct
@@ -472,60 +775,93 @@ struct FlashDealCard: View {
     
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 16) {
-                AsyncImage(url: URL(string: product.imageURL)) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                } placeholder: {
-                    Rectangle().fill(AppTheme.Colors.cardBackground)
+            HStack(spacing: 14) {
+                ZStack(alignment: .topLeading) {
+                    AsyncImage(url: URL(string: product.imageURL)) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    } placeholder: {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(AppTheme.Colors.backgroundSecondary)
+                            .overlay(
+                                Image(systemName: "bag.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                            )
+                    }
+                    .frame(width: 90, height: 90)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    
+                    if product.discount > 0 {
+                        Text("-\(product.discount)%")
+                            .font(.system(size: 9, weight: .heavy))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(AppTheme.Colors.error, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .padding(5)
+                    }
                 }
-                .frame(width: 96, height: 96)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
                 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(product.name)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                         .lineLimit(2)
                     
                     HStack(spacing: 6) {
                         Text("$\(String(format: "%.2f", product.price))")
-                            .font(.system(size: 18, weight: .bold))
+                            .font(.system(size: 17, weight: .bold))
                             .foregroundColor(AppTheme.Colors.textPrimary)
-                        Text("$\(product.originalPrice)")
-                            .font(AppTheme.Typography.caption)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .strikethrough()
+                        if product.discount > 0 {
+                            Text("$\(product.originalPrice)")
+                                .font(.system(size: 12))
+                                .foregroundColor(AppTheme.Colors.textTertiary)
+                                .strikethrough()
+                        }
                     }
                     
-                    HStack(spacing: 8) {
-                        Text("\(product.discount)% off")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(AppTheme.Colors.error, in: Capsule())
+                    // Stock progress bar
+                    VStack(alignment: .leading, spacing: 3) {
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(AppTheme.Colors.backgroundSecondary)
+                                    .frame(height: 4)
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(product.stockRemaining < 20 ? AppTheme.Colors.error : AppTheme.Colors.success)
+                                    .frame(width: geo.size.width * min(CGFloat(product.stockRemaining) / 100.0, 1.0), height: 4)
+                            }
+                        }
+                        .frame(height: 4)
                         
-                        Text("\(product.stockRemaining) left")
-                            .font(AppTheme.Typography.caption)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        Text("\(product.stockRemaining) left — selling fast!")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(product.stockRemaining < 20 ? AppTheme.Colors.error : AppTheme.Colors.textSecondary)
                     }
                 }
                 
-                Spacer(minLength: 12)
+                Spacer(minLength: 8)
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textTertiary)
             }
-            .padding(16)
-            .background(AppTheme.Colors.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .padding(12)
+            .background(AppTheme.Colors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 0.8)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 0.8)
             )
+            .shadow(color: .black.opacity(0.04), radius: 6, x: 0, y: 3)
         }
         .buttonStyle(.plain)
     }
 }
+
+// MARK: - Shopping Metric
 
 struct ShoppingMetric: Identifiable {
     let id = UUID()
@@ -567,6 +903,8 @@ struct ShoppingMetric: Identifiable {
     ]
 }
 
+// MARK: - Live Shopping Filter
+
 enum LiveShoppingFilter: String, CaseIterable, Identifiable {
     case live
     case drops
@@ -597,6 +935,8 @@ enum LiveShoppingFilter: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Metric Card
+
 struct ShoppingMetricCard: View {
     let metric: ShoppingMetric
     
@@ -606,29 +946,33 @@ struct ShoppingMetricCard: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(metric.iconColor)
                 .padding(10)
-                .background(metric.iconColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+                .background(metric.iconColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(metric.title)
-                    .font(AppTheme.Typography.caption)
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textSecondary)
                 Text(metric.value)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.Colors.textPrimary)
                 Text(metric.trend)
-                    .font(AppTheme.Typography.caption)
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(metric.trend.contains("+") ? AppTheme.Colors.success : AppTheme.Colors.textSecondary)
             }
         }
-        .padding(16)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.Colors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 0.8)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 0.8)
         )
+        .shadow(color: .black.opacity(0.04), radius: 6, x: 0, y: 3)
     }
 }
+
+// MARK: - Quick Filter Pill
 
 struct QuickFilterPill: View {
     let filter: LiveShoppingFilter
@@ -637,21 +981,22 @@ struct QuickFilterPill: View {
     
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: filter.icon)
+                    .font(.system(size: 12, weight: .semibold))
                 Text(filter.title)
+                    .font(.system(size: 13, weight: isSelected ? .bold : .medium))
             }
-            .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-            .foregroundColor(isSelected ? AppTheme.Colors.textPrimary : AppTheme.Colors.textSecondary)
+            .foregroundColor(isSelected ? .white : AppTheme.Colors.textSecondary)
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.vertical, 9)
             .background(
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(isSelected ? AppTheme.Colors.backgroundSecondary : Color.clear)
+                Capsule()
+                    .fill(isSelected ? AppTheme.Colors.textPrimary : AppTheme.Colors.cardBackground)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(isSelected ? AppTheme.Colors.divider.opacity(0.3) : AppTheme.Colors.divider.opacity(0.5), lineWidth: 1)
+                Capsule()
+                    .stroke(isSelected ? Color.clear : AppTheme.Colors.divider.opacity(0.5), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -659,6 +1004,7 @@ struct QuickFilterPill: View {
 }
 
 // MARK: - Product Detail Sheet
+
 struct ProductDetailSheet: View {
     let product: ShoppingProduct
     @Binding var showARTryOn: Bool
@@ -671,53 +1017,111 @@ struct ProductDetailSheet: View {
                 VStack(spacing: 24) {
                     // Product Images
                     TabView {
-                        ForEach(0..<3) { i in
+                        ForEach(0..<3, id: \.self) { _ in
                             AsyncImage(url: URL(string: product.imageURL)) { image in
                                 image.resizable().aspectRatio(contentMode: .fit)
                             } placeholder: {
-                                Rectangle().fill(AppTheme.Colors.cardBackground)
+                                Rectangle()
+                                    .fill(AppTheme.Colors.backgroundSecondary)
+                                    .overlay(
+                                        Image(systemName: "tshirt.fill")
+                                            .font(.system(size: 48))
+                                            .foregroundColor(AppTheme.Colors.textTertiary)
+                                    )
                             }
                         }
                     }
-                    .tabViewStyle(.page)
-                    .frame(height: 400)
+                    .tabViewStyle(.page(indexDisplayMode: .always))
+                    .frame(height: 380)
                     
                     VStack(spacing: 20) {
                         // Price & Title
                         VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 8) {
+                                Text(product.brand.uppercased())
+                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                                    .tracking(1.0)
+                                
+                                if product.hasARTryOn {
+                                    Label("AR", systemImage: "arkit")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(AppTheme.Colors.accent)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(AppTheme.Colors.accent.opacity(0.12), in: Capsule())
+                                }
+                            }
+                            
                             Text(product.name)
-                                .font(.system(size: 24, weight: .bold))
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
                                 .foregroundColor(AppTheme.Colors.textPrimary)
                             
-                            HStack {
+                            HStack(spacing: 8) {
                                 Text("$\(String(format: "%.2f", product.price))")
                                     .font(.system(size: 28, weight: .bold))
-                                    .foregroundColor(AppTheme.Colors.primary)
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
                                 
                                 if product.discount > 0 {
                                     Text("$\(product.originalPrice)")
-                                        .font(.system(size: 18))
+                                        .font(.system(size: 16))
                                         .foregroundColor(AppTheme.Colors.textTertiary)
                                         .strikethrough()
+                                    
+                                    Text("Save \(product.discount)%")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(AppTheme.Colors.success)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(AppTheme.Colors.success.opacity(0.12), in: Capsule())
                                 }
                             }
                             
                             HStack(spacing: 16) {
                                 HStack(spacing: 4) {
-                                    Image(systemName: "star.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.yellow)
+                                    ForEach(0..<5, id: \.self) { i in
+                                        Image(systemName: i < Int(product.rating) ? "star.fill" : "star")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.orange)
+                                    }
                                     Text(String(format: "%.1f", product.rating))
-                                        .font(.system(size: 15, weight: .semibold))
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(AppTheme.Colors.textPrimary)
                                 }
                                 
                                 Text("•")
                                     .foregroundColor(AppTheme.Colors.textTertiary)
                                 
                                 Text("\(product.reviews) reviews")
-                                    .font(.system(size: 15))
+                                    .font(.system(size: 14))
                                     .foregroundColor(AppTheme.Colors.textSecondary)
                             }
+                            
+                            if product.stockRemaining < 30 {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "flame.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.orange)
+                                    Text("Only \(product.stockRemaining) left — order soon!")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(AppTheme.Colors.error)
+                                }
+                                .padding(.top, 4)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        Divider()
+                        
+                        // Description
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Description")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                            Text(product.description)
+                                .font(.system(size: 15))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                .lineSpacing(4)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         
@@ -726,17 +1130,23 @@ struct ProductDetailSheet: View {
                             Button {
                                 showARTryOn = true
                             } label: {
-                                HStack(spacing: 12) {
+                                HStack(spacing: 10) {
                                     Image(systemName: "arkit")
                                         .font(.system(size: 18, weight: .bold))
                                     Text("Try with AR")
-                                        .font(.system(size: 17, weight: .bold))
+                                        .font(.system(size: 16, weight: .bold))
                                 }
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(.purple)
-                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .padding(.vertical, 15)
+                                .background(
+                                    LinearGradient(
+                                        colors: [AppTheme.Colors.accent, .purple],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ),
+                                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                )
                             }
                         }
                         
@@ -744,18 +1154,17 @@ struct ProductDetailSheet: View {
                         Button {
                             showCheckout = true
                         } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "cart.fill")
-                                    .font(.system(size: 18, weight: .bold))
-                                Text("Buy Now - 1-Click Checkout")
-                                    .font(.system(size: 17, weight: .bold))
+                            HStack(spacing: 10) {
+                                Image(systemName: "bag.fill")
+                                    .font(.system(size: 16, weight: .bold))
+                                Text("Buy Now — 1-Click Checkout")
+                                    .font(.system(size: 16, weight: .bold))
                             }
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 18)
-                            .background(AppTheme.Colors.primary)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                            .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 4)
+                            .padding(.vertical, 17)
+                            .background(AppTheme.Colors.premiumGradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 6)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -769,8 +1178,8 @@ struct ProductDetailSheet: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .font(.system(size: 26))
+                            .foregroundStyle(AppTheme.Colors.textTertiary)
                     }
                 }
             }
@@ -779,6 +1188,7 @@ struct ProductDetailSheet: View {
 }
 
 // MARK: - AR Try-On View
+
 struct ARTryOnView: View {
     let product: ShoppingProduct
     @Environment(\.dismiss) private var dismiss
@@ -787,30 +1197,243 @@ struct ARTryOnView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             
-            VStack {
-                Text("AR Try-On View")
-                    .font(.system(size: 24, weight: .bold))
+            VStack(spacing: 20) {
+                Spacer()
+                
+                Image(systemName: "arkit")
+                    .font(.system(size: 56, weight: .light))
+                    .foregroundColor(.white.opacity(0.8))
+                
+                Text("AR Try-On")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                 
-                Text("ARKit integration coming soon")
-                    .foregroundColor(.white.opacity(0.7))
+                Text("Point your camera to try on\n\(product.name)")
+                    .font(.system(size: 16))
+                    .foregroundColor(.white.opacity(0.6))
+                    .multilineTextAlignment(.center)
                 
-                Button("Close") {
+                Spacer()
+                
+                Button {
                     dismiss()
+                } label: {
+                    Text("Close")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
-                .padding()
+                .padding(.horizontal, 24)
+                .padding(.bottom, 40)
             }
         }
     }
 }
 
 // MARK: - Live Shopping Stream View
+
 struct LiveShoppingStreamView: View {
     let show: LiveShoppingShow
+    @Environment(\.dismiss) private var dismiss
+    @State private var showProducts = true
+    @State private var chatMessage = ""
     
     var body: some View {
-        Text("Live Shopping Stream")
-            .navigationTitle(show.title)
+        ZStack(alignment: .bottom) {
+            // Video area
+            ZStack(alignment: .top) {
+                Color.black.ignoresSafeArea()
+                
+                // Simulated live stream
+                LinearGradient(
+                    colors: [
+                        Color(hexString: "1a1a2e") ?? .black,
+                        Color(hexString: "16213e") ?? .black,
+                        Color(hexString: "0f3460") ?? .black
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+                
+                // Top overlay controls
+                VStack {
+                    HStack(spacing: 12) {
+                        // Creator info
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [AppTheme.Colors.primary, .orange],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 36, height: 36)
+                                .overlay(
+                                    Text(String(show.creator.name.prefix(1)))
+                                        .font(.system(size: 15, weight: .bold))
+                                        .foregroundColor(.white)
+                                )
+                            
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(show.creator.name)
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(.white)
+                                Text("\(show.viewerCount.abbreviated) watching")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        
+                        // LIVE badge
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 6, height: 6)
+                            Text("LIVE")
+                                .font(.system(size: 11, weight: .heavy))
+                                .foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.red, in: Capsule())
+                        
+                        Spacer()
+                        
+                        Button { dismiss() } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 32, height: 32)
+                                .background(.ultraThinMaterial, in: Circle())
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    
+                    Spacer()
+                    
+                    // Stream title
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(show.title)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.white)
+                        
+                        Text(show.description)
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.7))
+                            .lineLimit(2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, showProducts ? 300 : 80)
+                }
+            }
+            
+            // Products tray
+            if showProducts {
+                VStack(spacing: 0) {
+                    // Handle bar
+                    HStack {
+                        HStack(spacing: 8) {
+                            Image(systemName: "bag.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(AppTheme.Colors.primary)
+                            Text("Shop this stream")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                        }
+                        
+                        Spacer()
+                        
+                        Button {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                showProducts.toggle()
+                            }
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                .frame(width: 30, height: 30)
+                                .background(AppTheme.Colors.backgroundSecondary, in: Circle())
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 12)
+                    
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(0..<4, id: \.self) { i in
+                                StreamProductCard(index: i)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 20)
+                    }
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(AppTheme.Colors.cardBackground)
+                        .shadow(color: .black.opacity(0.2), radius: 20, x: 0, y: -8)
+                        .ignoresSafeArea(edges: .bottom)
+                )
+                .transition(.move(edge: .bottom))
+            }
+        }
+        .navigationBarHidden(true)
+    }
+}
+
+// MARK: - Stream Product Card
+
+struct StreamProductCard: View {
+    let index: Int
+    
+    private var productNames: [String] {
+        ["Creator Hoodie", "Logo Tee", "Snapback Cap", "Signature Sneakers"]
+    }
+    
+    private var productPrices: [String] {
+        ["$59.99", "$34.99", "$29.99", "$149.99"]
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(AppTheme.Colors.backgroundSecondary)
+                .frame(width: 130, height: 130)
+                .overlay(
+                    Image(systemName: "tshirt.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                )
+            
+            Text(productNames[index % productNames.count])
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .lineLimit(1)
+            
+            Text(productPrices[index % productPrices.count])
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+            
+            Button { } label: {
+                Text("Add to Bag")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(AppTheme.Colors.textPrimary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+        }
+        .frame(width: 130)
     }
 }
 

@@ -57,6 +57,11 @@ class BackgroundPlayService: ObservableObject {
     
     /// Start background audio playback for video
     func startBackgroundPlay(for video: Video, at time: TimeInterval = 0) async throws {
+        // Premium gate: background play requires MyChannel Plus+
+        guard StoreKitService.shared.isPremium else {
+            throw BackgroundPlayError.premiumRequired
+        }
+        
         guard isBackgroundPlayEnabled else {
             throw BackgroundPlayError.backgroundPlayDisabled
         }
@@ -468,7 +473,7 @@ enum BackgroundPlayError: Error {
 
 extension PremiumService {
     var hasPremium: Bool {
-        // Check if user has premium subscription
-        return true // Placeholder - implement actual premium check
+        // Single source of truth: StoreKit entitlements
+        return StoreKitService.shared.isPremium
     }
 }

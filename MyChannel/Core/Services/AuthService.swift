@@ -225,38 +225,37 @@ class AuthService: ObservableObject {
         guard AppConfig.Social.enableAppleLogin else {
             throw AuthError.socialLoginDisabled
         }
-        
+
         authState = .authenticating
         isLoading = true
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            let request = ASAuthorizationAppleIDProvider().createRequest()
-            request.requestedScopes = [.fullName, .email]
-            
-            let authorizationController = ASAuthorizationController(authorizationRequests: [request])
-            let delegate = AppleSignInDelegate { [weak self] result in
-                Task { @MainActor in
-                    do {
-                        switch result {
-                        case .success(let appleSignInResult):
-                            try await self?.processAppleSignIn(appleSignInResult)
-                            continuation.resume()
-                        case .failure(let error):
-                            self?.authState = .error(error.localizedDescription)
-                            self?.isLoading = false
-                            continuation.resume(throwing: error)
-                        }
-                    } catch {
-                        self?.authState = .error(error.localizedDescription)
-                        self?.isLoading = false
-                        continuation.resume(throwing: error)
-                    }
-                }
-            }
-            
-            authorizationController.delegate = delegate
-            authorizationController.performRequests()
-        }
+        defer { isLoading = false }
+
+        // Use FirebaseAppleAuthService which authenticates directly against Firebase,
+        // avoiding any dependency on the custom backend endpoint (/auth/apple).
+        let payload = try await FirebaseAppleAuthService.shared.signIn()
+
+        let user = User(
+            id: payload.uid,
+            username: payload.email?.components(separatedBy: "@").first ?? "apple_user",
+            displayName: payload.displayName.isEmpty ? "Apple User" : payload.displayName,
+            email: payload.email ?? "",
+            profileImageURL: nil,
+            isVerified: true,
+            isCreator: true
+        )
+
+        _ = keychain.save(user.id, for: "userId")
+        currentUser = user
+        isAuthenticated = true
+        authState = .authenticated
+        broadcastLogin(user)
+
+        await AnalyticsService.shared.trackEvent("user_sign_in", parameters: [
+            "method": "apple",
+            "user_id": user.id
+        ])
+
+        NotificationManager.shared.showSuccess("Welcome, \(user.displayName)!")
     }
     
     func signInWithGoogle() async throws {
@@ -631,45 +630,6 @@ class AuthService: ObservableObject {
         return deviceId
     }
     
-    // MARK: - Apple Sign In Processing
-    private func processAppleSignIn(_ result: AppleSignInResult) async throws {
-        let request = AppleSignInRequest(
-            identityToken: result.identityToken,
-            authorizationCode: result.authorizationCode,
-            fullName: result.fullName,
-            email: result.email,
-            deviceId: await getDeviceId()
-        )
-        
-        let response: APIResponse<SignInResponse> = try await networkService.post(
-            endpoint: .appleSignIn,
-            body: request,
-            responseType: APIResponse<SignInResponse>.self
-        )
-        
-        // Store tokens
-        _ = keychain.save(response.data.accessToken, for: "accessToken")
-        _ = keychain.save(response.data.refreshToken, for: "refreshToken")
-        _ = keychain.save(response.data.user.id, for: "userId")
-        
-        // Update state
-        currentUser = response.data.user
-        isAuthenticated = true
-        authState = .authenticated
-        isLoading = false
-        broadcastLogin(response.data.user)
-        
-        // Setup token refresh
-        scheduleTokenRefresh(expiresIn: response.data.expiresIn)
-        
-        // Track analytics
-        await AnalyticsService.shared.trackEvent("user_sign_in", parameters: [
-            "method": "apple",
-            "user_id": response.data.user.id
-        ])
-        
-        NotificationManager.shared.showSuccess("Welcome, \(response.data.user.displayName)!")
-    }
 }
 
 // MARK: - Authentication Errors
@@ -767,11 +727,20 @@ struct AppleSignInResult {
     let email: String?
 }
 
-class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate {
+class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
     private let completion: (Result<AppleSignInResult, Error>) -> Void
+    /// Strong self-reference to prevent deallocation before the callback fires.
+    var retainSelf: AppleSignInDelegate?
     
     init(completion: @escaping (Result<AppleSignInResult, Error>) -> Void) {
         self.completion = completion
+    }
+    
+    // MARK: - Presentation Context (required on iPad)
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.keyWindow ?? UIWindow()
     }
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
@@ -781,6 +750,7 @@ class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate {
                   let authorizationCodeData = appleIDCredential.authorizationCode,
                   let authorizationCode = String(data: authorizationCodeData, encoding: .utf8) else {
                 completion(.failure(AuthError.unknown))
+                retainSelf = nil
                 return
             }
             
@@ -795,10 +765,12 @@ class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate {
         } else {
             completion(.failure(AuthError.unknown))
         }
+        retainSelf = nil
     }
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
         completion(.failure(error))
+        retainSelf = nil
     }
 }
 

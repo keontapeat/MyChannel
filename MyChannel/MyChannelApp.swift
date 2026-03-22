@@ -111,6 +111,9 @@ struct MyChannelApp: App {
                         switch newPhase {
                         case .active:
                             LiveTVManager.shared.onAppBecameActive()
+                            // 🔒 ATT: Request tracking permission (Guideline 5.1.2(i))
+                            // Must fire after app is active and first screen is visible.
+                            TrackingTransparencyService.shared.requestTrackingPermissionIfNeeded()
                         case .background:
                             LiveTVManager.shared.onAppEnteredBackground()
                         default:

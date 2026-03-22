@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct BlockedUsersView: View {
     @Environment(\.dismiss) private var dismiss
@@ -251,39 +254,49 @@ struct BlockedUsersView: View {
     
     // MARK: - Helper Methods
     private func loadBlockedUsers() {
-        // Simulate loading blocked users
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            // For demo, create some sample blocked users
-            blockedUsers = [
-                BlockedUser(
-                    id: "1",
-                    username: "spamuser123",
-                    displayName: "Spam User",
-                    profileImageURL: nil,
-                    blockedDate: Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date(),
-                    reason: "Spam comments"
-                ),
-                BlockedUser(
-                    id: "2",
-                    username: "trollaccount",
-                    displayName: "Troll Account",
-                    profileImageURL: nil,
-                    blockedDate: Calendar.current.date(byAdding: .day, value: -14, to: Date()) ?? Date(),
-                    reason: "Inappropriate behavior"
-                ),
-                BlockedUser(
-                    id: "3",
-                    username: "hateruser",
-                    displayName: "Negative Nancy",
-                    profileImageURL: nil,
-                    blockedDate: Calendar.current.date(byAdding: .day, value: -21, to: Date()) ?? Date(),
-                    reason: "Harassment"
-                )
-            ]
-            
+        #if canImport(FirebaseFirestore)
+        guard let currentUserId = authManager.currentUser?.id else {
             isLoading = false
-            showingEmptyState = blockedUsers.isEmpty
+            showingEmptyState = true
+            return
         }
+        let db = Firestore.firestore()
+        Task {
+            do {
+                let snapshot = try await db.collection("users").document(currentUserId)
+                    .collection("blockedUsers")
+                    .order(by: "createdAt", descending: true)
+                    .getDocuments()
+                
+                let users = snapshot.documents.compactMap { doc -> BlockedUser? in
+                    let data = doc.data()
+                    let timestamp = data["createdAt"] as? Timestamp
+                    return BlockedUser(
+                        id: doc.documentID,
+                        username: data["blockedUserUsername"] as? String ?? "unknown",
+                        displayName: data["blockedUserDisplayName"] as? String ?? "Unknown User",
+                        profileImageURL: data["blockedUserProfileImage"] as? String,
+                        blockedDate: timestamp?.dateValue() ?? Date(),
+                        reason: data["reason"] as? String ?? "user_initiated_block"
+                    )
+                }
+                await MainActor.run {
+                    blockedUsers = users
+                    isLoading = false
+                    showingEmptyState = users.isEmpty
+                }
+            } catch {
+                print("🚨 [BlockedUsers] Error loading: \(error)")
+                await MainActor.run {
+                    isLoading = false
+                    showingEmptyState = true
+                }
+            }
+        }
+        #else
+        isLoading = false
+        showingEmptyState = true
+        #endif
     }
     
     private func unblockUser(_ user: BlockedUser) {
@@ -293,10 +306,16 @@ struct BlockedUsersView: View {
             blockedUsers.removeAll { $0.id == user.id }
         }
         
-        // Simulate API call
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            // Show success feedback if needed
+        #if canImport(FirebaseFirestore)
+        guard let currentUserId = authManager.currentUser?.id else { return }
+        let db = Firestore.firestore()
+        Task {
+            try? await db.collection("users").document(currentUserId)
+                .collection("blockedUsers").document(user.id)
+                .delete()
+            print("✅ [BlockedUsers] Unblocked \(user.username)")
         }
+        #endif
     }
 }
 

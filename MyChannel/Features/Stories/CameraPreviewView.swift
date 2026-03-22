@@ -196,6 +196,79 @@ class CameraManager: NSObject, ObservableObject {
             }
         }
     }
+    
+    // MARK: - Photo Capture
+    private var photoCaptureCompletion: ((URL?) -> Void)?
+    
+    func capturePhoto(completion: @escaping (URL?) -> Void) {
+        photoCaptureCompletion = completion
+        sessionQueue.async { [weak self] in
+            guard let self = self, let photoOutput = self.photoOutput else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            let settings = AVCapturePhotoSettings()
+            photoOutput.capturePhoto(with: settings, delegate: self)
+        }
+    }
+    
+    // MARK: - Video Recording
+    private var videoRecordingCompletion: ((URL?) -> Void)?
+    
+    func startVideoRecording() {
+        sessionQueue.async { [weak self] in
+            guard let self = self, let videoOutput = self.videoOutput,
+                  !videoOutput.isRecording else { return }
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension("mp4")
+            videoOutput.startRecording(to: tempURL, recordingDelegate: self)
+        }
+    }
+    
+    func stopVideoRecording(completion: @escaping (URL?) -> Void) {
+        videoRecordingCompletion = completion
+        sessionQueue.async { [weak self] in
+            guard let self = self, let videoOutput = self.videoOutput,
+                  videoOutput.isRecording else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            videoOutput.stopRecording()
+        }
+    }
+}
+
+// MARK: - AVCapturePhotoCaptureDelegate
+extension CameraManager: AVCapturePhotoCaptureDelegate {
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        guard error == nil, let data = photo.fileDataRepresentation() else {
+            DispatchQueue.main.async { self.photoCaptureCompletion?(nil) }
+            return
+        }
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("jpg")
+        do {
+            try data.write(to: tempURL)
+            DispatchQueue.main.async { self.photoCaptureCompletion?(tempURL) }
+        } catch {
+            print("Failed to write photo: \(error)")
+            DispatchQueue.main.async { self.photoCaptureCompletion?(nil) }
+        }
+    }
+}
+
+// MARK: - AVCaptureFileOutputRecordingDelegate
+extension CameraManager: AVCaptureFileOutputRecordingDelegate {
+    func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
+        if let error = error {
+            print("Video recording error: \(error)")
+            DispatchQueue.main.async { self.videoRecordingCompletion?(nil) }
+        } else {
+            DispatchQueue.main.async { self.videoRecordingCompletion?(outputFileURL) }
+        }
+    }
 }
 
 // MARK: - Camera Preview UIViewRepresentable

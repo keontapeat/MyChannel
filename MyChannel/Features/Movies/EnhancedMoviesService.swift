@@ -28,6 +28,12 @@ class EnhancedMoviesService: ObservableObject {
     
     // MARK: - Public Methods
     
+    /// Seed popular movies from pre-loaded Home data (avoids double-fetching)
+    func seedPopular(_ movies: [FreeMovie]) {
+        guard popularMovies.isEmpty, !movies.isEmpty else { return }
+        popularMovies = movies
+    }
+    
     func loadPopularMovies(forceRefresh: Bool = false) async {
         guard !isLoading else { return }
         

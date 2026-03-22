@@ -250,6 +250,8 @@ class AuthenticationManager: ObservableObject {
                 isAuthenticated = true
                 authState = .authenticated
                 await loadFullProfileAfterSignIn(uid: payload.uid, fallback: basicUser)
+                // 🔥 FIX: Post login notification so AppState hydrates collections + attaches listeners
+                NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
                 if let user = currentUser {
                     Task {
                         await SmartUserSeederService.shared.registerRealUser(user)
@@ -293,6 +295,9 @@ class AuthenticationManager: ObservableObject {
             
             isAuthenticated = true
             authState = .authenticated
+            
+            // 🔥 FIX: Post login notification so AppState hydrates collections + attaches listeners
+            NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
             
             if let user = currentUser {
                 Task {
@@ -363,7 +368,7 @@ class AuthenticationManager: ObservableObject {
             profileImageURL: user.profileImageURL,
             bannerImageURL: user.bannerImageURL,
             bio: user.bio,
-            subscriberCount: user.subscriberCount + Int.random(in: 0...5),
+            subscriberCount: user.subscriberCount,
             videoCount: user.videoCount,
             isVerified: user.isVerified,
             isCreator: user.isCreator,

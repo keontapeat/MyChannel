@@ -6,6 +6,51 @@ struct AssetStory: Identifiable, Equatable {
     let media: AssetMedia
     let username: String
     let authorImageName: String
+    var creatorId: String = ""
+}
+
+// MARK: - Instagram-style story grouping by user
+struct UserStoryGroup: Identifiable {
+    let id: String // username lowercased
+    let username: String
+    let authorImageName: String
+    let stories: [AssetStory]
+    
+    var isSeen: Bool {
+        StorySeenTracker.shared.seenUsernames.contains(username.lowercased())
+    }
+    
+    static func group(from stories: [AssetStory]) -> [UserStoryGroup] {
+        var dict: [String: (username: String, image: String, stories: [AssetStory])] = [:]
+        var order: [String] = []
+        
+        for story in stories {
+            let key = story.username.lowercased()
+            if dict[key] == nil {
+                dict[key] = (username: story.username, image: story.authorImageName, stories: [story])
+                order.append(key)
+            } else {
+                dict[key]?.stories.append(story)
+            }
+        }
+        
+        return order.compactMap { key in
+            guard let entry = dict[key] else { return nil }
+            return UserStoryGroup(
+                id: key,
+                username: entry.username,
+                authorImageName: entry.image,
+                stories: entry.stories
+            )
+        }
+    }
+    
+    /// Sort groups: unseen first, then seen (Instagram ordering)
+    static func sorted(_ groups: [UserStoryGroup]) -> [UserStoryGroup] {
+        let unseen = groups.filter { !$0.isSeen }
+        let seen = groups.filter { $0.isSeen }
+        return unseen + seen
+    }
 }
 
 enum AssetMedia: Equatable {
@@ -35,18 +80,37 @@ struct HeroMatch: ViewModifier {
     }
 }
 
-// MARK: - Story Bubble
+// MARK: - Story Bubble (Instagram-style ring)
 struct AssetBouncyStoryBubble: View {
     let story: AssetStory
+    let isSeen: Bool
     let onTap: (AssetStory) -> Void
     let ns: Namespace.ID?
     let activeHeroId: UUID?
 
-    init(story: AssetStory, onTap: @escaping (AssetStory) -> Void, ns: Namespace.ID? = nil, activeHeroId: UUID? = nil) {
+    init(story: AssetStory, isSeen: Bool = false, onTap: @escaping (AssetStory) -> Void, ns: Namespace.ID? = nil, activeHeroId: UUID? = nil) {
         self.story = story
+        self.isSeen = isSeen
         self.onTap = onTap
         self.ns = ns
         self.activeHeroId = activeHeroId
+    }
+
+    // Instagram gradient ring colors
+    private var ringGradient: LinearGradient {
+        if isSeen {
+            return LinearGradient(
+                colors: [Color(.systemGray4), Color(.systemGray3)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        } else {
+            return LinearGradient(
+                colors: [.red, .orange, .pink, .purple],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
     }
 
     var body: some View {
@@ -56,42 +120,20 @@ struct AssetBouncyStoryBubble: View {
         }) {
             VStack(spacing: 8) {
                 ZStack {
+                    // Instagram-style gradient ring (colored = unseen, gray = seen)
                     Circle()
-                        .fill(Color.white)
+                        .stroke(ringGradient, lineWidth: isSeen ? 1.5 : 3)
                         .frame(width: 80, height: 80)
-                        .shadow(color: .black.opacity(0.12), radius: 5, x: 0, y: 2)
 
+                    // White gap between ring and avatar
                     Circle()
-                        .fill(Color(.systemGray5))
+                        .fill(Color(.systemBackground))
                         .frame(width: 74, height: 74)
-                        .overlay(
-                            Group {
-                                if let uiImage = UIImage(named: story.authorImageName) {
-                                    Image(uiImage: uiImage)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 74, height: 74)
-                                        .clipShape(Circle())
-                                } else {
-                                    ZStack {
-                                        LinearGradient(
-                                            colors: [.blue.opacity(0.28), .purple.opacity(0.28)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                        Text(String(story.username.prefix(2)).uppercased())
-                                            .font(.system(size: 20, weight: .bold))
-                                            .foregroundColor(.white)
-                                    }
-                                    .frame(width: 74, height: 74)
-                                    .clipShape(Circle())
-                                }
-                            }
-                        )
 
-                    Circle()
-                        .stroke(Color.white, lineWidth: 3)
-                        .frame(width: 80, height: 80)
+                    // Avatar
+                    avatarImage
+                        .frame(width: 68, height: 68)
+                        .clipShape(Circle())
                 }
                 .opacity(activeHeroId == story.id ? 0 : 1)
                 .modifier(HeroMatch(ns: ns, id: story.id))
@@ -110,6 +152,44 @@ struct AssetBouncyStoryBubble: View {
         .accessibilityLabel("\(story.username) story")
         .accessibilityAddTraits(.isButton)
     }
+    
+    @ViewBuilder
+    private var avatarImage: some View {
+        if let remoteURL = URL(string: story.authorImageName), remoteURL.scheme == "https" || remoteURL.scheme == "http" {
+            AsyncImage(url: remoteURL) { phase in
+                switch phase {
+                case .success(let img):
+                    img.resizable().scaledToFill()
+                default:
+                    ZStack {
+                        LinearGradient(
+                            colors: [.blue.opacity(0.28), .purple.opacity(0.28)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        Text(String(story.username.prefix(2)).uppercased())
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                }
+            }
+        } else if let uiImage = UIImage(named: story.authorImageName) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFill()
+        } else {
+            ZStack {
+                LinearGradient(
+                    colors: [.blue.opacity(0.28), .purple.opacity(0.28)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                Text(String(story.username.prefix(2)).uppercased())
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+            }
+        }
+    }
 }
 
 // MARK: - Stories Row
@@ -119,6 +199,7 @@ struct AssetBouncyStoriesRow: View {
     let onAddStory: () -> Void
     let ns: Namespace.ID?
     let activeHeroId: UUID?
+    @ObservedObject private var seenTracker = StorySeenTracker.shared
 
     init(
         stories: [AssetStory],
@@ -134,6 +215,12 @@ struct AssetBouncyStoriesRow: View {
         self.activeHeroId = activeHeroId
     }
 
+    // Group stories by user, one bubble per user (Instagram-style)
+    private var userGroups: [UserStoryGroup] {
+        let groups = UserStoryGroup.group(from: stories)
+        return UserStoryGroup.sorted(groups)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Rectangle()
@@ -146,15 +233,19 @@ struct AssetBouncyStoriesRow: View {
                     addStoryButton
                         .padding(.leading, 20)
 
-                    ForEach(stories) { story in
-                        AssetBouncyStoryBubble(
-                            story: story,
-                            onTap: onStoryTap,
-                            ns: ns,
-                            activeHeroId: activeHeroId
-                        )
-                        .id(story.id)
-                        .contentShape(Rectangle())
+                    ForEach(userGroups) { group in
+                        // Show the first story as the representative bubble for this user
+                        if let representative = group.stories.first {
+                            AssetBouncyStoryBubble(
+                                story: representative,
+                                isSeen: group.isSeen,
+                                onTap: onStoryTap,
+                                ns: ns,
+                                activeHeroId: activeHeroId
+                            )
+                            .id(group.id)
+                            .contentShape(Rectangle())
+                        }
                     }
 
                     Color.clear.frame(width: 20)
@@ -262,14 +353,41 @@ struct AssetStoryViewerView: View {
     private var content: some View {
         switch story.media {
         case .image(let name):
-            Image(name)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding()
+            if let remoteURL = URL(string: name), remoteURL.scheme == "https" || remoteURL.scheme == "http" {
+                AsyncImage(url: remoteURL) { phase in
+                    switch phase {
+                    case .success(let img):
+                        img.resizable().scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    case .failure:
+                        ZStack {
+                            Color.black
+                            Image(systemName: "photo")
+                                .font(.system(size: 48))
+                                .foregroundStyle(.white.opacity(0.5))
+                        }
+                    case .empty:
+                        ZStack {
+                            Color.black
+                            ProgressView().tint(.white)
+                        }
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+            } else {
+                Image(name)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding()
+            }
         case .video(let resource):
-            if let url = Bundle.main.url(forResource: resource, withExtension: nil) {
-                VideoPlayer(player: AVPlayer(url: url))
+            if let remoteURL = URL(string: resource), remoteURL.scheme == "https" || remoteURL.scheme == "http" {
+                RawPlayerLayerView(player: AVPlayer(url: remoteURL), videoGravity: .resizeAspectFill)
+                    .ignoresSafeArea()
+            } else if let url = Bundle.main.url(forResource: resource, withExtension: nil) {
+                RawPlayerLayerView(player: AVPlayer(url: url), videoGravity: .resizeAspectFill)
                     .ignoresSafeArea()
             } else {
                 Text("Video not found").foregroundStyle(.white)

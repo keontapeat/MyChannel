@@ -125,7 +125,7 @@ struct MusicSearchView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                     
-                    let chips = ["Hip-Hop", "R&B", "Detroit", "Flint", "Local Artists", "Workout", "Chill", "Party"]
+                    let chips = ["Hip-Hop", "R&B", "Michigan Rap", "Detroit", "Trap", "Workout", "Chill", "Party"]
                     WrapChipsView(items: chips) { label in
                         Button {
                             query = label

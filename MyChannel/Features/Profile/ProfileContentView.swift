@@ -378,11 +378,6 @@ struct ProfileVideosView: View {
         }
     }
     
-    private var unpinnedSortedVideos: [Video] {
-        let pinnedSet = Set(pinnedVideos.map { $0.id })
-        return sortedVideos.filter { !pinnedSet.contains($0.id) }
-    }
-    
     private var filteredVideoIDs: [String] {
         filteredVideos.map { $0.id }
     }
@@ -440,7 +435,7 @@ struct ProfileVideosView: View {
             }
         } else if layoutMode == .grid2 {
             LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(Array(unpinnedSortedVideos.enumerated()), id: \.element.id) { index, video in
+                ForEach(Array(sortedVideos.enumerated()), id: \.element.id) { index, video in
                     let isSelected = managementContext?.selectedIDs.wrappedValue.contains(video.id) ?? false
                     ProfileVideoCard(
                         video: video,
@@ -459,7 +454,7 @@ struct ProfileVideosView: View {
                         }
                         .onAppear {
                             // 🔥 THERMONUCLEAR: Prefetch when 6 from bottom (was 3)
-                            if index >= unpinnedSortedVideos.count - 6 {
+                            if index >= sortedVideos.count - 6 {
                                 Task {
                                     if !isLoadingMore {
                                         await onLoadMore?()
@@ -468,8 +463,8 @@ struct ProfileVideosView: View {
                             }
                             
                             // 🔥 THERMONUCLEAR: Prefetch next 12 thumbnails
-                            let prefetchRange = (index + 1)..<min(unpinnedSortedVideos.count, index + 13)
-                            let urls = prefetchRange.compactMap { URL(string: unpinnedSortedVideos[$0].thumbnailURL) }
+                            let prefetchRange = (index + 1)..<min(sortedVideos.count, index + 13)
+                            let urls = prefetchRange.compactMap { URL(string: sortedVideos[$0].thumbnailURL) }
                             ImagePrefetcher.shared.prefetch(urls: urls)
                         }
                 }
@@ -489,7 +484,7 @@ struct ProfileVideosView: View {
         } else {
             // Single video view: one full-width 16:9 card per row
             LazyVStack(spacing: 12) {
-                ForEach(Array(unpinnedSortedVideos.enumerated()), id: \.element.id) { index, video in
+                ForEach(Array(sortedVideos.enumerated()), id: \.element.id) { index, video in
                     let isSelected = managementContext?.selectedIDs.wrappedValue.contains(video.id) ?? false
                     FullWidthVideoCard(
                         video: video,
@@ -504,7 +499,7 @@ struct ProfileVideosView: View {
                         .padding(.horizontal, 16)
                         .onAppear {
                             // 🔥 THERMONUCLEAR: Prefetch when 6 from bottom (was 3)
-                            if index >= unpinnedSortedVideos.count - 6 {
+                            if index >= sortedVideos.count - 6 {
                                 Task {
                                     if !isLoadingMore {
                                         await onLoadMore?()
@@ -513,8 +508,8 @@ struct ProfileVideosView: View {
                             }
                             
                             // 🔥 THERMONUCLEAR: Prefetch next 12 thumbnails
-                            let prefetchRange = (index + 1)..<min(unpinnedSortedVideos.count, index + 13)
-                            let urls = prefetchRange.compactMap { URL(string: unpinnedSortedVideos[$0].thumbnailURL) }
+                            let prefetchRange = (index + 1)..<min(sortedVideos.count, index + 13)
+                            let urls = prefetchRange.compactMap { URL(string: sortedVideos[$0].thumbnailURL) }
                             ImagePrefetcher.shared.prefetch(urls: urls)
                         }
                 }

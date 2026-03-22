@@ -82,42 +82,31 @@ struct ContinueWatchingSection: View {
         Task { @MainActor in
             isLoading = true
             
-            // Fetch watch history with progress
+            // Fetch watch history from Firestore (already contains watchProgress)
             let history = await historyService.fetch(userId: userId, limit: 20)
             
             // Filter to videos that are partially watched (10% - 90% complete)
+            // Uses the REAL watchProgress stored in Firestore, not mock data
             let partiallyWatched = history.compactMap { historyItem -> ContinueWatchingItem? in
                 // Only process video content types
                 guard historyItem.contentType == .video || historyItem.contentType == .flick else { return nil }
                 
-                let progress = historyService.getProgress(for: historyItem.id, userId: userId)
+                // Use REAL progress from Firestore document
+                let progress = historyItem.watchProgress
                 guard progress > 0.1 && progress < 0.9 else { return nil }
                 
-                // Convert WatchHistoryItem to Video
-                let video = Video(
-                    id: historyItem.contentId,
-                    title: historyItem.title,
-                    description: "",
-                    thumbnailURL: historyItem.thumbnailURL,
-                    videoURL: "",
-                    duration: historyItem.duration,
-                    viewCount: 0,
-                    likeCount: 0,
-                    creator: User(
-                        id: historyItem.creatorId,
-                        username: historyItem.creatorName,
-                        displayName: historyItem.creatorName,
-                        email: "",
-                        profileImageURL: ""
-                    ),
-                    category: .entertainment
-                )
+                // Convert WatchHistoryItem to Video with proper data
+                let video = historyItem.toVideo()
                 
                 return ContinueWatchingItem(video: video, progress: progress)
             }
             
             continueWatchingVideos = Array(partiallyWatched.prefix(10))
             isLoading = false
+            
+            if !partiallyWatched.isEmpty {
+                print("📺 [ContinueWatching] Loaded \(partiallyWatched.count) partially watched videos from Firestore")
+            }
         }
     }
     
@@ -351,14 +340,13 @@ extension Notification.Name {
 
 // MARK: - History Service Extension
 extension HistoryService {
-    func getProgress(for videoId: String, userId: String) -> Double {
-        // This would be implemented to fetch from local storage or Firestore
-        // For now, return a mock value
-        return Double.random(in: 0.1...0.9)
-    }
-    
     func clearProgress(for videoId: String, userId: String) async {
-        // Implementation to clear progress
+        // Find the history item for this video and remove it
+        let history = await fetch(userId: userId, limit: 100)
+        if let item = history.first(where: { $0.contentId == videoId }) {
+            await removeItem(itemId: item.id, userId: userId)
+            print("🗑️ [HistoryService] Cleared progress for video: \(videoId)")
+        }
     }
 }
 

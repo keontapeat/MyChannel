@@ -1087,7 +1087,7 @@ private struct VideoPreviewSheet: View {
                 
                 // Video player
                 if let player {
-                    VideoPlayer(player: player)
+                    RawPlayerLayerView(player: player, videoGravity: .resizeAspect)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .onAppear {
                             player.play()

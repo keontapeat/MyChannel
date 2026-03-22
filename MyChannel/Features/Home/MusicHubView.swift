@@ -1,16 +1,19 @@
 import SwiftUI
 import Combine
 
-// MARK: - 🔥 ULTIMATE MUSIC HUB - Apple Music Level Quality 🔥
+// MARK: - 🔥 MYCHANNEL MUSIC HUB - Custom Design 🔥
 
 struct MusicHubView: View {
     @EnvironmentObject var appState: AppState
-    @StateObject private var flintService = FlintArtistService.shared
+    @StateObject private var featuredService = FeaturedArtistService.shared
     @State private var trending: [CatalogSong] = []
     @State private var local: [CatalogSong] = []
     @State private var forYou: [CatalogSong] = []
     @State private var artists: [CatalogArtist] = []
     @State private var albums: [CatalogAlbum] = []
+    @State private var quickPicks: [CatalogSong] = []
+    @State private var topArtists: [CatalogArtist] = []
+    @State private var topAlbums: [CatalogAlbum] = []
     @State private var searchText: String = ""
     @State private var loading: Bool = true
     @ObservedObject private var preview = AudioPreviewPlayer.shared
@@ -41,106 +44,66 @@ struct MusicHubView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
+                // Background — clean white
+                Color(.systemBackground)
+                    .ignoresSafeArea()
+
                 ScrollView {
                     VStack(spacing: 0) {
-                        // 🔥 HERO SECTION - Apple Music Style
-                        heroSection
+                        // MyChannel Music Branding
+                        myChannelMusicBanner
                         
-                        VStack(spacing: 24) {
-                            // Quick Actions Row
-                            quickActionsRow
+                        // Welcome Header
+                        welcomeHeader
+                        
+                        VStack(spacing: 32) {
+                            // Pinned Artists
+                            discoverArtistsSection
                             
-                            // 🎵 Artist Upload CTA
-                            if showArtistCTA {
-                                artistUploadCTA
-                            }
+                            // On Repeat
+                            onRepeatSection
                             
-                            // 🔥 FLINT ARTISTS - 810 REPRESENT (TOP PRIORITY!)
-                            FlintArtistsSection()
+                            // Top Artists
+                            topArtistsSection
                             
-                            // 🆕 New Artist Drops
-                            if !discoveryFeed.newDrops.isEmpty {
-                                newArtistDropsSection
-                            }
+                            // Top Songs
+                            topSongsSection
                             
-                            // 🔥 Curated Playlists
-                            curatedPlaylistsSection
+                            // Top Albums
+                            topAlbumsSection
                             
-                            // 🔥 810 Radio
-                            radioStationsSection
-                            
-                            // 🔥 Discover Weekly & For You
-                            discoverSection
-                            
-                            // � Trending on MyChannel (creator uploads)
-                            if !discoveryFeed.trendingUploads.isEmpty {
-                                trendingOnMyChannelSection
-                            }
-                            
-                            // � Friend Activity
-                            friendActivitySection
-                            
-                            // 🔥 Concerts & Events
-                            concertsPreviewSection
-                            
-                            // 🔥 Behind the Music Stories
-                            behindTheMusicSection
-                            
-                            // Search bar
-                            searchBar
-                            
-                            // Mood/Genre Quick Filters
-                            moodFilterRow
-                            
-                            // Segment Control
-                            segmentControl
-                            
-                            // Content based on segment
-                            if segment == .songs {
-                                // Charts
-                                chartsSection
-                                
-                                forYouSection
-                                trendingSection
-                                newReleasesSection
-                            }
-                            if segment == .artists { artistsSection }
-                            if segment == .albums { albumsSection }
-                            
-                            // 🎥 Music Videos
-                            MusicVideosSection()
-                            
-                            // Spatial Audio Section
-                            spatialAudioSection
-                            
-                            // Recently Played
-                            recentlyPlayedSection
-                            
-                            // Local Artists Section
-                            localSection
-                            
-                            // Browse by Genre
-                            genreBrowseSection
+                            // New Releases
+                            newReleasesListSection
                             
                             // Bottom padding for now playing bar
                             Spacer().frame(height: 100)
                         }
-                        .padding(.vertical, 16)
+                        .padding(.vertical, 24)
                     }
                 }
-                // Global Now Playing Bar is injected via MainTabView; no local bar here
             }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
-            .navigationTitle("Music")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarBackground(Color(.systemBackground), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { try? awaitBack() }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
+                    Button {
+                        awaitBack()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text("Back")
+                                .font(.system(size: 17))
+                        }
+                        .foregroundColor(.red)
                     }
+                }
+                ToolbarItem(placement: .principal) {
+                    Text("Music")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.primary)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 12) {
@@ -150,7 +113,7 @@ struct MusicHubView: View {
                         } label: {
                             Image(systemName: "slider.horizontal.3")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(.primary)
                         }
                         Button {
                             showSettings = true
@@ -158,7 +121,7 @@ struct MusicHubView: View {
                         } label: {
                             Image(systemName: "gearshape.fill")
                                 .font(.system(size: 16))
-                                .foregroundColor(.white)
+                                .foregroundColor(.primary)
                         }
                     }
                 }
@@ -169,6 +132,9 @@ struct MusicHubView: View {
                 withAnimation(.easeOut(duration: 0.8)) {
                     animateHero = true
                 }
+            }
+            .onDisappear {
+                AudioPreviewPlayer.shared.stop()
             }
             .onChange(of: searchText) { newValue in
                 searchTask?.cancel()
@@ -241,70 +207,123 @@ struct MusicHubView: View {
         }
     }
     
-    // MARK: - Hero Section (Apple Music Light Style)
+    // MARK: - MyChannel Music Logo
     
-    private var heroSection: some View {
-        ZStack(alignment: .bottomLeading) {
-            // Blurred artwork background from first trending song
-            if let artURL = trending.first?.artworkUrl, let url = URL(string: artURL) {
+    private var myChannelMusicBanner: some View {
+        HStack {
+            Image("MyChannelMusicLogo")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 36)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+    
+    // MARK: - Welcome Header (Clean — No Gradient)
+    
+    private var welcomeHeader: some View {
+        HStack(spacing: 12) {
+            // Profile avatar
+            if let photoURL = appState.currentUser?.profileImageURL,
+               let url = URL(string: photoURL) {
                 AppAsyncImage(url: url) { img in
                     img.resizable().scaledToFill()
-                } placeholder: { Color.clear }
-                .frame(height: 300)
-                .clipped()
-                .blur(radius: 40)
-                .opacity(0.55)
+                } placeholder: {
+                    Circle().fill(Color(.systemGray5))
+                }
+                .frame(width: 44, height: 44)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Color(.systemGray4), lineWidth: 1))
+            } else {
+                Circle()
+                    .fill(Color(.systemGray5))
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Image(systemName: "person.fill")
+                            .foregroundColor(.secondary)
+                    )
+                    .overlay(Circle().stroke(Color(.systemGray4), lineWidth: 1))
             }
             
-            // Gradient overlay: vibrant top → white/clear at bottom (Apple Music style)
-            LinearGradient(
-                colors: [
-                    Color(red: 0.88, green: 0.15, blue: 0.25).opacity(0.85),
-                    Color(red: 0.58, green: 0.08, blue: 0.38).opacity(0.75),
-                    Color(.systemGroupedBackground)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 300)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Welcome!")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+                Text(appState.currentUser?.displayName ?? "Music Lover")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.primary)
+            }
             
-            // Subtle wave overlay
-            GeometryReader { _ in
-                ForEach(0..<4, id: \.self) { i in
-                    MusicWavePath()
-                        .stroke(Color.white.opacity(0.06 - Double(i) * 0.01), lineWidth: 1.5)
-                        .offset(y: CGFloat(i) * 20)
+            Spacer()
+            
+            HStack(spacing: 16) {
+                Button {
+                    HapticManager.shared.impact(style: .light)
+                } label: {
+                    Image(systemName: "bell")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(.primary)
+                        .overlay(
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 8, height: 8)
+                                .offset(x: 8, y: -8)
+                        )
+                }
+                
+                Button {
+                    showDiscover = true
+                    HapticManager.shared.impact(style: .light)
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(.primary)
                 }
             }
-            .frame(height: 300)
-            
-            // Content
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    PremiumBadge(icon: "airpodspro", text: "Spatial")
-                    PremiumBadge(icon: "waveform", text: "Lossless")
-                    PremiumBadge(icon: "music.note.tv", text: "Dolby Atmos")
-                }
-                .opacity(animateHero ? 1 : 0)
-                .offset(y: animateHero ? 0 : 10)
-                
-                Text("MyChannel\nMusic")
-                    .font(.system(size: 44, weight: .black, design: .rounded))
-                    .foregroundColor(.white)
-                    .opacity(animateHero ? 1 : 0)
-                    .offset(y: animateHero ? 0 : 20)
-                
-                Text("100 million songs. Zero ads.")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white.opacity(0.92))
-                    .opacity(animateHero ? 1 : 0)
-                    .offset(y: animateHero ? 0 : 15)
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 28)
         }
-        .frame(height: 300)
-        .clipped()
+        .padding(.horizontal, 24)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
+        .opacity(animateHero ? 1 : 0)
+        .offset(y: animateHero ? 0 : 8)
+    }
+    
+    @State private var newReleasesPage: Int = 0
+    
+    // MARK: - New Releases List (Numbered Rows)
+    
+    private var newReleasesListSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("New Releases")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(.primary)
+                .padding(.horizontal, 24)
+            
+            if trending.isEmpty && loading {
+                ProgressView().tint(.secondary)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+            } else {
+                let songs = Array(trending.prefix(20))
+                let pages = stride(from: 0, to: songs.count, by: 5).map { i in
+                    Array(songs[i..<min(i + 5, songs.count)])
+                }
+                
+                TabView(selection: $newReleasesPage) {
+                    ForEach(Array(pages.enumerated()), id: \.offset) { pageIndex, pageSongs in
+                        ShelfCarouselPage(
+                            songs: pageSongs,
+                            startIndex: pageIndex * 5,
+                            showFlame: false
+                        )
+                        .tag(pageIndex)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .automatic))
+                .frame(height: CGFloat(5 * 72 + 20))
+            }
+        }
     }
     
     // MARK: - Quick Actions Row
@@ -370,7 +389,7 @@ struct MusicHubView: View {
         HStack(spacing: 14) {
             ZStack {
                 Circle()
-                    .fill(LinearGradient(colors: [Color(red: 0.88, green: 0.15, blue: 0.25), Color(red: 0.58, green: 0.08, blue: 0.38)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .fill(AppTheme.Colors.premiumGradient)
                     .frame(width: 48, height: 48)
                 Image(systemName: "music.mic")
                     .font(.system(size: 20, weight: .bold))
@@ -379,10 +398,10 @@ struct MusicHubView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Are you an artist?")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
                 Text("Upload your music & get paid")
                     .font(.system(size: 13))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
             }
             Spacer()
             Button {
@@ -394,7 +413,7 @@ struct MusicHubView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(LinearGradient(colors: [Color(red: 0.88, green: 0.15, blue: 0.25), Color(red: 0.58, green: 0.08, blue: 0.38)], startPoint: .leading, endPoint: .trailing))
+                    .background(AppTheme.Colors.premiumGradient)
                     .clipShape(Capsule())
             }
             Button {
@@ -402,13 +421,13 @@ struct MusicHubView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppTheme.Colors.textTertiary)
             }
         }
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
+                .fill(AppTheme.Colors.cardBackground)
                 .shadow(color: .black.opacity(0.07), radius: 8, x: 0, y: 2)
         )
         .padding(.horizontal, 20)
@@ -539,21 +558,229 @@ struct MusicHubView: View {
         }
     }
     
-    // MARK: - Curated Playlists Section
+    // MARK: - Discover Artists Section
     
-    private var curatedPlaylistsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            MusicSectionHeader(title: "Playlists", subtitle: "Curated for you", showSeeAll: true)
+    private var discoverArtistsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 6) {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
+                Text("Pinned Artists")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.primary)
+            }
+            .padding(.horizontal, 24)
             
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 16) {
-                    ForEach(CuratedPlaylist.flintPlaylists, id: \.id) { playlist in
-                        MusicPlaylistCard(playlist: playlist) {
-                            HapticManager.shared.impact(style: .medium)
+                LazyHStack(spacing: 14) {
+                    ForEach(artists, id: \.id) { artist in
+                        NavigationLink(destination: ArtistProfileView(artist: artist)) {
+                            DiscoverArtistCircleCard(artist: artist)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 24)
+            }
+        }
+    }
+    
+    @State private var onRepeatPage: Int = 0
+    
+    // MARK: - On Repeat Section
+    
+    private let onRepeatSeeds: [String] = [
+        "5am In Miami Lil Poppa",
+        "OPRAH MIA Ghost",
+        "Whatever Ktrip",
+        "Free Ty JuuJu",
+        "Valuable Pain YoungBoy Never Broke Again",
+        "Smoking & Thinking Lil Durk",
+        "Promises Jhené Aiko",
+        "Foreign Say Twicee",
+        "Pick Up The Phone Travis Scott",
+        "BACKGROUND Lil Yachty",
+        "Space Song Beach House",
+        "Magic In The Hamptons Social House",
+        "pick up the phone Young Thug",
+        "Choosin Texas Ella Langley"
+    ]
+    
+    private var onRepeatSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "repeat")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.red)
+                    Text("On Repeat")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.primary)
+                }
+                Spacer()
+                Button {
+                    let items: [PreviewQueueItem] = quickPicks.compactMap { s in
+                        guard let p = s.previewUrl, let u = URL(string: p) else { return nil }
+                        return PreviewQueueItem(trackId: String(s.id), url: u, title: s.title, artist: s.artist, artworkURL: URL(string: s.artworkUrl ?? ""))
+                    }
+                    if !items.isEmpty { AudioPreviewPlayer.shared.queueAndPlay(items) }
+                    HapticManager.shared.impact(style: .medium)
+                } label: {
+                    Text("Play all")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(Capsule().stroke(Color.primary.opacity(0.3), lineWidth: 1))
+                }
+            }
+            .padding(.horizontal, 24)
+            
+            if quickPicks.isEmpty && loading {
+                ProgressView().tint(.secondary)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+            } else {
+                let pages = stride(from: 0, to: quickPicks.count, by: 5).map { i in
+                    Array(quickPicks[i..<min(i + 5, quickPicks.count)])
+                }
+                
+                TabView(selection: $onRepeatPage) {
+                    ForEach(Array(pages.enumerated()), id: \.offset) { pageIndex, pageSongs in
+                        ShelfCarouselPage(
+                            songs: pageSongs,
+                            startIndex: pageIndex * 5,
+                            showFlame: false
+                        )
+                        .tag(pageIndex)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .automatic))
+                .frame(height: CGFloat(min(quickPicks.count, 5) * 72 + 20))
+            }
+        }
+    }
+    
+    // MARK: - Top Artists Section
+    
+    private var topArtistsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 6) {
+                Text("Top Artists")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.primary)
+            }
+            .padding(.horizontal, 24)
+            
+            if topArtists.isEmpty && loading {
+                ProgressView().tint(.secondary)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 14) {
+                        ForEach(Array(topArtists.prefix(15).enumerated()), id: \.element.id) { index, artist in
+                            NavigationLink(destination: ArtistProfileView(artist: artist)) {
+                                TopArtistSquareCard(artist: artist, rank: index + 1)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                }
+            }
+        }
+    }
+    
+    @State private var topSongsPage: Int = 0
+    
+    // MARK: - Top Songs Section
+    
+    private var topSongsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 6) {
+                Text("Top Songs")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.primary)
+            }
+            .padding(.horizontal, 24)
+            
+            if trending.isEmpty && loading {
+                ProgressView().tint(.secondary)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+            } else {
+                let pages = stride(from: 0, to: min(trending.count, 20), by: 5).map { i in
+                    Array(trending[i..<min(i + 5, min(trending.count, 20))])
+                }
+                
+                TabView(selection: $topSongsPage) {
+                    ForEach(Array(pages.enumerated()), id: \.offset) { pageIndex, pageSongs in
+                        ShelfCarouselPage(
+                            songs: pageSongs,
+                            startIndex: pageIndex * 5,
+                            showFlame: true
+                        )
+                        .tag(pageIndex)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .automatic))
+                .frame(height: CGFloat(5 * 72 + 20))
+            }
+        }
+    }
+    
+    // MARK: - Top Albums Section
+    
+    private var topAlbumsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 6) {
+                Image(systemName: "square.stack.fill")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.red)
+                Text("Top Albums")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.primary)
+            }
+            .padding(.horizontal, 24)
+            
+            if topAlbums.isEmpty && loading {
+                ProgressView().tint(.secondary)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 16) {
+                        ForEach(topAlbums.prefix(15)) { album in
+                            VStack(alignment: .leading, spacing: 8) {
+                                AppAsyncImage(url: URL(string: album.artworkUrl ?? "")) { img in
+                                    img.resizable().scaledToFill()
+                                } placeholder: {
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.gray.opacity(0.15))
+                                        .overlay(
+                                            Image(systemName: "music.note.list")
+                                                .font(.system(size: 24))
+                                                .foregroundColor(.gray.opacity(0.4))
+                                        )
+                                }
+                                .frame(width: 90, height: 90)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(album.title)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                    Text(album.artist)
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                }
+                                .frame(width: 90, alignment: .leading)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                }
             }
         }
     }
@@ -572,7 +799,7 @@ struct MusicHubView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
-                    ForEach(RadioStation.flintStations, id: \.id) { station in
+                    ForEach(RadioStation.featuredStations, id: \.id) { station in
                         RadioStationCard(station: station) {
                             HapticManager.shared.impact(style: .medium)
                         }
@@ -610,7 +837,7 @@ struct MusicHubView: View {
                         HapticManager.shared.impact(style: .medium)
                     }
                     
-                    DiscoverMixCard(title: "810 Mix", subtitle: "Flint's finest", colors: [.red, .orange]) {
+                    DiscoverMixCard(title: "810 Mix", subtitle: "The best 810 hits", colors: [.red, .orange]) {
                         showDiscover = true
                         HapticManager.shared.impact(style: .medium)
                     }
@@ -642,8 +869,8 @@ struct MusicHubView: View {
                     ForEach(0..<5) { i in
                         FriendActivityCard(
                             name: ["Mike", "Sarah", "James", "Aisha", "Dre"][i],
-                            track: ["Coochie", "Flint Flow", "Enbarassing", "Money Talk", "810 Anthem"][i],
-                            artist: ["YN Jay", "Rio Da Yung OG", "RMC Mike", "Louie Ray", "Flint Legends"][i],
+                            track: ["Coochie", "Street Vibes", "Enbarassing", "Money Talk", "810 Anthem"][i],
+                            artist: ["YN Jay", "Rio Da Yung OG", "RMC Mike", "Louie Ray", "810 Legends"][i],
                             isPlaying: i < 2
                         )
                     }
@@ -734,7 +961,7 @@ struct MusicHubView: View {
                     )
                     
                     BehindTheMusicCard(
-                        title: "The Flint Sound",
+                        title: "The 810 Sound",
                         artist: "RMC Mike",
                         imageURL: "https://i.ytimg.com/vi/x_E1bq1sYdY/hqdefault.jpg",
                         duration: "4:55"
@@ -1082,30 +1309,100 @@ struct MusicHubView: View {
     private func load() async {
         loading = true
         
+        // Phase 1: Fire all primary requests in parallel
         async let curatedSongsTask = MusicCatalogService.shared.curatedSpotlightSongs()
         async let curatedArtistsTask = MusicCatalogService.shared.curatedArtists()
         async let curatedAlbumsTask = MusicCatalogService.shared.curatedAlbums()
+        async let topSongsTask: [CatalogSong] = (try? MusicCatalogService.shared.topSongs(limit: 40)) ?? []
         
-        let top = (try? await MusicCatalogService.shared.topSongs(limit: 40)) ?? []
-        let curatedSongs = await curatedSongsTask
+        // Show friend artists immediately from hardcoded data (no network wait)
+        let instantFriendArtists = FeaturedFriendArtist.friends.map { $0.catalogArtist }
+        artists = instantFriendArtists
+        
+        let top = await topSongsTask
         let editorialArtists = await curatedArtistsTask
         let editorialAlbums = await curatedAlbumsTask
+        let curatedSongs = await curatedSongsTask
         
+        // Phase 2: Immediately populate all sections — kills the spinners
         if !top.isEmpty { trending = top }
-        if !editorialArtists.isEmpty { artists = editorialArtists }
+        
+        let existingIds = Set(instantFriendArtists.map { $0.id })
+        let filteredEditorial = editorialArtists.filter { !existingIds.contains($0.id) }
+        artists = instantFriendArtists + filteredEditorial
         if !editorialAlbums.isEmpty { albums = editorialAlbums }
         
-        let city = appState.currentUser?.location ?? ""
-        if !city.isEmpty, let loc = try? await MusicCatalogService.shared.searchSongs(term: city, limit: 30) {
-            local = loc
-        }
-        if local.isEmpty {
-            let fallback = !curatedSongs.isEmpty ? curatedSongs : top
-            local = Array(fallback.prefix(8))
+        topArtists = editorialArtists
+        topAlbums = editorialAlbums
+        
+        // Set loading false NOW so all sections render with data
+        loading = false
+        
+        // Phase 3: Load On Repeat songs in parallel (non-blocking, fills in after)
+        Task {
+            let onRepeatSongs: [CatalogSong] = await withTaskGroup(of: CatalogSong?.self) { group in
+                for seed in onRepeatSeeds {
+                    group.addTask {
+                        try? await MusicCatalogService.shared.searchSongs(term: seed, limit: 1).first
+                    }
+                }
+                var results: [(Int, CatalogSong)] = []
+                var index = 0
+                for await song in group {
+                    if let song = song {
+                        results.append((index, song))
+                    }
+                    index += 1
+                }
+                // Preserve seed order
+                return onRepeatSeeds.indices.compactMap { i in
+                    results.first { $0.0 == i }?.1
+                }
+            }
+            await MainActor.run {
+                if !onRepeatSongs.isEmpty { quickPicks = onRepeatSongs }
+            }
         }
         
-        await loadForYou(curatedFallback: !curatedSongs.isEmpty ? curatedSongs : top)
-        loading = false
+        // Phase 4: Refresh friend artist artwork in background (non-blocking)
+        Task {
+            let freshFriendArtists: [CatalogArtist] = await withTaskGroup(of: CatalogArtist.self) { group in
+                for friend in FeaturedFriendArtist.friends {
+                    group.addTask {
+                        if let freshUrl = await MusicCatalogService.shared.freshArtworkURL(forArtistId: friend.appleMusicId),
+                           !freshUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            return CatalogArtist(id: friend.appleMusicId, name: friend.name, linkUrl: friend.catalogArtist.linkUrl, artworkUrl: freshUrl)
+                        }
+                        return friend.catalogArtist
+                    }
+                }
+                var results: [CatalogArtist] = []
+                for await artist in group { results.append(artist) }
+                return FeaturedFriendArtist.friends.compactMap { friend in
+                    results.first { $0.id == friend.appleMusicId }
+                }
+            }
+            await MainActor.run {
+                let freshIds = Set(freshFriendArtists.map { $0.id })
+                let filtered = artists.filter { !freshIds.contains($0.id) }
+                artists = freshFriendArtists + filtered
+            }
+        }
+        
+        // Phase 5: Local + For You (non-blocking)
+        Task {
+            let city = appState.currentUser?.location ?? ""
+            if !city.isEmpty, let loc = try? await MusicCatalogService.shared.searchSongs(term: city, limit: 30) {
+                await MainActor.run { local = loc }
+            }
+            await MainActor.run {
+                if local.isEmpty {
+                    let fallback = !curatedSongs.isEmpty ? curatedSongs : top
+                    local = Array(fallback.prefix(8))
+                }
+            }
+            await loadForYou(curatedFallback: !curatedSongs.isEmpty ? curatedSongs : top)
+        }
     }
     
     private func performSearch() async {
@@ -1252,6 +1549,80 @@ private struct MusicCard: View {
     }
 }
 
+// MARK: - New Release Row (Isolated view to prevent full-list re-renders during playback)
+struct NewReleaseRowView: View {
+    let song: CatalogSong
+    let rank: Int
+    @ObservedObject private var preview = AudioPreviewPlayer.shared
+    
+    private var isPlaying: Bool {
+        preview.currentTrackId == String(song.id) && preview.isPlaying
+    }
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            if isPlaying {
+                Image(systemName: "music.note")
+                    .font(.system(size: 16))
+                    .foregroundColor(.red)
+                    .frame(width: 24)
+            } else {
+                Spacer().frame(width: 24)
+            }
+            
+            AppAsyncImage(url: URL(string: song.artworkUrl ?? "")) { img in
+                img.resizable().scaledToFill()
+            } placeholder: {
+                RoundedRectangle(cornerRadius: 12).fill(Color(.systemGray5))
+                    .overlay(Image(systemName: "music.note").foregroundColor(.secondary))
+            }
+            .frame(width: 56, height: 56)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(song.title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                Text(song.artist)
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+            
+            Spacer()
+            
+            Button {
+                HapticManager.shared.impact(style: .light)
+            } label: {
+                Image(systemName: "heart")
+                    .font(.system(size: 20))
+                    .foregroundColor(isPlaying ? .red : .secondary)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(isPlaying ? Color.red.opacity(0.08) : Color(.systemBackground))
+                .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
+        )
+        .padding(.horizontal, 24)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if let p = song.previewUrl, let u = URL(string: p) {
+                let id = String(song.id)
+                if preview.currentTrackId == id && preview.isPlaying {
+                    preview.pause()
+                } else {
+                    preview.play(url: u, trackId: id, title: song.title, artist: song.artist, artworkURL: URL(string: song.artworkUrl ?? ""))
+                }
+                HapticManager.shared.selection()
+            }
+        }
+    }
+}
+
 // Local NowPlayingBar removed; using GlobalNowPlayingBar
 
 // MARK: - 🔥 PREMIUM UI COMPONENTS 🔥
@@ -1357,7 +1728,7 @@ struct PremiumBadge: View {
     }
 }
 
-// MARK: - Quick Action Button (Apple Music Light Style)
+// MARK: - Quick Action Button (MyChannel Adaptive Style)
 struct QuickActionButton: View {
     let icon: String
     let title: String
@@ -1368,24 +1739,18 @@ struct QuickActionButton: View {
             VStack(spacing: 6) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color(.secondarySystemGroupedBackground))
+                        .fill(AppTheme.Colors.surface)
                         .frame(width: 52, height: 52)
                         .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
                     
                     Image(systemName: icon)
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color(red: 0.88, green: 0.15, blue: 0.25), Color(red: 0.58, green: 0.08, blue: 0.38)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .foregroundStyle(AppTheme.Colors.premiumGradient)
                 }
                 
                 Text(title)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
                     .lineLimit(1)
             }
             .frame(width: 62)
@@ -1677,18 +2042,18 @@ struct CuratedPlaylist: Identifiable {
     let icon: String
     let songCount: Int
     
-    static let flintPlaylists: [CuratedPlaylist] = [
+    static let featuredPlaylists: [CuratedPlaylist] = [
         CuratedPlaylist(
             id: "810-essentials",
             name: "810 Essentials",
-            description: "The best of Flint",
+            description: "Essential hits, all day",
             imageColors: [.orange, .red],
             icon: "flame.fill",
             songCount: 50
         ),
         CuratedPlaylist(
-            id: "flint-heat",
-            name: "Flint Heat",
+            id: "808-heat",
+            name: "808 Heat",
             description: "Hottest tracks right now",
             imageColors: [.red, .pink],
             icon: "waveform.path",
@@ -1713,7 +2078,7 @@ struct CuratedPlaylist: Identifiable {
         CuratedPlaylist(
             id: "new-810",
             name: "New 810",
-            description: "Fresh releases from Flint",
+            description: "Fresh releases dropping now",
             imageColors: [.green, .mint],
             icon: "sparkles",
             songCount: 25
@@ -1778,11 +2143,11 @@ struct RadioStation: Identifiable {
     let color: Color
     let isLive: Bool
     
-    static let flintStations: [RadioStation] = [
-        RadioStation(id: "810-radio", name: "810 Radio", description: "Flint's #1 station", color: .orange, isLive: true),
-        RadioStation(id: "flint-underground", name: "Flint Underground", description: "Independent artists", color: .purple, isLive: true),
+    static let featuredStations: [RadioStation] = [
+        RadioStation(id: "810-radio", name: "810 Radio", description: "810's #1 station", color: .orange, isLive: true),
+        RadioStation(id: "810-underground", name: "810 Underground", description: "Independent artists", color: .purple, isLive: true),
         RadioStation(id: "michigan-hits", name: "Michigan Hits", description: "State-wide bangers", color: .blue, isLive: true),
-        RadioStation(id: "throwback-810", name: "Throwback 810", description: "Classic Flint hip-hop", color: .red, isLive: false),
+        RadioStation(id: "throwback-810", name: "Throwback 810", description: "Classic 810 hip-hop", color: .red, isLive: false),
         RadioStation(id: "rnb-soul", name: "R&B Soul", description: "Smooth vibes", color: .pink, isLive: true)
     ]
 }
@@ -1854,7 +2219,7 @@ struct MusicChart: Identifiable {
     let updateFrequency: String
     
     static let allCharts: [MusicChart] = [
-        MusicChart(id: "top-50-flint", name: "Top 50: Flint", icon: "trophy.fill", color: .orange, updateFrequency: "Updated daily"),
+        MusicChart(id: "top-50-810", name: "Top 50: 810", icon: "trophy.fill", color: .orange, updateFrequency: "Updated daily"),
         MusicChart(id: "top-100-usa", name: "Top 100: USA", icon: "flag.fill", color: .blue, updateFrequency: "Updated daily"),
         MusicChart(id: "viral-50", name: "Viral 50", icon: "flame.fill", color: .red, updateFrequency: "Updated daily"),
         MusicChart(id: "hip-hop-charts", name: "Hip-Hop Charts", icon: "music.mic", color: .purple, updateFrequency: "Updated weekly"),
@@ -2116,7 +2481,49 @@ struct EqualizerSheet: View {
     }
 }
 
-// MARK: - Discover Mix Card
+// MARK: - Discover Artist Card (Smaller Square Style)
+struct DiscoverArtistCircleCard: View {
+    let artist: CatalogArtist
+    
+    /// Check if this is a featured friend for the glow effect
+    private var isFeaturedFriend: Bool {
+        FeaturedFriendArtist.friends.contains { $0.appleMusicId == artist.id }
+    }
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            AppAsyncImage(url: URL(string: artist.artworkUrl ?? "")) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(.systemGray5))
+                    .overlay(
+                        Image(systemName: "music.mic")
+                            .font(.system(size: 24))
+                            .foregroundColor(.secondary)
+                    )
+            }
+            .frame(width: 90, height: 90)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(
+                        isFeaturedFriend ? Color.red : Color(.systemGray4),
+                        lineWidth: isFeaturedFriend ? 2 : 0.5
+                    )
+            )
+            .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 3)
+            
+            Text(artist.name)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+                .frame(width: 90)
+        }
+    }
+}
+
+// MARK: - Discover Mix Card (kept for legacy, or can be removed if unused)
 
 struct DiscoverMixCard: View {
     let title: String
@@ -2306,6 +2713,181 @@ struct BehindTheMusicCard: View {
                 .foregroundColor(.secondary)
         }
         .frame(width: 180)
+    }
+}
+
+// MARK: - Top Artist Square Card (matches Pinned Artists card size)
+struct TopArtistSquareCard: View {
+    let artist: CatalogArtist
+    let rank: Int
+    
+    private var isFeaturedFriend: Bool {
+        FeaturedFriendArtist.friends.contains { $0.appleMusicId == artist.id }
+    }
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack(alignment: .bottomTrailing) {
+                AppAsyncImage(url: URL(string: artist.artworkUrl ?? "")) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(.systemGray5))
+                        .overlay(
+                            Image(systemName: "music.mic")
+                                .font(.system(size: 24))
+                                .foregroundColor(.secondary)
+                        )
+                }
+                .frame(width: 90, height: 90)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(
+                            isFeaturedFriend ? Color.red : Color(.systemGray4),
+                            lineWidth: isFeaturedFriend ? 2 : 0.5
+                        )
+                )
+                .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 3)
+                
+                Text("#\(rank)")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.red))
+                    .offset(x: 4, y: 4)
+            }
+            
+            Text(artist.name)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+                .frame(width: 90)
+        }
+    }
+}
+
+// MARK: - 3D Shelf Carousel Page (5 song rows with shelf effect)
+struct ShelfCarouselPage: View {
+    let songs: [CatalogSong]
+    let startIndex: Int
+    var showFlame: Bool = false
+    @ObservedObject private var preview = AudioPreviewPlayer.shared
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(songs.enumerated()), id: \.element.id) { localIndex, song in
+                let globalIndex = startIndex + localIndex
+                let isPlaying = preview.currentTrackId == String(song.id) && preview.isPlaying
+                
+                Button {
+                    if let p = song.previewUrl, let u = URL(string: p) {
+                        let id = String(song.id)
+                        if preview.currentTrackId == id && preview.isPlaying {
+                            preview.pause()
+                        } else {
+                            preview.play(url: u, trackId: id, title: song.title, artist: song.artist, artworkURL: URL(string: song.artworkUrl ?? ""))
+                        }
+                        HapticManager.shared.impact(style: .medium)
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Text("\(globalIndex + 1)")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(isPlaying ? .red : .secondary)
+                            .frame(width: 24)
+                        
+                        AppAsyncImage(url: URL(string: song.artworkUrl ?? "")) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.gray.opacity(0.15))
+                                .overlay(
+                                    Image(systemName: "music.note")
+                                        .foregroundColor(.gray.opacity(0.4))
+                                )
+                        }
+                        .frame(width: 50, height: 50)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
+                        
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(song.title)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(isPlaying ? .red : .primary)
+                                .lineLimit(1)
+                            Text(song.artist)
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                        
+                        Spacer()
+                        
+                        if showFlame && globalIndex < 3 {
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(.red)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 16)
+                }
+                .buttonStyle(.plain)
+                .background(
+                    ZStack {
+                        // 3D shelf base — subtle gradient floor
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(
+                                isPlaying
+                                    ? Color.red.opacity(0.06)
+                                    : Color(.systemBackground)
+                            )
+                        
+                        // Bottom shelf edge — gives the "sitting on a shelf" look
+                        VStack {
+                            Spacer()
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.black.opacity(0.08),
+                                            Color.black.opacity(0.02),
+                                            Color.clear
+                                        ],
+                                        startPoint: .bottom,
+                                        endPoint: .top
+                                    )
+                                )
+                                .frame(height: 6)
+                                .clipShape(
+                                    RoundedRectangle(cornerRadius: 2)
+                                )
+                        }
+                    }
+                )
+                .overlay(
+                    // Shelf divider line
+                    VStack {
+                        Spacer()
+                        Rectangle()
+                            .fill(Color(.systemGray5))
+                            .frame(height: 0.5)
+                            .padding(.horizontal, 16)
+                    }
+                )
+                .shadow(color: .black.opacity(0.04), radius: 2, x: 0, y: 1)
+            }
+        }
+        .padding(.horizontal, 8)
+        // 3D perspective tilt for the whole shelf
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 4)
+        )
+        .padding(.horizontal, 16)
     }
 }
 

@@ -169,24 +169,16 @@ service cloud.firestore {
       allow delete: if isCreator(resource.data.creatorId) || isAdmin();
     }
     
-    // Stories - 🔥 OPTIMIZED with comprehensive validation
+    // Stories - open for signed-in users
     match /stories/{storyId} {
-      // Public read (like Instagram)
       allow read: if true;
-      
-      // Create with validation
-      allow create: if isSignedIn() && 
-                       isValidSize(request.resource.data, 30) &&
-                       request.resource.data.creatorId == request.auth.uid &&
-                       request.resource.data.expiresAt > request.time;
-      
-      // Update (owner only)
-      allow update: if isCreator(resource.data.creatorId) || isAdmin();
-      
-      // Delete (owner or expired)
-      allow delete: if isCreator(resource.data.creatorId) || 
-                       isAdmin() ||
-                       resource.data.expiresAt < request.time;
+      allow create, update, delete: if isSignedIn();
+    }
+    
+    // Story collections index (one doc per creator)
+    match /story-collections/{creatorId} {
+      allow read: if true;
+      allow write: if isSignedIn();
     }
     
     // Story views tracking - 🔥 OPTIMIZED

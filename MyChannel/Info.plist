@@ -10,7 +10,14 @@
 	<!-- ================================================================ -->
 	
 	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 📸 CAMERA & MEDIA CAPTURE -->
+	<!-- � APP TRACKING TRANSPARENCY -->
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	
+	<key>NSUserTrackingUsageDescription</key>
+	<string>MyChannel uses this identifier to deliver personalized ads and measure ad performance. You can change this permission anytime in Settings.</string>
+	
+	<!-- ═══════════════════════════════════════════════════════════════ -->
+	<!-- �📸 CAMERA & MEDIA CAPTURE -->
 	<!-- ═══════════════════════════════════════════════════════════════ -->
 	
 	<key>NSCameraUsageDescription</key>

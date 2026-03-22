@@ -58,12 +58,37 @@ class AdvancedSearchService: ObservableObject {
         userId: String? = nil
     ) async throws -> AdvancedSearchResponse {
         
+        let startTime = Date()
+        
+        // Start performance tracking
+        PerformanceMonitoringManager.shared.startTrace(name: "search_query", attributes: [
+            "query_length": String(query.count),
+            "has_filters": String(filters != nil),
+            "search_scope": "all"
+        ])
+        
+        // Update monitoring metrics
+        MonitoringDashboardManager.shared.incrementCounter("search_requests")
+        
         guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return AdvancedSearchResponse(results: [], totalCount: 0, searchTime: 0)
+            MonitoringDashboardManager.shared.incrementCounter("search_errors")
+            PerformanceMonitoringManager.shared.stopTrace(name: "search_query")
+            throw SearchError.emptyQuery
+        }
+        
+        // Check cache first
+        let cacheKey = generateCacheKey(query: query, filters: filters)
+        if let cachedResults = searchCache[cacheKey] {
+            let responseTime = Date().timeIntervalSince(startTime)
+            PerformanceMonitoringManager.shared.stopTrace(name: "search_query", metrics: [
+                "result_count": Int64(cachedResults.count),
+                "cache_hit": 1
+            ])
+            MonitoringDashboardManager.shared.recordLatency("search_response_time", latency: responseTime)
+            return AdvancedSearchResponse(results: cachedResults, totalCount: cachedResults.count, searchTime: responseTime)
         }
         
         isSearching = true
-        let startTime = Date()
         
         defer {
             DispatchQueue.main.async {
@@ -1055,15 +1080,18 @@ struct SearchFilters {
     var duration: DurationFilter?
     var uploadDate: UploadDateFilter?
     var subscriberRange: SubscriberRange?
-    var sortBy: SortOption?
+    var sortBy: SortOption = .relevance
+    var contentType: ContentType?
+    var features: Set<FeatureFilter> = []
     
     enum DurationFilter: String, CaseIterable {
-        case short = "Short (< 4 minutes)"
-        case medium = "Medium (4-20 minutes)"
-        case long = "Long (> 20 minutes)"
+        case short = "Under 4 minutes"
+        case medium = "4-20 minutes"
+        case long = "Over 20 minutes"
     }
     
     enum UploadDateFilter: String, CaseIterable {
+        case lastHour = "Last hour"
         case today = "Today"
         case thisWeek = "This week"
         case thisMonth = "This month"
@@ -1071,12 +1099,35 @@ struct SearchFilters {
         
         var dateComponent: Calendar.Component {
             switch self {
+            case .lastHour: return .hour
             case .today: return .day
             case .thisWeek: return .weekOfYear
             case .thisMonth: return .month
             case .thisYear: return .year
             }
         }
+    }
+    
+    enum ContentType: String, CaseIterable {
+        case video = "Video"
+        case channel = "Channel"
+        case playlist = "Playlist"
+        case movie = "Movie"
+        case live = "Live"
+    }
+    
+    enum FeatureFilter: String, CaseIterable {
+        case live = "Live"
+        case fourK = "4K"
+        case hd = "HD"
+        case subtitles = "Subtitles/CC"
+        case creativeCommons = "Creative Commons"
+        case threeSixty = "360°"
+        case vr180 = "VR180"
+        case threeD = "3D"
+        case hdr = "HDR"
+        case location = "Location"
+        case purchased = "Purchased"
     }
     
     struct SubscriberRange {

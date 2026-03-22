@@ -1,5 +1,5 @@
 //
-//  FlintArtistService.swift
+//  FeaturedArtistService.swift
 //  MyChannel
 //
 //  🔥🎵 FLINT ARTISTS SERVICE - 810 REPRESENT! 🎵🔥
@@ -13,13 +13,14 @@
 import Foundation
 import SwiftUI
 import Combine
+import MusicKit
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
 
 // MARK: - Flint Artist Model
 
-struct FlintArtist: Identifiable, Codable, Equatable {
+struct FeaturedArtist: Identifiable, Codable, Equatable {
     let id: String
     var name: String
     var stageName: String?
@@ -219,14 +220,14 @@ struct FlintArtist: Identifiable, Codable, Equatable {
 
 // MARK: - Flint Artist Track (combines Apple Music data with Flint artist info)
 
-struct FlintArtistTrack: Identifiable, Equatable {
+struct FeaturedArtistTrack: Identifiable, Equatable {
     let id: String
     let track: MusicKitTrack
-    let artist: FlintArtist
+    let artist: FeaturedArtist
     
-    var isFlintTrack: Bool { true }
+    var isFeaturedTrack: Bool { true }
     
-    static func == (lhs: FlintArtistTrack, rhs: FlintArtistTrack) -> Bool {
+    static func == (lhs: FeaturedArtistTrack, rhs: FeaturedArtistTrack) -> Bool {
         lhs.id == rhs.id
     }
 }
@@ -234,19 +235,19 @@ struct FlintArtistTrack: Identifiable, Equatable {
 // MARK: - Flint Artist Service
 
 @MainActor
-final class FlintArtistService: ObservableObject {
-    static let shared = FlintArtistService()
+final class FeaturedArtistService: ObservableObject {
+    static let shared = FeaturedArtistService()
     
     // MARK: - Published Properties
-    @Published private(set) var artists: [FlintArtist] = []
-    @Published private(set) var featuredArtists: [FlintArtist] = []
-    @Published private(set) var risingArtists: [FlintArtist] = []
-    @Published private(set) var verifiedArtists: [FlintArtist] = []
+    @Published private(set) var artists: [FeaturedArtist] = []
+    @Published private(set) var featuredArtists: [FeaturedArtist] = []
+    @Published private(set) var risingArtists: [FeaturedArtist] = []
+    @Published private(set) var verifiedArtists: [FeaturedArtist] = []
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var lastError: String?
     
     // Cache
-    private var artistCache: [String: FlintArtist] = [:]
+    private var artistCache: [String: FeaturedArtist] = [:]
     private var lastFetchTime: Date?
     private let cacheExpirationMinutes: Double = 30
     
@@ -286,8 +287,8 @@ final class FlintArtistService: ObservableObject {
                 .limit(to: 100)
                 .getDocuments()
             
-            let fetchedArtists = snapshot.documents.compactMap { doc -> FlintArtist? in
-                try? doc.data(as: FlintArtist.self)
+            let fetchedArtists = snapshot.documents.compactMap { doc -> FeaturedArtist? in
+                try? doc.data(as: FeaturedArtist.self)
             }
             
             artists = fetchedArtists
@@ -295,10 +296,10 @@ final class FlintArtistService: ObservableObject {
             cacheArtists(fetchedArtists)
             lastFetchTime = Date()
             
-            print("🔥 [FlintArtists] Fetched \(fetchedArtists.count) artists from Firestore")
+            print("🔥 [FeaturedArtists] Fetched \(fetchedArtists.count) artists from Firestore")
         } catch {
             lastError = error.localizedDescription
-            print("❌ [FlintArtists] Fetch error: \(error)")
+            print("❌ [FeaturedArtists] Fetch error: \(error)")
             
             // Fall back to seed data if Firestore fails
             if artists.isEmpty {
@@ -316,7 +317,7 @@ final class FlintArtistService: ObservableObject {
     }
     
     /// Fetch a single artist by ID
-    func fetchArtist(id: String) async -> FlintArtist? {
+    func fetchArtist(id: String) async -> FeaturedArtist? {
         // Check cache first
         if let cached = artistCache[id] {
             return cached
@@ -325,12 +326,12 @@ final class FlintArtistService: ObservableObject {
         #if canImport(FirebaseFirestore)
         do {
             let doc = try await db.collection(collectionName).document(id).getDocument()
-            if let artist = try? doc.data(as: FlintArtist.self) {
+            if let artist = try? doc.data(as: FeaturedArtist.self) {
                 artistCache[id] = artist
                 return artist
             }
         } catch {
-            print("❌ [FlintArtists] Error fetching artist \(id): \(error)")
+            print("❌ [FeaturedArtists] Error fetching artist \(id): \(error)")
         }
         #endif
         
@@ -338,8 +339,8 @@ final class FlintArtistService: ObservableObject {
         return Self.seedArtists.first { $0.id == id }
     }
     
-    /// Search Flint artists
-    func searchArtists(query: String) async -> [FlintArtist] {
+    /// Search featured artists
+    func searchArtists(query: String) async -> [FeaturedArtist] {
         let lowercasedQuery = query.lowercased()
         
         // First search local cache
@@ -361,11 +362,11 @@ final class FlintArtistService: ObservableObject {
                 .limit(to: 20)
                 .getDocuments()
             
-            return snapshot.documents.compactMap { doc -> FlintArtist? in
-                try? doc.data(as: FlintArtist.self)
+            return snapshot.documents.compactMap { doc -> FeaturedArtist? in
+                try? doc.data(as: FeaturedArtist.self)
             }
         } catch {
-            print("❌ [FlintArtists] Search error: \(error)")
+            print("❌ [FeaturedArtists] Search error: \(error)")
         }
         #endif
         
@@ -374,8 +375,8 @@ final class FlintArtistService: ObservableObject {
     
     // MARK: - Artist Management
     
-    /// Register a new Flint artist (pending verification)
-    func registerArtist(_ artist: FlintArtist) async throws {
+    /// Register a new featured artist (pending verification)
+    func registerArtist(_ artist: FeaturedArtist) async throws {
         #if canImport(FirebaseFirestore)
         var newArtist = artist
         newArtist.memberSince = Date()
@@ -388,14 +389,14 @@ final class FlintArtistService: ObservableObject {
         artists.append(newArtist)
         updateArtistCategories()
         
-        print("🔥 [FlintArtists] Registered new artist: \(artist.displayName)")
+        print("🔥 [FeaturedArtists] Registered new artist: \(artist.displayName)")
         #else
-        throw FlintArtistError.firestoreNotAvailable
+        throw FeaturedArtistError.firestoreNotAvailable
         #endif
     }
     
     /// Update artist profile
-    func updateArtist(_ artist: FlintArtist) async throws {
+    func updateArtist(_ artist: FeaturedArtist) async throws {
         #if canImport(FirebaseFirestore)
         try db.collection(collectionName).document(artist.id).setData(from: artist, merge: true)
         
@@ -406,9 +407,9 @@ final class FlintArtistService: ObservableObject {
         artistCache[artist.id] = artist
         updateArtistCategories()
         
-        print("✅ [FlintArtists] Updated artist: \(artist.displayName)")
+        print("✅ [FeaturedArtists] Updated artist: \(artist.displayName)")
         #else
-        throw FlintArtistError.firestoreNotAvailable
+        throw FeaturedArtistError.firestoreNotAvailable
         #endif
     }
     
@@ -432,7 +433,7 @@ final class FlintArtistService: ObservableObject {
                 }
             }
         } catch {
-            print("❌ [FlintArtists] Error recording stream: \(error)")
+            print("❌ [FeaturedArtists] Error recording stream: \(error)")
         }
         #endif
     }
@@ -446,53 +447,70 @@ final class FlintArtistService: ObservableObject {
                 "last_active": FieldValue.serverTimestamp()
             ])
             
-            print("💰 [FlintArtists] Recorded tip of $\(amount) for artist \(artistID)")
+            print("💰 [FeaturedArtists] Recorded tip of $\(amount) for artist \(artistID)")
         } catch {
-            print("❌ [FlintArtists] Error recording tip: \(error)")
+            print("❌ [FeaturedArtists] Error recording tip: \(error)")
         }
         #endif
     }
     
     // MARK: - Track Integration
     
-    /// Get tracks for a Flint artist from Apple Music
-    func getArtistTracks(artist: FlintArtist) async -> [FlintArtistTrack] {
+    /// Get tracks for a Flint artist from Apple Music using their artist ID
+    func getArtistTracks(artist: FeaturedArtist) async -> [FeaturedArtistTrack] {
         guard let appleMusicID = artist.appleMusicArtistID else {
             return []
         }
         
+        let musicKitService = MusicKitService.shared
+        
+        // Ensure authorized
+        if musicKitService.authorizationStatus != .authorized {
+            _ = await musicKitService.requestAuthorization()
+            guard musicKitService.authorizationStatus == .authorized else { return [] }
+        }
+        
         do {
-            let musicKitService = MusicKitService.shared
-            
-            // Ensure authorized
-            guard musicKitService.authorizationStatus == .authorized else {
-                _ = await musicKitService.requestAuthorization()
-                return []
-            }
-            
-            // Search for artist's tracks
-            let tracks = try await musicKitService.search(term: artist.displayName, limit: 20)
+            // Use the actual Apple Music artist ID for accurate top songs
+            let itemID = MusicItemID(appleMusicID)
+            let tracks = try await musicKitService.getArtistTopSongs(artistID: itemID, limit: 20)
             
             return tracks.map { track in
                 var modifiedTrack = track
-                modifiedTrack.isFlintArtist = true
-                modifiedTrack.flintArtistID = artist.id
+                modifiedTrack.isFeaturedArtist = true
+                modifiedTrack.featuredArtistID = artist.id
                 
-                return FlintArtistTrack(
+                return FeaturedArtistTrack(
                     id: "\(artist.id)-\(track.id)",
                     track: modifiedTrack,
                     artist: artist
                 )
             }
         } catch {
-            print("❌ [FlintArtists] Error fetching tracks for \(artist.displayName): \(error)")
-            return []
+            // Fallback to search if artist ID lookup fails
+            print("⚠️ [FeaturedArtists] Artist ID lookup failed for \(artist.displayName), falling back to search: \(error)")
+            do {
+                let tracks = try await musicKitService.search(term: artist.displayName, limit: 20)
+                return tracks.map { track in
+                    var modifiedTrack = track
+                    modifiedTrack.isFeaturedArtist = true
+                    modifiedTrack.featuredArtistID = artist.id
+                    return FeaturedArtistTrack(
+                        id: "\(artist.id)-\(track.id)",
+                        track: modifiedTrack,
+                        artist: artist
+                    )
+                }
+            } catch {
+                print("❌ [FeaturedArtists] Error fetching tracks for \(artist.displayName): \(error)")
+                return []
+            }
         }
     }
     
     /// Get all featured Flint tracks
-    func getFeaturedTracks() async -> [FlintArtistTrack] {
-        var allTracks: [FlintArtistTrack] = []
+    func getFeaturedTracks() async -> [FeaturedArtistTrack] {
+        var allTracks: [FeaturedArtistTrack] = []
         
         for artist in featuredArtists.prefix(5) {
             let tracks = await getArtistTracks(artist: artist)
@@ -522,20 +540,20 @@ final class FlintArtistService: ObservableObject {
             .sorted { $0.totalStreams > $1.totalStreams }
     }
     
-    private func cacheArtists(_ artists: [FlintArtist]) {
+    private func cacheArtists(_ artists: [FeaturedArtist]) {
         for artist in artists {
             artistCache[artist.id] = artist
         }
         
         // Persist to UserDefaults for offline access
         if let encoded = try? JSONEncoder().encode(artists) {
-            UserDefaults.standard.set(encoded, forKey: "cached_flint_artists")
+            UserDefaults.standard.set(encoded, forKey: "cached_featured_artists")
         }
     }
     
     private func loadCachedArtists() {
-        if let data = UserDefaults.standard.data(forKey: "cached_flint_artists"),
-           let cached = try? JSONDecoder().decode([FlintArtist].self, from: data) {
+        if let data = UserDefaults.standard.data(forKey: "cached_featured_artists"),
+           let cached = try? JSONDecoder().decode([FeaturedArtist].self, from: data) {
             artists = cached
             updateArtistCategories()
             
@@ -545,13 +563,13 @@ final class FlintArtistService: ObservableObject {
         }
     }
     
-    // MARK: - Seed Data (Flint Artists) - VERIFIED REAL 810 ONLY
+    // MARK: - Seed Data (Featured Artists)
     
-    static let seedArtists: [FlintArtist] = [
+    static let seedArtists: [FeaturedArtist] = [
         
         // ========== LEGENDS / OGs ==========
         
-        FlintArtist(
+        FeaturedArtist(
             id: "flint-001",
             name: "MC Breed",
             stageName: "MC Breed",
@@ -565,7 +583,7 @@ final class FlintArtistService: ObservableObject {
             monthlyListeners: 150000,
             followerCount: 250000
         ),
-        FlintArtist(
+        FeaturedArtist(
             id: "flint-002",
             name: "Dayton Family",
             stageName: "Dayton Family",
@@ -579,7 +597,7 @@ final class FlintArtistService: ObservableObject {
             monthlyListeners: 80000,
             followerCount: 175000
         ),
-        FlintArtist(
+        FeaturedArtist(
             id: "flint-003",
             name: "Bootleg",
             stageName: "Bootleg",
@@ -593,7 +611,7 @@ final class FlintArtistService: ObservableObject {
             monthlyListeners: 25000,
             followerCount: 65000
         ),
-        FlintArtist(
+        FeaturedArtist(
             id: "flint-004",
             name: "Shoestring",
             stageName: "Shoestring",
@@ -606,7 +624,7 @@ final class FlintArtistService: ObservableObject {
             monthlyListeners: 12000,
             followerCount: 35000
         ),
-        FlintArtist(
+        FeaturedArtist(
             id: "flint-005",
             name: "Big Herk",
             stageName: "Big Herk",
@@ -623,7 +641,7 @@ final class FlintArtistService: ObservableObject {
         
         // ========== CURRENT GENERATION ==========
         
-        FlintArtist(
+        FeaturedArtist(
             id: "flint-006",
             name: "YN Jay",
             stageName: "YN Jay",
@@ -639,7 +657,7 @@ final class FlintArtistService: ObservableObject {
             monthlyListeners: 800000,
             followerCount: 500000
         ),
-        FlintArtist(
+        FeaturedArtist(
             id: "flint-007",
             name: "Rio Da Yung OG",
             stageName: "Rio Da Yung OG",
@@ -655,7 +673,7 @@ final class FlintArtistService: ObservableObject {
             monthlyListeners: 250000,
             followerCount: 350000
         ),
-        FlintArtist(
+        FeaturedArtist(
             id: "flint-008",
             name: "Jon Connor",
             stageName: "Jon Connor",
@@ -671,7 +689,7 @@ final class FlintArtistService: ObservableObject {
             monthlyListeners: 45000,
             followerCount: 95000
         ),
-        FlintArtist(
+        FeaturedArtist(
             id: "flint-009",
             name: "RMC Mike",
             stageName: "RMC Mike",
@@ -687,7 +705,7 @@ final class FlintArtistService: ObservableObject {
             monthlyListeners: 150000,
             followerCount: 180000
         ),
-        FlintArtist(
+        FeaturedArtist(
             id: "flint-010",
             name: "Louie Ray",
             stageName: "Louie Ray",
@@ -703,7 +721,7 @@ final class FlintArtistService: ObservableObject {
             monthlyListeners: 120000,
             followerCount: 140000
         ),
-        FlintArtist(
+        FeaturedArtist(
             id: "flint-011",
             name: "KrispyLife Kidd",
             stageName: "KrispyLife Kidd",
@@ -719,7 +737,7 @@ final class FlintArtistService: ObservableObject {
             monthlyListeners: 80000,
             followerCount: 90000
         ),
-        FlintArtist(
+        FeaturedArtist(
             id: "flint-012",
             name: "YSR Gramz",
             stageName: "YSR Gramz",
@@ -727,19 +745,248 @@ final class FlintArtistService: ObservableObject {
             genres: ["Hip-Hop", "Michigan Rap"],
             hometown: "Flint, MI",
             profileImageURL: "https://i.ytimg.com/vi/HqC7Ov7sCwA/hqdefault.jpg",
+            appleMusicArtistID: "1474729367",
+            appleMusicURL: "https://music.apple.com/us/artist/ysr-gramz/1474729367",
             instagramHandle: "ysrgramz",
             isVerified: true,
             verificationBadge: .verified,
             totalStreams: 1500000,
             monthlyListeners: 60000,
             followerCount: 75000
+        ),
+
+        // ========== FEATURED ARTISTS ==========
+
+        FeaturedArtist(
+            id: "feat-mia-ghost",
+            name: "MIA Ghost",
+            stageName: "MIA Ghost",
+            bio: "REALITY CHECK (2026). Top tracks: GAME 7, FAKE & REAL, BEETLEJUICE. 7 albums deep.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "MIA",
+            appleMusicArtistID: "1582746406",
+            appleMusicURL: "https://music.apple.com/us/artist/mia-ghost/1582746406",
+            isVerified: true,
+            verificationBadge: .verified,
+            totalStreams: 800000,
+            monthlyListeners: 35000,
+            followerCount: 50000
+        ),
+        FeaturedArtist(
+            id: "feat-mia-getem",
+            name: "MIA Getem",
+            stageName: "MIA Getem",
+            bio: "Take A Gamble (2026). Top tracks: BEETLEJUICE, SCORE, BUMP, SOS. Strictly entertainment.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "MIA",
+            appleMusicArtistID: "1798000837",
+            appleMusicURL: "https://music.apple.com/us/artist/mia-getem/1798000837",
+            isVerified: true,
+            verificationBadge: .rising,
+            totalStreams: 300000,
+            monthlyListeners: 15000,
+            followerCount: 20000
+        ),
+        FeaturedArtist(
+            id: "feat-bk-babydumpper",
+            name: "Bk BabyDumpper",
+            stageName: "Bk BabyDumpper",
+            bio: "The Dumpp Zone. Raw street music.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "Michigan",
+            appleMusicArtistID: "1709296525",
+            appleMusicURL: "https://music.apple.com/us/artist/bk-babydumpper/1709296525",
+            isVerified: true,
+            verificationBadge: .rising,
+            totalStreams: 100000,
+            monthlyListeners: 8000,
+            followerCount: 12000
+        ),
+        FeaturedArtist(
+            id: "feat-lil-donny",
+            name: "Lil Donny",
+            stageName: "Lil Donny",
+            bio: "Lead Baby (2026). Latest drop: So Gone. Smooth with the melodies.",
+            genres: ["Hip-Hop", "Melodic Rap"],
+            hometown: "Michigan",
+            appleMusicURL: "https://music.apple.com/us/album/so-gone/1882571908?i=1882572102",
+            isVerified: true,
+            verificationBadge: .rising,
+            totalStreams: 150000,
+            monthlyListeners: 10000,
+            followerCount: 15000
+        ),
+        FeaturedArtist(
+            id: "feat-hotboy-curry",
+            name: "Hotboy Curry",
+            stageName: "Hotboy Curry",
+            bio: "Pressin Curry (2025). Top tracks: Qurom, Whoopty Doo, Saved By The Bell. 7 albums. Gangaroni time.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "Michigan",
+            appleMusicArtistID: "1771099410",
+            appleMusicURL: "https://music.apple.com/us/artist/hotboy-curry/1771099410",
+            isVerified: true,
+            verificationBadge: .verified,
+            totalStreams: 600000,
+            monthlyListeners: 25000,
+            followerCount: 35000
+        ),
+        FeaturedArtist(
+            id: "feat-ysr-loski",
+            name: "Ysr Loski",
+            stageName: "Ysr Loski",
+            bio: "Wtf Loski ? 2 (2025). Top tracks: Beecher Mafia, Miami Nights, Energy. 7 albums. YSR label.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "Flint, MI",
+            appleMusicArtistID: "1511351716",
+            appleMusicURL: "https://music.apple.com/us/artist/ysr-loski/1511351716",
+            isVerified: true,
+            verificationBadge: .verified,
+            totalStreams: 500000,
+            monthlyListeners: 20000,
+            followerCount: 30000
+        ),
+        FeaturedArtist(
+            id: "feat-luh-monti",
+            name: "Luh Monti",
+            stageName: "Luh Monti",
+            bio: "Like That (2026). Top tracks: Dr Dolittle, 679, All Facts. 5 albums. Olympic Shit Talking.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "Michigan",
+            appleMusicArtistID: "1656612386",
+            appleMusicURL: "https://music.apple.com/us/artist/luh-monti/1656612386",
+            isVerified: true,
+            verificationBadge: .verified,
+            totalStreams: 400000,
+            monthlyListeners: 18000,
+            followerCount: 25000
+        ),
+        FeaturedArtist(
+            id: "feat-babyfxce-e",
+            name: "Babyfxce E",
+            stageName: "Babyfxce E",
+            bio: "Da Realest (2026). Top tracks: Die Bout It, Trackhawk, The Big 3, PTP. 6 albums. Real striker music.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "Flint, MI",
+            appleMusicArtistID: "1573432856",
+            appleMusicURL: "https://music.apple.com/us/artist/babyfxce-e/1573432856",
+            isVerified: true,
+            verificationBadge: .gold,
+            totalStreams: 2000000,
+            monthlyListeners: 80000,
+            followerCount: 100000
+        ),
+        FeaturedArtist(
+            id: "feat-3200-tre",
+            name: "3200 Tre",
+            stageName: "3200 Tre",
+            bio: "679 feat. Luh Monti (2026). Top tracks: Duffy, Open A Bank, I'm With 30. 7 albums. Real Mitten Baby.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "Flint, MI",
+            appleMusicArtistID: "1491631657",
+            appleMusicURL: "https://music.apple.com/us/artist/3200-tre/1491631657",
+            isVerified: true,
+            verificationBadge: .verified,
+            totalStreams: 700000,
+            monthlyListeners: 30000,
+            followerCount: 40000
+        ),
+        FeaturedArtist(
+            id: "feat-ktrip",
+            name: "Ktrip",
+            stageName: "Ktrip",
+            bio: "Life After Death (2021). Top tracks: No shoes, Young Goat Shit, Be Still. Speaking from Experience.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "Michigan",
+            appleMusicArtistID: "1484873437",
+            appleMusicURL: "https://music.apple.com/us/artist/ktrip/1484873437",
+            isVerified: true,
+            verificationBadge: .rising,
+            totalStreams: 200000,
+            monthlyListeners: 10000,
+            followerCount: 15000
+        ),
+        FeaturedArtist(
+            id: "feat-baby-ju",
+            name: "Baby Ju",
+            stageName: "Baby Ju",
+            bio: "27 Nights (2022). Top tracks: Chrome Heart, Fully Mode, Cash Back. D-Rob Gang.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "Michigan",
+            appleMusicArtistID: "1649723396",
+            appleMusicURL: "https://music.apple.com/us/artist/baby-ju/1649723396",
+            isVerified: true,
+            verificationBadge: .rising,
+            totalStreams: 150000,
+            monthlyListeners: 8000,
+            followerCount: 12000
+        ),
+        FeaturedArtist(
+            id: "feat-ftos-twan",
+            name: "Ftos Twan",
+            stageName: "Ftos Twan",
+            bio: "Unk & Neph (2026). Top tracks: Perk Talk, Tom Hanson, 4 Headed Goat. 7 albums. Chess Not Checkers.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "Michigan",
+            appleMusicArtistID: "1527300992",
+            appleMusicURL: "https://music.apple.com/us/artist/ftos-twan/1527300992",
+            isVerified: true,
+            verificationBadge: .verified,
+            totalStreams: 500000,
+            monthlyListeners: 20000,
+            followerCount: 30000
+        ),
+        FeaturedArtist(
+            id: "feat-scatz",
+            name: "Scatz",
+            stageName: "Scatz",
+            bio: "Free Ghost (2026). Top tracks: Rice St, Benjamin Button, Free Da Yung OG. Six Ward Lord.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "Michigan",
+            appleMusicArtistID: "904008025",
+            appleMusicURL: "https://music.apple.com/us/artist/scatz/904008025",
+            isVerified: true,
+            verificationBadge: .verified,
+            totalStreams: 400000,
+            monthlyListeners: 18000,
+            followerCount: 25000
+        ),
+        FeaturedArtist(
+            id: "feat-baby-ghost",
+            name: "Baby Ghost",
+            stageName: "Baby Ghost",
+            bio: "Hurting Bad (2026). Top tracks: BOW, 3 Kills, Wham!, Elvis Presley. Gho Krazy series.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "Michigan",
+            appleMusicArtistID: "1507813989",
+            appleMusicURL: "https://music.apple.com/us/artist/baby-ghost/1507813989",
+            isVerified: true,
+            verificationBadge: .verified,
+            totalStreams: 600000,
+            monthlyListeners: 25000,
+            followerCount: 35000
+        ),
+        FeaturedArtist(
+            id: "feat-way-p",
+            name: "Way P",
+            stageName: "Way P",
+            bio: "Prolly feat. FblManny (2025). Top tracks: Gang baby, Probably, All Rise, Broad Day.",
+            genres: ["Hip-Hop", "Michigan Rap"],
+            hometown: "Michigan",
+            appleMusicArtistID: "1524383650",
+            appleMusicURL: "https://music.apple.com/us/artist/way-p/1524383650",
+            isVerified: true,
+            verificationBadge: .rising,
+            totalStreams: 100000,
+            monthlyListeners: 5000,
+            followerCount: 8000
         )
     ]
 }
 
 // MARK: - Errors
 
-enum FlintArtistError: Error, LocalizedError {
+enum FeaturedArtistError: Error, LocalizedError {
     case firestoreNotAvailable
     case artistNotFound
     case updateFailed
@@ -762,10 +1009,10 @@ enum FlintArtistError: Error, LocalizedError {
 // MARK: - Preview
 
 #if DEBUG
-extension FlintArtistService {
-    static var preview: FlintArtistService {
-        let service = FlintArtistService.shared
-        service.artists = FlintArtistService.seedArtists
+extension FeaturedArtistService {
+    static var preview: FeaturedArtistService {
+        let service = FeaturedArtistService.shared
+        service.artists = FeaturedArtistService.seedArtists
         service.updateArtistCategories()
         return service
     }

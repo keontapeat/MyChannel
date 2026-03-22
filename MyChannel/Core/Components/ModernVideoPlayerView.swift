@@ -39,7 +39,7 @@ struct ModernVideoPlayerView: View {
                 // Video Player
                 if let player = playerViewModel.player {
                     // The same AVPlayer feeds both the in-app mini player and native PiP bubble
-                    VideoPlayer(player: player)
+                    RawPlayerLayerView(player: player, videoGravity: .resizeAspect)
                         .aspectRatio(16/9, contentMode: .fit)
                         .clipped()
                         .onTapGesture {
@@ -813,8 +813,12 @@ class VideoPlayerViewModel: ObservableObject {
     private func setupNotifications() {
         NotificationCenter.default
             .publisher(for: .AVPlayerItemDidPlayToEndTime)
-            .sink { [weak self] _ in
-                self?.isPlaying = false
+            .sink { [weak self] notification in
+                // 🔥 FIX: Only handle end-of-playback for OUR player item
+                guard let self = self else { return }
+                if let endedItem = notification.object as? AVPlayerItem,
+                   endedItem !== self.player?.currentItem { return }
+                self.isPlaying = false
             }
             .store(in: &cancellables)
     }

@@ -121,8 +121,7 @@ struct ProEditorView: View {
             Color.black
             
             if let player = editor.player {
-                VideoPlayer(player: player)
-                    .disabled(true)
+                RawPlayerLayerView(player: player, videoGravity: .resizeAspect)
             } else {
                 VStack(spacing: 12) {
                     ProgressView()

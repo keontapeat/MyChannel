@@ -53,7 +53,13 @@ extension AdsService {
     
     /// 🔥 REQUEST PRE-ROLL AD - USES NUCLEAR MONETIZATION FOR REAL REVENUE
     static func requestPreRoll(for video: Video, personalized: Bool = true) async -> ServedAd? {
-        // 🔥 MONETIZATION CHECK: Show ads only if monetization is enabled
+        // � PREMIUM CHECK: Never serve ads to MyChannel Plus+ subscribers
+        if StoreKitService.shared.isPremium {
+            print("👑 [Ads] Premium subscriber — no ads served")
+            return nil
+        }
+        
+        // �🔥 MONETIZATION CHECK: Show ads only if monetization is enabled
         let shouldShowAds = video.monetization?.isMonetized ?? true // Default to true if no monetization settings
         guard shouldShowAds else {
             print("🚫 Video \(video.id ?? "unknown") has monetization disabled - no ads will be served")

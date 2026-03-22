@@ -75,7 +75,7 @@ struct LiveTVPlayerView: View {
             Color.black.ignoresSafeArea()
 
             if let player = player {
-                VideoPlayer(player: player)
+                RawPlayerLayerView(player: player, videoGravity: .resizeAspect)
                     .ignoresSafeArea()
             } else if let error = streamError {
                 // 🔥 Stream error view with retry

@@ -153,9 +153,8 @@ struct VideoDetailView: View {
         ZStack {
             // Ad video player - show video only when ready
             if let player = adManager.adPlayer, adManager.isAdVideoReady {
-                VideoPlayer(player: player)
+                RawPlayerLayerView(player: player, videoGravity: .resizeAspect)
                     .aspectRatio(16/9, contentMode: .fit)
-                    .disabled(true)  // No controls during ad
                     .onAppear {
                         // Ensure playback starts when view appears
                         if player.rate == 0 {
@@ -948,14 +947,9 @@ struct VideoDetailView: View {
     private var quickControls: some View {
         HStack(spacing: 12) {
             Button(action: { showingPlaybackSpeedSelector = true }) {
-                HStack(spacing: 4) {
-                    Image(systemName: "gauge.medium")
-                    Text(String(format: "%.1fx", playbackRate))
-                }
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.white.opacity(0.12), in: Capsule())
+                Text(playbackRate == 1.0 ? "1x" : String(format: "%.2gx", playbackRate))
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(playbackRate != 1.0 ? AppTheme.Colors.primary : .white)
             }
             .buttonStyle(ScaleButtonStyle())
             

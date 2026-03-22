@@ -146,17 +146,20 @@ class SmartUserSeederService: ObservableObject {
         let friends = OwnerProfile.instagramFriends
         
         for friend in friends {
+            let fid = "ig_\(friend.name.lowercased().replacingOccurrences(of: " ", with: "_"))"
+            // Deterministic stats so rankings stay stable across launches
+            var rng = StableRNG(string: fid)
             let seededUser = SeededUser(
-                id: "ig_\(friend.name.lowercased().replacingOccurrences(of: " ", with: "_"))",
+                id: fid,
                 username: friend.name.lowercased().replacingOccurrences(of: " ", with: ""),
                 displayName: friend.name,
                 bio: "Artist from Flint, MI 🔥",
                 profileImageURL: friend.avatar,
                 bannerImageURL: nil,
                 isVerified: true, // Your friends are verified!
-                subscriberCount: Int.random(in: 10_000...100_000),
-                videoCount: Int.random(in: 15...50),
-                totalViews: Int.random(in: 100_000...1_000_000),
+                subscriberCount: Int.random(in: 10_000...100_000, using: &rng),
+                videoCount: Int.random(in: 15...50, using: &rng),
+                totalViews: Int.random(in: 100_000...1_000_000, using: &rng),
                 category: .music,
                 userType: .imported,
                 createdAt: Date(),

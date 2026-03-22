@@ -352,6 +352,7 @@ enum CloudRunService: String, CaseIterable {
     case myChannelUpload = "mychannel-upload"
     case superAITeam = "super-ai-team"
     case aiRank = "ai-rank"
+    case topRankML = "top-rank-ml"
     case aiAvatar = "ai-avatar"
     case aiAvatarv2 = "ai-avatar-v2"
     case advertiserAI = "advertiser-ai"

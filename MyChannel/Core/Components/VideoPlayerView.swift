@@ -27,7 +27,7 @@ struct VideoPlayerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             
-            VideoPlayer(player: playerManager.player)
+            RawPlayerLayerView(player: playerManager.player ?? AVPlayer(), videoGravity: .resizeAspect)
                 .aspectRatio(16/9, contentMode: .fit)
             
             VStack {

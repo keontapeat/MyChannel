@@ -377,12 +377,16 @@ class StoryCreatorViewModel: ObservableObject {
     
     // Save story to Firestore
     private func saveStoryToFirestore(_ story: Story) async throws {
-        #if canImport(FirebaseFirestore)
+        #if canImport(FirebaseFirestore) && canImport(FirebaseAuth)
+        guard let authUID = Auth.auth().currentUser?.uid else {
+            print("⚠️ [StoryCreator] Not signed in — skipping Firestore save")
+            return
+        }
         let db = Firestore.firestore()
         
         let storyData: [String: Any] = [
             "id": story.id,
-            "creatorId": story.creatorId,
+            "creatorId": authUID,
             "mediaURL": story.mediaURL,
             "mediaType": story.mediaType.rawValue,
             "duration": story.duration,

@@ -26,6 +26,11 @@ import AVKit
 import FirebaseFirestore
 #endif
 
+// MARK: - Notification for auto-skipping unavailable flicks
+extension NSNotification.Name {
+    static let flickVideoUnavailable = NSNotification.Name("flickVideoUnavailable")
+}
+
 // MARK: - Nuclear Flicks View (THE BEST IN THE WORLD)
 struct NuclearFlicksView: View {
     
@@ -105,6 +110,20 @@ struct NuclearFlicksView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshFlicksFeed"))) { _ in
             Task {
                 await viewModel.loadInitialFlicks()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .flickVideoUnavailable)) { notification in
+            // Auto-skip unavailable videos
+            if let flickId = notification.userInfo?["flickId"] as? String,
+               currentIndex < viewModel.flicks.count,
+               viewModel.flicks[currentIndex].id == flickId {
+                // Remove the broken flick from the list so user never sees it again
+                viewModel.flicks.remove(at: currentIndex)
+                // If we removed the last item, go back one; otherwise currentIndex now points to next
+                if currentIndex >= viewModel.flicks.count && currentIndex > 0 {
+                    currentIndex = viewModel.flicks.count - 1
+                }
+                print("⏭️ [NuclearFlicks] Auto-skipped unavailable flick: \(flickId)")
             }
         }
     }
@@ -756,6 +775,12 @@ struct NuclearVideoPlayerView: View {
     let isMuted: Bool
     
     @StateObject private var playerManager = VideoPlayerManager()
+    @State private var hasSetup = false
+    @State private var loadingTimedOut = false
+    
+    private var videoUnavailable: Bool {
+        playerManager.hasError || loadingTimedOut
+    }
     
     var body: some View {
         GeometryReader { geo in
@@ -776,17 +801,42 @@ struct NuclearVideoPlayerView: View {
                 )
                 .frame(width: geo.size.width, height: geo.size.height)
                 .clipped()
-                .opacity(playerManager.player != nil ? 0 : 1)
+                .opacity(playerManager.isPlaying ? 0 : 1)
                 
                 // Video layer - fill entire screen
-                if let player = playerManager.player {
+                if !videoUnavailable, let player = playerManager.player {
                     FlicksPlayerLayerView(player: player, videoGravity: .resizeAspectFill)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
                 }
                 
-                // Loading: white spinner only while loading (no orange dot)
-                if playerManager.isLoading {
+                // Video unavailable state (deleted/broken video) — auto-skip after brief display
+                if videoUnavailable {
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 36))
+                            .foregroundColor(.white.opacity(0.6))
+                        Text("Video unavailable")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.white.opacity(0.7))
+                        Text("Skipping...")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.4))
+                    }
+                    .onAppear {
+                        // Auto-skip after a brief moment so user isn't stuck
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                            NotificationCenter.default.post(
+                                name: .flickVideoUnavailable,
+                                object: nil,
+                                userInfo: ["flickId": flick.id]
+                            )
+                        }
+                    }
+                }
+                
+                // Loading: white spinner only while actively loading (with timeout)
+                if playerManager.isLoading && !videoUnavailable && !playerManager.isPlaying {
                     ProgressView()
                         .tint(.white)
                         .scaleEffect(1.2)
@@ -796,14 +846,20 @@ struct NuclearVideoPlayerView: View {
         }
         .ignoresSafeArea()
         .onAppear {
-            setupPlayer()
+            if isActive && !hasSetup {
+                setupPlayer()
+            }
         }
         .onDisappear {
             playerManager.pause()
         }
         .onChange(of: isActive) { active in
             if active {
-                playerManager.play()
+                if !hasSetup {
+                    setupPlayer()
+                } else if !videoUnavailable {
+                    playerManager.play()
+                }
             } else {
                 playerManager.pause()
             }
@@ -817,6 +873,8 @@ struct NuclearVideoPlayerView: View {
     }
     
     private func setupPlayer() {
+        hasSetup = true
+        loadingTimedOut = false
         let video = flick.toVideo()
         playerManager.setupPlayer(with: video)
         playerManager.setLooping(true)
@@ -824,6 +882,14 @@ struct NuclearVideoPlayerView: View {
         
         if isActive {
             playerManager.play()
+        }
+        
+        // Timeout: hide spinner after 6s to prevent stuck loading on deleted videos
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [self] in
+            if playerManager.isLoading && !playerManager.isPlaying {
+                loadingTimedOut = true
+                print("⏰ [NuclearFlicks] Loading timed out for flick: \(flick.id) — video likely deleted")
+            }
         }
     }
 }
@@ -886,9 +952,16 @@ class NuclearFlicksViewModel: ObservableObject {
             
             if !snapshot.documents.isEmpty {
                 lastDocument = snapshot.documents.last
-                flicks = snapshot.documents.compactMap { doc in
+                var parsed = snapshot.documents.compactMap { doc in
                     parseFlickFromDocument(doc)
                 }
+                // If very few Firestore flicks, supplement with demo content so feed isn't empty/broken
+                if parsed.count < 3 {
+                    let demoBackfill = makeDemoFlicks().prefix(max(0, 10 - parsed.count))
+                    parsed.append(contentsOf: demoBackfill)
+                    print("📺 [NuclearFlicks] Supplemented \(parsed.count) flicks with demo content")
+                }
+                flicks = parsed
                 print("✅ [NuclearFlicks] Loaded \(flicks.count) Flicks from Firestore")
             } else {
                 // Silently fallback to demo data (no error - this is expected when starting)
@@ -1122,7 +1195,9 @@ class NuclearFlicksViewModel: ObservableObject {
         
         guard let title = data["title"] as? String,
               let videoURL = data["videoUrl"] as? String ?? data["videoURL"] as? String,
-              !videoURL.isEmpty else {
+              !videoURL.isEmpty,
+              let parsedURL = URL(string: videoURL),
+              parsedURL.scheme == "https" || parsedURL.scheme == "http" else {
             return nil
         }
         
@@ -1165,7 +1240,14 @@ class NuclearFlicksViewModel: ObservableObject {
     private func makeDemoFlicks() -> [NuclearFlick] {
         let freeVideos = SeedCatalogService.shared.freeCatalogVideos
         let seedVideos = SeedCatalogService.shared.seedVideos
-        let combined = (freeVideos + seedVideos).shuffled()
+        let combined = (freeVideos + seedVideos)
+            .filter { video in
+                let url = video.videoURL
+                guard !url.isEmpty, let parsed = URL(string: url),
+                      parsed.scheme == "https" || parsed.scheme == "http" else { return false }
+                return true
+            }
+            .shuffled()
         if !combined.isEmpty {
             return combined.prefix(60).map { video in
                 videoToFlick(video)
@@ -1209,7 +1291,12 @@ class NuclearFlicksViewModel: ObservableObject {
         do {
             let videos = try await VideoFirestoreService.shared.fetchMultipleVideos(videoIds: videoIds)
             guard !videos.isEmpty else { return [] }
-            let flickMap = Dictionary(uniqueKeysWithValues: videos.map { ($0.id, videoToFlick($0)) })
+            // Filter out videos with empty/invalid URLs (e.g. deleted videos)
+            let validVideos = videos.filter { video in
+                let url = video.videoURL
+                return !url.isEmpty && URL(string: url) != nil
+            }
+            let flickMap = Dictionary(uniqueKeysWithValues: validVideos.map { ($0.id, videoToFlick($0)) })
             return videoIds.compactMap { flickMap[$0] }
         } catch {
             print("⚠️ [NuclearFlicks] Failed to hydrate recommended IDs: \(error)")

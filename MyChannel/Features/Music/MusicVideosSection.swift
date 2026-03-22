@@ -36,8 +36,8 @@ struct MusicVideo: Identifiable {
         return "\(views) views"
     }
     
-    // Sample Flint music videos
-    static let flintVideos: [MusicVideo] = [
+    // Sample featured artist videos
+    static let featuredVideos: [MusicVideo] = [
         MusicVideo(
             id: "mv-1",
             title: "Coochie",
@@ -103,6 +103,50 @@ struct MusicVideo: Identifiable {
             views: 1200000,
             isOfficial: true,
             releaseDate: Date()
+        ),
+        MusicVideo(
+            id: "mv-7",
+            title: "Coochie World Tour",
+            artist: "YN Jay",
+            thumbnailURL: "https://i.ytimg.com/vi/pnQ0BXTfBjk/hqdefault.jpg",
+            videoURL: "https://www.youtube.com/watch?v=pnQ0BXTfBjk",
+            duration: 190,
+            views: 22000000,
+            isOfficial: true,
+            releaseDate: Date()
+        ),
+        MusicVideo(
+            id: "mv-8",
+            title: "Louie Season",
+            artist: "Louie Ray",
+            thumbnailURL: "https://i.ytimg.com/vi/oVP_aK7JzDw/hqdefault.jpg",
+            videoURL: "https://www.youtube.com/watch?v=oVP_aK7JzDw",
+            duration: 205,
+            views: 4500000,
+            isOfficial: true,
+            releaseDate: Date()
+        ),
+        MusicVideo(
+            id: "mv-9",
+            title: "KrispyLife",
+            artist: "KrispyLife Kidd",
+            thumbnailURL: "https://i.ytimg.com/vi/xv88_-pLqz8/hqdefault.jpg",
+            videoURL: "https://www.youtube.com/watch?v=xv88_-pLqz8",
+            duration: 175,
+            views: 3200000,
+            isOfficial: true,
+            releaseDate: Date()
+        ),
+        MusicVideo(
+            id: "mv-10",
+            title: "Street Vibes",
+            artist: "Big Herk",
+            thumbnailURL: "https://i.ytimg.com/vi/W8CiGjLlHDs/hqdefault.jpg",
+            videoURL: "https://www.youtube.com/watch?v=W8CiGjLlHDs",
+            duration: 230,
+            views: 900000,
+            isOfficial: true,
+            releaseDate: Date()
         )
     ]
 }
@@ -138,7 +182,7 @@ struct MusicVideosSection: View {
             .padding(.horizontal, 20)
             
             // Featured video (large)
-            if let featured = MusicVideo.flintVideos.first {
+            if let featured = MusicVideo.featuredVideos.first {
                 FeaturedVideoCard(video: featured) {
                     selectedVideo = featured
                     showVideoPlayer = true
@@ -150,7 +194,7 @@ struct MusicVideosSection: View {
             // Video carousel
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
-                    ForEach(MusicVideo.flintVideos.dropFirst()) { video in
+                    ForEach(MusicVideo.featuredVideos.dropFirst()) { video in
                         MusicVideoCard(video: video) {
                             selectedVideo = video
                             showVideoPlayer = true

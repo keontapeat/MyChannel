@@ -130,7 +130,7 @@ struct FloatingMiniPlayer: View {
         
         let videoPlayerView: some View = Group {
             if let player = globalPlayer.player {
-                VideoPlayer(player: player)
+                RawPlayerLayerView(player: player, videoGravity: .resizeAspect)
                     .aspectRatio(16/9, contentMode: .fit)
                     .allowsHitTesting(false)
                     .clipped()

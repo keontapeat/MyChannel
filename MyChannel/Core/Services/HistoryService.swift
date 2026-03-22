@@ -116,9 +116,12 @@ final class HistoryService: ObservableObject {
         #if canImport(FirebaseFirestore)
         do {
             let snap = try await db.collection("history").document(userId).collection("items").getDocuments()
+            // 🔥 FIX: Use batch delete instead of sequential deletes (up to 500 per batch)
+            let batch = db.batch()
             for doc in snap.documents {
-                try await doc.reference.delete()
+                batch.deleteDocument(doc.reference)
             }
+            try await batch.commit()
         } catch {
             print("⚠️ Failed to clear history: \(error.localizedDescription)")
         }

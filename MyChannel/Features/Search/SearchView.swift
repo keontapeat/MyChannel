@@ -32,12 +32,13 @@ struct SearchView: View {
     @StateObject private var searchService = AdvancedSearchService()
     @StateObject private var voiceSearch = VoiceSearchService()
     @StateObject private var trendingService = TrendingSearchService.shared
+    @StateObject private var historyService = SearchHistoryService.shared
     
     @State private var searchText: String = ""
     @State private var selectedScope: SearchScope = .all
     @State private var isSearching: Bool = false
     @State private var recentSearches: [String] = []
-    @State private var searchFilters = SearchFilters()
+    @State private var searchFilters = MyChannel.SearchFilters()
     @State private var showingFilters = false
     @State private var showingVoiceSearch = false
     @State private var showingVisualSearch = false
@@ -88,7 +89,7 @@ struct SearchView: View {
 
                 ZStack(alignment: .topLeading) {
                     if searchText.isEmpty {
-                        SearchEmptyState(recentSearches: recentSearches) { search in
+                        SearchEmptyState(recentSearches: historyService.getRecentSearches()) { search in
                             searchText = search
                             performSearch()
                         }
@@ -426,7 +427,10 @@ struct SearchView: View {
                 }
 
                 await MainActor.run {
-                    // Add to recent searches
+                    // Add to search history
+                    historyService.addSearch(searchText, scope: selectedScope)
+                    
+                    // Add to recent searches (for backward compatibility)
                     if !recentSearches.contains(searchText) {
                         recentSearches.insert(searchText, at: 0)
                         if recentSearches.count > 20 { recentSearches.removeLast() }
@@ -467,17 +471,6 @@ struct SearchView: View {
             defer { Task { @MainActor in isLoadingMore = false } }
             
             do {
-                // Use existing search method with pagination
-                // Note: AdvancedSearchService doesn't have searchMore, so we'll use search again
-                // In production, you'd want to add pagination support to AdvancedSearchService
-                let _ = try await searchService.search(
-                    query: searchText,
-                    filters: searchFilters
-                )
-                guard !Task.isCancelled else { return }
-                await MainActor.run { isLoadingMore = false }
-            } catch {
-                guard !Task.isCancelled else { return }
                 print("🚨 [SearchView] Load more error: \(error)")
                 await MainActor.run { isLoadingMore = false }
             }
@@ -1127,68 +1120,7 @@ struct LiveStreamSearchCard: View {
     }
 }
 
-struct SearchFiltersView: View {
-    @Binding var filters: SearchFilters
-    let onApply: () -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("Content Type") {
-                    Picker("Category", selection: $filters.category) {
-                        Text("All Categories").tag(VideoCategory?.none)
-                        ForEach(VideoCategory.allCases, id: \.self) { category in
-                            Text(category.displayName).tag(category as VideoCategory?)
-                        }
-                    }
-                }
-
-                Section("Duration") {
-                    Picker("Duration", selection: $filters.duration) {
-                        Text("Any Duration").tag(SearchFilters.DurationFilter?.none)
-                        ForEach(SearchFilters.DurationFilter.allCases, id: \.self) { duration in
-                            Text(duration.rawValue).tag(duration as SearchFilters.DurationFilter?)
-                        }
-                    }
-                }
-
-                Section("Upload Date") {
-                    Picker("Upload Date", selection: $filters.uploadDate) {
-                        Text("Any Time").tag(SearchFilters.UploadDateFilter?.none)
-                        ForEach(SearchFilters.UploadDateFilter.allCases, id: \.self) { date in
-                            Text(date.rawValue).tag(date as SearchFilters.UploadDateFilter?)
-                        }
-                    }
-                }
-
-                Section("Sort By") {
-                    Picker("Sort By", selection: $filters.sortBy) {
-                        Text("Relevance").tag(SearchFilters.SortOption?.none)
-                        ForEach(SearchFilters.SortOption.allCases, id: \.self) { sort in
-                            Text(sort.rawValue).tag(sort as SearchFilters.SortOption?)
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Search Filters")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarBackButtonHidden()
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Apply") {
-                        onApply()
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                }
-            }
-        }
-    }
-}
+// SearchFiltersView is now defined in its own file
 
 // MARK: - Supporting Models
 enum SearchScope: String, CaseIterable {

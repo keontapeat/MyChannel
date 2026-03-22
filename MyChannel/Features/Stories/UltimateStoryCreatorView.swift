@@ -9,6 +9,9 @@
 import SwiftUI
 import AVFoundation
 import PhotosUI
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
 
 // MARK: - Ultimate Story Creator
 struct UltimateStoryCreatorView: View {
@@ -517,9 +520,15 @@ struct UltimateStoryCreatorView: View {
                 }
             } catch {
                 print("🚨 Failed to create story: \(error)")
+                print("🚨 Full error details: \(String(describing: error))")
+                #if canImport(FirebaseAuth)
+                print("🚨 Firebase Auth uid at error time: \(Auth.auth().currentUser?.uid ?? "NIL - NOT SIGNED IN")")
+                #endif
                 await MainActor.run {
                     viewModel.isProcessing = false
                     viewModel.processingMessage = ""
+                    errorMessage = "[\(type(of: error))] \(error.localizedDescription)"
+                    showingError = true
                 }
             }
         }

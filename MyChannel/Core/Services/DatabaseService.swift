@@ -156,12 +156,16 @@ class DatabaseService: ObservableObject {
             userDefaults.set(encoded, forKey: "story_\(story.id)")
         }
         // 2. Persist to Firestore so all users/devices see the story
-        #if canImport(FirebaseFirestore)
+        #if canImport(FirebaseFirestore) && canImport(FirebaseAuth)
+        guard let authUID = Auth.auth().currentUser?.uid else {
+            print("⚠️ [DatabaseService] Not signed in — skipping Firestore story save")
+            return
+        }
         let db = Firestore.firestore()
         let expiresAt = story.expiresAt
         let data: [String: Any] = [
             "id": story.id,
-            "creatorId": story.creatorId,
+            "creatorId": authUID,
             "mediaURL": story.mediaURL,
             "mediaType": story.mediaType.rawValue,
             "duration": story.duration,
@@ -181,7 +185,34 @@ class DatabaseService: ObservableObject {
     
     func fetchStoriesByCreator(creatorId: String, includeExpired: Bool = false) async throws -> [Story] {
         var stories: [Story] = []
-        
+
+        // 1. Try Firestore first — simple single-field query (no composite index needed)
+        #if canImport(FirebaseFirestore)
+        do {
+            let db = Firestore.firestore()
+            let snapshot = try await db.collection("stories")
+                .whereField("creatorId", isEqualTo: creatorId)
+                .getDocuments()
+            print("📖 [DatabaseService] fetchStoriesByCreator: found \(snapshot.documents.count) docs for creator \(creatorId)")
+            for doc in snapshot.documents {
+                if let story = storyFromFirestoreDoc(doc) {
+                    if includeExpired || !story.isExpired {
+                        stories.append(story)
+                    }
+                } else {
+                    print("⚠️ [DatabaseService] Could not parse story doc: \(doc.documentID) data: \(doc.data() ?? [:])")
+                }
+            }
+            if !stories.isEmpty {
+                print("✅ [DatabaseService] Returning \(stories.count) stories for creator \(creatorId)")
+                return stories.sorted { $0.createdAt > $1.createdAt }
+            }
+        } catch {
+            print("⚠️ [DatabaseService] Firestore fetchStoriesByCreator failed: \(error.localizedDescription)")
+        }
+        #endif
+
+        // 2. Fallback to local UserDefaults cache
         for key in userDefaults.dictionaryRepresentation().keys {
             if key.hasPrefix("story_"),
                let data = userDefaults.data(forKey: key),
@@ -192,14 +223,45 @@ class DatabaseService: ObservableObject {
                 }
             }
         }
-        
+        print("📖 [DatabaseService] fetchStoriesByCreator fallback: \(stories.count) from UserDefaults")
         return stories.sorted { $0.createdAt > $1.createdAt }
     }
     
     func fetchActiveStoriesForCreators(_ creatorIds: [String]) async throws -> [Story] {
         var stories: [Story] = []
+
+        // 1. Try Firestore first — simple 'in' query, filter expiry client-side
+        #if canImport(FirebaseFirestore)
+        if !creatorIds.isEmpty {
+            do {
+                let db = Firestore.firestore()
+                // Firestore 'in' queries support up to 30 elements
+                let chunks = stride(from: 0, to: creatorIds.count, by: 30).map {
+                    Array(creatorIds[$0..<min($0 + 30, creatorIds.count)])
+                }
+                for chunk in chunks {
+                    let snapshot = try await db.collection("stories")
+                        .whereField("creatorId", in: chunk)
+                        .getDocuments()
+                    print("📖 [DatabaseService] fetchActiveStoriesForCreators: \(snapshot.documents.count) docs for chunk of \(chunk.count) creators")
+                    for doc in snapshot.documents {
+                        if let story = storyFromFirestoreDoc(doc), !story.isExpired {
+                            stories.append(story)
+                        }
+                    }
+                }
+                if !stories.isEmpty {
+                    print("✅ [DatabaseService] Returning \(stories.count) active stories for followed creators")
+                    return stories.sorted { $0.createdAt > $1.createdAt }
+                }
+            } catch {
+                print("⚠️ [DatabaseService] Firestore fetchActiveStoriesForCreators failed: \(error.localizedDescription)")
+            }
+        }
+        #endif
+
+        // 2. Fallback to local UserDefaults cache
         let set = Set(creatorIds)
-        
         for key in userDefaults.dictionaryRepresentation().keys {
             if key.hasPrefix("story_"),
                let data = userDefaults.data(forKey: key),
@@ -208,10 +270,92 @@ class DatabaseService: ObservableObject {
                 stories.append(story)
             }
         }
-        
+        print("📖 [DatabaseService] fetchActiveStoriesForCreators fallback: \(stories.count) from UserDefaults")
         return stories.sorted { $0.createdAt > $1.createdAt }
     }
     
+    func fetchAllActiveStories(limit: Int = 50) async throws -> [Story] {
+        var stories: [Story] = []
+
+        #if canImport(FirebaseFirestore)
+        do {
+            let db = Firestore.firestore()
+            // Simple query — fetch recent stories, filter expiry client-side
+            let snapshot = try await db.collection("stories")
+                .order(by: "createdAt", descending: true)
+                .limit(to: limit)
+                .getDocuments()
+            print("📖 [DatabaseService] fetchAllActiveStories: \(snapshot.documents.count) total docs from Firestore")
+            for doc in snapshot.documents {
+                if let story = storyFromFirestoreDoc(doc), !story.isExpired {
+                    stories.append(story)
+                } else if storyFromFirestoreDoc(doc) == nil {
+                    print("⚠️ [DatabaseService] Could not parse story doc: \(doc.documentID) data: \(doc.data() ?? [:])")
+                }
+            }
+            print("✅ [DatabaseService] fetchAllActiveStories: \(stories.count) non-expired stories")
+            if !stories.isEmpty {
+                return stories.sorted { $0.createdAt > $1.createdAt }
+            }
+        } catch {
+            print("⚠️ [DatabaseService] Firestore fetchAllActiveStories failed: \(error)")
+        }
+        #endif
+
+        // Fallback to local cache
+        for key in userDefaults.dictionaryRepresentation().keys {
+            if key.hasPrefix("story_"),
+               let data = userDefaults.data(forKey: key),
+               let story = try? decoder.decode(Story.self, from: data),
+               !story.isExpired {
+                stories.append(story)
+            }
+        }
+        print("📖 [DatabaseService] fetchAllActiveStories fallback: \(stories.count) from UserDefaults")
+        return stories.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    // MARK: - Firestore Story Parsing
+    #if canImport(FirebaseFirestore)
+    private func storyFromFirestoreDoc(_ doc: DocumentSnapshot) -> Story? {
+        let d = doc.data() ?? [:]
+        guard let creatorId = d["creatorId"] as? String,
+              let mediaURL = d["mediaURL"] as? String,
+              let mediaTypeRaw = d["mediaType"] as? String,
+              let mediaType = Story.MediaType(rawValue: mediaTypeRaw) else {
+            return nil
+        }
+        let duration = d["duration"] as? TimeInterval ?? 15.0
+        let caption = d["caption"] as? String
+        let text = d["text"] as? String
+        let createdAt = (d["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+        let expiresAt = (d["expiresAt"] as? Timestamp)?.dateValue() ?? Calendar.current.date(byAdding: .hour, value: 24, to: createdAt) ?? Date()
+        let viewCount = d["viewCount"] as? Int ?? 0
+        let backgroundColor = d["backgroundColor"] as? String
+        let textColor = d["textColor"] as? String
+        let audience = d["audience"] as? String ?? "public"
+
+        return Story(
+            id: doc.documentID,
+            creatorId: creatorId,
+            mediaURL: mediaURL,
+            mediaType: mediaType,
+            duration: duration,
+            caption: caption,
+            text: text,
+            createdAt: createdAt,
+            expiresAt: expiresAt,
+            viewCount: viewCount,
+            isViewed: false,
+            thumbnail: d["thumbnail"] as? String,
+            isLive: d["isLive"] as? Bool ?? false,
+            backgroundColor: backgroundColor,
+            textColor: textColor,
+            audience: audience
+        )
+    }
+    #endif
+
     // MARK: - Watch History
     func saveToWatchHistory(_ video: Video, watchTime: TimeInterval = 0) async throws {
         let historyItem = WatchHistoryItem.fromVideo(

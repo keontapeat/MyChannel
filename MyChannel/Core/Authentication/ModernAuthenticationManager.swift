@@ -393,14 +393,12 @@ class ModernAuthenticationManager: ObservableObject {
         return isAuthenticated
     }
     
-    // MARK: - Social Authentication (Placeholder)
+    // MARK: - Social Authentication
     func signInWithApple() async throws {
-        // TODO: Implement Apple Sign In integration with backend
-        throw AuthenticationError.serverError("Apple Sign In not implemented")
+        try await AuthenticationManager.shared.signInWithApple()
     }
     
     func signInWithGoogle() async throws {
-        // TODO: Implement Google Sign In integration with backend
-        throw AuthenticationError.serverError("Google Sign In not implemented")
+        await AuthenticationManager.shared.signInWithGoogle()
     }
 }

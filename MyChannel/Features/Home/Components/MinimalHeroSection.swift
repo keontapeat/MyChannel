@@ -143,7 +143,7 @@ struct MinimalHeroSection: View {
                 FeaturedHeroCard(
                     video: vid,
                     isCompact: isCompact,
-                    showLivePreview: (index == selectedIndex) || (index == 0),
+                    isActive: index == selectedIndex,
                     allowLiveInPreview: showLiveHeroPreviewInPreviews,
                     onPlay: { onPlayVideo(vid) },
                     onAddToList: { onAddToList(vid) }
@@ -162,52 +162,56 @@ struct MinimalHeroSection: View {
 struct FeaturedHeroCard: View {
     let video: Video
     let isCompact: Bool
-    let showLivePreview: Bool
+    let isActive: Bool
     let allowLiveInPreview: Bool
     let onPlay: () -> Void
     let onAddToList: () -> Void
 
     @State private var isPressed = false
+    @State private var isBuffering = false
     @EnvironmentObject private var appState: AppState
+
+    /// Whether this video URL can be played directly by AVPlayer (Firebase Storage, local files, direct MP4s).
+    /// YouTube/web URLs cannot — they need the WebView-based VideoLiveThumbnailView instead.
+    private var isDirectPlayable: Bool {
+        let url = video.videoURL.lowercased()
+        guard !url.isEmpty else { return false }
+        // Firebase Storage, local file://, or direct .mp4/.m3u8 links
+        return url.contains("firebasestorage.googleapis.com")
+            || url.hasPrefix("file://")
+            || url.hasSuffix(".mp4")
+            || url.hasSuffix(".mov")
+            || url.hasSuffix(".m3u8")
+            || url.contains("alt=media") // Firebase Storage token URLs
+    }
+
+    /// Whether this video should use the YouTube/web-based live thumbnail preview
+    private var isYouTubeContent: Bool {
+        video.contentSource == .youtube || video.isLiveStream
+    }
 
     var body: some View {
         let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
 
         ZStack {
-            // Media layer (poster + optional live autoplay)
+            // MARK: Media Layer
             ZStack {
-                // Use bundled asset for asset:// or Shot By Keonta intro so thumbnail always shows
-                if video.id == "shot_by_keonta_intro" {
-                    Image("ShotByKeontaThumbnail")
-                        .resizable()
-                        .scaledToFill()
-                } else if video.thumbnailURL.hasPrefix("asset://"),
-                          let assetName = video.thumbnailURL.split(separator: "/").last.map(String.init),
-                          !assetName.isEmpty {
-                    Image(assetName)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    MultiSourceAsyncImage(
-                        urls: video.posterCandidates,
-                        content: { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        },
-                        placeholder: {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color(.systemGray6))
-                        }
-                    )
-                }
+                // 1) Static poster (always rendered as base layer)
+                posterImage
 
-                // Only show live preview overlay for actual live/YouTube content (not local files like Shot By Keonta intro)
-                if showLivePreview && (!isPreview || allowLiveInPreview),
-                   video.isLiveStream || video.contentSource == .youtube {
-                    VideoLiveThumbnailView(video: video, cornerRadius: 16)
-                        .transition(.opacity)
-                        .allowsHitTesting(false)
+                // 2) Video preview — only on the ACTIVE card, pick the right player
+                if isActive && !isPreview {
+                    if isDirectPlayable {
+                        // Firebase Storage / local file → native AVPlayer loop
+                        MutedLoopVideoPlayer(videoURL: video.videoURL, isActive: isActive)
+                            .transition(.opacity)
+                            .allowsHitTesting(false)
+                    } else if isYouTubeContent && (!isPreview || allowLiveInPreview) {
+                        // YouTube / live → web-based thumbnail preview
+                        VideoLiveThumbnailView(video: video, cornerRadius: 16)
+                            .transition(.opacity)
+                            .allowsHitTesting(false)
+                    }
                 }
             }
             .frame(height: 230)
@@ -220,11 +224,6 @@ struct FeaturedHeroCard: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             )
-            .overlay(
-                MutedLoopVideoPlayer(videoURL: video.videoURL)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .allowsHitTesting(false)
-            )
 
             // Overlayed content
             VStack(spacing: 12) {
@@ -235,6 +234,35 @@ struct FeaturedHeroCard: View {
         }
         .scaleEffect(isPressed ? 0.98 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
+    }
+
+    // MARK: - Poster Image
+    @ViewBuilder
+    private var posterImage: some View {
+        if video.id == "shot_by_keonta_intro" || video.id == FeaturedStore.ownerIntroVideoId {
+            Image("ShotByKeontaThumbnail")
+                .resizable()
+                .scaledToFill()
+        } else if video.thumbnailURL.hasPrefix("asset://"),
+                  let assetName = video.thumbnailURL.split(separator: "/").last.map(String.init),
+                  !assetName.isEmpty {
+            Image(assetName)
+                .resizable()
+                .scaledToFill()
+        } else {
+            MultiSourceAsyncImage(
+                urls: video.posterCandidates,
+                content: { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                },
+                placeholder: {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(.systemGray6))
+                }
+            )
+        }
     }
     
     // MARK: - Top Badges
@@ -347,30 +375,59 @@ final class LoopAssetCache {
     }
 }
 
-// MARK: - Muted Looping Inline Video Player
+// MARK: - Muted Looping Inline Video Player (with pause/resume logic)
 struct MutedLoopVideoPlayer: UIViewRepresentable {
     let videoURL: String
+    let isActive: Bool
 
-    func makeUIView(context: Context) -> UIView {
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> PlayerContainerView {
         let view = PlayerContainerView()
         view.backgroundColor = .clear
-        configure(view: view)
         return view
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
-        guard let view = uiView as? PlayerContainerView else { return }
-        if view.currentURL != videoURL {
-            configure(view: view)
+    func updateUIView(_ uiView: PlayerContainerView, context: Context) {
+        // URL changed → reconfigure
+        if uiView.currentURL != videoURL {
+            configure(view: uiView, coordinator: context.coordinator)
+        }
+
+        // Pause/resume based on active state
+        if isActive {
+            if uiView.player?.rate == 0 {
+                uiView.player?.play()
+            }
+        } else {
+            uiView.player?.pause()
         }
     }
 
-    private func configure(view: PlayerContainerView) {
-        view.currentURL = videoURL
+    static func dismantleUIView(_ uiView: PlayerContainerView, coordinator: Coordinator) {
+        // Clean up when view is removed
+        uiView.player?.pause()
+        uiView.player = nil
+        uiView.playerLayer?.removeFromSuperlayer()
+        coordinator.loopObserver = nil
+        coordinator.bgObserver = nil
+        coordinator.fgObserver = nil
+        coordinator.pauseObserver = nil
+        coordinator.resumeObserver = nil
+    }
+
+    private func configure(view: PlayerContainerView, coordinator: Coordinator) {
+        // Tear down previous player
         view.player?.pause()
         view.playerLayer?.removeFromSuperlayer()
         view.player = nil
         view.playerLayer = nil
+        view.currentURL = videoURL
+        coordinator.loopObserver = nil
+        coordinator.bgObserver = nil
+        coordinator.fgObserver = nil
+        coordinator.pauseObserver = nil
+        coordinator.resumeObserver = nil
 
         guard !videoURL.isEmpty else { return }
 
@@ -382,7 +439,7 @@ struct MutedLoopVideoPlayer: UIViewRepresentable {
         let player = AVPlayer(playerItem: item)
         player.isMuted = true
         player.actionAtItemEnd = .none
-        player.automaticallyWaitsToMinimizeStalling = false  // start ASAP, don't wait
+        player.automaticallyWaitsToMinimizeStalling = false
 
         let layer = AVPlayerLayer(player: player)
         layer.videoGravity = .resizeAspectFill
@@ -391,7 +448,8 @@ struct MutedLoopVideoPlayer: UIViewRepresentable {
         view.player = player
         view.playerLayer = layer
 
-        NotificationCenter.default.addObserver(
+        // Loop at end
+        coordinator.loopObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item,
             queue: .main
@@ -400,7 +458,59 @@ struct MutedLoopVideoPlayer: UIViewRepresentable {
             player?.play()
         }
 
-        player.play()
+        // Pause on app background
+        coordinator.bgObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak player] _ in
+            player?.pause()
+        }
+
+        // Resume on app foreground (only if this card is active)
+        coordinator.fgObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak player] _ in
+            // Will be resumed by updateUIView when isActive == true
+            _ = player
+        }
+
+        // Pause/resume for fullscreen covers
+        coordinator.pauseObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("LivePreviewsShouldPause"),
+            object: nil,
+            queue: .main
+        ) { [weak player] _ in
+            player?.pause()
+        }
+        coordinator.resumeObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("LivePreviewsShouldResume"),
+            object: nil,
+            queue: .main
+        ) { [weak player] _ in
+            // Will be resumed by updateUIView when isActive == true
+            _ = player
+        }
+
+        if isActive {
+            player.play()
+        }
+    }
+
+    class Coordinator {
+        var loopObserver: NSObjectProtocol?
+        var bgObserver: NSObjectProtocol?
+        var fgObserver: NSObjectProtocol?
+        var pauseObserver: NSObjectProtocol?
+        var resumeObserver: NSObjectProtocol?
+
+        deinit {
+            [loopObserver, bgObserver, fgObserver, pauseObserver, resumeObserver].compactMap { $0 }.forEach {
+                NotificationCenter.default.removeObserver($0)
+            }
+        }
     }
 }
 

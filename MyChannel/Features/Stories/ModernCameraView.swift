@@ -108,21 +108,24 @@ struct ModernCameraView: View {
     }
     
     private func capturePhoto() {
-        // Simulate photo capture
-        let mockURL = URL(string: "https://picsum.photos/400/800?random=\(Int.random(in: 1...100))")!
-        let mediaItem = CreateStoryViewModel.MediaItem(
-            url: mockURL,
-            type: .image,
-            duration: nil
-        )
-        onMediaCaptured(mediaItem)
-        dismiss()
+        cameraManager.capturePhoto { [self] imageURL in
+            guard let imageURL = imageURL else { return }
+            let mediaItem = CreateStoryViewModel.MediaItem(
+                url: imageURL,
+                type: .image,
+                duration: nil
+            )
+            DispatchQueue.main.async {
+                onMediaCaptured(mediaItem)
+                dismiss()
+            }
+        }
     }
     
     private func startRecording() {
         isRecording = true
+        cameraManager.startVideoRecording()
         
-        // Auto-stop after 15 seconds
         DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
             if isRecording {
                 stopRecording()
@@ -134,15 +137,18 @@ struct ModernCameraView: View {
         guard isRecording else { return }
         isRecording = false
         
-        // Simulate video capture
-        let mockURL = URL(string: "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4")!
-        let mediaItem = CreateStoryViewModel.MediaItem(
-            url: mockURL,
-            type: .video,
-            duration: Double.random(in: 5...15)
-        )
-        onMediaCaptured(mediaItem)
-        dismiss()
+        cameraManager.stopVideoRecording { [self] videoURL in
+            guard let videoURL = videoURL else { return }
+            let mediaItem = CreateStoryViewModel.MediaItem(
+                url: videoURL,
+                type: .video,
+                duration: 15.0
+            )
+            DispatchQueue.main.async {
+                onMediaCaptured(mediaItem)
+                dismiss()
+            }
+        }
     }
 }
 

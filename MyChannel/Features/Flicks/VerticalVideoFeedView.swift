@@ -125,8 +125,7 @@ struct ShortVideoPlayerView: View {
         ZStack {
             // Video player (full screen)
             if isActive {
-                VideoPlayer(player: playerManager.player)
-                    .aspectRatio(9/16, contentMode: .fill)
+                RawPlayerLayerView(player: playerManager.player ?? AVPlayer(), videoGravity: .resizeAspectFill)
                     .clipped()
                     .onTapGesture {
                         withAnimation(.easeInOut(duration: 0.3)) {

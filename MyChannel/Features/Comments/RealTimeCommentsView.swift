@@ -7,6 +7,9 @@
 
 import SwiftUI
 import Combine
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct RealTimeCommentsView: View {
     let video: Video
@@ -776,8 +779,26 @@ class RealTimeCommentsManager: ObservableObject {
     }
     
     func reportComment(commentId: String) {
-        // Handle comment reporting
-        print("Reported comment: \(commentId)")
+        guard let reporterId = AppState.shared.currentUser?.id else { return }
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        let comment = comments.first(where: { $0.id == commentId })
+        let reportData: [String: Any] = [
+            "type": "comment",
+            "contentId": commentId,
+            "videoId": videoId ?? "",
+            "contentCreatorId": comment?.author.id ?? "",
+            "reporterId": reporterId,
+            "reason": "user_reported",
+            "status": "pending",
+            "reviewed": false,
+            "createdAt": FieldValue.serverTimestamp()
+        ]
+        Task {
+            try? await db.collection("content_reports").addDocument(data: reportData)
+        }
+        #endif
+        NotificationManager.shared.showSuccess("Comment reported. Thank you for keeping MyChannel safe.")
     }
     
     func pin(commentId: String) {

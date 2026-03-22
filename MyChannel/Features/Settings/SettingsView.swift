@@ -1459,14 +1459,18 @@ struct TermsView: View {
                     • We may remove content that violates these terms
                     """)
                     
-                    TermsSection(title: "5. Prohibited Conduct", content: """
-                    You agree not to:
-                    • Upload illegal, harmful, or infringing content
-                    • Harass, abuse, or harm other users
+                    TermsSection(title: "5. Prohibited Conduct & Zero-Tolerance Content Policy", content: """
+                    MyChannel has a ZERO-TOLERANCE policy for objectionable content and abusive behavior. You agree not to:
+                    • Upload illegal, harmful, threatening, defamatory, obscene, or otherwise objectionable content
+                    • Post content depicting nudity, sexual acts, or exploitation of minors
+                    • Harass, bully, abuse, stalk, or threaten other users
+                    • Upload hate speech, content promoting violence, terrorism, or self-harm
                     • Spam or engage in deceptive practices
                     • Attempt to circumvent security measures
                     • Use the Service for unauthorized commercial purposes
                     • Violate any applicable laws or regulations
+                    
+                    Violations will result in immediate content removal and account suspension or permanent ban. MyChannel reviews all reports within 24 hours.
                     """)
                     
                     TermsSection(title: "6. Monetization", content: """

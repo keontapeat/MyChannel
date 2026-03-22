@@ -1050,7 +1050,7 @@ struct StoryVideoPlayer: View {
     var body: some View {
         ZStack {
             if let player = player {
-                VideoPlayer(player: player)
+                RawPlayerLayerView(player: player, videoGravity: .resizeAspectFill)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onAppear {
                         player.play()

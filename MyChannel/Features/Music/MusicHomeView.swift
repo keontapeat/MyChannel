@@ -11,7 +11,7 @@ struct MusicHomeView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var musicPlayer: MusicPlayerService
     @StateObject private var catalog = MusicCatalogService.shared
-    @StateObject private var flintService = FlintArtistService.shared
+    @StateObject private var featuredService = FeaturedArtistService.shared
     @StateObject private var playlistService = PlaylistService.shared
 
     @State private var showSearch = false
@@ -85,7 +85,7 @@ struct MusicHomeView: View {
         async let songs = catalog.curatedSpotlightSongs()
         async let albums = catalog.curatedAlbums()
         async let artists = catalog.curatedArtists()
-        await flintService.fetchArtists()
+        await featuredService.fetchArtists()
         let (s, a, ar) = await (songs, albums, artists)
         trendingSongs = s
         newReleaseAlbums = a
@@ -154,8 +154,8 @@ struct MusicHomeView: View {
     }
 
     private var topArtistsSection: some View {
-        let artists = flintService.featuredArtists.isEmpty ? [] : flintService.featuredArtists
-        return MusicHorizontalSection(title: "Top Artists", subtitle: "Flint & Detroit on the rise") {
+        let artists = featuredService.featuredArtists.isEmpty ? [] : featuredService.featuredArtists
+        return MusicHorizontalSection(title: "Top Artists", subtitle: "Michigan artists on the rise") {
             ForEach(artists) { artist in
                 NavigationLink {
                     ArtistPageView(
@@ -275,8 +275,8 @@ struct MusicHomeView: View {
     }
 
     private var localArtistsSection: some View {
-        let local = flintService.risingArtists
-        return MusicHorizontalSection(title: "Flint & Detroit", subtitle: "Local artists on the rise") {
+        let local = featuredService.risingArtists
+        return MusicHorizontalSection(title: "Michigan Artists", subtitle: "Local artists on the rise") {
             ForEach(local) { artist in
                 NavigationLink {
                     ArtistPageView(

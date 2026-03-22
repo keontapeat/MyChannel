@@ -13,7 +13,7 @@ struct AdPlayerOverlay: View {
 
     var body: some View {
         ZStack {
-            VideoPlayer(player: adPlayer)
+            RawPlayerLayerView(player: adPlayer, videoGravity: .resizeAspect)
                 .background(ViewabilityTrackingView { view in
                     // Start OMID tracking when view appears
                     if impressionId == nil {

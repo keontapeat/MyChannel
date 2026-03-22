@@ -16,10 +16,16 @@ struct ImprovedMoviesView: View {
     @State private var searchText = ""
     @State private var searchResults: [FreeMovie] = []
     @State private var isSearching = false
+    @State private var selectedGenre: FreeMovie.MovieGenre? = nil
+    @State private var activeFilters = MovieFilters()
+
+    /// Pre-loaded movies from Home row (avoids double-fetching)
+    var initialMovies: [FreeMovie] = []
     
     enum MoviesTab: String, CaseIterable {
         case popular = "Popular"
         case trending = "Trending"
+        case forYou = "For You"
         case watchlist = "Watchlist"
         case recent = "Recent"
         
@@ -27,6 +33,7 @@ struct ImprovedMoviesView: View {
             switch self {
             case .popular: return "flame.fill"
             case .trending: return "chart.line.uptrend.xyaxis"
+            case .forYou: return "sparkles"
             case .watchlist: return "heart.fill"
             case .recent: return "clock.fill"
             }
@@ -38,12 +45,42 @@ struct ImprovedMoviesView: View {
             return searchResults
         }
         
+        var movies: [FreeMovie]
         switch selectedTab {
-        case .popular: return moviesService.popularMovies
-        case .trending: return moviesService.trendingMovies
-        case .watchlist: return moviesService.watchlist
-        case .recent: return moviesService.recentlyWatched
+        case .popular:
+            movies = moviesService.popularMovies.isEmpty ? initialMovies : moviesService.popularMovies
+        case .trending:
+            movies = moviesService.trendingMovies
+        case .forYou:
+            movies = moviesService.getPersonalizedRecommendations()
+        case .watchlist:
+            movies = moviesService.watchlist
+        case .recent:
+            movies = moviesService.recentlyWatched
         }
+        
+        // Apply genre filter if selected
+        if let genre = selectedGenre {
+            movies = movies.filter { $0.genre.contains(genre) }
+        }
+        
+        // Apply active filters
+        if let source = activeFilters.streamingSource {
+            movies = movies.filter { $0.streamingSource == source }
+        }
+        if let minRating = activeFilters.minimumRating {
+            movies = movies.filter { $0.imdbRating >= minRating }
+        }
+        if let minYear = activeFilters.minimumYear {
+            movies = movies.filter { $0.year >= minYear }
+        }
+        
+        return movies
+    }
+    
+    private var hasActiveFilters: Bool {
+        selectedGenre != nil || activeFilters.streamingSource != nil ||
+        activeFilters.minimumRating != nil || activeFilters.minimumYear != nil
     }
     
     var body: some View {
@@ -52,6 +89,7 @@ struct ImprovedMoviesView: View {
                 header
                 searchBar
                 tabNavigation
+                genreChips
                 
                 if moviesService.isLoading && currentMovies.isEmpty {
                     loadingView
@@ -71,9 +109,13 @@ struct ImprovedMoviesView: View {
                 }
         }
         .sheet(isPresented: $showFilters) {
-            MovieFiltersSheet()
+            MovieFiltersSheet(filters: $activeFilters)
         }
         .task {
+            // Seed from pre-loaded Home data so user sees content instantly
+            if moviesService.popularMovies.isEmpty && !initialMovies.isEmpty {
+                moviesService.seedPopular(initialMovies)
+            }
             await loadInitialData()
         }
         .onChange(of: searchText) { newValue in
@@ -118,11 +160,36 @@ struct ImprovedMoviesView: View {
             
             HStack(spacing: 12) {
                 Button(action: { showFilters = true }) {
-                    Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(AppTheme.Colors.primary)
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(AppTheme.Colors.primary)
+                        if hasActiveFilters {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 8, height: 8)
+                                .offset(x: 2, y: -2)
+                        }
+                    }
                 }
                 .buttonStyle(PressableScaleStyle())
+                
+                if hasActiveFilters {
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            selectedGenre = nil
+                            activeFilters = MovieFilters()
+                        }
+                    } label: {
+                        Text("Clear")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.red.opacity(0.8), in: Capsule())
+                    }
+                    .buttonStyle(PressableScaleStyle())
+                }
                 
                 Button(action: { Task { await refreshData() } }) {
                     Image(systemName: "arrow.clockwise.circle.fill")
@@ -225,6 +292,65 @@ struct ImprovedMoviesView: View {
         .padding(.top, 16)
     }
     
+    // MARK: - Genre Chips
+    
+    private var genreChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                // "All" chip
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        selectedGenre = nil
+                    }
+                    HapticManager.shared.selection()
+                } label: {
+                    Text("All")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(selectedGenre == nil ? .white : AppTheme.Colors.textSecondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(
+                            Capsule().fill(selectedGenre == nil ? AppTheme.Colors.primary.opacity(0.8) : AppTheme.Colors.surface)
+                        )
+                        .overlay(
+                            Capsule().stroke(
+                                selectedGenre == nil ? Color.clear : AppTheme.Colors.divider.opacity(0.4),
+                                lineWidth: 1
+                            )
+                        )
+                }
+                .buttonStyle(.plain)
+                
+                ForEach(FreeMovie.MovieGenre.allCases, id: \.self) { genre in
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            selectedGenre = selectedGenre == genre ? nil : genre
+                        }
+                        HapticManager.shared.selection()
+                    } label: {
+                        Text(genre.displayName)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(selectedGenre == genre ? .white : AppTheme.Colors.textSecondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(
+                                Capsule().fill(selectedGenre == genre ? AppTheme.Colors.primary.opacity(0.8) : AppTheme.Colors.surface)
+                            )
+                            .overlay(
+                                Capsule().stroke(
+                                    selectedGenre == genre ? Color.clear : AppTheme.Colors.divider.opacity(0.4),
+                                    lineWidth: 1
+                                )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .padding(.top, 10)
+    }
+    
     // MARK: - Movies Grid
     
     private var moviesGrid: some View {
@@ -319,9 +445,13 @@ struct ImprovedMoviesView: View {
     }
     
     private var emptyStateMessage: String {
+        if selectedGenre != nil {
+            return "No movies in this genre\nTry a different filter"
+        }
         switch selectedTab {
         case .popular: return "No popular movies found"
         case .trending: return "No trending movies available"
+        case .forYou: return "Watch some movies first\nWe'll learn your taste"
         case .watchlist: return "Your watchlist is empty\nAdd movies to watch later"
         case .recent: return "No recently watched movies\nStart watching to see them here"
         }
@@ -543,21 +673,169 @@ struct EnhancedMovieCard: View {
 
 struct MovieFiltersSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Binding var filters: MovieFilters
+    
+    @State private var selectedSource: FreeMovie.StreamingSource?
+    @State private var minimumRating: Double = 0
+    @State private var minimumYear: Int = 1920
+    @State private var sortBy: MovieSortOption = .popular
+    
+    private let yearRange = Array(stride(from: 2025, through: 1920, by: -5))
     
     var body: some View {
         NavigationStack {
-            VStack {
-                Text("Filters coming soon...")
-                    .font(.headline)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            List {
+                // Streaming Source
+                Section {
+                    Button {
+                        withAnimation { selectedSource = nil }
+                    } label: {
+                        HStack {
+                            Text("Any Source")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if selectedSource == nil {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(AppTheme.Colors.primary)
+                                    .font(.system(size: 14, weight: .bold))
+                            }
+                        }
+                    }
+                    
+                    ForEach(FreeMovie.StreamingSource.allCases, id: \.self) { source in
+                        Button {
+                            withAnimation { selectedSource = source }
+                        } label: {
+                            HStack {
+                                Circle()
+                                    .fill(source.color)
+                                    .frame(width: 10, height: 10)
+                                Text(source.displayName)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                if selectedSource == source {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(AppTheme.Colors.primary)
+                                        .font(.system(size: 14, weight: .bold))
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Streaming Source")
+                }
+                
+                // Minimum Rating
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Minimum Rating")
+                            Spacer()
+                            HStack(spacing: 4) {
+                                Image(systemName: "star.fill")
+                                    .foregroundColor(.yellow)
+                                    .font(.system(size: 12))
+                                Text(minimumRating > 0 ? String(format: "%.1f+", minimumRating) : "Any")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                            }
+                        }
+                        
+                        Slider(value: $minimumRating, in: 0...9, step: 0.5)
+                            .tint(AppTheme.Colors.primary)
+                    }
+                } header: {
+                    Text("Rating")
+                }
+                
+                // Minimum Year
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("From Year")
+                            Spacer()
+                            Text(minimumYear > 1920 ? "\(minimumYear)+" : "Any")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.primary)
+                        }
+                        
+                        Picker("Year", selection: $minimumYear) {
+                            Text("Any").tag(1920)
+                            ForEach(yearRange, id: \.self) { year in
+                                Text("\(year)").tag(year)
+                            }
+                        }
+                        .pickerStyle(.wheel)
+                        .frame(height: 120)
+                    }
+                } header: {
+                    Text("Release Year")
+                }
+                
+                // Sort
+                Section {
+                    ForEach(MovieSortOption.allCases, id: \.self) { option in
+                        Button {
+                            withAnimation { sortBy = option }
+                        } label: {
+                            HStack {
+                                Text(option.displayName)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                if sortBy == option {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(AppTheme.Colors.primary)
+                                        .font(.system(size: 14, weight: .bold))
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Sort By")
+                }
+                
+                // Reset
+                Section {
+                    Button(role: .destructive) {
+                        withAnimation {
+                            selectedSource = nil
+                            minimumRating = 0
+                            minimumYear = 1920
+                            sortBy = .popular
+                        }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Text("Reset All Filters")
+                                .font(.system(size: 16, weight: .semibold))
+                            Spacer()
+                        }
+                    }
+                }
             }
+            .listStyle(.insetGrouped)
             .navigationTitle("Filters")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { dismiss() }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Apply") {
+                        filters.streamingSource = selectedSource
+                        filters.minimumRating = minimumRating > 0 ? minimumRating : nil
+                        filters.minimumYear = minimumYear > 1920 ? minimumYear : nil
+                        filters.sortBy = sortBy
+                        dismiss()
+                    }
+                    .font(.system(size: 16, weight: .bold))
+                }
+            }
+            .onAppear {
+                selectedSource = filters.streamingSource
+                minimumRating = filters.minimumRating ?? 0
+                minimumYear = filters.minimumYear ?? 1920
+                sortBy = filters.sortBy
             }
         }
     }
