@@ -91,7 +91,32 @@ class AuthenticationManager: ObservableObject {
         #endif
         if let fuser = Auth.auth().currentUser {
             // 🔥 FIX: Prioritize complete Firestore profile over basic auth data
+            // 🔥 FIX 2.1.0: Wrap in Task with 10s timeout — login must NEVER hang indefinitely
             Task {
+                // Safety timeout: if Firestore takes > 10s, fall back to basic auth data immediately
+                let authTimeoutTask = Task {
+                    try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
+                    let alreadyAuthenticated = await self.isAuthenticated
+                    guard !alreadyAuthenticated else { return }
+                    let basicUser = User(
+                        id: fuser.uid,
+                        username: fuser.email?.components(separatedBy: "@").first ?? "user",
+                        displayName: fuser.displayName ?? (fuser.email ?? "User"),
+                        email: fuser.email ?? "",
+                        profileImageURL: fuser.photoURL?.absoluteString,
+                        isVerified: fuser.isEmailVerified,
+                        isCreator: true
+                    )
+                    await MainActor.run {
+                        if !self.isAuthenticated {
+                            self.currentUser = basicUser
+                            self.isAuthenticated = true
+                            self.authState = .authenticated
+                            print("⏰ [Auth] Timeout fallback — using basic auth data for \(basicUser.displayName)")
+                        }
+                    }
+                }
+                
                 var loadedUser: User? = nil
                 
                 do {
@@ -149,6 +174,7 @@ class AuthenticationManager: ObservableObject {
                     
                     // 3. Set the loaded user or fallback to basic auth data
                     if let user = loadedUser {
+                        authTimeoutTask.cancel()
                         await MainActor.run {
                             self.currentUser = user
                             self.isAuthenticated = true
@@ -165,6 +191,7 @@ class AuthenticationManager: ObservableObject {
                             isVerified: fuser.isEmailVerified,
                             isCreator: true
                         )
+                        authTimeoutTask.cancel()
                         await MainActor.run {
                             self.currentUser = basicUser
                             self.isAuthenticated = true
@@ -184,6 +211,7 @@ class AuthenticationManager: ObservableObject {
                         isVerified: fuser.isEmailVerified,
                         isCreator: true
                     )
+                    authTimeoutTask.cancel()
                     await MainActor.run {
                         self.currentUser = basicUser
                         self.isAuthenticated = true

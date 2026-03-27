@@ -173,9 +173,11 @@ struct MyChannelApp: App {
     private func configureAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
+            // .playback with no options = exclusive audio, silences other apps.
+            // Required for App Store 2.5.4: background audio must be audible to reviewers.
+            try session.setCategory(.playback, mode: .moviePlayback, options: [])
             try session.setActive(true)
-            print("✅ [MyChannelApp] Audio session configured for foreground playback")
+            print("✅ [MyChannelApp] Audio session configured for background playback")
         } catch {
             print("⚠️ [MyChannelApp] Failed to configure audio session: \(error.localizedDescription)")
         }
