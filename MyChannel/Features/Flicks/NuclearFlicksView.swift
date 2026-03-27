@@ -1296,7 +1296,7 @@ class NuclearFlicksViewModel: ObservableObject {
                 let url = video.videoURL
                 return !url.isEmpty && URL(string: url) != nil
             }
-            let flickMap = Dictionary(uniqueKeysWithValues: validVideos.map { ($0.id, videoToFlick($0)) })
+            let flickMap = Dictionary(validVideos.map { ($0.id, videoToFlick($0)) }, uniquingKeysWith: { _, last in last })
             return videoIds.compactMap { flickMap[$0] }
         } catch {
             print("⚠️ [NuclearFlicks] Failed to hydrate recommended IDs: \(error)")

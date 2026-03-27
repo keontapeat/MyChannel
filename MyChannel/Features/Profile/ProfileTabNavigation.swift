@@ -143,6 +143,9 @@ struct ProfileTabButton: View {
             return user.videoCount > 5 ? user.videoCount / 3 : nil // Estimate flicks count
         case .playlists:
             return user.videoCount > 10 ? user.videoCount / 8 : nil // Estimate playlists count
+        case .downloads:
+            let count = DownloadManager.shared.downloads.count
+            return count > 0 ? count : nil
         case .community:
             return user.subscriberCount > 1000 ? 12 : nil // Mock community posts
         case .about:

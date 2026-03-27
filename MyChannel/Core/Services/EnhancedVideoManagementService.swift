@@ -26,7 +26,7 @@ class EnhancedVideoManagementService: ObservableObject {
     @Published var error: String?
     @Published var videos: [EnhancedVideo] = []
     @Published var filteredVideos: [EnhancedVideo] = []
-    @Published var selectedFilter: VideoFilter = .all
+    @Published var selectedFilter: VideoManagementFilter = .all
     @Published var sortOption: VideoSortOption = .uploadDate
     @Published var viewMode: VideoViewMode = .list
     
@@ -68,7 +68,7 @@ class EnhancedVideoManagementService: ObservableObject {
     
     // MARK: - Video Loading with Enhanced Features
     
-    func loadVideos(creatorId: String, filter: VideoFilter = .all, limit: Int = 50) async throws -> [EnhancedVideo] {
+    func loadVideos(creatorId: String, filter: VideoManagementFilter = .all, limit: Int = 50) async throws -> [EnhancedVideo] {
         let startTime = Date()
         
         // Start performance tracking
@@ -153,7 +153,7 @@ class EnhancedVideoManagementService: ObservableObject {
         }
     }
     
-    private func loadVideosFromFirestore(creatorId: String, filter: VideoFilter, limit: Int) async throws -> [EnhancedVideo] {
+    private func loadVideosFromFirestore(creatorId: String, filter: VideoManagementFilter, limit: Int) async throws -> [EnhancedVideo] {
         #if canImport(FirebaseFirestore)
         let db = Firestore.firestore()
         
@@ -166,11 +166,11 @@ class EnhancedVideoManagementService: ObservableObject {
         switch filter {
         case .all:
             break // No additional filter
-        case .public:
+        case .publicVideos:
             query = query.whereField("visibility", isEqualTo: "public")
         case .unlisted:
             query = query.whereField("visibility", isEqualTo: "unlisted")
-        case .private:
+        case .privateVideos:
             query = query.whereField("visibility", isEqualTo: "private")
         case .scheduled:
             query = query.whereField("isScheduled", isEqualTo: true)
@@ -208,7 +208,7 @@ class EnhancedVideoManagementService: ObservableObject {
             thumbnailURL: data["thumbnailURL"] as? String ?? "",
             videoURL: data["videoURL"] as? String ?? "",
             duration: data["duration"] as? TimeInterval ?? 0,
-            visibility: VideoVisibility(rawValue: data["visibility"] as? String ?? "public") ?? .public,
+            visibility: VideoVisibility(rawValue: data["visibility"] as? String ?? "public") ?? .publicVideo,
             status: VideoStatus(rawValue: data["status"] as? String ?? "published") ?? .published,
             createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
             publishedAt: (data["publishedAt"] as? Timestamp)?.dateValue(),
@@ -400,7 +400,7 @@ class EnhancedVideoManagementService: ObservableObject {
             "thumbnailURL": originalVideo.thumbnailURL,
             "videoURL": originalVideo.videoURL,
             "duration": originalVideo.duration,
-            "visibility": VideoVisibility.private.rawValue, // Always start as private
+            "visibility": VideoVisibility.privateVideo.rawValue, // Always start as private
             "status": VideoStatus.draft.rawValue,
             "tags": originalVideo.tags,
             "category": originalVideo.category,
@@ -430,18 +430,18 @@ class EnhancedVideoManagementService: ObservableObject {
     
     // MARK: - Filtering and Sorting
     
-    func applyFilter(_ filter: VideoFilter) {
+    func applyFilter(_ filter: VideoManagementFilter) {
         selectedFilter = filter
         
         switch filter {
         case .all:
             filteredVideos = videos
-        case .public:
-            filteredVideos = videos.filter { $0.visibility == .public }
+        case .publicVideos:
+            filteredVideos = videos.filter { $0.visibility == .publicVideo }
         case .unlisted:
             filteredVideos = videos.filter { $0.visibility == .unlisted }
-        case .private:
-            filteredVideos = videos.filter { $0.visibility == .private }
+        case .privateVideos:
+            filteredVideos = videos.filter { $0.visibility == .privateVideo }
         case .scheduled:
             filteredVideos = videos.filter { $0.isScheduled }
         case .drafts:
@@ -569,7 +569,7 @@ class EnhancedVideoManagementService: ObservableObject {
         return searchResults
     }
     
-    func getVideoAnalytics(videoId: String) async throws -> VideoAnalytics {
+    func getVideoAnalytics(videoId: String) async throws -> VideoManagementAnalytics {
         do {
             let request = VideoAnalyticsDetailRequest(
                 videoId: videoId,
@@ -583,7 +583,7 @@ class EnhancedVideoManagementService: ObservableObject {
                 responseType: VideoAnalyticsDetailResponse.self
             )
             
-            return VideoAnalytics(
+            return VideoManagementAnalytics(
                 videoId: videoId,
                 views: response.views,
                 uniqueViews: response.uniqueViews,
@@ -706,18 +706,18 @@ struct EnhancedVideo: Identifiable, Codable {
     
     var visibilityIcon: String {
         switch visibility {
-        case .public: return "globe"
+        case .publicVideo: return "globe"
         case .unlisted: return "link"
-        case .private: return "lock"
+        case .privateVideo: return "lock"
         }
     }
 }
 
-enum VideoFilter: String, CaseIterable {
+enum VideoManagementFilter: String, CaseIterable {
     case all = "all"
-    case public = "public"
+    case publicVideos = "public"
     case unlisted = "unlisted"
-    case private = "private"
+    case privateVideos = "private"
     case scheduled = "scheduled"
     case drafts = "drafts"
     case live = "live"
@@ -725,9 +725,9 @@ enum VideoFilter: String, CaseIterable {
     var displayName: String {
         switch self {
         case .all: return "All"
-        case .public: return "Public"
+        case .publicVideos: return "Public"
         case .unlisted: return "Unlisted"
-        case .private: return "Private"
+        case .privateVideos: return "Private"
         case .scheduled: return "Scheduled"
         case .drafts: return "Drafts"
         case .live: return "Live"
@@ -737,9 +737,9 @@ enum VideoFilter: String, CaseIterable {
     var icon: String {
         switch self {
         case .all: return "list.bullet"
-        case .public: return "globe"
+        case .publicVideos: return "globe"
         case .unlisted: return "link"
-        case .private: return "lock"
+        case .privateVideos: return "lock"
         case .scheduled: return "calendar"
         case .drafts: return "doc"
         case .live: return "dot.radiowaves.left.and.right"
@@ -748,9 +748,9 @@ enum VideoFilter: String, CaseIterable {
 }
 
 enum VideoVisibility: String, Codable, CaseIterable {
-    case public = "public"
+    case publicVideo = "public"
     case unlisted = "unlisted"
-    case private = "private"
+    case privateVideo = "private"
 }
 
 enum VideoStatus: String, Codable, CaseIterable {
@@ -805,7 +805,7 @@ struct VideoMLInsights: Codable {
     let optimizationTips: [String]
 }
 
-struct VideoAnalytics: Codable {
+struct VideoManagementAnalytics: Codable {
     let videoId: String
     let views: Int
     let uniqueViews: Int

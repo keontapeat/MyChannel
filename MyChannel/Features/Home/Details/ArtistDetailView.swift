@@ -550,26 +550,21 @@ private struct WrapTags: View {
 // MARK: - Preview
 #Preview("Artist Detail") {
     let friendUser = User(username: "artist", displayName: "Top Artist", email: "artist@mc.com", profileImageURL: "https://i.pravatar.cc/200?u=artist", isVerified: true, isCreator: true)
-    let vids = Array(Video.sampleVideos.prefix(12)).map {
+    let vids = Array(Video.sampleVideos.prefix(12)).map { video in
         Video(
-            id: $0.id,
-            title: $0.title,
-            description: $0.description,
-            thumbnailURL: $0.thumbnailURL,
-            videoURL: $0.videoURL,
-            duration: $0.duration,
+            title: video.title,
+            description: video.description,
+            thumbnailURL: video.thumbnailURL,
+            videoURL: video.videoURL,
+            duration: video.duration,
             viewCount: Int.random(in: 30_000...1_500_000),
-            likeCount: $0.likeCount,
-            commentCount: $0.commentCount,
+            likeCount: video.likeCount,
+            commentCount: video.commentCount,
             creator: friendUser,
             category: .music,
-            tags: $0.tags + ["Detroit","Rap","Viral","Official"],
-            isPublic: true,
-            quality: $0.quality,
-            aspectRatio: .landscape,
-            isLiveStream: false,
+            tags: video.tags + ["Detroit","Rap","Viral","Official"],
             contentSource: .youtube,
-            externalID: $0.externalID,
+            externalID: video.externalID,
             isVerified: true
         )
     }

@@ -479,7 +479,7 @@ class EnhancedCreatorStudioService: ObservableObject {
         var totalEngagement = 0
         
         for doc in documents {
-            let data = doc.data()
+            guard let data = doc.data() else { continue }
             totalViews += data["viewCount"] as? Int ?? 0
             totalEngagement += (data["likeCount"] as? Int ?? 0) + (data["commentCount"] as? Int ?? 0)
         }

@@ -24,7 +24,9 @@ final class FirebaseManager {
         if isConfigured { return }
         if FirebaseApp.app() != nil {
             isConfigured = true
-            configureAdditionalServices()
+            Task { @MainActor in
+                configureAdditionalServices()
+            }
             return
         }
         // Ensure GoogleService-Info.plist exists before configuring to avoid runtime crashes
@@ -42,7 +44,9 @@ final class FirebaseManager {
         }
 
         FirebaseApp.configure()
-        configureAdditionalServices()
+        Task { @MainActor in
+            configureAdditionalServices()
+        }
         
         #if canImport(FirebaseAnalytics)
         if UserDefaults.standard.bool(forKey: analyticsEnabledKey) {
@@ -57,6 +61,7 @@ final class FirebaseManager {
         #endif
     }
     
+    @MainActor
     private func configureAdditionalServices() {
         // Configure Performance Monitoring
         PerformanceMonitoringManager.shared.configure()

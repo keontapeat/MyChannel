@@ -10,7 +10,7 @@ import SwiftUI
 // 🔥 YouTube-Parity Search Filters
 // Matches YouTube's filter system exactly
 struct SearchFiltersView: View {
-    @Binding var filters: MyChannel.SearchFilters
+    @Binding var filters: SearchFilters
     let onApply: () -> Void
     @Environment(\.dismiss) private var dismiss
     
@@ -194,7 +194,7 @@ private struct FilterOption: View {
 }
 
 #Preview {
-    SearchFiltersView(filters: .constant(MyChannel.SearchFilters())) {
+    SearchFiltersView(filters: .constant(SearchFilters())) {
         print("Filters applied")
     }
 }

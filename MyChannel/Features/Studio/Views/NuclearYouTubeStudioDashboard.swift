@@ -708,10 +708,10 @@ class NuclearStudioViewModel: ObservableObject {
                 .whereField("userId", isEqualTo: creatorId)
                 .getDocuments()
             let videoIds = videosSnap.documents.map { $0.documentID }
-            let videoTitles = Dictionary(uniqueKeysWithValues: videosSnap.documents.compactMap { doc -> (String, String)? in
+            let videoTitles = Dictionary(videosSnap.documents.compactMap { doc -> (String, String)? in
                 guard let title = doc.data()["title"] as? String else { return nil }
                 return (doc.documentID, title)
-            })
+            }, uniquingKeysWith: { _, last in last })
             
             guard !videoIds.isEmpty else {
                 await MainActor.run {

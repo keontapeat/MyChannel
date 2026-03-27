@@ -486,7 +486,7 @@ class EnhancedStoriesService: ObservableObject {
         let db = Firestore.firestore()
         let currentUser = getCurrentUser()
         
-        let storyData: [String: Any] = [
+        var storyData: [String: Any] = [
             "id": storyId,
             "creatorId": currentUser?.id ?? "unknown",
             "mediaURL": mediaURL,
@@ -671,7 +671,7 @@ class EnhancedStoriesService: ObservableObject {
     
     // MARK: - Helper Methods
     
-    private func performMLRequest<T: Codable, R: Codable>(
+    private func performMLRequest<T: Encodable, R: Decodable>(
         url: String,
         request: T,
         responseType: R.Type
@@ -800,7 +800,7 @@ struct StoryContext: Codable {
 
 // MARK: - ML Request/Response Types
 
-struct StoryRankingRequest: Codable {
+struct StoryRankingRequest: Encodable {
     let userId: String
     let stories: [[String: Any]]
     let context: StoryContext
@@ -863,7 +863,7 @@ struct StoryViralPredictionResponse: Codable {
     let confidence: Double
 }
 
-struct StoryEngagementUpdateRequest: Codable {
+struct StoryEngagementUpdateRequest: Encodable {
     let storyId: String
     let action: String
     let value: Any

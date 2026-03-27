@@ -79,7 +79,7 @@ enum VideoTransition: String, Codable, CaseIterable {
 
 // MARK: - Image Picker
 
-struct ImagePicker: UIViewControllerRepresentable {
+struct BindingImagePicker: UIViewControllerRepresentable {
     @Binding var selectedImage: UIImage?
     @Environment(\.presentationMode) var presentationMode
     
@@ -96,9 +96,9 @@ struct ImagePicker: UIViewControllerRepresentable {
     }
     
     class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: ImagePicker
+        let parent: BindingImagePicker
         
-        init(_ parent: ImagePicker) {
+        init(_ parent: BindingImagePicker) {
             self.parent = parent
         }
         

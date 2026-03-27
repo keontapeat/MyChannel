@@ -37,7 +37,7 @@ enum FullScreenRoute: Identifiable {
     case movie(FreeMovie)
     case search
     case stories(AssetStory)
-    case allMovies([FreeMovie])
+    case allMovies
     case allLiveTV
     case trending
     case artistDetail(name: String, avatar: String, videos: [Video], totalViews: Int)
@@ -161,7 +161,7 @@ struct HomeView: View {
                         MinimalContentSections(
                             onPlayVideo: { video in openVideo(video) },
                             onSelectMovie: { movie in route = .movie(movie) },
-                            onSeeAllFreeMovies: { movies in route = .allMovies(movies) },
+                            onSeeAllFreeMovies: { _ in route = .allMovies },
                             onSeeAllLiveTV: { route = .allLiveTV },
                             onSeeAllTrending: { route = .trending },
                             onSeeAllMusic: { route = .custom("musicHub") },
@@ -328,8 +328,8 @@ struct HomeView: View {
                 }
                 .onDisappear { self.route = nil }
 
-            case .allMovies(let preloaded):
-                ImprovedMoviesView(initialMovies: preloaded)
+            case .allMovies:
+                ImprovedMoviesView()
                     .environmentObject(appState)
                     .background(Color(.systemBackground).ignoresSafeArea())
                     .onDisappear { self.route = nil }
@@ -1033,131 +1033,112 @@ struct MinimalContentSections: View {
 
     @ObservedObject private var globalPlayer = GlobalVideoPlayerManager.shared
 
+    @ViewBuilder private var topSections: some View {
+        LiveNowSection { stream in
+            onSelectLiveStream?(stream)
+        }
+        .onAppear {
+            LiveStreamManager.shared.startListening()
+        }
+
+        ForYouSection(onPlayVideo: onPlayVideo, onSeeAllExplore: onSeeAllExplore)
+
+        if appState.isAuthenticated {
+            ContinueWatchingSection(onVideoTap: { video in
+                onPlayVideo(video)
+            })
+        }
+
+        MinimalSection(title: "Trending Now", seeAllAction: { onSeeAllTrending() }) {
+            TopTenCarousel(
+                videos: trendingVideos(),
+                preserveOrder: true,
+                onPlay: { v in onPlayVideo(v) }
+            )
+            .padding(.top, 4)
+        }
+
+        MinimalMusicSection(
+            onOpenArtistMusicProfile: onOpenArtistMusicProfile,
+            appState: _appState,
+            onSeeAll: { onSeeAllMusic() }
+        )
+    }
+
+    @ViewBuilder private var bottomSections: some View {
+        MinimalCategoriesSection(
+            onPlayVideo: onPlayVideo,
+            codVideos: gamingCOD(),
+            musicVideos: detroitFlintArtistsTrending(),
+            allVideos: categoriesAllVideos()
+        )
+
+        AILiveTVSection(
+            onSelectChannel: { channel in selectedLiveTVChannel = channel },
+            onSeeAll: { onSeeAllLiveTV() }
+        )
+
+        QuickTuneSection(liveChannelsAPI: liveChannelsAPI)
+
+        MinimalSection(title: "Movies", seeAllAction: { onSeeAllFreeMovies(blockbusterMovies) }) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 16) {
+                    let movies = blockbusterMovies.isEmpty ? Array(FreeMovie.sampleMovies.prefix(6)) : Array(blockbusterMovies.prefix(12))
+                    ForEach(movies) { movie in
+                        MinimalMovieCard(movie: movie, action: { onSelectMovie(movie) })
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+
+        TopArtistsSection(
+            rankings: rankService.topArtists,
+            sourceVideos: detroitFlintArtistsTrending() + [makeFriendTrendingVideo()] + Video.sampleVideos,
+            onSelect: { name, avatar, vids, total in onOpenArtistDetail(name, avatar, vids, total) },
+            onSeeAll: onSeeAllArtists
+        )
+
+        TopIndieFilmmakersSection(
+            rankings: rankService.topFilmmakers,
+            onSeeAll: onSeeAllFilmmakers,
+            onSelect: { name, films in onOpenFilmmakerDetail(name, films) }
+        )
+
+        TopMyChannelsSection(
+            rankings: rankService.topChannels,
+            sourceVideos: detroitFlintArtistsTrending() + gamingCOD() + Video.sampleVideos,
+            onSelect: { name, avatar, subs, total, vids in onOpenChannelDetail(name, avatar, subs, total, vids) },
+            onSeeAll: onSeeAllChannels
+        )
+    }
+
+    private func trendingVideos() -> [Video] {
+        let base = friendChannelVideos.isEmpty ? [] : friendChannelVideos
+        let pinnedIDs = ["JSXmfgZzHqQ", "xfdydb_3Ra0", "96Zeze6gdEI", "l1gQVUGdMyw", "71GJrAY54Ew"]
+        let pinnedVideos: [Video] = pinnedIDs.compactMap { id in
+            extraTrendingVideos().first(where: { $0.externalID == id }) ??
+            detroitFlintArtistsTrending().first(where: { $0.externalID == id })
+        }
+        let merged = pinnedVideos + [makeFriendTrendingVideo()] + extraTrendingVideos() + flintShowcaseVideos() + base
+        var seen = Set<String>()
+        return merged.filter { v in
+            if seen.contains(v.id) { return false }
+            seen.insert(v.id)
+            return true
+        }
+    }
+
+    private func categoriesAllVideos() -> [Video] {
+        var vids = flintShowcaseVideos() + detroitFlintArtistsTrending() + gamingCOD() + Video.sampleVideos + SeedCatalogService.shared.seedVideos
+        vids.insert(makeFriendTrendingVideo(), at: 0)
+        return vids
+    }
+
     var body: some View {
         VStack(spacing: 40) {
-            // LIVE NOW - Active live streams from Firestore
-            LiveNowSection { stream in
-                onSelectLiveStream?(stream)
-            }
-            .onAppear {
-                LiveStreamManager.shared.startListening()
-            }
-
-            ForYouSection(onPlayVideo: onPlayVideo, onSeeAllExplore: onSeeAllExplore)
-
-            // 🔥 REAL Continue Watching — pulls from Firestore watch history with actual progress
-            if appState.isAuthenticated {
-                ContinueWatchingSection(onVideoTap: { video in
-                    onPlayVideo(video)
-                })
-            }
-
-            MinimalSection(
-                title: "Trending Now",
-                seeAllAction: { onSeeAllTrending() }
-            ) {
-                TopTenCarousel(
-                    videos: {
-                        let base = friendChannelVideos.isEmpty ? [] : friendChannelVideos
-                        // Featured videos first: Baby Ju #1, KTrip #2
-                        let pinnedIDs = ["JSXmfgZzHqQ", "xfdydb_3Ra0", "96Zeze6gdEI", "l1gQVUGdMyw", "71GJrAY54Ew"]
-                        let pinnedVideos: [Video] = pinnedIDs.compactMap { id in
-                            extraTrendingVideos().first(where: { $0.externalID == id }) ??
-                            detroitFlintArtistsTrending().first(where: { $0.externalID == id })
-                        }
-                        let merged = pinnedVideos + [makeFriendTrendingVideo()] + extraTrendingVideos() + flintShowcaseVideos() + base
-                        var seen = Set<String>()
-                        let dedup = merged.filter { v in
-                            if seen.contains(v.id) { return false }
-                            seen.insert(v.id)
-                            return true
-                        }
-                        return dedup
-                    }(),
-                    preserveOrder: true,
-                    onPlay: { v in onPlayVideo(v) }
-                )
-                .padding(.top, 4)
-            }
-
-            // MUSIC – artist carousel, placed above Categories
-                        MinimalMusicSection(
-                            onOpenArtistMusicProfile: onOpenArtistMusicProfile,
-                            appState: _appState,
-                            onSeeAll: { onSeeAllMusic() }
-                        )
-
-            MinimalCategoriesSection(
-                onPlayVideo: onPlayVideo,
-                codVideos: gamingCOD(),
-                musicVideos: detroitFlintArtistsTrending(),
-                allVideos: {
-                    var vids = flintShowcaseVideos() + detroitFlintArtistsTrending() + gamingCOD() + Video.sampleVideos + SeedCatalogService.shared.seedVideos
-                    vids.insert(makeFriendTrendingVideo(), at: 0)
-                    return vids
-                }()
-            )
-
-            // 🔥🔥🔥 AI-POWERED LIVE TV SECTION - THE BEST IN THE WORLD 🔥🔥🔥
-            AILiveTVSection(
-                onSelectChannel: { channel in
-                    selectedLiveTVChannel = channel
-                },
-                onSeeAll: { onSeeAllLiveTV() }
-            )
-            
-            // 🔥 Quick Tune - Smart loading section
-            QuickTuneSection(liveChannelsAPI: liveChannelsAPI)
-
-            MinimalSection(
-                title: "Movies",
-                seeAllAction: { onSeeAllFreeMovies(blockbusterMovies) }
-            ) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(alignment: .top, spacing: 16) {
-                        let movies = blockbusterMovies.isEmpty ? Array(FreeMovie.sampleMovies.prefix(6)) : Array(blockbusterMovies.prefix(12))
-                        ForEach(movies) { movie in
-                            MinimalMovieCard(movie: movie, action: { 
-                                onSelectMovie(movie)
-                                // Track movie view for enhanced service
-                                Task {
-                                    EnhancedMoviesService.shared.addToRecentlyWatched(movie)
-                                }
-                            })
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-            }
-
-            TopArtistsSection(
-                rankings: rankService.topArtists,
-                sourceVideos: detroitFlintArtistsTrending() + [makeFriendTrendingVideo()] + Video.sampleVideos,
-                onSelect: { name, avatar, vids, total in
-                    onOpenArtistDetail(name, avatar, vids, total)
-                },
-                onSeeAll: onSeeAllArtists
-            )
-            .padding(.horizontal, 20)
-
-            TopIndieFilmmakersSection(
-                rankings: rankService.topFilmmakers,
-                onSeeAll: onSeeAllFilmmakers,
-                onSelect: { name, films in
-                    onOpenFilmmakerDetail(name, films)
-                }
-            )
-            .padding(.horizontal, 20)
-
-            TopMyChannelsSection(
-                rankings: rankService.topChannels,
-                sourceVideos: detroitFlintArtistsTrending() + gamingCOD() + Video.sampleVideos,
-                onSelect: { name, avatar, subs, total, vids in
-                    onOpenChannelDetail(name, avatar, subs, total, vids)
-                },
-                onSeeAll: onSeeAllChannels
-            )
-            .padding(.horizontal, 20)
+            topSections
+            bottomSections
         }
         // Native PiP doesn't affect layout, so no need to disable animations
         .task {
@@ -1988,6 +1969,7 @@ private struct TopArtistsSection: View {
                 }
             }
             .padding(.top, 4)
+            .padding(.horizontal, 20)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
@@ -2001,7 +1983,7 @@ private struct TopArtistsSection: View {
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 16)
                 .background(AppTheme.Colors.background)
             }
         }
@@ -2033,6 +2015,7 @@ private struct TopIndieFilmmakersSection: View {
                 }
             }
             .padding(.top, 4)
+            .padding(.horizontal, 20)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
@@ -2045,7 +2028,7 @@ private struct TopIndieFilmmakersSection: View {
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 16)
                 .background(AppTheme.Colors.background)
             }
         }
@@ -2078,6 +2061,7 @@ private struct TopMyChannelsSection: View {
                 }
             }
             .padding(.top, 4)
+            .padding(.horizontal, 20)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
@@ -2092,7 +2076,7 @@ private struct TopMyChannelsSection: View {
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 16)
                 .background(AppTheme.Colors.background)
             }
         }
@@ -2340,8 +2324,22 @@ struct ForYouSection: View {
     @State private var forYouVideos: [Video] = []
     @State private var isLoading = false
     
+    /// Last-resort view-level filter — blocks videos from rendering regardless of data source
+    private var safeForYouVideos: [Video] {
+        forYouVideos.filter { video in
+            let t = video.title.lowercased()
+            if t.contains("cooking with kya") { return false }
+            if t.contains("screen recording 2025") { return false }
+            let d = video.creator.displayName.lowercased()
+            if d == "shot by keonta" { return false }
+            let u = video.creator.username.lowercased()
+            if u == "sbkeonta_" || u == "shotbykeonta" || u == "keontapeat" { return false }
+            return true
+        }
+    }
+    
     var body: some View {
-        if !forYouVideos.isEmpty || appState.isAuthenticated {
+        if !safeForYouVideos.isEmpty || appState.isAuthenticated {
             MinimalSection(
                 title: "For You",
                 seeAllAction: onSeeAllExplore
@@ -2353,9 +2351,13 @@ struct ForYouSection: View {
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: 16) {
-                            ForEach(forYouVideos.prefix(8)) { video in
-                                MinimalVideoCard(video: video, action: { onPlayVideo(video) })
-                                    .optimizeUIPerformance()
+                            ForEach(Array(safeForYouVideos.prefix(8).enumerated()), id: \.element.id) { index, video in
+                                MinimalVideoCard(
+                                    video: video,
+                                    action: { onPlayVideo(video) },
+                                    useLivePreview: index < 3
+                                )
+                                .optimizeUIPerformance()
                             }
                         }
                         .padding(.horizontal, 20)
@@ -2363,7 +2365,7 @@ struct ForYouSection: View {
                 }
             }
             .onAppear {
-                if let uid = appState.currentUser?.id {
+                if let uid = appState.currentUser?.id, !uid.isEmpty {
                     Task { await loadForYou(userId: uid) }
                 }
             }
@@ -2372,6 +2374,30 @@ struct ForYouSection: View {
     
     private func loadForYou(userId: String) async {
         isLoading = true
+        print("🔍 [ForYou] Loading feed for userId: '\(userId)'")
+
+        /// Filter out the current user's own uploaded videos from the feed.
+        /// Uses multiple signals — creatorId, display name, username, AND specific titles.
+        let ownerDisplayNames: Set<String> = ["shot by keonta"]
+        let ownerUsernames: Set<String> = ["sbkeonta_", "shotbykeonta", "keontapeat"]
+        let blockedTitleSubstrings = ["cooking with kya", "screen recording 2025"]
+        func excludeOwn(_ videos: [Video]) -> [Video] {
+            videos.filter { video in
+                let titleLower = video.title.lowercased()
+                let hasBlockedTitle = blockedTitleSubstrings.contains { titleLower.contains($0) }
+                
+                let shouldExclude = video.creatorId == userId ||
+                                  ownerDisplayNames.contains(video.creator.displayName.lowercased()) ||
+                                  ownerUsernames.contains(video.creator.username.lowercased()) ||
+                                  hasBlockedTitle
+                
+                if shouldExclude {
+                    print("🚫 [ForYou] Filtering out: '\(video.title)' by '\(video.creator.displayName)' (@\(video.creator.username)) [creatorId: \(video.creatorId)]")
+                }
+                
+                return !shouldExclude
+            }
+        }
 
         // 🤖 AI RECOMMENDATIONS: Try Cloud Run agent first
         if let recResponse = try? await RealMLAgentsService.shared.getRecommendations(
@@ -2383,11 +2409,12 @@ struct ForYouSection: View {
         ), !recResponse.recommendations.isEmpty {
             let videoIds = recResponse.recommendations.map { $0.video_id }
             print("🤖 [HomeView] AI recommendations: \(videoIds.count) videos (personalization: \(Int(recResponse.personalization_score * 100))%)")
-            // Fetch actual video objects for those IDs (falls through to fair feed if empty)
             let recVideos = (try? await VideoFirestoreService.shared.fetchMultipleVideos(videoIds: Array(videoIds.prefix(20)))) ?? []
-            if !recVideos.isEmpty {
+            let filtered = excludeOwn(recVideos)
+            print("🤖 [ForYou] AI recommendations: \(recVideos.count) → \(filtered.count) after filtering")
+            if !filtered.isEmpty {
                 await MainActor.run {
-                    forYouVideos = recVideos
+                    forYouVideos = filtered
                     isLoading = false
                 }
                 return
@@ -2400,16 +2427,20 @@ struct ForYouSection: View {
             userId: userId,
             includeNewCreators: true
         )
-        
-        if !fairFeedVideos.isEmpty {
-            forYouVideos = fairFeedVideos
+
+        let filteredFair = excludeOwn(fairFeedVideos)
+        print("🚀 [ForYou] Fair discovery: \(fairFeedVideos.count) → \(filteredFair.count) after filtering")
+        if !filteredFair.isEmpty {
+            forYouVideos = filteredFair
             isLoading = false
-            print("✅ [HomeView] Loaded \(fairFeedVideos.count) videos with new creator discovery")
+            print("✅ [HomeView] Loaded \(filteredFair.count) videos with new creator discovery")
             return
         }
         
         // Final fallback: Use home feed that includes uploaded videos
-        var feed = await personalizedService.generateHomeFeed(limit: 12)
+        let rawFeed = await personalizedService.generateHomeFeed(limit: 12)
+        var feed = excludeOwn(rawFeed)
+        print("📱 [ForYou] Final fallback: \(rawFeed.count) → \(feed.count) after filtering")
         
         // Add featured video "Juicy Booty Banger" at the beginning (fake video - thumbnail only)
         // IMPORTANT: Make sure the image in Assets.xcassets is named exactly "JuicyBootyBangerThumbnail" (case-sensitive)

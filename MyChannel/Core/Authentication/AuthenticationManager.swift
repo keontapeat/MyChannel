@@ -7,11 +7,15 @@
 
 import SwiftUI
 import Combine
+import AuthenticationServices
 #if canImport(FirebaseAuth)
 import FirebaseAuth
 #endif
 #if canImport(FirebaseCore)
 import FirebaseCore
+#endif
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
 #endif
 
 @MainActor
@@ -22,6 +26,9 @@ class AuthenticationManager: ObservableObject {
     @Published var currentUser: User?
     @Published var isLoading: Bool = false
     @Published var authState: AuthState = .unauthenticated
+    @Published var isBanned: Bool = false
+    @Published var isSuspended: Bool = false
+    @Published var suspendedUntil: Date? = nil
     
     private var cancellables = Set<AnyCancellable>()
     
@@ -29,13 +36,17 @@ class AuthenticationManager: ObservableObject {
         case unauthenticated
         case authenticating
         case authenticated
+        case banned
+        case suspended
         case error(String)
         
         static func == (lhs: AuthState, rhs: AuthState) -> Bool {
             switch (lhs, rhs) {
             case (.unauthenticated, .unauthenticated),
                  (.authenticating, .authenticating),
-                 (.authenticated, .authenticated):
+                 (.authenticated, .authenticated),
+                 (.banned, .banned),
+                 (.suspended, .suspended):
                 return true
             case (.error(let lhsMessage), .error(let rhsMessage)):
                 return lhsMessage == rhsMessage
@@ -84,6 +95,44 @@ class AuthenticationManager: ObservableObject {
                 var loadedUser: User? = nil
                 
                 do {
+                    // 0. Check if account is banned or suspended before allowing access
+                    let rawDoc = try? await Firestore.firestore().collection("users").document(fuser.uid).getDocument()
+                    if let rawData = rawDoc?.data() {
+                        let banned = rawData["banned"] as? Bool ?? false
+                        let suspended = rawData["suspended"] as? Bool ?? false
+                        let suspendedUntilTS = (rawData["suspendedUntil"] as? Timestamp)?.dateValue()
+                        let suspensionExpired = suspendedUntilTS.map { $0 < Date() } ?? true
+
+                        if banned {
+                            await MainActor.run {
+                                self.isBanned = true
+                                self.authState = .banned
+                                self.isAuthenticated = false
+                            }
+                            print("🚫 [Auth] Banned account attempted login: \(fuser.uid)")
+                            try? Auth.auth().signOut()
+                            return
+                        }
+
+                        if suspended && !suspensionExpired {
+                            await MainActor.run {
+                                self.isSuspended = true
+                                self.suspendedUntil = suspendedUntilTS
+                                self.authState = .suspended
+                                self.isAuthenticated = false
+                            }
+                            print("⏸️ [Auth] Suspended account attempted login: \(fuser.uid)")
+                            try? Auth.auth().signOut()
+                            return
+                        }
+
+                        // If suspension expired, clear the flag in Firestore
+                        if suspended && suspensionExpired {
+                            try? await Firestore.firestore().collection("users").document(fuser.uid)
+                                .updateData(["suspended": false, "suspendedUntil": FieldValue.delete()])
+                        }
+                    }
+
                     // 1. Try Firestore first (has complete profile with custom displayName, username, etc.)
                     if let firestoreUser = try await UserFirestoreService.shared.fetchUser(id: fuser.uid) {
                         loadedUser = firestoreUser
@@ -257,8 +306,19 @@ class AuthenticationManager: ObservableObject {
                         await SmartUserSeederService.shared.registerRealUser(user)
                     }
                 }
+            } catch let error as ASAuthorizationError where error.code == .canceled {
+                // User tapped Cancel — silently return to unauthenticated, no error shown
+                print("🍎 [Apple Sign In] User cancelled")
+                authState = .unauthenticated
             } catch {
+                print("🍎 [Apple Sign In] Error: \(error.localizedDescription)")
                 authState = .error(error.localizedDescription)
+                // Reset to unauthenticated after a brief delay so the UI isn't stuck
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                    if case .error = self?.authState {
+                        self?.authState = .unauthenticated
+                    }
+                }
             }
         } else {
             authState = .unauthenticated

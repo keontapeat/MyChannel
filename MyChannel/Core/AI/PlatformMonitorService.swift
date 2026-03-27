@@ -463,13 +463,17 @@ final class PlatformMonitorService: ObservableObject {
             print("⚖️ [StrikeQueue] Updated case for \(username) — strike \(newStrikes)/3")
         } else {
             let aiRisk = min(100, 30 + confidence / 3)
-            let newCase: [String: Any] = [
+            let userData = userSnap?.data() ?? [:]
+            let profileImageURL = userData["profileImageURL"] as? String
+                ?? userData["photoURL"] as? String
+                ?? userData["avatarURL"] as? String
+            var newCase: [String: Any] = [
                 "userId": userId,
                 "username": username,
                 "email": email,
-                "joinDate": userSnap?.data()?["createdAt"] as? Timestamp ?? Timestamp(date: Date()),
-                "videoCount": userSnap?.data()?["videoCount"] as? Int ?? 0,
-                "followerCount": userSnap?.data()?["followerCount"] as? Int ?? 0,
+                "joinDate": userData["createdAt"] as? Timestamp ?? Timestamp(date: Date()),
+                "videoCount": userData["videoCount"] as? Int ?? 0,
+                "followerCount": userData["subscriberCount"] as? Int ?? userData["followerCount"] as? Int ?? 0,
                 "strikeCount": 1,
                 "status": StrikeCaseStatus.pendingReview.rawValue,
                 "violations": [violation],
@@ -481,6 +485,7 @@ final class PlatformMonitorService: ObservableObject {
                 "ownerNotes": "",
                 "ownerMessages": []
             ]
+            if let pic = profileImageURL { newCase["profileImageURL"] = pic }
             try? await db.collection("strikeCases").addDocument(data: newCase)
             print("⚖️ [StrikeQueue] New case created for \(username) — \(violationType)")
         }

@@ -175,7 +175,7 @@ struct NotificationPreferencesView: View {
     // MARK: - Content Notifications Section
     private var contentNotificationsSection: some View {
         VStack(spacing: 20) {
-            SectionHeader(title: "Content Updates")
+            NotificationSectionHeader(title: "Content Updates")
             
             VStack(spacing: 0) {
                 NotificationToggleRow(
@@ -220,7 +220,7 @@ struct NotificationPreferencesView: View {
     // MARK: - Social Notifications Section
     private var socialNotificationsSection: some View {
         VStack(spacing: 20) {
-            SectionHeader(title: "Social Activity")
+            NotificationSectionHeader(title: "Social Interactions")
             
             VStack(spacing: 0) {
                 NotificationToggleRow(
@@ -274,7 +274,7 @@ struct NotificationPreferencesView: View {
     // MARK: - Activity Notifications Section
     private var activityNotificationsSection: some View {
         VStack(spacing: 20) {
-            SectionHeader(title: "Personal Activity")
+            NotificationSectionHeader(title: "Personal Activity")
             
             VStack(spacing: 0) {
                 NotificationToggleRow(
@@ -319,7 +319,7 @@ struct NotificationPreferencesView: View {
     // MARK: - Timing Settings Section
     private var timingSettingsSection: some View {
         VStack(spacing: 20) {
-            SectionHeader(title: "Timing & Schedule")
+            NotificationSectionHeader(title: "Timing & Schedule")
             
             VStack(spacing: 16) {
                 // Quiet Hours Toggle
@@ -385,7 +385,7 @@ struct NotificationPreferencesView: View {
     // MARK: - Frequency Settings Section
     private var frequencySettingsSection: some View {
         VStack(spacing: 20) {
-            SectionHeader(title: "Delivery Settings")
+            NotificationSectionHeader(title: "Delivery Settings")
             
             VStack(spacing: 16) {
                 // Notification Frequency Picker
@@ -412,7 +412,7 @@ struct NotificationPreferencesView: View {
     // MARK: - Quick Actions Section
     private var quickActionsSection: some View {
         VStack(spacing: 16) {
-            SectionHeader(title: "Quick Actions")
+            NotificationSectionHeader(title: "Email Notifications")
             
             VStack(spacing: 12) {
                 ProfileQuickActionButton(
@@ -909,6 +909,31 @@ private extension DigestFrequency {
             return .weekly
         case .monthly, .disabled:
             return .never
+        }
+    }
+}
+
+// MARK: - Notification Section Header
+struct NotificationSectionHeader: View {
+    let title: String
+    let subtitle: String?
+    
+    init(title: String, subtitle: String? = nil) {
+        self.title = title
+        self.subtitle = subtitle
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(.primary)
+            
+            if let subtitle = subtitle {
+                Text(subtitle)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(.secondary)
+            }
         }
     }
 }

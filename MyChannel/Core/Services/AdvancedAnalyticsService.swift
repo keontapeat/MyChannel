@@ -22,7 +22,7 @@ class AdvancedAnalyticsService: ObservableObject {
     @Published var channelAnalytics: ChannelAnalytics?
     @Published var videoPerformance: [VideoAnalytics] = []
     @Published var audienceInsights: EnhancedAudienceInsights?
-    @Published var revenueAnalytics: RevenueAnalytics?
+    @Published var revenueAnalytics: AdvancedRevenueAnalytics?
     @Published var competitorAnalysis: AnalyticsCompetitorAnalysis?
     
     // Real-time updates (YouTube Studio updates every 15 minutes, we update every 30 seconds)
@@ -397,9 +397,9 @@ class AdvancedAnalyticsService: ObservableObject {
     func getRevenueAnalytics(
         for creatorId: String,
         timeframe: AnalyticsTimeframe = .last30Days
-    ) async throws -> RevenueAnalytics {
+    ) async throws -> AdvancedRevenueAnalytics {
         
-        let analytics = RevenueAnalytics(
+        let analytics = AdvancedRevenueAnalytics(
             totalRevenue: Double.random(in: 1000...10000),
             creatorShare: Double.random(in: 900...9000),
             platformFee: Double.random(in: 100...1000),
@@ -723,7 +723,7 @@ struct EnhancedAudienceInsights: Codable {
     let engagementOptimization: EngagementOptimization?
 }
 
-struct RevenueAnalytics: Codable {
+struct AdvancedRevenueAnalytics: Codable {
     let totalRevenue: Double
     let creatorShare: Double
     let platformFee: Double

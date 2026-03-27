@@ -22,7 +22,7 @@ class EnhancedSubscriptionService: ObservableObject {
     @Published var error: String?
     @Published var subscribedChannels: [User] = []
     @Published var subscriptionVideos: [Video] = []
-    @Published var subscriptionStats: SubscriptionStats?
+    @Published var subscriptionStats: EnhancedSubscriptionStats?
     
     // Performance tracking
     private let cache = NSCache<NSString, NSArray>()
@@ -218,7 +218,7 @@ class EnhancedSubscriptionService: ObservableObject {
             let request = FeedPersonalizationRequest(
                 userId: userId,
                 videos: videos.map { videoToMLData($0) },
-                context: FeedContext(
+                context: SubscriptionFeedContext(
                     feedType: "subscriptions",
                     timeOfDay: getCurrentTimeOfDay(),
                     dayOfWeek: getCurrentDayOfWeek(),
@@ -411,7 +411,7 @@ class EnhancedSubscriptionService: ObservableObject {
         ])
     }
     
-    func getSubscriptionStats(userId: String) async throws -> SubscriptionStats {
+    func getSubscriptionStats(userId: String) async throws -> EnhancedSubscriptionStats {
         #if canImport(FirebaseFirestore)
         let db = Firestore.firestore()
         
@@ -441,7 +441,7 @@ class EnhancedSubscriptionService: ObservableObject {
         
         let avgEngagement = engagementScores.isEmpty ? 0 : engagementScores.reduce(0, +) / Double(engagementScores.count)
         
-        return SubscriptionStats(
+        return EnhancedSubscriptionStats(
             totalSubscriptions: snapshot.documents.count,
             activeSubscriptions: activeSubscriptions,
             totalWatchTime: totalWatchTime,
@@ -450,7 +450,7 @@ class EnhancedSubscriptionService: ObservableObject {
             lastUpdated: Date()
         )
         #else
-        return SubscriptionStats(
+        return EnhancedSubscriptionStats(
             totalSubscriptions: 0,
             activeSubscriptions: 0,
             totalWatchTime: 0,
@@ -496,7 +496,7 @@ class EnhancedSubscriptionService: ObservableObject {
         }
     }
     
-    func predictChurnRisk(userId: String) async throws -> ChurnPredictionResult {
+    func predictChurnRisk(userId: String) async throws -> SubscriptionChurnPredictionResult {
         let request = ChurnPredictionRequest(
             userId: userId,
             subscriptionData: await getSubscriptionMLData(userId: userId)
@@ -508,7 +508,7 @@ class EnhancedSubscriptionService: ObservableObject {
             responseType: ChurnPredictionResponse.self
         )
         
-        return ChurnPredictionResult(
+        return SubscriptionChurnPredictionResult(
             riskScore: response.riskScore,
             riskLevel: response.riskLevel,
             factors: response.factors,
@@ -541,13 +541,13 @@ class EnhancedSubscriptionService: ObservableObject {
     
     // MARK: - Helper Methods
     
-    private func performMLRequest<T: Codable, R: Codable>(
+    private func performMLRequest<T: Encodable, R: Decodable>(
         url: String,
         request: T,
         responseType: R.Type
     ) async throws -> R {
         guard let requestURL = URL(string: url) else {
-            throw SubscriptionError.invalidURL
+            throw EnhancedSubscriptionError.invalidURL
         }
         
         var urlRequest = URLRequest(url: requestURL)
@@ -559,7 +559,7 @@ class EnhancedSubscriptionService: ObservableObject {
         
         guard let httpResponse = response as? HTTPURLResponse,
               200...299 ~= httpResponse.statusCode else {
-            throw SubscriptionError.serverError
+            throw EnhancedSubscriptionError.serverError
         }
         
         return try JSONDecoder().decode(responseType, from: data)
@@ -648,7 +648,7 @@ enum NotificationLevel: String, CaseIterable, Codable {
     }
 }
 
-struct SubscriptionStats {
+struct EnhancedSubscriptionStats {
     let totalSubscriptions: Int
     let activeSubscriptions: Int
     let totalWatchTime: TimeInterval
@@ -662,7 +662,7 @@ struct SubscriptionUpdate {
     let data: [String: Any]
 }
 
-struct ChurnPredictionResult {
+struct SubscriptionChurnPredictionResult {
     let riskScore: Double
     let riskLevel: String
     let factors: [String]
@@ -674,11 +674,29 @@ struct ChurnPredictionResult {
 struct FeedPersonalizationRequest: Codable {
     let userId: String
     let videos: [[String: Any]]
-    let context: FeedContext
+    let context: SubscriptionFeedContext
     let timestamp: TimeInterval
     
     enum CodingKeys: String, CodingKey {
-        case userId, context, timestamp
+        case userId, videos, context, timestamp
+    }
+    
+    init(userId: String, videos: [[String: Any]], context: SubscriptionFeedContext, timestamp: TimeInterval) {
+        self.userId = userId
+        self.videos = videos
+        self.context = context
+        self.timestamp = timestamp
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try container.decode(String.self, forKey: .userId)
+        context = try container.decode(SubscriptionFeedContext.self, forKey: .context)
+        timestamp = try container.decode(TimeInterval.self, forKey: .timestamp)
+        
+        // Decode videos as JSON array and convert to [String: Any]
+        let videosData = try container.decode([ContentData].self, forKey: .videos)
+        videos = videosData.map { $0.toDictionary() }
     }
     
     func encode(to encoder: Encoder) throws {
@@ -686,6 +704,34 @@ struct FeedPersonalizationRequest: Codable {
         try container.encode(userId, forKey: .userId)
         try container.encode(context, forKey: .context)
         try container.encode(timestamp, forKey: .timestamp)
+        
+        // Convert [String: Any] to encodable format
+        let videosData = videos.map { ContentData(from: $0) }
+        try container.encode(videosData, forKey: .videos)
+    }
+}
+
+// Helper struct for encoding/decoding [String: Any]
+struct ContentData: Codable {
+    let data: [String: JSONValue]
+    
+    init(from dictionary: [String: Any]) {
+        data = dictionary.mapValues { JSONValue(from: $0) }
+    }
+    
+    func toDictionary() -> [String: Any] {
+        return data.mapValues { $0.toAny() }
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let decodedData = try container.decode([String: JSONValue].self)
+        data = decodedData
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(data)
     }
 }
 
@@ -694,7 +740,7 @@ struct FeedPersonalizationResponse: Codable {
     let scores: [String: Double]
 }
 
-struct FeedContext: Codable {
+struct SubscriptionFeedContext: Codable {
     let feedType: String
     let timeOfDay: String
     let dayOfWeek: String
@@ -708,7 +754,7 @@ struct FeedContext: Codable {
     }
 }
 
-struct ContentRankingRequest: Codable {
+struct ContentRankingRequest: Encodable {
     let userId: String
     let content: [[String: Any]]
     let context: String
@@ -740,7 +786,7 @@ struct EngagementPredictionResponse: Codable {
     let confidence: Double
 }
 
-struct ChurnPredictionRequest: Codable {
+struct ChurnPredictionRequest: Encodable {
     let userId: String
     let subscriptionData: [String: Any]
     
@@ -763,7 +809,7 @@ struct ChurnPredictionResponse: Codable {
 
 // MARK: - Error Types
 
-enum SubscriptionError: LocalizedError {
+enum EnhancedSubscriptionError: LocalizedError {
     case invalidURL
     case serverError
     case networkError

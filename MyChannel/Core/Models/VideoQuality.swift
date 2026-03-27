@@ -169,7 +169,7 @@ extension VideoQuality {
             ForEach(VideoQuality.allQualitiesSorted, id: \.self) { quality in
                 HStack(spacing: 8) {
                     Image(systemName: quality.iconName)
-                        .foregroundColor(quality.color)
+                        .foregroundStyle(quality.color)
                         .font(.title2)
                     
                     VStack(alignment: .leading, spacing: 2) {
@@ -179,7 +179,7 @@ extension VideoQuality {
                         
                         Text("\(Int(quality.resolution.width))x\(Int(quality.resolution.height))")
                             .font(AppTheme.Typography.caption)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .foregroundStyle(AppTheme.Colors.textSecondary)
                     }
                     
                     Spacer()
@@ -198,7 +198,7 @@ extension VideoQuality {
             
             Text("For a 10-minute video:")
                 .font(AppTheme.Typography.caption)
-                .foregroundColor(AppTheme.Colors.textSecondary)
+                .foregroundStyle(AppTheme.Colors.textSecondary)
             
             ForEach([VideoQuality.quality360p, .quality720p, .quality1080p, .quality2160p], id: \.self) { quality in
                 HStack {
@@ -210,7 +210,7 @@ extension VideoQuality {
                     Text("\(Int(quality.estimatedDataUsage(for: 600))) MB")
                         .font(AppTheme.Typography.body)
                         .fontWeight(.medium)
-                        .foregroundColor(quality.color)
+                        .foregroundStyle(quality.color)
                 }
             }
         }

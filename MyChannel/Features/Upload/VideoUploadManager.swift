@@ -174,7 +174,7 @@ class VideoUploadManager: ObservableObject {
         // 🔥 NUCLEAR FIX #1: Create cancellable upload task
         uploadTask = Task {
             do {
-                let metadata = LocalUploadVideoMetadata(
+                let metadata = VideoUploadMetadata(
                     title: title,
                     description: description,
                     tags: Array(selectedTags),
@@ -478,7 +478,7 @@ class VideoUploadManager: ObservableObject {
         }
     }
     
-    private func uploadVideoWithProgress(_ data: Data, metadata: LocalUploadVideoMetadata) async throws -> Video {
+    private func uploadVideoWithProgress(_ data: Data, metadata: VideoUploadMetadata) async throws -> Video {
         // 🔥 CRITICAL: Require a real signed-in user so uploads are always tied
         // to an actual creator profile (never the placeholder Default User).
         guard let creatorUser = AuthenticationManager.shared.currentUser else {
@@ -769,8 +769,8 @@ class VideoUploadManager: ObservableObject {
     }
 }
 
-// MARK: - Local Upload Video Metadata Structure
-struct LocalUploadVideoMetadata {
+// MARK: - Video Upload Metadata Structure
+struct VideoUploadMetadata {
     let title: String
     let description: String
     let tags: [String]

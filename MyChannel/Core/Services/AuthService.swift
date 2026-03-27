@@ -230,32 +230,42 @@ class AuthService: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        // Use FirebaseAppleAuthService which authenticates directly against Firebase,
-        // avoiding any dependency on the custom backend endpoint (/auth/apple).
-        let payload = try await FirebaseAppleAuthService.shared.signIn()
+        do {
+            // Use FirebaseAppleAuthService which authenticates directly against Firebase,
+            // avoiding any dependency on the custom backend endpoint (/auth/apple).
+            let payload = try await FirebaseAppleAuthService.shared.signIn()
 
-        let user = User(
-            id: payload.uid,
-            username: payload.email?.components(separatedBy: "@").first ?? "apple_user",
-            displayName: payload.displayName.isEmpty ? "Apple User" : payload.displayName,
-            email: payload.email ?? "",
-            profileImageURL: nil,
-            isVerified: true,
-            isCreator: true
-        )
+            let user = User(
+                id: payload.uid,
+                username: payload.email?.components(separatedBy: "@").first ?? "apple_user",
+                displayName: payload.displayName.isEmpty ? "Apple User" : payload.displayName,
+                email: payload.email ?? "",
+                profileImageURL: nil,
+                isVerified: true,
+                isCreator: true
+            )
 
-        _ = keychain.save(user.id, for: "userId")
-        currentUser = user
-        isAuthenticated = true
-        authState = .authenticated
-        broadcastLogin(user)
+            _ = keychain.save(user.id, for: "userId")
+            currentUser = user
+            isAuthenticated = true
+            authState = .authenticated
+            broadcastLogin(user)
 
-        await AnalyticsService.shared.trackEvent("user_sign_in", parameters: [
-            "method": "apple",
-            "user_id": user.id
-        ])
+            await AnalyticsService.shared.trackEvent("user_sign_in", parameters: [
+                "method": "apple",
+                "user_id": user.id
+            ])
 
-        NotificationManager.shared.showSuccess("Welcome, \(user.displayName)!")
+            NotificationManager.shared.showSuccess("Welcome, \(user.displayName)!")
+        } catch let error as ASAuthorizationError where error.code == .canceled {
+            // User tapped Cancel on the Apple Sign In sheet — not an error
+            print("🍎 [AuthService] Apple Sign In cancelled by user")
+            authState = .unauthenticated
+        } catch {
+            print("🍎 [AuthService] Apple Sign In error: \(error.localizedDescription)")
+            authState = .unauthenticated
+            throw error
+        }
     }
     
     func signInWithGoogle() async throws {

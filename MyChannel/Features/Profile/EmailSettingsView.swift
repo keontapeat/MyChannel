@@ -97,7 +97,7 @@ struct EmailSettingsView: View {
     // MARK: - Email Accounts Section
     private var emailAccountsSection: some View {
         VStack(spacing: 20) {
-            SectionHeader(title: "Email Accounts")
+            EmailSectionHeader(title: "Email Accounts")
             
             VStack(spacing: 16) {
                 // Primary Email
@@ -173,7 +173,7 @@ struct EmailSettingsView: View {
     // MARK: - Email Preferences Section
     private var emailPreferencesSection: some View {
         VStack(spacing: 20) {
-            SectionHeader(title: "General Preferences")
+            EmailSectionHeader(title: "General Preferences")
             
             VStack(spacing: 0) {
                 EmailToggleRow(
@@ -219,7 +219,7 @@ struct EmailSettingsView: View {
     // MARK: - Notification Categories Section
     private var notificationCategoriesSection: some View {
         VStack(spacing: 20) {
-            SectionHeader(title: "Notification Categories")
+            EmailSectionHeader(title: "Notification Categories")
             
             VStack(spacing: 0) {
                 EmailToggleRow(
@@ -775,17 +775,27 @@ enum EmailField: CaseIterable {
     case currentPassword
 }
 
-// MARK: - Section Header
-struct SectionHeader: View {
+// MARK: - Email Section Header
+struct EmailSectionHeader: View {
     let title: String
+    let subtitle: String?
+    
+    init(title: String, subtitle: String? = nil) {
+        self.title = title
+        self.subtitle = subtitle
+    }
     
     var body: some View {
-        HStack {
+        VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundColor(AppTheme.Colors.textPrimary)
             
-            Spacer()
+            if let subtitle = subtitle {
+                Text(subtitle)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
         }
     }
 }

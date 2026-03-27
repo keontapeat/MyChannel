@@ -443,8 +443,8 @@ private struct ProfileVideoBackground: View {
     }
 }
 
-// MARK: - Stat Item (with Premium Counting Animation)
-struct StatItem: View {
+// MARK: - Profile Stat Item (with Premium Counting Animation)
+struct ProfileStatItem: View {
     let value: String
     let label: String
 

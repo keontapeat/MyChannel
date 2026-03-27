@@ -271,7 +271,7 @@ class VertexAIAgentService: ObservableObject {
     func getSupportResponse(
         userID: String,
         question: String,
-        userContext: UserContext?
+        userContext: VertexUserContext?
     ) async throws -> VertexSupportResponse {
         
         print("💬 [Support Agent] Answering question for user: \(userID)")
@@ -575,7 +575,7 @@ struct ContentIssue {
     let suggestedFix: String
 }
 
-struct UserContext {
+struct VertexUserContext {
     let isCreator: Bool
     let subscriberCount: Int
     let videoCount: Int

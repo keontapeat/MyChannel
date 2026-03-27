@@ -190,7 +190,7 @@ class CreatorMonetizationService: ObservableObject {
     
     // MARK: - Ad Revenue Optimization
     
-    func optimizeAdRevenue(creatorId: String) async throws -> AdOptimizationResult {
+    func optimizeAdRevenue(creatorId: String) async throws -> MonetizationAdOptimizationResult {
         let request = AdOptimizationRequest(
             creatorId: creatorId,
             currentSettings: await getCurrentAdSettings(creatorId: creatorId),
@@ -203,7 +203,7 @@ class CreatorMonetizationService: ObservableObject {
             responseType: AdOptimizationResponse.self
         )
         
-        return AdOptimizationResult(
+        return MonetizationAdOptimizationResult(
             recommendedAdTypes: response.recommendedAdTypes,
             optimalAdDensity: response.optimalAdDensity,
             bestAdPlacements: response.bestAdPlacements,
@@ -371,7 +371,7 @@ class CreatorMonetizationService: ObservableObject {
     
     // MARK: - Helper Methods
     
-    private func performMLRequest<T: Codable, R: Codable>(
+    private func performMLRequest<T: Encodable, R: Decodable>(
         url: String,
         request: T,
         responseType: R.Type
@@ -436,8 +436,8 @@ class CreatorMonetizationService: ObservableObject {
     
     private func getCurrentMembershipTiers(creatorId: String) async -> [MembershipTier] {
         return [
-            MembershipTier(name: "Basic", price: 4.99, benefits: ["Early access", "Exclusive content"]),
-            MembershipTier(name: "Premium", price: 9.99, benefits: ["All Basic benefits", "Monthly Q&A", "Discord access"])
+            MembershipTier(name: "Basic", description: "Basic membership", price: 4.99, benefits: ["Early access", "Exclusive content"], badgeColor: "blue"),
+            MembershipTier(name: "Premium", description: "Premium membership", price: 9.99, benefits: ["All Basic benefits", "Monthly Q&A", "Discord access"], badgeColor: "gold")
         ]
     }
     
@@ -492,7 +492,7 @@ enum AdDensity: String, Codable {
     case high = "high"
 }
 
-enum ProjectionTimeframe: String, CaseIterable {
+enum ProjectionTimeframe: String, CaseIterable, Codable {
     case month = "1m"
     case quarter = "3m"
     case halfYear = "6m"
@@ -514,11 +514,7 @@ struct MonetizationPreferences: Codable {
     let taxInformation: [String: String]
 }
 
-struct MembershipTier: Codable {
-    let name: String
-    let price: Double
-    let benefits: [String]
-}
+// MonetizationMembershipTier defined in ComprehensiveCreatorStudioView.swift
 
 struct MonetizationEligibility: Codable {
     let isEligible: Bool
@@ -573,7 +569,7 @@ struct RevenueStream: Codable {
     }
 }
 
-struct AdOptimizationResult: Codable {
+struct MonetizationAdOptimizationResult: Codable {
     let recommendedAdTypes: [String]
     let optimalAdDensity: String
     let bestAdPlacements: [String]
@@ -666,7 +662,120 @@ struct MonetizationEligibilityResponse: Codable {
     let estimatedTimeToEligibility: TimeInterval?
 }
 
-// Additional ML request/response types would be defined here...
+struct RevenueStreamOptimizationRequest: Encodable {
+    let creatorId: String
+    let preferences: MonetizationPreferences
+    let audienceData: [String: Any]
+    
+    enum CodingKeys: String, CodingKey {
+        case creatorId, preferences
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(creatorId, forKey: .creatorId)
+        try container.encode(preferences, forKey: .preferences)
+    }
+}
+
+struct RevenueStreamOptimizationResponse: Codable {
+    let optimizedStreams: [OptimizedStreamData]
+}
+
+struct OptimizedStreamData: Codable {
+    let type: String
+    let name: String
+    let isEnabled: Bool
+    let estimatedRevenue: Double
+    let optimizationScore: Double
+    let recommendations: [String]
+    let settings: [String: String]
+}
+
+struct AdOptimizationRequest: Encodable {
+    let creatorId: String
+    let currentSettings: [String: Any]
+    let performanceData: [String: Any]
+    
+    enum CodingKeys: String, CodingKey {
+        case creatorId
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(creatorId, forKey: .creatorId)
+    }
+}
+
+struct AdOptimizationResponse: Codable {
+    let recommendedAdTypes: [String]
+    let optimalAdDensity: String
+    let bestAdPlacements: [String]
+    let estimatedRevenueIncrease: Double
+    let audienceImpact: Double
+    let implementationSteps: [String]
+}
+
+struct SponsorshipMatchingRequest: Encodable {
+    let creatorId: String
+    let audienceData: [String: Any]
+    let contentCategories: [String]
+    let performanceMetrics: [String: Any]
+    
+    enum CodingKeys: String, CodingKey {
+        case creatorId, contentCategories
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(creatorId, forKey: .creatorId)
+        try container.encode(contentCategories, forKey: .contentCategories)
+    }
+}
+
+struct SponsorshipMatchingResponse: Codable {
+    let opportunities: [SponsorshipOpportunity]
+}
+
+struct MembershipOptimizationRequest: Encodable {
+    let creatorId: String
+    let currentTiers: [MembershipTier]
+    let audienceData: [String: Any]
+    let engagementData: [String: Any]
+    
+    enum CodingKeys: String, CodingKey {
+        case creatorId, currentTiers
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(creatorId, forKey: .creatorId)
+        try container.encode(currentTiers, forKey: .currentTiers)
+    }
+}
+
+struct MembershipOptimizationResponse: Codable {
+    let optimizedTiers: [OptimizedMembershipTier]
+}
+
+struct RevenueProjectionRequest: Codable {
+    let creatorId: String
+    let timeframe: String
+    let includeGrowthScenarios: Bool
+    let factorInSeasonality: Bool
+}
+
+struct RevenueProjectionResponse: Codable {
+    let baselineProjection: Double
+    let optimisticProjection: Double
+    let conservativeProjection: Double
+    let monthlyBreakdown: [Double]
+    let revenueByStream: [String: Double]
+    let growthFactors: [String]
+    let risks: [String]
+    let opportunities: [String]
+    let confidence: Double
+}
 
 // MARK: - Error Types
 

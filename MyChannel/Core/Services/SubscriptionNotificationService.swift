@@ -140,7 +140,7 @@ class SubscriptionNotificationService: ObservableObject {
             let request = NotificationOptimizationRequest(
                 videoId: video.id,
                 creatorId: video.creator.id,
-                videoMetadata: VideoMetadata(
+                videoMetadata: NotificationVideoMetadata(
                     title: video.title,
                     duration: video.duration,
                     category: video.category.rawValue,
@@ -161,7 +161,7 @@ class SubscriptionNotificationService: ObservableObject {
                     title: mlNotification.title,
                     body: mlNotification.body,
                     scheduledTime: Date(timeIntervalSince1970: mlNotification.scheduledTime),
-                    priority: NotificationPriority(rawValue: mlNotification.priority) ?? .normal,
+                    priority: NotificationPriority(rawValue: Int(mlNotification.priority) ?? 1) ?? .normal,
                     category: mlNotification.category,
                     metadata: mlNotification.metadata
                 )
@@ -302,14 +302,9 @@ struct OptimizedNotification {
     let metadata: [String: Any]
 }
 
-enum NotificationPriority: String, CaseIterable {
-    case low = "low"
-    case normal = "normal"
-    case high = "high"
-    case urgent = "urgent"
-}
+// NotificationPriority is defined in NotificationsStore.swift
 
-struct VideoMetadata: Codable {
+struct NotificationVideoMetadata: Codable {
     let title: String
     let duration: TimeInterval
     let category: String
@@ -321,7 +316,7 @@ struct VideoMetadata: Codable {
 struct NotificationOptimizationRequest: Codable {
     let videoId: String
     let creatorId: String
-    let videoMetadata: VideoMetadata
+    let videoMetadata: NotificationVideoMetadata
     let subscriberIds: [String]
 }
 

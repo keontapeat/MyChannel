@@ -181,6 +181,26 @@ final class PersonalizedFeedService: ObservableObject {
             videos.append(contentsOf: SeedCatalogService.shared.seedVideos.shuffled().prefix(remainingSlots / 2))
         }
         
+        // 🔥 FINAL SAFETY FILTER: Block owner videos at source
+        let ownerDisplayNames: Set<String> = ["shot by keonta"]
+        let ownerUsernames: Set<String> = ["sbkeonta_", "shotbykeonta", "keontapeat"]
+        let blockedTitleSubstrings = ["cooking with kya", "screen recording 2025"]
+        
+        videos = videos.filter { video in
+            let titleLower = video.title.lowercased()
+            let hasBlockedTitle = blockedTitleSubstrings.contains { titleLower.contains($0) }
+            
+            let shouldExclude = ownerDisplayNames.contains(video.creator.displayName.lowercased()) ||
+                              ownerUsernames.contains(video.creator.username.lowercased()) ||
+                              hasBlockedTitle
+            
+            if shouldExclude {
+                print("🚫 [PersonalizedFeedService] Filtering out: '\(video.title)' by '\(video.creator.displayName)'")
+            }
+            
+            return !shouldExclude
+        }
+        
         return Array(videos.prefix(limit))
     }
 }

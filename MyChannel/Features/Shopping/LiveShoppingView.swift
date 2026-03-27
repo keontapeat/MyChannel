@@ -268,7 +268,7 @@ struct LiveShoppingView: View {
             
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 14) {
                 ForEach(ShoppingCategory.allCases) { category in
-                    CategoryButton(category: category) {
+                    ShoppingCategoryButton(category: category) {
                         // TODO: route to category storefront
                     }
                 }
@@ -640,9 +640,9 @@ struct ProductHighlightCard: View {
     }
 }
 
-// MARK: - Category Button
+// MARK: - Shopping Category Button
 
-struct CategoryButton: View {
+struct ShoppingCategoryButton: View {
     let category: ShoppingCategory
     let action: () -> Void
     

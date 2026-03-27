@@ -140,7 +140,7 @@ final class GamingEsportsViewModel: ObservableObject {
         aiRankingConfidence = result.avgConfidence
 
         // Re-sort leaderboard using AI ELO order
-        let aiOrderMap = Dictionary(uniqueKeysWithValues: result.sortedPlayerIds.enumerated().map { ($1, $0) })
+        let aiOrderMap = Dictionary(result.sortedPlayerIds.enumerated().map { ($1, $0) }, uniquingKeysWith: { _, last in last })
         leaderboardUsers = leaderboardUsers.sorted {
             (aiOrderMap[$0.id] ?? Int.max) < (aiOrderMap[$1.id] ?? Int.max)
         }

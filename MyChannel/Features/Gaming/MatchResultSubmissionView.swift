@@ -410,7 +410,7 @@ struct MatchResultSubmissionView: View {
                     )
                 }
                 .sheet(isPresented: $showingImagePicker) {
-                    ImagePicker(selectedImage: $selectedScreenshot)
+                    BindingImagePicker(selectedImage: $selectedScreenshot)
                 }
             }
         }

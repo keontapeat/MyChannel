@@ -459,7 +459,7 @@ extension VertexAIService {
         title: String,
         description: String,
         tags: [String],
-        metrics: VideoMetrics
+        metrics: VertexVideoMetrics
     ) async throws -> PerformanceInsights {
         let prompt = """
         Analyze this video's performance and suggest improvements:
@@ -493,7 +493,7 @@ extension VertexAIService {
 
 // MARK: - Supporting Types for Creator Features
 
-struct VideoMetrics {
+struct VertexVideoMetrics {
     let views: Int
     let watchTime: TimeInterval
     let clickThroughRate: Double

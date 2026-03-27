@@ -26,7 +26,7 @@ class AdvancedSearchService: ObservableObject {
     private let aiSearchService = AISearchService.shared
     
     private let searchIndexer = SearchIndexer()
-    private let queryProcessor = QueryProcessor()
+    private let queryProcessor = AdvancedQueryProcessor()
     private let rankingEngine = SearchRankingEngine()
     private let autoCompleteService = AutoCompleteService()
     #if canImport(FirebaseFirestore)
@@ -42,6 +42,9 @@ class AdvancedSearchService: ObservableObject {
     
     // Real-time search debouncing
     private var searchCancellable: AnyCancellable?
+    
+    // Search cache
+    private var searchCache: [String: [SearchResult]] = [:]
     private let searchDebounceInterval: TimeInterval = 0.3
     
     init() {
@@ -54,7 +57,7 @@ class AdvancedSearchService: ObservableObject {
     /// Performs comprehensive search with ML-powered ranking
     func search(
         query: String,
-        filters: SearchFilters = SearchFilters(),
+        filters: AdvancedSearchFilters = AdvancedSearchFilters(),
         userId: String? = nil
     ) async throws -> AdvancedSearchResponse {
         
@@ -73,7 +76,7 @@ class AdvancedSearchService: ObservableObject {
         guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             MonitoringDashboardManager.shared.incrementCounter("search_errors")
             PerformanceMonitoringManager.shared.stopTrace(name: "search_query")
-            throw SearchError.emptyQuery
+            throw SearchError.invalidQuery
         }
         
         // Check cache first
@@ -209,6 +212,11 @@ class AdvancedSearchService: ObservableObject {
     
     // MARK: - Private Implementation
     
+    private func generateCacheKey(query: String, filters: AdvancedSearchFilters?) -> String {
+        let filterString = "active"
+        return "\(query.lowercased())_\(filterString)"
+    }
+    
     private func setupSearchEngine() {
         searchIndexer.buildIndex(from: Video.sampleVideos, creators: User.sampleUsers)
         loadSearchHistory()
@@ -216,7 +224,7 @@ class AdvancedSearchService: ObservableObject {
     
     private func searchVideos(
         query: ProcessedQuery,
-        filters: SearchFilters
+        filters: AdvancedSearchFilters
     ) async -> [VideoSearchResult] {
         
         var videos = Video.sampleVideos
@@ -289,7 +297,7 @@ class AdvancedSearchService: ObservableObject {
     
     private func searchCreators(
         query: ProcessedQuery,
-        filters: SearchFilters
+        filters: AdvancedSearchFilters
     ) async -> [CreatorSearchResult] {
         
         var creators = User.sampleUsers.filter { $0.isCreator }
@@ -394,7 +402,7 @@ class AdvancedSearchService: ObservableObject {
     
     private func searchPlaylists(
         query: ProcessedQuery,
-        filters: SearchFilters
+        filters: AdvancedSearchFilters
     ) async -> [PlaylistSearchResult] {
         
         // For demo - in production would search actual playlists
@@ -420,7 +428,7 @@ class AdvancedSearchService: ObservableObject {
     
     private func searchLiveStreams(
         query: ProcessedQuery,
-        filters: SearchFilters
+        filters: AdvancedSearchFilters
     ) async -> [LiveStreamSearchResult] {
         
         // Filter for live videos
@@ -448,7 +456,7 @@ class AdvancedSearchService: ObservableObject {
     private func calculateRelevance(
         video: Video,
         query: ProcessedQuery,
-        filters: SearchFilters
+        filters: AdvancedSearchFilters
     ) -> Double {
         
         var score = 0.0
@@ -781,7 +789,7 @@ class AdvancedSearchService: ObservableObject {
 
 // MARK: - Query Processing
 
-class QueryProcessor {
+class AdvancedQueryProcessor {
     
     func processQuery(_ query: String) async -> ProcessedQuery {
         let cleanedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -830,8 +838,8 @@ class QueryProcessor {
         )
     }
     
-    func inferFilters(from query: String) async -> SearchFilters {
-        var filters = SearchFilters()
+    func inferFilters(from query: String) async -> AdvancedSearchFilters {
+        var filters = AdvancedSearchFilters()
         
         // Infer duration filters
         if query.lowercased().contains("short") {
@@ -1075,7 +1083,7 @@ struct LiveStreamSearchResult: Identifiable {
     let viewerCount: Int
 }
 
-struct SearchFilters {
+struct AdvancedSearchFilters {
     var category: VideoCategory?
     var duration: DurationFilter?
     var uploadDate: UploadDateFilter?
@@ -1143,11 +1151,7 @@ struct SearchFilters {
     }
 }
 
-struct ProcessedQuery {
-    let originalQuery: String
-    let terms: [String]
-    let searchTerms: String
-}
+// ProcessedQuery is defined in QueryProcessor.swift
 
 struct AdvancedSearchSuggestion: Identifiable {
     let id = UUID().uuidString
@@ -1266,5 +1270,20 @@ struct AdvancedSearchService_Previews: PreviewProvider {
             Spacer()
         }
         .padding()
+    }
+}
+
+// MARK: - Search Error
+enum SearchError: LocalizedError {
+    case invalidQuery
+    case networkError
+    case serviceUnavailable
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidQuery: return "Invalid search query"
+        case .networkError: return "Network error occurred"
+        case .serviceUnavailable: return "Search service unavailable"
+        }
     }
 }

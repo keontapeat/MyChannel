@@ -157,8 +157,8 @@ final class NotificationsStore: ObservableObject {
             timestamp: timestamp,
             isRead: false,
             type: type,
-            source: .user,
-            priority: type == .live ? .high : .normal,
+            source: NotificationSource.user,
+            priority: type == .live ? NotificationPriority.high : NotificationPriority.normal,
             avatarURL: avatarURL,
             thumbnailURL: thumbnailURL,
             deepLinkPath: deepLinkPath
@@ -207,8 +207,8 @@ final class NotificationsStore: ObservableObject {
                         timestamp: inbox.createdAt,
                         isRead: inbox.read,
                         type: type,
-                        source: .user,
-                        priority: type == .live ? .high : .normal
+                        source: NotificationSource.user,
+                        priority: type == .live ? NotificationPriority.high : NotificationPriority.normal
                     )
                     self.push(item)
                 }
@@ -270,45 +270,45 @@ final class NotificationsStore: ObservableObject {
                 message: "Building the Future of SwiftUI",
                 timestamp: Date().addingTimeInterval(-900),
                 isRead: false,
-                type: .like,
-                source: .user,
-                priority: .normal
+                type: NotificationItem.NotificationType.like,
+                source: NotificationSource.user,
+                priority: NotificationPriority.normal
             ),
             StoreNotificationItem(
                 title: "CreativeArtist commented on your video",
                 message: "'Amazing tutorial! This really helped me out'",
                 timestamp: Date().addingTimeInterval(-3600),
                 isRead: false,
-                type: .comment,
-                source: .user,
-                priority: .normal
+                type: NotificationItem.NotificationType.comment,
+                source: NotificationSource.user,
+                priority: NotificationPriority.normal
             ),
             StoreNotificationItem(
                 title: "GamingPro started following you",
                 message: "Tap to view their channel",
                 timestamp: Date().addingTimeInterval(-7200),
                 isRead: false,
-                type: .follow,
-                source: .user,
-                priority: .normal
+                type: NotificationItem.NotificationType.follow,
+                source: NotificationSource.user,
+                priority: NotificationPriority.normal
             ),
             StoreNotificationItem(
                 title: "MusicMaker is live now",
                 message: "MusicMaker just started streaming",
                 timestamp: Date().addingTimeInterval(-14400),
                 isRead: true,
-                type: .live,
-                source: .liveAgent,
-                priority: .high
+                type: NotificationItem.NotificationType.live,
+                source: NotificationSource.liveAgent,
+                priority: NotificationPriority.high
             ),
             StoreNotificationItem(
                 title: "DesignPro posted a new video",
                 message: "UI Design Masterclass 2026",
                 timestamp: Date().addingTimeInterval(-86400),
                 isRead: true,
-                type: .upload,
-                source: .user,
-                priority: .normal
+                type: NotificationItem.NotificationType.upload,
+                source: NotificationSource.user,
+                priority: NotificationPriority.normal
             ),
         ]
         for s in samples {

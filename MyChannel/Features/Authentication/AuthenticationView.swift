@@ -435,9 +435,15 @@ struct SignInView: View {
     }
     
     private func signInWithApple() {
-        // Implement Apple Sign In
         Task {
-            try? await authManager.signInWithApple()
+            do {
+                try await authManager.signInWithApple()
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    showingError = true
+                }
+            }
         }
     }
     

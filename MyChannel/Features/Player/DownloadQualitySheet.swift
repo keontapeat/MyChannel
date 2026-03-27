@@ -12,6 +12,8 @@ struct DownloadQualitySheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var premiumService = PremiumService.shared
     @StateObject private var offlineService = OfflineDownloadService.shared
+    @StateObject private var downloadManager = DownloadManager.shared
+    @StateObject private var subscriptionService = SubscriptionService.shared
     @State private var selectedQuality: DownloadQuality = .medium
     @State private var isDownloading: Bool = false
     @State private var downloadProgress: Double = 0.0
@@ -242,7 +244,7 @@ struct DownloadQualitySheet: View {
             .foregroundColor(.white)
             .cornerRadius(12)
         }
-        .disabled(isDownloading || !premiumService.isPremium)
+        .disabled(isDownloading || (!subscriptionService.isPlusSubscriber && !premiumService.isPremium))
         .padding()
     }
     
@@ -261,8 +263,8 @@ struct DownloadQualitySheet: View {
     
     // MARK: - Download Action
     private func startDownload() async {
-        // Check premium
-        guard premiumService.isPremium else {
+        // Check premium via Firestore-backed subscription
+        guard subscriptionService.isPlusSubscriber || premiumService.isPremium else {
             await MainActor.run {
                 showingPremiumAlert = true
             }
@@ -278,8 +280,8 @@ struct DownloadQualitySheet: View {
             return
         }
         
-        // Check if already downloaded
-        if offlineService.isVideoAvailableOffline(video.id) {
+        // Check if already downloaded via DownloadManager (Firestore)
+        if downloadManager.isVideoDownloaded(videoId: video.id) {
             await MainActor.run {
                 errorMessage = "This video is already downloaded."
                 showingError = true
@@ -293,11 +295,24 @@ struct DownloadQualitySheet: View {
         }
         
         do {
-            // Start download using OfflineDownloadService
-            let download = try await offlineService.downloadVideo(video, quality: selectedQuality)
+            // Map DownloadQuality to DownloadedVideo.VideoQuality
+            let videoQuality: DownloadedVideo.VideoQuality = selectedQuality
             
-            // Monitor download progress
-            await monitorDownloadProgress(downloadId: download.id)
+            // Download via DownloadManager — saves to Firestore + local file
+            try await downloadManager.downloadVideo(
+                videoId: video.id,
+                title: video.title,
+                channelName: video.creator.displayName,
+                channelId: video.creator.id,
+                thumbnailUrl: video.thumbnailURL,
+                duration: video.duration,
+                viewCount: video.viewCount,
+                videoUrl: video.videoURL,
+                quality: videoQuality
+            )
+            
+            // Monitor download progress via DownloadManager
+            await monitorDownloadProgress(videoId: video.id)
             
             await MainActor.run {
                 isDownloading = false
@@ -313,26 +328,23 @@ struct DownloadQualitySheet: View {
         }
     }
     
-    private func monitorDownloadProgress(downloadId: String) async {
+    private func monitorDownloadProgress(videoId: String) async {
         while isDownloading {
             do {
-                try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
             } catch {
-                // Task was cancelled, exit the loop
                 break
             }
             
-            if let download = offlineService.downloads.first(where: { $0.id == downloadId }) {
+            if let progress = downloadManager.activeDownloads[videoId] {
                 await MainActor.run {
-                    downloadProgress = download.progress
-                    
-                    if download.status == .completed {
-                        isDownloading = false
-                    } else if download.status == .failed {
-                        isDownloading = false
-                        errorMessage = "Download failed. Please try again."
-                        showingError = true
-                    }
+                    downloadProgress = progress
+                }
+            } else if downloadManager.isVideoDownloaded(videoId: videoId) {
+                // Download completed
+                await MainActor.run {
+                    downloadProgress = 1.0
+                    isDownloading = false
                 }
             } else {
                 break

@@ -360,7 +360,8 @@ struct InteractiveRichTextTitleView: View {
             creator: User(
                 username: "sbkeonta_",
                 displayName: "ShotByKeonta",
-                email: "test@test.com"
+                email: "test@test.com",
+                isCreator: true
             )
         )
         

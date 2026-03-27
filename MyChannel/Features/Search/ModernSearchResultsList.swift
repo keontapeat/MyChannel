@@ -343,10 +343,10 @@ private struct CreatorSearchResultRow: View {
     let result: CreatorSearchResult
     
     var body: some View {
-        NavigationLink(destination: ProfileView(user: result.creator)) {
+        NavigationLink(destination: ProfileView()) {
             HStack(spacing: 12) {
                 // Avatar
-                AsyncImage(url: URL(string: result.creator.profileImageURL)) { image in
+                AsyncImage(url: URL(string: result.creator.profileImageURL ?? "")) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -402,10 +402,10 @@ private struct CreatorSearchResultCard: View {
     let result: CreatorSearchResult
     
     var body: some View {
-        NavigationLink(destination: ProfileView(user: result.creator)) {
+        NavigationLink(destination: ProfileView()) {
             VStack(spacing: 12) {
                 // Avatar
-                AsyncImage(url: URL(string: result.creator.profileImageURL)) { image in
+                AsyncImage(url: URL(string: result.creator.profileImageURL ?? "")) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)

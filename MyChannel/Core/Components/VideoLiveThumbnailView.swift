@@ -37,7 +37,6 @@ struct VideoLiveThumbnailView: View {
 #Preview("VideoLiveThumbnailView • YouTube") {
     let friend = User.sampleUsers[0]
     let v = Video(
-        id: "friend_video_yt_71GJrAY54Ew",
         title: "Friend Track • LIVE Preview",
         description: "Autoplaying preview",
         thumbnailURL: "https://i.ytimg.com/vi/71GJrAY54Ew/hqdefault.jpg",

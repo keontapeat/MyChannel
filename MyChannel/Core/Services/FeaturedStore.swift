@@ -96,11 +96,28 @@ final class FeaturedStore: ObservableObject {
         // Clear local cache and load fresh from Firestore
         var loadedVideos: [StoredFeatured] = []
         
+        // Filter criteria for owner's videos
+        let ownerDisplayNames: Set<String> = ["shot by keonta"]
+        let ownerUsernames: Set<String> = ["sbkeonta_", "shotbykeonta", "keontapeat"]
+        let blockedTitleSubstrings = ["cooking with kya", "screen recording 2025"]
+        
         for videoId in videoIds {
             do {
                 let videoDoc = try await db.collection("videos").document(videoId).getDocument()
                 if let video = try? videoDoc.data(as: Video.self) {
-                    loadedVideos.append(StoredFeatured(from: video))
+                    let titleLower = video.title.lowercased()
+                    let hasBlockedTitle = blockedTitleSubstrings.contains { titleLower.contains($0) }
+                    
+                    // Filter out owner's problematic videos
+                    let shouldExclude = ownerDisplayNames.contains(video.creator.displayName.lowercased()) ||
+                                      ownerUsernames.contains(video.creator.username.lowercased()) ||
+                                      hasBlockedTitle
+                    
+                    if shouldExclude {
+                        print("🚫 [FeaturedStore] Filtering out: '\(video.title)' by '\(video.creator.displayName)'")
+                    } else {
+                        loadedVideos.append(StoredFeatured(from: video))
+                    }
                 }
             } catch {
                 print("❌ Error loading video \(videoId): \(error)")

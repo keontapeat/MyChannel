@@ -245,7 +245,7 @@ final class UniversityWatchTrackingService: ObservableObject {
         }
         
         // Update local cache
-        currentCareerPaths = Dictionary(uniqueKeysWithValues: progressList.map { ($0.careerPathId, $0) })
+        currentCareerPaths = Dictionary(progressList.map { ($0.careerPathId, $0) }, uniquingKeysWith: { _, last in last })
         
         // Calculate total hours
         totalUniversityHours = progressList.map(\.totalHours).reduce(0, +)

@@ -1,0 +1,81 @@
+// Firebase Storage Security Rules for MyChannel Video Upload
+// Fixes the permissions error: "User does not have permission to access gs://mychannel-ca26d.firebasestorage.app"
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Videos upload path
+    match /videos/{userId}/{videoId} {
+      // Allow authenticated users to upload their own videos
+      allow read, write: if request.auth != null 
+        && request.auth.uid == userId
+        && isValidVideoUpload();
+        
+      // Allow public read for published videos
+      allow read: if resource.metadata.visibility == 'public';
+    }
+    
+    // Thumbnails upload path
+    match /thumbnails/{userId}/{thumbnailId} {
+      // Allow authenticated users to upload their own thumbnails
+      allow read, write: if request.auth != null 
+        && request.auth.uid == userId
+        && isValidThumbnailUpload();
+        
+      // Allow public read for published video thumbnails
+      allow read: if true; // Thumbnails are generally public
+    }
+    
+    // Profile pictures
+    match /profiles/{userId}/{imageId} {
+      allow read, write: if request.auth != null 
+        && request.auth.uid == userId
+        && isValidImageUpload();
+    }
+    
+    // Stories content
+    match /stories/{userId}/{storyId} {
+      allow read, write: if request.auth != null 
+        && request.auth.uid == userId
+        && isValidStoryUpload();
+        
+      // Allow read for followers (simplified - in production would check follower status)
+      allow read: if request.auth != null;
+    }
+    
+    // Validation functions
+    function isValidVideoUpload() {
+      return request.resource.size < 2 * 1024 * 1024 * 1024 // 2GB max
+        && request.resource.contentType.matches('video/.*')
+        && !isRateLimited();
+    }
+    
+    function isValidThumbnailUpload() {
+      return request.resource.size < 10 * 1024 * 1024 // 10MB max
+        && request.resource.contentType.matches('image/.*');
+    }
+    
+    function isValidImageUpload() {
+      return request.resource.size < 5 * 1024 * 1024 // 5MB max
+        && request.resource.contentType.matches('image/.*');
+    }
+    
+    function isValidStoryUpload() {
+      return request.resource.size < 100 * 1024 * 1024 // 100MB max
+        && (request.resource.contentType.matches('image/.*') 
+            || request.resource.contentType.matches('video/.*'));
+    }
+    
+    function isRateLimited() {
+      // In production, implement rate limiting logic
+      // For now, allow all uploads
+      return false;
+    }
+    
+    // Deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -78,21 +78,21 @@ struct OverviewTab: View {
                 
                 // Quick Stats
                 HStack(spacing: 15) {
-                    QuickStatCard(
+                    PerformanceQuickStatCard(
                         title: "FPS",
                         value: "\(Int(scrollOptimizer.currentFPS))",
                         subtitle: "Current",
                         color: scrollOptimizer.currentFPS >= 58 ? .green : .orange
                     )
                     
-                    QuickStatCard(
+                    PerformanceQuickStatCard(
                         title: "Memory",
                         value: "\(memoryManager.currentMemoryUsage / 1_000_000)MB",
                         subtitle: memoryManager.memoryTier.description,
                         color: memoryManager.memoryPressureLevel == .normal ? .green : .red
                     )
                     
-                    QuickStatCard(
+                    PerformanceQuickStatCard(
                         title: "Cache",
                         value: "\(Int(monitor.metrics.cacheHitRate * 100))%",
                         subtitle: "Hit Rate",
@@ -427,7 +427,7 @@ struct PerformanceScoreCard: View {
     }
 }
 
-struct QuickStatCard: View {
+struct PerformanceQuickStatCard: View {
     let title: String
     let value: String
     let subtitle: String

@@ -9,16 +9,26 @@ import SwiftUI
 
 struct ProfileDownloadsView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var downloads: [DownloadedVideo] = []
+    @StateObject private var downloadManager = DownloadManager.shared
     @State private var selectedQuality: DownloadQuality = .high
-    @State private var isLoading: Bool = true
     @State private var showingDeleteAlert: Bool = false
     @State private var videoToDelete: DownloadedVideo?
     @State private var showingDeleteAllAlert: Bool = false
-    @State private var totalStorageUsed: Int64 = 0
+    
+    private var downloads: [DownloadedVideo] {
+        downloadManager.downloads
+    }
+    
+    private var isLoading: Bool {
+        downloadManager.isLoading
+    }
+    
+    private var totalStorageUsed: Int64 {
+        downloadManager.getTotalStorageUsed()
+    }
     
     private var totalStorageText: String {
-        ByteCountFormatter.string(fromByteCount: totalStorageUsed, countStyle: .binary)
+        downloadManager.getFormattedTotalStorage()
     }
     
     var body: some View {
@@ -263,29 +273,22 @@ struct ProfileDownloadsView: View {
     
     // MARK: - Helper Methods
     private func loadDownloads() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            // Use sample downloads
-            downloads = DownloadedVideo.sampleDownloads
-            totalStorageUsed = downloads.reduce(0) { $0 + $1.fileSize }
-            isLoading = false
-        }
+        downloadManager.loadDownloads()
     }
     
     private func deleteDownload(_ video: DownloadedVideo) {
         HapticManager.shared.impact(style: .medium)
-        
-        withAnimation(.easeInOut(duration: 0.3)) {
-            downloads.removeAll { $0.id == video.id }
-            totalStorageUsed -= video.fileSize
+        Task {
+            try? await downloadManager.deleteDownload(videoId: video.videoId)
         }
     }
     
     private func clearAllDownloads() {
         HapticManager.shared.impact(style: .heavy)
-        
-        withAnimation(.easeInOut(duration: 0.3)) {
-            downloads.removeAll()
-            totalStorageUsed = 0
+        Task {
+            for download in downloadManager.downloads {
+                try? await downloadManager.deleteDownload(videoId: download.videoId)
+            }
         }
     }
 }

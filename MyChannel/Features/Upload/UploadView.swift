@@ -597,7 +597,6 @@ struct UploadView: View {
         }
         .safeAreaInset(edge: .bottom) {
             editingActionBar
-                .padding(.horizontal, 20)
                 .padding(.top, 12)
                 .background(.thinMaterial)
         }
@@ -606,7 +605,7 @@ struct UploadView: View {
     // MARK: - Extracted Button Views
     @ViewBuilder
     private var editingActionButtons: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
             HStack(spacing: 12) {
                 previewButton
                 qualityButton
@@ -619,10 +618,11 @@ struct UploadView: View {
     }
 
     private var editingActionBar: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 0) {
             editingActionButtons
         }
-        .padding(.vertical, 16)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 20)
         .background(
             RoundedRectangle(cornerRadius: 20)
                 .fill(.ultraThinMaterial)

@@ -161,7 +161,7 @@ final class AICrystalBall: ObservableObject {
     
     // MARK: - 🧠 AI ANALYSIS
     
-    private func analyzeTrendSignals(_ signals: TrendSignals) async -> TrendAnalysis {
+    private func analyzeTrendSignals(_ signals: TrendSignals) async -> CrystalBallTrendAnalysis {
         print("🧠 [Crystal Ball] AI analyzing trend signals...")
         
         // Use GPT-5 to analyze all signals
@@ -184,7 +184,7 @@ final class AICrystalBall: ObservableObject {
         // Parse AI response
         let topic = extractTopic(from: response) ?? "AI & Productivity"
         
-        return TrendAnalysis(
+        return CrystalBallTrendAnalysis(
             mainTopic: topic,
             subTopics: signals.googleTrends.trendingTopics,
             sentiment: "positive",
@@ -196,7 +196,7 @@ final class AICrystalBall: ObservableObject {
     
     // MARK: - ⏰ PEAK TIME PREDICTION
     
-    private func predictPeakTime(_ signals: TrendSignals, _ analysis: TrendAnalysis) -> Peak {
+    private func predictPeakTime(_ signals: TrendSignals, _ analysis: CrystalBallTrendAnalysis) -> Peak {
         // When will this trend reach maximum popularity?
         
         // Use momentum and historical patterns
@@ -211,7 +211,7 @@ final class AICrystalBall: ObservableObject {
     
     // MARK: - 👥 EARLY ADOPTER IDENTIFICATION
     
-    private func identifyEarlyAdopters(_ analysis: TrendAnalysis) -> [EarlyAdopter] {
+    private func identifyEarlyAdopters(_ analysis: CrystalBallTrendAnalysis) -> [EarlyAdopter] {
         // Find creators already covering this trend
         
         // TODO: Query Firestore for creators with related content
@@ -224,7 +224,7 @@ final class AICrystalBall: ObservableObject {
     
     // MARK: - 🎯 ACTION RECOMMENDATIONS
     
-    private func generateAction(_ analysis: TrendAnalysis, _ peak: Peak) -> String {
+    private func generateAction(_ analysis: CrystalBallTrendAnalysis, _ peak: Peak) -> String {
         let daysUntilPeak = peak.date.timeIntervalSinceNow / 86400.0
         
         if daysUntilPeak < 1 {
@@ -236,7 +236,7 @@ final class AICrystalBall: ObservableObject {
         }
     }
     
-    private func calculatePredictionConfidence(_ signals: TrendSignals, _ analysis: TrendAnalysis) -> Double {
+    private func calculatePredictionConfidence(_ signals: TrendSignals, _ analysis: CrystalBallTrendAnalysis) -> Double {
         // Confidence based on signal strength
         
         let signalStrength = signals.momentum
@@ -361,7 +361,7 @@ struct PlatformMetrics {
     let categoryGrowth: Double
 }
 
-struct TrendAnalysis {
+struct CrystalBallTrendAnalysis {
     let mainTopic: String
     let subTopics: [String]
     let sentiment: String

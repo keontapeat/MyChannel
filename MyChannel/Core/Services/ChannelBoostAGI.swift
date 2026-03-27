@@ -261,7 +261,7 @@ final class ChannelBoostAGI: ObservableObject {
     // MARK: - 🤖 AI ONBOARDING
     
     /// Generate personalized onboarding flow
-    func generateOnboarding(user: User) async -> OnboardingFlow {
+    func generateOnboarding(user: User) async -> ChannelBoostOnboardingFlow {
         print("🎯 [BoostAGI] Generating personalized onboarding...")
         
         // Analyze user psychology
@@ -289,7 +289,7 @@ final class ChannelBoostAGI: ObservableObject {
             ]
         }
         
-        return OnboardingFlow(
+        return ChannelBoostOnboardingFlow(
             steps: steps,
             estimatedTime: steps.reduce(0) { $0 + $1.duration },
             personalizationScore: psychology.confidence
@@ -419,7 +419,7 @@ struct UserPsychology {
     let confidence: Double
 }
 
-struct OnboardingFlow {
+struct ChannelBoostOnboardingFlow {
     let steps: [ChannelBoostOnboardingStep]
     let estimatedTime: Int // seconds
     let personalizationScore: Double

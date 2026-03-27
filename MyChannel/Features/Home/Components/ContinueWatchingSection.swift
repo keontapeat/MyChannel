@@ -48,7 +48,7 @@ struct ContinueWatchingSection: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: 12) {
                             ForEach(continueWatchingVideos) { item in
-                                ContinueWatchingCard(
+                                HomeContinueWatchingCard(
                                     item: item,
                                     onTap: { onVideoTap(item.video) },
                                     onRemove: { removeFromContinueWatching(item) }
@@ -144,7 +144,7 @@ struct ContinueWatchingItem: Identifiable {
 }
 
 // MARK: - Continue Watching Card
-struct ContinueWatchingCard: View {
+struct HomeContinueWatchingCard: View {
     let item: ContinueWatchingItem
     let onTap: () -> Void
     let onRemove: () -> Void

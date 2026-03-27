@@ -48,10 +48,10 @@ class FlicksMLService: ObservableObject {
     
     // MARK: - Content Moderation
     
-    func moderateFlick(_ flick: NuclearFlick) async throws -> ContentModerationResult {
+    func moderateFlick(_ flick: NuclearFlick) async throws -> FlicksContentModerationResult {
         let startTime = Date()
         
-        let request = ContentModerationRequest(
+        let request = FlicksContentModerationRequest(
             contentId: flick.id,
             title: flick.title,
             description: flick.description,
@@ -66,7 +66,7 @@ class FlicksMLService: ObservableObject {
             endpoint: "content-moderation",
             path: "/moderate/video",
             request: request,
-            responseType: ContentModerationResponse.self
+            responseType: FlicksContentModerationResponse.self
         )
         
         let processingTime = Date().timeIntervalSince(startTime)
@@ -87,7 +87,7 @@ class FlicksMLService: ObservableObject {
             "flags_count": response.flags.count
         ])
         
-        return ContentModerationResult(
+        return FlicksContentModerationResult(
             isApproved: response.isApproved,
             confidenceScore: response.confidenceScore,
             flags: response.flags,
@@ -98,49 +98,36 @@ class FlicksMLService: ObservableObject {
     
     // MARK: - Viral Prediction
     
-    func predictViralPotential(_ flick: NuclearFlick) async throws -> ViralPredictionResult {
+    func predictViralPotential(_ flick: NuclearFlick) async throws -> FlicksViralPredictionResult {
         let startTime = Date()
         
-        let request = ViralPredictionRequest(
-            contentId: flick.id,
+        let request = FlicksViralPredictionRequest(
+            flickId: flick.id,
             title: flick.title,
             description: flick.description,
             tags: flick.tags,
             duration: flick.duration,
             thumbnailURL: flick.thumbnailURL,
-            creatorMetrics: CreatorMetrics(
-                id: flick.creator.id,
-                followerCount: 0, // Would get from user service
-                averageViews: 0,
-                engagementRate: 0.0,
-                isVerified: flick.creator.isVerified
-            ),
-            uploadTime: flick.createdAt.timeIntervalSince1970,
-            initialMetrics: InitialMetrics(
-                viewCount: flick.viewCount,
-                likeCount: flick.likeCount,
-                commentCount: flick.commentCount,
-                shareCount: flick.shareCount
-            )
+            creatorFollowers: 0,
+            uploadTime: flick.createdAt.timeIntervalSince1970
         )
         
         let response = try await performMLRequest(
             endpoint: "viral-prediction",
             path: "/predict",
             request: request,
-            responseType: ViralPredictionResponse.self
+            responseType: FlicksViralPredictionResponse.self
         )
         
         let processingTime = Date().timeIntervalSince(startTime)
         
-        // Track ML service performance
         PerformanceMonitoringManager.shared.trackMLServiceCall(
             serviceName: "viral-prediction",
             responseTime: processingTime,
-            success: response.success
+            success: true
         )
         
-        return ViralPredictionResult(
+        return FlicksViralPredictionResult(
             viralScore: response.viralScore,
             prediction: response.prediction,
             predictedViews: response.predictedViews,
@@ -153,7 +140,7 @@ class FlicksMLService: ObservableObject {
     // MARK: - Sentiment Analysis
     
     func analyzeSentiment(text: String, context: String = "flick") async throws -> SentimentResult {
-        let request = SentimentAnalysisRequest(
+        let request = FlicksSentimentAnalysisRequest(
             text: text,
             context: context,
             language: "en"
@@ -163,7 +150,7 @@ class FlicksMLService: ObservableObject {
             endpoint: "sentiment-analysis",
             path: "/analyze",
             request: request,
-            responseType: SentimentAnalysisResponse.self
+            responseType: FlicksSentimentAnalysisResponse.self
         )
         
         return SentimentResult(
@@ -177,17 +164,17 @@ class FlicksMLService: ObservableObject {
     // MARK: - Smart Thumbnail Generation
     
     func generateSmartThumbnail(videoURL: String, options: ThumbnailOptions = .default) async throws -> String {
-        let request = ThumbnailGenerationRequest(
+        let request = FlicksThumbnailGenerationRequest(
             videoURL: videoURL,
-            options: options,
-            aiEnhanced: true
+            timestamp: options.timestamp,
+            quality: options.quality
         )
         
         let response = try await performMLRequest(
             endpoint: "thumbnail-generator",
             path: "/generate/smart",
             request: request,
-            responseType: ThumbnailGenerationResponse.self
+            responseType: FlicksThumbnailGenerationResponse.self
         )
         
         return response.thumbnailURL
@@ -196,15 +183,12 @@ class FlicksMLService: ObservableObject {
     // MARK: - Watch Time Prediction
     
     func predictWatchTime(_ flick: NuclearFlick, userContext: UserContext) async throws -> WatchTimePrediction {
-        let request = WatchTimePredictionRequest(
+        let request = FlicksWatchTimePredictionRequest(
             contentId: flick.id,
-            contentMetrics: ContentMetrics(
-                duration: flick.duration,
-                title: flick.title,
-                tags: flick.tags,
-                category: "shorts"
-            ),
-            userContext: userContext,
+            duration: flick.duration,
+            title: flick.title,
+            tags: flick.tags,
+            userId: userContext.userId,
             timeOfDay: Date().timeIntervalSince1970
         )
         
@@ -212,7 +196,7 @@ class FlicksMLService: ObservableObject {
             endpoint: "watch-time-predictor",
             path: "/predict",
             request: request,
-            responseType: WatchTimePredictionResponse.self
+            responseType: FlicksWatchTimePredictionResponse.self
         )
         
         return WatchTimePrediction(
@@ -232,8 +216,13 @@ class FlicksMLService: ObservableObject {
     ) async throws -> [NuclearFlick] {
         let request = FeedPersonalizationRequest(
             userId: userId,
-            flicks: flicks.map { flickToMLData($0) },
-            context: context,
+            videos: flicks.map { flickToMLData($0) },
+            context: SubscriptionFeedContext(
+                feedType: "flicks",
+                timeOfDay: context.timeOfDay,
+                dayOfWeek: context.dayOfWeek,
+                deviceType: context.deviceType
+            ),
             timestamp: Date().timeIntervalSince1970
         )
         
@@ -245,41 +234,37 @@ class FlicksMLService: ObservableObject {
         )
         
         // Reorder flicks based on ML ranking
-        let personalizedFlicks = response.rankedContentIds.compactMap { contentId in
+        let personalizedFlicks: [NuclearFlick] = response.rankedContentIds.compactMap { contentId in
             flicks.first { $0.id == contentId }
         }
         
         // Add any unranked flicks at the end
-        let unrankedFlicks = flicks.filter { flick in
+        let unrankedFlicks: [NuclearFlick] = flicks.filter { flick in
             !response.rankedContentIds.contains(flick.id)
         }
         
-        return personalizedFlicks + unrankedFlicks
+        let result: [NuclearFlick] = personalizedFlicks + unrankedFlicks
+        return result
     }
     
     // MARK: - Fraud Detection
     
-    func detectFraud(flick: NuclearFlick, uploadContext: UploadContext) async throws -> FraudDetectionResult {
-        let request = FraudDetectionRequest(
+    func detectFraud(flick: NuclearFlick, uploadContext: UploadContext) async throws -> FlicksFraudDetectionResult {
+        let request = FlicksFraudDetectionRequest(
             contentId: flick.id,
             creatorId: flick.creator.id,
-            uploadContext: uploadContext,
-            contentMetrics: ContentMetrics(
-                duration: flick.duration,
-                title: flick.title,
-                tags: flick.tags,
-                category: "shorts"
-            )
+            timestamp: uploadContext.timestamp,
+            ipAddress: uploadContext.ipAddress
         )
         
         let response = try await performMLRequest(
             endpoint: "fraud-detection",
             path: "/analyze",
             request: request,
-            responseType: FraudDetectionResponse.self
+            responseType: FlicksFraudDetectionResponse.self
         )
         
-        return FraudDetectionResult(
+        return FlicksFraudDetectionResult(
             riskScore: response.riskScore,
             riskLevel: response.riskLevel,
             flags: response.flags,
@@ -290,8 +275,8 @@ class FlicksMLService: ObservableObject {
     
     // MARK: - Spam Detection
     
-    func detectSpam(content: String, type: SpamDetectionType) async throws -> SpamDetectionResult {
-        let request = SpamDetectionRequest(
+    func detectSpam(content: String, type: SpamDetectionType) async throws -> FlicksSpamDetectionResult {
+        let request = FlicksSpamDetectionRequest(
             content: content,
             type: type.rawValue,
             context: "flicks"
@@ -301,10 +286,10 @@ class FlicksMLService: ObservableObject {
             endpoint: "spam-detection",
             path: "/detect",
             request: request,
-            responseType: SpamDetectionResponse.self
+            responseType: FlicksSpamDetectionResponse.self
         )
         
-        return SpamDetectionResult(
+        return FlicksSpamDetectionResult(
             isSpam: response.isSpam,
             confidence: response.confidence,
             spamType: response.spamType,
@@ -315,17 +300,16 @@ class FlicksMLService: ObservableObject {
     // MARK: - Quantum AI Enhancement
     
     func enhanceWithQuantumAI(flick: NuclearFlick) async throws -> QuantumEnhancementResult {
-        let request = QuantumAIRequest(
+        let request = FlicksQuantumAIRequest(
             contentId: flick.id,
-            analysisType: "flicks_optimization",
-            data: flickToMLData(flick)
+            analysisType: "flicks_optimization"
         )
         
         let response = try await performMLRequest(
             endpoint: "quantum-ai",
             path: "/enhance",
             request: request,
-            responseType: QuantumAIResponse.self
+            responseType: FlicksQuantumAIResponse.self
         )
         
         return QuantumEnhancementResult(
@@ -339,9 +323,8 @@ class FlicksMLService: ObservableObject {
     // MARK: - Super AI Team Consultation
     
     func consultSuperAITeam(query: String, context: [String: Any]) async throws -> SuperAIResponse {
-        let request = SuperAITeamRequest(
+        let request = FlicksSuperAITeamRequest(
             query: query,
-            context: context,
             domain: "flicks_platform"
         )
         
@@ -349,7 +332,7 @@ class FlicksMLService: ObservableObject {
             endpoint: "super-ai-team",
             path: "/consult",
             request: request,
-            responseType: SuperAITeamResponse.self
+            responseType: FlicksSuperAITeamResponse.self
         )
         
         return SuperAIResponse(
@@ -400,8 +383,8 @@ class FlicksMLService: ObservableObject {
         case .sentimentAnalysis:
             return try await analyzeSentiment(text: "\(flick.title) \(flick.description)")
         case .fraudDetection:
-            let context = UploadContext(timestamp: flick.createdAt.timeIntervalSince1970, ipAddress: "unknown")
-            return try await detectFraud(flick: flick, uploadContext: context)
+            let uploadCtx = UploadContext(timestamp: flick.createdAt.timeIntervalSince1970, ipAddress: "unknown")
+            return try await detectFraud(flick: flick, uploadContext: uploadCtx)
         case .quantumEnhancement:
             return try await enhanceWithQuantumAI(flick: flick)
         }
@@ -443,12 +426,12 @@ class FlicksMLService: ObservableObject {
             let responseTime = Date().timeIntervalSince(startTime)
             
             // Track API performance
-            EnhancedAnalyticsManager.shared.trackAPICall(
-                endpoint: endpoint,
-                method: "POST",
-                responseTime: responseTime,
-                statusCode: httpResponse.statusCode
-            )
+            EnhancedAnalyticsManager.shared.logEvent("ml_api_call", parameters: [
+                "endpoint": endpoint,
+                "method": "POST",
+                "response_time_ms": responseTime * 1000,
+                "status_code": httpResponse.statusCode
+            ])
             
             guard 200...299 ~= httpResponse.statusCode else {
                 ErrorReportingManager.shared.reportNetworkError(
@@ -563,7 +546,7 @@ struct UploadContext {
 
 // MARK: - Result Types
 
-struct ContentModerationResult {
+struct FlicksContentModerationResult {
     let isApproved: Bool
     let confidenceScore: Double
     let flags: [String]
@@ -571,7 +554,7 @@ struct ContentModerationResult {
     let reason: String?
 }
 
-struct ViralPredictionResult {
+struct FlicksViralPredictionResult {
     let viralScore: Double
     let prediction: String
     let predictedViews: Int
@@ -594,7 +577,7 @@ struct WatchTimePrediction {
     let retentionCurve: [Double]
 }
 
-struct FraudDetectionResult {
+struct FlicksFraudDetectionResult {
     let riskScore: Double
     let riskLevel: String
     let flags: [String]
@@ -602,7 +585,7 @@ struct FraudDetectionResult {
     let recommendations: [String]
 }
 
-struct SpamDetectionResult {
+struct FlicksSpamDetectionResult {
     let isSpam: Bool
     let confidence: Double
     let spamType: String?
@@ -625,7 +608,7 @@ struct SuperAIResponse {
 
 // MARK: - Request Types (matching your ML services)
 
-struct ContentModerationRequest: Codable {
+struct FlicksContentModerationRequest: Codable {
     let contentId: String
     let title: String
     let description: String
@@ -636,7 +619,7 @@ struct ContentModerationRequest: Codable {
     let creatorId: String
 }
 
-struct ContentModerationResponse: Codable {
+struct FlicksContentModerationResponse: Codable {
     let success: Bool
     let isApproved: Bool
     let confidenceScore: Double
@@ -645,7 +628,118 @@ struct ContentModerationResponse: Codable {
     let reason: String?
 }
 
-struct CreatorMetrics {
+struct FlicksViralPredictionRequest: Codable {
+    let flickId: String
+    let title: String
+    let description: String
+    let tags: [String]
+    let duration: TimeInterval
+    let thumbnailURL: String
+    let creatorFollowers: Int
+    let uploadTime: TimeInterval
+}
+
+struct FlicksViralPredictionResponse: Codable {
+    let viralScore: Double
+    let prediction: String
+    let predictedViews: Int
+    let peakTime: TimeInterval
+    let confidence: Double
+    let factors: [String]
+}
+
+struct FlicksSentimentAnalysisRequest: Codable {
+    let text: String
+    let context: String
+    let language: String
+}
+
+struct FlicksSentimentAnalysisResponse: Codable {
+    let sentiment: String
+    let confidence: Double
+    let emotions: [String: Double]
+    let keywords: [String]
+}
+
+struct FlicksThumbnailGenerationRequest: Codable {
+    let videoURL: String
+    let timestamp: Double
+    let quality: String
+}
+
+struct FlicksThumbnailGenerationResponse: Codable {
+    let thumbnailURL: String
+}
+
+struct FlicksWatchTimePredictionRequest: Codable {
+    let contentId: String
+    let duration: TimeInterval
+    let title: String
+    let tags: [String]
+    let userId: String
+    let timeOfDay: TimeInterval
+}
+
+struct FlicksWatchTimePredictionResponse: Codable {
+    let predictedWatchTime: TimeInterval
+    let completionProbability: Double
+    let engagementScore: Double
+    let retentionCurve: [Double]
+}
+
+struct FlicksFraudDetectionRequest: Codable {
+    let contentId: String
+    let creatorId: String
+    let timestamp: TimeInterval
+    let ipAddress: String
+}
+
+struct FlicksFraudDetectionResponse: Codable {
+    let riskScore: Double
+    let riskLevel: String
+    let flags: [String]
+    let confidence: Double
+    let recommendations: [String]
+}
+
+struct FlicksSpamDetectionRequest: Codable {
+    let content: String
+    let type: String
+    let context: String
+}
+
+struct FlicksSpamDetectionResponse: Codable {
+    let isSpam: Bool
+    let confidence: Double
+    let spamType: String?
+    let reason: String?
+}
+
+struct FlicksQuantumAIRequest: Codable {
+    let contentId: String
+    let analysisType: String
+}
+
+struct FlicksQuantumAIResponse: Codable {
+    let optimizationScore: Double
+    let suggestions: [String]
+    let predictedMetrics: [String: Double]
+    let quantumInsights: [String]
+}
+
+struct FlicksSuperAITeamRequest: Codable {
+    let query: String
+    let domain: String
+}
+
+struct FlicksSuperAITeamResponse: Codable {
+    let answer: String
+    let confidence: Double
+    let sources: [String]
+    let recommendations: [String]
+}
+
+struct FlicksCreatorMetrics {
     let id: String
     let followerCount: Int
     let averageViews: Int
@@ -692,4 +786,3 @@ enum FlicksMLError: LocalizedError {
     }
 }
 
-// Additional request/response types would be defined here to match your 190+ ML services...

@@ -411,14 +411,14 @@ class AgentAPIService: ObservableObject {
     func getCreatorAnalytics(
         creatorId: String,
         timeRange: String
-    ) async throws -> CreatorAnalytics {
+    ) async throws -> AgentCreatorAnalytics {
         let cacheKey = "creator_analytics_\(creatorId)_\(timeRange)"
         
-        if let cached: CreatorAnalytics = cache.get(key: cacheKey) {
+        if let cached: AgentCreatorAnalytics = cache.get(key: cacheKey) {
             return cached
         }
         
-        let result: CreatorAnalytics = try await callAgent(
+        let result: AgentCreatorAnalytics = try await callAgent(
             name: "Creator Analytics Pro AI",
             prompt: buildCreatorAnalyticsPrompt(creatorId: creatorId, timeRange: timeRange)
         )
@@ -529,7 +529,7 @@ class AgentAPIService: ObservableObject {
         return try await vertexAI.getSupportResponse(
             userID: userId,
             question: question,
-            userContext: userContext
+            userContext: nil
         )
     }
     
@@ -872,7 +872,7 @@ struct ReportHandlingResult: Codable {
     let estimatedResolutionTime: TimeInterval
 }
 
-struct CreatorAnalytics: Codable {
+struct AgentCreatorAnalytics: Codable {
     let totalViews: Int
     let totalRevenue: Double
     let growthRate: Double

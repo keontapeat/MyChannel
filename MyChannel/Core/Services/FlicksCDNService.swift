@@ -93,7 +93,7 @@ class FlicksCDNService: ObservableObject {
     
     // MARK: - Video Loading with CDN Fallback
     
-    func loadVideo(url: String, quality: VideoQuality = .auto) async throws -> AVPlayerItem {
+    func loadVideo(url: String, quality: FlicksCDNVideoQuality = .auto) async throws -> AVPlayerItem {
         let startTime = Date()
         requestCount += 1
         
@@ -174,7 +174,7 @@ class FlicksCDNService: ObservableObject {
     private func getOptimizedVideoURL(
         originalURL: String,
         cdnEndpoint: String,
-        quality: VideoQuality
+        quality: FlicksCDNVideoQuality
     ) async throws -> URL {
         // Extract file path from original URL
         guard let originalURL = URL(string: originalURL) else {
@@ -391,7 +391,7 @@ class FlicksCDNService: ObservableObject {
     
     func optimizeCache() {
         // Remove old entries based on LRU
-        let maxAge: TimeInterval = RemoteConfigManager.shared.cacheDurationHours * 3600
+        let maxAge: TimeInterval = TimeInterval(RemoteConfigManager.shared.cacheDurationHours * 3600)
         
         // This would require custom cache implementation to track access times
         // For now, we'll just ensure we're within limits
@@ -416,7 +416,7 @@ class FlicksCDNService: ObservableObject {
 
 // MARK: - Supporting Types
 
-enum VideoQuality: String, CaseIterable {
+enum FlicksCDNVideoQuality: String, CaseIterable {
     case auto = "auto"
     case low = "360p"
     case medium = "720p"

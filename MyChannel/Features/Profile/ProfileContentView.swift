@@ -123,6 +123,8 @@ struct ProfileContentView: View {
                 ProfileShortsView(videos: videos, user: user)
             case .playlists:
                 ProfilePlaylistsView(user: user)
+            case .downloads:
+                ProfileDownloadsTabView()
             case .community:
                 ProfileCommunityView(user: user)
             case .about:
@@ -150,6 +152,9 @@ struct ProfileVideosView: View {
     @State private var searchText: String = ""
     @State private var visibilityFilter: VideoVisibilityFilter = .all
     @State private var typeFilter: VideoTypeFilter = .all
+    @State private var advancedSortColumn: AdvancedSortColumn = .views
+    @State private var advancedSortAscending: Bool = false
+    @State private var metrixVideoId: String? = nil
     private let columns = [
         GridItem(.flexible(), spacing: 8),
         GridItem(.flexible(), spacing: 8)
@@ -168,50 +173,14 @@ struct ProfileVideosView: View {
                 }
                     .padding(.top, 16)
             } else if videos.isEmpty && AuthenticationManager.shared.currentUser?.id == user.id {
-                // Clean empty state - single placeholder
-                VStack(spacing: 20) {
-                    // Single empty placeholder banner
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(AppTheme.Colors.surface.opacity(0.5))
-                        .frame(height: 180)
-                        .overlay(
-                            VStack(spacing: 12) {
-                                Image(systemName: "video.slash")
-                                    .font(.system(size: 48, weight: .light))
-                                    .foregroundColor(.secondary.opacity(0.5))
-                                
-                                Text("No featured videos yet")
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(.secondary)
-                            }
-                        )
-                        .padding(.horizontal, 16)
-                        .padding(.top, 16)
-                    
-                    // Upload button
-                    Button {
-                        HapticManager.shared.impact(style: .medium)
-                        NotificationCenter.default.post(name: NSNotification.Name("ShowUpload"), object: nil)
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "plus")
-                            Text("Upload your first video")
-                                .font(.system(size: 15, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background(AppTheme.Colors.primary)
-                        .cornerRadius(12)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.bottom, 8)
+                PremiumEmptyVideosState()
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
             }
             
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Text("Videos")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                 
                 Spacer()
@@ -228,24 +197,24 @@ struct ProfileVideosView: View {
                         }
                     } label: {
                         Text(management.isManaging.wrappedValue ? "Done" : "Manage")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(management.isManaging.wrappedValue ? AppTheme.Colors.textPrimary : .white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(management.isManaging.wrappedValue ? AppTheme.Colors.primary : .white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
                             .background(
-                                Capsule()
-                                    .fill(management.isManaging.wrappedValue ? AppTheme.Colors.surface : AppTheme.Colors.primary)
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(management.isManaging.wrappedValue ? Color.clear : AppTheme.Colors.primary)
                             )
                             .overlay(
-                                Capsule()
-                                    .stroke(AppTheme.Colors.divider.opacity(management.isManaging.wrappedValue ? 0.4 : 0), lineWidth: 1)
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(AppTheme.Colors.primary, lineWidth: management.isManaging.wrappedValue ? 1.5 : 0)
                             )
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(management.isManaging.wrappedValue ? "Exit video management" : "Manage videos")
                 }
                 
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     ForEach(VideoLayoutMode.allCases, id: \.self) { mode in
                         Button {
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
@@ -254,11 +223,11 @@ struct ProfileVideosView: View {
                             HapticManager.shared.impact(style: .light)
                         } label: {
                             Image(systemName: mode.icon)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(layoutMode == mode ? .white : AppTheme.Colors.textSecondary)
-                                .frame(width: 32, height: 32)
+                                .frame(width: 30, height: 30)
                                 .background(
-                                    Circle()
+                                    RoundedRectangle(cornerRadius: 8)
                                         .fill(layoutMode == mode ? AppTheme.Colors.primary : AppTheme.Colors.surface)
                                 )
                         }
@@ -271,20 +240,12 @@ struct ProfileVideosView: View {
                         Button("Oldest") { sortMode = .oldest }
                     } label: {
                         Image(systemName: "arrow.up.arrow.down")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(.white)
-                            .frame(width: 32, height: 32)
-                            .background(Circle().fill(AppTheme.Colors.primary))
+                            .frame(width: 30, height: 30)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.Colors.primary))
                     }
                 }
-                
-                // If you prefer a segmented control instead, uncomment:
-                // Picker("", selection: $layoutMode) {
-                //     Label("Grid", systemImage: "square.grid.2x2").tag(VideoLayoutMode.grid2)
-                //     Label("List", systemImage: "list.bullet").tag(VideoLayoutMode.list1)
-                // }
-                // .pickerStyle(.segmented)
-                // .frame(maxWidth: 220)
             }
             .padding(.horizontal, 16)
             
@@ -422,6 +383,22 @@ struct ProfileVideosView: View {
         }
     }
     
+    private var advancedSortedVideos: [Video] {
+        let base = filteredVideos
+        switch advancedSortColumn {
+        case .views:
+            return advancedSortAscending
+                ? base.sorted { $0.viewCount < $1.viewCount }
+                : base.sorted { $0.viewCount > $1.viewCount }
+        case .ctr:
+            return base // CTR served by ML; default to view order
+        case .watchTime:
+            return base // Watch time served by ML; default to view order
+        case .revenue:
+            return base // Revenue served by ML; default to view order
+        }
+    }
+
     @ViewBuilder
     private var videosBody: some View {
         // ⚡ PERFORMANCE: Show skeleton while loading (only if videos are empty)
@@ -432,6 +409,45 @@ struct ProfileVideosView: View {
             } else {
                 VideosLoadingSkeletonList(count: 6)
                     .transition(.opacity)
+            }
+        } else if layoutMode == .advanced {
+            // 🔥 ADVANCED: YouTube Studio-style table view
+            VStack(spacing: 0) {
+                AdvancedTableColumnHeader(
+                    sortColumn: $advancedSortColumn,
+                    sortAscending: $advancedSortAscending
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+
+                LazyVStack(spacing: 0) {
+                    ForEach(advancedSortedVideos, id: \.id) { video in
+                        AdvancedVideoTableRow(
+                            video: video,
+                            ownerId: user.id,
+                            onMetrixTap: { metrixVideoId = video.id }
+                        )
+                        .padding(.horizontal, 16)
+                        Divider()
+                            .padding(.leading, 16)
+                    }
+                }
+            }
+            .sheet(item: Binding(
+                get: { metrixVideoId.map { AdvancedMetrixItem(id: $0) } },
+                set: { metrixVideoId = $0?.id }
+            )) { item in
+                NavigationStack {
+                    VideoAnalyticsView(videoId: item.id)
+                        .navigationTitle("Metrix")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarLeading) {
+                                Button("Done") { metrixVideoId = nil }
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                        }
+                }
             }
         } else if layoutMode == .grid2 {
             LazyVGrid(columns: columns, spacing: 12) {
@@ -1241,11 +1257,13 @@ struct ProfileContentFallback: View {
 private enum VideoLayoutMode: String, CaseIterable {
     case grid2
     case list1
+    case advanced
     
     var icon: String {
         switch self {
         case .grid2: return "square.grid.2x2"
         case .list1: return "list.bullet"
+        case .advanced: return "tablecells"
         }
     }
     
@@ -1253,6 +1271,23 @@ private enum VideoLayoutMode: String, CaseIterable {
         switch self {
         case .grid2: return "Grid"
         case .list1: return "List"
+        case .advanced: return "Advanced"
+        }
+    }
+}
+
+private enum AdvancedSortColumn: String, CaseIterable {
+    case views
+    case ctr
+    case watchTime
+    case revenue
+    
+    var title: String {
+        switch self {
+        case .views: return "Views"
+        case .ctr: return "CTR"
+        case .watchTime: return "Avg WT"
+        case .revenue: return "Rev"
         }
     }
 }
@@ -1339,14 +1374,13 @@ private struct VideoManagementToolbar: View {
             .disabled(selectedCount == 0 || isDeleting)
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(AppTheme.Colors.surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
-                )
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(AppTheme.Colors.divider.opacity(0.18), lineWidth: 1)
         )
+        .shadow(color: .black.opacity(0.22), radius: 20, x: 0, y: 8)
     }
 }
 
@@ -1392,18 +1426,18 @@ private struct ProfileBulkActionButton: View {
                 Text(action.title)
                     .font(.system(size: 13, weight: .semibold))
             }
-            .foregroundColor(action.isDestructive ? .white : action.tint)
+            .foregroundColor(action.isDestructive ? .red : AppTheme.Colors.textPrimary)
             .padding(.vertical, 8)
             .padding(.horizontal, 14)
-            .background(
-                Capsule()
-                    .fill(action.isDestructive
-                          ? (isEnabled ? action.tint : action.tint.opacity(0.4))
-                          : AppTheme.Colors.backgroundSecondary.opacity(isEnabled ? 1 : 0.7))
-            )
+            .background(Color.clear)
             .overlay(
-                Capsule()
-                    .stroke(action.isDestructive ? Color.clear : AppTheme.Colors.divider.opacity(isEnabled ? 0.5 : 0.2), lineWidth: action.isDestructive ? 0 : 1)
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(
+                        action.isDestructive
+                            ? Color.red.opacity(isEnabled ? 0.7 : 0.3)
+                            : AppTheme.Colors.divider.opacity(isEnabled ? 0.5 : 0.2),
+                        lineWidth: 1
+                    )
             )
         }
         .buttonStyle(.plain)
@@ -1470,6 +1504,7 @@ struct VideoFilterBar: View {
             HStack(spacing: 12) {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(AppTheme.Colors.textTertiary)
+                    .font(.system(size: 15, weight: .medium))
                 TextField("Search videos...", text: $searchText)
                     .textInputAutocapitalization(.never)
                     .disableAutocorrection(true)
@@ -1486,15 +1521,16 @@ struct VideoFilterBar: View {
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.vertical, 11)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(AppTheme.Colors.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
-                    )
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AppTheme.Colors.surface)
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppTheme.Colors.divider.opacity(0.15), lineWidth: 1)
+                }
             )
+            .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 2)
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -1542,6 +1578,8 @@ struct ProfileFilterChip: View {
                     .font(.system(size: 13, weight: .semibold))
             }
             .padding(.horizontal, 12)
+            .scaleEffect(isSelected ? 1.05 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
             .padding(.vertical, 8)
             .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
             .background(
@@ -1647,32 +1685,33 @@ private struct FullWidthVideoCard: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // Thumbnail - smaller, YouTube-like
+            // Thumbnail - cinematic with drop shadow
             ZStack(alignment: .bottomTrailing) {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(AppTheme.Colors.textTertiary.opacity(0.12))
                     .overlay(
                         FullWidthThumb(urls: video.posterCandidates)
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
-            .frame(width: 120, height: 68) // 16:9 ratio, compact size
+            .frame(width: 120, height: 68)
+            .shadow(color: .black.opacity(0.18), radius: 8, x: 0, y: 4)
             .overlay(
                 Text(video.formattedDuration)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(.black.opacity(0.8))
-                    .cornerRadius(3)
-                    .padding(4),
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .padding(5),
                 alignment: .bottomTrailing
             )
             
-            // Video info - takes remaining space
+            // Video info
             VStack(alignment: .leading, spacing: 4) {
                 Text(video.title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -1702,10 +1741,10 @@ private struct FullWidthVideoCard: View {
                     isWatchLaterLocal = appState.isVideoInWatchLater(video.id)
                     showOptions = true
                 } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 16, weight: .medium))
+                    Image(systemName: "ellipsis.vertical")
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(AppTheme.Colors.textSecondary)
-                        .padding(8)
+                        .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
             }
@@ -2086,6 +2125,286 @@ struct ReactiveViewCountText: View {
             return String(format: "%.1fK", Double(count) / 1_000)
         } else {
             return String(count)
+        }
+    }
+}
+
+// MARK: - Premium Empty Videos State
+struct PremiumEmptyVideosState: View {
+    @State private var pulse = false
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "film.stack")
+                .font(.system(size: 64, weight: .ultraLight))
+                .foregroundStyle(AppTheme.Colors.textTertiary)
+                .padding(.top, 24)
+
+            VStack(spacing: 8) {
+                Text("Your catalog is empty")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                Text("Start building your legacy — upload your first video.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button {
+                HapticManager.shared.impact(style: .medium)
+                NotificationCenter.default.post(name: NSNotification.Name("ShowUpload"), object: nil)
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .bold))
+                    Text("Upload Your First Video")
+                        .font(.system(size: 15, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 14)
+                .background(AppTheme.Colors.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .scaleEffect(pulse ? 1.03 : 1.0)
+                .shadow(color: AppTheme.Colors.primary.opacity(0.35), radius: pulse ? 12 : 6, x: 0, y: 4)
+            }
+            .buttonStyle(.plain)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                    pulse = true
+                }
+            }
+            .padding(.bottom, 24)
+        }
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
+// MARK: - Advanced View Support Types
+private struct AdvancedMetrixItem: Identifiable {
+    let id: String
+}
+
+// MARK: - Advanced Table Column Header
+private struct AdvancedTableColumnHeader: View {
+    @Binding var sortColumn: AdvancedSortColumn
+    @Binding var sortAscending: Bool
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Text("VIDEO")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(AppTheme.Colors.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            ForEach(AdvancedSortColumn.allCases, id: \.self) { col in
+                Button {
+                    HapticManager.shared.impact(style: .light)
+                    if sortColumn == col {
+                        sortAscending.toggle()
+                    } else {
+                        sortColumn = col
+                        sortAscending = false
+                    }
+                } label: {
+                    HStack(spacing: 2) {
+                        Text(col.title)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(sortColumn == col ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
+                        if sortColumn == col {
+                            Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(AppTheme.Colors.primary)
+                        }
+                    }
+                    .frame(width: 52, alignment: .trailing)
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Spacer for the 3-dot column
+            Spacer().frame(width: 28)
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 4)
+        .background(AppTheme.Colors.surface.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+// MARK: - Advanced Video Table Row
+private struct AdvancedVideoTableRow: View {
+    let video: Video
+    let ownerId: String
+    let onMetrixTap: () -> Void
+
+    @EnvironmentObject private var appState: AppState
+    @State private var showOptions = false
+    @State private var showVisibilityPicker = false
+    @State private var isSubscribedLocal = false
+    @State private var isWatchLaterLocal = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            // Thumbnail
+            ZStack(alignment: .bottomTrailing) {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(AppTheme.Colors.textTertiary.opacity(0.12))
+                    .overlay(
+                        FullWidthThumb(urls: video.posterCandidates)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
+            .frame(width: 80, height: 45)
+            .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
+            .overlay(
+                Text(video.formattedDuration)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                    .padding(3),
+                alignment: .bottomTrailing
+            )
+
+            // Title + visibility badge
+            VStack(alignment: .leading, spacing: 3) {
+                Text(video.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .lineLimit(2)
+
+                if let scheduledAt = video.scheduledAt {
+                    HStack(spacing: 4) {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 9))
+                        Text(scheduledAt, style: .date)
+                            .font(.system(size: 10))
+                    }
+                    .foregroundStyle(AppTheme.Colors.textTertiary)
+                } else {
+                    Button {
+                        showVisibilityPicker = true
+                    } label: {
+                        VisibilityBadge(visibility: video.visibility)
+                    }
+                    .buttonStyle(.plain)
+                    .confirmationDialog("Change Visibility", isPresented: $showVisibilityPicker, titleVisibility: .visible) {
+                        Button("Public") {
+                            updateVisibility(.public)
+                        }
+                        Button("Unlisted") {
+                            updateVisibility(.unlisted)
+                        }
+                        Button("Private") {
+                            updateVisibility(.private)
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Stat columns — Views, CTR, WatchTime, Revenue
+            AdvancedStatColumn(value: formatViews(video.viewCount), label: nil)
+            AdvancedStatColumn(value: "—", label: nil)
+            AdvancedStatColumn(value: "—", label: nil)
+            AdvancedStatColumn(value: "—", label: nil)
+
+            // 3-dot menu
+            Button {
+                HapticManager.shared.impact(style: .light)
+                isSubscribedLocal = appState.isSubscribedTo(video.creator.id)
+                isWatchLaterLocal = appState.isVideoInWatchLater(video.id)
+                showOptions = true
+            } label: {
+                Image(systemName: "ellipsis.vertical")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onMetrixTap()
+        }
+        .sheet(isPresented: $showOptions) {
+            VideoMoreOptionsSheet(
+                video: video,
+                isSubscribed: $isSubscribedLocal,
+                isWatchLater: $isWatchLaterLocal,
+                ownerId: ownerId
+            )
+            .onChange(of: isWatchLaterLocal) { _ in appState.toggleWatchLater(for: video.id) }
+            .onChange(of: isSubscribedLocal) { _ in appState.toggleSubscription(for: video.creator.id) }
+        }
+    }
+
+    private func formatViews(_ count: Int) -> String {
+        if count >= 1_000_000 { return String(format: "%.1fM", Double(count) / 1_000_000) }
+        if count >= 1_000 { return String(format: "%.1fK", Double(count) / 1_000) }
+        return "\(count)"
+    }
+
+    private func updateVisibility(_ visibility: Video.VisibilityStatus) {
+        Task {
+            try? await VideoFirestoreService.shared.updateVideoVisibility(videoId: video.id, visibility: visibility)
+        }
+    }
+}
+
+private struct AdvancedStatColumn: View {
+    let value: String
+    let label: String?
+
+    var body: some View {
+        Text(value)
+            .font(.system(size: 11, weight: .medium, design: .rounded))
+            .foregroundStyle(AppTheme.Colors.textSecondary)
+            .frame(width: 52, alignment: .trailing)
+            .lineLimit(1)
+    }
+}
+
+private struct VisibilityBadge: View {
+    let visibility: Video.VisibilityStatus
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(badgeColor)
+                .frame(width: 6, height: 6)
+            Text(badgeLabel)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(badgeColor)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(badgeColor.opacity(0.12))
+        .clipShape(Capsule())
+    }
+
+    private var badgeColor: Color {
+        switch visibility {
+        case .public: return .green
+        case .unlisted: return .orange
+        case .private: return AppTheme.Colors.textTertiary
+        @unknown default: return AppTheme.Colors.textTertiary
+        }
+    }
+
+    private var badgeLabel: String {
+        switch visibility {
+        case .public: return "Public"
+        case .unlisted: return "Unlisted"
+        case .private: return "Private"
+        @unknown default: return "Unknown"
         }
     }
 }

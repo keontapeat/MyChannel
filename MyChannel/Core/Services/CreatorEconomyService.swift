@@ -15,7 +15,7 @@ class CreatorEconomyService: ObservableObject {
     static let shared = CreatorEconomyService()
     
     @Published var creatorEarnings: CreatorEarnings?
-    @Published var revenueStreams: [RevenueStream] = []
+    @Published var revenueStreams: [CreatorRevenueStream] = []
     @Published var paymentHistory: [Payment] = []
     @Published var isLoading: Bool = false
     
@@ -352,15 +352,15 @@ enum EarningsPeriod {
     case today, thisWeek, thisMonth, thisYear, allTime
 }
 
-struct RevenueStream {
+struct CreatorRevenueStream {
     let id: String
     let name: String
-    let type: RevenueStreamType
+    let type: CreatorRevenueStreamType
     let amount: Double
     let isActive: Bool
 }
 
-enum RevenueStreamType {
+enum CreatorRevenueStreamType {
     case ads, tips, memberships, merchandise, courses, brandDeals, nfts, liveStreaming
 }
 

@@ -402,7 +402,7 @@ class UnifiedAGIBrain: ObservableObject {
         scenes: [VideoScene]?,
         content: AIGeneratedContent?,
         viral: TrendPrediction?,
-        audience: AudienceInsights,
+        audience: AGIAudienceInsights,
         quality: QualityScore,
         emotion: EmotionalProfile,
         competition: CompetitiveAnalysis
@@ -440,9 +440,9 @@ class UnifiedAGIBrain: ObservableObject {
         )
     }
     
-    private func analyzeAudience(for video: Video) async -> AudienceInsights {
+    private func analyzeAudience(for video: Video) async -> AGIAudienceInsights {
         // Understand who will watch this
-        return AudienceInsights(
+        return AGIAudienceInsights(
             primaryDemographic: "18-34",
             targetAudienceMatch: 0.85,
             engagementPrediction: 0.78,
@@ -693,7 +693,7 @@ struct NetworkIntelligence {
     let overallScore: Double
 }
 
-struct AudienceInsights {
+struct AGIAudienceInsights {
     let primaryDemographic: String
     let targetAudienceMatch: Double
     let engagementPrediction: Double

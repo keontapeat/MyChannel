@@ -13,12 +13,32 @@ struct MinimalVideoCard: View {
     let action: () -> Void
     var useLivePreview: Bool = false
 
+    /// Returns true only for actual live streams with a real HLS manifest (.m3u8).
+    /// Regular uploaded videos, Firebase Storage mp4s, and YouTube are excluded.
+    private var hasStreamableURL: Bool {
+        // Must be marked as a live stream in the data model
+        guard video.isLiveStream else { return false }
+        let url = video.videoURL.lowercased()
+        if url.isEmpty { return false }
+        if url.hasPrefix("asset://") { return false }
+        if url.contains("youtube.com") || url.contains("youtu.be") { return false }
+        if url.contains("firebasestorage.googleapis.com") { return false }
+        if url.contains("firebase") { return false }
+        // Must be an actual HLS manifest
+        return url.contains(".m3u8")
+    }
+
     var body: some View {
         let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+        let showLive = useLivePreview && !isPreview && hasStreamableURL
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
                 Group {
-                    if useLivePreview && !isPreview {
+                    if showLive {
+                        // ⚡ Live player — NO .drawingGroup() here.
+                        // drawingGroup() rasterizes to a flat GPU bitmap which kills
+                        // AVPlayer and WKWebView (YouTube) since they render outside
+                        // SwiftUI's layer hierarchy.
                         VideoLiveThumbnailView(video: video, cornerRadius: 12)
                             .frame(width: 180, height: 101)
                     } else {
@@ -42,6 +62,7 @@ struct MinimalVideoCard: View {
                                     )
                             }
                         )
+                        .drawingGroup() // ⚡ GPU flatten only for static images, safe here
                     }
                 }
                 .overlay(
@@ -60,8 +81,7 @@ struct MinimalVideoCard: View {
                     }
                 )
                 .onAppear {
-                    // ⚡ PERFORMANCE: Prefetch thumbnail
-                    if let url = video.posterCandidates.first {
+                    if !showLive, let url = video.posterCandidates.first {
                         ImagePrefetcher.shared.prefetch(url: url)
                     }
                 }
@@ -86,7 +106,6 @@ struct MinimalVideoCard: View {
             }
         }
         .buttonStyle(PressableScaleStyle(scale: 0.96))
-        .drawingGroup() // ⚡ PERFORMANCE: Flatten view hierarchy for smoother scrolling
     }
 }
 

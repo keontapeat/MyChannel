@@ -1,0 +1,73 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -scheme MyChannel -configuration Debug -destination "platform=iOS Simulator,name=iPhone 16" build
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  SwiftProtobuf: https://github.com/apple/swift-protobuf.git @ 1.30.0
+  InteropForGoogle: https://github.com/google/interop-ios-for-google-sdks.git @ 101.0.0
+  AppAuth: https://github.com/openid/AppAuth-iOS.git @ 2.0.0
+  Firebase: https://github.com/firebase/firebase-ios-sdk @ 12.1.0
+  GoogleDataTransport: https://github.com/google/GoogleDataTransport.git @ 10.1.0
+  GoogleAppMeasurement: https://github.com/google/GoogleAppMeasurement.git @ 12.1.0
+  gRPC: https://github.com/google/grpc-binary.git @ 1.69.0
+  GoogleSignIn: https://github.com/google/GoogleSignIn-iOS @ 9.0.0
+  abseil: https://github.com/google/abseil-cpp-binary.git @ 1.2024072200.0
+  GTMAppAuth: https://github.com/google/GTMAppAuth.git @ 5.0.0
+  GoogleUtilities: https://github.com/google/GoogleUtilities.git @ 8.1.0
+  GoogleAdsOnDeviceConversion: https://github.com/googleads/google-ads-on-device-conversion-ios-sdk @ 2.2.0
+  nanopb: https://github.com/firebase/nanopb.git @ 2.30910.0
+  leveldb: https://github.com/firebase/leveldb.git @ 1.22.5
+  GTMSessionFetcher: https://github.com/google/gtm-session-fetcher.git @ 3.5.0
+  Promises: https://github.com/google/promises.git @ 2.4.0
+  AppCheck: https://github.com/google/app-check.git @ 11.2.0
+
+2026-03-22 20:49:32.736 xcodebuild[27827:1090906] Writing error result bundle to /var/folders/bm/l8d_sh2s09x5jt8w1gz8dkl80000gn/T/ResultBundle_2026-22-03_20-49-0032.xcresult
+xcodebuild: error: Unable to find a device matching the provided destination specifier:
+		{ platform:iOS Simulator, OS:latest, name:iPhone 16 }
+
+	The requested device could not be found because no available devices matched the request.
+
+	Available destinations for the "MyChannel" scheme:
+		{ platform:iOS, arch:arm64, id:00008150-000D38E022B8401C, name:iPhone }
+		{ platform:iOS, id:dvtdevice-DVTiPhonePlaceholder-iphoneos:placeholder, name:Any iOS Device }
+		{ platform:iOS Simulator, id:dvtdevice-DVTiOSDeviceSimulatorPlaceholder-iphonesimulator:placeholder, name:Any iOS Simulator Device }
+		{ platform:iOS Simulator, arch:x86_64, id:211AB4A7-EF6C-4401-AFF5-7FE70BF2F6D4, OS:18.6, name:iPad (A16) }
+		{ platform:iOS Simulator, arch:x86_64, id:57A6F964-7DEA-44BF-88C9-56F38AB82A14, OS:26.0, name:iPad (A16) }
+		{ platform:iOS Simulator, arch:x86_64, id:1777AF82-46AC-4C24-9014-2BD0C043D503, OS:26.3.1, name:iPad (A16) }
+		{ platform:iOS Simulator, arch:x86_64, id:5866B74D-54E3-4D5D-BBBE-648B2E01B4BA, OS:18.6, name:iPad Air 11-inch (M3) }
+		{ platform:iOS Simulator, arch:x86_64, id:4BA8CCF8-253A-4A43-AF94-138988DED3E7, OS:26.0, name:iPad Air 11-inch (M3) }
+		{ platform:iOS Simulator, arch:x86_64, id:3C8AA92E-9D82-4C30-9AA3-ED87A85062DE, OS:26.3.1, name:iPad Air 11-inch (M3) }
+		{ platform:iOS Simulator, arch:x86_64, id:58AE2BE2-D7E3-4245-9772-CF82E0CBAF2C, OS:18.6, name:iPad Air 13-inch (M3) }
+		{ platform:iOS Simulator, arch:x86_64, id:BD5D48D4-C047-4894-9E59-75A9E165D318, OS:26.0, name:iPad Air 13-inch (M3) }
+		{ platform:iOS Simulator, arch:x86_64, id:9804CFE6-5343-41ED-B0B5-988E80B0173E, OS:26.3.1, name:iPad Air 13-inch (M3) }
+		{ platform:iOS Simulator, arch:x86_64, id:9A3F4ACA-4FF8-45BA-ABA8-6733AB6488FB, OS:18.6, name:iPad Pro 11-inch (M4) }
+		{ platform:iOS Simulator, arch:x86_64, id:2BF0F97D-BD38-4FA9-9476-7FBC6627CC80, OS:26.0, name:iPad Pro 11-inch (M4) }
+		{ platform:iOS Simulator, arch:x86_64, id:6904BFA8-5E38-401D-A5E5-5C6CE5EDBF51, OS:26.0, name:iPad Pro 11-inch (M5) }
+		{ platform:iOS Simulator, arch:x86_64, id:B572A3AF-18F4-4D71-B87D-091CCF2A390B, OS:26.3.1, name:iPad Pro 11-inch (M5) }
+		{ platform:iOS Simulator, arch:x86_64, id:F168EB62-E2A9-4EB7-B9DB-7476CE63AE12, OS:18.6, name:iPad Pro 13-inch (M4) }
+		{ platform:iOS Simulator, arch:x86_64, id:13674A2F-575F-415B-827D-4EE76C694A7D, OS:26.0, name:iPad Pro 13-inch (M4) }
+		{ platform:iOS Simulator, arch:x86_64, id:0EDE0033-27CE-4CCE-B1FC-3F50BB22F8B9, OS:26.0, name:iPad Pro 13-inch (M5) }
+		{ platform:iOS Simulator, arch:x86_64, id:DF2649B7-7E6E-4996-9B18-2B6E0BA3A93C, OS:26.3.1, name:iPad Pro 13-inch (M5) }
+		{ platform:iOS Simulator, arch:x86_64, id:A7B0C03C-F990-4032-A068-0EC5B39577C9, OS:18.6, name:iPad mini (A17 Pro) }
+		{ platform:iOS Simulator, arch:x86_64, id:342B5DCF-4884-4CF7-B3D9-F9ABBFCA8244, OS:26.0, name:iPad mini (A17 Pro) }
+		{ platform:iOS Simulator, arch:x86_64, id:9B905461-4B6E-42C2-AB55-9D463A0803EC, OS:26.3.1, name:iPad mini (A17 Pro) }
+		{ platform:iOS Simulator, arch:x86_64, id:895A8A8C-C575-4845-A8EA-F508CE6B9A8F, OS:18.6, name:iPhone 16 }
+		{ platform:iOS Simulator, arch:x86_64, id:263A2259-74BE-4AEB-B6E1-45A89388E983, OS:18.6, name:iPhone 16 Plus }
+		{ platform:iOS Simulator, arch:x86_64, id:6B1ED510-2B8C-4573-94D7-C8C1B87E2518, OS:18.6, name:iPhone 16 Pro }
+		{ platform:iOS Simulator, arch:x86_64, id:50827BD2-A645-4AAA-A9C7-29B140287189, OS:18.6, name:iPhone 16 Pro Max }
+		{ platform:iOS Simulator, arch:x86_64, id:56F03BA8-13F1-4CA4-9CB3-0AA1486C3615, OS:18.6, name:iPhone 16e }
+		{ platform:iOS Simulator, arch:x86_64, id:4E757BB1-9045-4556-8267-40338C37B8C0, OS:26.0, name:iPhone 16e }
+		{ platform:iOS Simulator, arch:x86_64, id:4ECC53F9-DEC8-48BA-8028-C2D313CC32B3, OS:26.3.1, name:iPhone 16e }
+		{ platform:iOS Simulator, arch:x86_64, id:C80730F3-FDCF-4964-8196-0A54411A4A3B, OS:26.0, name:iPhone 17 }
+		{ platform:iOS Simulator, arch:x86_64, id:8674039A-9673-4AD4-B7BB-3FB21F599584, OS:26.3.1, name:iPhone 17 }
+		{ platform:iOS Simulator, arch:x86_64, id:0FC509F8-EF09-4759-B8DE-20252DEE2317, OS:26.0, name:iPhone 17 Pro }
+		{ platform:iOS Simulator, arch:x86_64, id:1812385F-5722-4DED-B837-776132441528, OS:26.3.1, name:iPhone 17 Pro }
+		{ platform:iOS Simulator, arch:x86_64, id:1AD3AB10-A844-46A5-B0AD-E6DB29021716, OS:26.0, name:iPhone 17 Pro Max }
+		{ platform:iOS Simulator, arch:x86_64, id:D73498DE-2CAA-4EE3-9210-5BC9E85116FB, OS:26.3.1, name:iPhone 17 Pro Max }
+		{ platform:iOS Simulator, arch:x86_64, id:2B507C24-3B78-44BC-AE58-35B891F7157B, OS:26.0, name:iPhone Air }
+		{ platform:iOS Simulator, arch:x86_64, id:8C2FF09D-FB56-493F-A0EA-29397C1CAC1A, OS:26.3.1, name:iPhone Air }
+
+	Ineligible destinations for the "MyChannel" scheme:
+		{ platform:iOS, id:70ec1769ac3765d24efff0330a3a3eeee87f01d2, name:Maria IPad, error:Maria IPad’s iOS 9.3.5 doesn’t match MyChannel.app’s iOS 16.0 deployment target. Upgrade Maria IPad’s iOS version or lower MyChannel.app’s deployment target. }

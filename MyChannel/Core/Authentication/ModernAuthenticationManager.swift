@@ -394,8 +394,8 @@ class ModernAuthenticationManager: ObservableObject {
     }
     
     // MARK: - Social Authentication
-    func signInWithApple() async throws {
-        try await AuthenticationManager.shared.signInWithApple()
+    func signInWithApple() async {
+        await AuthenticationManager.shared.signInWithApple()
     }
     
     func signInWithGoogle() async throws {

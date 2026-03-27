@@ -247,7 +247,7 @@ class FlicksBackendService: ObservableObject {
                 !response.rankedIds.contains(flick.id)
             }
             
-            return rankedFlicks + unrankedFlicks
+            return rankedFlicks + unrankedFlicks as [NuclearFlick]
             
         } catch {
             ErrorReportingManager.shared.reportMLServiceError(
@@ -743,15 +743,121 @@ struct MLRankingRequest: Codable {
     let userId: String
     let context: String
     
+    init(flicks: [[String: Any]], userId: String, context: String) {
+        self.flicks = flicks
+        self.userId = userId
+        self.context = context
+    }
+    
     enum CodingKeys: String, CodingKey {
         case flicks, userId, context
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try container.decode(String.self, forKey: .userId)
+        context = try container.decode(String.self, forKey: .context)
+        
+        // Decode flicks as JSON array and convert to [String: Any]
+        let flicksData = try container.decode([FlickData].self, forKey: .flicks)
+        flicks = flicksData.map { $0.toDictionary() }
     }
     
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(userId, forKey: .userId)
         try container.encode(context, forKey: .context)
-        // Note: Encoding [String: Any] requires custom handling
+        
+        // Convert [String: Any] to encodable format
+        let flicksData = flicks.map { FlickData(from: $0) }
+        try container.encode(flicksData, forKey: .flicks)
+    }
+}
+
+// Helper struct for encoding/decoding [String: Any]
+struct FlickData: Codable {
+    let data: [String: JSONValue]
+    
+    init(from dictionary: [String: Any]) {
+        data = dictionary.mapValues { JSONValue(from: $0) }
+    }
+    
+    func toDictionary() -> [String: Any] {
+        return data.mapValues { $0.toAny() }
+    }
+}
+
+enum JSONValue: Codable {
+    case string(String)
+    case int(Int)
+    case double(Double)
+    case bool(Bool)
+    case array([JSONValue])
+    case object([String: JSONValue])
+    case null
+    
+    init(from value: Any) {
+        if let string = value as? String {
+            self = .string(string)
+        } else if let int = value as? Int {
+            self = .int(int)
+        } else if let double = value as? Double {
+            self = .double(double)
+        } else if let bool = value as? Bool {
+            self = .bool(bool)
+        } else if let array = value as? [Any] {
+            self = .array(array.map { JSONValue(from: $0) })
+        } else if let object = value as? [String: Any] {
+            self = .object(object.mapValues { JSONValue(from: $0) })
+        } else {
+            self = .null
+        }
+    }
+    
+    func toAny() -> Any {
+        switch self {
+        case .string(let string): return string
+        case .int(let int): return int
+        case .double(let double): return double
+        case .bool(let bool): return bool
+        case .array(let array): return array.map { $0.toAny() }
+        case .object(let object): return object.mapValues { $0.toAny() }
+        case .null: return NSNull()
+        }
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        
+        if let string = try? container.decode(String.self) {
+            self = .string(string)
+        } else if let int = try? container.decode(Int.self) {
+            self = .int(int)
+        } else if let double = try? container.decode(Double.self) {
+            self = .double(double)
+        } else if let bool = try? container.decode(Bool.self) {
+            self = .bool(bool)
+        } else if let array = try? container.decode([JSONValue].self) {
+            self = .array(array)
+        } else if let object = try? container.decode([String: JSONValue].self) {
+            self = .object(object)
+        } else {
+            self = .null
+        }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        
+        switch self {
+        case .string(let string): try container.encode(string)
+        case .int(let int): try container.encode(int)
+        case .double(let double): try container.encode(double)
+        case .bool(let bool): try container.encode(bool)
+        case .array(let array): try container.encode(array)
+        case .object(let object): try container.encode(object)
+        case .null: try container.encodeNil()
+        }
     }
 }
 
@@ -807,20 +913,19 @@ struct TrendingUpdateRequest: Codable {
     let contentId: String
     let contentType: String
     let engagement: String
-    let value: Any
+    let value: JSONValue
     let timestamp: TimeInterval
     
     enum CodingKeys: String, CodingKey {
-        case contentId, contentType, engagement, timestamp
+        case contentId, contentType, engagement, value, timestamp
     }
     
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(contentId, forKey: .contentId)
-        try container.encode(contentType, forKey: .contentType)
-        try container.encode(engagement, forKey: .engagement)
-        try container.encode(timestamp, forKey: .timestamp)
-        // Note: Encoding Any requires custom handling
+    init(contentId: String, contentType: String, engagement: String, value: Any, timestamp: TimeInterval) {
+        self.contentId = contentId
+        self.contentType = contentType
+        self.engagement = engagement
+        self.value = JSONValue(from: value)
+        self.timestamp = timestamp
     }
 }
 

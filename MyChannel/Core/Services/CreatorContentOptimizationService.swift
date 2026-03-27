@@ -118,7 +118,7 @@ class CreatorContentOptimizationService: ObservableObject {
     
     // MARK: - Thumbnail Optimization
     
-    func optimizeThumbnail(videoId: String, currentThumbnailURL: String, videoMetadata: VideoMetadata) async throws -> ThumbnailOptimizationResult {
+    func optimizeThumbnail(videoId: String, currentThumbnailURL: String, videoMetadata: ContentOptimizationVideoMetadata) async throws -> ThumbnailOptimizationResult {
         let request = ThumbnailOptimizationRequest(
             videoId: videoId,
             currentThumbnailURL: currentThumbnailURL,
@@ -154,7 +154,7 @@ class CreatorContentOptimizationService: ObservableObject {
     
     // MARK: - Title Optimization
     
-    func optimizeTitle(currentTitle: String, videoMetadata: VideoMetadata, targetKeywords: [String]) async throws -> TitleOptimizationResult {
+    func optimizeTitle(currentTitle: String, videoMetadata: ContentOptimizationVideoMetadata, targetKeywords: [String]) async throws -> TitleOptimizationResult {
         let request = TitleOptimizationRequest(
             currentTitle: currentTitle,
             videoCategory: videoMetadata.category,
@@ -191,7 +191,7 @@ class CreatorContentOptimizationService: ObservableObject {
     
     // MARK: - SEO Optimization
     
-    func optimizeSEO(videoId: String, videoMetadata: VideoMetadata) async throws -> SEOOptimizationResult {
+    func optimizeSEO(videoId: String, videoMetadata: ContentOptimizationVideoMetadata) async throws -> SEOOptimizationResult {
         let request = SEOOptimizationRequest(
             videoId: videoId,
             title: videoMetadata.title,
@@ -222,8 +222,8 @@ class CreatorContentOptimizationService: ObservableObject {
     
     // MARK: - Viral Prediction
     
-    func predictViralPotential(videoMetadata: VideoMetadata, creatorMetrics: CreatorMetrics) async throws -> ViralPredictionResult {
-        let request = ViralPredictionRequest(
+    func predictViralPotential(videoMetadata: ContentOptimizationVideoMetadata, creatorMetrics: CreatorMetrics) async throws -> ContentViralPredictionResult {
+        let request = ContentViralPredictionRequest(
             videoMetadata: videoMetadata,
             creatorMetrics: creatorMetrics,
             trendingFactors: await getTrendingFactors(),
@@ -234,10 +234,10 @@ class CreatorContentOptimizationService: ObservableObject {
         let response = try await performMLRequest(
             url: viralPredictionURL + "/predict",
             request: request,
-            responseType: ViralPredictionResponse.self
+            responseType: ContentViralPredictionResponse.self
         )
         
-        return ViralPredictionResult(
+        return ContentViralPredictionResult(
             viralScore: response.viralScore,
             probability: response.probability,
             predictedViews: response.predictedViews,
@@ -251,7 +251,7 @@ class CreatorContentOptimizationService: ObservableObject {
     
     // MARK: - Content Strategy
     
-    func generateContentStrategy(creatorId: String, goals: [ContentGoal], timeframe: StrategyTimeframe) async throws -> ContentStrategy {
+    func generateContentStrategy(creatorId: String, goals: [ContentGoal], timeframe: StrategyTimeframe) async throws -> CreatorContentStrategy {
         let request = ContentStrategyRequest(
             creatorId: creatorId,
             goals: goals.map { $0.rawValue },
@@ -268,7 +268,7 @@ class CreatorContentOptimizationService: ObservableObject {
             responseType: ContentStrategyResponse.self
         )
         
-        return ContentStrategy(
+        return CreatorContentStrategy(
             timeframe: timeframe,
             contentPillars: response.contentPillars,
             uploadSchedule: response.uploadSchedule,
@@ -324,7 +324,7 @@ class CreatorContentOptimizationService: ObservableObject {
     
     // MARK: - Performance Optimization
     
-    func optimizePerformance(videoId: String, currentMetrics: VideoMetrics) async throws -> PerformanceOptimizationResult {
+    func optimizePerformance(videoId: String, currentMetrics: ContentVideoMetrics) async throws -> PerformanceOptimizationResult {
         // Analyze current performance bottlenecks
         let bottlenecks = analyzePerformanceBottlenecks(metrics: currentMetrics)
         
@@ -347,7 +347,7 @@ class CreatorContentOptimizationService: ObservableObject {
     
     // MARK: - Helper Methods
     
-    private func performMLRequest<T: Codable, R: Codable>(
+    private func performMLRequest<T: Encodable, R: Decodable>(
         url: String,
         request: T,
         responseType: R.Type
@@ -449,7 +449,7 @@ class CreatorContentOptimizationService: ObservableObject {
         ]
     }
     
-    private func analyzePerformanceBottlenecks(metrics: VideoMetrics) -> [PerformanceBottleneck] {
+    private func analyzePerformanceBottlenecks(metrics: ContentVideoMetrics) -> [PerformanceBottleneck] {
         var bottlenecks: [PerformanceBottleneck] = []
         
         if metrics.clickThroughRate < 0.05 {
@@ -476,7 +476,7 @@ class CreatorContentOptimizationService: ObservableObject {
     private func generateOptimizationRecommendations(
         videoId: String,
         bottlenecks: [PerformanceBottleneck],
-        currentMetrics: VideoMetrics
+        currentMetrics: ContentVideoMetrics
     ) async -> [OptimizationRecommendation] {
         var recommendations: [OptimizationRecommendation] = []
         
@@ -524,6 +524,20 @@ class CreatorContentOptimizationService: ObservableObject {
                         "Create community posts"
                     ]
                 ))
+            case .poorSEO:
+                recommendations.append(OptimizationRecommendation(
+                    type: .seoOptimization,
+                    priority: .medium,
+                    title: "Improve SEO",
+                    description: "Optimize search visibility",
+                    expectedImpact: "15-25% search ranking improvement",
+                    implementationSteps: [
+                        "Optimize title with keywords",
+                        "Improve description",
+                        "Add relevant tags",
+                        "Use trending hashtags"
+                    ]
+                ))
             }
         }
         
@@ -551,7 +565,7 @@ class CreatorContentOptimizationService: ObservableObject {
     
     private func prioritizeImplementation(recommendations: [OptimizationRecommendation]) async -> [String] {
         return recommendations
-            .sorted { $0.priority.rawValue > $1.priority.rawValue }
+            .sorted { $0.priority.sortOrder > $1.priority.sortOrder }
             .map { $0.title }
     }
     
@@ -573,7 +587,7 @@ struct ContentInsight: Codable {
     let type: InsightType
     let title: String
     let description: String
-    let impact: ImpactLevel
+    let impact: CreatorImpactLevel
     let actionable: Bool
     let recommendations: [String]
 }
@@ -586,7 +600,7 @@ enum InsightType: String, Codable {
     case monetization = "monetization"
 }
 
-enum ImpactLevel: String, Codable {
+enum CreatorImpactLevel: String, Codable {
     case low = "low"
     case medium = "medium"
     case high = "high"
@@ -594,15 +608,15 @@ enum ImpactLevel: String, Codable {
 }
 
 struct OptimizationRecommendation: Codable {
-    let type: OptimizationType
-    let priority: Priority
+    let type: CreatorOptimizationType
+    let priority: ContentPriority
     let title: String
     let description: String
     let expectedImpact: String
     let implementationSteps: [String]
 }
 
-enum OptimizationType: String, Codable {
+enum CreatorOptimizationType: String, Codable {
     case thumbnailOptimization = "thumbnail"
     case titleOptimization = "title"
     case contentStructure = "structure"
@@ -611,13 +625,13 @@ enum OptimizationType: String, Codable {
     case timingOptimization = "timing"
 }
 
-enum Priority: String, Codable {
-    case low = "low"
-    case medium = "medium"
-    case high = "high"
-    case critical = "critical"
+enum ContentPriority: String, Codable {
+    case low
+    case medium
+    case high
+    case critical
     
-    var rawValue: Int {
+    var sortOrder: Int {
         switch self {
         case .low: return 1
         case .medium: return 2
@@ -627,7 +641,7 @@ enum Priority: String, Codable {
     }
 }
 
-struct VideoMetadata: Codable {
+struct ContentOptimizationVideoMetadata: Codable {
     let videoId: String
     let creatorId: String
     let title: String
@@ -646,7 +660,7 @@ struct CreatorMetrics: Codable {
     let audienceRetention: Double
 }
 
-struct VideoMetrics: Codable {
+struct ContentVideoMetrics: Codable {
     let views: Int
     let likes: Int
     let comments: Int
@@ -711,7 +725,7 @@ enum Severity: String, Codable {
 
 // MARK: - ML Request/Response Types (Simplified versions)
 
-struct ContentAnalysisRequest: Codable {
+struct ContentAnalysisRequest: Encodable {
     let videoId: String
     let creatorId: String
     let videoData: [String: Any]
@@ -742,7 +756,302 @@ struct ContentAnalysisResponse: Codable {
     let trendAlignment: Double
 }
 
-// Additional ML request/response types would be defined here...
+// MARK: - Viral Prediction Types
+
+struct ContentViralPredictionRequest: Encodable {
+    let videoMetadata: ContentOptimizationVideoMetadata
+    let creatorMetrics: CreatorMetrics
+    let trendingFactors: [String: Double]
+    let historicalData: [String: Any]
+    let socialSignals: [String: Any]
+    
+    enum CodingKeys: String, CodingKey {
+        case videoMetadata, creatorMetrics, trendingFactors
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(videoMetadata, forKey: .videoMetadata)
+        try container.encode(creatorMetrics, forKey: .creatorMetrics)
+        try container.encode(trendingFactors, forKey: .trendingFactors)
+    }
+}
+
+struct ContentViralPredictionResponse: Codable {
+    let viralScore: Double
+    let probability: Double
+    let predictedViews: Int
+    let timeToViral: TimeInterval
+    let viralFactors: [String]
+    let boostingStrategies: [String]
+    let optimalReleaseTime: String
+    let crossPlatformPotential: [String: Double]
+}
+
+struct ContentViralPredictionResult {
+    let viralScore: Double
+    let probability: Double
+    let predictedViews: Int
+    let timeToViral: TimeInterval
+    let viralFactors: [String]
+    let boostingStrategies: [String]
+    let optimalReleaseTime: String
+    let crossPlatformPotential: [String: Double]
+}
+
+// MARK: - Content Strategy Types
+
+struct ContentStrategyRequest: Encodable {
+    let creatorId: String
+    let goals: [String]
+    let timeframe: String
+    let audienceData: [String: Any]
+    let performanceHistory: [String: Any]
+    let competitorAnalysis: [String: Any]
+    let trendingTopics: [String]
+    
+    enum CodingKeys: String, CodingKey {
+        case creatorId, goals, timeframe, trendingTopics
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(creatorId, forKey: .creatorId)
+        try container.encode(goals, forKey: .goals)
+        try container.encode(timeframe, forKey: .timeframe)
+        try container.encode(trendingTopics, forKey: .trendingTopics)
+    }
+}
+
+struct ContentStrategyResponse: Codable {
+    let contentPillars: [String]
+    let uploadSchedule: [String: String]
+    let contentTypes: [String]
+    let topicRecommendations: [String]
+    let collaborationOpportunities: [String]
+    let seasonalContent: [String]
+    let performanceTargets: [String: Double]
+    let budgetAllocation: [String: Double]
+    let riskFactors: [String]
+}
+
+struct CreatorContentStrategy {
+    let timeframe: StrategyTimeframe
+    let contentPillars: [String]
+    let uploadSchedule: [String: String]
+    let contentTypes: [String]
+    let topicRecommendations: [String]
+    let collaborationOpportunities: [String]
+    let seasonalContent: [String]
+    let performanceTargets: [String: Double]
+    let budgetAllocation: [String: Double]
+    let riskFactors: [String]
+}
+
+// MARK: - Competitor Analysis Types
+
+struct CompetitorAnalysisRequest: Encodable {
+    let creatorId: String
+    let category: String
+    let analysisDepth: String
+    let competitorCount: Int
+    let metrics: [String]
+}
+
+struct CompetitorAnalysisResponse: Codable {
+    let competitors: [CompetitorProfile]
+    let marketPosition: String
+    let competitiveAdvantages: [String]
+    let threats: [String]
+    let recommendations: [String]
+    let benchmarks: [String: Double]
+}
+
+struct CompetitorAnalysisResult {
+    let competitors: [CompetitorProfile]
+    let marketPosition: String
+    let competitiveAdvantages: [String]
+    let threats: [String]
+    let recommendations: [String]
+    let benchmarks: [String: Double]
+}
+
+struct CompetitorProfile: Codable {
+    let id: String
+    let name: String
+    let subscriberCount: Int
+    let avgViews: Int
+    let engagementRate: Double
+    let uploadFrequency: String
+    let contentStrategy: String
+    let strengths: [String]
+    let weaknesses: [String]
+    let opportunities: [String]
+}
+
+// MARK: - Performance Optimization Types
+
+struct PerformanceOptimizationResult {
+    let currentPerformance: ContentVideoMetrics
+    let bottlenecks: [PerformanceBottleneck]
+    let recommendations: [OptimizationRecommendation]
+    let expectedImprovements: [String: Double]
+    let implementationPriority: [String]
+    let timeline: [String: String]
+}
+
+// MARK: - Thumbnail Types
+
+struct ThumbnailOptimizationRequest: Encodable {
+    let videoId: String
+    let currentThumbnailURL: String
+    let videoTitle: String
+    let videoCategory: String
+    let targetAudience: String
+    let competitorThumbnails: [String]
+}
+
+struct ThumbnailOptimizationResponse: Codable {
+    let currentScore: Double
+    let optimizedThumbnails: [OptimizedThumbnailData]
+    let recommendations: [String]
+    let abTestSuggestions: [String]
+}
+
+struct OptimizedThumbnailData: Codable {
+    let url: String
+    let score: Double
+    let improvements: [String]
+    let designElements: [String]
+    let colorPalette: [String]
+    let textOverlay: String
+    let emotionalImpact: String
+}
+
+struct ThumbnailOptimizationResult {
+    let currentScore: Double
+    let optimizedThumbnails: [OptimizedThumbnail]
+    let recommendations: [String]
+    let abTestSuggestions: [String]
+}
+
+struct OptimizedThumbnail {
+    let url: String
+    let score: Double
+    let improvements: [String]
+    let designElements: [String]
+    let colorPalette: [String]
+    let textOverlay: String
+    let emotionalImpact: String
+}
+
+// MARK: - Title Types
+
+struct TitleOptimizationRequest: Encodable {
+    let currentTitle: String
+    let videoCategory: String
+    let targetKeywords: [String]
+    let audienceData: [String: Any]
+    let competitorTitles: [String]
+    let trendingTopics: [String]
+    
+    enum CodingKeys: String, CodingKey {
+        case currentTitle, videoCategory, targetKeywords, competitorTitles, trendingTopics
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(currentTitle, forKey: .currentTitle)
+        try container.encode(videoCategory, forKey: .videoCategory)
+        try container.encode(targetKeywords, forKey: .targetKeywords)
+        try container.encode(competitorTitles, forKey: .competitorTitles)
+        try container.encode(trendingTopics, forKey: .trendingTopics)
+    }
+}
+
+struct TitleOptimizationResponse: Codable {
+    let currentScore: Double
+    let optimizedTitles: [OptimizedTitleData]
+    let keywordSuggestions: [String]
+    let trendingElements: [String]
+}
+
+struct OptimizedTitleData: Codable {
+    let title: String
+    let score: Double
+    let seoScore: Double
+    let engagementScore: Double
+    let predictedCTR: Double
+    let keywords: [String]
+    let emotionalTriggers: [String]
+    let lengthOptimization: String
+}
+
+struct TitleOptimizationResult {
+    let currentScore: Double
+    let optimizedTitles: [OptimizedTitle]
+    let keywordSuggestions: [String]
+    let trendingElements: [String]
+}
+
+struct OptimizedTitle {
+    let title: String
+    let score: Double
+    let seoScore: Double
+    let engagementScore: Double
+    let clickThroughRate: Double
+    let keywords: [String]
+    let emotionalTriggers: [String]
+    let lengthOptimization: String
+}
+
+// MARK: - SEO Types
+
+struct SEOOptimizationRequest: Encodable {
+    let videoId: String
+    let title: String
+    let description: String
+    let tags: [String]
+    let category: String
+    let targetKeywords: [String]
+    let competitorAnalysis: [String: Any]
+    
+    enum CodingKeys: String, CodingKey {
+        case videoId, title, description, tags, category, targetKeywords
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(videoId, forKey: .videoId)
+        try container.encode(title, forKey: .title)
+        try container.encode(description, forKey: .description)
+        try container.encode(tags, forKey: .tags)
+        try container.encode(category, forKey: .category)
+        try container.encode(targetKeywords, forKey: .targetKeywords)
+    }
+}
+
+struct SEOOptimizationResponse: Codable {
+    let currentSEOScore: Double
+    let optimizedTitle: String
+    let optimizedDescription: String
+    let recommendedTags: [String]
+    let keywordDensity: [String: Double]
+    let competitorGaps: [String]
+    let searchRankingPotential: Double
+    let optimizationSteps: [String]
+}
+
+struct SEOOptimizationResult {
+    let currentSEOScore: Double
+    let optimizedTitle: String
+    let optimizedDescription: String
+    let recommendedTags: [String]
+    let keywordDensity: [String: Double]
+    let competitorGaps: [String]
+    let searchRankingPotential: Double
+    let optimizationSteps: [String]
+}
 
 // MARK: - Error Types
 

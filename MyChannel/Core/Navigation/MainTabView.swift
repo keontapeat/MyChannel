@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FirebaseAuth
 
 // MARK: - Preview-Safe Main Tab View
 struct MainTabView: View {
@@ -47,7 +48,23 @@ struct MainTabView: View {
 
     var body: some View {
         ZStack {
-            if hasError {
+            if authManager.authState == .banned {
+                AccountBlockedView(
+                    title: "Account Permanently Removed",
+                    message: "Your account has been permanently banned from MyChannel for violating our Community Guidelines. This decision is final.",
+                    icon: "xmark.octagon.fill",
+                    iconColor: .red
+                )
+            } else if authManager.authState == .suspended {
+                AccountBlockedView(
+                    title: "Account Suspended",
+                    message: authManager.suspendedUntil.map {
+                        "Your account has been suspended until \($0.formatted(date: .long, time: .omitted)). Please review our Community Guidelines before returning."
+                    } ?? "Your account has been temporarily suspended. Please review our Community Guidelines.",
+                    icon: "pause.circle.fill",
+                    iconColor: .orange
+                )
+            } else if hasError {
                 errorView
             } else {
                 mainContent
@@ -568,7 +585,7 @@ struct SafeProfileView: View {
 struct SafeUploadView: View {
     var body: some View {
         ErrorBoundary {
-            UploadView()
+            YouTubeStyleUploadFlow()
         } fallback: {
             if #available(iOS 17.0, *) {
                 return AnyView(
@@ -1436,6 +1453,54 @@ private struct CustomTabBarPreview: View {
             }
         }
         .preferredColorScheme(.light)
+    }
+}
+
+// MARK: - Account Blocked Screen
+
+struct AccountBlockedView: View {
+    let title: String
+    let message: String
+    let icon: String
+    let iconColor: Color
+
+    @EnvironmentObject private var authManager: AuthenticationManager
+
+    var body: some View {
+        VStack(spacing: 28) {
+            Spacer()
+            Image(systemName: icon)
+                .font(.system(size: 72))
+                .foregroundColor(iconColor)
+            VStack(spacing: 12) {
+                Text(title)
+                    .font(.system(size: 22, weight: .black))
+                    .multilineTextAlignment(.center)
+                Text(message)
+                    .font(.system(size: 15))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+            }
+            VStack(spacing: 12) {
+                Link("MyChannel Community Guidelines",
+                     destination: URL(string: "https://mychannel.live/guidelines")!)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.blue)
+                Button("Sign Out") {
+                    try? FirebaseAuth.Auth.auth().signOut()
+                    authManager.authState = .unauthenticated
+                    authManager.isAuthenticated = false
+                    authManager.isBanned = false
+                    authManager.isSuspended = false
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.secondary)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
     }
 }
 

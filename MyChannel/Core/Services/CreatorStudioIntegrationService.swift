@@ -17,7 +17,7 @@ class CreatorStudioIntegrationService: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
     @Published var dashboardData: CreatorDashboardData?
-    @Published var realtimeMetrics: RealtimeMetrics = RealtimeMetrics()
+    @Published var realtimeMetrics: StudioRealtimeMetrics = StudioRealtimeMetrics()
     
     // Backend services
     private let enhancedStudioService = EnhancedCreatorStudioService.shared
@@ -41,7 +41,7 @@ class CreatorStudioIntegrationService: ObservableObject {
         do {
             // Load all dashboard components in parallel
             async let analytics = enhancedStudioService.loadCreatorAnalytics(creatorId: creatorId, timeRange: .month)
-            async let revenue = monetizationService.loadRevenueAnalytics(creatorId: creatorId, timeRange: .month)
+            async let revenue = monetizationService.loadEarningsData(creatorId: creatorId, timeRange: .month)
             async let contentPerformance = enhancedStudioService.analyzeContentPerformance(creatorId: creatorId, videoIds: await getRecentVideoIds(creatorId: creatorId))
             async let audienceInsights = enhancedStudioService.getAudienceInsights(creatorId: creatorId)
             
@@ -75,10 +75,10 @@ class CreatorStudioIntegrationService: ObservableObject {
     }
     
     /// Get real-time creator metrics for live updates
-    func getRealtimeMetrics(creatorId: String) async -> RealtimeMetrics {
+    func getRealtimeMetrics(creatorId: String) async -> StudioRealtimeMetrics {
         do {
             // Get live metrics from enhanced services
-            let metrics = RealtimeMetrics(
+            let metrics = StudioRealtimeMetrics(
                 currentViewers: await getCurrentViewers(creatorId: creatorId),
                 recentViews: await getRecentViews(creatorId: creatorId),
                 liveEngagement: await getLiveEngagement(creatorId: creatorId),
@@ -92,7 +92,7 @@ class CreatorStudioIntegrationService: ObservableObject {
             return metrics
             
         } catch {
-            return RealtimeMetrics()
+            return StudioRealtimeMetrics()
         }
     }
     
@@ -181,7 +181,7 @@ class CreatorStudioIntegrationService: ObservableObject {
     func getMonetizationInsights(creatorId: String) async -> MonetizationInsights {
         do {
             // Get revenue analytics
-            let revenueData = try await monetizationService.loadRevenueAnalytics(creatorId: creatorId, timeRange: .month)
+            let revenueData = try await monetizationService.loadEarningsData(creatorId: creatorId, timeRange: .month)
             
             // Get sponsorship opportunities
             let sponsorships = try await monetizationService.findSponsorshipOpportunities(creatorId: creatorId)
@@ -190,7 +190,7 @@ class CreatorStudioIntegrationService: ObservableObject {
             let projections = try await monetizationService.getRevenueProjections(creatorId: creatorId, timeframe: .quarter)
             
             return MonetizationInsights(
-                currentRevenue: revenueData.totalRevenue,
+                currentRevenue: revenueData.totalEarnings,
                 revenueStreams: [
                     "Ads": revenueData.adRevenue,
                     "Memberships": revenueData.membershipRevenue,
@@ -199,7 +199,7 @@ class CreatorStudioIntegrationService: ObservableObject {
                 ],
                 sponsorshipOpportunities: sponsorships,
                 revenueProjections: projections,
-                optimizationOpportunities: revenueData.optimizationOpportunities,
+                optimizationOpportunities: [],
                 lastUpdated: Date()
             )
             
@@ -302,7 +302,8 @@ class CreatorStudioIntegrationService: ObservableObject {
     }
     
     deinit {
-        stopRealtimeMonitoring()
+        metricsTimer?.invalidate()
+        metricsTimer = nil
     }
 }
 
@@ -310,7 +311,7 @@ class CreatorStudioIntegrationService: ObservableObject {
 
 struct CreatorDashboardData {
     let analytics: CreatorAnalytics
-    let revenue: RevenueAnalytics
+    let revenue: EarningsData
     let contentPerformance: [ContentPerformanceData]
     let audienceInsights: AudienceInsights
     let lastUpdated: Date
@@ -339,17 +340,17 @@ struct CreatorDashboardData {
                 retentionRate: 0,
                 mlInsights: nil
             ),
-            revenue: RevenueAnalytics(
-                totalRevenue: 0,
+            revenue: EarningsData(
+                totalEarnings: 0,
                 adRevenue: 0,
                 membershipRevenue: 0,
-                merchandiseRevenue: 0,
                 sponsorshipRevenue: 0,
-                revenueBySource: [:],
-                monthlyProjections: [],
-                revenuePerView: 0,
-                topEarningVideos: [],
-                optimizationOpportunities: []
+                merchandiseRevenue: 0,
+                dailyEarnings: [:],
+                growthRate: 0,
+                projectedEarnings: 0,
+                payoutSchedule: PayoutSchedule(frequency: .monthly, nextPayoutDate: Date(), minimumThreshold: 100, paymentMethod: "direct_deposit"),
+                taxInformation: TaxInformation(taxId: "", taxForm: "", withholdingRate: 0, estimatedTaxOwed: 0)
             ),
             contentPerformance: [],
             audienceInsights: AudienceInsights(
@@ -369,7 +370,7 @@ struct CreatorDashboardData {
     }
 }
 
-struct RealtimeMetrics {
+struct StudioRealtimeMetrics {
     let currentViewers: Int
     let recentViews: Int
     let liveEngagement: Double
@@ -419,7 +420,7 @@ struct ContentOptimizationTip {
     let type: TipType
     let title: String
     let description: String
-    let priority: Priority
+    let priority: ContentPriority
     let estimatedImpact: String
     let actionSteps: [String]
     

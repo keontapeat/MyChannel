@@ -160,12 +160,44 @@ private struct StrikeCaseRow: View {
             VStack(alignment: .leading, spacing: 10) {
                 // Header
                 HStack(spacing: 10) {
-                    // Strike badges
-                    HStack(spacing: 4) {
-                        ForEach(0..<3, id: \.self) { i in
-                            Image(systemName: "bolt.fill")
-                                .font(.system(size: 12))
-                                .foregroundColor(i < strikeCase.strikeCount ? strikeColor(strikeCase.strikeCount) : Color(.systemGray5))
+                    // Real user profile picture
+                    ZStack {
+                        if let urlStr = strikeCase.profileImageURL, let url = URL(string: urlStr) {
+                            AsyncImage(url: url) { phase in
+                                switch phase {
+                                case .success(let img):
+                                    img.resizable().scaledToFill()
+                                        .frame(width: 40, height: 40)
+                                        .clipShape(Circle())
+                                default:
+                                    Circle().fill(Color(.systemGray4))
+                                        .frame(width: 40, height: 40)
+                                        .overlay(
+                                            Text(String(strikeCase.username.prefix(2)).uppercased())
+                                                .font(.system(size: 13, weight: .bold))
+                                                .foregroundColor(.secondary)
+                                        )
+                                }
+                            }
+                        } else {
+                            Circle().fill(Color(.systemGray4))
+                                .frame(width: 40, height: 40)
+                                .overlay(
+                                    Text(String(strikeCase.username.prefix(2)).uppercased())
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(.secondary)
+                                )
+                        }
+                        // Strike count badge
+                        if strikeCase.strikeCount > 0 {
+                            ZStack {
+                                Circle().fill(strikeColor(strikeCase.strikeCount))
+                                    .frame(width: 16, height: 16)
+                                Text("\(strikeCase.strikeCount)")
+                                    .font(.system(size: 9, weight: .black))
+                                    .foregroundColor(.white)
+                            }
+                            .offset(x: 14, y: 14)
                         }
                     }
                     VStack(alignment: .leading, spacing: 2) {
@@ -180,31 +212,8 @@ private struct StrikeCaseRow: View {
                     StrikeStatusBadge(status: strikeCase.status)
                 }
 
-                // Violation Summary + Thumbnail
+                // Violation Summary
                 HStack(spacing: 10) {
-                    // Content thumbnail if available
-                    if let assetName = strikeCase.violations.first?.thumbnailURL,
-                       UIImage(named: assetName) != nil {
-                        Image(assetName)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 52, height: 52)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.red.opacity(0.6), lineWidth: 1.5)
-                            )
-                            .overlay(
-                                Image(systemName: "exclamationmark.octagon.fill")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.red)
-                                    .padding(3)
-                                    .background(Color.black.opacity(0.6))
-                                    .clipShape(Circle())
-                                    .padding(3),
-                                alignment: .topLeading
-                            )
-                    }
                     HStack(spacing: 6) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 11))
@@ -330,12 +339,18 @@ struct StrikeCaseReviewSheet: View {
 
     @State private var ownerMessage = ""
     @State private var selectedAction: StrikeAction? = nil
+    @State private var suspendDays: Int = 7
     @State private var isSubmitting = false
     @State private var showConfirmation = false
     @State private var userVideos: [UserVideo] = []
     @State private var loadingVideos = true
     @State private var profileImageURL: URL? = nil
     @State private var reporterCount: Int = 0
+
+    private var initialProfileURL: URL? {
+        if let s = strikeCase.profileImageURL { return URL(string: s) }
+        return nil
+    }
     @State private var flaggedContentImages: [FlaggedContent] = []
     @State private var loadingFlagged = true
 
@@ -397,6 +412,7 @@ struct StrikeCaseReviewSheet: View {
                 }
             }
             .onAppear {
+                profileImageURL = initialProfileURL
                 loadUserVideos()
                 loadProfileImage()
                 loadFlaggedContent()
@@ -439,8 +455,10 @@ struct StrikeCaseReviewSheet: View {
         let db = Firestore.firestore()
         db.collection("users").document(strikeCase.userId).getDocument { snap, _ in
             guard let data = snap?.data() else { return }
-            if let urlStr = data["profileImageURL"] as? String ?? data["photoURL"] as? String,
-               let url = URL(string: urlStr) {
+            let urlStr = data["profileImageURL"] as? String
+                ?? data["photoURL"] as? String
+                ?? data["avatarURL"] as? String
+            if let urlStr, let url = URL(string: urlStr) {
                 DispatchQueue.main.async { profileImageURL = url }
             }
         }
@@ -1076,14 +1094,23 @@ struct StrikeCaseReviewSheet: View {
             }
 
             // Suspend Account
-            DecisionButton(
-                title: "SUSPEND ACCOUNT",
-                subtitle: "Temporary — 7, 30, or 90 days",
-                icon: "pause.circle.fill",
-                color: .orange
-            ) {
-                selectedAction = .suspend
-                showConfirmation = true
+            VStack(spacing: 6) {
+                DecisionButton(
+                    title: "SUSPEND ACCOUNT",
+                    subtitle: "\(suspendDays)-day suspension",
+                    icon: "pause.circle.fill",
+                    color: .orange
+                ) {
+                    selectedAction = .suspend
+                    showConfirmation = true
+                }
+                Picker("Suspend duration", selection: $suspendDays) {
+                    Text("7 days").tag(7)
+                    Text("30 days").tag(30)
+                    Text("90 days").tag(90)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 4)
             }
 
             // Permanently Ban
@@ -1118,7 +1145,8 @@ struct StrikeCaseReviewSheet: View {
             await vm.applyDecision(
                 caseId: strikeCase.id,
                 action: action,
-                ownerMessage: ownerMessage.isEmpty ? nil : ownerMessage
+                ownerMessage: ownerMessage.isEmpty ? nil : ownerMessage,
+                suspendDays: suspendDays
             )
             await MainActor.run {
                 isSubmitting = false
@@ -1290,6 +1318,7 @@ struct StrikeCase: Identifiable, Codable {
     var aiRecommendation: String
     var ownerNotes: String
     var ownerMessages: [String]
+    var profileImageURL: String?
 }
 
 enum StrikeAction {
@@ -1314,7 +1343,7 @@ enum StrikeAction {
 
 @MainActor
 class StrikeViewModel: ObservableObject {
-    @Published var cases: [StrikeCase] = [StrikeCase.demoCase, StrikeCase.demoCase2, StrikeCase.demoCase3]
+    @Published var cases: [StrikeCase] = []
     @Published var isLoading = false
 
     var pendingCount: Int   { cases.filter { $0.status == .pendingReview }.count }
@@ -1354,7 +1383,7 @@ class StrikeViewModel: ObservableObject {
 
     // MARK: - Apply Owner Decision
 
-    func applyDecision(caseId: String, action: StrikeAction, ownerMessage: String?) async {
+    func applyDecision(caseId: String, action: StrikeAction, ownerMessage: String?, suspendDays: Int = 7) async {
         let ref = db.collection("strikeCases").document(caseId)
         guard let strikeCase = cases.first(where: { $0.id == caseId }) else { return }
 
@@ -1401,12 +1430,15 @@ class StrikeViewModel: ObservableObject {
                                  body: ownerMessage ?? "You have received strike \(newCount)/3. At 3 strikes your account may be removed.")
 
             case .suspend:
+                let suspendInterval = Double(suspendDays) * 86400
+                let suspendUntilDate = Date().addingTimeInterval(suspendInterval)
                 updates["status"] = StrikeCaseStatus.suspended.rawValue
-                updates["suspendedUntil"] = Timestamp(date: Date().addingTimeInterval(7 * 86400))
+                updates["suspendedUntil"] = Timestamp(date: suspendUntilDate)
+                updates["suspendDays"] = suspendDays
                 try await db.collection("users").document(strikeCase.userId)
-                    .updateData(["suspended": true, "suspendedUntil": Timestamp(date: Date().addingTimeInterval(7 * 86400))])
+                    .updateData(["suspended": true, "suspendedUntil": Timestamp(date: suspendUntilDate)])
                 await notifyUser(userId: strikeCase.userId, title: "🚫 Account Suspended",
-                                 body: ownerMessage ?? "Your account has been suspended for 7 days due to repeated violations.")
+                                 body: ownerMessage ?? "Your account has been suspended for \(suspendDays) days due to repeated violations.")
 
             case .ban:
                 updates["status"] = StrikeCaseStatus.banned.rawValue
@@ -1478,15 +1510,31 @@ class StrikeViewModel: ObservableObject {
                 "aiRiskScore": min(100, (currentStrikes + 1) * 35)
             ])
         } else {
-            // Create new case
-            let aiRisk = Int.random(in: 40...75)
-            let data: [String: Any] = [
+            // Fetch real user data from Firestore
+            let userSnap = try? await db.collection("users").document(userId).getDocument()
+            let userData = userSnap?.data() ?? [:]
+            let profileImageURL = userData["profileImageURL"] as? String
+                ?? userData["photoURL"] as? String
+                ?? userData["avatarURL"] as? String
+            let realJoinDate = (userData["createdAt"] as? Timestamp)?.dateValue()
+                ?? (userData["joinDate"] as? Timestamp)?.dateValue()
+                ?? Date()
+            let realVideoCount = userData["videoCount"] as? Int ?? 0
+            let realFollowerCount = userData["subscriberCount"] as? Int
+                ?? userData["followerCount"] as? Int ?? 0
+            let realEmail = email.isEmpty
+                ? (userData["email"] as? String ?? email)
+                : email
+
+            // Create new case with real user data
+            let aiRisk = 50
+            var data: [String: Any] = [
                 "userId": userId,
                 "username": username,
-                "email": email,
-                "joinDate": Timestamp(date: Date().addingTimeInterval(-Double.random(in: 86400...365*86400))),
-                "videoCount": Int.random(in: 1...50),
-                "followerCount": Int.random(in: 0...1000),
+                "email": realEmail,
+                "joinDate": Timestamp(date: realJoinDate),
+                "videoCount": realVideoCount,
+                "followerCount": realFollowerCount,
                 "strikeCount": 1,
                 "status": StrikeCaseStatus.pendingReview.rawValue,
                 "violations": [violation.firestoreData],
@@ -1498,6 +1546,7 @@ class StrikeViewModel: ObservableObject {
                 "ownerNotes": "",
                 "ownerMessages": []
             ]
+            if let pic = profileImageURL { data["profileImageURL"] = pic }
             try? await db.collection("strikeCases").addDocument(data: data)
         }
         print("⚖️ [Strike] Auto-strike issued for \(username) — \(violationType)")
@@ -1518,135 +1567,6 @@ class StrikeViewModel: ObservableObject {
     }
 }
 
-// MARK: - Demo Preview Case
-
-extension StrikeCase {
-    static var demoCase: StrikeCase {
-        let violation = StrikeViolation(
-            id: "demo-v1",
-            type: "Explicit Sexual Content",
-            detail: "User uploaded explicit adult content violating Community Guidelines §4.2 — Nudity & Sexual Content Policy.",
-            date: Date().addingTimeInterval(-3600 * 2),
-            videoTitle: "lilgunassnigga_ · uploaded video",
-            thumbnailURL: "violation_thumb1",
-            severity: .critical,
-            source: "ai"
-        )
-        return StrikeCase(
-            id: "demo-lilgun-001",
-            userId: "uid_demo_lilgun",
-            username: "lilgunassnigga_",
-            email: "lilgunassnigga_@gmail.com",
-            joinDate: Calendar.current.date(byAdding: .month, value: -3, to: Date()) ?? Date(),
-            videoCount: 14,
-            followerCount: 312,
-            strikeCount: 1,
-            status: .pendingReview,
-            violations: [violation],
-            latestViolation: "Explicit Sexual Content",
-            lastActivity: Date().addingTimeInterval(-3600 * 2),
-            aiRiskScore: 91,
-            aiRiskSummary: "HIGH RISK — Account uploaded explicit pornographic content. First offense but severity is critical. Immediate action recommended.",
-            aiRecommendation: "Issue Strike or Ban",
-            ownerNotes: "",
-            ownerMessages: []
-        )
-    }
-
-    static var demoCase2: StrikeCase {
-        let v1 = StrikeViolation(
-            id: "demo2-v1",
-            type: "Explicit Sexual Content",
-            detail: "User uploaded explicit adult content violating Community Guidelines §4.2 — Nudity & Sexual Content Policy.",
-            date: Date().addingTimeInterval(-3600 * 48),
-            videoTitle: "AssFaGrabs_ · uploaded video",
-            thumbnailURL: "violation_thumb2",
-            severity: .critical,
-            source: "ai"
-        )
-        let v2 = StrikeViolation(
-            id: "demo2-v2",
-            type: "Harassment & Targeted Abuse",
-            detail: "Multiple reports of harassing comments and direct messages sent to other users after first strike warning.",
-            date: Date().addingTimeInterval(-3600 * 5),
-            videoTitle: nil,
-            thumbnailURL: nil,
-            severity: .high,
-            source: "user_report"
-        )
-        return StrikeCase(
-            id: "demo-assfagrabs-001",
-            userId: "uid_demo_assfagrabs",
-            username: "AssFaGrabs_",
-            email: "assfagrabs_@gmail.com",
-            joinDate: Calendar.current.date(byAdding: .month, value: -7, to: Date()) ?? Date(),
-            videoCount: 31,
-            followerCount: 88,
-            strikeCount: 2,
-            status: .pendingReview,
-            violations: [v1, v2],
-            latestViolation: "Harassment & Targeted Abuse",
-            lastActivity: Date().addingTimeInterval(-3600 * 5),
-            aiRiskScore: 96,
-            aiRiskSummary: "CRITICAL RISK — 2 strikes in 48 hrs. Explicit content + repeat harassment. Strong ban recommendation.",
-            aiRecommendation: "Permanent Ban",
-            ownerNotes: "",
-            ownerMessages: []
-        )
-    }
-
-    static var demoCase3: StrikeCase {
-        let v1 = StrikeViolation(
-            id: "demo3-v1",
-            type: "Explicit Sexual Content",
-            detail: "User uploaded explicit adult content violating Community Guidelines §4.2 — Nudity & Sexual Content Policy.",
-            date: Date().addingTimeInterval(-3600 * 72),
-            videoTitle: "Fxckherrightinthepxssy5 · uploaded video",
-            thumbnailURL: "violation_thumb1",
-            severity: .critical,
-            source: "ai"
-        )
-        let v2 = StrikeViolation(
-            id: "demo3-v2",
-            type: "Explicit Sexual Content",
-            detail: "Second upload of explicit pornographic content after receiving first strike and warning message.",
-            date: Date().addingTimeInterval(-3600 * 36),
-            videoTitle: "Fxckherrightinthepxssy5 · uploaded video #2",
-            thumbnailURL: "violation_thumb3",
-            severity: .critical,
-            source: "ai"
-        )
-        let v3 = StrikeViolation(
-            id: "demo3-v3",
-            type: "Solicitation / Sex Work Promotion",
-            detail: "Using comments and bio to solicit paid explicit content. Violates §6.1 — Commercial Sexual Content.",
-            date: Date().addingTimeInterval(-3600 * 8),
-            videoTitle: nil,
-            thumbnailURL: nil,
-            severity: .critical,
-            source: "user_report"
-        )
-        return StrikeCase(
-            id: "demo-fxck-001",
-            userId: "uid_demo_fxck",
-            username: "Fxckherrightinthepxssy5",
-            email: "fxckherrightinthepxssy5@gmail.com",
-            joinDate: Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date(),
-            videoCount: 9,
-            followerCount: 47,
-            strikeCount: 3,
-            status: .pendingReview,
-            violations: [v1, v2, v3],
-            latestViolation: "Solicitation / Sex Work Promotion",
-            lastActivity: Date().addingTimeInterval(-3600 * 8),
-            aiRiskScore: 99,
-            aiRiskSummary: "MAXIMUM RISK — 3 strikes in 72 hrs. Repeat explicit uploads + solicitation. Immediate permanent ban recommended.",
-            aiRecommendation: "Permanent Ban",
-            ownerNotes: "",
-            ownerMessages: []
-        )
-    }
-}
 
 // MARK: - StrikeCase Firestore Init
 
@@ -1674,6 +1594,7 @@ extension StrikeCase {
         aiRecommendation = data["aiRecommendation"] as? String ?? "Review Required"
         ownerNotes    = data["ownerNotes"] as? String ?? ""
         ownerMessages = data["ownerMessages"] as? [String] ?? []
+        profileImageURL = data["profileImageURL"] as? String ?? data["photoURL"] as? String
 
         // Parse violations array
         let rawViolations = data["violations"] as? [[String: Any]] ?? []

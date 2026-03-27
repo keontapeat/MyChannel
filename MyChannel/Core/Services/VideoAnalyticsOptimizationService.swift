@@ -235,15 +235,8 @@ class VideoAnalyticsOptimizationService: ObservableObject {
             averageWatchTime: basic.averageViewDuration,
             clickThroughRate: basic.clickThroughRate,
             engagementRate: basic.engagementRate,
-            revenue: 0.0, // Would calculate from monetization data
-            retentionCurve: performance.retentionCurve,
-            trafficSources: audience.trafficSources,
-            audienceDemographics: audience.demographics,
-            deviceBreakdown: audience.deviceBreakdown,
-            geographicData: audience.geographicData,
-            performanceScore: performance.performanceScore,
-            competitorBenchmark: benchmark,
-            lastUpdated: Date()
+            revenue: 0.0,
+            date: Date()
         )
     }
     
@@ -409,6 +402,10 @@ struct CompetitorBenchmark {
     let topPerformers: [String]
     let competitiveGaps: [String]
     let opportunities: [String]
+}
+
+enum Priority: String, CaseIterable {
+    case low, medium, high
 }
 
 struct OptimizationSuggestion {

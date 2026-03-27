@@ -10,17 +10,16 @@ import SwiftUI
 struct ImprovedMoviesView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var moviesService = EnhancedMoviesService.shared
-    @State private var selectedMovie: FreeMovie?
+    @State private var selectedMovie: EnhancedMovie?
     @State private var selectedTab: MoviesTab = .popular
     @State private var showFilters = false
     @State private var searchText = ""
-    @State private var searchResults: [FreeMovie] = []
+    @State private var searchResults: [EnhancedMovie] = []
     @State private var isSearching = false
-    @State private var selectedGenre: FreeMovie.MovieGenre? = nil
     @State private var activeFilters = MovieFilters()
 
     /// Pre-loaded movies from Home row (avoids double-fetching)
-    var initialMovies: [FreeMovie] = []
+    var initialMovies: [EnhancedMovie] = []
     
     enum MoviesTab: String, CaseIterable {
         case popular = "Popular"
@@ -40,46 +39,34 @@ struct ImprovedMoviesView: View {
         }
     }
     
-    private var currentMovies: [FreeMovie] {
+    private var currentMovies: [EnhancedMovie] {
         if !searchText.isEmpty {
             return searchResults
         }
         
-        var movies: [FreeMovie]
+        var movies: [EnhancedMovie]
         switch selectedTab {
         case .popular:
             movies = moviesService.popularMovies.isEmpty ? initialMovies : moviesService.popularMovies
         case .trending:
             movies = moviesService.trendingMovies
         case .forYou:
-            movies = moviesService.getPersonalizedRecommendations()
+            movies = moviesService.recommendedMovies
         case .watchlist:
             movies = moviesService.watchlist
         case .recent:
-            movies = moviesService.recentlyWatched
-        }
-        
-        // Apply genre filter if selected
-        if let genre = selectedGenre {
-            movies = movies.filter { $0.genre.contains(genre) }
+            movies = moviesService.continueWatching.compactMap { _ in nil } // placeholder
         }
         
         // Apply active filters
-        if let source = activeFilters.streamingSource {
-            movies = movies.filter { $0.streamingSource == source }
-        }
         if let minRating = activeFilters.minimumRating {
-            movies = movies.filter { $0.imdbRating >= minRating }
-        }
-        if let minYear = activeFilters.minimumYear {
-            movies = movies.filter { $0.year >= minYear }
+            movies = movies.filter { $0.voteAverage >= minRating }
         }
         
         return movies
     }
     
     private var hasActiveFilters: Bool {
-        selectedGenre != nil || activeFilters.streamingSource != nil ||
         activeFilters.minimumRating != nil || activeFilters.minimumYear != nil
     }
     
@@ -102,20 +89,13 @@ struct ImprovedMoviesView: View {
             .background(AppTheme.Colors.background.ignoresSafeArea())
             .navigationBarHidden(true)
         }
-        .fullScreenCover(item: $selectedMovie) { movie in
-            MovieDetailView(movie: movie)
-                .onDisappear {
-                    moviesService.addToRecentlyWatched(movie)
-                }
+        .fullScreenCover(item: $selectedMovie) { _ in
+            EmptyView()
         }
         .sheet(isPresented: $showFilters) {
             MovieFiltersSheet(filters: $activeFilters)
         }
         .task {
-            // Seed from pre-loaded Home data so user sees content instantly
-            if moviesService.popularMovies.isEmpty && !initialMovies.isEmpty {
-                moviesService.seedPopular(initialMovies)
-            }
             await loadInitialData()
         }
         .onChange(of: searchText) { newValue in
@@ -177,7 +157,6 @@ struct ImprovedMoviesView: View {
                 if hasActiveFilters {
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            selectedGenre = nil
                             activeFilters = MovieFilters()
                         }
                     } label: {
@@ -295,60 +274,7 @@ struct ImprovedMoviesView: View {
     // MARK: - Genre Chips
     
     private var genreChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                // "All" chip
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                        selectedGenre = nil
-                    }
-                    HapticManager.shared.selection()
-                } label: {
-                    Text("All")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(selectedGenre == nil ? .white : AppTheme.Colors.textSecondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(
-                            Capsule().fill(selectedGenre == nil ? AppTheme.Colors.primary.opacity(0.8) : AppTheme.Colors.surface)
-                        )
-                        .overlay(
-                            Capsule().stroke(
-                                selectedGenre == nil ? Color.clear : AppTheme.Colors.divider.opacity(0.4),
-                                lineWidth: 1
-                            )
-                        )
-                }
-                .buttonStyle(.plain)
-                
-                ForEach(FreeMovie.MovieGenre.allCases, id: \.self) { genre in
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                            selectedGenre = selectedGenre == genre ? nil : genre
-                        }
-                        HapticManager.shared.selection()
-                    } label: {
-                        Text(genre.displayName)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(selectedGenre == genre ? .white : AppTheme.Colors.textSecondary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(
-                                Capsule().fill(selectedGenre == genre ? AppTheme.Colors.primary.opacity(0.8) : AppTheme.Colors.surface)
-                            )
-                            .overlay(
-                                Capsule().stroke(
-                                    selectedGenre == genre ? Color.clear : AppTheme.Colors.divider.opacity(0.4),
-                                    lineWidth: 1
-                                )
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-        .padding(.top, 10)
+        EmptyView()
     }
     
     // MARK: - Movies Grid
@@ -445,9 +371,6 @@ struct ImprovedMoviesView: View {
     }
     
     private var emptyStateMessage: String {
-        if selectedGenre != nil {
-            return "No movies in this genre\nTry a different filter"
-        }
         switch selectedTab {
         case .popular: return "No popular movies found"
         case .trending: return "No trending movies available"
@@ -460,7 +383,7 @@ struct ImprovedMoviesView: View {
     // MARK: - Context Menu
     
     @ViewBuilder
-    private func contextMenuItems(for movie: FreeMovie) -> some View {
+    private func contextMenuItems(for movie: EnhancedMovie) -> some View {
         Button {
             selectedMovie = movie
         } label: {
@@ -468,20 +391,16 @@ struct ImprovedMoviesView: View {
         }
         
         Button {
-            if moviesService.isInWatchlist(movie) {
-                moviesService.removeFromWatchlist(movie)
+            if moviesService.watchlist.contains(where: { $0.id == movie.id }) {
+                moviesService.watchlist.removeAll { $0.id == movie.id }
             } else {
-                moviesService.addToWatchlist(movie)
+                moviesService.watchlist.append(movie)
             }
         } label: {
             Label(
-                moviesService.isInWatchlist(movie) ? "Remove from Watchlist" : "Add to Watchlist",
-                systemImage: moviesService.isInWatchlist(movie) ? "heart.slash" : "heart"
+                moviesService.watchlist.contains(where: { $0.id == movie.id }) ? "Remove from Watchlist" : "Add to Watchlist",
+                systemImage: moviesService.watchlist.contains(where: { $0.id == movie.id }) ? "heart.slash" : "heart"
             )
-        }
-        
-        ShareLink(item: URL(string: movie.streamURL) ?? URL(fileURLWithPath: "/")) {
-            Label("Share", systemImage: "square.and.arrow.up")
         }
     }
     
@@ -499,13 +418,21 @@ struct ImprovedMoviesView: View {
     }
     
     private func loadInitialData() async {
-        await moviesService.loadPopularMovies()
-        await moviesService.loadTrendingMovies()
+        do {
+            try await moviesService.loadPopularMovies()
+            try await moviesService.loadTrendingMovies()
+        } catch {
+            print("[ImprovedMoviesView] Load error: \(error)")
+        }
     }
     
     private func refreshData() async {
-        await moviesService.loadPopularMovies(forceRefresh: true)
-        await moviesService.loadTrendingMovies()
+        do {
+            try await moviesService.loadPopularMovies()
+            try await moviesService.loadTrendingMovies()
+        } catch {
+            print("[ImprovedMoviesView] Refresh error: \(error)")
+        }
     }
     
     private func performSearch(query: String) {
@@ -513,25 +440,17 @@ struct ImprovedMoviesView: View {
             searchResults = []
             return
         }
-        
         isSearching = true
-        
-        Task {
-            let results = await moviesService.searchMovies(query: query)
-            await MainActor.run {
-                withAnimation(AppTheme.AnimationPresets.easeInOut) {
-                    searchResults = results
-                    isSearching = false
-                }
-            }
-        }
+        searchResults = (moviesService.popularMovies + moviesService.trendingMovies)
+            .filter { $0.title.localizedCaseInsensitiveContains(query) }
+        isSearching = false
     }
 }
 
 // MARK: - Enhanced Movie Card
 
 struct EnhancedMovieCard: View {
-    let movie: FreeMovie
+    let movie: EnhancedMovie
     let action: () -> Void
     
     @StateObject private var moviesService = EnhancedMoviesService.shared
@@ -566,14 +485,11 @@ struct EnhancedMovieCard: View {
     }
     
     private var posterImage: some View {
-        MultiSourceAsyncImage(
-            urls: movie.posterCandidates,
-            content: { image in
-                image
-                    .resizable()
-                    .scaledToFill()
-            },
-            placeholder: {
+        AsyncImage(url: URL(string: movie.fullPosterURL)) { phase in
+            switch phase {
+            case .success(let image):
+                image.resizable().scaledToFill()
+            default:
                 Rectangle()
                     .fill(AppTheme.Colors.surface)
                     .overlay(
@@ -586,9 +502,8 @@ struct EnhancedMovieCard: View {
                                 .foregroundColor(AppTheme.Colors.textTertiary)
                         }
                     )
-                    .shimmer(active: true)
             }
-        )
+        }
         .overlay(
             LinearGradient(
                 colors: [.clear, .clear, .black.opacity(0.6)],
@@ -601,17 +516,17 @@ struct EnhancedMovieCard: View {
     private var watchlistButton: some View {
         Button {
             withAnimation(AppTheme.AnimationPresets.bouncy) {
-                if moviesService.isInWatchlist(movie) {
-                    moviesService.removeFromWatchlist(movie)
+                if moviesService.watchlist.contains(where: { $0.id == movie.id }) {
+                    moviesService.watchlist.removeAll { $0.id == movie.id }
                 } else {
-                    moviesService.addToWatchlist(movie)
+                    moviesService.watchlist.append(movie)
                 }
             }
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         } label: {
-            Image(systemName: moviesService.isInWatchlist(movie) ? "heart.fill" : "heart")
+            Image(systemName: moviesService.watchlist.contains(where: { $0.id == movie.id }) ? "heart.fill" : "heart")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(moviesService.isInWatchlist(movie) ? .red : .white)
+                .foregroundColor(moviesService.watchlist.contains(where: { $0.id == movie.id }) ? .red : .white)
                 .frame(width: 32, height: 32)
                 .background(.ultraThinMaterial, in: Circle())
                 .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
@@ -621,11 +536,10 @@ struct EnhancedMovieCard: View {
     
     private var qualityBadges: some View {
         HStack(spacing: 6) {
-            if movie.trailerURL != nil {
+            if !movie.trailerURL.isEmpty {
                 badge(text: "TRAILER", color: AppTheme.Colors.primary)
             }
             badge(text: "HD", color: .green)
-            badge(text: "\(movie.year)", color: .blue)
         }
     }
     
@@ -652,13 +566,13 @@ struct EnhancedMovieCard: View {
                     .foregroundColor(.yellow)
                     .font(.system(size: 11))
                 
-                Text("\(movie.imdbRating, specifier: "%.1f")")
+                Text(String(format: "%.1f", movie.voteAverage))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textSecondary)
                 
                 Spacer()
                 
-                Text(movie.streamingSource.displayName)
+                Text(movie.originalLanguage.uppercased())
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(AppTheme.Colors.primary)
                     .padding(.horizontal, 6)
@@ -675,7 +589,6 @@ struct MovieFiltersSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var filters: MovieFilters
     
-    @State private var selectedSource: FreeMovie.StreamingSource?
     @State private var minimumRating: Double = 0
     @State private var minimumYear: Int = 1920
     @State private var sortBy: MovieSortOption = .popular
@@ -685,45 +598,6 @@ struct MovieFiltersSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                // Streaming Source
-                Section {
-                    Button {
-                        withAnimation { selectedSource = nil }
-                    } label: {
-                        HStack {
-                            Text("Any Source")
-                                .foregroundColor(.primary)
-                            Spacer()
-                            if selectedSource == nil {
-                                Image(systemName: "checkmark")
-                                    .foregroundColor(AppTheme.Colors.primary)
-                                    .font(.system(size: 14, weight: .bold))
-                            }
-                        }
-                    }
-                    
-                    ForEach(FreeMovie.StreamingSource.allCases, id: \.self) { source in
-                        Button {
-                            withAnimation { selectedSource = source }
-                        } label: {
-                            HStack {
-                                Circle()
-                                    .fill(source.color)
-                                    .frame(width: 10, height: 10)
-                                Text(source.displayName)
-                                    .foregroundColor(.primary)
-                                Spacer()
-                                if selectedSource == source {
-                                    Image(systemName: "checkmark")
-                                        .foregroundColor(AppTheme.Colors.primary)
-                                        .font(.system(size: 14, weight: .bold))
-                                }
-                            }
-                        }
-                    }
-                } header: {
-                    Text("Streaming Source")
-                }
                 
                 // Minimum Rating
                 Section {
@@ -798,7 +672,6 @@ struct MovieFiltersSheet: View {
                 Section {
                     Button(role: .destructive) {
                         withAnimation {
-                            selectedSource = nil
                             minimumRating = 0
                             minimumYear = 1920
                             sortBy = .popular
@@ -822,7 +695,6 @@ struct MovieFiltersSheet: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Apply") {
-                        filters.streamingSource = selectedSource
                         filters.minimumRating = minimumRating > 0 ? minimumRating : nil
                         filters.minimumYear = minimumYear > 1920 ? minimumYear : nil
                         filters.sortBy = sortBy
@@ -832,13 +704,28 @@ struct MovieFiltersSheet: View {
                 }
             }
             .onAppear {
-                selectedSource = filters.streamingSource
                 minimumRating = filters.minimumRating ?? 0
                 minimumYear = filters.minimumYear ?? 1920
                 sortBy = filters.sortBy
             }
         }
     }
+}
+
+// MARK: - Movie Filters Model
+struct MovieFilters {
+    var minimumRating: Double?
+    var minimumYear: Int?
+    var sortBy: MovieSortOption = .popular
+}
+
+enum MovieSortOption: String, CaseIterable {
+    case popular = "Popular"
+    case newest = "Newest"
+    case rating = "Rating"
+    case title = "Title"
+    
+    var displayName: String { rawValue }
 }
 
 #Preview("Improved Movies View") {

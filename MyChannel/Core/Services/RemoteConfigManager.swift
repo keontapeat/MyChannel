@@ -11,6 +11,12 @@ import Foundation
 import FirebaseRemoteConfig
 #endif
 
+enum ConfigFetchStatus {
+    case noFetchYet
+    case success
+    case failure
+}
+
 // 🎛️ Firebase Remote Config Manager
 // Manages feature flags and remote configuration
 @MainActor
@@ -19,7 +25,7 @@ class RemoteConfigManager: ObservableObject {
     
     @Published var isConfigured = false
     @Published var lastFetchTime: Date?
-    @Published var fetchStatus: RemoteConfigFetchStatus = .noFetchYet
+    @Published var fetchStatus: ConfigFetchStatus = .noFetchYet
     
     #if canImport(FirebaseRemoteConfig)
     private let remoteConfig = RemoteConfig.remoteConfig()
@@ -70,6 +76,7 @@ class RemoteConfigManager: ObservableObject {
         "ai_thumbnails_enabled": true as NSObject,
         "sentiment_analysis_enabled": true as NSObject,
         "recommendation_engine_enabled": true as NSObject,
+        "ml_enhancement_enabled": true as NSObject,
         
         // Performance
         "max_concurrent_uploads": 3 as NSObject,
@@ -126,7 +133,7 @@ class RemoteConfigManager: ObservableObject {
         do {
             let status = try await remoteConfig.fetchAndActivate()
             await MainActor.run {
-                self.fetchStatus = status
+                self.fetchStatus = .success
                 self.lastFetchTime = Date()
             }
             
@@ -283,7 +290,7 @@ class RemoteConfigManager: ObservableObject {
         #endif
     }
     
-    private func getString(for key: String) -> String {
+    func getString(for key: String) -> String {
         #if canImport(FirebaseRemoteConfig)
         return remoteConfig.configValue(forKey: key).stringValue ?? ""
         #else
@@ -387,5 +394,10 @@ extension RemoteConfigManager {
         #else
         return defaults[feature] as? T ?? fallback
         #endif
+    }
+    
+    // ML Enhancement feature flag
+    var isMLEnhancementEnabled: Bool {
+        return isFeatureEnabled("ml_enhancement_enabled", fallback: true)
     }
 }

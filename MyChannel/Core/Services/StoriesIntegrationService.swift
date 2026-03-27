@@ -89,7 +89,7 @@ class StoriesIntegrationService: ObservableObject {
         viewedStories.insert(story.id.uuidString)
         
         // Update seen tracker for UI
-        StorySeenTracker.shared.markAsSeen(username: story.username)
+        StorySeenTracker.shared.markSeen(username: story.username)
     }
     
     /// Handle story upload with enterprise backend
@@ -176,7 +176,7 @@ extension AssetStory {
 extension StorySeenTracker {
     /// Enhanced tracking with backend sync
     func markAsSeenWithSync(username: String, storyId: String) {
-        markAsSeen(username: username)
+        markSeen(username: username)
         
         // Sync with backend analytics
         Task {
@@ -188,7 +188,7 @@ extension StorySeenTracker {
         }
     }
     
-    private func getCurrentUserId() -> String {
+    @MainActor private func getCurrentUserId() -> String {
         return AppState.shared.currentUser?.id ?? "anonymous"
     }
 }

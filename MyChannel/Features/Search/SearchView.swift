@@ -89,14 +89,14 @@ struct SearchView: View {
 
                 ZStack(alignment: .topLeading) {
                     if searchText.isEmpty {
-                        SearchEmptyState(recentSearches: historyService.getRecentSearches()) { search in
+                        LegacySearchEmptyState(recentSearches: historyService.getRecentSearches()) { search in
                             searchText = search
                             performSearch()
                         }
                     } else if isSearching {
-                        SearchLoadingState()
+                        LegacySearchLoadingState()
                     } else {
-                        ModernSearchResultsList(
+                        LegacySearchResultsList(
                             results: searchService.searchResults,
                             searchCorrection: searchCorrection,
                             relatedSearches: relatedSearches,
@@ -386,7 +386,7 @@ struct SearchView: View {
                 // Track search analytics
                 await trendingService.trackSearch(term: searchText)
                 
-                let _ = try await searchService.search(query: searchText, filters: searchFilters)
+                let _ = try await searchService.search(query: searchText, filters: convertToAdvancedFilters(searchFilters))
 
                 // Check if task was cancelled
                 guard !Task.isCancelled else { return }
@@ -471,6 +471,9 @@ struct SearchView: View {
             defer { Task { @MainActor in isLoadingMore = false } }
             
             do {
+                // Add actual load more logic here
+                print("📄 [SearchView] Loading more results for page \(currentPage)")
+            } catch {
                 print("🚨 [SearchView] Load more error: \(error)")
                 await MainActor.run { isLoadingMore = false }
             }
@@ -519,7 +522,7 @@ struct SearchView: View {
 }
 
 // MARK: - Supporting Views and Models (unchanged)
-struct SearchEmptyState: View {
+struct LegacySearchEmptyState: View {
     let recentSearches: [String]
     let onSearchTap: (String) -> Void
     @StateObject private var trendingService = TrendingSearchService.shared
@@ -619,7 +622,7 @@ struct SearchEmptyState: View {
     }
 }
 
-struct SearchLoadingState: View {
+struct LegacySearchLoadingState: View {
     var body: some View {
         VStack(spacing: 20) {
             Spacer()
@@ -634,7 +637,7 @@ struct SearchLoadingState: View {
     }
 }
 
-struct ModernSearchResultsList: View {
+struct LegacySearchResultsList: View {
     let results: [SearchResult]
     let searchCorrection: String?
     let relatedSearches: [String]
@@ -1120,6 +1123,36 @@ struct LiveStreamSearchCard: View {
     }
 }
 
+// MARK: - Helper Methods
+private func convertToAdvancedFilters(_ filters: SearchFilters) -> AdvancedSearchFilters {
+    var advancedFilters = AdvancedSearchFilters()
+    
+    // Map upload date via rawValue
+    if let uploadDate = filters.uploadDate,
+       let mapped = AdvancedSearchFilters.UploadDateFilter(rawValue: uploadDate.rawValue) {
+        advancedFilters.uploadDate = mapped
+    }
+    
+    // Map duration via rawValue
+    if let duration = filters.duration,
+       let mapped = AdvancedSearchFilters.DurationFilter(rawValue: duration.rawValue) {
+        advancedFilters.duration = mapped
+    }
+    
+    // Map content type via rawValue
+    if let contentType = filters.contentType,
+       let mapped = AdvancedSearchFilters.ContentType(rawValue: contentType.rawValue) {
+        advancedFilters.contentType = mapped
+    }
+    
+    // Map features via rawValue
+    advancedFilters.features = Set(filters.features.compactMap {
+        AdvancedSearchFilters.FeatureFilter(rawValue: $0.rawValue)
+    })
+    
+    return advancedFilters
+}
+
 // SearchFiltersView is now defined in its own file
 
 // MARK: - Supporting Models
@@ -1262,141 +1295,6 @@ struct WaveformView: View {
             // Animate waveform
             for index in amplitudes.indices {
                 amplitudes[index] = CGFloat.random(in: 0.3...1.0)
-            }
-        }
-    }
-}
-
-// MARK: - Visual Search Sheet
-struct VisualSearchSheet: View {
-    let onComplete: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var isAnalyzing = false
-    @State private var selectedImage: UIImage?
-    @State private var showingImagePicker = false
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 32) {
-                if let image = selectedImage {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxHeight: 300)
-                        .cornerRadius(12)
-                        .padding()
-                    
-                    if isAnalyzing {
-                        HStack(spacing: 12) {
-                            ProgressView()
-                            Text("Analyzing image...")
-                                .font(.system(size: 15))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                    }
-                } else {
-                    VStack(spacing: 24) {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(AppTheme.Colors.textTertiary)
-                        
-                        Text("Visual Search")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                        
-                        Text("Take a photo or upload an image to search for similar content")
-                            .font(.system(size: 15))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 40)
-                        
-                        VStack(spacing: 16) {
-                            Button(action: { showingImagePicker = true }) {
-                                HStack {
-                                    Image(systemName: "photo.fill")
-                                    Text("Choose from Library")
-                                }
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(AppTheme.Colors.primary)
-                                .cornerRadius(12)
-                            }
-                            
-                            Button(action: { /* Camera */ }) {
-                                HStack {
-                                    Image(systemName: "camera.fill")
-                                    Text("Take Photo")
-                                }
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(AppTheme.Colors.primary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(AppTheme.Colors.surface)
-                                .cornerRadius(12)
-                            }
-                        }
-                        .padding(.horizontal, 40)
-                    }
-                }
-                
-                Spacer()
-            }
-            .padding(.vertical, 40)
-            .navigationTitle("Visual Search")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
-                
-                if selectedImage != nil {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Search") {
-                            performVisualSearch()
-                        }
-                        .disabled(isAnalyzing)
-                    }
-                }
-            }
-            .sheet(isPresented: $showingImagePicker) {
-                ImagePicker(selectedImage: $selectedImage)
-            }
-        }
-    }
-    
-    private func performVisualSearch() {
-        guard let image = selectedImage else { return }
-        
-        isAnalyzing = true
-        
-        Task {
-            do {
-                // Use Claude to analyze image
-                let prompt = """
-                Analyze this image and generate a search query that would find similar content.
-                Return only the search query, nothing else.
-                """
-                
-                // Convert image to base64 (simplified)
-                guard let imageData = image.jpegData(compressionQuality: 0.7) else {
-                    throw NSError(domain: "VisualSearch", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image"])
-                }
-                
-                // TODO: Send to Claude with image
-                // For now, use a simple placeholder
-                let query = "Similar content" // Replace with actual Claude response
-                
-                await MainActor.run {
-                    isAnalyzing = false
-                    onComplete(query)
-                }
-            } catch {
-                await MainActor.run {
-                    isAnalyzing = false
-                }
-                print("🚨 [VisualSearch] Error: \(error)")
             }
         }
     }

@@ -110,6 +110,14 @@ struct AppTheme {
         }))
         static let dividerDark = Color(hexString: "2F2F31")
         
+        // border: #E1E4E8 (light) / #38383A (dark)
+        static let border = Color(uiColor: UIColor(dynamicProvider: { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.220, green: 0.220, blue: 0.227, alpha: 1) // #38383A
+                : UIColor(red: 0.882, green: 0.894, blue: 0.906, alpha: 1) // #E1E4E8
+        }))
+        static let borderDark = Color(hexString: "38383A")
+        
         // MARK: Status colors - same in both modes
         static let success = Color(hexString: "00BA7C")
         static let successLight = Color(hexString: "00BA7C").opacity(0.15)

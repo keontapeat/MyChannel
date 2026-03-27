@@ -86,17 +86,37 @@ class NewUserDiscoveryEngine: ObservableObject {
             // 6. Ensure diversity (no same creator back-to-back)
             feedVideos = ensureCreatorDiversity(feedVideos)
             
-            print("📊 [NewUserDiscovery] Generated feed: \(popularVideos.count) popular, \(newVideos.count) new, \(risingVideos.count) rising")
-            
+            print(" [NewUserDiscovery] Generated feed: \(popularVideos.count) popular, \(newVideos.count) new, \(risingVideos.count) rising")
+        
         } catch {
-            print("❌ [NewUserDiscovery] Error generating feed: \(error)")
+            print(" [NewUserDiscovery] Error generating feed: \(error)")
         }
         #endif
+        
+        // FINAL SAFETY FILTER: Block owner videos at source
+        let ownerDisplayNames: Set<String> = ["shot by keonta"]
+        let ownerUsernames: Set<String> = ["sbkeonta_", "shotbykeonta", "keontapeat"]
+        let blockedTitleSubstrings = ["cooking with kya", "screen recording 2025"]
+        
+        feedVideos = feedVideos.filter { video in
+            let titleLower = video.title.lowercased()
+            let hasBlockedTitle = blockedTitleSubstrings.contains { titleLower.contains($0) }
+            
+            let shouldExclude = ownerDisplayNames.contains(video.creator.displayName.lowercased()) ||
+                              ownerUsernames.contains(video.creator.username.lowercased()) ||
+                              hasBlockedTitle
+            
+            if shouldExclude {
+                print(" [NewUserDiscovery] Filtering out: '\(video.title)' by '\(video.creator.displayName)'")
+            }
+            
+            return !shouldExclude
+        }
         
         return Array(feedVideos.prefix(limit))
     }
     
-    // MARK: - 🎯 New Creator Discovery
+    // MARK: - New Creator Discovery
     
     private func getNewCreatorVideos(limit: Int, excludeViewed: Bool) async throws -> [Video] {
         #if canImport(FirebaseFirestore)

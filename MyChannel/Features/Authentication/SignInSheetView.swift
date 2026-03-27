@@ -170,12 +170,15 @@ struct SignInSheetView: View {
         guard !isLoadingGoogle else { return }
         isLoadingApple = true
         defer { isLoadingApple = false }
-        do {
-            // Small delay to let the sheet finish layout before presenting SIWA controller
-            try await Task.sleep(nanoseconds: 50_000_000)
-            try await AuthService.shared.signInWithApple()
-        } catch {
-            errorMessage = error.localizedDescription
+        // Small delay to let the sheet finish layout before presenting SIWA controller
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        // Use AuthenticationManager (the @EnvironmentObject source of truth)
+        // so isAuthenticated updates correctly and the sheet auto-dismisses.
+        // Errors/cancellation are handled internally via authState.
+        await authManager.signInWithApple()
+        // Show error if auth failed
+        if case .error(let msg) = authManager.authState {
+            errorMessage = msg
         }
     }
 }

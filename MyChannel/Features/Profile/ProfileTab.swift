@@ -12,6 +12,7 @@ enum ProfileTab: String, CaseIterable, Identifiable {
     case videos = "videos"
     case shorts = "shorts" 
     case playlists = "playlists"
+    case downloads = "downloads"
     case community = "community"
     case about = "about"
     
@@ -22,6 +23,7 @@ enum ProfileTab: String, CaseIterable, Identifiable {
         case .videos: return "Videos"
         case .shorts: return "Flicks"
         case .playlists: return "Playlists"
+        case .downloads: return "Downloads"
         case .community: return "Community"
         case .about: return "About"
         }
@@ -32,6 +34,7 @@ enum ProfileTab: String, CaseIterable, Identifiable {
         case .videos: return "play.rectangle"
         case .shorts: return "play.rectangle.on.rectangle"
         case .playlists: return "list.bullet"
+        case .downloads: return "arrow.down.circle"
         case .community: return "person.3"
         case .about: return "info.circle"
         }
@@ -42,6 +45,7 @@ enum ProfileTab: String, CaseIterable, Identifiable {
         case .videos: return "Videos tab"
         case .shorts: return "Flicks tab"
         case .playlists: return "Playlists tab"
+        case .downloads: return "Downloads tab"
         case .community: return "Community tab"
         case .about: return "About tab"
         }

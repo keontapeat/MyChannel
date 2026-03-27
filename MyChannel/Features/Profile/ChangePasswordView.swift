@@ -130,7 +130,7 @@ struct ChangePasswordView: View {
     // MARK: - Current Password Section
     private var currentPasswordSection: some View {
         VStack(spacing: 20) {
-            SectionHeader(title: "Current Password")
+            PasswordSectionHeader(title: "Current Password")
             
             PasswordTextField(
                 title: "Current Password",
@@ -146,7 +146,7 @@ struct ChangePasswordView: View {
     // MARK: - New Password Section
     private var newPasswordSection: some View {
         VStack(spacing: 20) {
-            SectionHeader(title: "New Password")
+            PasswordSectionHeader(title: "New Password")
             
             VStack(spacing: 16) {
                 PasswordTextField(
@@ -474,6 +474,31 @@ struct PasswordValidator {
         case 3...4: return .fair
         case 5: return .good
         default: return .strong
+        }
+    }
+}
+
+// MARK: - Password Section Header
+struct PasswordSectionHeader: View {
+    let title: String
+    let subtitle: String?
+    
+    init(title: String, subtitle: String? = nil) {
+        self.title = title
+        self.subtitle = subtitle
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(.primary)
+            
+            if let subtitle = subtitle {
+                Text(subtitle)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(.secondary)
+            }
         }
     }
 }

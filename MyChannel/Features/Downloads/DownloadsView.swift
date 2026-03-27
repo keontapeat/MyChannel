@@ -2,6 +2,7 @@ import SwiftUI
 import FirebaseAuth
 
 struct DownloadsView: View {
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var downloadManager = DownloadManager.shared
     @StateObject private var mlService = DownloadMLService.shared
     @StateObject private var subscriptionService = SubscriptionService.shared
@@ -28,7 +29,7 @@ struct DownloadsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        
+                        dismiss()
                     } label: {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 17, weight: .semibold))

@@ -145,7 +145,7 @@ class AIRealtimeRankingService: ObservableObject {
         }
         
         // Sort by overall rank
-        let previousRanks = Dictionary(uniqueKeysWithValues: topCreators.enumerated().map { ($1.id, $0) })
+        let previousRanks = Dictionary(topCreators.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { _, last in last })
         allCreators.sort { $0.overallRank > $1.overallRank }
         
         // Calculate rank changes

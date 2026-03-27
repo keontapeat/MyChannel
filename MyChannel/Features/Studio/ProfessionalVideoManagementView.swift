@@ -94,7 +94,7 @@ struct ProfessionalVideoManagementView: View {
                         .onSubmit {
                             performSearch()
                         }
-                        .onChange(of: searchText) { oldValue, newValue in
+                        .onChange(of: searchText) { newValue in
                             if newValue.isEmpty {
                                 searchResults = []
                                 isSearching = false
@@ -158,7 +158,7 @@ struct ProfessionalVideoManagementView: View {
                 
                 QuickStatCard(
                     title: "Public",
-                    value: "\(videoService.videos.filter { $0.visibility == .public }.count)",
+                    value: "\(videoService.videos.filter { $0.visibility == .publicVideo }.count)",
                     icon: "globe",
                     color: .orange
                 )
@@ -179,7 +179,7 @@ struct ProfessionalVideoManagementView: View {
     private var filterTabsSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(VideoFilter.allCases, id: \.self) { filter in
+                ForEach(VideoManagementFilter.allCases, id: \.self) { filter in
                     FilterTabButton(
                         filter: filter,
                         isSelected: videoService.selectedFilter == filter,
@@ -320,7 +320,7 @@ struct ProfessionalVideoManagementView: View {
                     } else {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
                             ForEach(videosToShow) { video in
-                                VideoGridCard(
+                                ManagementVideoGridCard(
                                     video: video,
                                     isSelected: selectedVideos.contains(video.id),
                                     onSelectionChanged: { isSelected in
@@ -392,16 +392,16 @@ struct ProfessionalVideoManagementView: View {
         }
     }
     
-    private func getFilterCount(_ filter: VideoFilter) -> Int {
+    private func getFilterCount(_ filter: VideoManagementFilter) -> Int {
         switch filter {
         case .all:
             return videoService.videos.count
-        case .public:
-            return videoService.videos.filter { $0.visibility == .public }.count
+        case .publicVideos:
+            return videoService.videos.filter { $0.visibility == .publicVideo }.count
         case .unlisted:
             return videoService.videos.filter { $0.visibility == .unlisted }.count
-        case .private:
-            return videoService.videos.filter { $0.visibility == .private }.count
+        case .privateVideos:
+            return videoService.videos.filter { $0.visibility == .privateVideo }.count
         case .scheduled:
             return videoService.videos.filter { $0.isScheduled }.count
         case .drafts:
@@ -434,7 +434,7 @@ struct ProfessionalVideoManagementView: View {
 // MARK: - Supporting Views
 
 struct FilterTabButton: View {
-    let filter: VideoFilter
+    let filter: VideoManagementFilter
     let isSelected: Bool
     let count: Int
     let action: () -> Void
@@ -616,7 +616,7 @@ struct VideoListRow: View {
     }
 }
 
-struct VideoGridCard: View {
+struct ManagementVideoGridCard: View {
     let video: EnhancedVideo
     let isSelected: Bool
     let onSelectionChanged: (Bool) -> Void
@@ -811,7 +811,7 @@ struct VideoScheduleSheet: View {
 struct VideoVisibilitySheet: View {
     let selectedVideos: [String]
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedVisibility: VideoVisibility = .public
+    @State private var selectedVisibility: VideoVisibility = .publicVideo
     
     var body: some View {
         NavigationStack {
@@ -873,17 +873,17 @@ struct VideoVisibilitySheet: View {
     
     private func getVisibilityIcon(_ visibility: VideoVisibility) -> String {
         switch visibility {
-        case .public: return "globe"
+        case .publicVideo: return "globe"
         case .unlisted: return "link"
-        case .private: return "lock"
+        case .privateVideo: return "lock"
         }
     }
     
     private func getVisibilityDescription(_ visibility: VideoVisibility) -> String {
         switch visibility {
-        case .public: return "Anyone can search for and view"
+        case .publicVideo: return "Anyone can search for and view"
         case .unlisted: return "Anyone with the link can view"
-        case .private: return "Only you can view"
+        case .privateVideo: return "Only you can view"
         }
     }
 }
