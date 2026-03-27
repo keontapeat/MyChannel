@@ -2307,7 +2307,7 @@ private struct AdvancedVideoTableRow: View {
                     }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minWidth: 80, maxWidth: 110, alignment: .leading)
 
             // Stat columns — Views, CTR, WatchTime, Revenue
             AdvancedStatColumn(value: formatViews(video.viewCount), label: nil)
@@ -2383,11 +2383,14 @@ private struct VisibilityBadge: View {
             Text(badgeLabel)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(badgeColor)
+                .lineLimit(1)
+                .fixedSize()
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
         .background(badgeColor.opacity(0.12))
         .clipShape(Capsule())
+        .fixedSize()
     }
 
     private var badgeColor: Color {
