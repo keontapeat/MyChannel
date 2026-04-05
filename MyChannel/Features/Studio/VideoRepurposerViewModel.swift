@@ -89,8 +89,9 @@ class VideoRepurposerViewModel: ObservableObject {
     
     func loadData() async {
         // Load user's videos from Firestore
-        // Mock data for now
-        availableVideos = Video.sampleVideos
+        if let uid = AppState.shared.currentUser?.id {
+            availableVideos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: uid, limit: 30)
+        }
         
         videosRepurposed = 42
         flicksGenerated = 387

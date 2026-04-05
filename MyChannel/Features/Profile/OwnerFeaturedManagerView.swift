@@ -111,14 +111,13 @@ private struct OwnerFeaturedPickerView: View {
     @Environment(\.dismiss) private var dismiss
     let onPick: (Video) -> Void
 
-    // Simple sources for now – can wire to Firestore later
+    @State private var firestoreVideos: [Video] = []
+
     private var candidates: [Video] {
         var vids: [Video] = []
-        // 1) Owner intro video at the top if available
         if let intro = ownerIntroVideo() { vids.append(intro) }
-        // 2) Existing sources
         vids.append(contentsOf: SeedCatalogService.shared.seedVideos)
-        vids.append(contentsOf: Video.sampleVideos)
+        vids.append(contentsOf: firestoreVideos)
         return Array(Set(vids)).prefix(50).map { $0 }
     }
 
@@ -183,6 +182,9 @@ private struct OwnerFeaturedPickerView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") { dismiss() }
                 }
+            }
+            .task {
+                firestoreVideos = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 50)
             }
         }
     }

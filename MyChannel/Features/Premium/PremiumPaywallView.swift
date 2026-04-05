@@ -10,14 +10,29 @@ struct PremiumPaywallView: View {
             VStack(spacing: 20) {
                 header
                 benefits
-                productList
-                restore
-                Spacer()
-                footer
+                if AppConfig.Features.enableSubscriptions {
+                    productList
+                    restore
+                    Spacer()
+                    footer
+                } else {
+                    // 🔥 FIX 2.1(b): Hide purchase UI when IAPs not submitted
+                    Text("Coming Soon")
+                        .font(.title2.bold())
+                        .foregroundColor(.secondary)
+                        .padding(.top, 20)
+                    Spacer()
+                    Button("Done") { dismiss() }
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                }
             }
             .padding()
             .navigationTitle("Music Premium")
-            .task { await store.loadProducts() }
+            .task {
+                guard AppConfig.Features.enableSubscriptions else { return }
+                await store.loadProducts()
+            }
         }
     }
     

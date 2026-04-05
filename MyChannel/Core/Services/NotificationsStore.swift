@@ -76,7 +76,6 @@ final class NotificationsStore: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     private init() {
-        loadSampleData()
         bridgeFirestoreInbox()
     }
 

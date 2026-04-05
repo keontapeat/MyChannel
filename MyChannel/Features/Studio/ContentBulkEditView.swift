@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ContentBulkEditView: View {
-    @State private var videos: [Video] = Array(Video.sampleVideos.prefix(12))
+    @State private var videos: [Video] = []
     @State private var selected: Set<String> = []
     @State private var newVisibility: Visibility = .public
     @State private var scheduleDate: Date = Date().addingTimeInterval(3600)
@@ -20,6 +20,10 @@ struct ContentBulkEditView: View {
         VStack(spacing: 0) {
             List {
                 Section("Select videos") {
+                    if videos.isEmpty {
+                        Text("Loading your videos...")
+                            .foregroundStyle(.secondary)
+                    }
                     ForEach(videos) { v in
                         HStack {
                             Toggle(isOn: Binding(
@@ -49,6 +53,7 @@ struct ContentBulkEditView: View {
         }
         .navigationTitle("Bulk Edit")
         .navigationBarTitleDisplayMode(.inline)
+        .task { await loadVideos() }
     }
     
     private func apply() {
@@ -60,6 +65,13 @@ struct ContentBulkEditView: View {
             return updated
         }
         // NOTE: In a real app, call an API to update visibility and schedule
+    }
+}
+
+extension ContentBulkEditView {
+    func loadVideos() async {
+        guard let uid = AppState.shared.currentUser?.id else { return }
+        videos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: uid, limit: 20)
     }
 }
 

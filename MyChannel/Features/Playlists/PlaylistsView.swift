@@ -8,27 +8,27 @@
 import SwiftUI
 
 struct PlaylistsView: View {
-    @StateObject private var playlistService = MockPlaylistService()
     @StateObject private var fsService = PlaylistFirestoreService.shared
     @State private var showingCreatePlaylist = false
     @State private var searchText = ""
     @State private var selectedCategory: PlaylistCategory?
+    @State private var playlists: [Playlist] = []
     
     var filteredPlaylists: [Playlist] {
-        var playlists = playlistService.playlists
+        var result = playlists
         
         if !searchText.isEmpty {
-            playlists = playlists.filter { playlist in
+            result = result.filter { playlist in
                 playlist.title.localizedCaseInsensitiveContains(searchText) ||
                 playlist.description.localizedCaseInsensitiveContains(searchText)
             }
         }
         
         if let selectedCategory = selectedCategory {
-            playlists = playlists.filter { $0.category == selectedCategory }
+            result = result.filter { $0.category == selectedCategory }
         }
         
-        return playlists.sorted { $0.updatedAt > $1.updatedAt }
+        return result.sorted { $0.updatedAt > $1.updatedAt }
     }
     
     var body: some View {
@@ -59,6 +59,21 @@ struct PlaylistsView: View {
             .sheet(isPresented: $showingCreatePlaylist) {
                 CreatePlaylistViewFirestore()
             }
+            .task {
+                await loadPlaylists()
+            }
+            .refreshable {
+                await loadPlaylists()
+            }
+        }
+    }
+    
+    private func loadPlaylists() async {
+        guard let userId = AppState.shared.currentUser?.id else { return }
+        do {
+            playlists = try await fsService.getPlaylists(for: userId)
+        } catch {
+            print("⚠️ [PlaylistsView] Failed to load playlists: \(error.localizedDescription)")
         }
     }
     
@@ -118,7 +133,7 @@ struct PlaylistsView: View {
                     emptyPlaylistsView
                 } else {
                     ForEach(filteredPlaylists) { playlist in
-                        NavigationLink(destination: PlaylistDetailView(playlist: playlist, playlistService: playlistService)) {
+                        NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
                             PlaylistCard(
                                 playlist: playlist,
                                 onDelete: { deletePlaylist(playlist) },
@@ -162,7 +177,8 @@ struct PlaylistsView: View {
     private func deletePlaylist(_ playlist: Playlist) {
         Task {
             do {
-                try await playlistService.deletePlaylist(id: playlist.id)
+                try await fsService.deletePlaylist(id: playlist.id)
+                await loadPlaylists()
             } catch {
                 print("Error deleting playlist: \(error)")
             }
@@ -357,7 +373,7 @@ struct CreatePlaylistView: View {
         let newPlaylist = Playlist(
             title: title,
             description: description,
-            creatorId: "current-user-id",
+            creatorId: AppState.shared.currentUser?.id ?? "",
             isPublic: isPublic,
             tags: tagArray,
             category: selectedCategory

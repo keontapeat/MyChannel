@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct QuickActionsMenu: View {
     @EnvironmentObject private var appState: AppState
@@ -105,24 +106,26 @@ struct QuickActionsMenu: View {
     // MARK: - Action Methods
     
     private func saveVideosToWatchLater() {
-        let trendingVideos = Video.sampleVideos.filter { $0.viewCount > 100000 }
-        var savedCount = 0
-        
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-            for video in trendingVideos.prefix(5) {
-                if !appState.watchLaterVideos.contains(video.id) {
-                    appState.watchLaterVideos.insert(video.id)
-                    savedCount += 1
+        Task {
+            let trendingVideos = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 10)
+            let filtered = trendingVideos.filter { $0.viewCount > 100000 }
+            var savedCount = 0
+            
+            await MainActor.run {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    for video in filtered.prefix(5) {
+                        if !appState.watchLaterVideos.contains(video.id) {
+                            appState.watchLaterVideos.insert(video.id)
+                            savedCount += 1
+                        }
+                    }
                 }
             }
+            
+            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+            impactFeedback.impactOccurred()
+            print("✅ Saved \(savedCount) videos to Watch Later")
         }
-        
-        // Provide haptic feedback
-        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-        impactFeedback.impactOccurred()
-        
-        // Show success notification (you can implement a toast system)
-        print("✅ Saved \(savedCount) videos to Watch Later")
     }
     
     private func downloadForOffline() {
@@ -163,11 +166,7 @@ struct QuickActionsMenu: View {
             activityItems: [url],
             applicationActivities: nil
         )
-        
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first {
-            window.rootViewController?.present(activityController, animated: true)
-        }
+        UIApplication.shared.presentShareSheet(activityController)
         
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
         impactFeedback.impactOccurred()

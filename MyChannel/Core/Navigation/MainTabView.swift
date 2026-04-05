@@ -200,6 +200,13 @@ struct MainTabView: View {
         }) {
             AuthenticationView()
         }
+        // 🔥 FIX 2.1(a): Dismiss ALL auth UI when sign-in succeeds (belt-and-suspenders)
+        .onChange(of: authManager.isAuthenticated) { isAuth in
+            if isAuth {
+                if showAuthGate { showAuthGate = false }
+                if presentSignInSheet { presentSignInSheet = false }
+            }
+        }
         // Ensure mini-player pauses on Flicks, resumes otherwise (covers programmatic tab changes too)
         .onChange(of: selectedTab) { newTab in
             if newTab == .flicks {

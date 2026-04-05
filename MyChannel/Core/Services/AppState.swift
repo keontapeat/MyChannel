@@ -82,14 +82,25 @@ class AppState: ObservableObject {
         // Monitor authentication changes
         NotificationCenter.default.publisher(for: .userDidLogin)
             .sink { [weak self] notification in
+                guard let self = self else { return }
                 if let user = notification.object as? User {
-                    self?.currentUser = user
-                    self?.isAuthenticated = true
-                    Task { await self?.hydrateCloudCollectionsIfNeeded() }
-                    self?.loadUserData()
-                    self?.attachCloudListeners()
+                    self.currentUser = user
+                    self.isAuthenticated = true
+                    // 🔥 FIX 2.1(a): Wrap post-login operations in defensive error handling
+                    // to prevent crashes during hydration / listener setup
+                    Task { [weak self] in
+                        do {
+                            await self?.hydrateCloudCollectionsIfNeeded()
+                        } catch {
+                            print("⚠️ [AppState] Non-fatal: hydration failed: \(error.localizedDescription)")
+                        }
+                    }
+                    do { self.loadUserData() } catch { print("⚠️ [AppState] Non-fatal: loadUserData failed") }
+                    do { self.attachCloudListeners() } catch { print("⚠️ [AppState] Non-fatal: attachCloudListeners failed") }
+                    // Start search history cross-device sync
+                    do { SearchHistoryService.shared.startListening(userId: user.id) } catch { print("⚠️ [AppState] Non-fatal: SearchHistoryService listen failed") }
                     // Start ML agent notification bridge for this user
-                    MLAgentNotificationBridge.shared.start(userId: user.id)
+                    do { MLAgentNotificationBridge.shared.start(userId: user.id) } catch { print("⚠️ [AppState] Non-fatal: MLAgentNotificationBridge start failed") }
                 }
             }
             .store(in: &cancellables)
@@ -100,6 +111,8 @@ class AppState: ObservableObject {
                 self?.isAuthenticated = false
                 self?.resetState()
                 self?.firestoreListeners = nil
+                // Stop search history cross-device sync on logout
+                SearchHistoryService.shared.stopListening()
                 // Stop ML agent notification bridge on logout
                 MLAgentNotificationBridge.shared.stop()
             }

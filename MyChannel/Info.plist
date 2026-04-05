@@ -408,13 +408,8 @@
 		<string>plex</string>
 		<string>vlc</string>
 		<string>infuse</string>
-		<!-- Payment Apps -->
-		<string>paypal</string>
-		<string>venmo</string>
-		<string>cashapp</string>
-		<string>zelle</string>
+		<!-- Payment: Only Apple Pay kept; external payment schemes removed per Guideline 3.1.1 -->
 		<string>applepay</string>
-		<string>stripe</string>
 		<!-- Cloud Storage -->
 		<string>googledrive</string>
 		<string>dropbox</string>

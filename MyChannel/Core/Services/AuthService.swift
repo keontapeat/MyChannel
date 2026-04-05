@@ -251,6 +251,17 @@ class AuthService: ObservableObject {
             authState = .authenticated
             broadcastLogin(user)
 
+            // Create Firestore profile for first-time Apple Sign In users
+            #if canImport(FirebaseFirestore)
+            Task {
+                let existing = try? await UserFirestoreService.shared.fetchUser(id: user.id)
+                if existing == nil {
+                    try? await UserFirestoreService.shared.updateUser(user)
+                    print("✅ [AuthService] Created Firestore profile for new Apple user: \(user.displayName)")
+                }
+            }
+            #endif
+
             await AnalyticsService.shared.trackEvent("user_sign_in", parameters: [
                 "method": "apple",
                 "user_id": user.id
@@ -748,9 +759,24 @@ class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate, ASAuthor
     
     // MARK: - Presentation Context (required on iPad)
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        UIApplication.shared.connectedScenes
+        // On iPad (Stage Manager / Split View / sheets) keyWindow may be nil
+        // or not yet promoted to key during animations. Walk scenes broadly.
+        let scenes = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
-            .first?.keyWindow ?? UIWindow()
+        // 1. Prefer foreground-active scene's key window
+        if let fg = scenes.first(where: { $0.activationState == .foregroundActive }),
+           let w = fg.keyWindow ?? fg.windows.first { return w }
+        // 2. Any scene's key window
+        for s in scenes { if let w = s.keyWindow { return w } }
+        // 3. Any visible window at all
+        for s in scenes { if let w = s.windows.first { return w } }
+        // 4. Last resort — create a window attached to a real scene so it's not detached
+        if let scene = scenes.first {
+            let w = UIWindow(windowScene: scene)
+            w.makeKeyAndVisible()
+            return w
+        }
+        return UIWindow()
     }
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {

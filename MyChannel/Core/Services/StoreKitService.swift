@@ -18,20 +18,15 @@ final class StoreKitService: ObservableObject {
         "com.mychannel.plus.annual"
     ]
     
-    static let musicSubscriptionIDs: Set<String> = [
-        "mc.music.monthly",
-        "mc.music.annual"
-    ]
-    
     static var allSubscriptionIDs: Set<String> {
-        plusSubscriptionIDs.union(musicSubscriptionIDs)
+        plusSubscriptionIDs
     }
     
     // MARK: - Transaction listener task (keeps running for the app's lifetime)
     private var transactionListenerTask: Task<Void, Never>?
     
     // MARK: - Unified Premium Status
-    /// True when user has ANY active MyChannel Plus+ or Music subscription
+    /// True when user has ANY active MyChannel Plus+ subscription
     var isPremium: Bool {
         !purchasedProductIDs.isEmpty
     }
@@ -41,17 +36,15 @@ final class StoreKitService: ObservableObject {
         !purchasedProductIDs.isDisjoint(with: Self.plusSubscriptionIDs)
     }
     
-    /// True when user has a Music subscription
-    var isMusicSubscriber: Bool {
-        !purchasedProductIDs.isDisjoint(with: Self.musicSubscriptionIDs)
-    }
-    
     /// Active subscription product ID (for display purposes)
     var activeSubscriptionProductID: String? {
         purchasedProductIDs.first
     }
     
     private init() {
+        // 🔥 FIX 2.1(b): Don't start StoreKit when subscriptions are disabled
+        guard AppConfig.Features.enableSubscriptions else { return }
+        
         // Start listening for StoreKit transactions immediately
         transactionListenerTask = listenForTransactions()
         

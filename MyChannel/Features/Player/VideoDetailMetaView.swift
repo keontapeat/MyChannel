@@ -95,10 +95,20 @@ struct VideoDetailMetaView: View {
             isWatchLater = appState.watchLaterVideos.contains(video.id)
         }
         .sheet(isPresented: $showingTipSheet) {
-            TipSheet(video: video)
+            // 🔥 FIX 3.1.1: Gate tip sheet behind feature flag
+            if AppConfig.Features.enableTipping {
+                TipSheet(video: video)
+            } else {
+                Text("Tipping coming soon!").font(.title3.bold()).foregroundColor(.secondary).padding()
+            }
         }
         .sheet(isPresented: $showingSuperThanks) {
-            SuperThanksSheet(video: video)
+            // 🔥 FIX 3.1.1: Gate Super Thanks behind feature flag
+            if AppConfig.Features.enableTipping {
+                SuperThanksSheet(video: video)
+            } else {
+                Text("Super Thanks coming soon!").font(.title3.bold()).foregroundColor(.secondary).padding()
+            }
         }
         .sheet(isPresented: $showingClipsView) {
             ClipsView(video: video, currentTime: 0)
@@ -205,7 +215,8 @@ struct VideoDetailMetaView: View {
                 .buttonStyle(.plain)
                 
                 // 🔥 YOUTUBE EXACT: Stop ads Button (Shows Premium upsell)
-                if !premiumService.isPremium {
+                // 🔥 FIX 2.1(b): Hide when IAPs not submitted
+                if AppConfig.Features.enableSubscriptions && !premiumService.isPremium {
                     YouTubeActionPill(icon: "slash.circle", title: "Stop ads") {
                         showingStopAdsUpsell = true
                         HapticManager.shared.impact(style: .light)
@@ -233,9 +244,12 @@ struct VideoDetailMetaView: View {
                 }
                 
                 // 🔥 YOUTUBE EXACT: Thanks (Super Thanks) Button
-                YouTubeActionPill(icon: "heart.circle", title: "Thanks") {
-                    showingSuperThanks = true
-                    HapticManager.shared.impact(style: .light)
+                // 🔥 FIX 3.1.1: Hide when tipping disabled (uses Stripe, bypasses IAP)
+                if AppConfig.Features.enableTipping {
+                    YouTubeActionPill(icon: "heart.circle", title: "Thanks") {
+                        showingSuperThanks = true
+                        HapticManager.shared.impact(style: .light)
+                    }
                 }
                 
                 // 🔥 YOUTUBE EXACT: Remix Button
@@ -511,7 +525,8 @@ struct VideoDetailMetaView: View {
     
     private func performDownloadAction() {
         // 🔥 YOUTUBE PARITY: Check if premium user - show upsell if not
-        guard premiumService.isPremium else {
+        // 🔥 FIX 2.1(b): Only gate behind premium when IAPs are submitted
+        if AppConfig.Features.enableSubscriptions && !premiumService.isPremium {
             // Show YouTube-style premium upsell
             showingPremiumUpsell = true
             HapticManager.shared.impact(style: .light)

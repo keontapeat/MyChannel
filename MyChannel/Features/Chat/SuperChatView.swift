@@ -190,8 +190,8 @@ struct SuperChatView<Service: LiveChatServiceProtocol & ObservableObject>: View 
         let workItem = DispatchWorkItem {
             let superChatMessage = LiveChatMessage(
                 streamId: streamId,
-                userId: "current-user-id",
-                username: "CurrentUser",
+                userId: AppState.shared.currentUser?.id ?? "",
+                username: AppState.shared.currentUser?.displayName ?? "User",
                 content: message.isEmpty ? "Thanks for the stream!" : message,
                 messageType: .superChat,
                 superChatAmount: selectedAmount

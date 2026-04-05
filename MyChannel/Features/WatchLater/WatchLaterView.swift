@@ -8,7 +8,8 @@
 import SwiftUI
 
 struct WatchLaterView: View {
-    @StateObject private var watchLaterService = MockWatchLaterService()
+    @StateObject private var watchLaterService = WatchLaterFirestoreService.shared
+    @EnvironmentObject private var appState: AppState
     @State private var selectedSortOption: SortOption = .dateAdded
     @State private var showingStats = false
     @State private var searchText = ""
@@ -81,6 +82,14 @@ struct WatchLaterView: View {
             }
             .sheet(isPresented: $showingStats) {
                 WatchLaterStatsView(watchLaterService: watchLaterService)
+            }
+            .task {
+                if let userId = appState.currentUser?.id {
+                    watchLaterService.listen(userId: userId)
+                }
+            }
+            .onDisappear {
+                watchLaterService.stopListening()
             }
         }
     }
@@ -197,7 +206,7 @@ struct WatchLaterView: View {
                     ForEach(sortedItems) { item in
                         WatchLaterItemCard(
                             item: item,
-                            video: Video.sampleVideos.first { $0.id == item.videoId },
+                            video: nil,
                             onPlay: { playVideo(item) },
                             onRemove: { removeFromWatchLater(item) },
                             onMarkWatched: { markAsWatched(item) }
@@ -263,7 +272,9 @@ struct WatchLaterView: View {
     private func clearWatchedItems() {
         Task {
             do {
-                try await watchLaterService.clearWatchedItems(for: "user-1")
+                if let userId = appState.currentUser?.id {
+                    try await watchLaterService.clearWatchedItems(for: userId)
+                }
             } catch {
                 print("Error clearing watched items: \(error)")
             }
@@ -397,7 +408,7 @@ struct WatchLaterItemCard: View {
 
 // MARK: - Watch Later Stats View
 struct WatchLaterStatsView: View {
-    @ObservedObject var watchLaterService: MockWatchLaterService
+    @ObservedObject var watchLaterService: WatchLaterFirestoreService
     @Environment(\.dismiss) private var dismiss
     @State private var stats: WatchLaterStats?
     
@@ -490,7 +501,9 @@ struct WatchLaterStatsView: View {
                             VStack(spacing: 12) {
                                 Button(action: {
                                     Task {
-                                        try? await watchLaterService.clearWatchedItems(for: "user-1")
+                                        if let userId = AppState.shared.currentUser?.id {
+                                            try? await watchLaterService.clearWatchedItems(for: userId)
+                                        }
                                         dismiss()
                                     }
                                 }) {
@@ -553,7 +566,9 @@ struct WatchLaterStatsView: View {
     
     private func loadStats() async {
         do {
-            stats = try await watchLaterService.getWatchLaterStats(for: "user-1")
+            if let userId = AppState.shared.currentUser?.id {
+                stats = try await watchLaterService.getWatchLaterStats(for: userId)
+            }
         } catch {
             print("Error loading stats: \(error)")
         }

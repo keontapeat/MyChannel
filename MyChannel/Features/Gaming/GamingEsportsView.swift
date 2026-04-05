@@ -63,7 +63,23 @@ struct GamingEsportsView: View {
             }
         }
         .sheet(isPresented: $showingCreateMatch) {
-            VersusMatchCreatorView()
+            // 🔥 FIX 3.1.1/5.3.4: Gate real-money wagering behind feature flag
+            if AppConfig.Features.enableCreatorMonetization {
+                VersusMatchCreatorView()
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "gamecontroller")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    Text("Competitive Matches Coming Soon")
+                        .font(.title3.bold())
+                    Text("1v1 matches will be available in a future update.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding()
+            }
         }
         .alert(joinAlertMessage ?? "", isPresented: $showJoinAlert) {
             Button("OK", role: .cancel) {}

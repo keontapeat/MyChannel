@@ -117,12 +117,13 @@ final class PersonalizedFeedService: ObservableObject {
         } catch { }
         #endif
 
-        // 3. Fallback to mock if empty
+        // 3. Fallback to Firestore public videos if empty
         if candidates.isEmpty {
-            candidates = Video.sampleVideos.filter { vid in
+            let fetched = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: limit)
+            candidates = fetched.filter { vid in
                 likedCategories.contains(vid.category) || likedCreators.contains(vid.creator.id)
             }
-            if candidates.isEmpty { candidates = Array(Video.sampleVideos.shuffled().prefix(limit)) }
+            if candidates.isEmpty { candidates = Array(fetched.shuffled().prefix(limit)) }
         }
 
         // 4. Score and rank
@@ -174,11 +175,10 @@ final class PersonalizedFeedService: ObservableObject {
         }
         #endif
         
-        // Fill remaining slots with sample content if needed
+        // Fill remaining slots with seed catalog content if needed
         let remainingSlots = max(0, limit - videos.count)
         if remainingSlots > 0 {
-            videos.append(contentsOf: Video.sampleVideos.shuffled().prefix(remainingSlots / 2))
-            videos.append(contentsOf: SeedCatalogService.shared.seedVideos.shuffled().prefix(remainingSlots / 2))
+            videos.append(contentsOf: SeedCatalogService.shared.seedVideos.shuffled().prefix(remainingSlots))
         }
         
         // 🔥 FINAL SAFETY FILTER: Block owner videos at source

@@ -24,7 +24,10 @@
     { "collectionGroup": "adClicks", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "ipAddress", "order": "ASCENDING" }, { "fieldPath": "timestamp", "order": "DESCENDING" }] },
     { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "userId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "timestamp", "order": "DESCENDING" }] },
     { "collectionGroup": "userNotifications", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "userId", "order": "ASCENDING" }, { "fieldPath": "read", "order": "ASCENDING" }, { "fieldPath": "timestamp", "order": "DESCENDING" }] },
-    { "collectionGroup": "platformMetrics", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "source", "order": "ASCENDING" }, { "fieldPath": "timestamp", "order": "DESCENDING" }] }
+    { "collectionGroup": "platformMetrics", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "source", "order": "ASCENDING" }, { "fieldPath": "timestamp", "order": "DESCENDING" }] },
+    { "collectionGroup": "items", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "videoId", "order": "ASCENDING" }, { "fieldPath": "addedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "items", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "isWatched", "order": "ASCENDING" }, { "fieldPath": "addedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "community_posts", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "creatorId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] }
   ],
   "fieldOverrides": []
 }

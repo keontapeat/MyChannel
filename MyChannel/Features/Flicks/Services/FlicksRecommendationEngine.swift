@@ -17,6 +17,13 @@ class FlicksRecommendationEngine: ObservableObject {
     
     private var userViewingPatterns: [String: Any] = [:]
     private var sessionData: [String: Any] = [:]
+    private var cachedVideos: [Video] = []
+    
+    /// Load Firestore video pool for recommendations (call once on init or first use)
+    func loadVideoPool() async {
+        guard cachedVideos.isEmpty else { return }
+        cachedVideos = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 50)
+    }
     
     func updateUserPreferences(for video: Video) {
         // Analyze video content and update user preferences
@@ -31,8 +38,8 @@ class FlicksRecommendationEngine: ObservableObject {
     ) async -> [Video] {
         isLearning = true
         
-        // Simulate AI processing time
-        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        // Ensure video pool is loaded from Firestore
+        await loadVideoPool()
         
         // Enhanced multi-layer recommendation system
         let behaviorAnalysis = analyzeBehaviorPatterns(history)
@@ -60,15 +67,14 @@ class FlicksRecommendationEngine: ObservableObject {
     
     private func getTrendingRecommendations() -> [Video] {
         // Get currently trending Flicks content
-        return Video.sampleVideos.filter { $0.category == .entertainment }.prefix(10).map { $0 }
+        return cachedVideos.filter { $0.category == .entertainment }.prefix(10).map { $0 }
     }
     
     private func getViralPotentialRecommendations(_ history: [FlicksViewEvent]) -> [Video] {
         // Predict videos with viral potential based on early engagement patterns
-        return Video.sampleVideos.filter { video in
-            // Mock viral potential calculation
+        return cachedVideos.filter { video in
             let engagementRate = Double(video.likeCount) / Double(max(video.viewCount, 1))
-            return engagementRate > 0.1 && video.duration < 60 // Short videos with high engagement
+            return engagementRate > 0.1 && video.duration < 60
         }.prefix(5).map { $0 }
     }
     
@@ -314,7 +320,7 @@ class FlicksRecommendationEngine: ObservableObject {
         
         // Filter videos based on user's preferred categories
         let preferredCategories = Set(preferences.preferredCategories)
-        let categoryFilteredVideos = Video.sampleVideos.filter { video in
+        let categoryFilteredVideos = cachedVideos.filter { video in
             return preferredCategories.contains(video.category.rawValue)
         }
         
@@ -323,7 +329,7 @@ class FlicksRecommendationEngine: ObservableObject {
         
         // Filter videos from preferred creators
         let preferredCreators = Set(preferences.preferredCreators)
-        let creatorFilteredVideos = Video.sampleVideos.filter { video in
+        let creatorFilteredVideos = cachedVideos.filter { video in
             return preferredCreators.contains(video.creator.id)
         }
         
@@ -332,7 +338,7 @@ class FlicksRecommendationEngine: ObservableObject {
         
         // Fill remaining slots with popular content
         let remainingSlots = max(0, 6 - recommendations.count)
-        let popularVideos = Video.sampleVideos
+        let popularVideos = cachedVideos
             .sorted { $0.viewCount > $1.viewCount }
             .filter { !recommendations.contains($0) }
         
@@ -352,7 +358,7 @@ class FlicksRecommendationEngine: ObservableObject {
         
         if engagementRate > 0.7 {
             // High engagement users - recommend trending content
-            let trendingVideos = Video.sampleVideos
+            let trendingVideos = cachedVideos
                 .filter { $0.isSponsored != true }
                 .sorted { $0.viewCount > $1.viewCount }
             recommendations.append(contentsOf: Array(trendingVideos.prefix(3)))
@@ -360,7 +366,7 @@ class FlicksRecommendationEngine: ObservableObject {
         
         if likeRate > 0.5 {
             // Users who like content - recommend similar content
-            let similarVideos = Video.sampleVideos
+            let similarVideos = cachedVideos
                 .filter { $0.likeCount > 1000 }
                 .shuffled()
             recommendations.append(contentsOf: Array(similarVideos.prefix(3)))
@@ -408,7 +414,7 @@ class FlicksRecommendationEngine: ObservableObject {
         
         // Fill remaining slots with fresh content
         if finalRecommendations.count < 6 {
-            let freshVideos = Video.sampleVideos
+            let freshVideos = cachedVideos
                 .filter { !viewedVideoIds.contains($0.id) && !usedVideoIds.contains($0.id) }
                 .shuffled()
             

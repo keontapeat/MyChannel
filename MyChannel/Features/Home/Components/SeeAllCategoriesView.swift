@@ -27,6 +27,7 @@ struct SeeAllCategoriesView: View {
 
     @State private var selection: Category = .all
     @State private var allVideos: [Video] = []
+    @State private var firestoreVideos: [Video] = []
 
     private var filtered: [Video] {
         switch selection {
@@ -135,14 +136,15 @@ struct SeeAllCategoriesView: View {
                 }
             }
         }
-        .onAppear {
+        .task {
+            firestoreVideos = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 50)
             loadAllVideos()
         }
     }
 
     private func loadAllVideos() {
         // Combine initial videos with seed catalog and sample videos, deduplicated
-        var combined = initialVideos + SeedCatalogService.shared.seedVideos + Video.sampleVideos
+        var combined = initialVideos + SeedCatalogService.shared.seedVideos + firestoreVideos
         var seen = Set<String>()
         combined = combined.filter { v in
             if seen.contains(v.id) { return false }

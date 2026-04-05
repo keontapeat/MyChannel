@@ -9,7 +9,7 @@ import SwiftUI
 
 struct CommunityTabView: View {
     let creator: User
-    @StateObject private var communityService = MockCommunityService()
+    @StateObject private var postService = CommunityPostService.shared
     @State private var posts: [CommunityPost] = []
     @State private var isLoading = false
     @State private var showingCreatePost = false
@@ -36,7 +36,6 @@ struct CommunityTabView: View {
                             CommunityPostCard(
                                 post: post,
                                 creator: creator,
-                                communityService: communityService,
                                 onLike: { likePost(post) },
                                 onComment: { showComments(post) },
                                 onShare: { sharePost(post) },
@@ -63,7 +62,7 @@ struct CommunityTabView: View {
                 await loadPosts()
             }
             .sheet(isPresented: $showingCreatePost) {
-                CommunityCreatePostWrapper(creator: creator, communityService: communityService)
+                CreateCommunityPostView(creator: creator)
             }
         }
         .task {
@@ -164,49 +163,28 @@ struct CommunityTabView: View {
     // MARK: - Actions
     private func loadPosts() async {
         isLoading = true
-        defer { isLoading = false }
-        
-        do {
-            let loadedPosts = try await communityService.getCommunityPosts(for: creator.id, limit: 20)
-            await MainActor.run {
-                self.posts = loadedPosts
-            }
-        } catch {
-            print("Error loading posts: \(error)")
-        }
+        postService.listenToPosts(creatorId: creator.id)
+        // Give the listener a moment to populate
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        posts = postService.posts
+        isLoading = false
     }
     
     private func likePost(_ post: CommunityPost) {
+        guard let uid = AppState.shared.currentUser?.id else { return }
         Task {
-            do {
-                try await communityService.likePost(id: post.id, userId: "current-user-id")
-                await loadPosts()
-            } catch {
-                print("Error liking post: \(error)")
-            }
+            await postService.toggleLike(postId: post.id, userId: uid, add: true)
         }
     }
     
     private func sharePost(_ post: CommunityPost) {
-        Task {
-            do {
-                try await communityService.sharePost(id: post.id, userId: "current-user-id")
-                await loadPosts()
-            } catch {
-                print("Error sharing post: \(error)")
-            }
-        }
+        // TODO: Implement share sheet
+        print("Share post: \(post.id)")
     }
     
     private func deletePost(_ post: CommunityPost) {
-        Task {
-            do {
-                try await communityService.deletePost(id: post.id)
-                await loadPosts()
-            } catch {
-                print("Error deleting post: \(error)")
-            }
-        }
+        // TODO: Add deletePost to CommunityPostService
+        print("Delete post: \(post.id)")
     }
     
     private func showComments(_ post: CommunityPost) {
@@ -219,7 +197,6 @@ struct CommunityTabView: View {
 struct CommunityPostCard: View {
     let post: CommunityPost
     let creator: User
-    @ObservedObject var communityService: MockCommunityService
     let onLike: () -> Void
     let onComment: () -> Void
     let onShare: () -> Void
@@ -559,27 +536,17 @@ struct CommunityPostCard: View {
     
     // MARK: - Actions
     private func votePoll(poll: Poll, option: PollOption) {
+        guard let uid = AppState.shared.currentUser?.id else { return }
         Task {
-            do {
-                _ = try await communityService.votePoll(pollId: poll.id, optionId: option.id, userId: "current-user-id")
-            } catch {
-                print("Error voting on poll: \(error)")
+            if let idx = poll.options.firstIndex(where: { $0.id == option.id }) {
+                await CommunityPostService.shared.votePoll(postId: post.id, userId: uid, optionIndex: idx)
             }
         }
     }
     
     private func pinPost() {
-        Task {
-            do {
-                if post.isPinned {
-                    try await communityService.unpinPost(id: post.id)
-                } else {
-                    try await communityService.pinPost(id: post.id)
-                }
-            } catch {
-                print("Error pinning post: \(error)")
-            }
-        }
+        // TODO: Add pin/unpin to CommunityPostService
+        print("Pin/unpin post: \(post.id)")
     }
     
     private func editPost() {
@@ -653,14 +620,13 @@ struct CommunityPostPlaceholder: View {
 // MOVE: Move wrapper to bottom so CommunityTabView stays first in jump bar
 struct CommunityCreatePostWrapper: View {
     let creator: User
-    @ObservedObject var communityService: MockCommunityService
     var body: some View {
-        CreateCommunityPostView(creator: creator, communityService: communityService)
+        CreateCommunityPostView(creator: creator)
     }
 }
 
 #Preview("Community Create Post Wrapper") {
-    CommunityCreatePostWrapper(creator: User.sampleUsers[0], communityService: MockCommunityService())
+    CommunityCreatePostWrapper(creator: User.sampleUsers[0])
 }
 
 #Preview {

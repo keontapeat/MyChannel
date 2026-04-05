@@ -40,7 +40,7 @@ struct VerticalShortsView: View {
                 }
                 
                 // Actions panel overlay
-                if showActions {
+                if showActions, !viewModel.shorts.isEmpty {
                     VStack {
                         Spacer()
                         
@@ -48,7 +48,7 @@ struct VerticalShortsView: View {
                             Spacer()
                             
                             ShortsActionsPanel(
-                                video: viewModel.shorts.isEmpty ? Video.sampleVideos.first(where: { $0.isShort }) ?? Video.sampleVideos[0] : viewModel.shorts[currentIndex],
+                                video: viewModel.shorts.indices.contains(currentIndex) ? viewModel.shorts[currentIndex] : viewModel.shorts[0],
                                 onLike: { videoId in
                                     viewModel.toggleLike(videoId: videoId)
                                 },
@@ -443,9 +443,10 @@ class ShortsViewModel: ObservableObject {
         Task { @MainActor in
             let fetched = await shortsService.fetchNextPage(limit: 10)
             if fetched.isEmpty {
-                // Fallback to mock data
-                var seeds = Video.sampleVideos.filter { $0.isShort || $0.duration < 60 }
-                if seeds.isEmpty { seeds = Array(Video.sampleVideos.prefix(10)) }
+                // Fallback: fetch short-form content from Firestore
+                let firestoreVids = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 20)
+                var seeds = firestoreVids.filter { $0.isShort || $0.duration < 60 }
+                if seeds.isEmpty { seeds = Array(firestoreVids.prefix(10)) }
                 self.shorts = seeds
             } else {
                 self.shorts = fetched

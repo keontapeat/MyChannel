@@ -13,7 +13,6 @@ import FirebaseStorage
 
 struct PlaylistDetailView: View {
     let playlist: Playlist
-    @ObservedObject var playlistService: MockPlaylistService
     @Environment(\.dismiss) private var dismiss
     
     @State private var showingEditSheet = false
@@ -62,7 +61,7 @@ struct PlaylistDetailView: View {
             }
         }
         .sheet(isPresented: $showingEditSheet) {
-            EditPlaylistView(playlist: playlist, playlistService: playlistService)
+            EditPlaylistView(playlist: playlist)
         }
         .photosPicker(isPresented: $pickingThumb, selection: .constant(nil), matching: .images, photoLibrary: .shared())
         .onChange(of: pickingThumb) { _ in }
@@ -311,8 +310,13 @@ struct PlaylistDetailView: View {
     private func loadPlaylistVideos() async {
         isLoading = true; defer { isLoading = false }
         let ids = (try? await PlaylistFirestoreService.shared.getPlaylistVideoIds(playlistId: playlist.id)) ?? []
-        // Map to videos. Replace this with a real fetch by IDs when your API is ready.
-        playlistVideos = Video.sampleVideos.filter { ids.contains($0.id) }
+        guard !ids.isEmpty else { playlistVideos = []; return }
+        do {
+            playlistVideos = try await VideoFirestoreService.shared.fetchMultipleVideos(videoIds: ids)
+        } catch {
+            print("⚠️ [PlaylistDetail] Failed to fetch videos: \(error.localizedDescription)")
+            playlistVideos = []
+        }
     }
     
     private func playAll() {
@@ -443,7 +447,6 @@ struct PlaylistVideoRow: View {
 // MARK: - Edit Playlist View
 struct EditPlaylistView: View {
     let playlist: Playlist
-    let playlistService: MockPlaylistService
     @Environment(\.dismiss) private var dismiss
     
     @State private var title: String
@@ -452,9 +455,8 @@ struct EditPlaylistView: View {
     @State private var isPublic: Bool
     @State private var tags: String
     
-    init(playlist: Playlist, playlistService: MockPlaylistService) {
+    init(playlist: Playlist) {
         self.playlist = playlist
-        self.playlistService = playlistService
         
         _title = State(initialValue: playlist.title)
         _description = State(initialValue: playlist.description)
@@ -516,8 +518,7 @@ struct EditPlaylistView: View {
 #Preview {
     NavigationStack {
         PlaylistDetailView(
-            playlist: Playlist.samplePlaylists[0],
-            playlistService: MockPlaylistService()
+            playlist: Playlist.samplePlaylists[0]
         )
     }
 }

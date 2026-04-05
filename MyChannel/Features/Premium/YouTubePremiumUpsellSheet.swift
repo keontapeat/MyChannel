@@ -52,7 +52,24 @@ struct YouTubePremiumUpsellSheet: View {
             }
             
             // Bottom action buttons
-            actionButtons
+            if AppConfig.Features.enableSubscriptions {
+                actionButtons
+            } else {
+                // 🔥 FIX 2.1(b): Hide purchase buttons when IAPs not submitted
+                Button {
+                    dismiss()
+                } label: {
+                    Text("Got it")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(Color.black)
+                        .cornerRadius(26)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 16)
+            }
         }
         .background(AppTheme.Colors.background)
         .overlay {

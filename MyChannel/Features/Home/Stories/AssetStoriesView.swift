@@ -7,6 +7,7 @@ struct AssetStory: Identifiable, Equatable {
     let username: String
     let authorImageName: String
     var creatorId: String = ""
+    var originalStoryId: String? = nil
 }
 
 // MARK: - Instagram-style story grouping by user

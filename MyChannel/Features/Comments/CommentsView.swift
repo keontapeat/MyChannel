@@ -9,86 +9,12 @@ import SwiftUI
 
 struct CommentsView: View {
     let video: Video
-    @State private var comments: [VideoComment] = VideoComment.sampleComments
-    @State private var newComment: String = ""
-    
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Video info header
-                HStack(spacing: 12) {
-                    AsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Rectangle()
-                            .fill(AppTheme.Colors.surface)
-                    }
-                    .frame(width: 60, height: 34)
-                    .cornerRadius(AppTheme.CornerRadius.sm)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(video.title)
-                            .font(AppTheme.Typography.subheadline)
-                            .lineLimit(2)
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                        
-                        Text("\(video.commentCount) comments")
-                            .font(AppTheme.Typography.caption)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                    
-                    Spacer()
-                }
-                .padding()
-                .background(AppTheme.Colors.surface)
-                
-                // Comments list
-                ScrollView {
-                    LazyVStack(spacing: 16) {
-                        ForEach(comments) { comment in
-                            CommentCard(comment: comment)
-                                .padding(.horizontal)
-                        }
-                    }
-                    .padding(.vertical)
-                }
-                
-                // Comment input
-                HStack(spacing: 12) {
-                    AsyncImage(url: URL(string: User.sampleUsers[0].profileImageURL ?? "")) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Circle()
-                            .fill(AppTheme.Colors.surface)
-                    }
-                    .frame(width: 32, height: 32)
-                    .clipShape(Circle())
-                    
-                    TextField("Add a comment...", text: $newComment)
-                        .font(AppTheme.Typography.body)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(AppTheme.Colors.surface)
-                        .cornerRadius(AppTheme.CornerRadius.md)
-                    
-                    Button("Post") {
-                        // Handle post comment
-                        newComment = ""
-                    }
-                    .font(AppTheme.Typography.bodyMedium)
-                    .foregroundColor(AppTheme.Colors.primary)
-                    .disabled(newComment.isEmpty)
-                }
-                .padding()
-                .background(AppTheme.Colors.background)
-            }
-            .background(AppTheme.Colors.background)
-            .navigationTitle("Comments")
-            .navigationBarTitleDisplayMode(.inline)
+            RealTimeCommentsView(video: video)
+                .navigationTitle("Comments")
+                .navigationBarTitleDisplayMode(.inline)
         }
     }
 }

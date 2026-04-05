@@ -58,8 +58,11 @@ class BackgroundPlayService: ObservableObject {
     /// Start background audio playback for video
     func startBackgroundPlay(for video: Video, at time: TimeInterval = 0) async throws {
         // Premium gate: background play requires MyChannel Plus+
-        guard StoreKitService.shared.isPremium else {
-            throw BackgroundPlayError.premiumRequired
+        // 🔥 FIX 2.1(b): Skip premium check when IAPs not submitted
+        if AppConfig.Features.enableSubscriptions {
+            guard StoreKitService.shared.isPremium else {
+                throw BackgroundPlayError.premiumRequired
+            }
         }
         
         guard isBackgroundPlayEnabled else {

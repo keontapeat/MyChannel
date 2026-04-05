@@ -616,10 +616,7 @@ struct MovieDetailView: View {
             applicationActivities: nil
         )
         
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootViewController = windowScene.windows.first?.rootViewController {
-            rootViewController.present(activityViewController, animated: true)
-        }
+        UIApplication.shared.presentShareSheet(activityViewController)
         
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }

@@ -93,27 +93,29 @@ struct SettingsView: View {
     
     private var accountSection: some View {
         Section {
-            // Premium Benefits (if premium)
-            if storeKit.isPremium {
-                NavigationLink {
-                    PremiumBenefitsView()
-                } label: {
-                    settingsRow(
-                        icon: "crown.fill",
-                        title: "Your Premium benefits",
-                        iconColor: .black
-                    )
-                }
-            } else {
-                NavigationLink {
-                    MyChannelPlusView()
-                } label: {
-                    settingsRow(
-                        icon: "crown.fill",
-                        title: "Try MyChannel Plus+",
-                        iconColor: .black,
-                        badge: "Free Trial"
-                    )
+            // Premium Benefits — only show when IAPs are submitted & approved
+            if AppConfig.Features.enableSubscriptions {
+                if storeKit.isPremium {
+                    NavigationLink {
+                        PremiumBenefitsView()
+                    } label: {
+                        settingsRow(
+                            icon: "crown.fill",
+                            title: "Your Premium benefits",
+                            iconColor: .black
+                        )
+                    }
+                } else {
+                    NavigationLink {
+                        MyChannelPlusView()
+                    } label: {
+                        settingsRow(
+                            icon: "crown.fill",
+                            title: "Try MyChannel Plus+",
+                            iconColor: .black,
+                            badge: "Free Trial"
+                        )
+                    }
                 }
             }
             
@@ -787,7 +789,18 @@ struct PurchasesView: View {
     
     var body: some View {
         List {
-            if storeKit.isPremium {
+            if !AppConfig.Features.enableSubscriptions {
+                // 🔥 FIX 2.1(b): Hide subscription products when IAPs not submitted
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("No active purchases")
+                            .font(.system(size: 17, weight: .semibold))
+                        Text("Subscription options coming soon.")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            } else if storeKit.isPremium {
                 Section {
                     NavigationLink {
                         PremiumBenefitsView()
@@ -1130,7 +1143,18 @@ struct BackgroundDownloadsView: View {
     
     var body: some View {
         Form {
-            if storeKit.isPremium {
+            if !AppConfig.Features.enableSubscriptions {
+                // 🔥 FIX 2.1(b): Hide subscription upsell when IAPs not submitted
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Background & Downloads")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Background play and downloads will be available with a future update.")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            } else if storeKit.isPremium {
                 Section {
                     Toggle(
                         "Background play",
@@ -1319,10 +1343,65 @@ struct HelpView: View {
     var body: some View {
         List {
             Section {
-                Link("Help Center", destination: URL(string: "https://mychannel.live/help")!)
-                Link("Community Guidelines", destination: URL(string: "https://mychannel.live/guidelines")!)
-                Link("Copyright Policy", destination: URL(string: "https://mychannel.live/copyright")!)
-                Link("Contact Support", destination: URL(string: "mailto:support@mychannel.live")!)
+                Button {
+                    if let url = URL(string: "https://mychannel.live/help") {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    HStack {
+                        Text("Help Center")
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                Button {
+                    if let url = URL(string: "https://mychannel.live/guidelines") {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    HStack {
+                        Text("Community Guidelines")
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                Button {
+                    if let url = URL(string: "https://mychannel.live/copyright") {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    HStack {
+                        Text("Copyright Policy")
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                Button {
+                    let email = "support@mychannel.live"
+                    let subject = "Support Request"
+                    let subjectEncoded = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                    if let url = URL(string: "mailto:\(email)?subject=\(subjectEncoded)") {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    HStack {
+                        Text("Contact Support")
+                            .foregroundColor(AppTheme.Colors.primary)
+                        Spacer()
+                        Image(systemName: "envelope")
+                            .font(.caption)
+                            .foregroundColor(AppTheme.Colors.primary)
+                    }
+                }
             }
             
             Section("Quick Help") {

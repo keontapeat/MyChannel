@@ -206,8 +206,9 @@ final class TopRankMLService: ObservableObject {
         }
         #endif
 
-        // ✅ Mark real Firestore users with a baseline score so they always rank above mock data.
-        // Real users: overallScore = 500  |  Mock/seeded: ≤ 100  |  Pinned friends: > 900
+        // Score tiers:
+        // Pinned friends: 1000–996  |  Real Firestore users: 500  |  IG friends (non-pinned): 490  |  Seeded: ≤ 100
+        // Friends start at 490 so the list looks full. Real users replace them only after earning > 490 via engagement.
         for i in 0..<users.count {
             users[i].overallScore = 500
         }
@@ -281,18 +282,19 @@ final class TopRankMLService: ObservableObject {
             var rng = StableRNG(string: fid)
 
             // Pinned rank → force exact position using an artificially high overallScore.
-            // Pinned #1 = 999, #2 = 998, #3 = 997, etc. Normal friends score ≤ 100.
+            // Pinned #1 = 999, #2 = 998, #3 = 997, etc. Non-pinned friends get 490 baseline.
             let forcedScore: Double
             if let pin = f.pinnedRank {
                 forcedScore = Double(1000 - pin)
             } else {
-                forcedScore = 0  // will be computed by ML scoring pass
+                forcedScore = 490  // stays visible until a real user earns > 490 via actual engagement
             }
 
+            let displayName = f.name.hasSuffix("_c") ? String(f.name.dropLast(2)) : f.name
             users.append(TopRankedUser(
                 id: fid,
-                name: f.name,
-                username: f.name.lowercased().replacingOccurrences(of: " ", with: ""),
+                name: displayName,
+                username: displayName.lowercased().replacingOccurrences(of: " ", with: ""),
                 avatar: f.avatar,
                 isVerified: true,
                 totalViews: Int.random(in: 50_000...500_000, using: &rng),
@@ -303,7 +305,7 @@ final class TopRankMLService: ObservableObject {
                 shareCount: Int.random(in: 50...2_000, using: &rng),
                 watchTimeMinutes: Double(Int.random(in: 500...5_000, using: &rng)),
                 avgViewDuration: Double(Int.random(in: 30...180, using: &rng)),
-                engagementScore: forcedScore > 0 ? forcedScore : 0,
+                engagementScore: forcedScore,
                 viralityScore: 0,
                 contentQualityScore: 0,
                 consistencyScore: 0,
@@ -378,7 +380,7 @@ final class TopRankMLService: ObservableObject {
             var scoredUsers = users
             let scoreMap = Dictionary(response.rankings.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
             for i in 0..<scoredUsers.count {
-                guard scoredUsers[i].overallScore <= 100 else { continue } // pinned — don't overwrite
+                guard scoredUsers[i].overallScore < 490 else { continue } // pinned or friend baseline — don't overwrite
                 if let mlScore = scoreMap[scoredUsers[i].id] {
                     scoredUsers[i].engagementScore = mlScore.engagementScore
                     scoredUsers[i].viralityScore = mlScore.viralityScore
@@ -425,8 +427,8 @@ final class TopRankMLService: ObservableObject {
 
             // Overall: weighted composite
             //   35% engagement, 25% virality, 25% content quality, 15% consistency
-            // Skip pinned users — their overallScore must not be touched
-            guard u.overallScore <= 100 else {
+            // Skip pinned or friend-baseline users (score >= 490) — must not be overwritten
+            guard u.overallScore < 490 else {
                 scored[i] = u
                 continue
             }
@@ -480,9 +482,9 @@ final class TopRankMLService: ObservableObject {
         channels.sort { $0.overallScore > $1.overallScore }
 
         // Assign ranks + compute rank changes
-        topArtists = assignRanks(artists.prefix(50).map { $0 }, previousRanks: &previousArtistRanks)
-        topFilmmakers = assignRanks(filmmakers.prefix(50).map { $0 }, previousRanks: &previousFilmmakerRanks)
-        topChannels = assignRanks(channels.prefix(50).map { $0 }, previousRanks: &previousChannelRanks)
+        topArtists = assignRanks(artists.prefix(200).map { $0 }, previousRanks: &previousArtistRanks)
+        topFilmmakers = assignRanks(filmmakers.prefix(200).map { $0 }, previousRanks: &previousFilmmakerRanks)
+        topChannels = assignRanks(channels.prefix(200).map { $0 }, previousRanks: &previousChannelRanks)
 
         // Write rankings back to Firestore for cross-device sync
         Task { await persistRankingsToFirestore() }

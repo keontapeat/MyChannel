@@ -169,21 +169,9 @@ struct PremiumCheckoutView: View {
                     isSelected: true
                 )
                 
-                PaymentMethodRow(
-                    icon: "creditcard.fill",
-                    title: "Credit Card",
-                    subtitle: "Visa, MasterCard, American Express",
-                    color: .blue,
-                    isSelected: false
-                )
-                
-                PaymentMethodRow(
-                    icon: "paypal",
-                    title: "PayPal",
-                    subtitle: "Pay with your PayPal account",
-                    color: Color(red: 0.0, green: 0.48, blue: 0.75),
-                    isSelected: false
-                )
+                // 🔥 FIX 3.1.1: Removed PayPal and Credit Card options.
+                // All digital content purchases MUST go through Apple IAP.
+                // Only Apple Pay (IAP) is shown as the payment method.
             }
         }
     }

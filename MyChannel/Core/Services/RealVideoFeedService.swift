@@ -96,13 +96,11 @@ class RealVideoFeedService: ObservableObject {
         isLoading = true
         
         Task {
-            // Simulate loading delay
-            try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-            
+            let firestoreVids = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 30)
             let generatedVideos = generateVideosFromSources()
             
             await MainActor.run {
-                self.videos = Video.sampleVideos + generatedVideos
+                self.videos = firestoreVids + generatedVideos
                 self.featuredVideos = Array(self.videos.shuffled().prefix(5))
                 self.trendingVideos = self.videos.sorted { $0.viewCount > $1.viewCount }.prefix(8).map { $0 }
                 self.isLoading = false
@@ -118,7 +116,8 @@ class RealVideoFeedService: ObservableObject {
         
         let newVideos = generateVideosFromSources()
         
-        videos = Video.sampleVideos + newVideos.shuffled()
+        let firestoreVids = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 30)
+        videos = firestoreVids + newVideos.shuffled()
         featuredVideos = Array(videos.shuffled().prefix(5))
         trendingVideos = videos.sorted { $0.viewCount > $1.viewCount }.prefix(8).map { $0 }
         

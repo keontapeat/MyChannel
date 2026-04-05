@@ -360,10 +360,22 @@ struct VideoMoreOptionsSheet: View {
 import UIKit
 struct ActivityView: UIViewControllerRepresentable {
     let activityItems: [Any]
+    func makeCoordinator() -> Coordinator { Coordinator() }
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        controller.popoverPresentationController?.delegate = context.coordinator
+        if let windowScene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+           let window = windowScene.windows.first(where: \.isKeyWindow) {
+            controller.popoverPresentationController?.sourceView = window
+            controller.popoverPresentationController?.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
+            controller.popoverPresentationController?.permittedArrowDirections = []
+        }
+        return controller
     }
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+    class Coordinator: NSObject, UIPopoverPresentationControllerDelegate {
+        func adaptivePresentationStyle(for controller: UIPresentationController, traitCollection: UITraitCollection) -> UIModalPresentationStyle { .none }
+    }
 }
 
 // MARK: - Add To Playlist Sheet

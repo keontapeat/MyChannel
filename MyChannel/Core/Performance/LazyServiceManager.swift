@@ -79,8 +79,9 @@ class LazyServiceManager: ObservableObject {
         }
         
         register("ImagePrefetcher", priority: .medium) {
-            // Prewarm critical images
-            let criticalURLs = Video.sampleVideos.prefix(20).compactMap { $0.posterCandidates.first }
+            // Prewarm critical images from Firestore videos
+            let vids = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 20)
+            let criticalURLs = vids.compactMap { $0.posterCandidates.first }
             ImagePrefetcher.shared.prewarmCritical(urls: criticalURLs)
         }
         

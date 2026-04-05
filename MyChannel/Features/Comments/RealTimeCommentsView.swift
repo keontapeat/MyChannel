@@ -145,7 +145,7 @@ struct RealTimeCommentsView: View {
             
             HStack(spacing: 12) {
                 // User avatar
-                AsyncImage(url: URL(string: "https://picsum.photos/100/100?random=1")) { image in
+                AsyncImage(url: URL(string: AppState.shared.currentUser?.profileImageURL ?? "")) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -153,7 +153,7 @@ struct RealTimeCommentsView: View {
                     Circle()
                         .fill(AppTheme.Colors.primary)
                         .overlay(
-                            Text("Y")
+                            Text(String(AppState.shared.currentUser?.displayName.prefix(1) ?? "?"))
                                 .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
@@ -647,7 +647,7 @@ struct CommentComposerSheet: View {
                 // Comment input
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 12) {
-                        AsyncImage(url: URL(string: "https://picsum.photos/100/100?random=1")) { image in
+                        AsyncImage(url: URL(string: AppState.shared.currentUser?.profileImageURL ?? "")) { image in
                             image
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
@@ -655,7 +655,7 @@ struct CommentComposerSheet: View {
                             Circle()
                                 .fill(AppTheme.Colors.primary)
                                 .overlay(
-                                    Text("Y")
+                                    Text(String(AppState.shared.currentUser?.displayName.prefix(1) ?? "?"))
                                         .font(.caption)
                                         .fontWeight(.bold)
                                         .foregroundColor(.white)
@@ -665,7 +665,7 @@ struct CommentComposerSheet: View {
                         .clipShape(Circle())
                         
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Your Name")
+                            Text(AppState.shared.currentUser?.displayName ?? "You")
                                 .font(.system(size: 14, weight: .medium))
                             
                             TextField(replyingTo != nil ? "Add a reply..." : "Add a comment...", text: $commentText, axis: .vertical)

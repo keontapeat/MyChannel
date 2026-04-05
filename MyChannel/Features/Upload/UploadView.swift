@@ -316,8 +316,7 @@ struct UploadView: View {
         .fullScreenCover(isPresented: $showPostComposer) {
             NavigationStack {
                 CreateCommunityPostView(
-                    creator: appState.currentUser ?? User.defaultUser,
-                    communityService: MockCommunityService()
+                    creator: appState.currentUser ?? User.defaultUser
                 )
                 .toolbar {
                     ToolbarItemGroup(placement: .topBarLeading) {

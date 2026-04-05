@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UIKit
 import FirebaseAuth
 
 // MARK: - Profile Downloads Tab View (inline in profile)
@@ -27,6 +28,23 @@ struct ProfileDownloadsTabView: View {
         VStack(spacing: 0) {
             if !isAuthenticated {
                 signInPrompt
+            } else if !AppConfig.Features.enableSubscriptions && !subscriptionService.isPlusSubscriber {
+                // 🔥 FIX 2.1(b): Hide subscription upsell when IAPs not submitted
+                VStack(spacing: 16) {
+                    Spacer().frame(height: 32)
+                    Image(systemName: "arrow.down.circle")
+                        .font(.system(size: 48))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    Text("Downloads Coming Soon")
+                        .font(.system(size: 20, weight: .bold))
+                    Text("Offline downloads will be available in a future update.")
+                        .font(.system(size: 15))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
             } else if !subscriptionService.isPlusSubscriber {
                 premiumUpgradePrompt
             } else if downloadManager.isLoading {
@@ -482,11 +500,7 @@ struct ProfileDownloadsTabView: View {
     private func shareDownload(_ download: DownloadedVideo) {
         let url = URL(string: "https://mychannel.live/watch?v=\(download.videoId)")!
         let activityVC = UIActivityViewController(activityItems: [download.title, url], applicationActivities: nil)
-        
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            rootVC.present(activityVC, animated: true)
-        }
+        UIApplication.shared.presentShareSheet(activityVC)
     }
 }
 

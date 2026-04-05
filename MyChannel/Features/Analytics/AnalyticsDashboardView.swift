@@ -6,14 +6,16 @@
 //
 
 import SwiftUI
+import UIKit
 import Charts
 
 struct AnalyticsDashboardView: View {
-    @StateObject private var analyticsService = MockAnalyticsService()
+    @StateObject private var analyticsService = AdvancedAnalyticsService.shared
     @State private var selectedPeriod: AnalyticsPeriod = .last30Days
     @State private var channelAnalytics: ChannelAnalytics?
     @State private var chartData: [AnalyticsChartData] = []
     @State private var topVideos: [VideoAnalytics] = []
+    @State private var videosMap: [String: Video] = []
     @State private var selectedMetric: MetricType = .views
     
     enum MetricType: String, CaseIterable {
@@ -270,7 +272,7 @@ struct AnalyticsDashboardView: View {
                         TopVideoRow(
                             rank: index + 1,
                             analytics: analytics,
-                            video: Video.sampleVideos.first { $0.id == analytics.videoId }
+                            video: videosMap[analytics.videoId]
                         )
                     }
                 }
@@ -381,17 +383,20 @@ struct AnalyticsDashboardView: View {
     
     // MARK: - Actions
     private func loadAnalytics() async {
-        async let channelData = analyticsService.getChannelAnalytics(creatorId: "creator-1", period: selectedPeriod)
-        async let chartDataResult = analyticsService.getAnalyticsChartData(creatorId: "creator-1", period: selectedPeriod)
-        async let topVideosResult = analyticsService.getTopPerformingVideos(creatorId: "creator-1", limit: 10)
-        
+        guard let creatorId = AppState.shared.currentUser?.id else { return }
         do {
-            let (channel, chart, videos) = try await (channelData, chartDataResult, topVideosResult)
-            
+            let channel = try await analyticsService.getChannelAnalytics(for: creatorId)
+            let videos = try await analyticsService.getVideoPerformanceAnalytics(for: creatorId)
+            let sortedVideos = videos.sorted { $0.views > $1.views }
+            // Fetch real video metadata for thumbnails/titles
+            let videoIds = sortedVideos.prefix(10).map { $0.videoId }
+            let fetchedVideos = (try? await VideoFirestoreService.shared.fetchMultipleVideos(videoIds: videoIds)) ?? []
+            var vMap: [String: Video] = [:]
+            for v in fetchedVideos { vMap[v.id] = v }
             await MainActor.run {
                 self.channelAnalytics = channel
-                self.chartData = chart
-                self.topVideos = videos
+                self.topVideos = sortedVideos
+                self.videosMap = vMap
             }
         } catch {
             print("Error loading analytics: \(error)")
@@ -432,7 +437,7 @@ struct AnalyticsDashboardView: View {
         case .pdf:
             Task {
                 struct PDFResp: Codable { let url: String }
-                if let uid = AppState.shared.currentUser?.id ?? User.sampleUsers.first?.id,
+                if let uid = AppState.shared.currentUser?.id,
                    let pdf: PDFResp = try? await NetworkService.shared.post(
                         endpoint: .custom("/analytics/export/pdf"),
                         body: payloadForPDF(creatorId: uid),
@@ -445,11 +450,11 @@ struct AnalyticsDashboardView: View {
     }
     private func shareText(_ text: String) {
         let av = UIActivityViewController(activityItems: [text], applicationActivities: nil)
-        UIApplication.shared.topMostController()?.present(av, animated: true)
+        UIApplication.shared.presentShareSheet(av)
     }
     private func shareItems(_ items: [Any]) {
         let av = UIActivityViewController(activityItems: items, applicationActivities: nil)
-        UIApplication.shared.topMostController()?.present(av, animated: true)
+        UIApplication.shared.presentShareSheet(av)
     }
     private func payloadForPDF(creatorId: String) -> [String: String] {
         ["creatorId": creatorId, "period": selectedPeriod.rawValue]

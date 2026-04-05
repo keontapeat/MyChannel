@@ -170,7 +170,7 @@ struct HomeView: View {
                             onSeeAllFilmmakers: { route = .custom("topFilmmakers") },
                             onSeeAllChannels: { route = .custom("topChannels") },
                             onOpenArtistDetail: { name, avatar, vids, total in
-                                route = .artistDetail(name: name, avatar: avatar, videos: vids.isEmpty ? Array(Video.sampleVideos.prefix(8)) : vids, totalViews: total)
+                                route = .artistDetail(name: name, avatar: avatar, videos: vids, totalViews: total)
                             },
                             onOpenArtistMusicProfile: { catalogArtist in
                                 route = .artistMusicProfile(catalogArtist)
@@ -179,7 +179,7 @@ struct HomeView: View {
                                 route = .filmmakerDetail(name: name, films: films)
                             },
                             onOpenChannelDetail: { name, avatar, subs, total, vids in
-                                route = .channelDetail(name: name, avatar: avatar, subscribers: subs, totalViews: total, videos: vids.isEmpty ? Array(Video.sampleVideos.prefix(12)) : vids)
+                                route = .channelDetail(name: name, avatar: avatar, subscribers: subs, totalViews: total, videos: vids)
                             },
                             onSelectLiveStream: { stream in
                                 route = .liveStream(stream)
@@ -526,7 +526,7 @@ struct HomeView: View {
                 print("📖 [HomeView] Found \(mine.count) own stories")
                 let mapped = mine.map { s -> AssetStory in
                     let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
-                    return AssetStory(media: media, username: currentUser.username, authorImageName: currentUser.profileImageURL ?? "")
+                    return AssetStory(media: media, username: currentUser.username, authorImageName: currentUser.profileImageURL ?? "", creatorId: currentUser.id, originalStoryId: s.id)
                 }
                 collected.append(contentsOf: mapped)
             } else {
@@ -540,9 +540,9 @@ struct HomeView: View {
                 if let stories = try? await DatabaseService.shared.fetchActiveStoriesForCreators(followed), !stories.isEmpty {
                     for s in stories {
                         let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
-                        let user = try? await DatabaseService.shared.fetchUser(id: s.creatorId)
+                        let user = try? await UserFirestoreService.shared.fetchUser(id: s.creatorId)
                         let name = user?.username ?? s.creatorId
-                        collected.append(AssetStory(media: media, username: name, authorImageName: user?.profileImageURL ?? ""))
+                        collected.append(AssetStory(media: media, username: name, authorImageName: user?.profileImageURL ?? "", creatorId: s.creatorId, originalStoryId: s.id))
                     }
                 }
             } else {
@@ -557,9 +557,9 @@ struct HomeView: View {
                     print("📖 [HomeView] Got \(allStories.count) stories from fetchAllActiveStories")
                     for s in allStories {
                         let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
-                        let user = try? await DatabaseService.shared.fetchUser(id: s.creatorId)
+                        let user = try? await UserFirestoreService.shared.fetchUser(id: s.creatorId)
                         let name = user?.username ?? s.creatorId
-                        collected.append(AssetStory(media: media, username: name, authorImageName: user?.profileImageURL ?? ""))
+                        collected.append(AssetStory(media: media, username: name, authorImageName: user?.profileImageURL ?? "", creatorId: s.creatorId, originalStoryId: s.id))
                     }
                 }
             }
@@ -700,6 +700,7 @@ struct MinimalContentSections: View {
     @State private var liveChannelsAPI: [LiveTVChannel] = []
     @State private var showLocalArtistsOnly: Bool = false
     @State private var selectedLiveTVChannel: LiveTVChannel?
+    @State private var firestoreVideos: [Video] = []
 
     private var friendVideoId: String { "friend_video_yt_71GJrAY54Ew" }
     private var friendChannelID: String { "UCITAM_FKtyKEq40aHVXFTcQ" }
@@ -1094,7 +1095,7 @@ struct MinimalContentSections: View {
 
         TopArtistsSection(
             rankings: rankService.topArtists,
-            sourceVideos: detroitFlintArtistsTrending() + [makeFriendTrendingVideo()] + Video.sampleVideos,
+            sourceVideos: detroitFlintArtistsTrending() + [makeFriendTrendingVideo()] + firestoreVideos,
             onSelect: { name, avatar, vids, total in onOpenArtistDetail(name, avatar, vids, total) },
             onSeeAll: onSeeAllArtists
         )
@@ -1107,7 +1108,7 @@ struct MinimalContentSections: View {
 
         TopMyChannelsSection(
             rankings: rankService.topChannels,
-            sourceVideos: detroitFlintArtistsTrending() + gamingCOD() + Video.sampleVideos,
+            sourceVideos: detroitFlintArtistsTrending() + gamingCOD() + firestoreVideos,
             onSelect: { name, avatar, subs, total, vids in onOpenChannelDetail(name, avatar, subs, total, vids) },
             onSeeAll: onSeeAllChannels
         )
@@ -1130,7 +1131,7 @@ struct MinimalContentSections: View {
     }
 
     private func categoriesAllVideos() -> [Video] {
-        var vids = flintShowcaseVideos() + detroitFlintArtistsTrending() + gamingCOD() + Video.sampleVideos + SeedCatalogService.shared.seedVideos
+        var vids = flintShowcaseVideos() + detroitFlintArtistsTrending() + gamingCOD() + firestoreVideos + SeedCatalogService.shared.seedVideos
         vids.insert(makeFriendTrendingVideo(), at: 0)
         return vids
     }
@@ -1147,6 +1148,10 @@ struct MinimalContentSections: View {
                 group.addTask { await loadBlockbusters() }
                 group.addTask { await loadFriendChannelVideos() }
                 group.addTask { await loadLiveChannelsAPI() }
+                group.addTask {
+                    let vids = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 50)
+                    await MainActor.run { firestoreVideos = vids }
+                }
             }
             // Start real-time ML-powered rankings
             rankService.startRealTimeRanking()
@@ -1883,11 +1888,11 @@ private struct MinimalCategoriesSection: View {
         case .gaming:
             return codVideos.shuffled()
         case .sports:
-            return Video.sampleVideos.shuffled()
+            return allVideos.filter { $0.category == .sports || $0.tags.contains("sports") }.shuffled()
         case .news:
-            return Video.sampleVideos.shuffled()
+            return allVideos.filter { $0.category == .news || $0.tags.contains("news") }.shuffled()
         case .tech:
-            return (Video.sampleVideos.filter { $0.category == .technology } + Video.sampleVideos).shuffled()
+            return allVideos.filter { $0.category == .technology || $0.tags.contains("tech") }.shuffled()
         }
     }
 

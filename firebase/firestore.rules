@@ -75,6 +75,12 @@ service cloud.firestore {
         allow create: if isSignedIn() && isNotBanned() && fanUid == uid();
         allow delete: if isSignedIn() && (fanUid == uid() || isAdmin());
       }
+
+      match /search_history/{itemId} {
+        allow read: if isSignedIn() && uid() == userId;
+        allow create, update: if isSignedIn() && isNotBanned() && uid() == userId;
+        allow delete: if isSignedIn() && uid() == userId;
+      }
     }
 
     // ── Security bans (admin-write, no self-read) ─────────────────────────
@@ -164,18 +170,18 @@ service cloud.firestore {
 
     // ── Playlists ─────────────────────────────────────────────────────────
     match /playlists/{playlistId} {
-      allow read: if resource.data.visibility == 'public' || isOwner(resource.data.ownerUid) || isAdmin();
+      allow read: if resource.data.visibility == 'public' || isOwner(resource.data.userId) || isAdmin();
       allow create: if isSignedIn() && isNotBanned()
-        && request.resource.data.ownerUid == uid()
+        && request.resource.data.userId == uid()
         && safeText(request.resource.data.get('title', ''), 200)
         && validVisibility(request.resource.data.get('visibility', 'public'));
-      allow update, delete: if (isOwner(resource.data.ownerUid) || isAdmin()) && isNotBanned();
+      allow update, delete: if (isOwner(resource.data.userId) || isAdmin()) && isNotBanned();
 
       match /videos/{videoId} {
         allow read: if get(/databases/$(database)/documents/playlists/$(playlistId)).data.visibility == 'public'
-          || isOwner(get(/databases/$(database)/documents/playlists/$(playlistId)).data.ownerUid)
+          || isOwner(get(/databases/$(database)/documents/playlists/$(playlistId)).data.userId)
           || isAdmin();
-        allow write: if (isOwner(get(/databases/$(database)/documents/playlists/$(playlistId)).data.ownerUid) || isAdmin()) && isNotBanned();
+        allow write: if (isOwner(get(/databases/$(database)/documents/playlists/$(playlistId)).data.userId) || isAdmin()) && isNotBanned();
       }
     }
 
@@ -183,6 +189,14 @@ service cloud.firestore {
     match /reports/{reportId} {
       allow create: if isSignedIn() && isNotBanned()
         && safeText(request.resource.data.get('reason', ''), 1000);
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── Content Reports (video/comment/user reporting) ──────────────────
+    match /content_reports/{reportId} {
+      allow create: if isSignedIn() && isNotBanned()
+        && request.resource.data.reporterId == uid()
+        && safeText(request.resource.data.get('reason', ''), 500);
       allow read, update, delete: if isAdmin();
     }
 
@@ -235,6 +249,43 @@ service cloud.firestore {
     match /story-collections/{creatorId} {
       allow read: if true;
       allow write: if isSignedIn() && request.auth.uid == creatorId;
+    }
+
+    // ── Watch Later (user-scoped) ──────────────────────────────────────────
+    match /watch_later/{userId}/items/{itemId} {
+      allow read: if isSignedIn() && uid() == userId;
+      allow create: if isSignedIn() && isNotBanned() && uid() == userId;
+      allow update: if isSignedIn() && isNotBanned() && uid() == userId;
+      allow delete: if isSignedIn() && (uid() == userId || isAdmin());
+    }
+
+    // ── Community Posts ─────────────────────────────────────────────────────
+    match /community_posts/{postId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isNotBanned()
+        && request.resource.data.creatorId == uid()
+        && safeText(request.resource.data.get('content', ''), 5000);
+      allow update: if isSignedIn() && isNotBanned() && (resource.data.creatorId == uid() || isAdmin());
+      allow delete: if isSignedIn() && (resource.data.creatorId == uid() || isAdmin());
+
+      match /likes/{likeUid} {
+        allow read: if true;
+        allow create: if isSignedIn() && isNotBanned() && likeUid == uid();
+        allow delete: if isSignedIn() && (likeUid == uid() || isAdmin());
+      }
+
+      match /votes/{voteUid} {
+        allow read: if true;
+        allow create, update: if isSignedIn() && isNotBanned() && voteUid == uid();
+        allow delete: if isSignedIn() && (voteUid == uid() || isAdmin());
+      }
+    }
+
+    // ── History (user-scoped) ───────────────────────────────────────────────
+    match /history/{userId}/items/{itemId} {
+      allow read: if isSignedIn() && uid() == userId;
+      allow create, update: if isSignedIn() && isNotBanned() && uid() == userId;
+      allow delete: if isSignedIn() && (uid() == userId || isAdmin());
     }
 
     // ── Notifications (user-scoped, read-only to owner) ───────────────────

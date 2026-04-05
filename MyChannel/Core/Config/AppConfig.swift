@@ -141,6 +141,14 @@ struct AppConfig {
         static let enablePushNotifications = true
         static let enableDeepLinks = true
         static let enableOfflineDownload = true
+        // 🔥 FIX 2.1(b): Hide subscription purchase UI until IAPs are submitted & approved
+        // Flip to `true` once App Store Connect IAPs are approved by App Review.
+        static let enableSubscriptions = false
+        // 🔥 FIX 3.1.1: Hide ALL external payment features (Stripe tips, Super Thanks,
+        // fan funding, creator payouts) until proper IAP integration is complete.
+        // These bypass Apple IAP and violate Guideline 3.1.1.
+        static let enableTipping = false
+        static let enableCreatorMonetization = false
         // Disable mock data in TestFlight/app store; allow in debug
         static let enableMockData: Bool = {
             #if DEBUG

@@ -294,12 +294,14 @@ final class ExploreService: ObservableObject {
     @Published var videos: [Video] = []
     
     func loadTrending() async {
-        videos = Video.sampleVideos.sorted { $0.viewCount > $1.viewCount }
+        let fetched = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 30)
+        videos = fetched.sorted { $0.viewCount > $1.viewCount }
     }
     
     func loadTopic(_ topic: String) async {
         let category = mapTopicToCategory(topic)
-        videos = Video.sampleVideos.filter { $0.category == category }.shuffled()
+        let fetched = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 30)
+        videos = fetched.filter { $0.category == category }.shuffled()
     }
     
     private func mapTopicToCategory(_ topic: String) -> VideoCategory {

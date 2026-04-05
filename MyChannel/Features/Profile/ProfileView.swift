@@ -101,6 +101,17 @@ struct ProfileView: View {
         currentUser.id == user.id
     }
     
+    // UIDs / emails that identify the single owner account
+    private static let ownerUIDs: Set<String> = ["7EAoUc1aKsNRqR4cYBIOYVGB3Mf2"]
+    private static let ownerEmails: Set<String> = ["keontapeat@gmail.com", "keontapeat@mychannel.live"]
+
+    /// Returns true only when the currently logged-in user is the channel owner.
+    private var isOwnerAccount: Bool {
+        if Self.ownerUIDs.contains(currentUser.id) { return true }
+        if Self.ownerEmails.contains(currentUser.email.lowercased()) { return true }
+        return false
+    }
+
     // 🔥 OWNER INTRO VIDEO: First video on profile with reliable YouTube thumbnail
     private func ownerIntroVideo() -> Video? {
         let introId = "owner_intro_video"
@@ -725,7 +736,7 @@ struct ProfileView: View {
                 
                 var videosWithIntro = result.videos
                 
-                if isViewingOwnProfile, let intro = ownerIntroVideo() {
+                if isViewingOwnProfile && isOwnerAccount, let intro = ownerIntroVideo() {
                     videosWithIntro.removeAll { $0.id == intro.id }
                     videosWithIntro.insert(intro, at: 0)
                     PinnedVideosStore.shared.pin(intro.id, for: user.id)
@@ -963,7 +974,7 @@ struct ProfileView: View {
                 guard !Task.isCancelled else { return }
                 
                 var videosWithIntro = result.videos
-                if isViewingOwnProfile, let intro = ownerIntroVideo() {
+                if isViewingOwnProfile && isOwnerAccount, let intro = ownerIntroVideo() {
                     videosWithIntro.removeAll { $0.id == intro.id }
                     videosWithIntro.insert(intro, at: 0)
                     PinnedVideosStore.shared.pin(intro.id, for: user.id)

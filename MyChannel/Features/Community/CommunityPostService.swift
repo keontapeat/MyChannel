@@ -63,11 +63,6 @@ final class CommunityPostService: ObservableObject {
                 }
             }
         #endif
-        
-        // Mock fallback
-        if posts.isEmpty {
-            posts = generateMockPosts(creatorId: creatorId)
-        }
     }
     
     func createPost(creatorId: String, type: PostType, content: String, imageURL: String? = nil, poll: Poll? = nil) async -> String? {

@@ -143,8 +143,8 @@ final class UserFirestoreService: ObservableObject {
             username: data["username"] as? String ?? "",
             displayName: data["displayName"] as? String ?? "",
             email: data["email"] as? String ?? "",
-            // Read primary key, fall back to legacy key used by web
-            profileImageURL: (data["profileImageURL"] as? String) ?? (data["avatarUrl"] as? String),
+            // Read primary key, fall back to legacy key used by web, then Google Auth photo
+            profileImageURL: (data["profileImageURL"] as? String) ?? (data["avatarUrl"] as? String) ?? (data["photoURL"] as? String),
             bannerImageURL: data["bannerImageURL"] as? String,
             bio: data["bio"] as? String,
             subscriberCount: data["subscriberCount"] as? Int ?? 0,

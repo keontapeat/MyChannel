@@ -272,8 +272,9 @@ final class AdvancedSearchEngine: ObservableObject {
         // In production, would use vector database like Pinecone or Weaviate
         var results: [SearchResult] = []
         
-        // Mock semantic search results
-        let mockResults = Video.sampleVideos.prefix(limit / 2)
+        // Semantic search results from Firestore
+        let fetched = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: limit)
+        let mockResults = fetched.prefix(limit / 2)
         for video in mockResults {
             let semanticScore = Double.random(in: 0.5...0.9)
             results.append(.video(VideoSearchResult(

@@ -43,7 +43,8 @@ struct DownloadButtonView: View {
         }
         
         // Check if premium OR ad-unlocked
-        if premiumService.isPremium || adUnlockedDownload {
+        // 🔥 FIX 2.1(b): When IAPs not submitted, don't gate behind premium
+        if !AppConfig.Features.enableSubscriptions || premiumService.isPremium || adUnlockedDownload {
             return .available
         } else {
             return .premiumRequired

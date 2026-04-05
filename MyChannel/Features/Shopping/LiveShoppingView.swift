@@ -1151,21 +1151,22 @@ struct ProductDetailSheet: View {
                         }
                         
                         // Buy Now Button
+                        // 🔥 FIX 2.1/3.1.1: Checkout not yet implemented — show coming soon
                         Button {
                             showCheckout = true
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "bag.fill")
                                     .font(.system(size: 16, weight: .bold))
-                                Text("Buy Now — 1-Click Checkout")
+                                Text("Shop Coming Soon")
                                     .font(.system(size: 16, weight: .bold))
                             }
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 17)
-                            .background(AppTheme.Colors.premiumGradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 6)
+                            .background(Color.gray.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
+                        .disabled(true)
                     }
                     .padding(.horizontal, 20)
                 }

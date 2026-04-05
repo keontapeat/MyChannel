@@ -42,7 +42,7 @@ struct VideoDetailView: View {
     @State private var isSubscribed = false
     @State private var isWatchLater = false
     @State private var showingCommentComposer = false
-    @State private var showingShareSheet = false
+    // showingShareSheet removed — share is now presented directly via UIApplication.shared.presentShareSheet()
     @State private var showingMoreOptions = false
     @State private var showingQualitySelector = false
     @State private var showingPlaybackSpeedSelector = false
@@ -103,6 +103,7 @@ struct VideoDetailView: View {
     @State private var showingCinemaMode = false
     @State private var showingCreatorProfile = false
     @State private var showingQueueSidebar = false  // 🔥 YOUTUBE PARITY: Queue sidebar
+    @State private var recommendedVideos: [Video] = []  // Firestore-fetched Up Next candidates
     
     // MARK: - YouTube Parity: Long-Press 2x Speed
     @State private var isLongPressSpeedUp = false  // 🔥 YOUTUBE PARITY: Hold-to-2x active
@@ -313,7 +314,7 @@ struct VideoDetailView: View {
         }
         
         // End-screen overlay
-        if showUpNext, let next = (upNextVideo ?? Video.sampleVideos.first(where: { $0.id != video.id })) {
+        if showUpNext, let next = (upNextVideo ?? recommendedVideos.first(where: { $0.id != video.id })) {
             endScreenOverlay(next: next)
         }
         
@@ -1263,7 +1264,10 @@ struct VideoDetailView: View {
                                     isLiked: $isLiked,
                                     isDisliked: $isDisliked,
                                     expandedDescription: $expandedDescription,
-                                    onShare: { showingShareSheet = true },
+                                    onShare: {
+                                        let av = UIActivityViewController(activityItems: [shareURLWithTimestamp()], applicationActivities: nil)
+                                        UIApplication.shared.presentShareSheet(av)
+                                    },
                                     onMore: { showingMoreOptions = true },
                                     onComment: { showingCommentComposer = true },
                                     onChapters: {
@@ -1276,7 +1280,7 @@ struct VideoDetailView: View {
                                     dynamicViewCount: currentViewCount) // 🔥 REAL-TIME: Pass reactive view count
                 .overlay(alignment: .bottom) {
                     // Simple Up Next bar with autoplay toggle
-                    if let next = Video.sampleVideos.first(where: { $0.id != video.id }) {
+                    if let next = recommendedVideos.first(where: { $0.id != video.id }) {
                         HStack(spacing: 12) {
                             RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial)
                                 .frame(width: 56, height: 32)
@@ -1308,10 +1312,6 @@ struct VideoDetailView: View {
         .sheet(isPresented: $showingCommentComposer) {
             RealTimeCommentsView(video: video)
                 .presentationDetents([.large])
-        }
-        .sheet(isPresented: $showingShareSheet) {
-            VideoShareSheet(items: [shareURLWithTimestamp()])
-                .presentationDetents([.medium])
         }
         .fullScreenCover(isPresented: $showingFullscreenOverlay) {
             ImmersiveFullscreenPlayerView(video: video) {
@@ -1359,7 +1359,7 @@ struct VideoDetailView: View {
             .presentationDetents([.medium])
         }
         .sheet(isPresented: $showingUpNextList) {
-            UpNextQueueSheet(current: video, queue: Video.sampleVideos) { v in
+            UpNextQueueSheet(current: video, queue: recommendedVideos) { v in
                 playNext(v)
             }
             .presentationDetents([.medium, .large])
@@ -1819,8 +1819,12 @@ struct VideoDetailView: View {
             let latestCount = await RealtimeViewTracker.shared.getViewCount(for: video.id)
             print("📊 [VideoDetailView] Latest view count from Firestore: \(latestCount)")
             
+            // 🔥 Load Up Next recommendations from Firestore (same category/creator)
+            let recs = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 20)
+            
             await MainActor.run {
                 currentViewCount = latestCount
+                recommendedVideos = recs.filter { $0.id != video.id }
             }
         }
         .onChange(of: playerManager.isPlaying) { isPlaying in
@@ -1993,7 +1997,7 @@ struct VideoDetailView: View {
 
     // MARK: - Endscreen & Queue
     private func beginEndscreen() {
-        upNextVideo = Video.sampleVideos.first(where: { $0.id != video.id })
+        upNextVideo = recommendedVideos.first(where: { $0.id != video.id })
         if let next = upNextVideo {
             // Prewarm Up Next video for instant start
             VideoPlayerManager.prewarm(urlString: next.videoURL)

@@ -48,8 +48,7 @@ class APIService: ObservableObject {
     }
     
     func fetchVideos(page: Int = 0, limit: Int = 20) async throws -> [Video] {
-        try await Task.sleep(nanoseconds: 1_000_000_000)
-        return Array(Video.sampleVideos.suffix(limit))
+        return await VideoFirestoreService.shared.fetchAllPublicVideos(limit: limit)
     }
     
     func likeVideo(_ videoId: String) async throws {

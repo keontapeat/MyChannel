@@ -529,7 +529,7 @@ class MockNetworkService: NetworkService {
         // Mock responses based on endpoint
         switch endpoint {
         case .videos:
-            if let videos = Video.sampleVideos as? T {
+            if let videos = [Video]() as? T {
                 return videos
             }
         case .userProfile:
@@ -537,7 +537,7 @@ class MockNetworkService: NetworkService {
                 return user
             }
         case .trending:
-            if let trending = Video.sampleVideos.filter({ $0.viewCount > 100000 }) as? T {
+            if let trending = [Video]() as? T {
                 return trending
             }
         default:

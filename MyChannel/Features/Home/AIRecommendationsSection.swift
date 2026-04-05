@@ -78,9 +78,10 @@ struct AIRecommendationsSection: View {
         guard !isLoading else { return }
         // Guest / logged-out: shared recommendations (not personalized)
         guard appState.isAuthenticated, let userId = appState.currentUser?.id else {
-            // Not logged in - use sample videos
+            // Not logged in - fetch trending from Firestore
+            let fetched = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 10)
             await MainActor.run {
-                recommendedVideos = Array(Video.sampleVideos.shuffled().prefix(10))
+                recommendedVideos = fetched.shuffled()
             }
             return
         }
@@ -98,10 +99,11 @@ struct AIRecommendationsSection: View {
             // 🔥 Personalized per-user recommendations using watch history + likes
             let videos = try await PersonalizedFeedService.shared.generateForYou(userId: userId, limit: 12)
             
-            // Fallback to sample if AI returns nothing
+            // Fallback to Firestore trending if AI returns nothing
             if videos.isEmpty {
+                let fetched = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 10)
                 await MainActor.run {
-                    recommendedVideos = Array(Video.sampleVideos.shuffled().prefix(10))
+                    recommendedVideos = fetched.shuffled()
                     isLoading = false
                     lastLoadedUserId = userId
                 }
@@ -115,13 +117,12 @@ struct AIRecommendationsSection: View {
             }
             
         } catch {
-            print("⚠️ [Recommender] AI agent unavailable, using fallback: \(error)")
+            print("⚠️ [Recommender] AI agent unavailable, using Firestore fallback: \(error)")
             
-            // Graceful degradation - use trending/popular videos
+            // Graceful degradation - fetch trending from Firestore
+            let fetched = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 10)
             await MainActor.run {
-                recommendedVideos = Array(Video.sampleVideos
-                    .sorted { $0.viewCount > $1.viewCount }
-                    .prefix(10))
+                recommendedVideos = fetched.sorted { $0.viewCount > $1.viewCount }
                 isLoading = false
             }
         }

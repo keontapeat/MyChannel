@@ -348,8 +348,8 @@ class AISearchService: ObservableObject {
         context: SearchContext
     ) async -> [AISemanticSearchResult] {
         
-        // Get all videos from database
-        var allVideos = Video.sampleVideos
+        // Get all videos from Firestore
+        var allVideos = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 50)
         
         // Score each video using AI insights
         let scoredResults = allVideos.compactMap { video -> AISemanticSearchResult? in

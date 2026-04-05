@@ -83,7 +83,15 @@ struct ArtistPageView: View {
             MusicUploadSheet()
         }
         .navigationDestination(isPresented: $showEarnings) {
-            ArtistEarningsView(artistId: artist.id, artistName: artist.name)
+            // 🔥 FIX 3.1.1: Gate Stripe Connect earnings behind feature flag
+            if AppConfig.Features.enableCreatorMonetization {
+                ArtistEarningsView(artistId: artist.id, artistName: artist.name)
+            } else {
+                Text("Artist Earnings coming soon!")
+                    .font(.title3.bold())
+                    .foregroundColor(.secondary)
+                    .padding()
+            }
         }
     }
     

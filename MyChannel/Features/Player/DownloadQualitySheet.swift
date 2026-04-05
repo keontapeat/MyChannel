@@ -244,7 +244,7 @@ struct DownloadQualitySheet: View {
             .foregroundColor(.white)
             .cornerRadius(12)
         }
-        .disabled(isDownloading || (!subscriptionService.isPlusSubscriber && !premiumService.isPremium))
+        .disabled(isDownloading || (AppConfig.Features.enableSubscriptions && !subscriptionService.isPlusSubscriber && !premiumService.isPremium))
         .padding()
     }
     
@@ -264,11 +264,14 @@ struct DownloadQualitySheet: View {
     // MARK: - Download Action
     private func startDownload() async {
         // Check premium via Firestore-backed subscription
-        guard subscriptionService.isPlusSubscriber || premiumService.isPremium else {
-            await MainActor.run {
-                showingPremiumAlert = true
+        // 🔥 FIX 2.1(b): Skip premium check when IAPs not submitted
+        if AppConfig.Features.enableSubscriptions {
+            guard subscriptionService.isPlusSubscriber || premiumService.isPremium else {
+                await MainActor.run {
+                    showingPremiumAlert = true
+                }
+                return
             }
-            return
         }
         
         // Check WiFi if required

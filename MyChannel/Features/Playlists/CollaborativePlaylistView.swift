@@ -132,18 +132,18 @@ struct CollaborativePlaylistsView: View {
     
     // MARK: - Computed Properties
     private var myPlaylists: [CollaborativePlaylist] {
-        service.playlists.filter { $0.ownerId == "user-1" }
+        service.playlists.filter { $0.ownerId == (AppState.shared.currentUser?.id ?? "") }
     }
     
     private var collaboratingPlaylists: [CollaborativePlaylist] {
-        service.playlists.filter { $0.ownerId != "user-1" }
+        service.playlists.filter { $0.ownerId != (AppState.shared.currentUser?.id ?? "") }
     }
     
     // MARK: - Methods
     private func loadPlaylists() async {
         isLoading = true
         do {
-            let _ = try await service.getPlaylists(for: "user-1")
+            let _ = try await service.getPlaylists(for: (AppState.shared.currentUser?.id ?? ""))
         } catch {
             print("Failed to load playlists: \(error)")
         }
@@ -334,7 +334,7 @@ struct CreateCollaborativePlaylistView: View {
         let playlist = CollaborativePlaylist(
             title: title,
             description: description,
-            ownerId: "user-1",
+            ownerId: (AppState.shared.currentUser?.id ?? ""),
             isPublic: isPublic,
             allowSuggestions: allowSuggestions,
             requireApproval: requireApproval,
@@ -430,7 +430,7 @@ struct JoinPlaylistSheet: View {
         
         Task {
             do {
-                let _ = try await service.joinPlaylist(shareCode: shareCode, userId: "user-1")
+                let _ = try await service.joinPlaylist(shareCode: shareCode, userId: (AppState.shared.currentUser?.id ?? ""))
                 dismiss()
             } catch {
                 errorMessage = error.localizedDescription
@@ -508,7 +508,7 @@ struct CollaborativePlaylistDetailView: View {
                             Label("Activity Log", systemImage: "clock.arrow.circlepath")
                         }
                         
-                        if currentPlaylist.ownerId != "user-1" {
+                        if currentPlaylist.ownerId != (AppState.shared.currentUser?.id ?? "") {
                             Divider()
                             Button(role: .destructive) {
                                 leavePlaylist()
@@ -600,7 +600,7 @@ struct CollaborativePlaylistDetailView: View {
             }
             .secondaryButtonStyle()
             
-            if currentPlaylist.canAdd(userId: "user-1") {
+            if currentPlaylist.canAdd(userId: (AppState.shared.currentUser?.id ?? "")) {
                 Button {
                     showAddVideo = true
                 } label: {
@@ -667,7 +667,7 @@ struct CollaborativePlaylistDetailView: View {
                         .font(AppTheme.Typography.body)
                         .foregroundColor(AppTheme.Colors.textSecondary)
                     
-                    if currentPlaylist.canAdd(userId: "user-1") {
+                    if currentPlaylist.canAdd(userId: (AppState.shared.currentUser?.id ?? "")) {
                         Button("Add Video") {
                             showAddVideo = true
                         }
@@ -681,7 +681,7 @@ struct CollaborativePlaylistDetailView: View {
                 .cornerRadius(AppTheme.CornerRadius.md)
             } else {
                 ForEach(currentPlaylist.videoItems) { video in
-                    CollaborativePlaylistVideoRow(video: video, canRemove: currentPlaylist.canRemove(userId: "user-1")) {
+                    CollaborativePlaylistVideoRow(video: video, canRemove: currentPlaylist.canRemove(userId: (AppState.shared.currentUser?.id ?? ""))) {
                         Task {
                             try? await service.removeVideo(playlistId: currentPlaylist.id, videoItemId: video.id)
                         }
@@ -735,13 +735,13 @@ struct CollaborativePlaylistDetailView: View {
     
     // MARK: - Computed
     private var isOwnerOrAdmin: Bool {
-        currentPlaylist.ownerId == "user-1" || currentPlaylist.canEdit(userId: "user-1")
+        currentPlaylist.ownerId == (AppState.shared.currentUser?.id ?? "") || currentPlaylist.canEdit(userId: (AppState.shared.currentUser?.id ?? ""))
     }
     
     // MARK: - Methods
     private func leavePlaylist() {
         Task {
-            try? await service.leavePlaylist(playlistId: currentPlaylist.id, userId: "user-1")
+            try? await service.leavePlaylist(playlistId: currentPlaylist.id, userId: (AppState.shared.currentUser?.id ?? ""))
             dismiss()
         }
     }
@@ -969,7 +969,7 @@ struct ManageCollaboratorsView: View {
                             
                             Spacer()
                             
-                            if playlist.ownerId == "user-1" {
+                            if playlist.ownerId == (AppState.shared.currentUser?.id ?? "") {
                                 Menu {
                                     ForEach(CollaboratorPermission.allCases, id: \.self) { permission in
                                         Button {
@@ -1000,7 +1000,7 @@ struct ManageCollaboratorsView: View {
                 }
                 
                 // Invite Section
-                if playlist.ownerId == "user-1" || playlist.canInvite(userId: "user-1") {
+                if playlist.ownerId == (AppState.shared.currentUser?.id ?? "") || playlist.canInvite(userId: (AppState.shared.currentUser?.id ?? "")) {
                     Section {
                         Button {
                             showInvite = true

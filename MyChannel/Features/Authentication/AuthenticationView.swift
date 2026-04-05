@@ -8,7 +8,8 @@
 import SwiftUI
 
 struct AuthenticationView: View {
-    @StateObject private var authManager = AuthService.shared
+    @ObservedObject private var authManager = AuthenticationManager.shared
+    @Environment(\.dismiss) private var dismiss
     @State private var currentPage: AuthPage = .welcome
     @State private var animateBackground: Bool = false
     
@@ -64,6 +65,24 @@ struct AuthenticationView: View {
             }
         }
         .ignoresSafeArea()
+        // 🔥 FIX 2.1(a): Auto-dismiss auth screen when sign-in succeeds
+        .onChange(of: authManager.isAuthenticated) { isAuth in
+            if isAuth {
+                // Small delay lets SwiftUI finish processing the state change
+                // before tearing down the fullScreenCover — prevents iPad dismiss bugs
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    dismiss()
+                }
+            }
+        }
+        .onAppear {
+            // Safety: if we appear while already authenticated (race condition), dismiss immediately
+            if authManager.isAuthenticated {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    dismiss()
+                }
+            }
+        }
     }
 }
 
@@ -231,7 +250,7 @@ struct WelcomeView: View {
 
 // MARK: - Sign In View
 struct SignInView: View {
-    @StateObject private var authManager = AuthService.shared
+    @ObservedObject private var authManager = AuthenticationManager.shared
     
     @State private var email: String = ""
     @State private var password: String = ""
@@ -268,11 +287,11 @@ struct SignInView: View {
                 
                 // Sign in form
                 VStack(spacing: 24) {
-                    // Email field
+                    // Email or username field
                     AuthTextField(
-                        title: "Email",
+                        title: "Email or Username",
                         text: $email,
-                        placeholder: "Enter your email",
+                        placeholder: "Enter your email or username",
                         keyboardType: .emailAddress,
                         icon: "envelope"
                     )
@@ -405,7 +424,7 @@ struct SignInView: View {
     }
     
     private var canSignIn: Bool {
-        !email.isEmpty && !password.isEmpty && email.contains("@") && password.count >= 6
+        !email.isEmpty && !password.isEmpty && password.count >= 6
     }
     
     private func signIn() {
@@ -413,7 +432,15 @@ struct SignInView: View {
         
         Task {
             do {
-                try await authManager.signIn(email: email, password: password)
+                // Support username OR email login
+                let resolvedEmail: String
+                if email.contains("@") {
+                    resolvedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+                } else {
+                    // Username entered — look up email in Firestore
+                    resolvedEmail = await AuthenticationManager.shared.resolveEmailForUsername(email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()) ?? email
+                }
+                try await AuthenticationManager.shared.signIn(email: resolvedEmail, password: password)
                 
                 // Haptic feedback
                 let notificationFeedback = UINotificationFeedbackGenerator()
@@ -436,11 +463,14 @@ struct SignInView: View {
     
     private func signInWithApple() {
         Task {
-            do {
-                try await authManager.signInWithApple()
-            } catch {
+            // iPad requires a brief delay so the key window is fully active
+            // before the SIWA controller attempts to present its popover.
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            await AuthenticationManager.shared.signInWithApple()
+            // Show error if auth failed (AuthenticationManager handles internally via authState)
+            if case .error(let msg) = AuthenticationManager.shared.authState {
                 await MainActor.run {
-                    errorMessage = error.localizedDescription
+                    errorMessage = msg
                     showingError = true
                 }
             }
@@ -448,16 +478,15 @@ struct SignInView: View {
     }
     
     private func signInWithGoogle() {
-        // Implement Google Sign In
         Task {
-            try? await authManager.signInWithGoogle()
+            await AuthenticationManager.shared.signInWithGoogle()
         }
     }
 }
 
 // MARK: - Sign Up View
 struct SignUpView: View {
-    @StateObject private var authManager = AuthService.shared
+    @ObservedObject private var authManager = AuthenticationManager.shared
     
     @State private var firstName: String = ""
     @State private var lastName: String = ""
@@ -741,7 +770,7 @@ struct SignUpView: View {
         
         Task {
             do {
-                try await authManager.signUp(
+                try await AuthenticationManager.shared.signUp(
                     firstName: firstName,
                     lastName: lastName,
                     username: username,

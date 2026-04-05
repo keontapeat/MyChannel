@@ -186,8 +186,9 @@ class PremiumService: ObservableObject {
         // AI-powered playlist generation
         try await Task.sleep(nanoseconds: 1_500_000_000)
         
-        // Return AI-curated videos
-        return Video.sampleVideos.shuffled().prefix(20).map { $0 }
+        // Return AI-curated videos from Firestore
+        let fetched = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 20)
+        return fetched.shuffled()
     }
     
     func enableSpatialAudio(for video: Video) -> Bool {

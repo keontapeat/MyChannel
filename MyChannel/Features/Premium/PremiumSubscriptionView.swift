@@ -76,7 +76,12 @@ struct PremiumSubscriptionView: View {
             }
         }
         .sheet(isPresented: $showingCheckout) {
-            PremiumCheckoutView(tier: selectedTier, isYearly: isYearly)
+            if AppConfig.Features.enableSubscriptions {
+                PremiumCheckoutView(tier: selectedTier, isYearly: isYearly)
+            } else {
+                // 🔥 FIX 2.1(b): Prevent checkout when IAPs not submitted
+                Text("Coming Soon").font(.title2.bold()).foregroundColor(.secondary).padding()
+            }
         }
     }
     

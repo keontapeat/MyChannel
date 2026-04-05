@@ -26,6 +26,13 @@ struct AssetStoriesPagerView: View {
     @State private var heartScale: CGFloat = 0.6
     @State private var headerVisible: Bool = true
 
+    // Three-dot menu
+    @State private var showStoryOptions: Bool = false
+    @State private var showDeleteConfirm: Bool = false
+    @State private var isDeletingStory: Bool = false
+
+    @EnvironmentObject private var appState: AppState
+
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -202,6 +209,16 @@ struct AssetStoriesPagerView: View {
         }
         .statusBarHidden()
         .ignoresSafeArea()
+        .alert("Delete this story?", isPresented: $showDeleteConfirm) {
+            Button("Delete", role: .destructive) {
+                deleteCurrentStory()
+            }
+            Button("Cancel", role: .cancel) {
+                resume()
+            }
+        } message: {
+            Text("This will permanently remove the story for everyone.")
+        }
         .onChange(of: scenePhase) { newValue in
             switch newValue {
             case .active: resume()
@@ -324,13 +341,33 @@ struct AssetStoriesPagerView: View {
                 Button {
                     HapticManager.shared.selection()
                     pause()
-                    headerVisible.toggle()
+                    showStoryOptions = true
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(10)
                         .background(Color.black.opacity(0.35), in: Circle())
+                }
+                .confirmationDialog("", isPresented: $showStoryOptions, titleVisibility: .hidden) {
+                    let isOwner = currentStory?.creatorId == appState.currentUser?.id
+                    if isOwner {
+                        Button("Delete Story", role: .destructive) {
+                            showDeleteConfirm = true
+                        }
+                        Button("Archive Story") {
+                            archiveCurrentStory()
+                        }
+                    }
+                    Button("Save to Photos") {
+                        saveCurrentStoryToPhotos()
+                    }
+                    Button("Report", role: .destructive) {
+                        resume()
+                    }
+                    Button("Cancel", role: .cancel) {
+                        resume()
+                    }
                 }
 
                 Button {
@@ -564,6 +601,85 @@ struct AssetStoriesPagerView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 showHeart = false
                 heartScale = 0.6
+            }
+        }
+    }
+
+    // MARK: - Story Actions
+
+    private func deleteCurrentStory() {
+        guard let story = currentStory, let storyId = story.originalStoryId else {
+            resume()
+            return
+        }
+        isDeletingStory = true
+        stopTimer()
+        Task {
+            do {
+                try await DatabaseService.shared.deleteStory(id: storyId)
+                HapticManager.shared.notification(type: .success)
+                await MainActor.run {
+                    isDeletingStory = false
+                    // Advance to next or dismiss if no more stories
+                    let groupCount = storiesInCurrentGroup
+                    if groupCount > 1 && storyIndex < groupCount - 1 {
+                        nextStory()
+                    } else {
+                        onDismiss()
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isDeletingStory = false
+                    resume()
+                    print("❌ [Stories] Delete failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func archiveCurrentStory() {
+        guard let story = currentStory, let storyId = story.originalStoryId else {
+            resume()
+            return
+        }
+        Task {
+            try? await DatabaseService.shared.archiveStory(id: storyId)
+            await MainActor.run {
+                HapticManager.shared.notification(type: .success)
+                nextStory()
+            }
+        }
+    }
+
+    private func saveCurrentStoryToPhotos() {
+        guard let story = currentStory else { resume(); return }
+        Task {
+            switch story.media {
+            case .image(let urlString):
+                guard let url = URL(string: urlString),
+                      let data = try? Data(contentsOf: url),
+                      let image = UIImage(data: data) else {
+                    await MainActor.run { resume() }
+                    return
+                }
+                UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+                await MainActor.run {
+                    HapticManager.shared.notification(type: .success)
+                    resume()
+                }
+            case .video(let urlString):
+                guard let url = URL(string: urlString) else {
+                    await MainActor.run { resume() }
+                    return
+                }
+                UISaveVideoAtPathToSavedPhotosAlbum(url.path, nil, nil, nil)
+                await MainActor.run {
+                    HapticManager.shared.notification(type: .success)
+                    resume()
+                }
+            default:
+                await MainActor.run { resume() }
             }
         }
     }

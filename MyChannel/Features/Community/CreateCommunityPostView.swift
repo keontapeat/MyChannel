@@ -9,7 +9,6 @@ import SwiftUI
 
 struct CreateCommunityPostView: View {
     let creator: User
-    @ObservedObject var communityService: MockCommunityService
     @Environment(\.dismiss) private var dismiss
     
     @State private var selectedPostType: PostType = .text
@@ -355,13 +354,8 @@ struct CreateCommunityPostView: View {
     
     // MARK: - Actions
     private func addImages() {
-        // TODO: Implement image picker
-        // For now, add sample images
-        let sampleImages = [
-            "https://picsum.photos/400/400?random=\(Int.random(in: 1...100))",
-            "https://picsum.photos/400/400?random=\(Int.random(in: 101...200))"
-        ]
-        selectedImages.append(contentsOf: sampleImages.prefix(10 - selectedImages.count))
+        // TODO: Implement PHPickerViewController for real image selection + Firebase Storage upload
+        // Image picker integration should be added here
     }
     
     private func removeImage(_ imageURL: String) {
@@ -410,14 +404,17 @@ struct CreateCommunityPostView: View {
         )
         
         Task {
-            do {
-                _ = try await communityService.createPost(newPost)
-                await MainActor.run {
-                    dismiss()
-                }
-            } catch {
-                print("Error creating post: \(error)")
+            let imageURL = selectedPostType == .image ? selectedImages.first : nil
+            let _ = await CommunityPostService.shared.createPost(
+                creatorId: creator.id,
+                type: selectedPostType,
+                content: postContent,
+                imageURL: imageURL,
+                poll: poll
+            )
+            await MainActor.run {
                 isSubmitting = false
+                dismiss()
             }
         }
     }
@@ -425,7 +422,6 @@ struct CreateCommunityPostView: View {
 
 #Preview {
     CreateCommunityPostView(
-        creator: User.sampleUsers[0],
-        communityService: MockCommunityService()
+        creator: User.sampleUsers[0]
     )
 }

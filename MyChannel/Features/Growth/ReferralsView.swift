@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ReferralsView: View {
     @EnvironmentObject private var appState: AppState
@@ -362,7 +363,7 @@ struct ShareReferralCodeView: View {
     private func shareLink() {
         let items = [shareableLink]
         let av = UIActivityViewController(activityItems: items, applicationActivities: nil)
-        UIApplication.shared.topMostController()?.present(av, animated: true)
+        UIApplication.shared.presentShareSheet(av)
     }
 }
 

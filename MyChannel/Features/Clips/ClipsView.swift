@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import UIKit
 import AVFoundation
 import AVKit
 #if canImport(FirebaseFirestore)
@@ -694,12 +695,7 @@ struct ClipShareSheet: View {
             activityItems: [clip.shareURL],
             applicationActivities: nil
         )
-        
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first,
-           let rootVC = window.rootViewController {
-            rootVC.present(activityVC, animated: true)
-        }
+        UIApplication.shared.presentShareSheet(activityVC)
     }
     
     private func formatDuration(_ duration: TimeInterval) -> String {

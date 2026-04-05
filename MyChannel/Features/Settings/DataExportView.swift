@@ -50,7 +50,7 @@ struct DataExportView: View {
         if let data = try? JSONSerialization.data(withJSONObject: sample, options: [.prettyPrinted]),
            let json = String(data: data, encoding: .utf8) {
             let av = UIActivityViewController(activityItems: [json], applicationActivities: nil)
-            UIApplication.shared.topMostController()?.present(av, animated: true)
+            UIApplication.shared.presentShareSheet(av)
         }
     }
 }
@@ -61,6 +61,23 @@ extension UIApplication {
         if let tab = base as? UITabBarController { return topMostController(base: tab.selectedViewController) }
         if let presented = base?.presentedViewController { return topMostController(base: presented) }
         return base
+    }
+
+    /// Presents a UIActivityViewController in an iPad-safe way by anchoring
+    /// the popover to the center of the key window so it never fails silently on iPad.
+    func presentShareSheet(_ activityVC: UIActivityViewController) {
+        guard let topVC = topMostController() else { return }
+        // iPad requires a popover source; anchor to the center of the view.
+        if let popover = activityVC.popoverPresentationController {
+            popover.sourceView = topVC.view
+            popover.sourceRect = CGRect(
+                x: topVC.view.bounds.midX,
+                y: topVC.view.bounds.midY,
+                width: 0, height: 0
+            )
+            popover.permittedArrowDirections = []
+        }
+        topVC.present(activityVC, animated: true)
     }
 }
 

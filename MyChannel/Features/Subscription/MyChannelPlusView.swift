@@ -25,33 +25,38 @@ struct MyChannelPlusView: View {
             Color(uiColor: .systemBackground)
                 .ignoresSafeArea()
             
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    // Header
-                    header
-                    
-                    // Benefits Grid
-                    benefitsGrid
-                        .padding(.top, 40)
-                    
-                    // Pricing Plans
-                    pricingPlans
-                        .padding(.top, 50)
-                    
-                    // Subscribe Button
-                    subscribeButton
-                        .padding(.top, 30)
-                    
-                    // Features Comparison
-                    featuresComparison
-                        .padding(.top, 50)
-                    
-                    // Footer
-                    footer
-                        .padding(.top, 40)
-                        .padding(.bottom, 100)
+            if !AppConfig.Features.enableSubscriptions {
+                // 🔥 FIX 2.1(b): Show Coming Soon when IAPs not yet submitted
+                comingSoonView
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        // Header
+                        header
+                        
+                        // Benefits Grid
+                        benefitsGrid
+                            .padding(.top, 40)
+                        
+                        // Pricing Plans
+                        pricingPlans
+                            .padding(.top, 50)
+                        
+                        // Subscribe Button
+                        subscribeButton
+                            .padding(.top, 30)
+                        
+                        // Features Comparison
+                        featuresComparison
+                            .padding(.top, 50)
+                        
+                        // Footer
+                        footer
+                            .padding(.top, 40)
+                            .padding(.bottom, 100)
+                    }
+                    .padding(.horizontal, 20)
                 }
-                .padding(.horizontal, 20)
             }
             
             // Close Button
@@ -87,10 +92,64 @@ struct MyChannelPlusView: View {
             Text(errorMessage)
         }
         .task {
+            guard AppConfig.Features.enableSubscriptions else { return }
             // Pre-load products so purchase button works immediately
             if storeKit.products.isEmpty {
                 await storeKit.loadProducts()
             }
+        }
+    }
+    
+    // MARK: - Coming Soon (when IAPs are not yet submitted)
+    
+    private var comingSoonView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            
+            ZStack {
+                Circle()
+                    .fill(Color.black)
+                    .frame(width: 80, height: 80)
+                
+                Image(systemName: "plus")
+                    .font(.system(size: 36, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            
+            Text("MyChannel Plus+")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(.primary)
+            
+            Text("Coming Soon")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(.secondary)
+            
+            Text("Ad-free videos, offline downloads, background play, and more. Stay tuned!")
+                .font(.system(size: 16))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            
+            // Benefits preview
+            benefitsGrid
+                .padding(.top, 10)
+                .padding(.horizontal, 20)
+            
+            Spacer()
+            
+            Button {
+                dismiss()
+            } label: {
+                Text("Got it")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .background(Color.black)
+                    .cornerRadius(28)
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 40)
         }
     }
     

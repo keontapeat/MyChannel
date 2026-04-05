@@ -16,7 +16,7 @@ struct DownloadsView: View {
                 Color.black
                     .ignoresSafeArea()
                 
-                if !subscriptionService.isPlusSubscriber {
+                if AppConfig.Features.enableSubscriptions && !subscriptionService.isPlusSubscriber {
                     plusUpgradePrompt
                 } else if downloadManager.downloads.isEmpty && !downloadManager.isLoading {
                     emptyDownloadsState

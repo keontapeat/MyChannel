@@ -46,7 +46,7 @@ final class CommentsFirestoreService: ObservableObject {
             fetchUsers(Array(userIds)) { usersMap in
                 let mapped: [RealTimeComment] = raw.compactMap { (id, d) in
                     let uid = d["userId"] as? String ?? ""
-                    let author = usersMap[uid] ?? (User.sampleUsers.first ?? .defaultUser)
+                    let author = usersMap[uid] ?? .defaultUser
                     return RealTimeComment(
                         id: id,
                         author: author,

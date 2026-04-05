@@ -391,7 +391,7 @@ struct AdvancedPrivacyToggleRow: View {
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                     
-                    if requiresPremium {
+                    if requiresPremium && AppConfig.Features.enableSubscriptions {
                         Text("PRO")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.white)
@@ -418,10 +418,10 @@ struct AdvancedPrivacyToggleRow: View {
             
             // Enhanced toggle
             Toggle("", isOn: $isOn)
-                .toggleStyle(AdvancedToggleStyle(isEnabled: !requiresPremium || isOn))
-                .disabled(requiresPremium && !isOn)
+                .toggleStyle(AdvancedToggleStyle(isEnabled: !(requiresPremium && AppConfig.Features.enableSubscriptions) || isOn))
+                .disabled(requiresPremium && AppConfig.Features.enableSubscriptions && !isOn)
                 .onTapGesture {
-                    if requiresPremium && !isOn {
+                    if requiresPremium && AppConfig.Features.enableSubscriptions && !isOn {
                         showPremiumPrompt = true
                         HapticManager.shared.impact(style: .medium)
                     } else {

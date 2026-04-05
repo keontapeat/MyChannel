@@ -38,7 +38,7 @@ struct CommunityPostsView: View {
         }
         .sheet(isPresented: $showingCreatePost) {
             if let creator = appState.currentUser {
-                CreateCommunityPostView(creator: creator, communityService: MockCommunityService())
+                CreateCommunityPostView(creator: creator)
             }
         }
     }

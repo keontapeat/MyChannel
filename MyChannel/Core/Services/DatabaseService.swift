@@ -183,6 +183,26 @@ class DatabaseService: ObservableObject {
         #endif
     }
     
+    func deleteStory(id: String) async throws {
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        try await db.collection("stories").document(id).delete()
+        print("✅ [DatabaseService] Deleted story \(id) from Firestore")
+        #else
+        print("⚠️ [DatabaseService] Cannot delete story: Firestore unavailable")
+        #endif
+    }
+
+    func archiveStory(id: String) async throws {
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        try await db.collection("stories").document(id).updateData(["archived": true, "status": "archived"])
+        print("✅ [DatabaseService] Archived story \(id)")
+        #else
+        print("⚠️ [DatabaseService] Cannot archive story: Firestore unavailable")
+        #endif
+    }
+    
     func fetchStoriesByCreator(creatorId: String, includeExpired: Bool = false) async throws -> [Story] {
         var stories: [Story] = []
 
@@ -196,11 +216,12 @@ class DatabaseService: ObservableObject {
             print("📖 [DatabaseService] fetchStoriesByCreator: found \(snapshot.documents.count) docs for creator \(creatorId)")
             for doc in snapshot.documents {
                 if let story = storyFromFirestoreDoc(doc) {
-                    if includeExpired || !story.isExpired {
+                    let isArchived = doc.data()["archived"] as? Bool == true
+                    if !isArchived && (includeExpired || !story.isExpired) {
                         stories.append(story)
                     }
                 } else {
-                    print("⚠️ [DatabaseService] Could not parse story doc: \(doc.documentID) data: \(doc.data() ?? [:])")
+                    print("⚠️ [DatabaseService] Could not parse story doc: \(doc.documentID) data: \(doc.data())")
                 }
             }
             if !stories.isEmpty {
@@ -245,7 +266,8 @@ class DatabaseService: ObservableObject {
                         .getDocuments()
                     print("📖 [DatabaseService] fetchActiveStoriesForCreators: \(snapshot.documents.count) docs for chunk of \(chunk.count) creators")
                     for doc in snapshot.documents {
-                        if let story = storyFromFirestoreDoc(doc), !story.isExpired {
+                        let isArchived = doc.data()["archived"] as? Bool == true
+                        if let story = storyFromFirestoreDoc(doc), !story.isExpired, !isArchived {
                             stories.append(story)
                         }
                     }
@@ -287,10 +309,11 @@ class DatabaseService: ObservableObject {
                 .getDocuments()
             print("📖 [DatabaseService] fetchAllActiveStories: \(snapshot.documents.count) total docs from Firestore")
             for doc in snapshot.documents {
-                if let story = storyFromFirestoreDoc(doc), !story.isExpired {
+                let isArchived = doc.data()["archived"] as? Bool == true
+                if let story = storyFromFirestoreDoc(doc), !story.isExpired, !isArchived {
                     stories.append(story)
                 } else if storyFromFirestoreDoc(doc) == nil {
-                    print("⚠️ [DatabaseService] Could not parse story doc: \(doc.documentID) data: \(doc.data() ?? [:])")
+                    print("⚠️ [DatabaseService] Could not parse story doc: \(doc.documentID) data: \(doc.data())")
                 }
             }
             print("✅ [DatabaseService] fetchAllActiveStories: \(stories.count) non-expired stories")

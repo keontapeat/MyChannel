@@ -159,26 +159,24 @@ struct SignInSheetView: View {
         guard !isLoadingApple else { return }
         isLoadingGoogle = true
         defer { isLoadingGoogle = false }
-        do {
-            try await AuthService.shared.signInWithGoogle()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        // 🔥 FIX 2.1(a): Use AuthenticationManager (Firebase Auth) instead of AuthService (backend API)
+        await AuthenticationManager.shared.signInWithGoogle()
+        // onChange(of: authManager.isAuthenticated) will auto-dismiss the sheet
     }
 
     private func appleTap() async {
         guard !isLoadingGoogle else { return }
         isLoadingApple = true
-        defer { isLoadingApple = false }
-        // Small delay to let the sheet finish layout before presenting SIWA controller
-        try? await Task.sleep(nanoseconds: 50_000_000)
-        // Use AuthenticationManager (the @EnvironmentObject source of truth)
-        // so isAuthenticated updates correctly and the sheet auto-dismisses.
-        // Errors/cancellation are handled internally via authState.
-        await authManager.signInWithApple()
-        // Show error if auth failed
-        if case .error(let msg) = authManager.authState {
-            errorMessage = msg
+        // 🔥 FIX 2.1(a) iPad SIWA:
+        // iPad sheets have separate window contexts that break ASAuthorizationController.
+        // Dismiss the sheet first, wait for the animation, then trigger SIWA.
+        // MainTabView's onChange(of: authManager.isAuthenticated) will ensure
+        // presentSignInSheet is set to false even if this view is torn down.
+        dismiss()
+        Task.detached { @MainActor in
+            // Wait for sheet dismissal animation to fully complete on iPad
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            await AuthenticationManager.shared.signInWithApple()
         }
     }
 }

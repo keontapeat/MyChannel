@@ -242,8 +242,25 @@ struct ComprehensiveCreatorStudioView: View {
             AdvancedAnalyticsView()
                 .navigationTitle("Analytics")
         case .earnings:
-            EarningsManagementView()
+            // 🔥 FIX 3.1.1: Gate external payment features
+            if AppConfig.Features.enableCreatorMonetization {
+                EarningsManagementView()
+                    .navigationTitle("Earnings")
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "dollarsign.circle")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    Text("Earnings Coming Soon")
+                        .font(.title3.bold())
+                    Text("Creator monetization will be available in a future update.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding()
                 .navigationTitle("Earnings")
+            }
         case .customization:
             ChannelCustomizationView()
                 .navigationTitle("Customization")
@@ -290,7 +307,23 @@ struct ComprehensiveCreatorStudioView: View {
         case .analytics:
             AdvancedAnalyticsView()
         case .earnings:
-            EarningsManagementView()
+            // 🔥 FIX 3.1.1: Gate external payment features
+            if AppConfig.Features.enableCreatorMonetization {
+                EarningsManagementView()
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "dollarsign.circle")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    Text("Earnings Coming Soon")
+                        .font(.title3.bold())
+                    Text("Creator monetization will be available in a future update.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding()
+            }
         case .customization:
             ChannelCustomizationView()
         case .community:

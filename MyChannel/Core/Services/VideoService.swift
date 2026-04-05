@@ -66,8 +66,7 @@ class VideoService: ObservableObject {
     // MARK: - Fetch Videos
     func fetchVideos(page: Int = 1, limit: Int = 20) async throws -> [Video] {
         if AppConfig.Features.enableMockData {
-            // Return mock data for development
-            return Video.sampleVideos
+            return await VideoFirestoreService.shared.fetchAllPublicVideos(limit: limit)
         }
         
         do {
@@ -84,7 +83,10 @@ class VideoService: ObservableObject {
     
     func fetchVideo(id: String) async throws -> Video {
         if AppConfig.Features.enableMockData {
-            return Video.sampleVideos.first { $0.id == id } ?? Video.sampleVideos[0]
+            if let video = try? await VideoFirestoreService.shared.fetchMultipleVideos(videoIds: [id]).first {
+                return video
+            }
+            return await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 1).first ?? Video(title: "Not Found", description: "", thumbnailURL: "", videoURL: "", duration: 0, viewCount: 0, likeCount: 0, creator: .defaultUser, category: .entertainment)
         }
         
         do {
@@ -100,7 +102,8 @@ class VideoService: ObservableObject {
     
     func fetchTrendingVideos() async throws -> [Video] {
         if AppConfig.Features.enableMockData {
-            return Video.sampleVideos.filter { $0.viewCount > 100000 }
+            let vids = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 20)
+            return vids.filter { $0.viewCount > 100000 }
         }
         
         do {

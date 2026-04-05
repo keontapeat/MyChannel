@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct CreatorStudioView: View {
     @EnvironmentObject private var appState: AppState
@@ -38,16 +39,8 @@ struct CreatorStudioView: View {
                     .tag(Tab.memberships)
                 
                 NavigationStack { 
-                    List {
-                        ForEach(Video.sampleVideos.prefix(5)) { video in
-                            NavigationLink {
-                                VideoAnalyticsView(videoId: video.id)
-                            } label: {
-                                Text(video.title).lineLimit(1)
-                            }
-                        }
-                    }
-                    .navigationTitle("Video Analytics")
+                    StudioAnalyticsVideoList()
+                        .navigationTitle("Video Analytics")
                 }
                     .tabItem { Label("Analytics", systemImage: "chart.line.uptrend.xyaxis") }
                     .tag(Tab.analytics)
@@ -101,12 +94,35 @@ struct CreatorStudioView: View {
         ]
         let url = URL(string: "mychannel://studio?tab=\(tabMap[selectedTab] ?? "overview")")!
         let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-        UIApplication.shared.topMostController()?.present(av, animated: true)
+        UIApplication.shared.presentShareSheet(av)
+    }
+}
+
+private struct StudioAnalyticsVideoList: View {
+    @State private var videos: [Video] = []
+    
+    var body: some View {
+        List {
+            if videos.isEmpty {
+                ContentUnavailableView("No Videos", systemImage: "video.slash", description: Text("Upload your first video to see analytics"))
+            }
+            ForEach(videos) { video in
+                NavigationLink {
+                    VideoAnalyticsView(videoId: video.id)
+                } label: {
+                    Text(video.title).lineLimit(1)
+                }
+            }
+        }
+        .task {
+            guard let uid = AppState.shared.currentUser?.id else { return }
+            videos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: uid, limit: 20)
+        }
     }
 }
 
 private struct StudioContentList: View {
-    @State private var videos: [Video] = Array(Video.sampleVideos.prefix(20))
+    @State private var videos: [Video] = []
     
     var body: some View {
         List {
@@ -134,6 +150,10 @@ private struct StudioContentList: View {
             }
         }
         .listStyle(.plain)
+        .task {
+            guard let uid = AppState.shared.currentUser?.id else { return }
+            videos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: uid, limit: 20)
+        }
     }
 }
 

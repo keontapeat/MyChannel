@@ -98,12 +98,17 @@ class AuthenticationManager: ObservableObject {
                     try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
                     let alreadyAuthenticated = await self.isAuthenticated
                     guard !alreadyAuthenticated else { return }
+                    let ownerEmailsT: Set<String> = ["keontapeat@gmail.com", "keontapeat@mychannel.live"]
+                    let ownerUIDsT: Set<String> = ["7EAoUc1aKsNRqR4cYBIOYVGB3Mf2"]
+                    let email = fuser.email ?? ""
+                    let isOwnerT = ownerUIDsT.contains(fuser.uid) || ownerEmailsT.contains(email.lowercased())
                     let basicUser = User(
                         id: fuser.uid,
-                        username: fuser.email?.components(separatedBy: "@").first ?? "user",
-                        displayName: fuser.displayName ?? (fuser.email ?? "User"),
-                        email: fuser.email ?? "",
+                        username: email.components(separatedBy: "@").first ?? "user",
+                        displayName: fuser.displayName ?? (email.isEmpty ? "User" : email),
+                        email: email,
                         profileImageURL: fuser.photoURL?.absoluteString,
+                        bio: isOwnerT ? "MyChannel founder & creator" : nil,
                         isVerified: fuser.isEmailVerified,
                         isCreator: true
                     )
@@ -172,6 +177,22 @@ class AuthenticationManager: ObservableObject {
                         }
                     }
                     
+                    // Patch loaded user: fill missing photo from Google Auth + hardwire owner bio
+                    if var user = loadedUser {
+                        let ownerEmails: Set<String> = ["keontapeat@gmail.com", "keontapeat@mychannel.live"]
+                        let ownerUIDs: Set<String> = ["7EAoUc1aKsNRqR4cYBIOYVGB3Mf2"]
+                        let isOwner = ownerUIDs.contains(user.id) || ownerEmails.contains(user.email.lowercased())
+                        // Use Google's photo if Firestore has none
+                        if user.profileImageURL == nil || user.profileImageURL?.isEmpty == true {
+                            user = User(id: user.id, username: user.username, displayName: user.displayName, email: user.email, profileImageURL: fuser.photoURL?.absoluteString, bannerImageURL: user.bannerImageURL, bio: user.bio, subscriberCount: user.subscriberCount, videoCount: user.videoCount, isVerified: user.isVerified, isCreator: user.isCreator, createdAt: user.createdAt, location: user.location, website: user.website, showWebsiteOnProfile: user.showWebsiteOnProfile, showOnlineStatus: user.showOnlineStatus)
+                        }
+                        // Always show "MyChannel founder & creator" on both owner accounts
+                        if isOwner {
+                            user = User(id: user.id, username: user.username, displayName: user.displayName, email: user.email, profileImageURL: user.profileImageURL, bannerImageURL: user.bannerImageURL, bio: "MyChannel founder & creator", subscriberCount: user.subscriberCount, videoCount: user.videoCount, isVerified: user.isVerified, isCreator: user.isCreator, createdAt: user.createdAt, location: user.location, website: user.website, showWebsiteOnProfile: user.showWebsiteOnProfile, showOnlineStatus: user.showOnlineStatus)
+                        }
+                        loadedUser = user
+                    }
+
                     // 3. Set the loaded user or fallback to basic auth data
                     if let user = loadedUser {
                         authTimeoutTask.cancel()
@@ -248,9 +269,16 @@ class AuthenticationManager: ObservableObject {
             currentUser = basicUser
             isAuthenticated = true
             authState = .authenticated
+            // 🔥 FIX 2.1(a): Force SwiftUI to pick up state change immediately on iPad
+            objectWillChange.send()
             // Load complete Firestore profile FIRST, then post login notification
             // so AppState receives the custom profile (not basic auth data)
-            await loadFullProfileAfterSignIn(uid: fuser.uid, fallback: basicUser)
+            // Wrapped in do/catch so profile loading failures never crash the app
+            do {
+                await loadFullProfileAfterSignIn(uid: fuser.uid, fallback: basicUser)
+            } catch {
+                print("⚠️ [Auth] Non-fatal: profile loading after sign-in failed: \(error.localizedDescription)")
+            }
             NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
         } catch {
             authState = .error(error.localizedDescription)
@@ -288,6 +316,8 @@ class AuthenticationManager: ObservableObject {
             currentUser = basicUser
             isAuthenticated = true
             authState = .authenticated
+            // Create Firestore profile for new email/password sign-up users
+            await createFirestoreProfileIfNeeded(for: basicUser)
             // Load complete Firestore profile FIRST, then post login notification
             await loadFullProfileAfterSignIn(uid: fuser.uid, fallback: basicUser)
             NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
@@ -317,7 +347,7 @@ class AuthenticationManager: ObservableObject {
                 let basicUser = User(
                     id: payload.uid,
                     username: payload.email?.components(separatedBy: "@").first ?? "apple_user",
-                    displayName: payload.displayName,
+                    displayName: payload.displayName.isEmpty ? "Apple User" : payload.displayName,
                     email: payload.email ?? "",
                     profileImageURL: nil,
                     isVerified: true,
@@ -326,7 +356,12 @@ class AuthenticationManager: ObservableObject {
                 currentUser = basicUser
                 isAuthenticated = true
                 authState = .authenticated
-                await loadFullProfileAfterSignIn(uid: payload.uid, fallback: basicUser)
+                // 🔥 FIX 2.1(a): Force SwiftUI to pick up state change immediately on iPad
+                objectWillChange.send()
+                // Create Firestore profile if this is a first-time Apple Sign In user
+                // Wrapped in do/catch so failures never crash the app
+                do { await createFirestoreProfileIfNeeded(for: basicUser) } catch { print("⚠️ [Auth] Non-fatal: Firestore profile creation failed: \(error)") }
+                do { await loadFullProfileAfterSignIn(uid: payload.uid, fallback: basicUser) } catch { print("⚠️ [Auth] Non-fatal: profile loading failed: \(error)") }
                 // 🔥 FIX: Post login notification so AppState hydrates collections + attaches listeners
                 NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
                 if let user = currentUser {
@@ -362,13 +397,19 @@ class AuthenticationManager: ObservableObject {
             let payload = try await GoogleAuthService.shared.signIn()
             
             // 🔥 FIX: Try to load complete Firestore profile FIRST before showing basic auth data
-            if let firestoreUser = try? await UserFirestoreService.shared.fetchUser(id: payload.uid) {
-                // Use complete Firestore profile (has custom displayName, username, etc.)
-                currentUser = firestoreUser
+            let ownerEmailsG: Set<String> = ["keontapeat@gmail.com", "keontapeat@mychannel.live"]
+            let ownerUIDsG: Set<String> = ["7EAoUc1aKsNRqR4cYBIOYVGB3Mf2"]
+            var resolvedUser: User
+            if var firestoreUser = try? await UserFirestoreService.shared.fetchUser(id: payload.uid) {
+                // Use Google photo if Firestore has none
+                if firestoreUser.profileImageURL == nil || firestoreUser.profileImageURL?.isEmpty == true {
+                    firestoreUser = User(id: firestoreUser.id, username: firestoreUser.username, displayName: firestoreUser.displayName, email: firestoreUser.email, profileImageURL: payload.photoURL, bannerImageURL: firestoreUser.bannerImageURL, bio: firestoreUser.bio, subscriberCount: firestoreUser.subscriberCount, videoCount: firestoreUser.videoCount, isVerified: firestoreUser.isVerified, isCreator: firestoreUser.isCreator, createdAt: firestoreUser.createdAt, location: firestoreUser.location, website: firestoreUser.website, showWebsiteOnProfile: firestoreUser.showWebsiteOnProfile, showOnlineStatus: firestoreUser.showOnlineStatus)
+                }
+                resolvedUser = firestoreUser
                 print("✅ [GoogleAuth] Loaded complete profile: \(firestoreUser.displayName) (@\(firestoreUser.username))")
             } else {
                 // Fallback to basic Google Auth data if no Firestore profile exists
-                let basicUser = User(
+                resolvedUser = User(
                     id: payload.uid,
                     username: payload.email.components(separatedBy: "@").first ?? "google_user",
                     displayName: payload.displayName,
@@ -377,9 +418,14 @@ class AuthenticationManager: ObservableObject {
                     isVerified: true,
                     isCreator: true
                 )
-                currentUser = basicUser
-                print("⚠️ [GoogleAuth] Using basic auth data: \(basicUser.displayName)")
+                print("⚠️ [GoogleAuth] Using basic auth data: \(resolvedUser.displayName)")
             }
+            // Hardwire "MyChannel founder & creator" bio for both owner accounts
+            let isOwnerG = ownerUIDsG.contains(resolvedUser.id) || ownerEmailsG.contains(resolvedUser.email.lowercased())
+            if isOwnerG {
+                resolvedUser = User(id: resolvedUser.id, username: resolvedUser.username, displayName: resolvedUser.displayName, email: resolvedUser.email, profileImageURL: resolvedUser.profileImageURL, bannerImageURL: resolvedUser.bannerImageURL, bio: "MyChannel founder & creator", subscriberCount: resolvedUser.subscriberCount, videoCount: resolvedUser.videoCount, isVerified: resolvedUser.isVerified, isCreator: resolvedUser.isCreator, createdAt: resolvedUser.createdAt, location: resolvedUser.location, website: resolvedUser.website, showWebsiteOnProfile: resolvedUser.showWebsiteOnProfile, showOnlineStatus: resolvedUser.showOnlineStatus)
+            }
+            currentUser = resolvedUser
             
             isAuthenticated = true
             authState = .authenticated
@@ -476,11 +522,37 @@ class AuthenticationManager: ObservableObject {
     
     // MARK: - Private Helper Methods
     
+    /// Creates a Firestore profile document for first-time social sign-in users (Apple, Google) if one doesn't exist yet.
+    private func createFirestoreProfileIfNeeded(for user: User) async {
+        #if canImport(FirebaseFirestore)
+        do {
+            let existing = try? await UserFirestoreService.shared.fetchUser(id: user.id)
+            guard existing == nil else { return }
+            try await UserFirestoreService.shared.updateUser(user)
+            print("✅ [Auth] Created Firestore profile for new social sign-in user: \(user.displayName)")
+        } catch {
+            print("⚠️ [Auth] Could not create Firestore profile: \(error.localizedDescription)")
+        }
+        #endif
+    }
+
     /// After sign-in, load full profile from Firestore so Edit Profile choices (Show Website, privacy, etc.) stick across reload and sign-out/sign-in.
     private func loadFullProfileAfterSignIn(uid: String, fallback: User) async {
         #if canImport(FirebaseFirestore)
+        let ownerEmailsF: Set<String> = ["keontapeat@gmail.com", "keontapeat@mychannel.live"]
+        let ownerUIDsF: Set<String> = ["7EAoUc1aKsNRqR4cYBIOYVGB3Mf2"]
         do {
-            if let firestoreUser = try await UserFirestoreService.shared.fetchUser(id: uid) {
+            if var firestoreUser = try await UserFirestoreService.shared.fetchUser(id: uid) {
+                // Use Google/fallback photo if Firestore has none
+                if firestoreUser.profileImageURL == nil || firestoreUser.profileImageURL?.isEmpty == true,
+                   let fallbackPhoto = fallback.profileImageURL, !fallbackPhoto.isEmpty {
+                    firestoreUser = User(id: firestoreUser.id, username: firestoreUser.username, displayName: firestoreUser.displayName, email: firestoreUser.email, profileImageURL: fallbackPhoto, bannerImageURL: firestoreUser.bannerImageURL, bio: firestoreUser.bio, subscriberCount: firestoreUser.subscriberCount, videoCount: firestoreUser.videoCount, isVerified: firestoreUser.isVerified, isCreator: firestoreUser.isCreator, createdAt: firestoreUser.createdAt, location: firestoreUser.location, website: firestoreUser.website, showWebsiteOnProfile: firestoreUser.showWebsiteOnProfile, showOnlineStatus: firestoreUser.showOnlineStatus)
+                }
+                // Hardwire "MyChannel founder & creator" bio for both owner accounts
+                let isOwnerF = ownerUIDsF.contains(firestoreUser.id) || ownerEmailsF.contains(firestoreUser.email.lowercased())
+                if isOwnerF {
+                    firestoreUser = User(id: firestoreUser.id, username: firestoreUser.username, displayName: firestoreUser.displayName, email: firestoreUser.email, profileImageURL: firestoreUser.profileImageURL, bannerImageURL: firestoreUser.bannerImageURL, bio: "MyChannel founder & creator", subscriberCount: firestoreUser.subscriberCount, videoCount: firestoreUser.videoCount, isVerified: firestoreUser.isVerified, isCreator: firestoreUser.isCreator, createdAt: firestoreUser.createdAt, location: firestoreUser.location, website: firestoreUser.website, showWebsiteOnProfile: firestoreUser.showWebsiteOnProfile, showOnlineStatus: firestoreUser.showOnlineStatus)
+                }
                 currentUser = firestoreUser
                 AppState.shared.updateUser(firestoreUser)
                 try? await DatabaseService.shared.saveUser(firestoreUser)
@@ -521,6 +593,31 @@ class AuthenticationManager: ObservableObject {
             totalEarnings: user.totalEarnings,
             membershipTiers: user.membershipTiers
         )
+    }
+}
+
+// MARK: - Username → Email resolution
+extension AuthenticationManager {
+    /// Looks up the email address associated with a given username in Firestore.
+    /// Returns nil if the username is not found, allowing the caller to fall back to treating the input as an email.
+    func resolveEmailForUsername(_ username: String) async -> String? {
+        #if canImport(FirebaseFirestore)
+        do {
+            let snapshot = try await Firestore.firestore()
+                .collection("users")
+                .whereField("username", isEqualTo: username)
+                .limit(to: 1)
+                .getDocuments()
+            if let doc = snapshot.documents.first,
+               let email = doc.data()["email"] as? String, !email.isEmpty {
+                print("✅ [Auth] Resolved username '\(username)' → \(email)")
+                return email
+            }
+        } catch {
+            print("⚠️ [Auth] Username lookup failed: \(error.localizedDescription)")
+        }
+        #endif
+        return nil
     }
 }
 

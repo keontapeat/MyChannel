@@ -7,9 +7,12 @@
 
 import Foundation
 import SwiftUI
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 // 🔥 YouTube-Parity Search History Service
-// Manages search history with persistence and clear functionality
+// Manages search history with local UserDefaults cache + Firestore cross-device sync
 @MainActor
 class SearchHistoryService: ObservableObject {
     static let shared = SearchHistoryService()
@@ -22,9 +25,87 @@ class SearchHistoryService: ObservableObject {
     private let historyKey = "search_history"
     private let enabledKey = "search_history_enabled"
     
+    #if canImport(FirebaseFirestore)
+    private var db: Firestore { Firestore.firestore() }
+    private var listener: ListenerRegistration?
+    #endif
+    
     private init() {
         loadSearchHistory()
         loadSettings()
+    }
+    
+    // MARK: - Firestore Sync
+    
+    /// Start listening for cross-device search history updates
+    func startListening(userId: String) {
+        #if canImport(FirebaseFirestore)
+        listener?.remove()
+        listener = db.collection("users").document(userId).collection("search_history")
+            .order(by: "timestamp", descending: true)
+            .limit(to: maxHistoryItems)
+            .addSnapshotListener { [weak self] snap, _ in
+                guard let self = self, let docs = snap?.documents else { return }
+                let cloudItems: [SearchHistoryItem] = docs.compactMap { doc in
+                    let d = doc.data()
+                    guard let query = d["query"] as? String,
+                          let ts = (d["timestamp"] as? Timestamp)?.dateValue() else { return nil }
+                    let scopeRaw = d["scope"] as? String ?? "all"
+                    return SearchHistoryItem(
+                        id: doc.documentID,
+                        query: query,
+                        scope: SearchScope(rawValue: scopeRaw) ?? .all,
+                        timestamp: ts
+                    )
+                }
+                // Merge: cloud is source of truth
+                Task { @MainActor in
+                    self.searchHistory = cloudItems
+                    self.saveSearchHistoryLocal()
+                }
+            }
+        #endif
+    }
+    
+    func stopListening() {
+        #if canImport(FirebaseFirestore)
+        listener?.remove()
+        listener = nil
+        #endif
+    }
+    
+    private func syncToFirestore(_ item: SearchHistoryItem) {
+        #if canImport(FirebaseFirestore)
+        guard let uid = AppState.shared.currentUser?.id, !uid.isEmpty else { return }
+        let ref = db.collection("users").document(uid).collection("search_history").document(item.id)
+        ref.setData([
+            "query": item.query,
+            "scope": String(describing: item.scope),
+            "timestamp": Timestamp(date: item.timestamp)
+        ]) { error in
+            if let error = error { print("⚠️ [SearchHistory] Firestore sync error: \(error.localizedDescription)") }
+        }
+        #endif
+    }
+    
+    private func deleteFromFirestore(_ itemId: String) {
+        #if canImport(FirebaseFirestore)
+        guard let uid = AppState.shared.currentUser?.id, !uid.isEmpty else { return }
+        db.collection("users").document(uid).collection("search_history").document(itemId).delete()
+        #endif
+    }
+    
+    private func clearFirestoreHistory() {
+        #if canImport(FirebaseFirestore)
+        guard let uid = AppState.shared.currentUser?.id, !uid.isEmpty else { return }
+        let ref = db.collection("users").document(uid).collection("search_history")
+        ref.getDocuments { snap, _ in
+            guard let docs = snap?.documents else { return }
+            let batch = self.db.batch()
+            docs.forEach { batch.deleteDocument($0.reference) }
+            batch.commit(completion: nil)
+        }
+        #endif
     }
     
     // MARK: - Public Methods
@@ -53,19 +134,22 @@ class SearchHistoryService: ObservableObject {
             searchHistory = Array(searchHistory.prefix(maxHistoryItems))
         }
         
-        saveSearchHistory()
+        saveSearchHistoryLocal()
+        syncToFirestore(historyItem)
     }
     
     /// Remove specific search from history
     func removeSearch(_ item: SearchHistoryItem) {
         searchHistory.removeAll { $0.id == item.id }
-        saveSearchHistory()
+        saveSearchHistoryLocal()
+        deleteFromFirestore(item.id)
     }
     
     /// Clear all search history
     func clearAllHistory() {
         searchHistory.removeAll()
-        saveSearchHistory()
+        saveSearchHistoryLocal()
+        clearFirestoreHistory()
     }
     
     /// Toggle search history on/off
@@ -102,7 +186,7 @@ class SearchHistoryService: ObservableObject {
         searchHistory = decoded
     }
     
-    private func saveSearchHistory() {
+    private func saveSearchHistoryLocal() {
         guard let encoded = try? JSONEncoder().encode(searchHistory) else { return }
         userDefaults.set(encoded, forKey: historyKey)
     }

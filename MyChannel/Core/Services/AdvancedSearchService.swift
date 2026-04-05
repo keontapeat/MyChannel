@@ -218,7 +218,10 @@ class AdvancedSearchService: ObservableObject {
     }
     
     private func setupSearchEngine() {
-        searchIndexer.buildIndex(from: Video.sampleVideos, creators: User.sampleUsers)
+        Task {
+            let vids = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 50)
+            searchIndexer.buildIndex(from: vids, creators: User.sampleUsers)
+        }
         loadSearchHistory()
     }
     
@@ -227,7 +230,7 @@ class AdvancedSearchService: ObservableObject {
         filters: AdvancedSearchFilters
     ) async -> [VideoSearchResult] {
         
-        var videos = Video.sampleVideos
+        var videos: [Video] = []
         #if canImport(FirebaseFirestore)
         do {
             var queryRef: Query = db.collection("videos").whereField("visibility", isEqualTo: "public")
@@ -432,7 +435,8 @@ class AdvancedSearchService: ObservableObject {
     ) async -> [LiveStreamSearchResult] {
         
         // Filter for live videos
-        let liveVideos = Video.sampleVideos.filter { $0.isLiveStream }
+        let allVids = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 30)
+        let liveVideos = allVids.filter { $0.isLiveStream }
         
         let searchResults = liveVideos.compactMap { video -> LiveStreamSearchResult? in
             let relevanceScore = calculateRelevance(

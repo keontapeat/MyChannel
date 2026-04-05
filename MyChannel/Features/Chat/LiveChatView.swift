@@ -41,7 +41,22 @@ struct LiveChatView: View {
         .sheet(isPresented: $showingUserList) { ChatUserListView(chatService: chatService) }
         .sheet(isPresented: $showingChatSettings) { ChatSettingsView(chatService: chatService, streamId: streamId) }
         .sheet(isPresented: $showingSuperChatSheet) {
-            SuperChatView(streamId: streamId, chatService: chatService)
+            // 🔥 FIX 3.1.1: Gate Super Chat behind feature flag
+            if AppConfig.Features.enableTipping {
+                SuperChatView(streamId: streamId, chatService: chatService)
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "dollarsign.circle")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    Text("Super Chat Coming Soon")
+                        .font(.title3.bold())
+                    Text("This feature will be available in a future update.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+            }
         }
         .sheet(item: $selectedMessage) { message in
             MessageOptionsView(message: message, chatService: chatService)
@@ -158,12 +173,15 @@ struct LiveChatView: View {
                     .disabled(!chatService.isConnected)
                 
                 // Super Chat Button
-                Button(action: { showingSuperChatSheet = true }) {
-                    Image(systemName: "dollarsign.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.green)
+                // 🔥 FIX 3.1.1: Only show when tipping enabled
+                if AppConfig.Features.enableTipping {
+                    Button(action: { showingSuperChatSheet = true }) {
+                        Image(systemName: "dollarsign.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.green)
+                    }
+                    .disabled(!chatService.isConnected)
                 }
-                .disabled(!chatService.isConnected)
                 
                 // Send Button
                 Button(action: sendMessage) {
@@ -227,8 +245,8 @@ struct LiveChatView: View {
         
         let message = LiveChatMessage(
             streamId: streamId,
-            userId: "current-user-id",
-            username: "CurrentUser",
+            userId: AppState.shared.currentUser?.id ?? "",
+            username: AppState.shared.currentUser?.displayName ?? "User",
             content: content
         )
         

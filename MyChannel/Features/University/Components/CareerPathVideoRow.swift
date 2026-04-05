@@ -288,8 +288,10 @@ struct CareerPathVideoCard: View {
         skillsCovered: ["Accounting", "Tax", "Excel"]
     )
     
-    let sampleVideos = (0..<5).map { index in
-        UniversityVideo(
+    let sampleVideos: [UniversityVideo] = (0..<5).map { (index: Int) -> UniversityVideo in
+        let progress: Double = index == 0 ? 0.65 : 0.0
+        let lastWatched: Date? = index == 0 ? Date() : nil
+        return UniversityVideo(
             id: "\(index)",
             videoId: "vid\(index)",
             title: "Advanced Accounting Principles: Understanding Financial Statements",
@@ -304,8 +306,8 @@ struct CareerPathVideoCard: View {
             isUniversityContent: true,
             certificateEligible: true,
             aiCategorizationScore: 0.95,
-            watchProgress: index == 0 ? 0.65 : index == 1 ? 0.0 : 0.0,
-            lastWatchedAt: index == 0 ? Date() : nil,
+            watchProgress: progress,
+            lastWatchedAt: lastWatched,
             aiVerificationScore: 88,
             completed: index == 2
         )

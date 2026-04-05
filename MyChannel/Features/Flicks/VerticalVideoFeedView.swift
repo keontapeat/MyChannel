@@ -373,13 +373,14 @@ class FeedShortsViewModel: ObservableObject {
     func loadShorts() {
         isLoading = true
         
-        // Simulate loading shorts
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            self.shorts = Video.sampleVideos.filter { $0.isShort || $0.duration < 60 }
+        Task { @MainActor in
+            // Fetch short-form content from Firestore
+            let firestoreVids = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 20)
+            self.shorts = firestoreVids.filter { $0.isShort || $0.duration < 60 }
             
-            // If no shorts, make some regular videos into shorts
+            // If no shorts, use all fetched videos
             if self.shorts.isEmpty {
-                self.shorts = Array(Video.sampleVideos.prefix(10))
+                self.shorts = Array(firestoreVids.prefix(10))
             }
             
             self.isLoading = false

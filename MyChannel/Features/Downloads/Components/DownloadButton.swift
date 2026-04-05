@@ -95,7 +95,7 @@ struct DownloadButton: View {
         } else if isDownloaded {
             // Already downloaded, could show options
         } else {
-            if subscriptionService.isPlusSubscriber {
+            if !AppConfig.Features.enableSubscriptions || subscriptionService.isPlusSubscriber {
                 showingQualityPicker = true
             } else {
                 showingUpgrade = true
@@ -146,7 +146,7 @@ struct CompactDownloadButton: View {
     
     var body: some View {
         Button {
-            if subscriptionService.isPlusSubscriber {
+            if !AppConfig.Features.enableSubscriptions || subscriptionService.isPlusSubscriber {
                 showingQualityPicker = true
             } else {
                 showingUpgrade = true

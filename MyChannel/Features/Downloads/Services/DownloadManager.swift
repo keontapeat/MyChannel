@@ -52,9 +52,12 @@ class DownloadManager: ObservableObject {
                       thumbnailUrl: String, duration: TimeInterval, viewCount: Int, 
                       videoUrl: String, quality: DownloadedVideo.VideoQuality) async throws {
         
-        let isPlusSubscriber = await checkPlusSubscription()
-        guard isPlusSubscriber else {
-            throw DownloadError.subscriptionRequired
+        // 🔥 FIX 2.1(b): Skip subscription check when IAPs not submitted
+        if AppConfig.Features.enableSubscriptions {
+            let isPlusSubscriber = await checkPlusSubscription()
+            guard isPlusSubscriber else {
+                throw DownloadError.subscriptionRequired
+            }
         }
         
         guard !isVideoDownloaded(videoId: videoId) else {
