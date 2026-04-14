@@ -37,6 +37,7 @@ struct MusicHubView: View {
     @State private var showDiscover: Bool = false
     @State private var showUploadSheet: Bool = false
     @State private var showArtistCTA: Bool = true
+    @State private var showArtistDashboard: Bool = false
     @StateObject private var discoveryFeed = MusicDiscoveryFeedService.shared
     
     enum Segment: String, CaseIterable { case songs = "Songs", artists = "Artists", albums = "Albums" }
@@ -204,6 +205,9 @@ struct MusicHubView: View {
             .sheet(isPresented: $showUploadSheet) {
                 MusicUploadSheet()
             }
+            .navigationDestination(isPresented: $showArtistDashboard) {
+                ArtistDashboardView()
+            }
         }
     }
     
@@ -259,6 +263,15 @@ struct MusicHubView: View {
             Spacer()
             
             HStack(spacing: 16) {
+                Button {
+                    showArtistDashboard = true
+                    HapticManager.shared.impact(style: .light)
+                } label: {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(.blue)
+                }
+                
                 Button {
                     HapticManager.shared.impact(style: .light)
                 } label: {
