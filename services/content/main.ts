@@ -5065,6 +5065,437 @@ app.post('/v1/videos/bulk/unpublish', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Watch Later API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/users/:userId/watch-later - add video to watch later
+app.post('/v1/users/:userId/watch-later', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { videoId } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (!videoId) {
+      return res.status(400).json({ error: 'videoId is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const watchLaterRef = db.collection('users').doc(userId).collection('watchLater').doc(videoId);
+
+    await watchLaterRef.set({
+      videoId,
+      addedAt: now,
+      updatedAt: now
+    }, { merge: true });
+
+    res.status(201).json({ message: 'Added to watch later' });
+  } catch (error) {
+    console.error('Add to watch later error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/users/:userId/watch-later/:videoId - remove video from watch later
+app.delete('/v1/users/:userId/watch-later/:videoId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId, videoId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const watchLaterRef = db.collection('users').doc(userId).collection('watchLater').doc(videoId);
+    await watchLaterRef.delete();
+
+    res.json({ message: 'Removed from watch later' });
+  } catch (error) {
+    console.error('Remove from watch later error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/watch-later - list watch later videos
+app.get('/v1/users/:userId/watch-later', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const offset = (page - 1) * limit;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const watchLaterSnap = await db.collection('users').doc(userId).collection('watchLater')
+      .orderBy('addedAt', 'desc')
+      .offset(offset)
+      .limit(limit)
+      .get();
+
+    const videoIds = watchLaterSnap.docs.map(doc => doc.get('videoId'));
+    const videosMap: Record<string, FirestoreData> = {};
+    const userIds = new Set<string>();
+
+    for (const vid of videoIds) {
+      const videoSnap = await db.collection('videos').doc(vid).get();
+      if (videoSnap.exists) {
+        const videoData = videoSnap.data()!;
+        videosMap[vid] = videoData;
+        if (videoData.ownerId) userIds.add(String(videoData.ownerId));
+      }
+    }
+
+    const usersMap = await loadUsersMap(Array.from(userIds));
+
+    const videos = watchLaterSnap.docs.map(doc => {
+      const videoId = doc.get('videoId');
+      const videoData = videosMap[videoId] || null;
+      const userData = videoData ? usersMap[String(videoData.ownerId || '')] || null : null;
+      return {
+        videoId,
+        addedAt: toIsoString(doc.get('addedAt')),
+        video: videoData ? formatVideoSummary('', videoData, userData) : null
+      };
+    });
+
+    res.json({
+      userId,
+      videos,
+      pagination: {
+        page,
+        limit,
+        hasMore: videos.length === limit
+      }
+    });
+  } catch (error) {
+    console.error('List watch later error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Favorites API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/users/:userId/favorites - add video to favorites
+app.post('/v1/users/:userId/favorites', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { videoId } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (!videoId) {
+      return res.status(400).json({ error: 'videoId is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const favoritesRef = db.collection('users').doc(userId).collection('favorites').doc(videoId);
+
+    await favoritesRef.set({
+      videoId,
+      addedAt: now,
+      updatedAt: now
+    }, { merge: true });
+
+    res.status(201).json({ message: 'Added to favorites' });
+  } catch (error) {
+    console.error('Add to favorites error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/users/:userId/favorites/:videoId - remove video from favorites
+app.delete('/v1/users/:userId/favorites/:videoId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId, videoId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const favoritesRef = db.collection('users').doc(userId).collection('favorites').doc(videoId);
+    await favoritesRef.delete();
+
+    res.json({ message: 'Removed from favorites' });
+  } catch (error) {
+    console.error('Remove from favorites error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/favorites - list favorite videos
+app.get('/v1/users/:userId/favorites', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const offset = (page - 1) * limit;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const favoritesSnap = await db.collection('users').doc(userId).collection('favorites')
+      .orderBy('addedAt', 'desc')
+      .offset(offset)
+      .limit(limit)
+      .get();
+
+    const videoIds = favoritesSnap.docs.map(doc => doc.get('videoId'));
+    const videosMap: Record<string, FirestoreData> = {};
+    const userIds = new Set<string>();
+
+    for (const vid of videoIds) {
+      const videoSnap = await db.collection('videos').doc(vid).get();
+      if (videoSnap.exists) {
+        const videoData = videoSnap.data()!;
+        videosMap[vid] = videoData;
+        if (videoData.ownerId) userIds.add(String(videoData.ownerId));
+      }
+    }
+
+    const usersMap = await loadUsersMap(Array.from(userIds));
+
+    const videos = favoritesSnap.docs.map(doc => {
+      const videoId = doc.get('videoId');
+      const videoData = videosMap[videoId] || null;
+      const userData = videoData ? usersMap[String(videoData.ownerId || '')] || null : null;
+      return {
+        videoId,
+        addedAt: toIsoString(doc.get('addedAt')),
+        video: videoData ? formatVideoSummary('', videoData, userData) : null
+      };
+    });
+
+    res.json({
+      userId,
+      videos,
+      pagination: {
+        page,
+        limit,
+        hasMore: videos.length === limit
+      }
+    });
+  } catch (error) {
+    console.error('List favorites error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Continue Watching API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/users/:userId/continue-watching - update watch progress
+app.post('/v1/users/:userId/continue-watching', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { videoId, position, duration } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (!videoId) {
+      return res.status(400).json({ error: 'videoId is required' });
+    }
+
+    if (typeof position !== 'number') {
+      return res.status(400).json({ error: 'position is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const continueWatchingRef = db.collection('users').doc(userId).collection('continueWatching').doc(videoId);
+
+    await continueWatchingRef.set({
+      videoId,
+      position,
+      duration: typeof duration === 'number' ? duration : null,
+      lastWatchedAt: now,
+      updatedAt: now
+    }, { merge: true });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Update continue watching error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/continue-watching - list continue watching videos
+app.get('/v1/users/:userId/continue-watching', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const continueWatchingSnap = await db.collection('users').doc(userId).collection('continueWatching')
+      .orderBy('lastWatchedAt', 'desc')
+      .limit(limit)
+      .get();
+
+    const videoIds = continueWatchingSnap.docs.map(doc => doc.get('videoId'));
+    const videosMap: Record<string, FirestoreData> = {};
+    const userIds = new Set<string>();
+    const progressMap: Record<string, { position: number; duration: number | null }> = {};
+
+    for (const doc of continueWatchingSnap.docs) {
+      const videoId = doc.get('videoId');
+      progressMap[videoId] = {
+        position: typeof doc.get('position') === 'number' ? doc.get('position') : 0,
+        duration: typeof doc.get('duration') === 'number' ? doc.get('duration') : null
+      };
+
+      const videoSnap = await db.collection('videos').doc(videoId).get();
+      if (videoSnap.exists) {
+        const videoData = videoSnap.data()!;
+        videosMap[videoId] = videoData;
+        if (videoData.ownerId) userIds.add(String(videoData.ownerId));
+      }
+    }
+
+    const usersMap = await loadUsersMap(Array.from(userIds));
+
+    const videos = continueWatchingSnap.docs.map(doc => {
+      const videoId = doc.get('videoId');
+      const videoData = videosMap[videoId] || null;
+      const userData = videoData ? usersMap[String(videoData.ownerId || '')] || null : null;
+      const progress = progressMap[videoId] || { position: 0, duration: null };
+      const progressPercent = progress.duration && progress.duration > 0 ? Math.round((progress.position / progress.duration) * 100) : 0;
+
+      return {
+        videoId,
+        position: progress.position,
+        duration: progress.duration,
+        progressPercent,
+        lastWatchedAt: toIsoString(doc.get('lastWatchedAt')),
+        video: videoData ? formatVideoSummary('', videoData, userData) : null
+      };
+    });
+
+    res.json({
+      userId,
+      videos
+    });
+  } catch (error) {
+    console.error('List continue watching error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Add to Playlist from Video Detail API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/add-to-playlist - add video to playlist (convenience endpoint)
+app.post('/v1/videos/:videoId/add-to-playlist', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { playlistId } = req.body || {};
+
+    if (!playlistId) {
+      return res.status(400).json({ error: 'playlistId is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const playlistRef = db.collection('playlists').doc(playlistId);
+    const playlistSnap = await playlistRef.get();
+
+    if (!playlistSnap.exists) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const playlistData = playlistSnap.data()!;
+
+    if (String(playlistData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const playlistVideoRef = db.collection('playlists').doc(playlistId).collection('videos').doc(videoId);
+
+    await playlistVideoRef.set({
+      videoId,
+      addedAt: now,
+      order: Date.now()
+    }, { merge: true });
+
+    await playlistRef.update({
+      videoCount: admin.firestore.FieldValue.increment(1),
+      updatedAt: now
+    });
+
+    res.status(201).json({ message: 'Added to playlist' });
+  } catch (error) {
+    console.error('Add to playlist error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
