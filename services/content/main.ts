@@ -4304,6 +4304,343 @@ app.put('/v1/users/:userId/settings/preferences', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Monetization Basics API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /v1/users/:userId/monetization - get monetization settings
+app.get('/v1/users/:userId/monetization', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const monetizationSnap = await db.collection('users').doc(userId).collection('settings').doc('monetization').get();
+    const monetizationData = monetizationSnap.exists ? monetizationSnap.data()! : {};
+
+    res.json({
+      userId,
+      monetization: {
+        adsEnabled: monetizationData.adsEnabled || false,
+        midRollAds: monetizationData.midRollAds || false,
+        adFrequency: monetizationData.adFrequency || 'medium',
+        sponsorshipDisclosureEnabled: monetizationData.sponsorshipDisclosureEnabled !== false,
+        sponsorshipText: monetizationData.sponsorshipText || '',
+        monetizationPartner: monetizationData.monetizationPartner || null,
+        partnerId: monetizationData.partnerId || null
+      }
+    });
+  } catch (error) {
+    console.error('Get monetization error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/users/:userId/monetization - update monetization settings
+app.put('/v1/users/:userId/monetization', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { adsEnabled, midRollAds, adFrequency, sponsorshipDisclosureEnabled, sponsorshipText } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const patch: Record<string, any> = {
+      updatedAt: admin.firestore.Timestamp.now()
+    };
+
+    if (adsEnabled !== undefined) patch.adsEnabled = !!adsEnabled;
+    if (midRollAds !== undefined) patch.midRollAds = !!midRollAds;
+    if (adFrequency) patch.adFrequency = adFrequency;
+    if (sponsorshipDisclosureEnabled !== undefined) patch.sponsorshipDisclosureEnabled = !!sponsorshipDisclosureEnabled;
+    if (sponsorshipText !== undefined) patch.sponsorshipText = sponsorshipText;
+
+    await db.collection('users').doc(userId).collection('settings').doc('monetization').set(patch, { merge: true });
+
+    res.json({ message: 'Monetization settings updated' });
+  } catch (error) {
+    console.error('Update monetization error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/:id/sponsorship - add sponsorship disclosure to a video
+app.post('/v1/videos/:id/sponsorship', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { id } = req.params;
+    const { sponsorName, sponsorshipType, startTime, endTime } = req.body || {};
+
+    if (!sponsorName || typeof sponsorName !== 'string') {
+      return res.status(400).json({ error: 'sponsorName is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(id);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const sponsorshipRef = db.collection('videos').doc(id).collection('sponsorships').doc();
+
+    await sponsorshipRef.set({
+      sponsorName: sponsorName.trim(),
+      sponsorshipType: sponsorshipType || 'paid',
+      startTime: typeof startTime === 'number' ? startTime : null,
+      endTime: typeof endTime === 'number' ? endTime : null,
+      createdAt: now,
+      createdBy: user.userId
+    });
+
+    await videoRef.update({
+      hasSponsorship: true,
+      updatedAt: now
+    });
+
+    const sponsorshipSnap = await sponsorshipRef.get();
+
+    res.status(201).json({
+      sponsorship: {
+        id: sponsorshipRef.id,
+        sponsorName: sponsorshipSnap.data()!.sponsorName,
+        sponsorshipType: sponsorshipSnap.data()!.sponsorshipType,
+        startTime: sponsorshipSnap.data()!.startTime,
+        endTime: sponsorshipSnap.data()!.endTime,
+        createdAt: toIsoString(sponsorshipSnap.data()!.createdAt)
+      }
+    });
+  } catch (error) {
+    console.error('Add sponsorship error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Metadata API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PUT /v1/videos/:id/metadata - update video metadata (tags, category, language, license)
+app.put('/v1/videos/:id/metadata', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { id } = req.params;
+    const { tags, category, language, license, recordingDate, location } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(id);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const patch: Record<string, any> = {
+      updatedAt: admin.firestore.Timestamp.now()
+    };
+
+    if (Array.isArray(tags)) {
+      patch.tags = tags.filter(tag => typeof tag === 'string' && tag.trim().length > 0);
+    }
+    if (category) patch.category = category;
+    if (language) patch.language = language;
+    if (license) patch.license = license;
+    if (recordingDate) patch.recordingDate = recordingDate;
+    if (location) patch.location = location;
+
+    await videoRef.update(patch);
+
+    const updatedSnap = await videoRef.get();
+
+    res.json({
+      videoId: id,
+      metadata: {
+        tags: updatedSnap.data()!.tags || [],
+        category: updatedSnap.data()!.category || null,
+        language: updatedSnap.data()!.language || null,
+        license: updatedSnap.data()!.license || null,
+        recordingDate: updatedSnap.data()!.recordingDate || null,
+        location: updatedSnap.data()!.location || null
+      }
+    });
+  } catch (error) {
+    console.error('Update metadata error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:id/metadata - get video metadata
+app.get('/v1/videos/:id/metadata', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const videoSnap = await db.collection('videos').doc(id).get();
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    res.json({
+      videoId: id,
+      metadata: {
+        tags: Array.isArray(videoData.tags) ? videoData.tags : [],
+        category: videoData.category || null,
+        language: videoData.language || null,
+        license: videoData.license || null,
+        recordingDate: videoData.recordingDate || null,
+        location: videoData.location || null
+      }
+    });
+  } catch (error) {
+    console.error('Get metadata error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bulk Operations API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/bulk/delete - delete multiple videos at once
+app.post('/v1/videos/bulk/delete', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoIds } = req.body || {};
+
+    if (!Array.isArray(videoIds) || videoIds.length === 0) {
+      return res.status(400).json({ error: 'videoIds array is required' });
+    }
+
+    if (videoIds.length > 50) {
+      return res.status(400).json({ error: 'Cannot delete more than 50 videos at once' });
+    }
+
+    const batch = db.batch();
+    let deletedCount = 0;
+    let notOwnedCount = 0;
+
+    for (const videoId of videoIds) {
+      const videoRef = db.collection('videos').doc(videoId);
+      const videoSnap = await videoRef.get();
+
+      if (!videoSnap.exists) continue;
+
+      const videoData = videoSnap.data()!;
+
+      if (String(videoData.ownerId || '') === user.userId) {
+        batch.delete(videoRef);
+        deletedCount++;
+      } else {
+        notOwnedCount++;
+      }
+    }
+
+    if (deletedCount > 0) {
+      await batch.commit();
+    }
+
+    res.json({
+      deleted: deletedCount,
+      notOwned: notOwnedCount,
+      total: videoIds.length
+    });
+  } catch (error) {
+    console.error('Bulk delete error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/bulk/privacy - change privacy of multiple videos at once
+app.post('/v1/videos/bulk/privacy', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoIds, privacy } = req.body || {};
+
+    if (!Array.isArray(videoIds) || videoIds.length === 0) {
+      return res.status(400).json({ error: 'videoIds array is required' });
+    }
+
+    if (!privacy || typeof privacy !== 'string') {
+      return res.status(400).json({ error: 'privacy is required (public, private, unlisted)' });
+    }
+
+    if (!['public', 'private', 'unlisted'].includes(privacy)) {
+      return res.status(400).json({ error: 'privacy must be public, private, or unlisted' });
+    }
+
+    if (videoIds.length > 50) {
+      return res.status(400).json({ error: 'Cannot update more than 50 videos at once' });
+    }
+
+    const batch = db.batch();
+    let updatedCount = 0;
+    let notOwnedCount = 0;
+
+    for (const videoId of videoIds) {
+      const videoRef = db.collection('videos').doc(videoId);
+      const videoSnap = await videoRef.get();
+
+      if (!videoSnap.exists) continue;
+
+      const videoData = videoSnap.data()!;
+
+      if (String(videoData.ownerId || '') === user.userId) {
+        batch.update(videoRef, {
+          privacy,
+          updatedAt: admin.firestore.Timestamp.now()
+        });
+        updatedCount++;
+      } else {
+        notOwnedCount++;
+      }
+    }
+
+    if (updatedCount > 0) {
+      await batch.commit();
+    }
+
+    res.json({
+      updated: updatedCount,
+      notOwned: notOwnedCount,
+      total: videoIds.length,
+      privacy
+    });
+  } catch (error) {
+    console.error('Bulk privacy error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
