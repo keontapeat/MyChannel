@@ -6281,6 +6281,585 @@ app.get('/v1/users/:userId/archived', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Video Report/Flag API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/report - report a video
+app.post('/v1/videos/:videoId/report', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { reason, category, description } = req.body || {};
+
+    if (!reason || typeof reason !== 'string') {
+      return res.status(400).json({ error: 'reason is required' });
+    }
+
+    if (!category || typeof category !== 'string') {
+      return res.status(400).json({ error: 'category is required' });
+    }
+
+    const validCategories = ['violence', 'hate', 'harassment', 'spam', 'misinformation', 'copyright', 'other'];
+    if (!validCategories.includes(category)) {
+      return res.status(400).json({ error: `category must be one of: ${validCategories.join(', ')}` });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const reportRef = db.collection('videos').doc(videoId).collection('reports').doc();
+
+    await reportRef.set({
+      videoId,
+      reporterId: user.userId,
+      reason: reason.trim(),
+      category,
+      description: description || '',
+      status: 'pending',
+      createdAt: now,
+      reviewedAt: null,
+      reviewedBy: null,
+      actionTaken: null
+    });
+
+    await videoRef.update({
+      reportCount: admin.firestore.FieldValue.increment(1),
+      updatedAt: now
+    });
+
+    const reportSnap = await reportRef.get();
+
+    res.status(201).json({
+      reportId: reportRef.id,
+      videoId,
+      reason: reportSnap.data()!.reason,
+      category: reportSnap.data()!.category,
+      status: reportSnap.data()!.status,
+      createdAt: toIsoString(reportSnap.data()!.createdAt)
+    });
+  } catch (error) {
+    console.error('Report video error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/reports - list reports for a video (admin only)
+app.get('/v1/videos/:videoId/reports', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const reportsSnap = await videoRef.collection('reports')
+      .orderBy('createdAt', 'desc')
+      .limit(100)
+      .get();
+
+    const reports = reportsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        videoId: data.videoId,
+        reporterId: data.reporterId,
+        reason: data.reason,
+        category: data.category,
+        description: data.description,
+        status: data.status,
+        createdAt: toIsoString(data.createdAt),
+        reviewedAt: data.reviewedAt ? toIsoString(data.reviewedAt) : null,
+        reviewedBy: data.reviewedBy || null,
+        actionTaken: data.actionTaken || null
+      };
+    });
+
+    res.json({
+      videoId,
+      reports
+    });
+  } catch (error) {
+    console.error('List reports error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/reports/:reportId/review - review a report (admin only)
+app.put('/v1/videos/:videoId/reports/:reportId/review', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, reportId } = req.params;
+    const { status, actionTaken, notes } = req.body || {};
+
+    if (!status || typeof status !== 'string') {
+      return res.status(400).json({ error: 'status is required' });
+    }
+
+    const validStatuses = ['pending', 'approved', 'rejected', 'escalated'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
+    }
+
+    const reportRef = db.collection('videos').doc(videoId).collection('reports').doc(reportId);
+    const reportSnap = await reportRef.get();
+
+    if (!reportSnap.exists) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await reportRef.update({
+      status,
+      reviewedAt: now,
+      reviewedBy: user.userId,
+      actionTaken: actionTaken || null,
+      reviewNotes: notes || ''
+    });
+
+    res.json({
+      reportId,
+      status,
+      reviewedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Review report error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Thumbnail Customization API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PUT /v1/videos/:videoId/thumbnail - set custom thumbnail
+app.put('/v1/videos/:videoId/thumbnail', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { thumbnailUrl, timestamp } = req.body || {};
+
+    if (!thumbnailUrl || typeof thumbnailUrl !== 'string') {
+      return res.status(400).json({ error: 'thumbnailUrl is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      thumbnailUrl: thumbnailUrl.trim(),
+      updatedAt: now
+    };
+
+    if (typeof timestamp === 'number') {
+      patch.thumbnailTimestamp = timestamp;
+    }
+
+    await videoRef.update(patch);
+
+    res.json({
+      videoId,
+      thumbnailUrl: thumbnailUrl.trim(),
+      thumbnailTimestamp: patch.thumbnailTimestamp || null
+    });
+  } catch (error) {
+    console.error('Set thumbnail error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/:videoId/thumbnails/generate - generate auto thumbnails
+app.post('/v1/videos/:videoId/thumbnails/generate', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { count } = req.body || {};
+
+    const thumbnailCount = typeof count === 'number' ? Math.min(Math.max(count, 1), 10) : 3;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const duration = videoData.duration || 0;
+    const interval = duration > 0 ? duration / thumbnailCount : 0;
+
+    const thumbnails: any[] = [];
+    for (let i = 0; i < thumbnailCount; i++) {
+      const timestamp = interval > 0 ? Math.round(i * interval) : 0;
+      const thumbnailRef = videoRef.collection('thumbnails').doc();
+      const thumbnailId = thumbnailRef.id;
+
+      await thumbnailRef.set({
+        videoId,
+        thumbnailId,
+        timestamp,
+        url: videoData.thumbnailUrl || null,
+        status: 'pending',
+        createdAt: now
+      });
+
+      thumbnails.push({
+        id: thumbnailId,
+        timestamp,
+        status: 'pending'
+      });
+    }
+
+    await videoRef.update({
+      hasCustomThumbnails: true,
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      videoId,
+      thumbnails
+    });
+  } catch (error) {
+    console.error('Generate thumbnails error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/thumbnails - list video thumbnails
+app.get('/v1/videos/:videoId/thumbnails', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const thumbnailsSnap = await videoRef.collection('thumbnails')
+      .orderBy('timestamp', 'asc')
+      .get();
+
+    const thumbnails = thumbnailsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        timestamp: data.timestamp,
+        url: data.url,
+        status: data.status,
+        createdAt: toIsoString(data.createdAt)
+      };
+    });
+
+    res.json({
+      videoId,
+      currentThumbnail: videoSnap.data()!.thumbnailUrl || null,
+      thumbnails
+    });
+  } catch (error) {
+    console.error('List thumbnails error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Quality Presets API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/users/:userId/quality-presets - create a quality preset
+app.post('/v1/users/:userId/quality-presets', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { name, resolution, bitrate, framerate, codec } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ error: 'name is required' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const presetRef = db.collection('users').doc(userId).collection('qualityPresets').doc();
+
+    await presetRef.set({
+      name: name.trim(),
+      resolution: resolution || '1080p',
+      bitrate: bitrate || null,
+      framerate: framerate || null,
+      codec: codec || 'h264',
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const presetSnap = await presetRef.get();
+
+    res.status(201).json({
+      presetId: presetRef.id,
+      name: presetSnap.data()!.name,
+      resolution: presetSnap.data()!.resolution,
+      bitrate: presetSnap.data()!.bitrate,
+      framerate: presetSnap.data()!.framerate,
+      codec: presetSnap.data()!.codec,
+      createdAt: toIsoString(presetSnap.data()!.createdAt)
+    });
+  } catch (error) {
+    console.error('Create quality preset error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/quality-presets - list quality presets
+app.get('/v1/users/:userId/quality-presets', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const presetsSnap = await db.collection('users').doc(userId).collection('qualityPresets')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const presets = presetsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name,
+        resolution: data.resolution,
+        bitrate: data.bitrate,
+        framerate: data.framerate,
+        codec: data.codec,
+        createdAt: toIsoString(data.createdAt),
+        updatedAt: data.updatedAt ? toIsoString(data.updatedAt) : null
+      };
+    });
+
+    res.json({
+      userId,
+      presets
+    });
+  } catch (error) {
+    console.error('List quality presets error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/users/:userId/quality-presets/:presetId - update a quality preset
+app.put('/v1/users/:userId/quality-presets/:presetId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId, presetId } = req.params;
+    const { name, resolution, bitrate, framerate, codec } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const presetRef = db.collection('users').doc(userId).collection('qualityPresets').doc(presetId);
+    const presetSnap = await presetRef.get();
+
+    if (!presetSnap.exists) {
+      return res.status(404).json({ error: 'Preset not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (name) patch.name = name.trim();
+    if (resolution) patch.resolution = resolution;
+    if (typeof bitrate === 'number') patch.bitrate = bitrate;
+    if (typeof framerate === 'number') patch.framerate = framerate;
+    if (codec) patch.codec = codec;
+
+    await presetRef.update(patch);
+
+    res.json({
+      presetId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update quality preset error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/users/:userId/quality-presets/:presetId - delete a quality preset
+app.delete('/v1/users/:userId/quality-presets/:presetId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId, presetId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const presetRef = db.collection('users').doc(userId).collection('qualityPresets').doc(presetId);
+    await presetRef.delete();
+
+    res.json({ message: 'Preset deleted' });
+  } catch (error) {
+    console.error('Delete quality preset error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Export/Download History API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/download - track video download
+app.post('/v1/videos/:videoId/download', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { quality, format, size } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const downloadRef = db.collection('users').doc(user.userId).collection('downloadHistory').doc();
+
+    await downloadRef.set({
+      videoId,
+      quality: quality || 'unknown',
+      format: format || 'mp4',
+      size: size || null,
+      downloadedAt: now
+    });
+
+    await videoRef.update({
+      downloadCount: admin.firestore.FieldValue.increment(1),
+      updatedAt: now
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Track download error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/download-history - list download history
+app.get('/v1/users/:userId/download-history', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const offset = (page - 1) * limit;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const downloadSnap = await db.collection('users').doc(userId).collection('downloadHistory')
+      .orderBy('downloadedAt', 'desc')
+      .offset(offset)
+      .limit(limit)
+      .get();
+
+    const videoIds = downloadSnap.docs.map(doc => doc.get('videoId'));
+    const videosMap: Record<string, FirestoreData> = {};
+    const userIds = new Set<string>();
+
+    for (const vid of videoIds) {
+      const videoSnap = await db.collection('videos').doc(vid).get();
+      if (videoSnap.exists) {
+        const videoData = videoSnap.data()!;
+        videosMap[vid] = videoData;
+        if (videoData.ownerId) userIds.add(String(videoData.ownerId));
+      }
+    }
+
+    const usersMap = await loadUsersMap(Array.from(userIds));
+
+    const downloads = downloadSnap.docs.map(doc => {
+      const videoId = doc.get('videoId');
+      const videoData = videosMap[videoId] || null;
+      const userData = videoData ? usersMap[String(videoData.ownerId || '')] || null : null;
+      return {
+        videoId,
+        quality: doc.get('quality'),
+        format: doc.get('format'),
+        size: doc.get('size'),
+        downloadedAt: toIsoString(doc.get('downloadedAt')),
+        video: videoData ? formatVideoSummary('', videoData, userData) : null
+      };
+    });
+
+    res.json({
+      userId,
+      downloads,
+      pagination: {
+        page,
+        limit,
+        hasMore: downloads.length === limit
+      }
+    });
+  } catch (error) {
+    console.error('List download history error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
