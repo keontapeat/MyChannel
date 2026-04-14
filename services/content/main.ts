@@ -6014,6 +6014,273 @@ app.get('/v1/videos/:videoId/sharing-stats', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Video Transcoding Status API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PUT /v1/videos/:videoId/transcode-status - update transcoding status
+app.put('/v1/videos/:videoId/transcode-status', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const { status, progress, quality, errorMessage } = req.body || {};
+
+    if (!status || typeof status !== 'string') {
+      return res.status(400).json({ error: 'status is required' });
+    }
+
+    const validStatuses = ['pending', 'processing', 'completed', 'failed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      transcodeStatus: status,
+      transcodeUpdatedAt: now,
+      updatedAt: now
+    };
+
+    if (typeof progress === 'number' && progress >= 0 && progress <= 100) {
+      patch.transcodeProgress = progress;
+    }
+    if (quality) {
+      patch.transcodeQuality = quality;
+    }
+    if (errorMessage) {
+      patch.transcodeError = errorMessage;
+    }
+
+    await videoRef.update(patch);
+
+    res.json({
+      videoId,
+      status,
+      progress: patch.transcodeProgress || null,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update transcode status error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/transcode-status - get transcoding status
+app.get('/v1/videos/:videoId/transcode-status', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    res.json({
+      videoId,
+      status: videoData.transcodeStatus || 'unknown',
+      progress: videoData.transcodeProgress || 0,
+      quality: videoData.transcodeQuality || null,
+      error: videoData.transcodeError || null,
+      updatedAt: videoData.transcodeUpdatedAt ? toIsoString(videoData.transcodeUpdatedAt) : null
+    });
+  } catch (error) {
+    console.error('Get transcode status error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/transcoding - list videos currently being transcoded
+app.get('/v1/videos/transcoding', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { status } = req.query;
+
+    const query = db.collection('videos')
+      .where('ownerId', '==', user.userId);
+
+    if (status && typeof status === 'string') {
+      query.where('transcodeStatus', '==', status);
+    } else {
+      query.where('transcodeStatus', 'in', ['pending', 'processing']);
+    }
+
+    const snap = await query
+      .orderBy('transcodeUpdatedAt', 'desc')
+      .limit(50)
+      .get();
+
+    const videos = snap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        title: data.title,
+        transcodeStatus: data.transcodeStatus || 'unknown',
+        transcodeProgress: data.transcodeProgress || 0,
+        transcodeQuality: data.transcodeQuality || null,
+        transcodeError: data.transcodeError || null,
+        transcodeUpdatedAt: data.transcodeUpdatedAt ? toIsoString(data.transcodeUpdatedAt) : null
+      };
+    });
+
+    res.json({
+      userId: user.userId,
+      videos
+    });
+  } catch (error) {
+    console.error('List transcoding videos error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Archive API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PUT /v1/videos/:videoId/archive - archive a video
+app.put('/v1/videos/:videoId/archive', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await videoRef.update({
+      status: 'archived',
+      archivedAt: now,
+      privacy: 'private',
+      updatedAt: now
+    });
+
+    res.json({
+      videoId,
+      status: 'archived',
+      archivedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Archive video error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/unarchive - unarchive a video
+app.put('/v1/videos/:videoId/unarchive', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await videoRef.update({
+      status: 'published',
+      archivedAt: null,
+      privacy: 'public',
+      updatedAt: now
+    });
+
+    res.json({
+      videoId,
+      status: 'published'
+    });
+  } catch (error) {
+    console.error('Unarchive video error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/archived - list archived videos
+app.get('/v1/users/:userId/archived', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const offset = (page - 1) * limit;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const archivedSnap = await db.collection('videos')
+      .where('ownerId', '==', userId)
+      .where('status', '==', 'archived')
+      .orderBy('archivedAt', 'desc')
+      .offset(offset)
+      .limit(limit)
+      .get();
+
+    const videoIds = archivedSnap.docs.map(doc => doc.id);
+    const userIds = new Set<string>();
+
+    archivedSnap.docs.forEach(doc => {
+      const data = doc.data();
+      if (data.ownerId) userIds.add(String(data.ownerId));
+    });
+
+    const usersMap = await loadUsersMap(Array.from(userIds));
+
+    const videos = archivedSnap.docs.map(doc => {
+      const data = doc.data();
+      const userData = data.ownerId ? usersMap[String(data.ownerId)] || null : null;
+      return formatVideoSummary(doc.id, data, userData);
+    });
+
+    res.json({
+      userId,
+      videos,
+      pagination: {
+        page,
+        limit,
+        hasMore: videos.length === limit
+      }
+    });
+  } catch (error) {
+    console.error('List archived videos error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
