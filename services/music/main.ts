@@ -411,6 +411,100 @@ app.put('/v1/music/tracks/:trackId/publish', async (req, res) => {
   }
 });
 
+// PUT /v1/music/tracks/:trackId - Edit track metadata
+app.put('/v1/music/tracks/:trackId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { trackId } = req.params;
+    const { title, artistName, albumName, genre, isExplicit } = req.body || {};
+
+    const trackRef = db.collection('music_tracks').doc(trackId);
+    const trackSnap = await trackRef.get();
+
+    if (!trackSnap.exists) {
+      return res.status(404).json({ error: 'Track not found' });
+    }
+
+    const trackData = trackSnap.data()!;
+
+    if (String(trackData.artistId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const updates: any = {};
+    if (title !== undefined) updates.title = title.trim();
+    if (artistName !== undefined) updates.artistName = artistName.trim();
+    if (albumName !== undefined) updates.albumName = albumName.trim();
+    if (genre !== undefined) updates.genre = genre.trim();
+    if (isExplicit !== undefined) updates.isExplicit = isExplicit;
+    updates.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+
+    await trackRef.update(updates);
+
+    res.json({
+      trackId,
+      message: 'Track updated successfully'
+    });
+  } catch (error) {
+    console.error('Edit track error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/music/tracks/:trackId - Delete track
+app.delete('/v1/music/tracks/:trackId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { trackId } = req.params;
+
+    const trackRef = db.collection('music_tracks').doc(trackId);
+    const trackSnap = await trackRef.get();
+
+    if (!trackSnap.exists) {
+      return res.status(404).json({ error: 'Track not found' });
+    }
+
+    const trackData = trackSnap.data()!;
+
+    if (String(trackData.artistId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    // Delete audio file from storage
+    if (trackData.audioURL) {
+      const audioFileName = trackData.audioURL.split('/').pop();
+      if (audioFileName) {
+        const audioFile = bucket.file(`music/${user.userId}/tracks/${audioFileName}`);
+        await audioFile.delete().catch(() => {});
+      }
+    }
+
+    // Delete artwork from storage
+    if (trackData.artworkURL) {
+      const artworkFileName = trackData.artworkURL.split('/').pop();
+      if (artworkFileName) {
+        const artworkFile = bucket.file(`music/${user.userId}/artwork/${artworkFileName}`);
+        await artworkFile.delete().catch(() => {});
+      }
+    }
+
+    // Delete Firestore document
+    await trackRef.delete();
+
+    res.json({
+      trackId,
+      message: 'Track deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete track error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`🎵 Music service listening on port ${PORT}`);
