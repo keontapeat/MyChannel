@@ -4641,6 +4641,430 @@ app.post('/v1/videos/bulk/privacy', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Video Engagement Metrics API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:id/impression - record video impression (for CTR calculation)
+app.post('/v1/videos/:id/impression', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { source } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(id);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const impressionRef = db.collection('videos').doc(id).collection('impressions').doc(now.toDate().toISOString());
+
+    await impressionRef.set({
+      source: source || 'unknown',
+      timestamp: now
+    });
+
+    await videoRef.update({
+      impressionCount: admin.firestore.FieldValue.increment(1),
+      updatedAt: now
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Record impression error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:id/engagement - get engagement metrics (CTR, retention)
+app.get('/v1/videos/:id/engagement', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const days = parseInt(req.query.days as string) || 7;
+
+    const videoRef = db.collection('videos').doc(id);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+    const since = admin.firestore.Timestamp.fromDate(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+
+    const impressionsSnap = await videoRef.collection('impressions')
+      .where('timestamp', '>=', since)
+      .get();
+
+    const retentionSnap = await videoRef.collection('retention')
+      .where('timestamp', '>=', since)
+      .orderBy('timestamp', 'desc')
+      .limit(100)
+      .get();
+
+    const totalImpressions = impressionsSnap.size;
+    const totalViews = Number(videoData.views || 0);
+    const ctr = totalImpressions > 0 ? (totalViews / totalImpressions) * 100 : 0;
+
+    const retentionData = retentionSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        timestamp: toIsoString(data.timestamp),
+        watchTime: typeof data.watchTime === 'number' ? data.watchTime : 0,
+        videoPosition: typeof data.videoPosition === 'number' ? data.videoPosition : 0
+      };
+    });
+
+    const avgWatchTime = retentionData.length > 0 
+      ? retentionData.reduce((sum, r) => sum + r.watchTime, 0) / retentionData.length 
+      : 0;
+
+    const avgRetentionPercent = retentionData.length > 0 
+      ? retentionData.reduce((sum, r) => sum + (r.videoPosition || 0), 0) / retentionData.length 
+      : 0;
+
+    res.json({
+      videoId: id,
+      period: `${days} days`,
+      metrics: {
+        impressions: totalImpressions,
+        views: totalViews,
+        ctr: Math.round(ctr * 100) / 100,
+        avgWatchTime: Math.round(avgWatchTime),
+        avgRetentionPercent: Math.round(avgRetentionPercent * 100) / 100,
+        likeRate: totalViews > 0 ? (Number(videoData.likeCount || 0) / totalViews) * 100 : 0,
+        commentRate: totalViews > 0 ? (Number(videoData.commentCount || 0) / totalViews) * 100 : 0
+      },
+      retentionData: retentionData.slice(0, 20)
+    });
+  } catch (error) {
+    console.error('Get engagement error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/:id/retention - record retention data
+app.post('/v1/videos/:id/retention', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { watchTime, videoPosition } = req.body || {};
+
+    if (typeof watchTime !== 'number' || typeof videoPosition !== 'number') {
+      return res.status(400).json({ error: 'watchTime and videoPosition are required' });
+    }
+
+    const videoRef = db.collection('videos').doc(id);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const retentionRef = videoRef.collection('retention').doc(now.toDate().toISOString());
+
+    await retentionRef.set({
+      watchTime,
+      videoPosition,
+      timestamp: now
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Record retention error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Creator Dashboard Analytics API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /v1/users/:userId/analytics/dashboard - get creator dashboard analytics
+app.get('/v1/users/:userId/analytics/dashboard', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const days = parseInt(req.query.days as string) || 30;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const since = admin.firestore.Timestamp.fromDate(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+
+    const videosSnap = await db.collection('videos')
+      .where('ownerId', '==', userId)
+      .where('status', '==', 'published')
+      .where('createdAt', '>=', since)
+      .get();
+
+    const subscribersSnap = await db.collection('users').doc(userId).collection('subscribers').get();
+    const currentSubscribers = subscribersSnap.size;
+
+    const videos = videosSnap.docs.map(doc => doc.data());
+    const totalViews = videos.reduce((sum, v) => sum + (Number(v.views) || 0), 0);
+    const totalLikes = videos.reduce((sum, v) => sum + (Number(v.likeCount) || 0), 0);
+    const totalComments = videos.reduce((sum, v) => sum + (Number(v.commentCount) || 0), 0);
+
+    const subscriberHistorySnap = await db.collection('users').doc(userId).collection('analytics')
+      .doc('subscriberHistory')
+      .get();
+
+    const subscriberHistoryData = subscriberHistorySnap.exists ? subscriberHistorySnap.data()! : {};
+    const subscriberGrowth = Array.isArray(subscriberHistoryData.history) 
+      ? subscriberHistoryData.history.filter((h: any) => h.date >= since.toDate().toISOString())
+      : [];
+
+    const dailyViews: Record<string, number> = {};
+    videos.forEach(v => {
+      const date = v.createdAt ? v.createdAt.toDate().toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+      dailyViews[date] = (dailyViews[date] || 0) + (Number(v.views) || 0);
+    });
+
+    res.json({
+      userId,
+      period: `${days} days`,
+      summary: {
+        totalVideos: videos.length,
+        totalViews,
+        totalLikes,
+        totalComments,
+        currentSubscribers,
+        avgViewsPerVideo: videos.length > 0 ? Math.round(totalViews / videos.length) : 0,
+        avgLikeRate: totalViews > 0 ? Math.round((totalLikes / totalViews) * 100) / 100 : 0
+      },
+      subscriberGrowth: subscriberGrowth.slice(0, 30),
+      dailyViews: Object.entries(dailyViews).slice(0, 30).map(([date, views]) => ({ date, views }))
+    });
+  } catch (error) {
+    console.error('Get dashboard analytics error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/users/:userId/analytics/subscribers - record subscriber count for analytics
+app.post('/v1/users/:userId/analytics/subscribers', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { count } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (typeof count !== 'number') {
+      return res.status(400).json({ error: 'count is required' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const date = now.toDate().toISOString().split('T')[0];
+
+    const historyRef = db.collection('users').doc(userId).collection('analytics').doc('subscriberHistory');
+    const historySnap = await historyRef.get();
+
+    let history = [];
+    if (historySnap.exists) {
+      const data = historySnap.data()!;
+      history = Array.isArray(data.history) ? data.history : [];
+    }
+
+    history.push({ date, count, timestamp: now.toDate().toISOString() });
+    history = history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    history = history.slice(0, 365);
+
+    await historyRef.set({ history, updatedAt: now });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Record subscriber analytics error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Content Management API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/bulk/edit - bulk edit video metadata
+app.post('/v1/videos/bulk/edit', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoIds, title, description, category, tags, language } = req.body || {};
+
+    if (!Array.isArray(videoIds) || videoIds.length === 0) {
+      return res.status(400).json({ error: 'videoIds array is required' });
+    }
+
+    if (videoIds.length > 50) {
+      return res.status(400).json({ error: 'Cannot edit more than 50 videos at once' });
+    }
+
+    const batch = db.batch();
+    let editedCount = 0;
+    let notOwnedCount = 0;
+
+    for (const videoId of videoIds) {
+      const videoRef = db.collection('videos').doc(videoId);
+      const videoSnap = await videoRef.get();
+
+      if (!videoSnap.exists) continue;
+
+      const videoData = videoSnap.data()!;
+
+      if (String(videoData.ownerId || '') === user.userId) {
+        const patch: Record<string, any> = {
+          updatedAt: admin.firestore.Timestamp.now()
+        };
+
+        if (title) patch.title = title;
+        if (description) patch.description = description;
+        if (category) patch.category = category;
+        if (Array.isArray(tags)) patch.tags = tags;
+        if (language) patch.language = language;
+
+        batch.update(videoRef, patch);
+        editedCount++;
+      } else {
+        notOwnedCount++;
+      }
+    }
+
+    if (editedCount > 0) {
+      await batch.commit();
+    }
+
+    res.json({
+      edited: editedCount,
+      notOwned: notOwnedCount,
+      total: videoIds.length
+    });
+  } catch (error) {
+    console.error('Bulk edit error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/bulk/publish - bulk publish videos
+app.post('/v1/videos/bulk/publish', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoIds } = req.body || {};
+
+    if (!Array.isArray(videoIds) || videoIds.length === 0) {
+      return res.status(400).json({ error: 'videoIds array is required' });
+    }
+
+    if (videoIds.length > 50) {
+      return res.status(400).json({ error: 'Cannot publish more than 50 videos at once' });
+    }
+
+    const batch = db.batch();
+    let publishedCount = 0;
+    let notOwnedCount = 0;
+    const now = admin.firestore.Timestamp.now();
+
+    for (const videoId of videoIds) {
+      const videoRef = db.collection('videos').doc(videoId);
+      const videoSnap = await videoRef.get();
+
+      if (!videoSnap.exists) continue;
+
+      const videoData = videoSnap.data()!;
+
+      if (String(videoData.ownerId || '') === user.userId) {
+        batch.update(videoRef, {
+          status: 'published',
+          publishedAt: now,
+          updatedAt: now
+        });
+        publishedCount++;
+      } else {
+        notOwnedCount++;
+      }
+    }
+
+    if (publishedCount > 0) {
+      await batch.commit();
+    }
+
+    res.json({
+      published: publishedCount,
+      notOwned: notOwnedCount,
+      total: videoIds.length
+    });
+  } catch (error) {
+    console.error('Bulk publish error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/bulk/unpublish - bulk unpublish videos
+app.post('/v1/videos/bulk/unpublish', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoIds } = req.body || {};
+
+    if (!Array.isArray(videoIds) || videoIds.length === 0) {
+      return res.status(400).json({ error: 'videoIds array is required' });
+    }
+
+    if (videoIds.length > 50) {
+      return res.status(400).json({ error: 'Cannot unpublish more than 50 videos at once' });
+    }
+
+    const batch = db.batch();
+    let unpublishedCount = 0;
+    let notOwnedCount = 0;
+    const now = admin.firestore.Timestamp.now();
+
+    for (const videoId of videoIds) {
+      const videoRef = db.collection('videos').doc(videoId);
+      const videoSnap = await videoRef.get();
+
+      if (!videoSnap.exists) continue;
+
+      const videoData = videoSnap.data()!;
+
+      if (String(videoData.ownerId || '') === user.userId) {
+        batch.update(videoRef, {
+          status: 'draft',
+          updatedAt: now
+        });
+        unpublishedCount++;
+      } else {
+        notOwnedCount++;
+      }
+    }
+
+    if (unpublishedCount > 0) {
+      await batch.commit();
+    }
+
+    res.json({
+      unpublished: unpublishedCount,
+      notOwned: notOwnedCount,
+      total: videoIds.length
+    });
+  } catch (error) {
+    console.error('Bulk unpublish error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
