@@ -1263,6 +1263,123 @@ app.get('/v1/comments/:id/replies', async (req, res) => {
   }
 });
 
+// POST /v1/comments/:id/report - report a comment for moderation
+app.post('/v1/comments/:id/report', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { id } = req.params;
+    const { reason } = req.body || {};
+
+    if (!reason || typeof reason !== 'string') {
+      return res.status(400).json({ error: 'reason is required' });
+    }
+
+    const commentRef = db.collectionGroup('comments').where('id', '==', id).limit(1);
+    const commentSnap = await commentRef.get();
+
+    if (commentSnap.empty) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    const comment = commentSnap.docs[0];
+    const reportRef = comment.ref.collection('reports').doc(user.userId);
+    const existing = await reportRef.get();
+
+    if (existing.exists) {
+      return res.json({ message: 'Already reported' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await reportRef.set({
+      userId: user.userId,
+      reason: reason.trim(),
+      createdAt: now
+    });
+
+    await comment.ref.update({
+      reportCount: admin.firestore.FieldValue.increment(1),
+      updatedAt: now
+    });
+
+    res.status(201).json({ message: 'Comment reported' });
+  } catch (error) {
+    console.error('Report comment error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/comments/:id/hide - hide a comment (moderation action)
+app.post('/v1/comments/:id/hide', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { id } = req.params;
+    const { reason } = req.body || {};
+
+    const commentRef = db.collectionGroup('comments').where('id', '==', id).limit(1);
+    const commentSnap = await commentRef.get();
+
+    if (commentSnap.empty) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    const comment = commentSnap.docs[0];
+    const commentData = comment.data();
+
+    if (String(commentData.userId || '') === user.userId) {
+      return res.status(403).json({ error: 'Cannot hide your own comment' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await comment.ref.update({
+      hidden: true,
+      hiddenBy: user.userId,
+      hiddenReason: reason || null,
+      hiddenAt: now,
+      updatedAt: now
+    });
+
+    res.json({ message: 'Comment hidden' });
+  } catch (error) {
+    console.error('Hide comment error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/comments/:id/unhide - unhide a comment (moderation action)
+app.post('/v1/comments/:id/unhide', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { id } = req.params;
+
+    const commentRef = db.collectionGroup('comments').where('id', '==', id).limit(1);
+    const commentSnap = await commentRef.get();
+
+    if (commentSnap.empty) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await commentRef.update({
+      hidden: false,
+      hiddenBy: null,
+      hiddenReason: null,
+      hiddenAt: null,
+      updatedAt: now
+    });
+
+    res.json({ message: 'Comment unhidden' });
+  } catch (error) {
+    console.error('Unhide comment error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Playlists API
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1628,6 +1745,64 @@ app.put('/v1/playlists/:id/reorder', async (req, res) => {
     res.json(successMessage('Playlist reordered'));
   } catch (error) {
     console.error('Reorder playlist error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/playlists/:id/generate-thumbnail - auto-generate playlist thumbnail from first video
+app.post('/v1/playlists/:id/generate-thumbnail', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { id } = req.params;
+
+    const playlistRef = db.collection('playlists').doc(id);
+    const playlistSnap = await playlistRef.get();
+
+    if (!playlistSnap.exists) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    if (String(playlistSnap.data()!.userId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const videosSnap = await playlistRef.collection('videos')
+      .orderBy('order', 'asc')
+      .limit(1)
+      .get();
+
+    if (videosSnap.empty) {
+      return res.status(400).json({ error: 'Playlist is empty' });
+    }
+
+    const firstVideoId = String(videosSnap.docs[0].get('videoId') || '');
+    const videoSnap = await db.collection('videos').doc(firstVideoId).get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'First video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+    const thumbnailUrl = videoData.thumbnailUrl || null;
+
+    if (!thumbnailUrl) {
+      return res.status(400).json({ error: 'First video has no thumbnail' });
+    }
+
+    await playlistRef.update({
+      thumbnailUrl,
+      thumbnailGeneratedAt: admin.firestore.Timestamp.now(),
+      updatedAt: admin.firestore.Timestamp.now()
+    });
+
+    res.json({
+      thumbnailUrl,
+      message: 'Thumbnail generated from first video'
+    });
+  } catch (error) {
+    console.error('Generate thumbnail error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2233,6 +2408,211 @@ app.put('/v1/notifications/preferences', async (req, res) => {
     });
   } catch (error) {
     console.error('Update notification preferences error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Social Share API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /v1/videos/:id/share - get share link and embed code
+app.get('/v1/videos/:id/share', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const videoSnap = await db.collection('videos').doc(id).get();
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+    const baseUrl = process.env.BASE_URL || 'https://mychannel.live';
+    const shareUrl = `${baseUrl}/v/${id}`;
+    const embedUrl = `${baseUrl}/embed/${id}`;
+
+    const embedCode = `<iframe width="560" height="315" src="${embedUrl}" title="${videoData.title || 'Video'}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+
+    const compactEmbed = `<iframe src="${embedUrl}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`;
+
+    res.json({
+      shareUrl,
+      embedUrl,
+      embedCode,
+      compactEmbed,
+      videoId: id,
+      title: videoData.title || ''
+    });
+  } catch (error) {
+    console.error('Get share error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/:id/share/custom - generate custom embed with options
+app.post('/v1/videos/:id/share/custom', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { width, height, autoplay, controls, loop, muted } = req.body || {};
+
+    const videoSnap = await db.collection('videos').doc(id).get();
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+    const baseUrl = process.env.BASE_URL || 'https://mychannel.live';
+    const embedUrl = `${baseUrl}/embed/${id}`;
+
+    const w = width || '100%';
+    const h = height || '100%';
+    const autoplayAttr = autoplay ? 'autoplay' : '';
+    const controlsAttr = controls !== false ? 'controls' : '';
+    const loopAttr = loop ? 'loop' : '';
+    const mutedAttr = muted ? 'muted' : '';
+
+    const embedCode = `<iframe src="${embedUrl}?autoplay=${autoplay ? 1 : 0}&loop=${loop ? 1 : 0}&muted=${muted ? 1 : 0}" width="${w}" height="${h}" frameborder="0" ${autoplayAttr} ${controlsAttr} ${loopAttr} ${mutedAttr} allowfullscreen></iframe>`;
+
+    res.json({
+      embedCode,
+      embedUrl,
+      videoId: id,
+      title: videoData.title || '',
+      options: { width: w, height: h, autoplay, controls, loop, muted }
+    });
+  } catch (error) {
+    console.error('Custom share error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Advanced Analytics API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /v1/videos/:id/analytics - get detailed video analytics
+app.get('/v1/videos/:id/analytics', async (req, res) => {
+  try {
+    const user = await verifyAppToken(req.headers.authorization);
+    const { id } = req.params;
+
+    const videoSnap = await db.collection('videos').doc(id).get();
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (user && String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const videoId = id;
+    const now = admin.firestore.Timestamp.now();
+    const sevenDaysAgo = admin.firestore.Timestamp.fromDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+
+    const viewsSnap = await db.collection('events').where('videoId', '==', videoId).get();
+    const totalViews = viewsSnap.size;
+
+    const recentViewsSnap = await db.collection('events')
+      .where('videoId', '==', videoId)
+      .where('timestamp', '>=', sevenDaysAgo)
+      .get();
+
+    const dailyViews: Record<string, number> = {};
+    for (let i = 0; i < 7; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      dailyViews[dateStr] = 0;
+    }
+
+    recentViewsSnap.docs.forEach(doc => {
+      const timestamp = doc.get('timestamp') as admin.firestore.Timestamp;
+      if (timestamp) {
+        const dateStr = timestamp.toDate().toISOString().split('T')[0];
+        if (dailyViews.hasOwnProperty(dateStr)) {
+          dailyViews[dateStr]++;
+        }
+      }
+    });
+
+    const likesSnap = await db.collection('videos').doc(videoId).collection('likes').get();
+    const totalLikes = likesSnap.size;
+
+    const dislikesSnap = await db.collection('videos').doc(videoId).collection('dislikes').get();
+    const totalDislikes = dislikesSnap.size;
+
+    const commentsSnap = await db.collection('videos').doc(videoId).collection('comments').get();
+    const totalComments = commentsSnap.size;
+
+    const sharesSnap = await db.collection('videos').doc(videoId).collection('shares').get();
+    const totalShares = sharesSnap.size;
+
+    res.json({
+      videoId,
+      totalViews,
+      totalLikes,
+      totalDislikes,
+      totalComments,
+      totalShares,
+      engagementRate: totalViews > 0 ? ((totalLikes + totalComments + totalShares) / totalViews * 100).toFixed(2) : '0',
+      dailyViews,
+      period: '7 days',
+      updatedAt: now.toDate().toISOString()
+    });
+  } catch (error) {
+    console.error('Get video analytics error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/analytics/demographics - get video demographics (stubbed for now)
+app.get('/v1/analytics/demographics', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.query;
+
+    if (!videoId) {
+      return res.status(400).json({ error: 'videoId is required' });
+    }
+
+    const videoSnap = await db.collection('videos').doc(String(videoId)).get();
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    res.json({
+      videoId,
+      ageGroups: [
+        { range: '13-17', percentage: 15 },
+        { range: '18-24', percentage: 35 },
+        { range: '25-34', percentage: 25 },
+        { range: '35-44', percentage: 15 },
+        { range: '45+', percentage: 10 }
+      ],
+      gender: [
+        { gender: 'male', percentage: 55 },
+        { gender: 'female', percentage: 45 }
+      ],
+      topCountries: [
+        { country: 'US', percentage: 40 },
+        { country: 'UK', percentage: 15 },
+        { country: 'CA', percentage: 10 },
+        { country: 'AU', percentage: 8 },
+        { country: 'Other', percentage: 27 }
+      ]
+    });
+  } catch (error) {
+    console.error('Get demographics error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
