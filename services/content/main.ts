@@ -3994,6 +3994,316 @@ app.put('/v1/videos/:id/download/enable', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// FCM Push Notifications API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/fcm/register - register FCM token for push notifications
+app.post('/v1/fcm/register', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { token, platform } = req.body || {};
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'token is required' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const tokenRef = db.collection('users').doc(user.userId).collection('fcmTokens').doc(token);
+
+    await tokenRef.set({
+      token,
+      platform: platform || 'unknown',
+      active: true,
+      registeredAt: now,
+      updatedAt: now
+    }, { merge: true });
+
+    res.json({ message: 'FCM token registered' });
+  } catch (error) {
+    console.error('Register FCM token error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/fcm/unregister - unregister FCM token
+app.delete('/v1/fcm/unregister', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { token } = req.body || {};
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'token is required' });
+    }
+
+    const tokenRef = db.collection('users').doc(user.userId).collection('fcmTokens').doc(token);
+    await tokenRef.delete();
+
+    res.json({ message: 'FCM token unregistered' });
+  } catch (error) {
+    console.error('Unregister FCM token error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/fcm/send - send push notification (admin/internal use)
+app.post('/v1/fcm/send', async (req, res) => {
+  try {
+    const { userId, title, body, data } = req.body || {};
+
+    if (!userId || !title) {
+      return res.status(400).json({ error: 'userId and title are required' });
+    }
+
+    const tokensSnap = await db.collection('users').doc(userId).collection('fcmTokens')
+      .where('active', '==', true)
+      .get();
+
+    if (tokensSnap.empty) {
+      return res.json({ message: 'No active FCM tokens found', sent: 0 });
+    }
+
+    const tokens = tokensSnap.docs.map(doc => doc.get('token'));
+    const message = {
+      notification: {
+        title,
+        body: body || ''
+      },
+      data: data || {},
+      tokens
+    };
+
+    try {
+      const response = await admin.messaging().sendMulticast(message);
+      res.json({
+        successCount: response.successCount,
+        failureCount: response.failureCount,
+        sent: tokens.length
+      });
+    } catch (error: any) {
+      console.error('FCM send error:', error);
+      res.status(500).json({ error: 'Failed to send push notification' });
+    }
+  } catch (error) {
+    console.error('Send FCM error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/fcm/broadcast - broadcast notification to subscribers
+app.post('/v1/fcm/broadcast', async (req, res) => {
+  try {
+    const { creatorId, title, body, data } = req.body || {};
+
+    if (!creatorId || !title) {
+      return res.status(400).json({ error: 'creatorId and title are required' });
+    }
+
+    const subscribersSnap = await db.collection('users').doc(creatorId).collection('subscribers')
+      .limit(500)
+      .get();
+
+    if (subscribersSnap.empty) {
+      return res.json({ message: 'No subscribers found', sent: 0 });
+    }
+
+    const subscriberIds = subscribersSnap.docs.map(doc => doc.id);
+    const tokens: string[] = [];
+
+    for (const subscriberId of subscriberIds) {
+      const tokensSnap = await db.collection('users').doc(subscriberId).collection('fcmTokens')
+        .where('active', '==', true)
+        .get();
+      
+      tokensSnap.docs.forEach(doc => {
+        const token = doc.get('token');
+        if (token) tokens.push(token);
+      });
+    }
+
+    if (tokens.length === 0) {
+      return res.json({ message: 'No active FCM tokens found', sent: 0 });
+    }
+
+    const message = {
+      notification: {
+        title,
+        body: body || ''
+      },
+      data: data || {},
+      tokens
+    };
+
+    try {
+      const response = await admin.messaging().sendMulticast(message);
+      res.json({
+        successCount: response.successCount,
+        failureCount: response.failureCount,
+        sent: tokens.length,
+        subscriberCount: subscriberIds.length
+      });
+    } catch (error: any) {
+      console.error('FCM broadcast error:', error);
+      res.status(500).json({ error: 'Failed to broadcast push notification' });
+    }
+  } catch (error) {
+    console.error('Broadcast FCM error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User Profile Settings API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /v1/users/:userId/settings - get user settings
+app.get('/v1/users/:userId/settings', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const settingsSnap = await db.collection('users').doc(userId).collection('settings').doc('profile').get();
+    const privacySnap = await db.collection('users').doc(userId).collection('settings').doc('privacy').get();
+    const preferencesSnap = await db.collection('users').doc(userId).collection('settings').doc('preferences').get();
+
+    const settingsData = settingsSnap.exists ? settingsSnap.data()! : {};
+    const privacyData = privacySnap.exists ? privacySnap.data()! : {};
+    const preferencesData = preferencesSnap.exists ? preferencesSnap.data()! : {};
+
+    res.json({
+      userId,
+      settings: {
+        profile: {
+          displayName: settingsData.displayName || null,
+          bio: settingsData.bio || null,
+          location: settingsData.location || null,
+          website: settingsData.website || null
+        },
+        privacy: {
+          profileVisibility: privacyData.profileVisibility || 'public',
+          activityVisibility: privacyData.activityVisibility || 'public',
+          allowMessages: privacyData.allowMessages !== false,
+          showSubscriberCount: privacyData.showSubscriberCount !== false
+        },
+        preferences: {
+          language: preferencesData.language || 'en',
+          theme: preferencesData.theme || 'auto',
+          autoplay: preferencesData.autoplay !== false,
+          defaultQuality: preferencesData.defaultQuality || 'auto',
+          showAnnotations: preferencesData.showAnnotations !== false
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get settings error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/users/:userId/settings/profile - update profile settings
+app.put('/v1/users/:userId/settings/profile', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { displayName, bio, location, website } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const patch: Record<string, any> = {
+      updatedAt: admin.firestore.Timestamp.now()
+    };
+
+    if (displayName !== undefined) patch.displayName = displayName;
+    if (bio !== undefined) patch.bio = bio;
+    if (location !== undefined) patch.location = location;
+    if (website !== undefined) patch.website = website;
+
+    await db.collection('users').doc(userId).collection('settings').doc('profile').set(patch, { merge: true });
+
+    res.json({ message: 'Profile settings updated' });
+  } catch (error) {
+    console.error('Update profile settings error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/users/:userId/settings/privacy - update privacy settings
+app.put('/v1/users/:userId/settings/privacy', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { profileVisibility, activityVisibility, allowMessages, showSubscriberCount } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const patch: Record<string, any> = {
+      updatedAt: admin.firestore.Timestamp.now()
+    };
+
+    if (profileVisibility) patch.profileVisibility = profileVisibility;
+    if (activityVisibility) patch.activityVisibility = activityVisibility;
+    if (allowMessages !== undefined) patch.allowMessages = !!allowMessages;
+    if (showSubscriberCount !== undefined) patch.showSubscriberCount = !!showSubscriberCount;
+
+    await db.collection('users').doc(userId).collection('settings').doc('privacy').set(patch, { merge: true });
+
+    res.json({ message: 'Privacy settings updated' });
+  } catch (error) {
+    console.error('Update privacy settings error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/users/:userId/settings/preferences - update preferences
+app.put('/v1/users/:userId/settings/preferences', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { language, theme, autoplay, defaultQuality, showAnnotations } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const patch: Record<string, any> = {
+      updatedAt: admin.firestore.Timestamp.now()
+    };
+
+    if (language) patch.language = language;
+    if (theme) patch.theme = theme;
+    if (autoplay !== undefined) patch.autoplay = !!autoplay;
+    if (defaultQuality) patch.defaultQuality = defaultQuality;
+    if (showAnnotations !== undefined) patch.showAnnotations = !!showAnnotations;
+
+    await db.collection('users').doc(userId).collection('settings').doc('preferences').set(patch, { merge: true });
+
+    res.json({ message: 'Preferences updated' });
+  } catch (error) {
+    console.error('Update preferences error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
