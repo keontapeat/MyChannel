@@ -22,8 +22,19 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_TODO", {
   apiVersion: "2024-04-10",
 });
 
-const PAYOUT_RATE_USD = 0.004; // $0.004 per stream
-const MINIMUM_PAYOUT_USD = 10.0; // $10 minimum to trigger payout
+const PAYOUT_RATE_USD = 0.004; // $0.004 per stream (MyChannel internal)
+const MINIMUM_PAYOUT_USD = 0.0; // No minimum for on-demand payouts
+const INSTANT_PAYOUT_FEE_USD = 1.0; // $1 fee for instant payouts
+
+// External platform rates
+const PLATFORM_RATES = {
+  spotify: 0.004, // $0.004 per stream
+  apple_music: 0.007, // $0.007 per stream
+  youtube_music: 0.0025, // $0.0025 per stream
+  amazon_music: 0.005, // $0.005 per stream
+  tidal: 0.012, // $0.012 per stream
+  deezer: 0.004 // $0.004 per stream
+};
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -158,6 +169,196 @@ exports.payoutArtist = async (req, res) => {
     console.error("❌ Payout error:", err);
     return res.status(500).json({
       error: err.message || "Payout failed",
+    });
+  }
+};
+
+/**
+ * POST /requestPayout
+ * Body: { artistId: string, payoutType: "instant" | "standard" }
+ *
+ * Request on-demand payout with no minimum threshold
+ */
+exports.requestPayout = async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  if (req.method === "OPTIONS") {
+    res.set("Access-Control-Allow-Methods", "POST");
+    res.set("Access-Control-Allow-Headers", "Content-Type,Authorization");
+    return res.status(204).send("");
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const { artistId, payoutType } = req.body || {};
+  if (!artistId) {
+    return res.status(400).json({ error: "artistId is required" });
+  }
+
+  const type = payoutType || "standard";
+
+  try {
+    // 1. Fetch artist's Stripe connected account ID
+    const stripeDoc = await db.collection("artist_stripe").doc(artistId).get();
+    if (!stripeDoc.exists || !stripeDoc.data().stripeAccountId) {
+      return res.status(400).json({
+        error: "Artist has not connected Stripe. Complete onboarding first.",
+      });
+    }
+    const stripeAccountId = stripeDoc.data().stripeAccountId;
+
+    // 2. Calculate unpaid streams
+    const unpaidTracksSnap = await db
+      .collection("music_tracks")
+      .where("artistId", "==", artistId)
+      .get();
+
+    let unpaidStreams = 0;
+    const trackIds = [];
+    unpaidTracksSnap.forEach((doc) => {
+      const data = doc.data();
+      const lastPaid = data.lastPaidAt ? data.lastPaidAt.toDate() : null;
+      if (!lastPaid) {
+        unpaidStreams += data.streamCount || 0;
+        trackIds.push(doc.id);
+      }
+    });
+
+    const basePayoutAmountUSD = unpaidStreams * PAYOUT_RATE_USD;
+
+    // 3. Apply instant payout fee if applicable
+    let finalAmountUSD = basePayoutAmountUSD;
+    let fee = 0;
+    if (type === "instant") {
+      fee = INSTANT_PAYOUT_FEE_USD;
+      finalAmountUSD = basePayoutAmountUSD - fee;
+    }
+
+    if (finalAmountUSD <= 0) {
+      return res.status(200).json({
+        success: false,
+        message: `Insufficient balance for payout. Available: $${basePayoutAmountUSD.toFixed(2)}`,
+        availableUSD: basePayoutAmountUSD,
+      });
+    }
+
+    // 4. Create Stripe Transfer
+    const amountCents = Math.floor(finalAmountUSD * 100);
+    const transfer = await stripe.transfers.create({
+      amount: amountCents,
+      currency: "usd",
+      destination: stripeAccountId,
+      description: `MyChannel Music ${type} payout — ${unpaidStreams} streams @ $${PAYOUT_RATE_USD}/stream`,
+      metadata: {
+        artistId,
+        streams: String(unpaidStreams),
+        payoutType: type,
+        fee: String(fee),
+      },
+    });
+
+    // 5. Record payout request
+    const payoutRef = db.collection("music_payout_requests").doc();
+    await payoutRef.set({
+      id: payoutRef.id,
+      artistId,
+      stripeTransferId: transfer.id,
+      stripeAccountId,
+      baseAmount: basePayoutAmountUSD,
+      fee,
+      finalAmount: finalAmountUSD,
+      streams: unpaidStreams,
+      payoutType: type,
+      status: "processing",
+      requestedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // 6. Mark tracks as paid
+    const batch = db.batch();
+    for (const trackId of trackIds) {
+      batch.update(db.collection("music_tracks").doc(trackId), {
+        lastPaidAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+
+    console.log(
+      `✅ ${type} payout requested: $${finalAmountUSD.toFixed(2)} → ${stripeAccountId} (${unpaidStreams} streams)`
+    );
+
+    return res.status(200).json({
+      success: true,
+      payoutRequestId: payoutRef.id,
+      transferId: transfer.id,
+      amountUSD: finalAmountUSD,
+      fee,
+      streams: unpaidStreams,
+      estimatedDelivery: type === "instant" ? "1-2 business days" : "5-7 business days",
+    });
+  } catch (err) {
+    console.error("❌ Payout request error:", err);
+    return res.status(500).json({
+      error: err.message || "Payout request failed",
+    });
+  }
+};
+
+/**
+ * GET /getAvailableBalance
+ * Query: { artistId: string }
+ *
+ * Calculate available balance for payout
+ */
+exports.getAvailableBalance = async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  if (req.method === "OPTIONS") {
+    res.set("Access-Control-Allow-Methods", "GET");
+    res.set("Access-Control-Allow-Headers", "Content-Type,Authorization");
+    return res.status(204).send("");
+  }
+
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const { artistId } = req.query || {};
+  if (!artistId) {
+    return res.status(400).json({ error: "artistId is required" });
+  }
+
+  try {
+    // Calculate unpaid streams
+    const unpaidTracksSnap = await db
+      .collection("music_tracks")
+      .where("artistId", "==", artistId)
+      .get();
+
+    let unpaidStreams = 0;
+    unpaidTracksSnap.forEach((doc) => {
+      const data = doc.data();
+      const lastPaid = data.lastPaidAt ? data.lastPaidAt.toDate() : null;
+      if (!lastPaid) {
+        unpaidStreams += data.streamCount || 0;
+      }
+    });
+
+    const baseAmountUSD = unpaidStreams * PAYOUT_RATE_USD;
+    const instantAmountUSD = baseAmountUSD - INSTANT_PAYOUT_FEE_USD;
+
+    return res.status(200).json({
+      artistId,
+      unpaidStreams,
+      baseAmountUSD,
+      instantPayoutAmountUSD: Math.max(0, instantAmountUSD),
+      instantPayoutFee: INSTANT_PAYOUT_FEE_USD,
+      estimatedStandardDelivery: "5-7 business days",
+      estimatedInstantDelivery: "1-2 business days",
+    });
+  } catch (err) {
+    console.error("❌ Get available balance error:", err);
+    return res.status(500).json({
+      error: err.message || "Failed to get available balance",
     });
   }
 };

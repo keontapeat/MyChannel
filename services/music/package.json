@@ -1,0 +1,25 @@
+{
+  "name": "music-service",
+  "version": "1.0.0",
+  "description": "MyChannel Music Service - Artist upload, distribution, analytics, and payouts",
+  "main": "main.ts",
+  "scripts": {
+    "start": "ts-node main.ts",
+    "dev": "ts-node-dev main.ts",
+    "build": "tsc",
+    "deploy": "gcloud functions deploy music --runtime nodejs20 --trigger-http --allow-unauthenticated"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "firebase-admin": "^12.0.0",
+    "@google-cloud/storage": "^7.0.0",
+    "crypto": "^1.0.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.17",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0",
+    "ts-node-dev": "^2.0.0"
+  }
+}
