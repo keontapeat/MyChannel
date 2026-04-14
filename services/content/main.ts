@@ -6860,6 +6860,566 @@ app.get('/v1/users/:userId/download-history', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Video Description Templates API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/users/:userId/description-templates - create a description template
+app.post('/v1/users/:userId/description-templates', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { name, template, tags } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ error: 'name is required' });
+    }
+
+    if (!template || typeof template !== 'string') {
+      return res.status(400).json({ error: 'template is required' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const templateRef = db.collection('users').doc(userId).collection('descriptionTemplates').doc();
+
+    await templateRef.set({
+      name: name.trim(),
+      template: template.trim(),
+      tags: Array.isArray(tags) ? tags : [],
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const templateSnap = await templateRef.get();
+
+    res.status(201).json({
+      templateId: templateRef.id,
+      name: templateSnap.data()!.name,
+      template: templateSnap.data()!.template,
+      tags: templateSnap.data()!.tags,
+      createdAt: toIsoString(templateSnap.data()!.createdAt)
+    });
+  } catch (error) {
+    console.error('Create description template error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/description-templates - list description templates
+app.get('/v1/users/:userId/description-templates', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const templatesSnap = await db.collection('users').doc(userId).collection('descriptionTemplates')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const templates = templatesSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name,
+        template: data.template,
+        tags: data.tags,
+        createdAt: toIsoString(data.createdAt),
+        updatedAt: data.updatedAt ? toIsoString(data.updatedAt) : null
+      };
+    });
+
+    res.json({
+      userId,
+      templates
+    });
+  } catch (error) {
+    console.error('List description templates error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/users/:userId/description-templates/:templateId - update a description template
+app.put('/v1/users/:userId/description-templates/:templateId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId, templateId } = req.params;
+    const { name, template, tags } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const templateRef = db.collection('users').doc(userId).collection('descriptionTemplates').doc(templateId);
+    const templateSnap = await templateRef.get();
+
+    if (!templateSnap.exists) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (name) patch.name = name.trim();
+    if (template) patch.template = template.trim();
+    if (Array.isArray(tags)) patch.tags = tags;
+
+    await templateRef.update(patch);
+
+    res.json({
+      templateId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update description template error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/users/:userId/description-templates/:templateId - delete a description template
+app.delete('/v1/users/:userId/description-templates/:templateId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId, templateId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const templateRef = db.collection('users').doc(userId).collection('descriptionTemplates').doc(templateId);
+    await templateRef.delete();
+
+    res.json({ message: 'Template deleted' });
+  } catch (error) {
+    console.error('Delete description template error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video End Screen Configuration API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PUT /v1/videos/:videoId/end-screen - set end screen configuration
+app.put('/v1/videos/:videoId/end-screen', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { elements } = req.body || {};
+
+    if (!Array.isArray(elements)) {
+      return res.status(400).json({ error: 'elements array is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const validElements = elements.filter((el: any) => 
+      el.type && (el.type === 'video' || el.type === 'playlist' || el.type === 'channel') && el.targetId
+    );
+
+    await videoRef.update({
+      endScreenElements: validElements,
+      hasEndScreen: validElements.length > 0,
+      updatedAt: now
+    });
+
+    res.json({
+      videoId,
+      elements: validElements,
+      hasEndScreen: validElements.length > 0
+    });
+  } catch (error) {
+    console.error('Set end screen error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/end-screen - get end screen configuration
+app.get('/v1/videos/:videoId/end-screen', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    res.json({
+      videoId,
+      elements: videoData.endScreenElements || [],
+      hasEndScreen: videoData.hasEndScreen || false
+    });
+  } catch (error) {
+    console.error('Get end screen error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Playlist Collaboration API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PUT /v1/playlists/:playlistId/share - share playlist and add collaborators
+app.put('/v1/playlists/:playlistId/share', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { playlistId } = req.params;
+    const { isPublic, collaboratorIds } = req.body || {};
+
+    const playlistRef = db.collection('playlists').doc(playlistId);
+    const playlistSnap = await playlistRef.get();
+
+    if (!playlistSnap.exists) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const playlistData = playlistSnap.data()!;
+
+    if (String(playlistData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (typeof isPublic === 'boolean') {
+      patch.isPublic = isPublic;
+    }
+
+    if (Array.isArray(collaboratorIds)) {
+      patch.collaboratorIds = collaboratorIds;
+    }
+
+    await playlistRef.update(patch);
+
+    res.json({
+      playlistId,
+      isPublic: patch.isPublic || playlistData.isPublic,
+      collaboratorIds: patch.collaboratorIds || playlistData.collaboratorIds || []
+    });
+  } catch (error) {
+    console.error('Share playlist error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/playlists/:playlistId/collaborators - add collaborator to playlist
+app.post('/v1/playlists/:playlistId/collaborators', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { playlistId } = req.params;
+    const { collaboratorId, role } = req.body || {};
+
+    if (!collaboratorId || typeof collaboratorId !== 'string') {
+      return res.status(400).json({ error: 'collaboratorId is required' });
+    }
+
+    const playlistRef = db.collection('playlists').doc(playlistId);
+    const playlistSnap = await playlistRef.get();
+
+    if (!playlistSnap.exists) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const playlistData = playlistSnap.data()!;
+
+    if (String(playlistData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const collaboratorRef = playlistRef.collection('collaborators').doc(collaboratorId);
+
+    await collaboratorRef.set({
+      userId: collaboratorId,
+      role: role || 'editor',
+      addedBy: user.userId,
+      addedAt: now
+    });
+
+    const currentCollaboratorIds = Array.isArray(playlistData.collaboratorIds) ? playlistData.collaboratorIds : [];
+    if (!currentCollaboratorIds.includes(collaboratorId)) {
+      await playlistRef.update({
+        collaboratorIds: [...currentCollaboratorIds, collaboratorId],
+        updatedAt: now
+      });
+    }
+
+    res.status(201).json({
+      collaboratorId,
+      role: role || 'editor',
+      addedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Add collaborator error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/playlists/:playlistId/collaborators/:collaboratorId - remove collaborator
+app.delete('/v1/playlists/:playlistId/collaborators/:collaboratorId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { playlistId, collaboratorId } = req.params;
+
+    const playlistRef = db.collection('playlists').doc(playlistId);
+    const playlistSnap = await playlistRef.get();
+
+    if (!playlistSnap.exists) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const playlistData = playlistSnap.data()!;
+
+    if (String(playlistData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await playlistRef.collection('collaborators').doc(collaboratorId).delete();
+
+    const currentCollaboratorIds = Array.isArray(playlistData.collaboratorIds) ? playlistData.collaboratorIds : [];
+    const updatedCollaboratorIds = currentCollaboratorIds.filter(id => id !== collaboratorId);
+
+    await playlistRef.update({
+      collaboratorIds: updatedCollaboratorIds,
+      updatedAt: now
+    });
+
+    res.json({ message: 'Collaborator removed' });
+  } catch (error) {
+    console.error('Remove collaborator error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/playlists/:playlistId/collaborators - list playlist collaborators
+app.get('/v1/playlists/:playlistId/collaborators', async (req, res) => {
+  try {
+    const { playlistId } = req.params;
+
+    const playlistRef = db.collection('playlists').doc(playlistId);
+    const playlistSnap = await playlistRef.get();
+
+    if (!playlistSnap.exists) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const collaboratorsSnap = await playlistRef.collection('collaborators').get();
+
+    const collaborators = collaboratorsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        userId: data.userId,
+        role: data.role,
+        addedBy: data.addedBy,
+        addedAt: toIsoString(data.addedAt)
+      };
+    });
+
+    res.json({
+      playlistId,
+      collaborators
+    });
+  } catch (error) {
+    console.error('List collaborators error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Milestone Tracking API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/milestones - track video milestone
+app.post('/v1/videos/:videoId/milestones', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const { type, value, notified } = req.body || {};
+
+    if (!type || typeof type !== 'string') {
+      return res.status(400).json({ error: 'type is required' });
+    }
+
+    const validTypes = ['views', 'likes', 'comments', 'shares', 'subscribers', 'watchTime'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ error: `type must be one of: ${validTypes.join(', ')}` });
+    }
+
+    if (typeof value !== 'number') {
+      return res.status(400).json({ error: 'value is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const milestoneRef = db.collection('videos').doc(videoId).collection('milestones').doc(`${type}_${value}`);
+
+    await milestoneRef.set({
+      videoId,
+      type,
+      value,
+      notified: notified || false,
+      achievedAt: now
+    }, { merge: true });
+
+    res.status(201).json({
+      milestoneId: milestoneRef.id,
+      type,
+      value,
+      achievedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Track milestone error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/milestones - list video milestones
+app.get('/v1/videos/:videoId/milestones', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const milestonesSnap = await videoRef.collection('milestones')
+      .orderBy('achievedAt', 'desc')
+      .limit(100)
+      .get();
+
+    const milestones = milestonesSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        type: data.type,
+        value: data.value,
+        notified: data.notified,
+        achievedAt: toIsoString(data.achievedAt)
+      };
+    });
+
+    res.json({
+      videoId,
+      milestones
+    });
+  } catch (error) {
+    console.error('List milestones error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/milestones - list milestones across user's videos
+app.get('/v1/users/:userId/milestones', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { type } = req.query;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const userVideosSnap = await db.collection('videos')
+      .where('ownerId', '==', userId)
+      .select('id')
+      .get();
+
+    const videoIds = userVideosSnap.docs.map(doc => doc.id);
+
+    if (videoIds.length === 0) {
+      return res.json({ userId, milestones: [] });
+    }
+
+    const allMilestones: any[] = [];
+    for (const vid of videoIds) {
+      const query = db.collection('videos').doc(vid).collection('milestones');
+      if (type && typeof type === 'string') {
+        query.where('type', '==', type);
+      }
+      const milestonesSnap = await query
+        .orderBy('achievedAt', 'desc')
+        .limit(10)
+        .get();
+
+      milestonesSnap.docs.forEach(doc => {
+        const data = doc.data();
+        allMilestones.push({
+          id: doc.id,
+          videoId: vid,
+          type: data.type,
+          value: data.value,
+          notified: data.notified,
+          achievedAt: toIsoString(data.achievedAt)
+        });
+      });
+    }
+
+    allMilestones.sort((a, b) => new Date(b.achievedAt).getTime() - new Date(a.achievedAt).getTime());
+
+    res.json({
+      userId,
+      milestones: allMilestones.slice(0, 50)
+    });
+  } catch (error) {
+    console.error('List user milestones error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
