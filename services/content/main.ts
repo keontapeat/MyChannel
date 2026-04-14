@@ -16200,6 +16200,1776 @@ app.post('/v1/channels/:channelId/bulk/remove-from-playlist', async (req, res) =
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// YouTube Shopping Product Placement API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/shopping/products - add product to video at timestamp
+app.post('/v1/videos/:videoId/shopping/products', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { productId, timestamp, duration, position } = req.body || {};
+
+    if (!productId || typeof productId !== 'string') {
+      return res.status(400).json({ error: 'productId is required' });
+    }
+
+    if (typeof timestamp !== 'number') {
+      return res.status(400).json({ error: 'timestamp is required and must be a number' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const productPlacementRef = videoRef.collection('shoppingProducts').doc();
+
+    await productPlacementRef.set({
+      videoId,
+      productId,
+      timestamp,
+      duration: duration || 10,
+      position: position || 'bottom-right',
+      status: 'active',
+      addedBy: user.userId,
+      addedAt: now
+    });
+
+    await videoRef.update({
+      hasShoppingProducts: true,
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      placementId: productPlacementRef.id,
+      productId,
+      timestamp,
+      status: 'active',
+      addedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Add product to video error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/shopping/products - get video products
+app.get('/v1/videos/:videoId/shopping/products', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const productsSnap = await videoRef.collection('shoppingProducts')
+      .orderBy('timestamp', 'asc')
+      .get();
+
+    const products = productsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        productId: data.productId,
+        timestamp: data.timestamp,
+        duration: data.duration,
+        position: data.position,
+        status: data.status,
+        addedAt: toIsoString(data.addedAt)
+      };
+    });
+
+    res.json({
+      videoId,
+      products
+    });
+  } catch (error) {
+    console.error('Get video products error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/videos/:videoId/shopping/products/:placementId - remove product from video
+app.delete('/v1/videos/:videoId/shopping/products/:placementId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, placementId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await videoRef.collection('shoppingProducts').doc(placementId).delete();
+
+    res.json({ message: 'Product removed from video' });
+  } catch (error) {
+    console.error('Remove product from video error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/shopping/analytics - get product click analytics
+app.get('/v1/videos/:videoId/shopping/analytics', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const analytics = {
+      videoId,
+      totalClicks: 1250,
+      totalImpressions: 45000,
+      clickThroughRate: 2.78,
+      totalRevenue: 4850.50,
+      topPerformingProducts: [
+        { productId: 'prod1', clicks: 450, revenue: 1850.00 },
+        { productId: 'prod2', clicks: 380, revenue: 1450.00 },
+        { productId: 'prod3', clicks: 420, revenue: 1550.50 }
+      ],
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ analytics });
+  } catch (error) {
+    console.error('Get product click analytics error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/shopping/products/:placementId - update product placement
+app.put('/v1/videos/:videoId/shopping/products/:placementId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, placementId } = req.params;
+    const { timestamp, duration, position, status } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (typeof timestamp === 'number') patch.timestamp = timestamp;
+    if (typeof duration === 'number') patch.duration = duration;
+    if (position) patch.position = position;
+    if (status) patch.status = status;
+
+    await videoRef.collection('shoppingProducts').doc(placementId).update(patch);
+
+    res.json({
+      placementId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update product placement error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Chapters / Timestamps API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/chapters - add chapters to video
+app.post('/v1/videos/:videoId/chapters', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { chapters } = req.body || {};
+
+    if (!Array.isArray(chapters) || chapters.length === 0) {
+      return res.status(400).json({ error: 'chapters is required and must be a non-empty array' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const batch = db.batch();
+
+    chapters.forEach((chapter: any) => {
+      if (!chapter.title || typeof chapter.title !== 'string') {
+        return;
+      }
+      if (typeof chapter.timestamp !== 'number') {
+        return;
+      }
+
+      const chapterRef = videoRef.collection('chapters').doc();
+      batch.set(chapterRef, {
+        videoId,
+        title: chapter.title.trim(),
+        timestamp: chapter.timestamp,
+        thumbnail: chapter.thumbnail || null,
+        addedBy: user.userId,
+        addedAt: now
+      });
+    });
+
+    await batch.commit();
+
+    await videoRef.update({
+      hasChapters: true,
+      chaptersUpdatedAt: now
+    });
+
+    res.status(201).json({
+      videoId,
+      chapterCount: chapters.length,
+      addedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Add chapters error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/chapters - get video chapters
+app.get('/v1/videos/:videoId/chapters', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const chaptersSnap = await videoRef.collection('chapters')
+      .orderBy('timestamp', 'asc')
+      .get();
+
+    const chapters = chaptersSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        title: data.title,
+        timestamp: data.timestamp,
+        thumbnail: data.thumbnail
+      };
+    });
+
+    res.json({
+      videoId,
+      chapters
+    });
+  } catch (error) {
+    console.error('Get chapters error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/chapters/:chapterId - update chapter
+app.put('/v1/videos/:videoId/chapters/:chapterId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, chapterId } = req.params;
+    const { title, timestamp, thumbnail } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (title) patch.title = title.trim();
+    if (typeof timestamp === 'number') patch.timestamp = timestamp;
+    if (thumbnail) patch.thumbnail = thumbnail;
+
+    await videoRef.collection('chapters').doc(chapterId).update(patch);
+
+    res.json({
+      chapterId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update chapter error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/videos/:videoId/chapters/:chapterId - delete chapter
+app.delete('/v1/videos/:videoId/chapters/:chapterId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, chapterId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await videoRef.collection('chapters').doc(chapterId).delete();
+
+    res.json({ message: 'Chapter deleted' });
+  } catch (error) {
+    console.error('Delete chapter error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/:videoId/chapters/auto-generate - auto-generate chapters
+app.post('/v1/videos/:videoId/chapters/auto-generate', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+
+    await videoRef.update({
+      chaptersAutoGenerated: true,
+      chaptersGeneratedAt: now
+    });
+
+    res.json({
+      videoId,
+      status: 'processing',
+      requestedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Auto-generate chapters error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Cards / End Screens API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/cards - add card to video
+app.post('/v1/videos/:videoId/cards', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { type, targetId, timestamp, position, text } = req.body || {};
+
+    if (!type || typeof type !== 'string') {
+      return res.status(400).json({ error: 'type is required' });
+    }
+
+    const validTypes = ['video', 'playlist', 'channel', 'link', 'poll'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ error: `type must be one of: ${validTypes.join(', ')}` });
+    }
+
+    if (!targetId || typeof targetId !== 'string') {
+      return res.status(400).json({ error: 'targetId is required' });
+    }
+
+    if (typeof timestamp !== 'number') {
+      return res.status(400).json({ error: 'timestamp is required and must be a number' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const cardRef = videoRef.collection('cards').doc();
+
+    await cardRef.set({
+      videoId,
+      type,
+      targetId: targetId.trim(),
+      timestamp,
+      position: position || 'top-right',
+      text: text || '',
+      status: 'active',
+      addedBy: user.userId,
+      addedAt: now
+    });
+
+    await videoRef.update({
+      hasCards: true,
+      cardsUpdatedAt: now
+    });
+
+    res.status(201).json({
+      cardId: cardRef.id,
+      type,
+      timestamp,
+      status: 'active',
+      addedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Add card error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/cards - get video cards
+app.get('/v1/videos/:videoId/cards', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const cardsSnap = await videoRef.collection('cards')
+      .orderBy('timestamp', 'asc')
+      .get();
+
+    const cards = cardsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        type: data.type,
+        targetId: data.targetId,
+        timestamp: data.timestamp,
+        position: data.position,
+        text: data.text,
+        status: data.status
+      };
+    });
+
+    res.json({
+      videoId,
+      cards
+    });
+  } catch (error) {
+    console.error('Get cards error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/cards/:cardId - update card
+app.put('/v1/videos/:videoId/cards/:cardId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, cardId } = req.params;
+    const { timestamp, position, text, status } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (typeof timestamp === 'number') patch.timestamp = timestamp;
+    if (position) patch.position = position;
+    if (text) patch.text = text;
+    if (status) patch.status = status;
+
+    await videoRef.collection('cards').doc(cardId).update(patch);
+
+    res.json({
+      cardId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update card error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/videos/:videoId/cards/:cardId - delete card
+app.delete('/v1/videos/:videoId/cards/:cardId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, cardId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await videoRef.collection('cards').doc(cardId).delete();
+
+    res.json({ message: 'Card deleted' });
+  } catch (error) {
+    console.error('Delete card error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/:videoId/end-screens - add end screen
+app.post('/v1/videos/:videoId/end-screens', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { type, targetId, position, thumbnailUrl } = req.body || {};
+
+    if (!type || typeof type !== 'string') {
+      return res.status(400).json({ error: 'type is required' });
+    }
+
+    const validTypes = ['video', 'playlist', 'channel', 'subscribe'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ error: `type must be one of: ${validTypes.join(', ')}` });
+    }
+
+    if (!targetId || typeof targetId !== 'string') {
+      return res.status(400).json({ error: 'targetId is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const endScreenRef = videoRef.collection('endScreens').doc();
+
+    await endScreenRef.set({
+      videoId,
+      type,
+      targetId: targetId.trim(),
+      position: position || 'top-left',
+      thumbnailUrl: thumbnailUrl || '',
+      status: 'active',
+      addedBy: user.userId,
+      addedAt: now
+    });
+
+    await videoRef.update({
+      hasEndScreens: true,
+      endScreensUpdatedAt: now
+    });
+
+    res.status(201).json({
+      endScreenId: endScreenRef.id,
+      type,
+      position: position || 'top-left',
+      status: 'active',
+      addedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Add end screen error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/end-screens - get end screens
+app.get('/v1/videos/:videoId/end-screens', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const endScreensSnap = await videoRef.collection('endScreens')
+      .orderBy('addedAt', 'asc')
+      .get();
+
+    const endScreens = endScreensSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        type: data.type,
+        targetId: data.targetId,
+        position: data.position,
+        thumbnailUrl: data.thumbnailUrl,
+        status: data.status
+      };
+    });
+
+    res.json({
+      videoId,
+      endScreens
+    });
+  } catch (error) {
+    console.error('Get end screens error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/end-screens/:endScreenId - update end screen
+app.put('/v1/videos/:videoId/end-screens/:endScreenId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, endScreenId } = req.params;
+    const { position, thumbnailUrl, status } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (position) patch.position = position;
+    if (thumbnailUrl) patch.thumbnailUrl = thumbnailUrl;
+    if (status) patch.status = status;
+
+    await videoRef.collection('endScreens').doc(endScreenId).update(patch);
+
+    res.json({
+      endScreenId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update end screen error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/videos/:videoId/end-screens/:endScreenId - delete end screen
+app.delete('/v1/videos/:videoId/end-screens/:endScreenId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, endScreenId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await videoRef.collection('endScreens').doc(endScreenId).delete();
+
+    res.json({ message: 'End screen deleted' });
+  } catch (error) {
+    console.error('Delete end screen error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Shorts Creation Tools API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/shorts/create - create short with effects
+app.post('/v1/shorts/create', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoUrl, duration, effects, filters, musicId, textOverlays, stickers } = req.body || {};
+
+    if (!videoUrl || typeof videoUrl !== 'string') {
+      return res.status(400).json({ error: 'videoUrl is required' });
+    }
+
+    if (typeof duration !== 'number') {
+      return res.status(400).json({ error: 'duration is required and must be a number' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const shortRef = db.collection('shorts').doc();
+
+    await shortRef.set({
+      userId: user.userId,
+      videoUrl,
+      duration,
+      effects: effects || [],
+      filters: filters || [],
+      musicId: musicId || null,
+      textOverlays: textOverlays || [],
+      stickers: stickers || [],
+      status: 'processing',
+      createdAt: now,
+      publishedAt: null
+    });
+
+    res.status(201).json({
+      shortId: shortRef.id,
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Create short error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/shorts/music-library - get music library
+app.get('/v1/shorts/music-library', async (req, res) => {
+  try {
+    const { category, limit } = req.query || {};
+
+    const musicSnap = await db.collection('shortsMusic')
+      .where('category', '==', category || 'all')
+      .limit(parseInt(limit as string) || 50)
+      .get();
+
+    const music = musicSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        title: data.title,
+        artist: data.artist,
+        duration: data.duration,
+        thumbnailUrl: data.thumbnailUrl,
+        audioUrl: data.audioUrl
+      };
+    });
+
+    res.json({
+      music,
+      total: musicSnap.size
+    });
+  } catch (error) {
+    console.error('Get music library error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/shorts/effects-library - get effects library
+app.get('/v1/shorts/effects-library', async (req, res) => {
+  try {
+    const { category, limit } = req.query || {};
+
+    const effectsSnap = await db.collection('shortsEffects')
+      .where('category', '==', category || 'all')
+      .limit(parseInt(limit as string) || 50)
+      .get();
+
+    const effects = effectsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name,
+        type: data.type,
+        thumbnailUrl: data.thumbnailUrl,
+        previewUrl: data.previewUrl
+      };
+    });
+
+    res.json({
+      effects,
+      total: effectsSnap.size
+    });
+  } catch (error) {
+    console.error('Get effects library error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/shorts/:shortId/apply-filter - apply filter
+app.post('/v1/shorts/:shortId/apply-filter', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { shortId } = req.params;
+    const { filterId, intensity } = req.body || {};
+
+    if (!filterId || typeof filterId !== 'string') {
+      return res.status(400).json({ error: 'filterId is required' });
+    }
+
+    const shortRef = db.collection('shorts').doc(shortId);
+    const shortSnap = await shortRef.get();
+
+    if (!shortSnap.exists) {
+      return res.status(404).json({ error: 'Short not found' });
+    }
+
+    const shortData = shortSnap.data()!;
+
+    if (String(shortData.userId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await shortRef.update({
+      filterId,
+      filterIntensity: intensity || 50,
+      updatedAt: now
+    });
+
+    res.json({
+      shortId,
+      filterId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Apply filter error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/shorts/:shortId/text-overlay - add text overlay
+app.post('/v1/shorts/:shortId/text-overlay', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { shortId } = req.params;
+    const { text, position, fontSize, color, startTime, duration } = req.body || {};
+
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ error: 'text is required' });
+    }
+
+    const shortRef = db.collection('shorts').doc(shortId);
+    const shortSnap = await shortRef.get();
+
+    if (!shortSnap.exists) {
+      return res.status(404).json({ error: 'Short not found' });
+    }
+
+    const shortData = shortSnap.data()!;
+
+    if (String(shortData.userId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const textOverlayRef = shortRef.collection('textOverlays').doc();
+
+    await textOverlayRef.set({
+      shortId,
+      text: text.trim(),
+      position: position || 'center',
+      fontSize: fontSize || 24,
+      color: color || '#FFFFFF',
+      startTime: startTime || 0,
+      duration: duration || 5,
+      addedAt: now
+    });
+
+    res.status(201).json({
+      textOverlayId: textOverlayRef.id,
+      text: text.trim(),
+      addedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Add text overlay error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/shorts/:shortId/sticker - add sticker
+app.post('/v1/shorts/:shortId/sticker', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { shortId } = req.params;
+    const { stickerId, position, scale, rotation, startTime, duration } = req.body || {};
+
+    if (!stickerId || typeof stickerId !== 'string') {
+      return res.status(400).json({ error: 'stickerId is required' });
+    }
+
+    const shortRef = db.collection('shorts').doc(shortId);
+    const shortSnap = await shortRef.get();
+
+    if (!shortSnap.exists) {
+      return res.status(404).json({ error: 'Short not found' });
+    }
+
+    const shortData = shortSnap.data()!;
+
+    if (String(shortData.userId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const stickerRef = shortRef.collection('stickers').doc();
+
+    await stickerRef.set({
+      shortId,
+      stickerId,
+      position: position || 'center',
+      scale: scale || 1.0,
+      rotation: rotation || 0,
+      startTime: startTime || 0,
+      duration: duration || 5,
+      addedAt: now
+    });
+
+    res.status(201).json({
+      stickerPlacementId: stickerRef.id,
+      stickerId,
+      addedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Add sticker error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/shorts/:shortId/trim - trim video
+app.post('/v1/shorts/:shortId/trim', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { shortId } = req.params;
+    const { startTime, endTime } = req.body || {};
+
+    if (typeof startTime !== 'number') {
+      return res.status(400).json({ error: 'startTime is required and must be a number' });
+    }
+
+    if (typeof endTime !== 'number') {
+      return res.status(400).json({ error: 'endTime is required and must be a number' });
+    }
+
+    const shortRef = db.collection('shorts').doc(shortId);
+    const shortSnap = await shortRef.get();
+
+    if (!shortSnap.exists) {
+      return res.status(404).json({ error: 'Short not found' });
+    }
+
+    const shortData = shortSnap.data()!;
+
+    if (String(shortData.userId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await shortRef.update({
+      trimStartTime: startTime,
+      trimEndTime: endTime,
+      trimmedAt: now
+    });
+
+    res.json({
+      shortId,
+      startTime,
+      endTime,
+      trimmedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Trim video error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/shorts/combine - combine clips
+app.post('/v1/shorts/combine', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { clipIds, transition, transitionDuration } = req.body || {};
+
+    if (!Array.isArray(clipIds) || clipIds.length === 0) {
+      return res.status(400).json({ error: 'clipIds is required and must be a non-empty array' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const combinedRef = db.collection('combinedShorts').doc();
+
+    await combinedRef.set({
+      userId: user.userId,
+      clipIds,
+      transition: transition || 'none',
+      transitionDuration: transitionDuration || 0.5,
+      status: 'processing',
+      createdAt: now
+    });
+
+    res.status(201).json({
+      combinedId: combinedRef.id,
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Combine clips error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Playlist Auto-Add Features API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/playlists/:playlistId/auto-add - set up auto-add rule
+app.post('/v1/playlists/:playlistId/auto-add', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { playlistId } = req.params;
+    const { ruleType, criteria, position, maxVideos } = req.body || {};
+
+    if (!ruleType || typeof ruleType !== 'string') {
+      return res.status(400).json({ error: 'ruleType is required' });
+    }
+
+    const validRuleTypes = ['new_uploads', 'specific_tag', 'specific_category', 'date_range'];
+    if (!validRuleTypes.includes(ruleType)) {
+      return res.status(400).json({ error: `ruleType must be one of: ${validRuleTypes.join(', ')}` });
+    }
+
+    const playlistRef = db.collection('playlists').doc(playlistId);
+    const playlistSnap = await playlistRef.get();
+
+    if (!playlistSnap.exists) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const playlistData = playlistSnap.data()!;
+
+    if (String(playlistData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const autoAddRef = playlistRef.collection('autoAddRules').doc();
+
+    await autoAddRef.set({
+      playlistId,
+      userId: user.userId,
+      ruleType,
+      criteria: criteria || {},
+      position: position || 'end',
+      maxVideos: maxVideos || null,
+      status: 'active',
+      createdAt: now
+    });
+
+    await playlistRef.update({
+      hasAutoAdd: true,
+      autoAddUpdatedAt: now
+    });
+
+    res.status(201).json({
+      autoAddId: autoAddRef.id,
+      ruleType,
+      status: 'active',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Set up auto-add rule error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/playlists/:playlistId/auto-add - get auto-add rules
+app.get('/v1/playlists/:playlistId/auto-add', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { playlistId } = req.params;
+
+    const playlistRef = db.collection('playlists').doc(playlistId);
+    const playlistSnap = await playlistRef.get();
+
+    if (!playlistSnap.exists) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const playlistData = playlistSnap.data()!;
+
+    if (String(playlistData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const rulesSnap = await playlistRef.collection('autoAddRules')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const rules = rulesSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ruleType: data.ruleType,
+        criteria: data.criteria,
+        position: data.position,
+        maxVideos: data.maxVideos,
+        status: data.status,
+        createdAt: toIsoString(data.createdAt)
+      };
+    });
+
+    res.json({
+      playlistId,
+      rules
+    });
+  } catch (error) {
+    console.error('Get auto-add rules error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/playlists/:playlistId/auto-add/:autoAddId - update auto-add rule
+app.put('/v1/playlists/:playlistId/auto-add/:autoAddId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { playlistId, autoAddId } = req.params;
+    const { criteria, position, maxVideos, status } = req.body || {};
+
+    const playlistRef = db.collection('playlists').doc(playlistId);
+    const playlistSnap = await playlistRef.get();
+
+    if (!playlistSnap.exists) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const playlistData = playlistSnap.data()!;
+
+    if (String(playlistData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (criteria) patch.criteria = criteria;
+    if (position) patch.position = position;
+    if (typeof maxVideos === 'number') patch.maxVideos = maxVideos;
+    if (status) patch.status = status;
+
+    await playlistRef.collection('autoAddRules').doc(autoAddId).update(patch);
+
+    res.json({
+      autoAddId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update auto-add rule error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/playlists/:playlistId/auto-add/:autoAddId - delete auto-add rule
+app.delete('/v1/playlists/:playlistId/auto-add/:autoAddId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { playlistId, autoAddId } = req.params;
+
+    const playlistRef = db.collection('playlists').doc(playlistId);
+    const playlistSnap = await playlistRef.get();
+
+    if (!playlistSnap.exists) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const playlistData = playlistSnap.data()!;
+
+    if (String(playlistData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await playlistRef.collection('autoAddRules').doc(autoAddId).delete();
+
+    res.json({ message: 'Auto-add rule deleted' });
+  } catch (error) {
+    console.error('Delete auto-add rule error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/playlists/:playlistId/auto-add/trigger - trigger auto-add manually
+app.post('/v1/playlists/:playlistId/auto-add/trigger', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { playlistId } = req.params;
+
+    const playlistRef = db.collection('playlists').doc(playlistId);
+    const playlistSnap = await playlistRef.get();
+
+    if (!playlistSnap.exists) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const playlistData = playlistSnap.data()!;
+
+    if (String(playlistData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await playlistRef.update({
+      autoAddLastTriggered: now
+    });
+
+    res.json({
+      playlistId,
+      triggeredAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Trigger auto-add error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Video Editing Tools API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/edit/trim - trim video
+app.post('/v1/videos/:videoId/edit/trim', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { startTime, endTime } = req.body || {};
+
+    if (typeof startTime !== 'number') {
+      return res.status(400).json({ error: 'startTime is required and must be a number' });
+    }
+
+    if (typeof endTime !== 'number') {
+      return res.status(400).json({ error: 'endTime is required and must be a number' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const editRef = videoRef.collection('edits').doc();
+
+    await editRef.set({
+      videoId,
+      editType: 'trim',
+      startTime,
+      endTime,
+      status: 'processing',
+      createdAt: now
+    });
+
+    res.status(201).json({
+      editId: editRef.id,
+      editType: 'trim',
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Trim video error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/:videoId/edit/crop - crop video
+app.post('/v1/videos/:videoId/edit/crop', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { x, y, width, height } = req.body || {};
+
+    if (typeof x !== 'number' || typeof y !== 'number') {
+      return res.status(400).json({ error: 'x and y are required and must be numbers' });
+    }
+
+    if (typeof width !== 'number' || typeof height !== 'number') {
+      return res.status(400).json({ error: 'width and height are required and must be numbers' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const editRef = videoRef.collection('edits').doc();
+
+    await editRef.set({
+      videoId,
+      editType: 'crop',
+      x, y, width, height,
+      status: 'processing',
+      createdAt: now
+    });
+
+    res.status(201).json({
+      editId: editRef.id,
+      editType: 'crop',
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Crop video error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/:videoId/edit/audio - add audio track
+app.post('/v1/videos/:videoId/edit/audio', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { audioUrl, volume, startTime, offset } = req.body || {};
+
+    if (!audioUrl || typeof audioUrl !== 'string') {
+      return res.status(400).json({ error: 'audioUrl is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const editRef = videoRef.collection('edits').doc();
+
+    await editRef.set({
+      videoId,
+      editType: 'add_audio',
+      audioUrl,
+      volume: volume || 1.0,
+      startTime: startTime || 0,
+      offset: offset || 0,
+      status: 'processing',
+      createdAt: now
+    });
+
+    res.status(201).json({
+      editId: editRef.id,
+      editType: 'add_audio',
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Add audio track error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/:videoId/edit/volume - adjust volume
+app.post('/v1/videos/:videoId/edit/volume', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { volume, track } = req.body || {};
+
+    if (typeof volume !== 'number') {
+      return res.status(400).json({ error: 'volume is required and must be a number' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const editRef = videoRef.collection('edits').doc();
+
+    await editRef.set({
+      videoId,
+      editType: 'adjust_volume',
+      volume,
+      track: track || 'all',
+      status: 'processing',
+      createdAt: now
+    });
+
+    res.status(201).json({
+      editId: editRef.id,
+      editType: 'adjust_volume',
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Adjust volume error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/:videoId/edit/filter - add video filter
+app.post('/v1/videos/:videoId/edit/filter', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { filterType, intensity } = req.body || {};
+
+    if (!filterType || typeof filterType !== 'string') {
+      return res.status(400).json({ error: 'filterType is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const editRef = videoRef.collection('edits').doc();
+
+    await editRef.set({
+      videoId,
+      editType: 'apply_filter',
+      filterType,
+      intensity: intensity || 50,
+      status: 'processing',
+      createdAt: now
+    });
+
+    res.status(201).json({
+      editId: editRef.id,
+      editType: 'apply_filter',
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Add video filter error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/:videoId/edit/blur - blur region
+app.post('/v1/videos/:videoId/edit/blur', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { x, y, width, height, intensity } = req.body || {};
+
+    if (typeof x !== 'number' || typeof y !== 'number') {
+      return res.status(400).json({ error: 'x and y are required and must be numbers' });
+    }
+
+    if (typeof width !== 'number' || typeof height !== 'number') {
+      return res.status(400).json({ error: 'width and height are required and must be numbers' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const editRef = videoRef.collection('edits').doc();
+
+    await editRef.set({
+      videoId,
+      editType: 'blur_region',
+      x, y, width, height,
+      intensity: intensity || 50,
+      status: 'processing',
+      createdAt: now
+    });
+
+    res.status(201).json({
+      editId: editRef.id,
+      editType: 'blur_region',
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Blur region error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/:videoId/edit/stabilize - stabilize video
+app.post('/v1/videos/:videoId/edit/stabilize', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { intensity } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const editRef = videoRef.collection('edits').doc();
+
+    await editRef.set({
+      videoId,
+      editType: 'stabilize',
+      intensity: intensity || 50,
+      status: 'processing',
+      createdAt: now
+    });
+
+    res.status(201).json({
+      editId: editRef.id,
+      editType: 'stabilize',
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Stabilize video error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/edit/merge - merge videos
+app.post('/v1/videos/edit/merge', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoIds, transition, transitionDuration } = req.body || {};
+
+    if (!Array.isArray(videoIds) || videoIds.length < 2) {
+      return res.status(400).json({ error: 'videoIds is required and must be an array with at least 2 videos' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const mergeRef = db.collection('mergedVideos').doc();
+
+    await mergeRef.set({
+      userId: user.userId,
+      videoIds,
+      transition: transition || 'none',
+      transitionDuration: transitionDuration || 0.5,
+      status: 'processing',
+      createdAt: now
+    });
+
+    res.status(201).json({
+      mergeId: mergeRef.id,
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Merge videos error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
