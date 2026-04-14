@@ -11928,6 +11928,507 @@ app.put('/v1/videos/:videoId/summaries/:summaryId', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Video Face Blur API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/face-blur - apply face blur
+app.post('/v1/videos/:videoId/face-blur', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { blurIntensity, blurType, targetRegions } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const faceBlurRef = videoRef.collection('faceBlur').doc();
+
+    await faceBlurRef.set({
+      videoId,
+      blurIntensity: typeof blurIntensity === 'number' ? blurIntensity : 0.5,
+      blurType: blurType || 'gaussian',
+      targetRegions: Array.isArray(targetRegions) ? targetRegions : [],
+      status: 'processing',
+      createdAt: now,
+      completedAt: null,
+      processedUrl: null
+    });
+
+    await videoRef.update({
+      hasFaceBlur: true,
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      faceBlurId: faceBlurRef.id,
+      blurType: blurType || 'gaussian',
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Apply face blur error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/face-blur - get face blur status
+app.get('/v1/videos/:videoId/face-blur', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const faceBlurSnap = await videoRef.collection('faceBlur')
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (faceBlurSnap.empty) {
+      return res.json({ videoId, faceBlur: null });
+    }
+
+    const data = faceBlurSnap.docs[0].data();
+    res.json({
+      videoId,
+      faceBlur: {
+        id: faceBlurSnap.docs[0].id,
+        blurIntensity: data.blurIntensity,
+        blurType: data.blurType,
+        targetRegions: data.targetRegions,
+        status: data.status,
+        createdAt: toIsoString(data.createdAt),
+        completedAt: data.completedAt ? toIsoString(data.completedAt) : null,
+        processedUrl: data.processedUrl
+      }
+    });
+  } catch (error) {
+    console.error('Get face blur error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Object Tracking API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/object-tracking - start object tracking
+app.post('/v1/videos/:videoId/object-tracking', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { objectType, trackingMethod, startTime, endTime } = req.body || {};
+
+    if (!objectType || typeof objectType !== 'string') {
+      return res.status(400).json({ error: 'objectType is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const trackingRef = videoRef.collection('objectTracking').doc();
+
+    await trackingRef.set({
+      videoId,
+      objectType: objectType.trim(),
+      trackingMethod: trackingMethod || 'yolo',
+      startTime: startTime || 0,
+      endTime: endTime || null,
+      status: 'processing',
+      createdAt: now,
+      completedAt: null,
+      trackingData: []
+    });
+
+    await videoRef.update({
+      hasObjectTracking: true,
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      trackingId: trackingRef.id,
+      objectType: objectType.trim(),
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Start object tracking error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/object-tracking - get object tracking results
+app.get('/v1/videos/:videoId/object-tracking', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const trackingSnap = await videoRef.collection('objectTracking')
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (trackingSnap.empty) {
+      return res.json({ videoId, objectTracking: null });
+    }
+
+    const data = trackingSnap.docs[0].data();
+    res.json({
+      videoId,
+      objectTracking: {
+        id: trackingSnap.docs[0].id,
+        objectType: data.objectType,
+        trackingMethod: data.trackingMethod,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        status: data.status,
+        trackingData: data.trackingData,
+        createdAt: toIsoString(data.createdAt),
+        completedAt: data.completedAt ? toIsoString(data.completedAt) : null
+      }
+    });
+  } catch (error) {
+    console.error('Get object tracking error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Motion Graphics/Overlays API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/overlays - add motion graphics overlay
+app.post('/v1/videos/:videoId/overlays', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { overlayType, content, position, startTime, endTime, duration } = req.body || {};
+
+    if (!overlayType || typeof overlayType !== 'string') {
+      return res.status(400).json({ error: 'overlayType is required' });
+    }
+
+    const validTypes = ['text', 'image', 'animated', 'watermark', 'lower_third'];
+    if (!validTypes.includes(overlayType)) {
+      return res.status(400).json({ error: `overlayType must be one of: ${validTypes.join(', ')}` });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const overlayRef = videoRef.collection('overlays').doc();
+
+    await overlayRef.set({
+      videoId,
+      overlayType,
+      content: content || '',
+      position: position || { x: 50, y: 50 },
+      startTime: typeof startTime === 'number' ? startTime : 0,
+      endTime: endTime || null,
+      duration: duration || null,
+      createdAt: now
+    });
+
+    await videoRef.update({
+      hasOverlays: true,
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      overlayId: overlayRef.id,
+      overlayType,
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Add overlay error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/overlays - list video overlays
+app.get('/v1/videos/:videoId/overlays', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const overlaysSnap = await videoRef.collection('overlays')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const overlays = overlaysSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        overlayType: data.overlayType,
+        content: data.content,
+        position: data.position,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        duration: data.duration,
+        createdAt: toIsoString(data.createdAt)
+      };
+    });
+
+    res.json({
+      videoId,
+      overlays
+    });
+  } catch (error) {
+    console.error('List overlays error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/overlays/:overlayId - update overlay
+app.put('/v1/videos/:videoId/overlays/:overlayId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, overlayId } = req.params;
+    const { content, position, startTime, endTime, duration } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const overlayRef = videoRef.collection('overlays').doc(overlayId);
+    const overlaySnap = await overlayRef.get();
+
+    if (!overlaySnap.exists) {
+      return res.status(404).json({ error: 'Overlay not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (content !== undefined) patch.content = content;
+    if (position) patch.position = position;
+    if (typeof startTime === 'number') patch.startTime = startTime;
+    if (endTime !== undefined) patch.endTime = endTime;
+    if (duration !== undefined) patch.duration = duration;
+
+    await overlayRef.update(patch);
+
+    res.json({
+      overlayId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update overlay error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/videos/:videoId/overlays/:overlayId - delete overlay
+app.delete('/v1/videos/:videoId/overlays/:overlayId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, overlayId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await videoRef.collection('overlays').doc(overlayId).delete();
+
+    const remainingSnap = await videoRef.collection('overlays').limit(1).get();
+    if (remainingSnap.empty) {
+      await videoRef.update({ hasOverlays: false });
+    }
+
+    res.json({ message: 'Overlay deleted' });
+  } catch (error) {
+    console.error('Delete overlay error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Aspect Ratio Conversion API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/aspect-ratio - convert video aspect ratio
+app.post('/v1/videos/:videoId/aspect-ratio', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { targetRatio, cropMode, paddingColor } = req.body || {};
+
+    if (!targetRatio || typeof targetRatio !== 'string') {
+      return res.status(400).json({ error: 'targetRatio is required' });
+    }
+
+    const validRatios = ['16:9', '9:16', '1:1', '4:3', '4:5', '21:9'];
+    if (!validRatios.includes(targetRatio)) {
+      return res.status(400).json({ error: `targetRatio must be one of: ${validRatios.join(', ')}` });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const conversionRef = videoRef.collection('aspectRatioConversions').doc();
+
+    await conversionRef.set({
+      videoId,
+      targetRatio,
+      cropMode: cropMode || 'center',
+      paddingColor: paddingColor || 'black',
+      status: 'processing',
+      createdAt: now,
+      completedAt: null,
+      convertedUrl: null
+    });
+
+    await videoRef.update({
+      hasAspectRatioConversion: true,
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      conversionId: conversionRef.id,
+      targetRatio,
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Convert aspect ratio error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/aspect-ratio - get aspect ratio conversion status
+app.get('/v1/videos/:videoId/aspect-ratio', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const conversionSnap = await videoRef.collection('aspectRatioConversions')
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (conversionSnap.empty) {
+      return res.json({ videoId, aspectRatioConversion: null });
+    }
+
+    const data = conversionSnap.docs[0].data();
+    res.json({
+      videoId,
+      aspectRatioConversion: {
+        id: conversionSnap.docs[0].id,
+        targetRatio: data.targetRatio,
+        cropMode: data.cropMode,
+        paddingColor: data.paddingColor,
+        status: data.status,
+        createdAt: toIsoString(data.createdAt),
+        completedAt: data.completedAt ? toIsoString(data.completedAt) : null,
+        convertedUrl: data.convertedUrl
+      }
+    });
+  } catch (error) {
+    console.error('Get aspect ratio conversion error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
