@@ -329,9 +329,8 @@ struct HomeView: View {
                 .onDisappear { self.route = nil }
 
             case .allMovies:
-                ImprovedMoviesView()
+                MoviesView()
                     .environmentObject(appState)
-                    .background(Color(.systemBackground).ignoresSafeArea())
                     .onDisappear { self.route = nil }
 
             case .allLiveTV:

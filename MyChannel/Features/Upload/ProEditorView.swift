@@ -39,7 +39,6 @@ struct ProEditorView: View {
                 toolsPanel
             }
         }
-        .navigationBarHidden(true)
         .statusBar(hidden: true)
         .onAppear {
             editor.loadVideo(url: videoURL, existing: existingVideo)

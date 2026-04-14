@@ -116,7 +116,7 @@ struct MyChannelPlusView: View {
                     .foregroundColor(.white)
             }
             
-            Text("MyChannel Plus+")
+            Text("Unavailable")
                 .font(.system(size: 28, weight: .bold))
                 .foregroundColor(.primary)
             
@@ -124,16 +124,11 @@ struct MyChannelPlusView: View {
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundColor(.secondary)
             
-            Text("Ad-free videos, offline downloads, background play, and more. Stay tuned!")
+            Text("This section is not available in the current build.")
                 .font(.system(size: 16))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
-            
-            // Benefits preview
-            benefitsGrid
-                .padding(.top, 10)
-                .padding(.horizontal, 20)
             
             Spacer()
             

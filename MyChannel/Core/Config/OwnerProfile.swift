@@ -67,10 +67,10 @@ struct OwnerProfile {
         FriendArtist(name: "Yung Sak Runner",     instagram: "@yungsakrunner",       avatar: "asset://YungSakRunnerAvatar"),
 
         // ── TOP INDIE FILMMAKERS ─────────────────────────────────────────────────
-        // Shot By Keonta #1, TeeCee #2, Merch HD #3, Pros KT #4
+        // Shot By Keonta #1, TeeCee #2, Merch HD #3
         FriendArtist(name: "Shot By Keonta", instagram: "@sbkeonta_",  avatar: "asset://ShotByKeontaThumbnail", category: "filmmaker", pinnedRank: 1),
         FriendArtist(name: "TeeCee",         instagram: "@teecee",     avatar: "asset://TeeCeeAvatar",          category: "filmmaker", pinnedRank: 2),
-        FriendArtist(name: "Merch",          instagram: "@merch",      avatar: "asset://MerchHDAvatar",         category: "filmmaker", pinnedRank: 3),
+        FriendArtist(name: "Merch HD",       instagram: "@merchhd",    avatar: "asset://MerchHDAvatar",         category: "filmmaker", pinnedRank: 3),
         FriendArtist(name: "Pros KT",        instagram: "@proskt",     avatar: "asset://ProsKtAvatar",          category: "filmmaker", pinnedRank: 4),
 
         // ── TOP MYCHANNELS ───────────────────────────────────────────────────────

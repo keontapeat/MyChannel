@@ -403,6 +403,7 @@ struct UploadView: View {
             ZStack {
                 currentStepView
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(.spring(response: 0.6, dampingFraction: 0.8), value: uploadStep)
         }
     }

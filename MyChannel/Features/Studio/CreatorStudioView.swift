@@ -104,7 +104,18 @@ private struct StudioAnalyticsVideoList: View {
     var body: some View {
         List {
             if videos.isEmpty {
-                ContentUnavailableView("No Videos", systemImage: "video.slash", description: Text("Upload your first video to see analytics"))
+                VStack(spacing: 8) {
+                    Image(systemName: "video.slash")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+                    Text("No Videos")
+                        .font(.headline)
+                    Text("Upload your first video to see analytics")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
             }
             ForEach(videos) { video in
                 NavigationLink {

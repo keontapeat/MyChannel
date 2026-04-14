@@ -146,7 +146,14 @@ struct SignInSheetView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
             .onChange(of: authManager.isAuthenticated) { isAuth in
-                if isAuth { dismiss() }
+                if isAuth {
+                    showFullAuth = false
+                    dismiss()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .userDidLogin)) { _ in
+                showFullAuth = false
+                dismiss()
             }
             .fullScreenCover(isPresented: $showFullAuth) {
                 AuthenticationView()

@@ -200,6 +200,10 @@ struct MainTabView: View {
         }) {
             AuthenticationView()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .userDidLogin)) { _ in
+            if showAuthGate { showAuthGate = false }
+            if presentSignInSheet { presentSignInSheet = false }
+        }
         // 🔥 FIX 2.1(a): Dismiss ALL auth UI when sign-in succeeds (belt-and-suspenders)
         .onChange(of: authManager.isAuthenticated) { isAuth in
             if isAuth {

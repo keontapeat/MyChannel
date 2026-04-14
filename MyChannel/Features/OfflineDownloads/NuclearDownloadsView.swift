@@ -52,7 +52,7 @@ struct NuclearDownloadsView: View {
                 AppTheme.Colors.background
                     .ignoresSafeArea()
                 
-                if !storeKit.isPremium {
+                if AppConfig.Features.enableSubscriptions && !storeKit.isPremium {
                     premiumUpgradeView
                 } else if downloadManager.downloads.isEmpty && downloadManager.downloadQueue.isEmpty {
                     emptyStateView

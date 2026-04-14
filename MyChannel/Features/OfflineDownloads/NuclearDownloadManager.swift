@@ -816,7 +816,7 @@ final class NuclearDownloadManager: NSObject, ObservableObject {
     private func validatePremiumStatus() async -> Bool {
         // Check premium status via StoreKitService
         return await MainActor.run {
-            StoreKitService.shared.isPremium
+            !AppConfig.Features.enableSubscriptions || StoreKitService.shared.isPremium
         }
     }
     

@@ -279,17 +279,17 @@ struct ProfileView: View {
                 )
                 
                 // Profile Content
-                    SafeProfileContentView(
-                        selectedTab: $selectedTab,
-                        user: user,
-                        videos: userVideos,
-                        onLoadMore: { await loadMoreVideos() },
-                        hasMoreVideos: hasMoreVideos,
-                        isLoadingMore: isLoadingMoreVideos,
-                        isOwnProfile: isViewingOwnProfile,
-                        videoManagementContext: videoManagementContext,
-                        isLoadingVideos: isLoadingVideos  // ⚡ PERFORMANCE: Pass loading state for skeleton
-                    )
+                SafeProfileContentView(
+                    selectedTab: $selectedTab,
+                    user: user,
+                    videos: userVideos,
+                    onLoadMore: { await loadMoreVideos() },
+                    hasMoreVideos: hasMoreVideos,
+                    isLoadingMore: isLoadingMoreVideos,
+                    isOwnProfile: isViewingOwnProfile,
+                    videoManagementContext: videoManagementContext,
+                    isLoadingVideos: isLoadingVideos
+                )
                 
                 // Quick Actions and Links
                 VStack(spacing: 16) {
@@ -402,57 +402,58 @@ struct ProfileView: View {
                             .cornerRadius(12)
                         }
                         
-                        // Premium Benefits (if premium) or Upgrade to Plus+ (if not premium)
-                        Button {
-                            if storeKit.isPremium {
-                                showingPremiumBenefits = true
-                            } else {
-                                showingMyChannelPlus = true
-                            }
-                            HapticManager.shared.impact(style: .light)
-                        } label: {
-                            HStack(spacing: 12) {
-                                // 🔥 FIX: Clean icon without circle (like other tabs)
-                                Image(systemName: "plus.circle")
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                                    .frame(width: 44, height: 44)
-                                
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(storeKit.isPremium ? "Your Premium Benefits" : "MyChannel Plus+")
-                                        .font(.system(size: 17, weight: .semibold))
+                        if AppConfig.Features.enableSubscriptions || storeKit.isPremium {
+                            Button {
+                                if storeKit.isPremium {
+                                    showingPremiumBenefits = true
+                                } else {
+                                    showingMyChannelPlus = true
+                                }
+                                HapticManager.shared.impact(style: .light)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    // 🔥 FIX: Clean icon without circle (like other tabs)
+                                    Image(systemName: "plus.circle")
+                                        .font(.system(size: 20, weight: .semibold))
                                         .foregroundColor(AppTheme.Colors.textPrimary)
+                                        .frame(width: 44, height: 44)
                                     
-                                    Text(storeKit.isPremium ? "View your usage stats" : "Try 7 days free")
-                                        .font(.system(size: 13))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(storeKit.isPremium ? "Your Premium Benefits" : "MyChannel Plus+")
+                                            .font(.system(size: 17, weight: .semibold))
+                                            .foregroundColor(AppTheme.Colors.textPrimary)
+                                        
+                                        Text(storeKit.isPremium ? "View your usage stats" : "Try 7 days free")
+                                            .font(.system(size: 13))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    if !storeKit.isPremium {
+                                        Text("FREE TRIAL")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(Color.black)
+                                            .cornerRadius(6)
+                                    }
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .semibold))
                                         .foregroundColor(.secondary)
                                 }
-                                
-                                Spacer()
-                                
-                                if !storeKit.isPremium {
-                                    Text("FREE TRIAL")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.black)
-                                        .cornerRadius(6)
-                                }
-                                
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.secondary)
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(AppTheme.Colors.surface)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+                                        )
+                                )
                             }
-                            .padding(16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(AppTheme.Colors.surface)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
-                                    )
-                            )
                         }
                     }
                     .padding(.horizontal, 16)

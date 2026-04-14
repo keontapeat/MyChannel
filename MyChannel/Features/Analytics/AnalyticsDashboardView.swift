@@ -15,7 +15,7 @@ struct AnalyticsDashboardView: View {
     @State private var channelAnalytics: ChannelAnalytics?
     @State private var chartData: [AnalyticsChartData] = []
     @State private var topVideos: [VideoAnalytics] = []
-    @State private var videosMap: [String: Video] = []
+    @State private var videosMap: [String: Video] = [:]
     @State private var selectedMetric: MetricType = .views
     
     enum MetricType: String, CaseIterable {

@@ -11,9 +11,12 @@ await app.register(helmet)
 await app.register(rate, { max: 200, timeWindow: '1 minute' })
 await app.register(jwt, { secret: process.env.JWT_SECRET || 'dev-secret' })
 
-function auth(req, reply, done) {
-  // Optional JWT verification placeholder
-  done()
+async function auth(req, reply) {
+  try {
+    await req.jwtVerify()
+  } catch (err) {
+    reply.code(401).send({ error: 'Unauthorized' })
+  }
 }
 
 app.get('/health', async () => ({ status: 'ok' }))

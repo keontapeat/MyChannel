@@ -48,38 +48,40 @@ struct YouTubeStyleUploadFlow: View {
     ]
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Professional Header
-            professionalHeader
-            
-            // Progress Indicator
-            progressIndicator
-            
-            // Content based on current step
-            Group {
-                switch currentStep {
-                case .contentSelection:
-                    contentSelectionView
-                case .videoPreview:
-                    videoPreviewView
-                case .videoDetails:
-                    videoDetailsView
-                case .thumbnailSelection:
-                    thumbnailSelectionView
-                case .publishing:
-                    publishingView
-                case .completed:
-                    completedView
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Professional Header
+                professionalHeader
+                
+                // Progress Indicator
+                progressIndicator
+                
+                // Content based on current step
+                Group {
+                    switch currentStep {
+                    case .contentSelection:
+                        contentSelectionView
+                    case .videoPreview:
+                        videoPreviewView
+                    case .videoDetails:
+                        videoDetailsView
+                    case .thumbnailSelection:
+                        thumbnailSelectionView
+                    case .publishing:
+                        publishingView
+                    case .completed:
+                        completedView
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                
+                // Bottom Action Bar
+                bottomActionBar
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            
-            // Bottom Action Bar
-            bottomActionBar
+            .background(Color(.systemBackground).ignoresSafeArea())
+            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
         }
-        .background(Color(.systemBackground).ignoresSafeArea())
-        .navigationBarHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
         .photosPicker(
             isPresented: $showingPhotoPicker,
             selection: $selectedVideo,

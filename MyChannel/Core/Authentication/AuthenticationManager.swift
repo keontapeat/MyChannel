@@ -255,13 +255,27 @@ class AuthenticationManager: ObservableObject {
         defer { isLoading = false }
         #if canImport(FirebaseAuth)
         do {
-            let result = try await Auth.auth().signIn(withEmail: email, password: password)
+            let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+            let result: AuthDataResult
+            do {
+                result = try await Auth.auth().signIn(withEmail: normalizedEmail, password: password)
+            } catch {
+                let lowercasedEmail = normalizedEmail.lowercased()
+                if lowercasedEmail == "keontapeat@mychannel.live" {
+                    result = try await Auth.auth().signIn(withEmail: "keontapeat@gmail.com", password: password)
+                } else if lowercasedEmail == "keontapeat@gmail.com" {
+                    result = try await Auth.auth().signIn(withEmail: "keontapeat@mychannel.live", password: password)
+                } else {
+                    throw error
+                }
+            }
             let fuser = result.user
+            let signedInEmail = fuser.email ?? normalizedEmail
             let basicUser = User(
                 id: fuser.uid,
-                username: email.components(separatedBy: "@").first ?? "user",
-                displayName: fuser.displayName ?? email,
-                email: email,
+                username: signedInEmail.components(separatedBy: "@").first ?? "user",
+                displayName: fuser.displayName ?? signedInEmail,
+                email: signedInEmail,
                 profileImageURL: fuser.photoURL?.absoluteString,
                 isVerified: fuser.isEmailVerified,
                 isCreator: true
@@ -429,7 +443,12 @@ class AuthenticationManager: ObservableObject {
             
             isAuthenticated = true
             authState = .authenticated
-            
+            // 🔥 FIX 2.1(a): Force SwiftUI to pick up state change immediately on iPad
+            objectWillChange.send()
+            // Create Firestore profile if this is a first-time Google Sign In user
+            do { await createFirestoreProfileIfNeeded(for: resolvedUser) } catch { print("⚠️ [Auth] Non-fatal: Firestore profile creation failed: \(error)") }
+            // Load full profile so AppState gets updated with photo, bio, etc.
+            do { await loadFullProfileAfterSignIn(uid: payload.uid, fallback: resolvedUser) } catch { print("⚠️ [Auth] Non-fatal: profile loading failed: \(error)") }
             // 🔥 FIX: Post login notification so AppState hydrates collections + attaches listeners
             NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
             
@@ -601,16 +620,20 @@ extension AuthenticationManager {
     /// Looks up the email address associated with a given username in Firestore.
     /// Returns nil if the username is not found, allowing the caller to fall back to treating the input as an email.
     func resolveEmailForUsername(_ username: String) async -> String? {
+        let normalizedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalizedUsername == "keontapeat" {
+            return "keontapeat@mychannel.live"
+        }
         #if canImport(FirebaseFirestore)
         do {
             let snapshot = try await Firestore.firestore()
                 .collection("users")
-                .whereField("username", isEqualTo: username)
+                .whereField("username", isEqualTo: normalizedUsername)
                 .limit(to: 1)
                 .getDocuments()
             if let doc = snapshot.documents.first,
                let email = doc.data()["email"] as? String, !email.isEmpty {
-                print("✅ [Auth] Resolved username '\(username)' → \(email)")
+                print("✅ [Auth] Resolved username '\(normalizedUsername)' → \(email)")
                 return email
             }
         } catch {

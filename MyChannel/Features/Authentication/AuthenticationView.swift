@@ -75,6 +75,11 @@ struct AuthenticationView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .userDidLogin)) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                dismiss()
+            }
+        }
         .onAppear {
             // Safety: if we appear while already authenticated (race condition), dismiss immediately
             if authManager.isAuthenticated {
@@ -438,7 +443,8 @@ struct SignInView: View {
                     resolvedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
                 } else {
                     // Username entered — look up email in Firestore
-                    resolvedEmail = await AuthenticationManager.shared.resolveEmailForUsername(email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()) ?? email
+                    let normalizedIdentifier = email.trimmingCharacters(in: .whitespacesAndNewlines)
+                    resolvedEmail = await AuthenticationManager.shared.resolveEmailForUsername(normalizedIdentifier.lowercased()) ?? normalizedIdentifier
                 }
                 try await AuthenticationManager.shared.signIn(email: resolvedEmail, password: password)
                 

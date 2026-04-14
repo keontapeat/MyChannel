@@ -264,9 +264,26 @@ final class TopRankMLService: ObservableObject {
             let fid = "ig_\(f.name.lowercased().replacingOccurrences(of: " ", with: "_"))"
             guard !existingIds2.contains(fid) else { continue }
 
-            // Reuse cached metrics if available so rankings don't shuffle
+            // Pinned rank → force exact position using an artificially high overallScore.
+            // Pinned #1 = 999, #2 = 998, #3 = 997, etc. Non-pinned friends get 490 baseline.
+            let forcedScore: Double
+            if let pin = f.pinnedRank {
+                forcedScore = Double(1000 - pin)
+            } else {
+                forcedScore = 490  // stays visible until a real user earns > 490 via actual engagement
+            }
+
+            // Reuse cached metrics if available so rankings don't shuffle, EXCEPT for pinned scores
             if let cached = cachedUsers.first(where: { $0.id == fid }) {
-                users.append(cached)
+                // If it's a pinned user, we must ensure their score matches the current config (in case config changed)
+                if f.pinnedRank != nil {
+                    var updatedCache = cached
+                    updatedCache.overallScore = forcedScore
+                    updatedCache.engagementScore = forcedScore
+                    users.append(updatedCache)
+                } else {
+                    users.append(cached)
+                }
                 continue
             }
 
@@ -280,15 +297,6 @@ final class TopRankMLService: ObservableObject {
 
             // Deterministic seed from user id so values are stable across refreshes
             var rng = StableRNG(string: fid)
-
-            // Pinned rank → force exact position using an artificially high overallScore.
-            // Pinned #1 = 999, #2 = 998, #3 = 997, etc. Non-pinned friends get 490 baseline.
-            let forcedScore: Double
-            if let pin = f.pinnedRank {
-                forcedScore = Double(1000 - pin)
-            } else {
-                forcedScore = 490  // stays visible until a real user earns > 490 via actual engagement
-            }
 
             let displayName = f.name.hasSuffix("_c") ? String(f.name.dropLast(2)) : f.name
             users.append(TopRankedUser(
