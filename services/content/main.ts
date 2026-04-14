@@ -1983,7 +1983,7 @@ app.get('/v1/users/:userId/subscribers', async (req, res) => {
 // Watch History API
 // ─────────────────────────────────────────────────────────────────────────────
 
-// POST /v1/history - add a video to watch history
+// POST /v1/history - add to watch history
 app.post('/v1/history', async (req, res) => {
   try {
     const user = await requireUser(req, res);
@@ -1995,9 +1995,7 @@ app.post('/v1/history', async (req, res) => {
       return res.status(400).json({ error: 'videoId is required' });
     }
 
-    const videoRef = db.collection('videos').doc(videoId);
-    const videoSnap = await videoRef.get();
-
+    const videoSnap = await db.collection('videos').doc(videoId).get();
     if (!videoSnap.exists) {
       return res.status(404).json({ error: 'Video not found' });
     }
@@ -2009,21 +2007,10 @@ app.post('/v1/history', async (req, res) => {
       videoId,
       watchedAt: now,
       duration: typeof duration === 'number' ? duration : null,
-      position: typeof position === 'number' ? position : null,
-      updatedAt: now
+      position: typeof position === 'number' ? position : null
     }, { merge: true });
 
-    const userData = await loadUserDocument(user.userId);
-    const videoData = videoSnap.data()!;
-    res.status(201).json({
-      historyItem: {
-        videoId,
-        video: formatVideoSummary(videoId, videoData, userData),
-        watchedAt: now.toDate().toISOString(),
-        duration,
-        position
-      }
-    });
+    res.json(successMessage('Added to history'));
   } catch (error) {
     console.error('Add to history error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -2113,6 +2100,7 @@ app.delete('/v1/history/:videoId', async (req, res) => {
     if (!user) return;
 
     const { videoId } = req.params;
+
     const historyRef = db.collection('users').doc(user.userId).collection('history').doc(videoId);
     const snap = await historyRef.get();
 
@@ -2125,6 +2113,108 @@ app.delete('/v1/history/:videoId', async (req, res) => {
     res.json(successMessage('Removed from history'));
   } catch (error) {
     console.error('Remove from history error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/activity/track - track user activity (watch time, engagement)
+app.post('/v1/activity/track', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, action, duration, timestamp, sessionId } = req.body || {};
+
+    if (!videoId || !action) {
+      return res.status(400).json({ error: 'videoId and action are required' });
+    }
+
+    const videoSnap = await db.collection('videos').doc(videoId).get();
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const ts = timestamp ? admin.firestore.Timestamp.fromDate(new Date(timestamp)) : now;
+    const sid = sessionId || `session_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+    const activityRef = db.collection('users').doc(user.userId).collection('activity').doc();
+    await activityRef.set({
+      videoId,
+      action,
+      duration: typeof duration === 'number' ? duration : null,
+      timestamp: ts,
+      sessionId: sid,
+      userId: user.userId,
+      createdAt: now
+    });
+
+    res.json({ activityId: activityRef.id, sessionId: sid });
+  } catch (error) {
+    console.error('Track activity error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/activity/summary - get user activity summary
+app.get('/v1/activity/summary', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const days = parseInt(req.query.days as string) || 7;
+    const now = admin.firestore.Timestamp.now();
+    const startDate = admin.firestore.Timestamp.fromDate(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+
+    const activitySnap = await db.collection('users').doc(user.userId).collection('activity')
+      .where('timestamp', '>=', startDate)
+      .orderBy('timestamp', 'desc')
+      .limit(500)
+      .get();
+
+    const totalWatchTime = activitySnap.docs.reduce((sum, doc) => {
+      const duration = doc.get('duration');
+      return sum + (typeof duration === 'number' ? duration : 0);
+    }, 0);
+
+    const videosWatched = new Set(activitySnap.docs.map(doc => String(doc.get('videoId') || '')));
+
+    const actionCounts: Record<string, number> = {};
+    activitySnap.docs.forEach(doc => {
+      const action = String(doc.get('action') || 'unknown');
+      actionCounts[action] = (actionCounts[action] || 0) + 1;
+    });
+
+    const dailyActivity: Record<string, { watchTime: number; videos: number }> = {};
+    for (let i = 0; i < days; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      dailyActivity[dateStr] = { watchTime: 0, videos: 0 };
+    }
+
+    activitySnap.docs.forEach(doc => {
+      const timestamp = doc.get('timestamp') as admin.firestore.Timestamp;
+      if (timestamp) {
+        const dateStr = timestamp.toDate().toISOString().split('T')[0];
+        if (dailyActivity[dateStr]) {
+          const duration = doc.get('duration');
+          dailyActivity[dateStr].watchTime += typeof duration === 'number' ? duration : 0;
+          dailyActivity[dateStr].videos += 1;
+        }
+      }
+    });
+
+    res.json({
+      totalWatchTime,
+      totalVideosWatched: videosWatched.size,
+      totalActions: activitySnap.size,
+      actionCounts,
+      dailyActivity,
+      period: `${days} days`
+    });
+  } catch (error) {
+    console.error('Activity summary error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2613,6 +2703,292 @@ app.get('/v1/analytics/demographics', async (req, res) => {
     });
   } catch (error) {
     console.error('Get demographics error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Recommendations Engine
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /v1/recommendations - get personalized video recommendations
+app.get('/v1/recommendations', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const excludeWatched = req.query.excludeWatched !== 'false';
+
+    const historySnap = await db.collection('users').doc(user.userId).collection('history')
+      .orderBy('watchedAt', 'desc')
+      .limit(50)
+      .get();
+
+    const watchedVideoIds = new Set(historySnap.docs.map(doc => String(doc.get('videoId') || '')));
+    const watchedVideosData: FirestoreData[] = [];
+
+    for (const doc of historySnap.docs) {
+      const videoId = String(doc.get('videoId') || '');
+      const videoSnap = await db.collection('videos').doc(videoId).get();
+      if (videoSnap.exists) {
+        watchedVideosData.push(videoSnap.data()!);
+      }
+    }
+
+    const categories = new Set<string>();
+    const tags = new Set<string>();
+    const creators = new Set<string>();
+
+    watchedVideosData.forEach(video => {
+      if (video.category) categories.add(video.category);
+      if (Array.isArray(video.tags)) {
+        video.tags.forEach(tag => tags.add(tag));
+      }
+      if (video.ownerId) creators.add(video.ownerId);
+    });
+
+    const recommendedVideos: FirestoreData[] = [];
+    const recommendedVideoIds = new Set<string>();
+
+    const videosSnap = await db.collection('videos')
+      .where('status', '==', 'published')
+      .orderBy('views', 'desc')
+      .limit(200)
+      .get();
+
+    for (const doc of videosSnap.docs) {
+      const video = doc.data()!;
+      const videoId = doc.id;
+
+      if (excludeWatched && watchedVideoIds.has(videoId)) continue;
+      if (String(video.ownerId || '') === user.userId) continue;
+      if (recommendedVideoIds.has(videoId)) continue;
+
+      let score = 0;
+
+      if (video.category && categories.has(video.category)) score += 3;
+      if (Array.isArray(video.tags)) {
+        video.tags.forEach(tag => {
+          if (tags.has(tag)) score += 2;
+        });
+      }
+      if (video.ownerId && creators.has(video.ownerId)) score += 4;
+      score += Math.log10(Number(video.views || 1)) * 0.5;
+
+      if (score > 0) {
+        recommendedVideos.push({ ...video, _score: score });
+        recommendedVideoIds.add(videoId);
+      }
+    }
+
+    recommendedVideos.sort((a, b) => (b._score || 0) - (a._score || 0));
+
+    const userIds = recommendedVideos.slice(0, limit).map(v => String(v.ownerId || ''));
+    const usersMap = await loadUsersMap(userIds);
+
+    const recommendations = recommendedVideos.slice(0, limit).map(video => {
+      const userData = usersMap[String(video.ownerId || '')] || null;
+      return formatVideoSummary('', video, userData);
+    });
+
+    res.json({
+      recommendations,
+      algorithm: 'collaborative_filtering',
+      basedOn: {
+        categoriesWatched: Array.from(categories),
+        tagsWatched: Array.from(tags).slice(0, 10),
+        creatorsWatched: Array.from(creators).slice(0, 5),
+        videosWatched: watchedVideoIds.size
+      }
+    });
+  } catch (error) {
+    console.error('Get recommendations error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:id/related - get related videos for a specific video
+app.get('/v1/videos/:id/related', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
+
+    const videoSnap = await db.collection('videos').doc(id).get();
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+    const category = videoData.category || '';
+    const tags = Array.isArray(videoData.tags) ? videoData.tags : [];
+    const ownerId = videoData.ownerId || '';
+
+    const relatedVideos: FirestoreData[] = [];
+    const relatedVideoIds = new Set<string>();
+
+    const videosSnap = await db.collection('videos')
+      .where('status', '==', 'published')
+      .orderBy('views', 'desc')
+      .limit(100)
+      .get();
+
+    for (const doc of videosSnap.docs) {
+      const video = doc.data()!;
+      const videoId = doc.id;
+
+      if (videoId === id) continue;
+      if (String(video.ownerId || '') === ownerId) continue;
+      if (relatedVideoIds.has(videoId)) continue;
+
+      let score = 0;
+
+      if (video.category === category) score += 3;
+      if (Array.isArray(video.tags)) {
+        const commonTags = video.tags.filter(tag => tags.includes(tag));
+        score += commonTags.length * 2;
+      }
+      score += Math.log10(Number(video.views || 1)) * 0.3;
+
+      if (score > 0) {
+        relatedVideos.push({ ...video, _score: score });
+        relatedVideoIds.add(videoId);
+      }
+    }
+
+    relatedVideos.sort((a, b) => (b._score || 0) - (a._score || 0));
+
+    const userIds = relatedVideos.slice(0, limit).map(v => String(v.ownerId || ''));
+    const usersMap = await loadUsersMap(userIds);
+
+    const related = relatedVideos.slice(0, limit).map(video => {
+      const userData = usersMap[String(video.ownerId || '')] || null;
+      return formatVideoSummary('', video, userData);
+    });
+
+    res.json({
+      related,
+      videoId: id,
+      algorithm: 'content_based'
+    });
+  } catch (error) {
+    console.error('Get related videos error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/discover/trending - get trending videos
+app.get('/v1/discover/trending', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const category = req.query.category as string || null;
+    const period = (req.query.period as string) || 'week';
+
+    const now = admin.firestore.Timestamp.now();
+    let startDate: admin.firestore.Timestamp;
+
+    if (period === 'day') {
+      startDate = admin.firestore.Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
+    } else if (period === 'week') {
+      startDate = admin.firestore.Timestamp.fromDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+    } else if (period === 'month') {
+      startDate = admin.firestore.Timestamp.fromDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+    } else {
+      startDate = admin.firestore.Timestamp.fromDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+    }
+
+    let query = db.collection('videos')
+      .where('status', '==', 'published')
+      .where('publishedAt', '>=', startDate)
+      .orderBy('views', 'desc');
+
+    if (category) {
+      query = query.where('category', '==', category);
+    }
+
+    const snap = await query.limit(limit * 2).get();
+
+    const userIds = snap.docs.map(doc => String(doc.get('ownerId') || ''));
+    const usersMap = await loadUsersMap(userIds);
+
+    const trending = snap.docs.slice(0, limit).map(doc => {
+      const data = doc.data();
+      const userData = usersMap[String(data.ownerId || '')] || null;
+      return formatVideoSummary(doc.id, data, userData);
+    });
+
+    res.json({
+      trending,
+      category: category || 'all',
+      period,
+      count: trending.length
+    });
+  } catch (error) {
+    console.error('Get trending error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/discover/feed - get personalized discovery feed
+app.get('/v1/discover/feed', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+
+    const subscriptionsSnap = await db.collection('users').doc(user.userId).collection('subscriptions')
+      .limit(50)
+      .get();
+
+    const subscribedCreatorIds = new Set(subscriptionsSnap.docs.map(doc => String(doc.get('creatorId') || '')));
+
+    const videosSnap = await db.collection('videos')
+      .where('status', '==', 'published')
+      .orderBy('publishedAt', 'desc')
+      .limit(200)
+      .get();
+
+    const feedVideos: FirestoreData[] = [];
+
+    for (const doc of videosSnap.docs) {
+      const video = doc.data();
+      const videoId = doc.id;
+      const ownerId = String(video.ownerId || '');
+
+      if (ownerId === user.userId) continue;
+
+      let score = 0;
+
+      if (subscribedCreatorIds.has(ownerId)) score += 5;
+
+      const likesSnap = await db.collection('videos').doc(videoId).collection('likes').doc(user.userId).get();
+      if (likesSnap.exists) score += 2;
+
+      score += Math.log10(Number(video.views || 1)) * 0.3;
+
+      if (score > 0) {
+        feedVideos.push({ ...video, _score: score });
+      }
+    }
+
+    feedVideos.sort((a, b) => (b._score || 0) - (a._score || 0));
+
+    const userIds = feedVideos.slice(0, limit).map(v => String(v.ownerId || ''));
+    const usersMap = await loadUsersMap(userIds);
+
+    const feed = feedVideos.slice(0, limit).map(video => {
+      const userData = usersMap[String(video.ownerId || '')] || null;
+      return formatVideoSummary('', video, userData);
+    });
+
+    res.json({
+      feed,
+      algorithm: 'personalized',
+      subscriptionsCount: subscribedCreatorIds.size
+    });
+  } catch (error) {
+    console.error('Get feed error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
