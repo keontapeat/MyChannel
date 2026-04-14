@@ -7420,6 +7420,592 @@ app.get('/v1/users/:userId/milestones', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Video Watermarking API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PUT /v1/videos/:videoId/watermark - set video watermark
+app.put('/v1/videos/:videoId/watermark', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { imageUrl, position, opacity, size } = req.body || {};
+
+    if (!imageUrl || typeof imageUrl !== 'string') {
+      return res.status(400).json({ error: 'imageUrl is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      watermarkUrl: imageUrl.trim(),
+      watermarkPosition: position || 'bottom-right',
+      watermarkOpacity: typeof opacity === 'number' ? opacity : 0.5,
+      watermarkSize: size || 'medium',
+      hasWatermark: true,
+      updatedAt: now
+    };
+
+    const validPositions = ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'];
+    if (!validPositions.includes(patch.watermarkPosition)) {
+      patch.watermarkPosition = 'bottom-right';
+    }
+
+    const validSizes = ['small', 'medium', 'large'];
+    if (!validSizes.includes(patch.watermarkSize)) {
+      patch.watermarkSize = 'medium';
+    }
+
+    await videoRef.update(patch);
+
+    res.json({
+      videoId,
+      watermarkUrl: patch.watermarkUrl,
+      watermarkPosition: patch.watermarkPosition,
+      watermarkOpacity: patch.watermarkOpacity,
+      watermarkSize: patch.watermarkSize
+    });
+  } catch (error) {
+    console.error('Set watermark error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/watermark - get video watermark
+app.get('/v1/videos/:videoId/watermark', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    res.json({
+      videoId,
+      watermarkUrl: videoData.watermarkUrl || null,
+      watermarkPosition: videoData.watermarkPosition || 'bottom-right',
+      watermarkOpacity: videoData.watermarkOpacity || 0.5,
+      watermarkSize: videoData.watermarkSize || 'medium',
+      hasWatermark: videoData.hasWatermark || false
+    });
+  } catch (error) {
+    console.error('Get watermark error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/videos/:videoId/watermark - remove video watermark
+app.delete('/v1/videos/:videoId/watermark', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await videoRef.update({
+      watermarkUrl: null,
+      watermarkPosition: null,
+      watermarkOpacity: null,
+      watermarkSize: null,
+      hasWatermark: false,
+      updatedAt: now
+    });
+
+    res.json({ message: 'Watermark removed' });
+  } catch (error) {
+    console.error('Remove watermark error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Branding/Intros API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PUT /v1/users/:userId/branding - set user branding (intro/outro)
+app.put('/v1/users/:userId/branding', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { introVideoUrl, outroVideoUrl, logoUrl, backgroundColor } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (introVideoUrl) patch.introVideoUrl = introVideoUrl.trim();
+    if (outroVideoUrl) patch.outroVideoUrl = outroVideoUrl.trim();
+    if (logoUrl) patch.logoUrl = logoUrl.trim();
+    if (backgroundColor) patch.backgroundColor = backgroundColor.trim();
+
+    await db.collection('users').doc(userId).collection('branding').doc('default').set(patch, { merge: true });
+
+    res.json({
+      userId,
+      introVideoUrl: patch.introVideoUrl || null,
+      outroVideoUrl: patch.outroVideoUrl || null,
+      logoUrl: patch.logoUrl || null,
+      backgroundColor: patch.backgroundColor || null
+    });
+  } catch (error) {
+    console.error('Set branding error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/branding - get user branding
+app.get('/v1/users/:userId/branding', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const brandingRef = db.collection('users').doc(userId).collection('branding').doc('default');
+    const brandingSnap = await brandingRef.get();
+
+    if (!brandingSnap.exists) {
+      return res.json({
+        userId,
+        introVideoUrl: null,
+        outroVideoUrl: null,
+        logoUrl: null,
+        backgroundColor: null
+      });
+    }
+
+    const data = brandingSnap.data()!;
+
+    res.json({
+      userId,
+      introVideoUrl: data.introVideoUrl || null,
+      outroVideoUrl: data.outroVideoUrl || null,
+      logoUrl: data.logoUrl || null,
+      backgroundColor: data.backgroundColor || null
+    });
+  } catch (error) {
+    console.error('Get branding error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/branding - apply branding to specific video
+app.put('/v1/videos/:videoId/branding', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { applyIntro, applyOutro, applyLogo } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (typeof applyIntro === 'boolean') patch.applyIntro = applyIntro;
+    if (typeof applyOutro === 'boolean') patch.applyOutro = applyOutro;
+    if (typeof applyLogo === 'boolean') patch.applyLogo = applyLogo;
+
+    await videoRef.update(patch);
+
+    res.json({
+      videoId,
+      applyIntro: patch.applyIntro || false,
+      applyOutro: patch.applyOutro || false,
+      applyLogo: patch.applyLogo || false
+    });
+  } catch (error) {
+    console.error('Apply video branding error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Accessibility API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/audio-descriptions - add audio description track
+app.post('/v1/videos/:videoId/audio-descriptions', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { language, audioUrl, description } = req.body || {};
+
+    if (!language || typeof language !== 'string') {
+      return res.status(400).json({ error: 'language is required' });
+    }
+
+    if (!audioUrl || typeof audioUrl !== 'string') {
+      return res.status(400).json({ error: 'audioUrl is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const audioDescRef = videoRef.collection('audioDescriptions').doc();
+
+    await audioDescRef.set({
+      videoId,
+      language: language.trim(),
+      audioUrl: audioUrl.trim(),
+      description: description || '',
+      createdAt: now
+    });
+
+    await videoRef.update({
+      hasAudioDescriptions: true,
+      updatedAt: now
+    });
+
+    const audioDescSnap = await audioDescRef.get();
+
+    res.status(201).json({
+      audioDescriptionId: audioDescRef.id,
+      language: audioDescSnap.data()!.language,
+      audioUrl: audioDescSnap.data()!.audioUrl,
+      description: audioDescSnap.data()!.description,
+      createdAt: toIsoString(audioDescSnap.data()!.createdAt)
+    });
+  } catch (error) {
+    console.error('Add audio description error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/audio-descriptions - list audio description tracks
+app.get('/v1/videos/:videoId/audio-descriptions', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const audioDescSnap = await videoRef.collection('audioDescriptions')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const audioDescriptions = audioDescSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        language: data.language,
+        audioUrl: data.audioUrl,
+        description: data.description,
+        createdAt: toIsoString(data.createdAt)
+      };
+    });
+
+    res.json({
+      videoId,
+      audioDescriptions
+    });
+  } catch (error) {
+    console.error('List audio descriptions error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/accessibility - update video accessibility settings
+app.put('/v1/videos/:videoId/accessibility', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { hasCaptions, hasAudioDescriptions, hasSignLanguage } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (typeof hasCaptions === 'boolean') patch.hasCaptions = hasCaptions;
+    if (typeof hasAudioDescriptions === 'boolean') patch.hasAudioDescriptions = hasAudioDescriptions;
+    if (typeof hasSignLanguage === 'boolean') patch.hasSignLanguage = hasSignLanguage;
+
+    await videoRef.update(patch);
+
+    res.json({
+      videoId,
+      hasCaptions: patch.hasCaptions || videoData.hasCaptions || false,
+      hasAudioDescriptions: patch.hasAudioDescriptions || videoData.hasAudioDescriptions || false,
+      hasSignLanguage: patch.hasSignLanguage || videoData.hasSignLanguage || false
+    });
+  } catch (error) {
+    console.error('Update accessibility error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Localization API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/localizations - add localized metadata
+app.post('/v1/videos/:videoId/localizations', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { language, title, description, tags } = req.body || {};
+
+    if (!language || typeof language !== 'string') {
+      return res.status(400).json({ error: 'language is required' });
+    }
+
+    if (!title || typeof title !== 'string') {
+      return res.status(400).json({ error: 'title is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const localizationRef = videoRef.collection('localizations').doc(language.trim().toLowerCase());
+
+    await localizationRef.set({
+      videoId,
+      language: language.trim(),
+      title: title.trim(),
+      description: description || '',
+      tags: Array.isArray(tags) ? tags : [],
+      createdAt: now,
+      updatedAt: now
+    }, { merge: true });
+
+    await videoRef.update({
+      hasLocalizations: true,
+      updatedAt: now
+    });
+
+    const localizationSnap = await localizationRef.get();
+
+    res.status(201).json({
+      language: localizationSnap.data()!.language,
+      title: localizationSnap.data()!.title,
+      description: localizationSnap.data()!.description,
+      tags: localizationSnap.data()!.tags,
+      createdAt: toIsoString(localizationSnap.data()!.createdAt)
+    });
+  } catch (error) {
+    console.error('Add localization error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/localizations - list video localizations
+app.get('/v1/videos/:videoId/localizations', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const localizationsSnap = await videoRef.collection('localizations').get();
+
+    const localizations = localizationsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        language: data.language,
+        title: data.title,
+        description: data.description,
+        tags: data.tags,
+        createdAt: toIsoString(data.createdAt),
+        updatedAt: data.updatedAt ? toIsoString(data.updatedAt) : null
+      };
+    });
+
+    res.json({
+      videoId,
+      localizations
+    });
+  } catch (error) {
+    console.error('List localizations error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/localizations/:language - update localization
+app.put('/v1/videos/:videoId/localizations/:language', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, language } = req.params;
+    const { title, description, tags } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const localizationRef = videoRef.collection('localizations').doc(language.toLowerCase());
+    const localizationSnap = await localizationRef.get();
+
+    if (!localizationSnap.exists) {
+      return res.status(404).json({ error: 'Localization not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (title) patch.title = title.trim();
+    if (description !== undefined) patch.description = description;
+    if (Array.isArray(tags)) patch.tags = tags;
+
+    await localizationRef.update(patch);
+
+    res.json({
+      language,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update localization error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/videos/:videoId/localizations/:language - delete localization
+app.delete('/v1/videos/:videoId/localizations/:language', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, language } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await videoRef.collection('localizations').doc(language.toLowerCase()).delete();
+
+    const remainingLocalizationsSnap = await videoRef.collection('localizations').limit(1).get();
+    if (remainingLocalizationsSnap.empty) {
+      await videoRef.update({ hasLocalizations: false });
+    }
+
+    res.json({ message: 'Localization deleted' });
+  } catch (error) {
+    console.error('Delete localization error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
