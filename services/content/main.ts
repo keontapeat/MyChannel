@@ -10808,6 +10808,679 @@ app.get('/v1/audio-enhancements/types', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Auto-Generated Playlists API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/users/:userId/auto-playlists - generate smart playlist
+app.post('/v1/users/:userId/auto-playlists', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { playlistType, criteria, name, description } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (!playlistType || typeof playlistType !== 'string') {
+      return res.status(400).json({ error: 'playlistType is required' });
+    }
+
+    const validTypes = ['watch_history', 'liked_videos', 'watch_later', 'similar_videos', 'trending', 'custom'];
+    if (!validTypes.includes(playlistType)) {
+      return res.status(400).json({ error: `playlistType must be one of: ${validTypes.join(', ')}` });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const autoPlaylistRef = db.collection('users').doc(userId).collection('autoPlaylists').doc();
+
+    await autoPlaylistRef.set({
+      userId,
+      playlistType,
+      name: name || playlistType,
+      description: description || '',
+      criteria: criteria || {},
+      status: 'generating',
+      videoIds: [],
+      createdAt: now,
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      autoPlaylistId: autoPlaylistRef.id,
+      playlistType,
+      name: name || playlistType,
+      status: 'generating',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Generate auto playlist error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/auto-playlists - list auto-generated playlists
+app.get('/v1/users/:userId/auto-playlists', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const autoPlaylistsSnap = await db.collection('users').doc(userId).collection('autoPlaylists')
+      .orderBy('updatedAt', 'desc')
+      .limit(20)
+      .get();
+
+    const autoPlaylists = autoPlaylistsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        playlistType: data.playlistType,
+        name: data.name,
+        description: data.description,
+        criteria: data.criteria,
+        status: data.status,
+        videoIds: data.videoIds,
+        videoCount: data.videoIds ? data.videoIds.length : 0,
+        createdAt: toIsoString(data.createdAt),
+        updatedAt: toIsoString(data.updatedAt)
+      };
+    });
+
+    res.json({
+      userId,
+      autoPlaylists
+    });
+  } catch (error) {
+    console.error('List auto playlists error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/users/:userId/auto-playlists/:autoPlaylistId - update auto playlist
+app.put('/v1/users/:userId/auto-playlists/:autoPlaylistId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId, autoPlaylistId } = req.params;
+    const { name, description, criteria, videoIds } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const autoPlaylistRef = db.collection('users').doc(userId).collection('autoPlaylists').doc(autoPlaylistId);
+    const autoPlaylistSnap = await autoPlaylistRef.get();
+
+    if (!autoPlaylistSnap.exists) {
+      return res.status(404).json({ error: 'Auto playlist not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (name) patch.name = name;
+    if (description !== undefined) patch.description = description;
+    if (criteria) patch.criteria = criteria;
+    if (Array.isArray(videoIds)) {
+      patch.videoIds = videoIds;
+      patch.status = 'completed';
+    }
+
+    await autoPlaylistRef.update(patch);
+
+    res.json({
+      autoPlaylistId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update auto playlist error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/users/:userId/auto-playlists/:autoPlaylistId - delete auto playlist
+app.delete('/v1/users/:userId/auto-playlists/:autoPlaylistId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId, autoPlaylistId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await db.collection('users').doc(userId).collection('autoPlaylists').doc(autoPlaylistId).delete();
+
+    res.json({ message: 'Auto playlist deleted' });
+  } catch (error) {
+    console.error('Delete auto playlist error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Subtitle Translation API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/subtitles/:subtitleId/translate - request subtitle translation
+app.post('/v1/videos/:videoId/subtitles/:subtitleId/translate', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, subtitleId } = req.params;
+    const { targetLanguage, sourceLanguage } = req.body || {};
+
+    if (!targetLanguage || typeof targetLanguage !== 'string') {
+      return res.status(400).json({ error: 'targetLanguage is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const subtitleRef = videoRef.collection('subtitles').doc(subtitleId);
+    const subtitleSnap = await subtitleRef.get();
+
+    if (!subtitleSnap.exists) {
+      return res.status(404).json({ error: 'Subtitle not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const translationRef = subtitleRef.collection('translations').doc();
+
+    await translationRef.set({
+      videoId,
+      subtitleId,
+      sourceLanguage: sourceLanguage || 'auto',
+      targetLanguage: targetLanguage.toLowerCase(),
+      status: 'pending',
+      createdAt: now,
+      completedAt: null,
+      translatedContent: null
+    });
+
+    res.status(201).json({
+      translationId: translationRef.id,
+      targetLanguage: targetLanguage.toLowerCase(),
+      status: 'pending',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Request translation error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/subtitles/:subtitleId/translations - list translations
+app.get('/v1/videos/:videoId/subtitles/:subtitleId/translations', async (req, res) => {
+  try {
+    const { videoId, subtitleId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const subtitleRef = videoRef.collection('subtitles').doc(subtitleId);
+    const subtitleSnap = await subtitleRef.get();
+
+    if (!subtitleSnap.exists) {
+      return res.status(404).json({ error: 'Subtitle not found' });
+    }
+
+    const translationsSnap = await subtitleRef.collection('translations')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const translations = translationsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        sourceLanguage: data.sourceLanguage,
+        targetLanguage: data.targetLanguage,
+        status: data.status,
+        createdAt: toIsoString(data.createdAt),
+        completedAt: data.completedAt ? toIsoString(data.completedAt) : null
+      };
+    });
+
+    res.json({
+      videoId,
+      subtitleId,
+      translations
+    });
+  } catch (error) {
+    console.error('List translations error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/subtitles/:subtitleId/translations/:translationId - apply translation
+app.put('/v1/videos/:videoId/subtitles/:subtitleId/translations/:translationId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, subtitleId, translationId } = req.params;
+    const { translatedContent, status } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const translationRef = videoRef.collection('subtitles').doc(subtitleId).collection('translations').doc(translationId);
+    const translationSnap = await translationRef.get();
+
+    if (!translationSnap.exists) {
+      return res.status(404).json({ error: 'Translation not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (translatedContent) patch.translatedContent = translatedContent;
+    if (status) {
+      patch.status = status;
+      if (status === 'completed') patch.completedAt = now;
+    }
+
+    await translationRef.update(patch);
+
+    res.json({
+      translationId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Apply translation error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Slow Motion/Time-Lapse API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/slow-motion - create slow motion version
+app.post('/v1/videos/:videoId/slow-motion', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { speedFactor, startTime, endTime } = req.body || {};
+
+    if (typeof speedFactor !== 'number' || speedFactor <= 0 || speedFactor > 1) {
+      return res.status(400).json({ error: 'speedFactor must be between 0 and 1' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const effectRef = videoRef.collection('videoEffects').doc();
+
+    await effectRef.set({
+      videoId,
+      effectType: 'slow_motion',
+      speedFactor,
+      startTime: startTime || 0,
+      endTime: endTime || null,
+      status: 'processing',
+      createdAt: now,
+      createdBy: user.userId
+    });
+
+    await videoRef.update({
+      hasVideoEffects: true,
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      effectId: effectRef.id,
+      effectType: 'slow_motion',
+      speedFactor,
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Create slow motion error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/videos/:videoId/time-lapse - create time-lapse version
+app.post('/v1/videos/:videoId/time-lapse', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { speedFactor, frameInterval, startTime, endTime } = req.body || {};
+
+    if (typeof speedFactor !== 'number' || speedFactor <= 1) {
+      return res.status(400).json({ error: 'speedFactor must be greater than 1' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const effectRef = videoRef.collection('videoEffects').doc();
+
+    await effectRef.set({
+      videoId,
+      effectType: 'time_lapse',
+      speedFactor,
+      frameInterval: frameInterval || 1,
+      startTime: startTime || 0,
+      endTime: endTime || null,
+      status: 'processing',
+      createdAt: now,
+      createdBy: user.userId
+    });
+
+    await videoRef.update({
+      hasVideoEffects: true,
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      effectId: effectRef.id,
+      effectType: 'time_lapse',
+      speedFactor,
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Create time-lapse error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/effects - list video effects
+app.get('/v1/videos/:videoId/effects', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const effectsSnap = await videoRef.collection('videoEffects')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const effects = effectsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        effectType: data.effectType,
+        speedFactor: data.speedFactor,
+        frameInterval: data.frameInterval,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        status: data.status,
+        createdAt: toIsoString(data.createdAt)
+      };
+    });
+
+    res.json({
+      videoId,
+      effects
+    });
+  } catch (error) {
+    console.error('List effects error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/videos/:videoId/effects/:effectId - delete video effect
+app.delete('/v1/videos/:videoId/effects/:effectId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, effectId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await videoRef.collection('videoEffects').doc(effectId).delete();
+
+    const remainingSnap = await videoRef.collection('videoEffects').limit(1).get();
+    if (remainingSnap.empty) {
+      await videoRef.update({ hasVideoEffects: false });
+    }
+
+    res.json({ message: 'Video effect deleted' });
+  } catch (error) {
+    console.error('Delete effect error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Screen Recording Integration API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/users/:userId/screen-recordings - start screen recording
+app.post('/v1/users/:userId/screen-recordings', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { title, description, resolution, frameRate, audioEnabled } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const recordingRef = db.collection('users').doc(userId).collection('screenRecordings').doc();
+
+    await recordingRef.set({
+      userId,
+      title: title || 'Screen Recording',
+      description: description || '',
+      resolution: resolution || '1080p',
+      frameRate: frameRate || 30,
+      audioEnabled: typeof audioEnabled === 'boolean' ? audioEnabled : true,
+      status: 'recording',
+      startedAt: now,
+      endedAt: null,
+      duration: null,
+      fileSize: null,
+      videoUrl: null
+    });
+
+    res.status(201).json({
+      recordingId: recordingRef.id,
+      title: title || 'Screen Recording',
+      status: 'recording',
+      startedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Start screen recording error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/users/:userId/screen-recordings/:recordingId/stop - stop screen recording
+app.put('/v1/users/:userId/screen-recordings/:recordingId/stop', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId, recordingId } = req.params;
+    const { videoUrl, fileSize, duration } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const recordingRef = db.collection('users').doc(userId).collection('screenRecordings').doc(recordingId);
+    const recordingSnap = await recordingRef.get();
+
+    if (!recordingSnap.exists) {
+      return res.status(404).json({ error: 'Recording not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await recordingRef.update({
+      status: 'completed',
+      endedAt: now,
+      videoUrl: videoUrl || null,
+      fileSize: fileSize || null,
+      duration: duration || null
+    });
+
+    res.json({
+      recordingId,
+      status: 'completed',
+      endedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Stop screen recording error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/screen-recordings - list screen recordings
+app.get('/v1/users/:userId/screen-recordings', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const recordingsSnap = await db.collection('users').doc(userId).collection('screenRecordings')
+      .orderBy('startedAt', 'desc')
+      .limit(20)
+      .get();
+
+    const recordings = recordingsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        title: data.title,
+        description: data.description,
+        resolution: data.resolution,
+        frameRate: data.frameRate,
+        audioEnabled: data.audioEnabled,
+        status: data.status,
+        startedAt: toIsoString(data.startedAt),
+        endedAt: data.endedAt ? toIsoString(data.endedAt) : null,
+        duration: data.duration,
+        fileSize: data.fileSize,
+        videoUrl: data.videoUrl
+      };
+    });
+
+    res.json({
+      userId,
+      recordings
+    });
+  } catch (error) {
+    console.error('List screen recordings error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/users/:userId/screen-recordings/:recordingId - delete screen recording
+app.delete('/v1/users/:userId/screen-recordings/:recordingId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId, recordingId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await db.collection('users').doc(userId).collection('screenRecordings').doc(recordingId).delete();
+
+    res.json({ message: 'Screen recording deleted' });
+  } catch (error) {
+    console.error('Delete screen recording error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
