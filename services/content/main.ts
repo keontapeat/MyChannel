@@ -3560,6 +3560,440 @@ app.delete('/v1/users/:userId/community/:postId', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Video Scheduling API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /v1/videos/scheduled - list scheduled videos for the current user
+app.get('/v1/videos/scheduled', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const offset = (page - 1) * limit;
+
+    const snap = await db.collection('videos')
+      .where('ownerId', '==', user.userId)
+      .where('status', '==', 'scheduled')
+      .orderBy('scheduledAt', 'asc')
+      .offset(offset)
+      .limit(limit)
+      .get();
+
+    const videos = snap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        title: data.title || '',
+        thumbnailUrl: data.thumbnailUrl || null,
+        scheduledAt: toIsoString(data.scheduledAt),
+        createdAt: toIsoString(data.createdAt)
+      };
+    });
+
+    res.json({
+      videos,
+      pagination: {
+        page,
+        limit,
+        hasMore: videos.length === limit
+      }
+    });
+  } catch (error) {
+    console.error('List scheduled videos error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:id/schedule - schedule a video for future publication
+app.put('/v1/videos/:id/schedule', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { id } = req.params;
+    const { scheduledAt } = req.body || {};
+
+    if (!scheduledAt) {
+      return res.status(400).json({ error: 'scheduledAt is required' });
+    }
+
+    const scheduledDate = new Date(scheduledAt);
+    if (isNaN(scheduledDate.getTime()) || scheduledDate < new Date()) {
+      return res.status(400).json({ error: 'scheduledAt must be a valid future date' });
+    }
+
+    const videoRef = db.collection('videos').doc(id);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const scheduledTimestamp = admin.firestore.Timestamp.fromDate(scheduledDate);
+
+    await videoRef.update({
+      status: 'scheduled',
+      scheduledAt: scheduledTimestamp,
+      updatedAt: now
+    });
+
+    res.json({
+      videoId: id,
+      scheduledAt: scheduledTimestamp.toDate().toISOString(),
+      status: 'scheduled'
+    });
+  } catch (error) {
+    console.error('Schedule video error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:id/schedule/update - update scheduled time
+app.put('/v1/videos/:id/schedule/update', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { id } = req.params;
+    const { scheduledAt } = req.body || {};
+
+    if (!scheduledAt) {
+      return res.status(400).json({ error: 'scheduledAt is required' });
+    }
+
+    const scheduledDate = new Date(scheduledAt);
+    if (isNaN(scheduledDate.getTime()) || scheduledDate < new Date()) {
+      return res.status(400).json({ error: 'scheduledAt must be a valid future date' });
+    }
+
+    const videoRef = db.collection('videos').doc(id);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (videoData.status !== 'scheduled') {
+      return res.status(400).json({ error: 'Video is not scheduled' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const scheduledTimestamp = admin.firestore.Timestamp.fromDate(scheduledDate);
+
+    await videoRef.update({
+      scheduledAt: scheduledTimestamp,
+      updatedAt: now
+    });
+
+    res.json({
+      videoId: id,
+      scheduledAt: scheduledTimestamp.toDate().toISOString(),
+      status: 'scheduled'
+    });
+  } catch (error) {
+    console.error('Update schedule error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:id/schedule/cancel - cancel scheduled publication
+app.put('/v1/videos/:id/schedule/cancel', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { id } = req.params;
+
+    const videoRef = db.collection('videos').doc(id);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (videoData.status !== 'scheduled') {
+      return res.status(400).json({ error: 'Video is not scheduled' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+
+    await videoRef.update({
+      status: 'draft',
+      scheduledAt: null,
+      updatedAt: now
+    });
+
+    res.json({
+      videoId: id,
+      status: 'draft',
+      message: 'Scheduled publication cancelled'
+    });
+  } catch (error) {
+    console.error('Cancel schedule error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Premiere API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PUT /v1/videos/:id/premiere - set video as premiere
+app.put('/v1/videos/:id/premiere', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { id } = req.params;
+    const { premiereAt } = req.body || {};
+
+    if (!premiereAt) {
+      return res.status(400).json({ error: 'premiereAt is required' });
+    }
+
+    const premiereDate = new Date(premiereAt);
+    if (isNaN(premiereDate.getTime()) || premiereDate < new Date()) {
+      return res.status(400).json({ error: 'premiereAt must be a valid future date' });
+    }
+
+    const videoRef = db.collection('videos').doc(id);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const premiereTimestamp = admin.firestore.Timestamp.fromDate(premiereDate);
+
+    await videoRef.update({
+      status: 'premiere',
+      premiereAt: premiereTimestamp,
+      scheduledAt: premiereTimestamp,
+      isPremiere: true,
+      premiereLiveChatEnabled: true,
+      updatedAt: now
+    });
+
+    res.json({
+      videoId: id,
+      premiereAt: premiereTimestamp.toDate().toISOString(),
+      status: 'premiere'
+    });
+  } catch (error) {
+    console.error('Set premiere error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:id/premiere - get premiere info
+app.get('/v1/videos/:id/premiere', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const videoRef = db.collection('videos').doc(id);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (videoData.status !== 'premiere') {
+      return res.status(400).json({ error: 'Video is not a premiere' });
+    }
+
+    const premiereAt = videoData.premiereAt || videoData.scheduledAt;
+    const now = admin.firestore.Timestamp.now();
+    const premiereDate = premiereAt ? premiereAt.toDate() : null;
+
+    let countdownSeconds = 0;
+    let status = 'upcoming';
+
+    if (premiereDate) {
+      const diffMs = premiereDate.getTime() - now.toDate().getTime();
+      countdownSeconds = Math.max(0, Math.floor(diffMs / 1000));
+
+      if (diffMs <= 0 && diffMs > -3600000) {
+        status = 'live';
+      } else if (diffMs <= -3600000) {
+        status = 'ended';
+      }
+    }
+
+    res.json({
+      videoId: id,
+      premiereAt: premiereAt ? toIsoString(premiereAt) : null,
+      countdownSeconds,
+      status,
+      liveChatEnabled: !!videoData.premiereLiveChatEnabled
+    });
+  } catch (error) {
+    console.error('Get premiere error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Download API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /v1/videos/:id/download - get download URLs for a video
+app.get('/v1/videos/:id/download', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const videoRef = db.collection('videos').doc(id);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (videoData.status !== 'published') {
+      return res.status(400).json({ error: 'Video must be published to download' });
+    }
+
+    const qualityVariants = Array.isArray(videoData.qualityVariants) ? videoData.qualityVariants : [];
+    const baseUrl = process.env.BASE_URL || 'https://mychannel.live';
+
+    const downloadOptions = [
+      {
+        quality: 'original',
+        label: 'Original Quality',
+        url: videoData.videoUrl || null,
+        size: typeof videoData.fileSize === 'number' ? videoData.fileSize : (videoData.fileSize ? Number(videoData.fileSize) : null),
+        mimeType: videoData.mimeType || 'video/mp4'
+      }
+    ];
+
+    if (qualityVariants.length > 0) {
+      qualityVariants.forEach((variant: any) => {
+        downloadOptions.push({
+          quality: variant.quality || 'unknown',
+          label: variant.label || variant.quality || 'Unknown',
+          url: variant.url || null,
+          size: typeof variant.size === 'number' ? variant.size : (variant.size ? Number(variant.size) : null),
+          mimeType: variant.mimeType || 'video/mp4'
+        });
+      });
+    }
+
+    res.json({
+      videoId: id,
+      title: videoData.title || '',
+      downloadOptions,
+      downloadEnabled: !videoData.downloadDisabled
+    });
+  } catch (error) {
+    console.error('Get download error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:id/download/disable - disable downloads for a video
+app.put('/v1/videos/:id/download/disable', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { id } = req.params;
+
+    const videoRef = db.collection('videos').doc(id);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await videoRef.update({
+      downloadDisabled: true,
+      updatedAt: admin.firestore.Timestamp.now()
+    });
+
+    res.json({
+      videoId: id,
+      downloadEnabled: false
+    });
+  } catch (error) {
+    console.error('Disable download error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:id/download/enable - enable downloads for a video
+app.put('/v1/videos/:id/download/enable', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { id } = req.params;
+
+    const videoRef = db.collection('videos').doc(id);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await videoRef.update({
+      downloadDisabled: false,
+      updatedAt: admin.firestore.Timestamp.now()
+    });
+
+    res.json({
+      videoId: id,
+      downloadEnabled: true
+    });
+  } catch (error) {
+    console.error('Enable download error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
