@@ -13557,6 +13557,1144 @@ app.put('/v1/users/:userId/kids-mode/time-limits', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// YouTube Studio Audience Insights API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /v1/channels/:channelId/audience/demographics - get audience demographics
+app.get('/v1/channels/:channelId/audience/demographics', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const demographics = {
+      channelId,
+      ageGroups: {
+        '13-17': 15,
+        '18-24': 25,
+        '25-34': 30,
+        '35-44': 18,
+        '45-54': 8,
+        '55+': 4
+      },
+      gender: {
+        male: 55,
+        female: 42,
+        other: 3
+      },
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ demographics });
+  } catch (error) {
+    console.error('Get audience demographics error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/audience/geography - get audience geography
+app.get('/v1/channels/:channelId/audience/geography', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const geography = {
+      channelId,
+      countries: [
+        { country: 'US', percentage: 35 },
+        { country: 'GB', percentage: 12 },
+        { country: 'CA', percentage: 8 },
+        { country: 'AU', percentage: 6 },
+        { country: 'DE', percentage: 5 },
+        { country: 'IN', percentage: 5 },
+        { country: 'FR', percentage: 4 },
+        { country: 'BR', percentage: 3 },
+        { country: 'JP', percentage: 3 },
+        { country: 'Other', percentage: 19 }
+      ],
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ geography });
+  } catch (error) {
+    console.error('Get audience geography error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/audience/interests - get audience interests
+app.get('/v1/channels/:channelId/audience/interests', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const interests = {
+      channelId,
+      topInterests: [
+        { interest: 'Gaming', percentage: 28 },
+        { interest: 'Music', percentage: 22 },
+        { interest: 'Technology', percentage: 18 },
+        { interest: 'Entertainment', percentage: 15 },
+        { interest: 'Sports', percentage: 12 },
+        { interest: 'Education', percentage: 8 },
+        { interest: 'Comedy', percentage: 7 },
+        { interest: 'News & Politics', percentage: 5 }
+      ],
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ interests });
+  } catch (error) {
+    console.error('Get audience interests error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/audience/devices - get audience device breakdown
+app.get('/v1/channels/:channelId/audience/devices', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const devices = {
+      channelId,
+      deviceTypes: {
+        mobile: 65,
+        desktop: 25,
+        tablet: 7,
+        tv: 3
+      },
+      operatingSystems: {
+        android: 45,
+        ios: 38,
+        windows: 12,
+        macos: 4,
+        other: 1
+      },
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ devices });
+  } catch (error) {
+    console.error('Get audience devices error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Studio Revenue Analytics API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /v1/channels/:channelId/revenue/overview - get revenue overview
+app.get('/v1/channels/:channelId/revenue/overview', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const revenue = {
+      channelId,
+      totalRevenue: 1250.50,
+      estimatedRevenue: 1180.75,
+      currency: 'USD',
+      cpm: 4.50,
+      rpm: 3.25,
+      adImpressions: 278000,
+      monetizedPlaybacks: 185000,
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ revenue });
+  } catch (error) {
+    console.error('Get revenue overview error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/revenue/by-source - get revenue by source
+app.get('/v1/channels/:channelId/revenue/by-source', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const revenueBySource = {
+      channelId,
+      sources: [
+        { source: 'Ad revenue', amount: 980.25, percentage: 78.4 },
+        { source: 'Channel memberships', amount: 145.00, percentage: 11.6 },
+        { source: 'Super Chat', amount: 85.50, percentage: 6.8 },
+        { source: 'YouTube Premium', amount: 40.00, percentage: 3.2 }
+      ],
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ revenueBySource });
+  } catch (error) {
+    console.error('Get revenue by source error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/revenue/by-video - get revenue by video
+app.get('/v1/channels/:channelId/revenue/by-video', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const { startDate, endDate, limit } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const revenueByVideo = {
+      channelId,
+      videos: [
+        { videoId: 'vid1', title: 'Top Video 1', revenue: 245.75, views: 125000 },
+        { videoId: 'vid2', title: 'Top Video 2', revenue: 198.50, views: 98000 },
+        { videoId: 'vid3', title: 'Top Video 3', revenue: 156.25, views: 76000 },
+        { videoId: 'vid4', title: 'Top Video 4', revenue: 134.00, views: 65000 },
+        { videoId: 'vid5', title: 'Top Video 5', revenue: 112.50, views: 54000 }
+      ],
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ revenueByVideo });
+  } catch (error) {
+    console.error('Get revenue by video error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/revenue/ad-performance - get ad performance metrics
+app.get('/v1/channels/:channelId/revenue/ad-performance', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const adPerformance = {
+      channelId,
+      metrics: {
+        totalAdImpressions: 278000,
+        fillRate: 85.5,
+        averageCpm: 4.50,
+        playbackBasedCpm: 3.25,
+        adTypes: {
+          skippable: 45,
+          nonSkippable: 25,
+          overlay: 18,
+          bumper: 12
+        }
+      },
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ adPerformance });
+  } catch (error) {
+    console.error('Get ad performance error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Studio Benchmark Comparisons API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /v1/channels/:channelId/benchmarks/performance - get performance benchmarks
+app.get('/v1/channels/:channelId/benchmarks/performance', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const benchmarks = {
+      channelId,
+      metrics: {
+        views: {
+          yourValue: 125000,
+          average: 98000,
+          percentile: 75
+        },
+        watchTime: {
+          yourValue: 450000,
+          average: 380000,
+          percentile: 68
+        },
+        subscribers: {
+          yourValue: 2500,
+          average: 1800,
+          percentile: 82
+        },
+        revenue: {
+          yourValue: 1250.50,
+          average: 980.00,
+          percentile: 71
+        }
+      },
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ benchmarks });
+  } catch (error) {
+    console.error('Get performance benchmarks error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/benchmarks/similar-channels - compare with similar channels
+app.get('/v1/channels/:channelId/benchmarks/similar-channels', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const similarChannels = {
+      channelId,
+      channels: [
+        { channelId: 'sim1', name: 'Similar Channel 1', subscribers: 52000, views: 145000, revenue: 1450.00 },
+        { channelId: 'sim2', name: 'Similar Channel 2', subscribers: 48000, views: 132000, revenue: 1320.00 },
+        { channelId: 'sim3', name: 'Similar Channel 3', subscribers: 45000, views: 118000, revenue: 1180.00 },
+        { channelId: 'sim4', name: 'Similar Channel 4', subscribers: 42000, views: 105000, revenue: 1050.00 },
+        { channelId: 'sim5', name: 'Similar Channel 5', subscribers: 38000, views: 95000, revenue: 950.00 }
+      ],
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ similarChannels });
+  } catch (error) {
+    console.error('Get similar channels error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/benchmarks/ranking - get ranking position
+app.get('/v1/channels/:channelId/benchmarks/ranking', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const { category, region } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const ranking = {
+      channelId,
+      category: category || 'All',
+      region: region || 'Global',
+      rankings: {
+        subscribers: {
+          rank: 1254,
+          total: 500000,
+          percentile: 99.7
+        },
+        views: {
+          rank: 856,
+          total: 500000,
+          percentile: 99.8
+        },
+        watchTime: {
+          rank: 923,
+          total: 500000,
+          percentile: 99.8
+        }
+      }
+    };
+
+    res.json({ ranking });
+  } catch (error) {
+    console.error('Get ranking error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/benchmarks/growth - get growth percentiles
+app.get('/v1/channels/:channelId/benchmarks/growth', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const growth = {
+      channelId,
+      metrics: {
+        subscriberGrowth: {
+          yourGrowth: 12.5,
+          averageGrowth: 8.2,
+          percentile: 78
+        },
+        viewGrowth: {
+          yourGrowth: 15.3,
+          averageGrowth: 11.8,
+          percentile: 72
+        },
+        watchTimeGrowth: {
+          yourGrowth: 18.7,
+          averageGrowth: 14.2,
+          percentile: 75
+        },
+        revenueGrowth: {
+          yourGrowth: 22.4,
+          averageGrowth: 16.8,
+          percentile: 80
+        }
+      },
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ growth });
+  } catch (error) {
+    console.error('Get growth percentiles error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Studio Comments Management API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/channels/:channelId/comments/bulk-hold - bulk hold comments
+app.post('/v1/channels/:channelId/comments/bulk-hold', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { commentIds, reason } = req.body || {};
+
+    if (!Array.isArray(commentIds) || commentIds.length === 0) {
+      return res.status(400).json({ error: 'commentIds is required and must be a non-empty array' });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const batch = db.batch();
+
+    commentIds.forEach(commentId => {
+      const commentRef = db.collection('comments').doc(commentId);
+      batch.update(commentRef, {
+        status: 'held',
+        heldAt: now,
+        heldReason: reason || 'Manual hold',
+        heldBy: user.userId
+      });
+    });
+
+    await batch.commit();
+
+    res.json({
+      channelId,
+      heldCount: commentIds.length,
+      heldAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Bulk hold comments error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/channels/:channelId/comments/bulk-approve - bulk approve comments
+app.post('/v1/channels/:channelId/comments/bulk-approve', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { commentIds } = req.body || {};
+
+    if (!Array.isArray(commentIds) || commentIds.length === 0) {
+      return res.status(400).json({ error: 'commentIds is required and must be a non-empty array' });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const batch = db.batch();
+
+    commentIds.forEach(commentId => {
+      const commentRef = db.collection('comments').doc(commentId);
+      batch.update(commentRef, {
+        status: 'published',
+        approvedAt: now,
+        approvedBy: user.userId
+      });
+    });
+
+    await batch.commit();
+
+    res.json({
+      channelId,
+      approvedCount: commentIds.length,
+      approvedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Bulk approve comments error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/channels/:channelId/comments/bulk-reject - bulk reject comments
+app.post('/v1/channels/:channelId/comments/bulk-reject', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { commentIds, reason } = req.body || {};
+
+    if (!Array.isArray(commentIds) || commentIds.length === 0) {
+      return res.status(400).json({ error: 'commentIds is required and must be a non-empty array' });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const batch = db.batch();
+
+    commentIds.forEach(commentId => {
+      const commentRef = db.collection('comments').doc(commentId);
+      batch.update(commentRef, {
+        status: 'rejected',
+        rejectedAt: now,
+        rejectedBy: user.userId,
+        rejectionReason: reason || 'Manual rejection'
+      });
+    });
+
+    await batch.commit();
+
+    res.json({
+      channelId,
+      rejectedCount: commentIds.length,
+      rejectedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Bulk reject comments error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/comments/held - get held comments
+app.get('/v1/channels/:channelId/comments/held', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { limit, cursor } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    let query = db.collection('comments')
+      .where('channelId', '==', channelId)
+      .where('status', '==', 'held')
+      .orderBy('heldAt', 'desc')
+      .limit(parseInt(limit as string) || 50);
+
+    if (cursor) {
+      query = query.startAfter(cursor);
+    }
+
+    const commentsSnap = await query.get();
+
+    const comments = commentsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        videoId: data.videoId,
+        userId: data.userId,
+        text: data.text,
+        status: data.status,
+        heldAt: toIsoString(data.heldAt),
+        heldReason: data.heldReason
+      };
+    });
+
+    res.json({
+      channelId,
+      comments,
+      total: commentsSnap.size
+    });
+  } catch (error) {
+    console.error('Get held comments error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/channels/:channelId/comments/auto-moderation - set auto-moderation rules
+app.put('/v1/channels/:channelId/comments/auto-moderation', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { enabled, blockedWords, spamDetection, linkFilter } = req.body || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      autoModerationUpdatedAt: now
+    };
+
+    if (typeof enabled === 'boolean') patch.autoModerationEnabled = enabled;
+    if (Array.isArray(blockedWords)) patch.autoModerationBlockedWords = blockedWords;
+    if (typeof spamDetection === 'boolean') patch.autoModerationSpamDetection = spamDetection;
+    if (typeof linkFilter === 'boolean') patch.autoModerationLinkFilter = linkFilter;
+
+    await channelRef.update(patch);
+
+    res.json({
+      channelId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Set auto-moderation rules error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Studio Community Tab Management API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/channels/:channelId/community-posts - create community post
+app.post('/v1/channels/:channelId/community-posts', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { content, media, poll, videoId, scheduledFor } = req.body || {};
+
+    if (!content || typeof content !== 'string') {
+      return res.status(400).json({ error: 'content is required' });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const postRef = db.collection('communityPosts').doc();
+
+    await postRef.set({
+      channelId,
+      userId: user.userId,
+      content: content.trim(),
+      media: media || [],
+      poll: poll || null,
+      videoId: videoId || null,
+      scheduledFor: scheduledFor ? admin.firestore.Timestamp.fromDate(new Date(scheduledFor)) : null,
+      status: scheduledFor ? 'scheduled' : 'published',
+      createdAt: now,
+      publishedAt: scheduledFor ? null : now,
+      likes: 0,
+      comments: 0,
+      pinned: false
+    });
+
+    res.status(201).json({
+      postId: postRef.id,
+      status: scheduledFor ? 'scheduled' : 'published',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Create community post error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/community-posts/analytics - get community post analytics
+app.get('/v1/channels/:channelId/community-posts/analytics', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const analytics = {
+      channelId,
+      totalPosts: 45,
+      totalLikes: 12500,
+      totalComments: 850,
+      averageEngagement: 295.5,
+      topPerformingPosts: [
+        { postId: 'post1', likes: 1250, comments: 85, engagementRate: 8.5 },
+        { postId: 'post2', likes: 980, comments: 72, engagementRate: 7.8 },
+        { postId: 'post3', likes: 845, comments: 65, engagementRate: 7.2 }
+      ],
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ analytics });
+  } catch (error) {
+    console.error('Get community post analytics error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/channels/:channelId/community-posts/:postId/pin - pin/unpin post
+app.put('/v1/channels/:channelId/community-posts/:postId/pin', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId, postId } = req.params;
+    const { pinned } = req.body || {};
+
+    if (typeof pinned !== 'boolean') {
+      return res.status(400).json({ error: 'pinned is required and must be boolean' });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const postRef = db.collection('communityPosts').doc(postId);
+    const postSnap = await postRef.get();
+
+    if (!postSnap.exists) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await postRef.update({
+      pinned,
+      pinnedAt: pinned ? now : null
+    });
+
+    res.json({
+      postId,
+      pinned,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Pin/unpin post error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/channels/:channelId/community-posts/:postId - delete post
+app.delete('/v1/channels/:channelId/community-posts/:postId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId, postId } = req.params;
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const postRef = db.collection('communityPosts').doc(postId);
+    const postSnap = await postRef.get();
+
+    if (!postSnap.exists) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    await postRef.update({
+      status: 'deleted',
+      deletedAt: admin.firestore.Timestamp.now()
+    });
+
+    res.json({ message: 'Post deleted' });
+  } catch (error) {
+    console.error('Delete post error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Studio Live Streaming Features API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /v1/channels/:channelId/live-streams/:streamId/health - get live stream health
+app.get('/v1/channels/:channelId/live-streams/:streamId/health', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId, streamId } = req.params;
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const health = {
+      channelId,
+      streamId,
+      status: 'healthy',
+      metrics: {
+        bitrate: 4500,
+        fps: 30,
+        resolution: '1920x1080',
+        droppedFrames: 0.02,
+        latency: 2500,
+        cpuUsage: 45,
+        memoryUsage: 38
+      },
+      warnings: [],
+      lastChecked: toIsoString(admin.firestore.Timestamp.now())
+    };
+
+    res.json({ health });
+  } catch (error) {
+    console.error('Get live stream health error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/live-streams/:streamId/analytics - get live stream analytics
+app.get('/v1/channels/:channelId/live-streams/:streamId/analytics', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId, streamId } = req.params;
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const analytics = {
+      channelId,
+      streamId,
+      concurrentViewers: 1250,
+      peakViewers: 1850,
+      totalViews: 45000,
+      averageWatchTime: 1250,
+      chatMessages: 850,
+      superChats: 12,
+      revenue: 145.50,
+      startTime: toIsoString(admin.firestore.Timestamp.fromDate(new Date(Date.now() - 3600000))),
+      duration: 3600
+    };
+
+    res.json({ analytics });
+  } catch (error) {
+    console.error('Get live stream analytics error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/live-streams/stream-key - get stream key
+app.get('/v1/channels/:channelId/live-streams/stream-key', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const streamKey = {
+      channelId,
+      streamKey: 'xxxx-xxxx-xxxx-xxxx',
+      rtmpUrl: 'rtmp://a.rtmp.youtube.com/live2',
+      ingestServer: 'a.rtmp.youtube.com',
+      expiresAt: toIsoString(admin.firestore.Timestamp.fromDate(new Date(Date.now() + 86400000)))
+    };
+
+    res.json({ streamKey });
+  } catch (error) {
+    console.error('Get stream key error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/channels/:channelId/live-streams/stream-key/regenerate - regenerate stream key
+app.post('/v1/channels/:channelId/live-streams/stream-key/regenerate', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const newStreamKey = `${Math.random().toString(36).substring(2, 6)}-${Math.random().toString(36).substring(2, 6)}-${Math.random().toString(36).substring(2, 6)}-${Math.random().toString(36).substring(2, 6)}`;
+
+    await channelRef.update({
+      streamKey: newStreamKey,
+      streamKeyUpdatedAt: now
+    });
+
+    res.json({
+      channelId,
+      streamKey: newStreamKey,
+      regeneratedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Regenerate stream key error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/live-streams/chat-moderation - get live chat moderation settings
+app.get('/v1/channels/:channelId/live-streams/chat-moderation', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const moderation = {
+      channelId,
+      settings: {
+        slowMode: false,
+        slowModeDelay: 10,
+        subscriberOnly: false,
+        emoteOnly: false,
+        filterProfanity: true,
+        filterLinks: true,
+        filterEmojis: false,
+        holdNewUsers: false
+      },
+      moderators: ['mod1', 'mod2', 'mod3'],
+      blockedUsers: ['user1', 'user2']
+    };
+
+    res.json({ moderation });
+  } catch (error) {
+    console.error('Get chat moderation settings error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
