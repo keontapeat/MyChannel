@@ -8763,6 +8763,614 @@ function generateSEOKeywords(videoData: FirestoreData): string[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Video A/B Testing API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/ab-tests - create A/B test
+app.post('/v1/videos/:videoId/ab-tests', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { testName, variantType, variantA, variantB, trafficSplit } = req.body || {};
+
+    if (!testName || typeof testName !== 'string') {
+      return res.status(400).json({ error: 'testName is required' });
+    }
+
+    if (!variantType || typeof variantType !== 'string') {
+      return res.status(400).json({ error: 'variantType is required' });
+    }
+
+    const validTypes = ['thumbnail', 'title', 'description', 'metadata'];
+    if (!validTypes.includes(variantType)) {
+      return res.status(400).json({ error: `variantType must be one of: ${validTypes.join(', ')}` });
+    }
+
+    if (!variantA || !variantB) {
+      return res.status(400).json({ error: 'variantA and variantB are required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const testRef = videoRef.collection('abTests').doc();
+
+    await testRef.set({
+      videoId,
+      testName: testName.trim(),
+      variantType,
+      variantA,
+      variantB,
+      trafficSplit: trafficSplit || 50,
+      status: 'active',
+      createdAt: now,
+      startedAt: now,
+      endedAt: null,
+      results: {
+        variantA: { impressions: 0, clicks: 0, ctr: 0 },
+        variantB: { impressions: 0, clicks: 0, ctr: 0 }
+      }
+    });
+
+    res.status(201).json({
+      testId: testRef.id,
+      testName: testName.trim(),
+      variantType,
+      status: 'active',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Create A/B test error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/ab-tests - list A/B tests
+app.get('/v1/videos/:videoId/ab-tests', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const testsSnap = await videoRef.collection('abTests')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const tests = testsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        testName: data.testName,
+        variantType: data.variantType,
+        status: data.status,
+        trafficSplit: data.trafficSplit,
+        createdAt: toIsoString(data.createdAt),
+        startedAt: toIsoString(data.startedAt),
+        endedAt: data.endedAt ? toIsoString(data.endedAt) : null,
+        results: data.results
+      };
+    });
+
+    res.json({
+      videoId,
+      tests
+    });
+  } catch (error) {
+    console.error('List A/B tests error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/ab-tests/:testId/end - end A/B test
+app.put('/v1/videos/:videoId/ab-tests/:testId/end', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, testId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const testRef = videoRef.collection('abTests').doc(testId);
+    const testSnap = await testRef.get();
+
+    if (!testSnap.exists) {
+      return res.status(404).json({ error: 'Test not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await testRef.update({
+      status: 'ended',
+      endedAt: now
+    });
+
+    res.json({
+      testId,
+      status: 'ended',
+      endedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('End A/B test error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Granular User Preferences API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PUT /v1/users/:userId/preferences - update user preferences
+app.put('/v1/users/:userId/preferences', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { autoplay, annotations, captionsQuality, playbackSpeed, theme, language, notifications, privacy } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (typeof autoplay === 'boolean') patch.autoplay = autoplay;
+    if (typeof annotations === 'boolean') patch.showAnnotations = annotations;
+    if (captionsQuality) patch.captionsQuality = captionsQuality;
+    if (typeof playbackSpeed === 'number') patch.defaultPlaybackSpeed = playbackSpeed;
+    if (theme) patch.theme = theme;
+    if (language) patch.language = language;
+    if (notifications) patch.notificationSettings = notifications;
+    if (privacy) patch.privacySettings = privacy;
+
+    await db.collection('users').doc(userId).collection('preferences').doc('settings').set(patch, { merge: true });
+
+    res.json({
+      userId,
+      preferences: patch
+    });
+  } catch (error) {
+    console.error('Update preferences error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/preferences - get user preferences
+app.get('/v1/users/:userId/preferences', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const prefRef = db.collection('users').doc(userId).collection('preferences').doc('settings');
+    const prefSnap = await prefRef.get();
+
+    if (!prefSnap.exists) {
+      return res.json({
+        userId,
+        preferences: {
+          autoplay: true,
+          showAnnotations: true,
+          captionsQuality: 'auto',
+          defaultPlaybackSpeed: 1,
+          theme: 'system',
+          language: 'en',
+          notificationSettings: {},
+          privacySettings: {}
+        }
+      });
+    }
+
+    const data = prefSnap.data()!;
+
+    res.json({
+      userId,
+      preferences: {
+        autoplay: data.autoplay !== undefined ? data.autoplay : true,
+        showAnnotations: data.showAnnotations !== undefined ? data.showAnnotations : true,
+        captionsQuality: data.captionsQuality || 'auto',
+        defaultPlaybackSpeed: data.defaultPlaybackSpeed || 1,
+        theme: data.theme || 'system',
+        language: data.language || 'en',
+        notificationSettings: data.notificationSettings || {},
+        privacySettings: data.privacySettings || {}
+      }
+    });
+  } catch (error) {
+    console.error('Get preferences error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/users/:userId/preferences/reset - reset preferences to defaults
+app.post('/v1/users/:userId/preferences/reset', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const defaultPreferences = {
+      autoplay: true,
+      showAnnotations: true,
+      captionsQuality: 'auto',
+      defaultPlaybackSpeed: 1,
+      theme: 'system',
+      language: 'en',
+      notificationSettings: {},
+      privacySettings: {},
+      updatedAt: now
+    };
+
+    await db.collection('users').doc(userId).collection('preferences').doc('settings').set(defaultPreferences);
+
+    res.json({
+      userId,
+      preferences: defaultPreferences
+    });
+  } catch (error) {
+    console.error('Reset preferences error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Analytics Export API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/analytics/export - export video analytics
+app.post('/v1/videos/:videoId/analytics/export', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { format, dateRange, metrics } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const exportRef = db.collection('users').doc(user.userId).collection('analyticsExports').doc();
+
+    await exportRef.set({
+      userId: user.userId,
+      videoId,
+      exportType: 'video',
+      format: format || 'csv',
+      dateRange: dateRange || '30d',
+      metrics: metrics || ['views', 'likes', 'comments', 'shares', 'watchTime'],
+      status: 'pending',
+      createdAt: now,
+      completedAt: null,
+      downloadUrl: null
+    });
+
+    res.status(201).json({
+      exportId: exportRef.id,
+      videoId,
+      format: format || 'csv',
+      status: 'pending',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Export video analytics error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/users/:userId/analytics/export - export channel analytics
+app.post('/v1/users/:userId/analytics/export', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { format, dateRange, metrics } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const exportRef = db.collection('users').doc(userId).collection('analyticsExports').doc();
+
+    await exportRef.set({
+      userId,
+      exportType: 'channel',
+      format: format || 'csv',
+      dateRange: dateRange || '30d',
+      metrics: metrics || ['views', 'subscribers', 'revenue', 'engagement'],
+      status: 'pending',
+      createdAt: now,
+      completedAt: null,
+      downloadUrl: null
+    });
+
+    res.status(201).json({
+      exportId: exportRef.id,
+      exportType: 'channel',
+      format: format || 'csv',
+      status: 'pending',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Export channel analytics error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/analytics/exports - list export jobs
+app.get('/v1/users/:userId/analytics/exports', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const exportsSnap = await db.collection('users').doc(userId).collection('analyticsExports')
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .get();
+
+    const exports = exportsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        exportType: data.exportType,
+        videoId: data.videoId || null,
+        format: data.format,
+        dateRange: data.dateRange,
+        metrics: data.metrics,
+        status: data.status,
+        createdAt: toIsoString(data.createdAt),
+        completedAt: data.completedAt ? toIsoString(data.completedAt) : null,
+        downloadUrl: data.downloadUrl
+      };
+    });
+
+    res.json({
+      userId,
+      exports
+    });
+  } catch (error) {
+    console.error('List exports error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Creator Tools API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/users/:userId/quick-actions - execute quick action
+app.post('/v1/users/:userId/quick-actions', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { actionType, targetId, params } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (!actionType || typeof actionType !== 'string') {
+      return res.status(400).json({ error: 'actionType is required' });
+    }
+
+    const validActions = ['publish', 'unpublish', 'delete', 'archive', 'unarchive', 'add_to_playlist', 'remove_from_playlist'];
+    if (!validActions.includes(actionType)) {
+      return res.status(400).json({ error: `actionType must be one of: ${validActions.join(', ')}` });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const actionRef = db.collection('users').doc(userId).collection('quickActions').doc();
+
+    await actionRef.set({
+      userId,
+      actionType,
+      targetId: targetId || null,
+      params: params || {},
+      status: 'pending',
+      createdAt: now,
+      completedAt: null,
+      result: null
+    });
+
+    res.status(201).json({
+      actionId: actionRef.id,
+      actionType,
+      status: 'pending',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Execute quick action error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/users/:userId/bulk-actions - execute bulk action
+app.post('/v1/users/:userId/bulk-actions', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { actionType, targetIds, params } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (!actionType || typeof actionType !== 'string') {
+      return res.status(400).json({ error: 'actionType is required' });
+    }
+
+    if (!Array.isArray(targetIds) || targetIds.length === 0) {
+      return res.status(400).json({ error: 'targetIds array is required' });
+    }
+
+    if (targetIds.length > 100) {
+      return res.status(400).json({ error: 'targetIds array cannot exceed 100 items' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const bulkActionRef = db.collection('users').doc(userId).collection('bulkActions').doc();
+
+    await bulkActionRef.set({
+      userId,
+      actionType,
+      targetIds,
+      params: params || {},
+      status: 'pending',
+      progress: 0,
+      total: targetIds.length,
+      completed: 0,
+      failed: 0,
+      createdAt: now,
+      completedAt: null
+    });
+
+    res.status(201).json({
+      bulkActionId: bulkActionRef.id,
+      actionType,
+      total: targetIds.length,
+      status: 'pending',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Execute bulk action error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/actions - list action history
+app.get('/v1/users/:userId/actions', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { type } = req.query;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const actions: any[] = [];
+
+    const quickActionsSnap = await db.collection('users').doc(userId).collection('quickActions')
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .get();
+
+    quickActionsSnap.docs.forEach(doc => {
+      const data = doc.data();
+      if (type && typeof type === 'string' && data.actionType !== type) return;
+      actions.push({
+        id: doc.id,
+        type: 'quick',
+        actionType: data.actionType,
+        targetId: data.targetId,
+        status: data.status,
+        createdAt: toIsoString(data.createdAt),
+        completedAt: data.completedAt ? toIsoString(data.completedAt) : null
+      });
+    });
+
+    const bulkActionsSnap = await db.collection('users').doc(userId).collection('bulkActions')
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .get();
+
+    bulkActionsSnap.docs.forEach(doc => {
+      const data = doc.data();
+      if (type && typeof type === 'string' && data.actionType !== type) return;
+      actions.push({
+        id: doc.id,
+        type: 'bulk',
+        actionType: data.actionType,
+        total: data.total,
+        progress: data.progress,
+        completed: data.completed,
+        failed: data.failed,
+        status: data.status,
+        createdAt: toIsoString(data.createdAt),
+        completedAt: data.completedAt ? toIsoString(data.completedAt) : null
+      });
+    });
+
+    actions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.json({
+      userId,
+      actions: actions.slice(0, 40)
+    });
+  } catch (error) {
+    console.error('List actions error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
