@@ -2,10 +2,10 @@
   "name": "music-service",
   "version": "1.0.0",
   "description": "MyChannel Music Service - Artist upload, distribution, analytics, and payouts",
-  "main": "main.ts",
+  "main": "dist/main.js",
   "scripts": {
-    "start": "ts-node main.ts",
-    "dev": "ts-node-dev main.ts",
+    "start": "node dist/main.js",
+    "dev": "ts-node main.ts",
     "build": "tsc",
     "deploy": "gcloud functions deploy music --runtime nodejs20 --trigger-http --allow-unauthenticated"
   },

@@ -1,5 +1,6 @@
 import express from 'express';
 import admin from 'firebase-admin';
+import { randomUUID } from 'crypto';
 
 const app = express();
 app.use(express.json());
@@ -280,7 +281,7 @@ app.post('/v1/music/tracks/:trackId/collaborators', async (req, res) => {
     const collaboratorsRef = db.collection('music_track_collaborators').doc(trackId);
 
     const collaboratorsData = collaborators.map((collab: any) => ({
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       name: collab.name,
       role: collab.role || 'featured',
       revenueSharePercentage: collab.revenueSharePercentage || 0,

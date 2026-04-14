@@ -1,7 +1,7 @@
 import express from 'express';
 import admin from 'firebase-admin';
 import { Storage } from '@google-cloud/storage';
-import crypto from 'crypto';
+import { randomUUID } from 'crypto';
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
@@ -38,7 +38,7 @@ async function requireUser(req: any, res: any) {
 
 // Helper function to generate track ID
 function generateTrackId(): string {
-  return crypto.randomUUID();
+  return randomUUID();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
