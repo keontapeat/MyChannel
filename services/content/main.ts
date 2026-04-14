@@ -14695,6 +14695,1511 @@ app.get('/v1/channels/:channelId/live-streams/chat-moderation', async (req, res)
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// YouTube Studio Translation and Localization API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/translations - request video translation
+app.post('/v1/videos/:videoId/translations', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { targetLanguages, sourceLanguage, translateSubtitles, translateTitle, translateDescription } = req.body || {};
+
+    if (!Array.isArray(targetLanguages) || targetLanguages.length === 0) {
+      return res.status(400).json({ error: 'targetLanguages is required and must be a non-empty array' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const translationRef = videoRef.collection('translations').doc();
+
+    await translationRef.set({
+      videoId,
+      targetLanguages,
+      sourceLanguage: sourceLanguage || 'en',
+      translateSubtitles: translateSubtitles !== undefined ? translateSubtitles : true,
+      translateTitle: translateTitle !== undefined ? translateTitle : false,
+      translateDescription: translateDescription !== undefined ? translateDescription : false,
+      status: 'processing',
+      createdAt: now,
+      completedAt: null,
+      progress: 0
+    });
+
+    res.status(201).json({
+      translationId: translationRef.id,
+      targetLanguages,
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Request video translation error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/translations - list translations
+app.get('/v1/videos/:videoId/translations', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const translationsSnap = await videoRef.collection('translations')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const translations = translationsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        targetLanguages: data.targetLanguages,
+        sourceLanguage: data.sourceLanguage,
+        status: data.status,
+        progress: data.progress,
+        createdAt: toIsoString(data.createdAt),
+        completedAt: data.completedAt ? toIsoString(data.completedAt) : null
+      };
+    });
+
+    res.json({
+      videoId,
+      translations
+    });
+  } catch (error) {
+    console.error('List translations error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/translations/:translationId - get translation status
+app.get('/v1/videos/:videoId/translations/:translationId', async (req, res) => {
+  try {
+    const { videoId, translationId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const translationRef = videoRef.collection('translations').doc(translationId);
+    const translationSnap = await translationRef.get();
+
+    if (!translationSnap.exists) {
+      return res.status(404).json({ error: 'Translation not found' });
+    }
+
+    const data = translationSnap.data();
+    res.json({
+      videoId,
+      translation: {
+        id: translationId,
+        targetLanguages: data.targetLanguages,
+        sourceLanguage: data.sourceLanguage,
+        status: data.status,
+        progress: data.progress,
+        createdAt: toIsoString(data.createdAt),
+        completedAt: data.completedAt ? toIsoString(data.completedAt) : null
+      }
+    });
+  } catch (error) {
+    console.error('Get translation status error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/translations/:translationId/apply - apply translation
+app.put('/v1/videos/:videoId/translations/:translationId/apply', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, translationId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const translationRef = videoRef.collection('translations').doc(translationId);
+    const translationSnap = await translationRef.get();
+
+    if (!translationSnap.exists) {
+      return res.status(404).json({ error: 'Translation not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await translationRef.update({
+      applied: true,
+      appliedAt: now
+    });
+
+    await videoRef.update({
+      hasTranslations: true,
+      updatedAt: now
+    });
+
+    res.json({
+      translationId,
+      applied: true,
+      appliedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Apply translation error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Studio Collaboration Tools API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/channels/:channelId/collaborators - invite collaborator
+app.post('/v1/channels/:channelId/collaborators', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { collaboratorEmail, collaboratorName, permissions, role } = req.body || {};
+
+    if (!collaboratorEmail || typeof collaboratorEmail !== 'string') {
+      return res.status(400).json({ error: 'collaboratorEmail is required' });
+    }
+
+    if (!permissions || !Array.isArray(permissions)) {
+      return res.status(400).json({ error: 'permissions is required and must be an array' });
+    }
+
+    const validPermissions = ['edit_videos', 'manage_comments', 'view_analytics', 'manage_playlists', 'upload_videos'];
+    const invalidPermissions = permissions.filter(p => !validPermissions.includes(p));
+    if (invalidPermissions.length > 0) {
+      return res.status(400).json({ error: `Invalid permissions: ${invalidPermissions.join(', ')}` });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const collaboratorRef = channelRef.collection('collaborators').doc();
+
+    await collaboratorRef.set({
+      channelId,
+      collaboratorEmail: collaboratorEmail.trim(),
+      collaboratorName: collaboratorName || '',
+      permissions,
+      role: role || 'editor',
+      status: 'pending',
+      invitedBy: user.userId,
+      invitedAt: now,
+      acceptedAt: null
+    });
+
+    res.status(201).json({
+      collaboratorId: collaboratorRef.id,
+      collaboratorEmail: collaboratorEmail.trim(),
+      status: 'pending',
+      invitedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Invite collaborator error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/collaborators - list collaborators
+app.get('/v1/channels/:channelId/collaborators', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const collaboratorsSnap = await channelRef.collection('collaborators')
+      .orderBy('invitedAt', 'desc')
+      .get();
+
+    const collaborators = collaboratorsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        collaboratorEmail: data.collaboratorEmail,
+        collaboratorName: data.collaboratorName,
+        permissions: data.permissions,
+        role: data.role,
+        status: data.status,
+        invitedAt: toIsoString(data.invitedAt),
+        acceptedAt: data.acceptedAt ? toIsoString(data.acceptedAt) : null
+      };
+    });
+
+    res.json({
+      channelId,
+      collaborators
+    });
+  } catch (error) {
+    console.error('List collaborators error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/channels/:channelId/collaborators/:collaboratorId - remove collaborator
+app.delete('/v1/channels/:channelId/collaborators/:collaboratorId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId, collaboratorId } = req.params;
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await channelRef.collection('collaborators').doc(collaboratorId).delete();
+
+    res.json({ message: 'Collaborator removed' });
+  } catch (error) {
+    console.error('Remove collaborator error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/channels/:channelId/collaborators/:collaboratorId/permissions - set collaborator permissions
+app.put('/v1/channels/:channelId/collaborators/:collaboratorId/permissions', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId, collaboratorId } = req.params;
+    const { permissions, role } = req.body || {};
+
+    if (!permissions || !Array.isArray(permissions)) {
+      return res.status(400).json({ error: 'permissions is required and must be an array' });
+    }
+
+    const validPermissions = ['edit_videos', 'manage_comments', 'view_analytics', 'manage_playlists', 'upload_videos'];
+    const invalidPermissions = permissions.filter(p => !validPermissions.includes(p));
+    if (invalidPermissions.length > 0) {
+      return res.status(400).json({ error: `Invalid permissions: ${invalidPermissions.join(', ')}` });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      permissions,
+      updatedAt: now
+    };
+
+    if (role) patch.role = role;
+
+    await channelRef.collection('collaborators').doc(collaboratorId).update(patch);
+
+    res.json({
+      collaboratorId,
+      permissions,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Set collaborator permissions error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/collaborators/history - get collaboration history
+app.get('/v1/channels/:channelId/collaborators/history', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { limit } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const historySnap = await channelRef.collection('collaboratorHistory')
+      .orderBy('timestamp', 'desc')
+      .limit(parseInt(limit as string) || 50)
+      .get();
+
+    const history = historySnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        action: data.action,
+        collaboratorEmail: data.collaboratorEmail,
+        performedBy: data.performedBy,
+        timestamp: toIsoString(data.timestamp),
+        details: data.details || {}
+      };
+    });
+
+    res.json({
+      channelId,
+      history
+    });
+  } catch (error) {
+    console.error('Get collaboration history error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Studio Content ID Management API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/channels/:channelId/content-id/register - register content for Content ID
+app.post('/v1/channels/:channelId/content-id/register', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { videoId, referenceId, contentType, ownershipPercentage } = req.body || {};
+
+    if (!videoId || typeof videoId !== 'string') {
+      return res.status(400).json({ error: 'videoId is required' });
+    }
+
+    if (!referenceId || typeof referenceId !== 'string') {
+      return res.status(400).json({ error: 'referenceId is required' });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const contentIdRef = channelRef.collection('contentIdRegistrations').doc();
+
+    await contentIdRef.set({
+      channelId,
+      videoId,
+      referenceId: referenceId.trim(),
+      contentType: contentType || 'video',
+      ownershipPercentage: ownershipPercentage || 100,
+      status: 'active',
+      registeredAt: now,
+      lastScanned: now
+    });
+
+    await channelRef.update({
+      hasContentId: true,
+      contentIdUpdatedAt: now
+    });
+
+    res.status(201).json({
+      contentIdId: contentIdRef.id,
+      referenceId: referenceId.trim(),
+      status: 'active',
+      registeredAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Register content ID error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/content-id/matches - view content ID matches
+app.get('/v1/channels/:channelId/content-id/matches', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { limit, status } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    let query = channelRef.collection('contentIdMatches')
+      .orderBy('matchedAt', 'desc')
+      .limit(parseInt(limit as string) || 50);
+
+    if (status) {
+      query = query.where('status', '==', status);
+    }
+
+    const matchesSnap = await query.get();
+
+    const matches = matchesSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        videoId: data.videoId,
+        matchedVideoId: data.matchedVideoId,
+        matchType: data.matchType,
+        similarity: data.similarity,
+        status: data.status,
+        matchedAt: toIsoString(data.matchedAt),
+        policy: data.policy
+      };
+    });
+
+    res.json({
+      channelId,
+      matches,
+      total: matchesSnap.size
+    });
+  } catch (error) {
+    console.error('Get content ID matches error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/channels/:channelId/content-id/matches/:matchId/claim - manage claim
+app.put('/v1/channels/:channelId/content-id/matches/:matchId/claim', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId, matchId } = req.params;
+    const { action, policy } = req.body || {};
+
+    if (!action || typeof action !== 'string') {
+      return res.status(400).json({ error: 'action is required' });
+    }
+
+    const validActions = ['monetize', 'block', 'track', 'allow'];
+    if (!validActions.includes(action)) {
+      return res.status(400).json({ error: `action must be one of: ${validActions.join(', ')}` });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const matchRef = channelRef.collection('contentIdMatches').doc(matchId);
+    const matchSnap = await matchRef.get();
+
+    if (!matchSnap.exists) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    await matchRef.update({
+      status: action,
+      policy: policy || 'standard',
+      actionTakenAt: now,
+      actionTakenBy: user.userId
+    });
+
+    res.json({
+      matchId,
+      action,
+      policy: policy || 'standard',
+      actionTakenAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Manage claim error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/channels/:channelId/content-id/policies - set content ID policies
+app.put('/v1/channels/:channelId/content-id/policies', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { defaultPolicy, allowMonetization, allowTracking, autoBlockThreshold } = req.body || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      contentIdPolicyUpdatedAt: now
+    };
+
+    if (defaultPolicy) patch.contentIdDefaultPolicy = defaultPolicy;
+    if (typeof allowMonetization === 'boolean') patch.contentIdAllowMonetization = allowMonetization;
+    if (typeof allowTracking === 'boolean') patch.contentIdAllowTracking = allowTracking;
+    if (typeof autoBlockThreshold === 'number') patch.contentIdAutoBlockThreshold = autoBlockThreshold;
+
+    await channelRef.update(patch);
+
+    res.json({
+      channelId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Set content ID policies error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/content-id/analytics - get content ID analytics
+app.get('/v1/channels/:channelId/content-id/analytics', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const analytics = {
+      channelId,
+      totalMatches: 1250,
+      activeClaims: 85,
+      monetizedMatches: 450,
+      blockedMatches: 75,
+      trackedMatches: 640,
+      revenueFromClaims: 2850.50,
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ analytics });
+  } catch (error) {
+    console.error('Get content ID analytics error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Studio Monetization Dashboard API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /v1/channels/:channelId/monetization/overview - get monetization overview
+app.get('/v1/channels/:channelId/monetization/overview', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const overview = {
+      channelId,
+      totalRevenue: 5420.75,
+      estimatedBalance: 4150.50,
+      currency: 'USD',
+      monetizationStatus: 'active',
+      adRevenue: 3850.50,
+      membershipRevenue: 980.25,
+      superChatRevenue: 450.00,
+      merchandiseRevenue: 140.00,
+      youtubePremiumRevenue: 0.00,
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ overview });
+  } catch (error) {
+    console.error('Get monetization overview error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/monetization/ad-revenue - get ad revenue breakdown
+app.get('/v1/channels/:channelId/monetization/ad-revenue', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const adRevenue = {
+      channelId,
+      totalAdRevenue: 3850.50,
+      breakdown: {
+        skippableAds: 2450.25,
+        nonSkippableAds: 980.50,
+        overlayAds: 320.75,
+        bumperAds: 99.00
+      },
+      cpm: 4.50,
+      rpm: 3.25,
+      adImpressions: 856000,
+      monetizedPlaybacks: 545000,
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ adRevenue });
+  } catch (error) {
+    console.error('Get ad revenue breakdown error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/monetization/memberships - get membership revenue
+app.get('/v1/channels/:channelId/monetization/memberships', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const memberships = {
+      channelId,
+      totalMembershipRevenue: 980.25,
+      activeMembers: 245,
+      memberTiers: [
+        { tier: 'Basic', members: 125, price: 4.99, revenue: 623.75 },
+        { tier: 'Premium', members: 85, price: 9.99, revenue: 849.15 },
+        { tier: 'VIP', members: 35, price: 19.99, revenue: 699.65 }
+      ],
+      newMembers: 45,
+      churnRate: 2.5,
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ memberships });
+  } catch (error) {
+    console.error('Get membership revenue error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/monetization/super-chat - get Super Chat revenue
+app.get('/v1/channels/:channelId/monetization/super-chat', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const superChat = {
+      channelId,
+      totalSuperChatRevenue: 450.00,
+      totalSuperChats: 85,
+      averageSuperChat: 5.29,
+      topSuperChats: [
+        { amount: 50.00, message: 'Amazing stream!', user: 'user1' },
+        { amount: 25.00, message: 'Keep it up!', user: 'user2' },
+        { amount: 20.00, message: 'Best content', user: 'user3' }
+      ],
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ superChat });
+  } catch (error) {
+    console.error('Get Super Chat revenue error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/monetization/merchandise - get merchandise revenue
+app.get('/v1/channels/:channelId/monetandise', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const merchandise = {
+      channelId,
+      totalMerchandiseRevenue: 140.00,
+      totalOrders: 35,
+      averageOrderValue: 4.00,
+      topProducts: [
+        { product: 'T-Shirt', sales: 15, revenue: 75.00 },
+        { product: 'Mug', sales: 12, revenue: 36.00 },
+        { product: 'Sticker Pack', sales: 8, revenue: 29.00 }
+      ],
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ merchandise });
+  } catch (error) {
+    console.error('Get merchandise revenue error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Studio Analytics Export API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/channels/:channelId/analytics/exports - request analytics export
+app.post('/v1/channels/:channelId/analytics/exports', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { reportType, startDate, endDate, format, metrics } = req.body || {};
+
+    if (!reportType || typeof reportType !== 'string') {
+      return res.status(400).json({ error: 'reportType is required' });
+    }
+
+    const validReportTypes = ['traffic', 'earnings', 'demographics', 'playback', 'all'];
+    if (!validReportTypes.includes(reportType)) {
+      return res.status(400).json({ error: `reportType must be one of: ${validReportTypes.join(', ')}` });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const exportRef = channelRef.collection('analyticsExports').doc();
+
+    await exportRef.set({
+      channelId,
+      userId: user.userId,
+      reportType,
+      startDate: startDate ? admin.firestore.Timestamp.fromDate(new Date(startDate)) : null,
+      endDate: endDate ? admin.firestore.Timestamp.fromDate(new Date(endDate)) : null,
+      format: format || 'csv',
+      metrics: metrics || [],
+      status: 'processing',
+      requestedAt: now,
+      completedAt: null,
+      downloadUrl: null
+    });
+
+    res.status(201).json({
+      exportId: exportRef.id,
+      reportType,
+      status: 'processing',
+      requestedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Request analytics export error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/analytics/exports - list exports
+app.get('/v1/channels/:channelId/analytics/exports', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { limit, status } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    let query = channelRef.collection('analyticsExports')
+      .orderBy('requestedAt', 'desc')
+      .limit(parseInt(limit as string) || 50);
+
+    if (status) {
+      query = query.where('status', '==', status);
+    }
+
+    const exportsSnap = await query.get();
+
+    const exports = exportsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        reportType: data.reportType,
+        format: data.format,
+        status: data.status,
+        requestedAt: toIsoString(data.requestedAt),
+        completedAt: data.completedAt ? toIsoString(data.completedAt) : null,
+        downloadUrl: data.downloadUrl
+      };
+    });
+
+    res.json({
+      channelId,
+      exports,
+      total: exportsSnap.size
+    });
+  } catch (error) {
+    console.error('List exports error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/analytics/exports/:exportId - get export status
+app.get('/v1/channels/:channelId/analytics/exports/:exportId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId, exportId } = req.params;
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const exportRef = channelRef.collection('analyticsExports').doc(exportId);
+    const exportSnap = await exportRef.get();
+
+    if (!exportSnap.exists) {
+      return res.status(404).json({ error: 'Export not found' });
+    }
+
+    const data = exportSnap.data();
+    res.json({
+      channelId,
+      export: {
+        id: exportId,
+        reportType: data.reportType,
+        format: data.format,
+        status: data.status,
+        requestedAt: toIsoString(data.requestedAt),
+        completedAt: data.completedAt ? toIsoString(data.completedAt) : null,
+        downloadUrl: data.downloadUrl
+      }
+    });
+  } catch (error) {
+    console.error('Get export status error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/channels/:channelId/analytics/exports/:exportId/download - download export
+app.post('/v1/channels/:channelId/analytics/exports/:exportId/download', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId, exportId } = req.params;
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const exportRef = channelRef.collection('analyticsExports').doc(exportId);
+    const exportSnap = await exportRef.get();
+
+    if (!exportSnap.exists) {
+      return res.status(404).json({ error: 'Export not found' });
+    }
+
+    const data = exportSnap.data();
+
+    if (data.status !== 'completed') {
+      return res.status(400).json({ error: 'Export is not ready for download' });
+    }
+
+    res.json({
+      exportId,
+      downloadUrl: data.downloadUrl,
+      expiresAt: data.expiresAt ? toIsoString(data.expiresAt) : null
+    });
+  } catch (error) {
+    console.error('Download export error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/channels/:channelId/analytics/exports/recurring - schedule recurring export
+app.post('/v1/channels/:channelId/analytics/exports/recurring', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { reportType, frequency, format, metrics, dayOfWeek, dayOfMonth } = req.body || {};
+
+    if (!reportType || typeof reportType !== 'string') {
+      return res.status(400).json({ error: 'reportType is required' });
+    }
+
+    if (!frequency || typeof frequency !== 'string') {
+      return res.status(400).json({ error: 'frequency is required' });
+    }
+
+    const validFrequencies = ['daily', 'weekly', 'monthly'];
+    if (!validFrequencies.includes(frequency)) {
+      return res.status(400).json({ error: `frequency must be one of: ${validFrequencies.join(', ')}` });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const recurringRef = channelRef.collection('recurringExports').doc();
+
+    await recurringRef.set({
+      channelId,
+      userId: user.userId,
+      reportType,
+      frequency,
+      format: format || 'csv',
+      metrics: metrics || [],
+      dayOfWeek: dayOfWeek || null,
+      dayOfMonth: dayOfMonth || null,
+      status: 'active',
+      createdAt: now,
+      nextRunAt: now
+    });
+
+    res.status(201).json({
+      recurringId: recurringRef.id,
+      reportType,
+      frequency,
+      status: 'active',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Schedule recurring export error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Studio Bulk Actions API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/channels/:channelId/bulk/update-metadata - bulk update video metadata
+app.post('/v1/channels/:channelId/bulk/update-metadata', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { videoIds, title, description, tags, category } = req.body || {};
+
+    if (!Array.isArray(videoIds) || videoIds.length === 0) {
+      return res.status(400).json({ error: 'videoIds is required and must be a non-empty array' });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const batch = db.batch();
+    const patch: Record<string, any> = { updatedAt: now };
+
+    if (title) patch.title = title;
+    if (description) patch.description = description;
+    if (Array.isArray(tags)) patch.tags = tags;
+    if (category) patch.category = category;
+
+    videoIds.forEach(videoId => {
+      const videoRef = db.collection('videos').doc(videoId);
+      batch.update(videoRef, patch);
+    });
+
+    await batch.commit();
+
+    res.json({
+      channelId,
+      updatedCount: videoIds.length,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Bulk update metadata error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/channels/:channelId/bulk/change-privacy - bulk change privacy
+app.post('/v1/channels/:channelId/bulk/change-privacy', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { videoIds, privacy } = req.body || {};
+
+    if (!Array.isArray(videoIds) || videoIds.length === 0) {
+      return res.status(400).json({ error: 'videoIds is required and must be a non-empty array' });
+    }
+
+    if (!privacy || typeof privacy !== 'string') {
+      return res.status(400).json({ error: 'privacy is required' });
+    }
+
+    const validPrivacy = ['public', 'unlisted', 'private'];
+    if (!validPrivacy.includes(privacy)) {
+      return res.status(400).json({ error: `privacy must be one of: ${validPrivacy.join(', ')}` });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const batch = db.batch();
+
+    videoIds.forEach(videoId => {
+      const videoRef = db.collection('videos').doc(videoId);
+      batch.update(videoRef, {
+        privacy,
+        privacyUpdatedAt: now
+      });
+    });
+
+    await batch.commit();
+
+    res.json({
+      channelId,
+      updatedCount: videoIds.length,
+      privacy,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Bulk change privacy error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/channels/:channelId/bulk/delete - bulk delete videos
+app.post('/v1/channels/:channelId/bulk/delete', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { videoIds } = req.body || {};
+
+    if (!Array.isArray(videoIds) || videoIds.length === 0) {
+      return res.status(400).json({ error: 'videoIds is required and must be a non-empty array' });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const batch = db.batch();
+
+    videoIds.forEach(videoId => {
+      const videoRef = db.collection('videos').doc(videoId);
+      batch.update(videoRef, {
+        status: 'deleted',
+        deletedAt: now
+      });
+    });
+
+    await batch.commit();
+
+    await channelRef.update({
+      videoCount: admin.firestore.FieldValue.increment(-videoIds.length)
+    });
+
+    res.json({
+      channelId,
+      deletedCount: videoIds.length,
+      deletedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Bulk delete videos error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/channels/:channelId/bulk/add-to-playlist - bulk add to playlist
+app.post('/v1/channels/:channelId/bulk/add-to-playlist', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { videoIds, playlistId } = req.body || {};
+
+    if (!Array.isArray(videoIds) || videoIds.length === 0) {
+      return res.status(400).json({ error: 'videoIds is required and must be a non-empty array' });
+    }
+
+    if (!playlistId || typeof playlistId !== 'string') {
+      return res.status(400).json({ error: 'playlistId is required' });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const playlistRef = db.collection('playlists').doc(playlistId);
+    const playlistSnap = await playlistRef.get();
+
+    if (!playlistSnap.exists) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const batch = db.batch();
+
+    videoIds.forEach(videoId => {
+      const playlistItemRef = playlistRef.collection('items').doc();
+      batch.set(playlistItemRef, {
+        videoId,
+        addedAt: now,
+        addedBy: user.userId
+      });
+    });
+
+    await batch.commit();
+
+    await playlistRef.update({
+      itemCount: admin.firestore.FieldValue.increment(videoIds.length),
+      updatedAt: now
+    });
+
+    res.json({
+      channelId,
+      playlistId,
+      addedCount: videoIds.length,
+      addedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Bulk add to playlist error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/channels/:channelId/bulk/remove-from-playlist - bulk remove from playlist
+app.post('/v1/channels/:channelId/bulk/remove-from-playlist', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { videoIds, playlistId } = req.body || {};
+
+    if (!Array.isArray(videoIds) || videoIds.length === 0) {
+      return res.status(400).json({ error: 'videoIds is required and must be a non-empty array' });
+    }
+
+    if (!playlistId || typeof playlistId !== 'string') {
+      return res.status(400).json({ error: 'playlistId is required' });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const playlistRef = db.collection('playlists').doc(playlistId);
+    const playlistSnap = await playlistRef.get();
+
+    if (!playlistSnap.exists) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const batch = db.batch();
+
+    const itemsSnap = await playlistRef.collection('items')
+      .where('videoId', 'in', videoIds)
+      .get();
+
+    itemsSnap.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+
+    await batch.commit();
+
+    await playlistRef.update({
+      itemCount: admin.firestore.FieldValue.increment(-itemsSnap.size),
+      updatedAt: now
+    });
+
+    res.json({
+      channelId,
+      playlistId,
+      removedCount: itemsSnap.size,
+      removedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Bulk remove from playlist error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
