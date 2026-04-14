@@ -5496,6 +5496,524 @@ app.post('/v1/videos/:videoId/add-to-playlist', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Video Highlights/Clips API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/highlights - create a video highlight/clip
+app.post('/v1/videos/:videoId/highlights', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { title, startTime, endTime, description } = req.body || {};
+
+    if (!title || typeof title !== 'string') {
+      return res.status(400).json({ error: 'title is required' });
+    }
+
+    if (typeof startTime !== 'number' || typeof endTime !== 'number') {
+      return res.status(400).json({ error: 'startTime and endTime are required' });
+    }
+
+    if (startTime >= endTime) {
+      return res.status(400).json({ error: 'startTime must be less than endTime' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const highlightRef = db.collection('videos').doc(videoId).collection('highlights').doc();
+
+    await highlightRef.set({
+      title: title.trim(),
+      description: description || '',
+      startTime,
+      endTime,
+      createdAt: now,
+      createdBy: user.userId
+    });
+
+    await videoRef.update({
+      hasHighlights: true,
+      updatedAt: now
+    });
+
+    const highlightSnap = await highlightRef.get();
+
+    res.status(201).json({
+      highlight: {
+        id: highlightRef.id,
+        title: highlightSnap.data()!.title,
+        description: highlightSnap.data()!.description,
+        startTime: highlightSnap.data()!.startTime,
+        endTime: highlightSnap.data()!.endTime,
+        createdAt: toIsoString(highlightSnap.data()!.createdAt)
+      }
+    });
+  } catch (error) {
+    console.error('Create highlight error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/highlights - list video highlights
+app.get('/v1/videos/:videoId/highlights', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const highlightsSnap = await videoRef.collection('highlights')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const highlights = highlightsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        title: data.title,
+        description: data.description,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        createdAt: toIsoString(data.createdAt)
+      };
+    });
+
+    res.json({
+      videoId,
+      highlights
+    });
+  } catch (error) {
+    console.error('List highlights error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/videos/:videoId/highlights/:highlightId - delete a highlight
+app.delete('/v1/videos/:videoId/highlights/:highlightId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, highlightId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const highlightRef = videoRef.collection('highlights').doc(highlightId);
+    await highlightRef.delete();
+
+    const remainingSnap = await videoRef.collection('highlights').limit(1).get();
+    if (remainingSnap.empty) {
+      await videoRef.update({ hasHighlights: false });
+    }
+
+    res.json({ message: 'Highlight deleted' });
+  } catch (error) {
+    console.error('Delete highlight error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Trimming/Editing API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/trim - create a trimmed version of a video
+app.post('/v1/videos/:videoId/trim', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { title, startTime, endTime, description } = req.body || {};
+
+    if (!title || typeof title !== 'string') {
+      return res.status(400).json({ error: 'title is required' });
+    }
+
+    if (typeof startTime !== 'number' || typeof endTime !== 'number') {
+      return res.status(400).json({ error: 'startTime and endTime are required' });
+    }
+
+    if (startTime >= endTime) {
+      return res.status(400).json({ error: 'startTime must be less than endTime' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const trimmedVideoId = `trimmed_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const trimmedVideoRef = db.collection('videos').doc(trimmedVideoId);
+
+    await trimmedVideoRef.set({
+      id: trimmedVideoId,
+      title: title.trim(),
+      description: description || videoData.description || '',
+      ownerId: user.userId,
+      sourceVideoId: videoId,
+      trimStartTime: startTime,
+      trimEndTime: endTime,
+      status: 'processing',
+      privacy: 'private',
+      thumbnailUrl: videoData.thumbnailUrl || null,
+      duration: endTime - startTime,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    await videoRef.update({
+      hasTrimmedVersions: true,
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      videoId: trimmedVideoId,
+      title: title.trim(),
+      startTime,
+      endTime,
+      status: 'processing'
+    });
+  } catch (error) {
+    console.error('Trim video error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/edits - list video edits/trimmed versions
+app.get('/v1/videos/:videoId/edits', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const editsSnap = await db.collection('videos')
+      .where('sourceVideoId', '==', videoId)
+      .where('ownerId', '==', user.userId)
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const edits = editsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        title: data.title,
+        trimStartTime: data.trimStartTime,
+        trimEndTime: data.trimEndTime,
+        status: data.status,
+        createdAt: toIsoString(data.createdAt)
+      };
+    });
+
+    res.json({
+      sourceVideoId: videoId,
+      edits
+    });
+  } catch (error) {
+    console.error('List edits error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/videos/:videoId/edits/:editId - delete a trimmed version
+app.delete('/v1/videos/:videoId/edits/:editId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, editId } = req.params;
+
+    const sourceVideoRef = db.collection('videos').doc(videoId);
+    const sourceSnap = await sourceVideoRef.get();
+
+    if (!sourceSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const sourceData = sourceSnap.data()!;
+
+    if (String(sourceData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const editRef = db.collection('videos').doc(editId);
+    const editSnap = await editRef.get();
+
+    if (!editSnap.exists) {
+      return res.status(404).json({ error: 'Edit not found' });
+    }
+
+    const editData = editSnap.data()!;
+
+    if (String(editData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await editRef.delete();
+
+    const remainingEditsSnap = await db.collection('videos')
+      .where('sourceVideoId', '==', videoId)
+      .limit(1)
+      .get();
+
+    if (remainingEditsSnap.empty) {
+      await sourceVideoRef.update({ hasTrimmedVersions: false });
+    }
+
+    res.json({ message: 'Edit deleted' });
+  } catch (error) {
+    console.error('Delete edit error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Reactions API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/reactions - add or remove emoji reaction
+app.post('/v1/videos/:videoId/reactions', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { emoji, action } = req.body || {};
+
+    if (!emoji || typeof emoji !== 'string') {
+      return res.status(400).json({ error: 'emoji is required' });
+    }
+
+    if (action !== 'add' && action !== 'remove') {
+      return res.status(400).json({ error: 'action must be add or remove' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const reactionRef = db.collection('videos').doc(videoId).collection('reactions').doc(`${user.userId}_${emoji}`);
+
+    if (action === 'add') {
+      await reactionRef.set({
+        userId: user.userId,
+        emoji: emoji.trim(),
+        reactedAt: now
+      });
+
+      await videoRef.update({
+        reactionCount: admin.firestore.FieldValue.increment(1),
+        updatedAt: now
+      });
+
+      res.json({ action: 'added', emoji: emoji.trim() });
+    } else {
+      await reactionRef.delete();
+
+      await videoRef.update({
+        reactionCount: admin.firestore.FieldValue.increment(-1),
+        updatedAt: now
+      });
+
+      res.json({ action: 'removed', emoji: emoji.trim() });
+    }
+  } catch (error) {
+    console.error('Reaction error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/reactions - list video reactions
+app.get('/v1/videos/:videoId/reactions', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const reactionsSnap = await videoRef.collection('reactions').get();
+
+    const emojiCounts: Record<string, number> = {};
+    const userReactions: Record<string, string> = {};
+
+    reactionsSnap.docs.forEach(doc => {
+      const data = doc.data();
+      const emoji = data.emoji;
+      emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+      userReactions[data.userId] = emoji;
+    });
+
+    const sortedReactions = Object.entries(emojiCounts)
+      .map(([emoji, count]) => ({ emoji, count }))
+      .sort((a, b) => b.count - a.count);
+
+    res.json({
+      videoId,
+      totalReactions: reactionsSnap.size,
+      reactions: sortedReactions,
+      userReactions
+    });
+  } catch (error) {
+    console.error('List reactions error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Sharing Stats API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/share - track video share
+app.post('/v1/videos/:videoId/share', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const { platform, userId } = req.body || {};
+
+    if (!platform || typeof platform !== 'string') {
+      return res.status(400).json({ error: 'platform is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const shareRef = db.collection('videos').doc(videoId).collection('shares').doc();
+
+    await shareRef.set({
+      platform: platform.trim(),
+      userId: userId || null,
+      sharedAt: now
+    });
+
+    await videoRef.update({
+      shareCount: admin.firestore.FieldValue.increment(1),
+      updatedAt: now
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Track share error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/sharing-stats - get video sharing stats and viral metrics
+app.get('/v1/videos/:videoId/sharing-stats', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const days = parseInt(req.query.days as string) || 7;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+    const since = admin.firestore.Timestamp.fromDate(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+
+    const sharesSnap = await videoRef.collection('shares')
+      .where('sharedAt', '>=', since)
+      .get();
+
+    const platformCounts: Record<string, number> = {};
+    sharesSnap.docs.forEach(doc => {
+      const platform = doc.get('platform');
+      platformCounts[platform] = (platformCounts[platform] || 0) + 1;
+    });
+
+    const sortedPlatforms = Object.entries(platformCounts)
+      .map(([platform, count]) => ({ platform, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const totalShares = sharesSnap.size;
+    const totalViews = Number(videoData.views || 0);
+    const shareRate = totalViews > 0 ? (totalShares / totalViews) * 100 : 0;
+    const viralScore = totalShares > 0 ? Math.log(totalShares + 1) * (shareRate / 100) * 100 : 0;
+
+    res.json({
+      videoId,
+      period: `${days} days`,
+      stats: {
+        totalShares,
+        totalViews,
+        shareRate: Math.round(shareRate * 100) / 100,
+        viralScore: Math.round(viralScore * 100) / 100,
+        platformBreakdown: sortedPlatforms
+      }
+    });
+  } catch (error) {
+    console.error('Get sharing stats error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
