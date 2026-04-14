@@ -12429,6 +12429,1134 @@ app.get('/v1/videos/:videoId/aspect-ratio', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// YouTube Partner Program API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/channels/:channelId/partner-program - apply to partner program
+app.post('/v1/channels/:channelId/partner-program', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { taxInfo, paymentInfo, contentDeclaration } = req.body || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const applicationRef = channelRef.collection('partnerProgram').doc();
+
+    await applicationRef.set({
+      channelId,
+      userId: user.userId,
+      taxInfo: taxInfo || {},
+      paymentInfo: paymentInfo || {},
+      contentDeclaration: contentDeclaration || {},
+      status: 'pending_review',
+      submittedAt: now,
+      reviewedAt: null,
+      approvedAt: null,
+      rejectionReason: null
+    });
+
+    res.status(201).json({
+      applicationId: applicationRef.id,
+      status: 'pending_review',
+      submittedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Apply to partner program error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/partner-program/eligibility - check eligibility
+app.get('/v1/channels/:channelId/partner-program/eligibility', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+    const subscriberCount = channelData.subscriberCount || 0;
+    const watchHours = channelData.watchHours || 0;
+
+    const eligibility = {
+      eligible: subscriberCount >= 1000 && watchHours >= 4000,
+      subscriberCount,
+      requiredSubscribers: 1000,
+      watchHours,
+      requiredWatchHours: 4000,
+      reasons: []
+    };
+
+    if (subscriberCount < 1000) {
+      eligibility.reasons.push(`Need ${1000 - subscriberCount} more subscribers`);
+    }
+    if (watchHours < 4000) {
+      eligibility.reasons.push(`Need ${4000 - watchHours} more watch hours`);
+    }
+
+    res.json({
+      channelId,
+      eligibility
+    });
+  } catch (error) {
+    console.error('Check eligibility error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/partner-program - get application status
+app.get('/v1/channels/:channelId/partner-program', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const applicationSnap = await channelRef.collection('partnerProgram')
+      .orderBy('submittedAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (applicationSnap.empty) {
+      return res.json({ channelId, application: null });
+    }
+
+    const data = applicationSnap.docs[0].data();
+    res.json({
+      channelId,
+      application: {
+        id: applicationSnap.docs[0].id,
+        status: data.status,
+        submittedAt: toIsoString(data.submittedAt),
+        reviewedAt: data.reviewedAt ? toIsoString(data.reviewedAt) : null,
+        approvedAt: data.approvedAt ? toIsoString(data.approvedAt) : null,
+        rejectionReason: data.rejectionReason
+      }
+    });
+  } catch (error) {
+    console.error('Get application status error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/channels/:channelId/partner-program/:applicationId - approve/reject application
+app.put('/v1/channels/:channelId/partner-program/:applicationId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId, applicationId } = req.params;
+    const { status, rejectionReason } = req.body || {};
+
+    if (!status || typeof status !== 'string') {
+      return res.status(400).json({ error: 'status is required' });
+    }
+
+    const validStatuses = ['approved', 'rejected', 'under_review'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const applicationRef = channelRef.collection('partnerProgram').doc(applicationId);
+    const applicationSnap = await applicationRef.get();
+
+    if (!applicationSnap.exists) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      status,
+      reviewedAt: now
+    };
+
+    if (status === 'approved') {
+      patch.approvedAt = now;
+    }
+    if (status === 'rejected' && rejectionReason) {
+      patch.rejectionReason = rejectionReason;
+    }
+
+    await applicationRef.update(patch);
+
+    if (status === 'approved') {
+      await channelRef.update({
+        isPartner: true,
+        partnerSince: now
+      });
+    }
+
+    res.json({
+      applicationId,
+      status,
+      reviewedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update application error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Channel Verification Badge System API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/channels/:channelId/verification - request channel verification
+app.post('/v1/channels/:channelId/verification', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { proofDocuments, socialLinks, description } = req.body || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const verificationRef = channelRef.collection('verification').doc();
+
+    await verificationRef.set({
+      channelId,
+      userId: user.userId,
+      proofDocuments: proofDocuments || [],
+      socialLinks: socialLinks || {},
+      description: description || '',
+      status: 'pending_review',
+      submittedAt: now,
+      reviewedAt: null,
+      approvedAt: null,
+      rejectionReason: null
+    });
+
+    res.status(201).json({
+      verificationId: verificationRef.id,
+      status: 'pending_review',
+      submittedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Request verification error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/verification/eligibility - check verification eligibility
+app.get('/v1/channels/:channelId/verification/eligibility', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+    const subscriberCount = channelData.subscriberCount || 0;
+    const isVerified = channelData.isVerified || false;
+
+    const eligibility = {
+      eligible: subscriberCount >= 100000 && !isVerified,
+      subscriberCount,
+      requiredSubscribers: 100000,
+      isVerified,
+      reasons: []
+    };
+
+    if (isVerified) {
+      eligibility.reasons.push('Channel is already verified');
+    }
+    if (subscriberCount < 100000) {
+      eligibility.reasons.push(`Need ${100000 - subscriberCount} more subscribers`);
+    }
+
+    res.json({
+      channelId,
+      eligibility
+    });
+  } catch (error) {
+    console.error('Check verification eligibility error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/verification - get verification status
+app.get('/v1/channels/:channelId/verification', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const verificationSnap = await channelRef.collection('verification')
+      .orderBy('submittedAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (verificationSnap.empty) {
+      return res.json({
+        channelId,
+        verification: null,
+        isVerified: channelSnap.data()?.isVerified || false
+      });
+    }
+
+    const data = verificationSnap.docs[0].data();
+    res.json({
+      channelId,
+      verification: {
+        id: verificationSnap.docs[0].id,
+        status: data.status,
+        submittedAt: toIsoString(data.submittedAt),
+        reviewedAt: data.reviewedAt ? toIsoString(data.reviewedAt) : null,
+        approvedAt: data.approvedAt ? toIsoString(data.approvedAt) : null,
+        rejectionReason: data.rejectionReason
+      },
+      isVerified: channelSnap.data()?.isVerified || false
+    });
+  } catch (error) {
+    console.error('Get verification status error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/channels/:channelId/verification/:verificationId - approve/reject verification
+app.put('/v1/channels/:channelId/verification/:verificationId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId, verificationId } = req.params;
+    const { status, rejectionReason } = req.body || {};
+
+    if (!status || typeof status !== 'string') {
+      return res.status(400).json({ error: 'status is required' });
+    }
+
+    const validStatuses = ['approved', 'rejected', 'under_review'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const verificationRef = channelRef.collection('verification').doc(verificationId);
+    const verificationSnap = await verificationRef.get();
+
+    if (!verificationSnap.exists) {
+      return res.status(404).json({ error: 'Verification not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      status,
+      reviewedAt: now
+    };
+
+    if (status === 'approved') {
+      patch.approvedAt = now;
+    }
+    if (status === 'rejected' && rejectionReason) {
+      patch.rejectionReason = rejectionReason;
+    }
+
+    await verificationRef.update(patch);
+
+    if (status === 'approved') {
+      await channelRef.update({
+        isVerified: true,
+        verifiedAt: now
+      });
+    }
+
+    res.json({
+      verificationId,
+      status,
+      reviewedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update verification error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Copyright Strike Enforcement API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/copyright-strikes - issue copyright strike
+app.post('/v1/videos/:videoId/copyright-strikes', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { claimantId, claimantName, contentId, reason, evidence } = req.body || {};
+
+    if (!claimantId || typeof claimantId !== 'string') {
+      return res.status(400).json({ error: 'claimantId is required' });
+    }
+
+    if (!claimantName || typeof claimantName !== 'string') {
+      return res.status(400).json({ error: 'claimantName is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const strikeRef = videoRef.collection('copyrightStrikes').doc();
+
+    await strikeRef.set({
+      videoId,
+      claimantId,
+      claimantName: claimantName.trim(),
+      contentId: contentId || null,
+      reason: reason || 'Copyright infringement',
+      evidence: evidence || [],
+      status: 'active',
+      issuedAt: now,
+      expiresAt: admin.firestore.Timestamp.fromDate(new Date(now.toDate().getTime() + 90 * 24 * 60 * 60 * 1000)),
+      appealed: false,
+      appealStatus: null
+    });
+
+    await videoRef.update({
+      hasCopyrightStrikes: true,
+      copyrightStrikeCount: admin.firestore.FieldValue.increment(1),
+      updatedAt: now
+    });
+
+    const channelRef = db.collection('channels').doc(videoSnap.data()?.channelId);
+    await channelRef.update({
+      copyrightStrikeCount: admin.firestore.FieldValue.increment(1),
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      strikeId: strikeRef.id,
+      status: 'active',
+      issuedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Issue copyright strike error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/copyright-strikes - get copyright strikes
+app.get('/v1/videos/:videoId/copyright-strikes', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const strikesSnap = await videoRef.collection('copyrightStrikes')
+      .orderBy('issuedAt', 'desc')
+      .get();
+
+    const strikes = strikesSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        claimantId: data.claimantId,
+        claimantName: data.claimantName,
+        contentId: data.contentId,
+        reason: data.reason,
+        evidence: data.evidence,
+        status: data.status,
+        issuedAt: toIsoString(data.issuedAt),
+        expiresAt: data.expiresAt ? toIsoString(data.expiresAt) : null,
+        appealed: data.appealed,
+        appealStatus: data.appealStatus
+      };
+    });
+
+    res.json({
+      videoId,
+      strikes,
+      totalStrikes: strikesSnap.size
+    });
+  } catch (error) {
+    console.error('Get copyright strikes error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/videos/:videoId/copyright-strikes/:strikeId - remove copyright strike
+app.delete('/v1/videos/:videoId/copyright-strikes/:strikeId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, strikeId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const strikeRef = videoRef.collection('copyrightStrikes').doc(strikeId);
+    const strikeSnap = await strikeRef.get();
+
+    if (!strikeSnap.exists) {
+      return res.status(404).json({ error: 'Strike not found' });
+    }
+
+    await strikeRef.update({
+      status: 'removed',
+      removedAt: admin.firestore.Timestamp.now()
+    });
+
+    await videoRef.update({
+      copyrightStrikeCount: admin.firestore.FieldValue.increment(-1)
+    });
+
+    const channelRef = db.collection('channels').doc(videoSnap.data()?.channelId);
+    await channelRef.update({
+      copyrightStrikeCount: admin.firestore.FieldValue.increment(-1)
+    });
+
+    res.json({ message: 'Copyright strike removed' });
+  } catch (error) {
+    console.error('Remove copyright strike error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Copyright Claim Appeal Process API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/copyright-strikes/:strikeId/appeal - submit appeal
+app.post('/v1/videos/:videoId/copyright-strikes/:strikeId/appeal', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, strikeId } = req.params;
+    const { appealReason, explanation, supportingDocuments } = req.body || {};
+
+    if (!appealReason || typeof appealReason !== 'string') {
+      return res.status(400).json({ error: 'appealReason is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const strikeRef = videoRef.collection('copyrightStrikes').doc(strikeId);
+    const strikeSnap = await strikeRef.get();
+
+    if (!strikeSnap.exists) {
+      return res.status(404).json({ error: 'Strike not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const appealRef = strikeRef.collection('appeals').doc();
+
+    await appealRef.set({
+      strikeId,
+      videoId,
+      userId: user.userId,
+      appealReason: appealReason.trim(),
+      explanation: explanation || '',
+      supportingDocuments: supportingDocuments || [],
+      status: 'submitted',
+      submittedAt: now,
+      reviewedAt: null,
+      approved: null,
+      rejectionReason: null
+    });
+
+    await strikeRef.update({
+      appealed: true,
+      appealStatus: 'submitted',
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      appealId: appealRef.id,
+      status: 'submitted',
+      submittedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Submit appeal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/copyright-strikes/:strikeId/appeals - list appeals
+app.get('/v1/videos/:videoId/copyright-strikes/:strikeId/appeals', async (req, res) => {
+  try {
+    const { videoId, strikeId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const strikeRef = videoRef.collection('copyrightStrikes').doc(strikeId);
+    const strikeSnap = await strikeRef.get();
+
+    if (!strikeSnap.exists) {
+      return res.status(404).json({ error: 'Strike not found' });
+    }
+
+    const appealsSnap = await strikeRef.collection('appeals')
+      .orderBy('submittedAt', 'desc')
+      .get();
+
+    const appeals = appealsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        appealReason: data.appealReason,
+        explanation: data.explanation,
+        status: data.status,
+        submittedAt: toIsoString(data.submittedAt),
+        reviewedAt: data.reviewedAt ? toIsoString(data.reviewedAt) : null,
+        approved: data.approved,
+        rejectionReason: data.rejectionReason
+      };
+    });
+
+    res.json({
+      videoId,
+      strikeId,
+      appeals
+    });
+  } catch (error) {
+    console.error('List appeals error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/copyright-strikes/:strikeId/appeals/:appealId - approve/reject appeal
+app.put('/v1/videos/:videoId/copyright-strikes/:strikeId/appeals/:appealId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, strikeId, appealId } = req.params;
+    const { status, rejectionReason } = req.body || {};
+
+    if (!status || typeof status !== 'string') {
+      return res.status(400).json({ error: 'status is required' });
+    }
+
+    const validStatuses = ['approved', 'rejected', 'under_review'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const strikeRef = videoRef.collection('copyrightStrikes').doc(strikeId);
+    const strikeSnap = await strikeRef.get();
+
+    if (!strikeSnap.exists) {
+      return res.status(404).json({ error: 'Strike not found' });
+    }
+
+    const appealRef = strikeRef.collection('appeals').doc(appealId);
+    const appealSnap = await appealRef.get();
+
+    if (!appealSnap.exists) {
+      return res.status(404).json({ error: 'Appeal not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      status,
+      reviewedAt: now
+    };
+
+    if (status === 'approved') {
+      patch.approved = true;
+    }
+    if (status === 'rejected' && rejectionReason) {
+      patch.approved = false;
+      patch.rejectionReason = rejectionReason;
+    }
+
+    await appealRef.update(patch);
+
+    await strikeRef.update({
+      appealStatus: status,
+      updatedAt: now
+    });
+
+    if (status === 'approved') {
+      await strikeRef.update({
+        status: 'removed',
+        removedAt: now
+      });
+      await videoRef.update({
+        copyrightStrikeCount: admin.firestore.FieldValue.increment(-1)
+      });
+    }
+
+    res.json({
+      appealId,
+      status,
+      reviewedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update appeal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shorts Fund Payment System API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/channels/:channelId/shorts-fund - enroll in Shorts fund
+app.post('/v1/channels/:channelId/shorts-fund', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { taxInfo, paymentInfo, agreementAccepted } = req.body || {};
+
+    if (!agreementAccepted || typeof agreementAccepted !== 'boolean') {
+      return res.status(400).json({ error: 'agreementAccepted is required' });
+    }
+
+    if (!agreementAccepted) {
+      return res.status(400).json({ error: 'Agreement must be accepted to enroll' });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const enrollmentRef = channelRef.collection('shortsFund').doc();
+
+    await enrollmentRef.set({
+      channelId,
+      userId: user.userId,
+      taxInfo: taxInfo || {},
+      paymentInfo: paymentInfo || {},
+      agreementAccepted,
+      status: 'active',
+      enrolledAt: now,
+      totalEarnings: 0,
+      pendingPayout: 0
+    });
+
+    await channelRef.update({
+      enrolledInShortsFund: true,
+      shortsFundEnrolledAt: now
+    });
+
+    res.status(201).json({
+      enrollmentId: enrollmentRef.id,
+      status: 'active',
+      enrolledAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Enroll in Shorts fund error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/shorts-fund/earnings - calculate earnings
+app.get('/v1/channels/:channelId/shorts-fund/earnings', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const { startDate, endDate } = req.query || {};
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const enrollmentSnap = await channelRef.collection('shortsFund')
+      .orderBy('enrolledAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (enrollmentSnap.empty) {
+      return res.json({ channelId, enrolled: false, earnings: null });
+    }
+
+    const enrollmentData = enrollmentSnap.docs[0].data();
+    
+    const earnings = {
+      channelId,
+      enrolled: true,
+      totalEarnings: enrollmentData.totalEarnings || 0,
+      pendingPayout: enrollmentData.pendingPayout || 0,
+      periodEarnings: 0,
+      videoCount: 0,
+      startDate: startDate || null,
+      endDate: endDate || null
+    };
+
+    res.json({ earnings });
+  } catch (error) {
+    console.error('Calculate earnings error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/channels/:channelId/shorts-fund/payouts - get payment history
+app.get('/v1/channels/:channelId/shorts-fund/payouts', async (req, res) => {
+  try {
+    const { channelId } = req.params;
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const payoutsSnap = await channelRef.collection('shortsFundPayouts')
+      .orderBy('payoutDate', 'desc')
+      .limit(20)
+      .get();
+
+    const payouts = payoutsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        amount: data.amount,
+        currency: data.currency || 'USD',
+        status: data.status,
+        payoutDate: toIsoString(data.payoutDate),
+        transactionId: data.transactionId
+      };
+    });
+
+    res.json({
+      channelId,
+      payouts
+    });
+  } catch (error) {
+    console.error('Get payment history error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/channels/:channelId/shorts-fund/payouts - request payout
+app.post('/v1/channels/:channelId/shorts-fund/payouts', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { channelId } = req.params;
+    const { amount } = req.body || {};
+
+    if (typeof amount !== 'number' || amount <= 0) {
+      return res.status(400).json({ error: 'amount must be a positive number' });
+    }
+
+    const channelRef = db.collection('channels').doc(channelId);
+    const channelSnap = await channelRef.get();
+
+    if (!channelSnap.exists) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
+    const channelData = channelSnap.data()!;
+
+    if (String(channelData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const enrollmentSnap = await channelRef.collection('shortsFund')
+      .orderBy('enrolledAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (enrollmentSnap.empty) {
+      return res.status(400).json({ error: 'Channel not enrolled in Shorts fund' });
+    }
+
+    const enrollmentData = enrollmentSnap.docs[0].data();
+    const pendingPayout = enrollmentData.pendingPayout || 0;
+
+    if (amount > pendingPayout) {
+      return res.status(400).json({ error: 'Requested amount exceeds pending payout' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const payoutRef = channelRef.collection('shortsFundPayouts').doc();
+
+    await payoutRef.set({
+      channelId,
+      userId: user.userId,
+      amount,
+      currency: 'USD',
+      status: 'processing',
+      requestedAt: now,
+      payoutDate: null,
+      transactionId: null
+    });
+
+    await enrollmentSnap.docs[0].ref.update({
+      pendingPayout: admin.firestore.FieldValue.increment(-amount),
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      payoutId: payoutRef.id,
+      amount,
+      status: 'processing',
+      requestedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Request payout error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MyChannel Kids Mode Settings API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// PUT /v1/users/:userId/kids-mode - enable/disable kids mode
+app.put('/v1/users/:userId/kids-mode', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { enabled, pin } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled is required and must be boolean' });
+    }
+
+    const userRef = db.collection('users').doc(userId);
+    const now = admin.firestore.Timestamp.now();
+
+    const patch: Record<string, any> = {
+      kidsModeEnabled: enabled,
+      kidsModeUpdatedAt: now
+    };
+
+    if (pin) {
+      patch.kidsModePin = pin;
+    }
+
+    await userRef.update(patch);
+
+    res.json({
+      userId,
+      kidsModeEnabled: enabled,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update kids mode error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/kids-mode - get kids mode status
+app.get('/v1/users/:userId/kids-mode', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const userRef = db.collection('users').doc(userId);
+    const userSnap = await userRef.get();
+
+    if (!userSnap.exists) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const userData = userSnap.data()!;
+
+    res.json({
+      userId,
+      kidsModeEnabled: userData.kidsModeEnabled || false,
+      kidsModeUpdatedAt: userData.kidsModeUpdatedAt ? toIsoString(userData.kidsModeUpdatedAt) : null,
+      hasPin: !!userData.kidsModePin
+    });
+  } catch (error) {
+    console.error('Get kids mode status error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/users/:userId/kids-mode/filters - set content filters
+app.put('/v1/users/:userId/kids-mode/filters', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { allowedCategories, blockedCategories, ageRating, languageFilter } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const userRef = db.collection('users').doc(userId);
+    const now = admin.firestore.Timestamp.now();
+
+    const patch: Record<string, any> = {
+      kidsModeFiltersUpdatedAt: now
+    };
+
+    if (Array.isArray(allowedCategories)) patch.kidsModeAllowedCategories = allowedCategories;
+    if (Array.isArray(blockedCategories)) patch.kidsModeBlockedCategories = blockedCategories;
+    if (ageRating) patch.kidsModeAgeRating = ageRating;
+    if (typeof languageFilter === 'boolean') patch.kidsModeLanguageFilter = languageFilter;
+
+    await userRef.update(patch);
+
+    res.json({
+      userId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update kids mode filters error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/users/:userId/kids-mode/time-limits - set time limits
+app.put('/v1/users/:userId/kids-mode/time-limits', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { dailyLimitMinutes, allowedHours, blockedHours } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const userRef = db.collection('users').doc(userId);
+    const now = admin.firestore.Timestamp.now();
+
+    const patch: Record<string, any> = {
+      kidsModeTimeLimitsUpdatedAt: now
+    };
+
+    if (typeof dailyLimitMinutes === 'number') patch.kidsModeDailyLimitMinutes = dailyLimitMinutes;
+    if (Array.isArray(allowedHours)) patch.kidsModeAllowedHours = allowedHours;
+    if (Array.isArray(blockedHours)) patch.kidsModeBlockedHours = blockedHours;
+
+    await userRef.update(patch);
+
+    res.json({
+      userId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update kids mode time limits error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
