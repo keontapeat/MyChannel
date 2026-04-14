@@ -11481,6 +11481,453 @@ app.delete('/v1/users/:userId/screen-recordings/:recordingId', async (req, res) 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Video Stabilization API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/stabilization - apply video stabilization
+app.post('/v1/videos/:videoId/stabilization', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { intensity, smoothing } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const stabilizationRef = videoRef.collection('stabilization').doc();
+
+    await stabilizationRef.set({
+      videoId,
+      intensity: typeof intensity === 'number' ? intensity : 0.5,
+      smoothing: typeof smoothing === 'number' ? smoothing : 0.5,
+      status: 'processing',
+      createdAt: now,
+      completedAt: null,
+      stabilizedUrl: null
+    });
+
+    await videoRef.update({
+      hasStabilization: true,
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      stabilizationId: stabilizationRef.id,
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Apply stabilization error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/stabilization - get stabilization status
+app.get('/v1/videos/:videoId/stabilization', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const stabilizationSnap = await videoRef.collection('stabilization')
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (stabilizationSnap.empty) {
+      return res.json({ videoId, stabilization: null });
+    }
+
+    const data = stabilizationSnap.docs[0].data();
+    res.json({
+      videoId,
+      stabilization: {
+        id: stabilizationSnap.docs[0].id,
+        intensity: data.intensity,
+        smoothing: data.smoothing,
+        status: data.status,
+        createdAt: toIsoString(data.createdAt),
+        completedAt: data.completedAt ? toIsoString(data.completedAt) : null,
+        stabilizedUrl: data.stabilizedUrl
+      }
+    });
+  } catch (error) {
+    console.error('Get stabilization error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Background Removal API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/background-removal - apply background removal
+app.post('/v1/videos/:videoId/background-removal', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { replacementType, replacementValue, edgeSmoothing } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const removalRef = videoRef.collection('backgroundRemoval').doc();
+
+    await removalRef.set({
+      videoId,
+      replacementType: replacementType || 'transparent',
+      replacementValue: replacementValue || null,
+      edgeSmoothing: typeof edgeSmoothing === 'number' ? edgeSmoothing : 0.5,
+      status: 'processing',
+      createdAt: now,
+      completedAt: null,
+      processedUrl: null
+    });
+
+    await videoRef.update({
+      hasBackgroundRemoval: true,
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      removalId: removalRef.id,
+      replacementType: replacementType || 'transparent',
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Apply background removal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/background-removal - get background removal status
+app.get('/v1/videos/:videoId/background-removal', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const removalSnap = await videoRef.collection('backgroundRemoval')
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (removalSnap.empty) {
+      return res.json({ videoId, backgroundRemoval: null });
+    }
+
+    const data = removalSnap.docs[0].data();
+    res.json({
+      videoId,
+      backgroundRemoval: {
+        id: removalSnap.docs[0].id,
+        replacementType: data.replacementType,
+        replacementValue: data.replacementValue,
+        edgeSmoothing: data.edgeSmoothing,
+        status: data.status,
+        createdAt: toIsoString(data.createdAt),
+        completedAt: data.completedAt ? toIsoString(data.completedAt) : null,
+        processedUrl: data.processedUrl
+      }
+    });
+  } catch (error) {
+    console.error('Get background removal error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI Color Correction API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/color-correction - apply AI color correction
+app.post('/v1/videos/:videoId/color-correction', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { preset, customSettings, autoEnhance } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const correctionRef = videoRef.collection('colorCorrection').doc();
+
+    await correctionRef.set({
+      videoId,
+      preset: preset || 'auto',
+      customSettings: customSettings || {},
+      autoEnhance: typeof autoEnhance === 'boolean' ? autoEnhance : true,
+      status: 'processing',
+      createdAt: now,
+      completedAt: null,
+      correctedUrl: null
+    });
+
+    await videoRef.update({
+      hasColorCorrection: true,
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      correctionId: correctionRef.id,
+      preset: preset || 'auto',
+      status: 'processing',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Apply color correction error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/color-correction - get color correction status
+app.get('/v1/videos/:videoId/color-correction', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const correctionSnap = await videoRef.collection('colorCorrection')
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (correctionSnap.empty) {
+      return res.json({ videoId, colorCorrection: null });
+    }
+
+    const data = correctionSnap.docs[0].data();
+    res.json({
+      videoId,
+      colorCorrection: {
+        id: correctionSnap.docs[0].id,
+        preset: data.preset,
+        customSettings: data.customSettings,
+        autoEnhance: data.autoEnhance,
+        status: data.status,
+        createdAt: toIsoString(data.createdAt),
+        completedAt: data.completedAt ? toIsoString(data.completedAt) : null,
+        correctedUrl: data.correctedUrl
+      }
+    });
+  } catch (error) {
+    console.error('Get color correction error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI Video Summaries API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/summaries - generate AI video summary
+app.post('/v1/videos/:videoId/summaries', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { summaryType, maxLength, includeTimestamps } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const summaryRef = videoRef.collection('summaries').doc();
+
+    await summaryRef.set({
+      videoId,
+      summaryType: summaryType || 'general',
+      maxLength: typeof maxLength === 'number' ? maxLength : 500,
+      includeTimestamps: typeof includeTimestamps === 'boolean' ? includeTimestamps : true,
+      status: 'generating',
+      createdAt: now,
+      completedAt: null,
+      summaryText: null,
+      keyPoints: [],
+      timestampedSegments: []
+    });
+
+    await videoRef.update({
+      hasSummary: true,
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      summaryId: summaryRef.id,
+      summaryType: summaryType || 'general',
+      status: 'generating',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Generate summary error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/summaries - list video summaries
+app.get('/v1/videos/:videoId/summaries', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const summariesSnap = await videoRef.collection('summaries')
+      .orderBy('createdAt', 'desc')
+      .limit(10)
+      .get();
+
+    const summaries = summariesSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        summaryType: data.summaryType,
+        maxLength: data.maxLength,
+        includeTimestamps: data.includeTimestamps,
+        status: data.status,
+        summaryText: data.summaryText,
+        keyPoints: data.keyPoints,
+        timestampedSegments: data.timestampedSegments,
+        createdAt: toIsoString(data.createdAt),
+        completedAt: data.completedAt ? toIsoString(data.completedAt) : null
+      };
+    });
+
+    res.json({
+      videoId,
+      summaries
+    });
+  } catch (error) {
+    console.error('List summaries error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/summaries/:summaryId - update summary with generated content
+app.put('/v1/videos/:videoId/summaries/:summaryId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, summaryId } = req.params;
+    const { summaryText, keyPoints, timestampedSegments, status } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const summaryRef = videoRef.collection('summaries').doc(summaryId);
+    const summarySnap = await summaryRef.get();
+
+    if (!summarySnap.exists) {
+      return res.status(404).json({ error: 'Summary not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (summaryText) patch.summaryText = summaryText;
+    if (Array.isArray(keyPoints)) patch.keyPoints = keyPoints;
+    if (Array.isArray(timestampedSegments)) patch.timestampedSegments = timestampedSegments;
+    if (status) {
+      patch.status = status;
+      if (status === 'completed') patch.completedAt = now;
+    }
+
+    await summaryRef.update(patch);
+
+    res.json({
+      summaryId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update summary error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
