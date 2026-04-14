@@ -667,6 +667,8 @@ app.post('/v1/creator/videos', async (req, res) => {
         videoCount: admin.firestore.FieldValue.increment(1),
         updatedAt: now
       }, { merge: true });
+
+      await notifySubscribers(user.userId, creator.username || creator.displayName || 'A creator', videoRef.id, payload.title);
     }
 
     const updatedCreator = {
@@ -1948,6 +1950,289 @@ app.delete('/v1/history/:videoId', async (req, res) => {
     res.json(successMessage('Removed from history'));
   } catch (error) {
     console.error('Remove from history error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications API
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function formatNotification(notificationId: string, notificationData: FirestoreData) {
+  return {
+    id: notificationId,
+    type: notificationData.type || 'general',
+    title: notificationData.title || '',
+    body: notificationData.body || '',
+    data: notificationData.data || null,
+    read: !!notificationData.read,
+    createdAt: toIsoString(notificationData.createdAt),
+    readAt: toIsoString(notificationData.readAt) || null
+  };
+}
+
+async function notifySubscribers(creatorId: string, creatorName: string, videoId: string, videoTitle: string) {
+  try {
+    const subscribersSnap = await db.collection('users').doc(creatorId).collection('subscribers')
+      .limit(500)
+      .get();
+
+    const now = admin.firestore.Timestamp.now();
+    const batch = db.batch();
+
+    subscribersSnap.docs.forEach(doc => {
+      const subscriberId = doc.id;
+      const notificationRef = db.collection('users').doc(subscriberId).collection('notifications').doc();
+      batch.set(notificationRef, {
+        type: 'new_video',
+        title: `${creatorName} uploaded a new video`,
+        body: videoTitle,
+        data: { creatorId, videoId, creatorName, videoTitle },
+        read: false,
+        createdAt: now,
+        readAt: null
+      });
+    });
+
+    await batch.commit();
+  } catch (error) {
+    console.error('Notify subscribers error:', error);
+  }
+}
+
+// GET /v1/notifications - list user's notifications
+app.get('/v1/notifications', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const offset = (page - 1) * limit;
+    const unreadOnly = req.query.unreadOnly === 'true';
+
+    let query = db.collection('users').doc(user.userId).collection('notifications')
+      .orderBy('createdAt', 'desc');
+
+    if (unreadOnly) {
+      query = query.where('read', '==', false);
+    }
+
+    const snap = await query.offset(offset).limit(limit).get();
+
+    const notifications = snap.docs.map(doc => formatNotification(doc.id, doc.data()));
+
+    res.json({
+      notifications,
+      pagination: {
+        page,
+        limit,
+        hasMore: notifications.length === limit
+      }
+    });
+  } catch (error) {
+    console.error('List notifications error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/notifications - create a notification (internal/system use)
+app.post('/v1/notifications', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { type, title, body, data, targetUserId } = req.body || {};
+
+    if (!title || typeof title !== 'string') {
+      return res.status(400).json({ error: 'title is required' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const notificationRef = db.collection('users').doc(user.userId).collection('notifications').doc();
+    const notificationData = {
+      type: type || 'general',
+      title,
+      body: body || null,
+      data: data || null,
+      read: false,
+      createdAt: now,
+      readAt: null
+    };
+
+    await notificationRef.set(notificationData);
+
+    res.status(201).json({
+      notification: formatNotification(notificationRef.id, notificationData)
+    });
+  } catch (error) {
+    console.error('Create notification error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/notifications/:id/read - mark notification as read
+app.put('/v1/notifications/:id/read', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { id } = req.params;
+    const notificationRef = db.collection('users').doc(user.userId).collection('notifications').doc(id);
+    const snap = await notificationRef.get();
+
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    await notificationRef.update({
+      read: true,
+      readAt: admin.firestore.Timestamp.now()
+    });
+
+    const updatedSnap = await notificationRef.get();
+    res.json({
+      notification: formatNotification(id, updatedSnap.data()!)
+    });
+  } catch (error) {
+    console.error('Mark notification read error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /v1/notifications/:id - delete a notification
+app.delete('/v1/notifications/:id', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { id } = req.params;
+    const notificationRef = db.collection('users').doc(user.userId).collection('notifications').doc(id);
+    const snap = await notificationRef.get();
+
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    await notificationRef.delete();
+
+    res.json(successMessage('Notification deleted'));
+  } catch (error) {
+    console.error('Delete notification error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/notifications/read-all - mark all notifications as read
+app.put('/v1/notifications/read-all', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const snap = await db.collection('users').doc(user.userId).collection('notifications')
+      .where('read', '==', false)
+      .limit(100)
+      .get();
+
+    const batch = db.batch();
+    const now = admin.firestore.Timestamp.now();
+
+    snap.docs.forEach(doc => {
+      batch.update(doc.ref, {
+        read: true,
+        readAt: now
+      });
+    });
+
+    await batch.commit();
+
+    res.json({
+      ...successMessage('All notifications marked as read'),
+      count: snap.size
+    });
+  } catch (error) {
+    console.error('Mark all read error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/notifications/unread-count - get unread notification count
+app.get('/v1/notifications/unread-count', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const snap = await db.collection('users').doc(user.userId).collection('notifications')
+      .where('read', '==', false)
+      .count()
+      .get();
+
+    res.json({
+      unreadCount: snap.data().count
+    });
+  } catch (error) {
+    console.error('Get unread count error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/notifications/preferences - get user's notification preferences
+app.get('/v1/notifications/preferences', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const snap = await db.collection('users').doc(user.userId).collection('settings').doc('notifications').get();
+
+    const defaultPreferences = {
+      newVideos: true,
+      comments: true,
+      replies: true,
+      likes: false,
+      subscriptions: true,
+      mentions: true,
+      emailNotifications: false,
+      pushNotifications: true
+    };
+
+    const preferences = snap.exists ? snap.data()! : defaultPreferences;
+
+    res.json({ preferences });
+  } catch (error) {
+    console.error('Get notification preferences error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/notifications/preferences - update user's notification preferences
+app.put('/v1/notifications/preferences', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { newVideos, comments, replies, likes, subscriptions, mentions, emailNotifications, pushNotifications } = req.body || {};
+
+    const patch: Record<string, any> = {
+      updatedAt: admin.firestore.Timestamp.now()
+    };
+
+    if (newVideos !== undefined) patch.newVideos = !!newVideos;
+    if (comments !== undefined) patch.comments = !!comments;
+    if (replies !== undefined) patch.replies = !!replies;
+    if (likes !== undefined) patch.likes = !!likes;
+    if (subscriptions !== undefined) patch.subscriptions = !!subscriptions;
+    if (mentions !== undefined) patch.mentions = !!mentions;
+    if (emailNotifications !== undefined) patch.emailNotifications = !!emailNotifications;
+    if (pushNotifications !== undefined) patch.pushNotifications = !!pushNotifications;
+
+    await db.collection('users').doc(user.userId).collection('settings').doc('notifications').set(patch, { merge: true });
+
+    const updatedSnap = await db.collection('users').doc(user.userId).collection('settings').doc('notifications').get();
+    res.json({
+      preferences: updatedSnap.exists ? updatedSnap.data()! : patch
+    });
+  } catch (error) {
+    console.error('Update notification preferences error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
