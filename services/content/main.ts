@@ -9371,6 +9371,686 @@ app.get('/v1/users/:userId/actions', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Content ID System API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/content-id/register - register content fingerprint
+app.post('/v1/content-id/register', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, fingerprint, audioFingerprint, duration } = req.body || {};
+
+    if (!videoId || typeof videoId !== 'string') {
+      return res.status(400).json({ error: 'videoId is required' });
+    }
+
+    if (!fingerprint || typeof fingerprint !== 'string') {
+      return res.status(400).json({ error: 'fingerprint is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const contentIdRef = db.collection('contentId').doc();
+
+    await contentIdRef.set({
+      videoId,
+      fingerprint: fingerprint.trim(),
+      audioFingerprint: audioFingerprint || null,
+      duration: duration || null,
+      ownerId: user.userId,
+      status: 'registered',
+      createdAt: now
+    });
+
+    res.status(201).json({
+      contentId: contentIdRef.id,
+      videoId,
+      status: 'registered',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Register content ID error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/content-id/match - match content against database
+app.post('/v1/content-id/match', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, fingerprint, audioFingerprint } = req.body || {};
+
+    if (!videoId || typeof videoId !== 'string') {
+      return res.status(400).json({ error: 'videoId is required' });
+    }
+
+    if (!fingerprint || typeof fingerprint !== 'string') {
+      return res.status(400).json({ error: 'fingerprint is required' });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const matchesSnap = await db.collection('contentId')
+      .where('fingerprint', '==', fingerprint.trim())
+      .limit(10)
+      .get();
+
+    const matches = matchesSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        contentId: doc.id,
+        videoId: data.videoId,
+        ownerId: data.ownerId,
+        status: data.status,
+        similarity: 1.0,
+        createdAt: toIsoString(data.createdAt)
+      };
+    });
+
+    const now = admin.firestore.Timestamp.now();
+    const matchResultRef = db.collection('contentId').doc(videoId).collection('matches').doc();
+
+    await matchResultRef.set({
+      videoId,
+      fingerprint: fingerprint.trim(),
+      audioFingerprint: audioFingerprint || null,
+      matches,
+      matchedAt: now
+    });
+
+    res.json({
+      videoId,
+      matches,
+      matchCount: matches.length,
+      matchedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Match content error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/content-id/claim - claim content ownership
+app.post('/v1/content-id/claim', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { contentId, claimType, policy, action } = req.body || {};
+
+    if (!contentId || typeof contentId !== 'string') {
+      return res.status(400).json({ error: 'contentId is required' });
+    }
+
+    if (!claimType || typeof claimType !== 'string') {
+      return res.status(400).json({ error: 'claimType is required' });
+    }
+
+    const validClaimTypes = ['copyright', 'trademark', 'other'];
+    if (!validClaimTypes.includes(claimType)) {
+      return res.status(400).json({ error: `claimType must be one of: ${validClaimTypes.join(', ')}` });
+    }
+
+    const contentIdRef = db.collection('contentId').doc(contentId);
+    const contentIdSnap = await contentIdRef.get();
+
+    if (!contentIdSnap.exists) {
+      return res.status(404).json({ error: 'Content ID not found' });
+    }
+
+    const contentIdData = contentIdSnap.data()!;
+
+    if (String(contentIdData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const claimRef = contentIdRef.collection('claims').doc();
+
+    await claimRef.set({
+      contentId,
+      claimType,
+      policy: policy || 'block',
+      action: action || 'monetize',
+      claimantId: user.userId,
+      status: 'active',
+      createdAt: now
+    });
+
+    res.status(201).json({
+      claimId: claimRef.id,
+      contentId,
+      claimType,
+      policy: policy || 'block',
+      status: 'active',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Claim content error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/content-id/claims/:claimId/resolve - resolve content claim
+app.put('/v1/content-id/claims/:claimId/resolve', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { claimId } = req.params;
+    const { resolution, notes } = req.body || {};
+
+    const claimRef = db.collection('contentId').doc('temp').collection('claims').doc(claimId);
+    const claimSnap = await claimRef.get();
+
+    if (!claimSnap.exists) {
+      return res.status(404).json({ error: 'Claim not found' });
+    }
+
+    const claimData = claimSnap.data()!;
+
+    if (String(claimData.claimantId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await claimRef.update({
+      status: 'resolved',
+      resolution: resolution || 'withdrawn',
+      notes: notes || '',
+      resolvedAt: now
+    });
+
+    res.json({
+      claimId,
+      status: 'resolved',
+      resolution: resolution || 'withdrawn',
+      resolvedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Resolve claim error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Content Moderation Queue API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/moderation-queue - add content to moderation queue
+app.post('/v1/moderation-queue', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { contentType, contentId, reason, priority } = req.body || {};
+
+    if (!contentType || typeof contentType !== 'string') {
+      return res.status(400).json({ error: 'contentType is required' });
+    }
+
+    if (!contentId || typeof contentId !== 'string') {
+      return res.status(400).json({ error: 'contentId is required' });
+    }
+
+    const validTypes = ['video', 'comment', 'playlist', 'channel'];
+    if (!validTypes.includes(contentType)) {
+      return res.status(400).json({ error: `contentType must be one of: ${validTypes.join(', ')}` });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const queueRef = db.collection('moderationQueue').doc();
+
+    await queueRef.set({
+      contentType,
+      contentId,
+      reason: reason || '',
+      priority: priority || 'normal',
+      status: 'pending',
+      reportedBy: user.userId,
+      createdAt: now,
+      reviewedBy: null,
+      reviewedAt: null,
+      decision: null,
+      notes: null
+    });
+
+    res.status(201).json({
+      queueId: queueRef.id,
+      contentType,
+      contentId,
+      status: 'pending',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Add to moderation queue error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/moderation-queue - list moderation queue
+app.get('/v1/moderation-queue', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { status, priority, limit } = req.query;
+    const queueLimit = Math.min(parseInt(limit as string) || 50, 100);
+
+    const query = db.collection('moderationQueue');
+    if (status && typeof status === 'string') {
+      query.where('status', '==', status);
+    }
+    if (priority && typeof priority === 'string') {
+      query.where('priority', '==', priority);
+    }
+
+    const queueSnap = await query
+      .orderBy('createdAt', 'desc')
+      .limit(queueLimit)
+      .get();
+
+    const queueItems = queueSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        contentType: data.contentType,
+        contentId: data.contentId,
+        reason: data.reason,
+        priority: data.priority,
+        status: data.status,
+        reportedBy: data.reportedBy,
+        createdAt: toIsoString(data.createdAt),
+        reviewedBy: data.reviewedBy,
+        reviewedAt: data.reviewedAt ? toIsoString(data.reviewedAt) : null,
+        decision: data.decision,
+        notes: data.notes
+      };
+    });
+
+    res.json({
+      queueItems
+    });
+  } catch (error) {
+    console.error('List moderation queue error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/moderation-queue/:queueId/review - review moderation item
+app.put('/v1/moderation-queue/:queueId/review', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { queueId } = req.params;
+    const { decision, notes } = req.body || {};
+
+    if (!decision || typeof decision !== 'string') {
+      return res.status(400).json({ error: 'decision is required' });
+    }
+
+    const validDecisions = ['approve', 'reject', 'escalate'];
+    if (!validDecisions.includes(decision)) {
+      return res.status(400).json({ error: `decision must be one of: ${validDecisions.join(', ')}` });
+    }
+
+    const queueRef = db.collection('moderationQueue').doc(queueId);
+    const queueSnap = await queueRef.get();
+
+    if (!queueSnap.exists) {
+      return res.status(404).json({ error: 'Queue item not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    await queueRef.update({
+      status: 'reviewed',
+      decision,
+      notes: notes || '',
+      reviewedBy: user.userId,
+      reviewedAt: now
+    });
+
+    res.json({
+      queueId,
+      status: 'reviewed',
+      decision,
+      reviewedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Review moderation item error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video Rights Management API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/videos/:videoId/rights - add video rights
+app.post('/v1/videos/:videoId/rights', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId } = req.params;
+    const { rightsType, holder, license, expiryDate, restrictions } = req.body || {};
+
+    if (!rightsType || typeof rightsType !== 'string') {
+      return res.status(400).json({ error: 'rightsType is required' });
+    }
+
+    if (!holder || typeof holder !== 'string') {
+      return res.status(400).json({ error: 'holder is required' });
+    }
+
+    const validTypes = ['copyright', 'licensing', 'distribution', 'broadcast'];
+    if (!validTypes.includes(rightsType)) {
+      return res.status(400).json({ error: `rightsType must be one of: ${validTypes.join(', ')}` });
+    }
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const rightsRef = videoRef.collection('rights').doc();
+
+    await rightsRef.set({
+      videoId,
+      rightsType,
+      holder: holder.trim(),
+      license: license || '',
+      expiryDate: expiryDate || null,
+      restrictions: Array.isArray(restrictions) ? restrictions : [],
+      createdAt: now,
+      updatedAt: now
+    });
+
+    await videoRef.update({
+      hasRights: true,
+      updatedAt: now
+    });
+
+    res.status(201).json({
+      rightsId: rightsRef.id,
+      videoId,
+      rightsType,
+      holder: holder.trim(),
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Add rights error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/videos/:videoId/rights - get video rights
+app.get('/v1/videos/:videoId/rights', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const rightsSnap = await videoRef.collection('rights')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const rights = rightsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        rightsType: data.rightsType,
+        holder: data.holder,
+        license: data.license,
+        expiryDate: data.expiryDate ? toIsoString(data.expiryDate) : null,
+        restrictions: data.restrictions,
+        createdAt: toIsoString(data.createdAt),
+        updatedAt: toIsoString(data.updatedAt)
+      };
+    });
+
+    res.json({
+      videoId,
+      rights
+    });
+  } catch (error) {
+    console.error('Get rights error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /v1/videos/:videoId/rights/:rightsId - update video rights
+app.put('/v1/videos/:videoId/rights/:rightsId', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { videoId, rightsId } = req.params;
+    const { holder, license, expiryDate, restrictions } = req.body || {};
+
+    const videoRef = db.collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+
+    if (!videoSnap.exists) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoData = videoSnap.data()!;
+
+    if (String(videoData.ownerId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const rightsRef = videoRef.collection('rights').doc(rightsId);
+    const rightsSnap = await rightsRef.get();
+
+    if (!rightsSnap.exists) {
+      return res.status(404).json({ error: 'Rights not found' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const patch: Record<string, any> = {
+      updatedAt: now
+    };
+
+    if (holder) patch.holder = holder.trim();
+    if (license !== undefined) patch.license = license;
+    if (expiryDate !== undefined) patch.expiryDate = expiryDate;
+    if (Array.isArray(restrictions)) patch.restrictions = restrictions;
+
+    await rightsRef.update(patch);
+
+    res.json({
+      rightsId,
+      updatedAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Update rights error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User Activity Logging (Audit Trail) API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /v1/users/:userId/activity-log - log user activity
+app.post('/v1/users/:userId/activity-log', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { action, resourceType, resourceId, metadata, ipAddress, userAgent } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (!action || typeof action !== 'string') {
+      return res.status(400).json({ error: 'action is required' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const logRef = db.collection('users').doc(userId).collection('activityLog').doc();
+
+    await logRef.set({
+      userId,
+      action: action.trim(),
+      resourceType: resourceType || null,
+      resourceId: resourceId || null,
+      metadata: metadata || {},
+      ipAddress: ipAddress || '',
+      userAgent: userAgent || '',
+      timestamp: now
+    });
+
+    res.status(201).json({
+      logId: logRef.id,
+      action: action.trim(),
+      timestamp: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Log activity error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /v1/users/:userId/activity-log - list user activity logs
+app.get('/v1/users/:userId/activity-log', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { action, resourceType, limit, startDate, endDate } = req.query;
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const query = db.collection('users').doc(userId).collection('activityLog');
+    if (action && typeof action === 'string') {
+      query.where('action', '==', action);
+    }
+    if (resourceType && typeof resourceType === 'string') {
+      query.where('resourceType', '==', resourceType);
+    }
+
+    const logLimit = Math.min(parseInt(limit as string) || 100, 500);
+    const logsSnap = await query
+      .orderBy('timestamp', 'desc')
+      .limit(logLimit)
+      .get();
+
+    const logs = logsSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        action: data.action,
+        resourceType: data.resourceType,
+        resourceId: data.resourceId,
+        metadata: data.metadata,
+        ipAddress: data.ipAddress,
+        userAgent: data.userAgent,
+        timestamp: toIsoString(data.timestamp)
+      };
+    });
+
+    res.json({
+      userId,
+      logs
+    });
+  } catch (error) {
+    console.error('List activity logs error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/users/:userId/activity-log/export - export activity logs
+app.post('/v1/users/:userId/activity-log/export', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { userId } = req.params;
+    const { format, startDate, endDate, filters } = req.body || {};
+
+    if (userId !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const exportRef = db.collection('users').doc(userId).collection('activityExports').doc();
+
+    await exportRef.set({
+      userId,
+      exportType: 'activity-log',
+      format: format || 'csv',
+      startDate: startDate || null,
+      endDate: endDate || null,
+      filters: filters || {},
+      status: 'pending',
+      createdAt: now,
+      completedAt: null,
+      downloadUrl: null
+    });
+
+    res.status(201).json({
+      exportId: exportRef.id,
+      format: format || 'csv',
+      status: 'pending',
+      createdAt: toIsoString(now)
+    });
+  } catch (error) {
+    console.error('Export activity logs error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
