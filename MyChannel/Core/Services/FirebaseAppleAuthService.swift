@@ -31,6 +31,23 @@ final class FirebaseAppleAuthService: NSObject {
         #endif
     }
 
+    // MARK: - Nonce for SwiftUI SignInWithAppleButton flow
+    /// Call this before constructing the SignInWithAppleButton request to get a nonce that is paired
+    /// with the subsequent handleCredential call.
+    func prepareNonce() -> String {
+        let nonce = randomNonceString()
+        pendingNonce = nonce
+        return sha256(nonce)
+    }
+
+    /// Called by the SwiftUI SignInWithAppleButton .onCompletion handler.
+    /// Apple's own button manages presentationAnchor — no ASAuthorizationController.performRequests() needed.
+    func handleCredential(_ credential: ASAuthorizationAppleIDCredential) async throws -> AuthPayload {
+        guard let nonce = pendingNonce else { throw AuthError.unknown }
+        pendingNonce = nil
+        return try await completeFirebaseSignIn(credential: credential, nonce: nonce)
+    }
+
     func signIn() async throws -> AuthPayload {
         // Cancel any stale in-flight request
         pendingContinuation?.resume(throwing: AuthError.unknown)

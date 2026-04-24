@@ -32,7 +32,9 @@ class VideoUploadManager: ObservableObject {
     @Published var selectedTags: Set<String> = []
     @Published var selectedCategory: VideoCategory = .entertainment
     @Published var isPublic: Bool = true
+    @Published var isUnlisted: Bool = false
     @Published var monetizationEnabled: Bool = true // 🔥💰 DEFAULT: ON! Creators earn from day 1!
+    @Published var allowComments: Bool = true
     
     // 🔥 NEW: Scheduling & Advanced Features
     @Published var isScheduled: Bool = false
@@ -180,8 +182,16 @@ class VideoUploadManager: ObservableObject {
                     tags: Array(selectedTags),
                     category: selectedCategory,
                     isPublic: isPublic,
+                    isUnlisted: isUnlisted,
                     thumbnailData: thumbnail?.jpegData(compressionQuality: 0.8),
-                    monetizationEnabled: monetizationEnabled
+                    monetizationEnabled: monetizationEnabled,
+                    allowComments: allowComments,
+                    madeForKids: madeForKids,
+                    ageRestricted: ageRestricted,
+                    filmingLocation: filmingLocation,
+                    isScheduled: isScheduled,
+                    scheduledDate: isScheduled ? scheduledDate : nil,
+                    isPremiere: isPremiere
                 )
                 
                 let video = try await uploadVideoWithProgress(videoData, metadata: metadata)
@@ -559,8 +569,8 @@ class VideoUploadManager: ObservableObject {
                 creator: creatorUser,
                 category: metadata.category,
                 tags: metadata.tags,
-            isPublic: metadata.isPublic,
-            visibility: metadata.isPublic ? .public : .private,
+                isPublic: metadata.isPublic && !metadata.isUnlisted,
+                visibility: metadata.isUnlisted ? .unlisted : (metadata.isPublic ? .public : .private),
                 // 🔥 FIX: Always enable monetization for testing
                 monetization: Video.MonetizationSettings(
                     isMonetized: true, // Always true for testing
@@ -572,7 +582,9 @@ class VideoUploadManager: ObservableObject {
                     sponsorSegments: [],
                     donationEnabled: true,
                     totalRevenue: 0.0
-                )
+                ),
+                ageRestricted: metadata.ageRestricted,
+                madeForKids: metadata.madeForKids
             )
             
             // Trigger AI analysis (non-blocking)
@@ -602,99 +614,27 @@ class VideoUploadManager: ObservableObject {
                     description: metadata.description,
                     category: metadata.category.rawValue,
                     tags: metadata.tags,
-                    visibility: metadata.isPublic ? "public" : "private",
+                    visibility: metadata.isUnlisted ? "unlisted" : (metadata.isPublic ? "public" : "private"),
                     isPremium: self.monetizationEnabled,
                     language: "en",
                     videoUrl: uploaded.videoURL,
-                    thumbnailUrl: uploaded.thumbnailURL
+                    thumbnailUrl: uploaded.thumbnailURL,
+                    allowComments: metadata.allowComments,
+                    madeForKids: metadata.madeForKids,
+                    ageRestricted: metadata.ageRestricted,
+                    filmingLocation: metadata.filmingLocation.isEmpty ? nil : metadata.filmingLocation,
+                    isPremiere: metadata.isPremiere,
+                    scheduledAt: metadata.scheduledDate?.ISO8601Format()
                 )
             }
             return uploaded
         } catch {
-            // If anything fails, fall back to mock path to avoid blocking UI in debug
             print("🚨 Firebase upload failed: \(error)")
-            print("🔄 Falling back to local storage (videos may not play)")
+            throw error
         }
+        #else
+        throw UploadError.networkError("Firebase Storage is unavailable in this build")
         #endif
-        
-        // Fallback mock (e.g., in previews or when Firebase Storage isn’t available)
-        let totalSteps = 10
-        for step in 1...totalSteps {
-            try await Task.sleep(nanoseconds: 300_000_000)
-            uploadProgress = Double(step) / Double(totalSteps)
-        }
-
-        // Persist assets locally so profile shows real thumbnails and playable files
-        let fm = FileManager.default
-        let baseDir = try fm.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            .appendingPathComponent("MyChannelUploads", isDirectory: true)
-        if !fm.fileExists(atPath: baseDir.path) {
-            try? fm.createDirectory(at: baseDir, withIntermediateDirectories: true)
-        }
-
-        let videoId = UUID().uuidString
-
-        // 🔥 FIX: Use actual uploaded video URL, not hardcoded test video
-        var localVideoURLString = ""
-        if let src = self.videoURL {
-            let dst = baseDir.appendingPathComponent("\(videoId).mp4")
-            do {
-                if fm.fileExists(atPath: dst.path) { try? fm.removeItem(at: dst) }
-                try fm.copyItem(at: src, to: dst)
-                // Use the actual local file URL for playback
-                localVideoURLString = dst.absoluteString
-                print("✅ Video saved locally at: \(dst.path)")
-                print("🎬 Using actual uploaded video URL for playback: \(localVideoURLString)")
-            } catch {
-                print("⚠️ Failed to save video locally: \(error)")
-                // Fallback to source URL if copy fails
-                localVideoURLString = src.absoluteString
-            }
-        }
-
-        // Save thumbnail to persistent location
-        var localThumbURLString = ""
-        if let img = self.thumbnail ?? UIImage(systemName: "video") {
-            let dst = baseDir.appendingPathComponent("\(videoId).jpg")
-            if let data = img.jpegData(compressionQuality: 0.9) {
-                try? data.write(to: dst, options: .atomic)
-                localThumbURLString = dst.absoluteString
-            }
-        }
-
-        // 🔥 ALWAYS ENABLE MONETIZATION: Force monetization on for testing
-        let mockVideo = Video(
-            id: videoId,
-            title: metadata.title,
-            description: metadata.description,
-            thumbnailURL: localThumbURLString,
-            videoURL: localVideoURLString,
-            duration: max(1, videoDuration),
-            viewCount: 0,
-            likeCount: 0,
-            commentCount: 0,
-            creator: creatorUser,
-            category: metadata.category,
-            tags: metadata.tags,
-            isPublic: metadata.isPublic,
-            visibility: metadata.isPublic ? .public : .private,
-            monetization: Video.MonetizationSettings(
-                isMonetized: true, // Always true for testing
-                adBreaks: Video.AdBreaks(preRoll: true, midRoll: true, postRoll: false),
-                adBreakTimestamps: [
-                    Video.MonetizationSettings.AdBreak(timeStamp: 0, duration: 15, type: .preRoll), // Pre-roll
-                    Video.MonetizationSettings.AdBreak(timeStamp: max(1, videoDuration) / 2, duration: 15, type: .midRoll) // Mid-roll
-                ],
-                sponsorSegments: [],
-                donationEnabled: true,
-                totalRevenue: 0.0
-            )
-        )
-        
-        print("🎬 Created video with working URL: \(localVideoURLString)")
-        print("💰 Monetization enabled: \(mockVideo.monetization?.isMonetized ?? false)")
-        print("🎯 Ad breaks: \(mockVideo.monetization?.adBreakTimestamps?.count ?? 0)")
-        return mockVideo
     }
     
     // MARK: - Cleanup
@@ -714,7 +654,15 @@ class VideoUploadManager: ObservableObject {
         selectedTags.removeAll()
         selectedCategory = .entertainment
         isPublic = true
+        isUnlisted = false
         monetizationEnabled = false
+        allowComments = true
+        isScheduled = false
+        scheduledDate = Date().addingTimeInterval(3600)
+        isPremiere = false
+        filmingLocation = ""
+        ageRestricted = false
+        madeForKids = false
         uploadProgress = 0.0
         videoDuration = 0
         videoDimensions = .zero
@@ -776,17 +724,33 @@ struct VideoUploadMetadata {
     let tags: [String]
     let category: VideoCategory
     let isPublic: Bool
+    let isUnlisted: Bool
     let thumbnailData: Data?
     let monetizationEnabled: Bool
+    let allowComments: Bool
+    let madeForKids: Bool
+    let ageRestricted: Bool
+    let filmingLocation: String
+    let isScheduled: Bool
+    let scheduledDate: Date?
+    let isPremiere: Bool
     
-    init(title: String, description: String, tags: [String], category: VideoCategory, isPublic: Bool, thumbnailData: Data? = nil, monetizationEnabled: Bool = false) {
+    init(title: String, description: String, tags: [String], category: VideoCategory, isPublic: Bool, isUnlisted: Bool = false, thumbnailData: Data? = nil, monetizationEnabled: Bool = false, allowComments: Bool = true, madeForKids: Bool = false, ageRestricted: Bool = false, filmingLocation: String = "", isScheduled: Bool = false, scheduledDate: Date? = nil, isPremiere: Bool = false) {
         self.title = title
         self.description = description
         self.tags = tags
         self.category = category
         self.isPublic = isPublic
+        self.isUnlisted = isUnlisted
         self.thumbnailData = thumbnailData
         self.monetizationEnabled = monetizationEnabled
+        self.allowComments = allowComments
+        self.madeForKids = madeForKids
+        self.ageRestricted = ageRestricted
+        self.filmingLocation = filmingLocation
+        self.isScheduled = isScheduled
+        self.scheduledDate = scheduledDate
+        self.isPremiere = isPremiere
     }
 }
 

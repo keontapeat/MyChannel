@@ -159,6 +159,7 @@ struct UploadView: View {
                 .ignoresSafeArea()
             
             content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .navigationTitle("Create")
         .navigationBarTitleDisplayMode(.inline)
@@ -836,10 +837,23 @@ struct UploadView: View {
                         Text("Visibility")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(AppTheme.Colors.textSecondary)
-                        
-                        Picker("Visibility", selection: $uploadManager.isPublic) {
-                            Text("Public").tag(true)
-                            Text("Private").tag(false)
+
+                        Picker(
+                            "Visibility",
+                            selection: Binding<String>(
+                                get: {
+                                    if uploadManager.isUnlisted { return "unlisted" }
+                                    return uploadManager.isPublic ? "public" : "private"
+                                },
+                                set: { newValue in
+                                    uploadManager.isPublic = newValue == "public"
+                                    uploadManager.isUnlisted = newValue == "unlisted"
+                                }
+                            )
+                        ) {
+                            Text("Public").tag("public")
+                            Text("Unlisted").tag("unlisted")
+                            Text("Private").tag("private")
                         }
                         .pickerStyle(.segmented)
                     }
@@ -856,11 +870,33 @@ struct UploadView: View {
                     }
                     .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.primary))
                     
-                    Toggle(isOn: .constant(true)) {
+                    Toggle(isOn: $uploadManager.allowComments) {
                         Text("Allow comments")
                             .font(.system(size: 15, weight: .medium))
                     }
                     .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.primary))
+
+                    Toggle(isOn: $uploadManager.isScheduled) {
+                        Text("Schedule upload")
+                            .font(.system(size: 15, weight: .medium))
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.primary))
+
+                    if uploadManager.isScheduled {
+                        DatePicker(
+                            "Publish time",
+                            selection: $uploadManager.scheduledDate,
+                            in: Date()...,
+                            displayedComponents: [.date, .hourAndMinute]
+                        )
+                        .datePickerStyle(.compact)
+
+                        Toggle(isOn: $uploadManager.isPremiere) {
+                            Text("Set as Premiere")
+                                .font(.system(size: 15, weight: .medium))
+                        }
+                        .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.primary))
+                    }
                 }
                 
                 detailCard(title: "Location & Thumbnail") {

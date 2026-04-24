@@ -9,6 +9,7 @@ import Foundation
 import Combine
 import AVFoundation
 import SwiftUI
+import FirebaseStorage
 
 // MARK: - Offline Download Service (YouTube Premium Parity)
 @MainActor
@@ -29,8 +30,6 @@ class OfflineDownloadService: ObservableObject {
     @Published var maxStorageLimit: Int64 = 5 * 1024 * 1024 * 1024 // 5GB default
     
     private let fileManager = FileManager.default
-    private let urlSession: URLSession
-    private var downloadTasks: [String: URLSessionDownloadTask] = [:]
     private var cancellables = Set<AnyCancellable>()
     
     // Download directory
@@ -40,12 +39,6 @@ class OfflineDownloadService: ObservableObject {
     }
     
     private init() {
-        // Configure URL session for downloads
-        let config = URLSessionConfiguration.background(withIdentifier: "com.mychannel.downloads")
-        config.isDiscretionary = false
-        config.sessionSendsLaunchEvents = true
-        urlSession = URLSession(configuration: config, delegate: DownloadDelegate(), delegateQueue: nil)
-        
         setupDownloadService()
         loadExistingDownloads()
         updateStorageInfo()
@@ -85,6 +78,7 @@ class OfflineDownloadService: ObservableObject {
             title: video.title,
             thumbnailURL: video.thumbnailURL,
             duration: video.duration,
+            remoteVideoURL: video.videoURL,
             quality: quality ?? downloadQuality,
             status: .queued,
             progress: 0.0,
@@ -115,15 +109,16 @@ class OfflineDownloadService: ObservableObject {
     func cancelDownload(_ downloadId: String) async {
         // Remove from queue
         downloadQueue.removeAll { $0.download.id == downloadId }
-        
-        // Cancel active download task
-        if let task = downloadTasks[downloadId] {
-            task.cancel()
-            downloadTasks.removeValue(forKey: downloadId)
+
+        // Mark as failed
+        if let index = downloads.firstIndex(where: { $0.id == downloadId }) {
+            downloads[index].status = .failed
+            persistDownloads()
         }
-        
+
         // Remove partial files
-        await cleanupPartialDownload(downloadId)
+        let partialURL = downloadsDirectory.appendingPathComponent("\(downloadId).tmp")
+        try? fileManager.removeItem(at: partialURL)
     }
     
     /// Delete downloaded video
@@ -168,38 +163,42 @@ class OfflineDownloadService: ObservableObject {
     
     private func processDownloadQueue() async {
         guard !downloadQueue.isEmpty && !isDownloading else { return }
-        
+
         isDownloading = true
-        
+
         // Sort queue by priority
         downloadQueue.sort(by: { $0.priority.rawValue > $1.priority.rawValue })
-        
+
+        // Process one at a time, wait for completion before next
         while let queueItem = downloadQueue.first {
-            do {
-                await startDownload(queueItem.download)
-                downloadQueue.removeFirst()
-            } catch {
-                print("Download failed: \(error)")
-                downloadQueue.removeFirst()
+            await startDownload(queueItem.download)
+
+            // Wait for this download to complete before moving to next
+            await waitForDownloadCompletion(downloadId: queueItem.download.id)
+
+            // Remove from queue after completion
+            downloadQueue.removeFirst()
+        }
+
+        isDownloading = false
+    }
+
+    private func waitForDownloadCompletion(downloadId: String) async {
+        // Poll for completion (up to 10 minutes)
+        for _ in 0..<3000 {
+            try? await Task.sleep(nanoseconds: 200_000_000) // 0.2s
+            if let download = downloads.first(where: { $0.id == downloadId }) {
+                if download.status == .completed || download.status == .failed {
+                    return
+                }
             }
         }
-        
-        isDownloading = false
     }
     
     private func startDownload(_ download: OfflineDownload) async {
-        // Get video stream URL
-        guard let streamURL = await getVideoStreamURL(download.videoId, quality: download.quality) else {
-            return
-        }
-        
         // Create download directory if needed
         try? fileManager.createDirectory(at: downloadsDirectory, withIntermediateDirectories: true)
-        
-        // Start download task
-        let downloadTask = urlSession.downloadTask(with: streamURL)
-        downloadTasks[download.id] = downloadTask
-        
+
         // Update download status
         if let index = downloads.firstIndex(where: { $0.id == download.id }) {
             downloads[index].status = .downloading
@@ -208,8 +207,58 @@ class OfflineDownloadService: ObservableObject {
             updatedDownload.status = .downloading
             downloads.append(updatedDownload)
         }
-        
-        downloadTask.resume()
+        persistDownloads()
+
+        // Download using Firebase Storage SDK (handles auth automatically)
+        let storage = Storage.storage()
+        let gsURL = download.remoteVideoURL
+
+        // Check if it's a gs:// URL or https:// Firebase Storage URL
+        let reference: StorageReference?
+        if gsURL.hasPrefix("gs://") {
+            reference = storage.reference(forURL: gsURL)
+        } else {
+            // Convert https:// to gs:// format
+            let path = gsURL.replacingOccurrences(of: "https://firebasestorage.googleapis.com/v0/b/", with: "gs://")
+            reference = storage.reference(forURL: path)
+        }
+
+        guard let ref = reference else {
+            if let index = downloads.firstIndex(where: { $0.id == download.id }) {
+                downloads[index].status = .failed
+                persistDownloads()
+            }
+            return
+        }
+
+        let destinationURL = downloadsDirectory.appendingPathComponent("\(download.videoId).mp4")
+
+        do {
+            // Download to temp file first, then move to final location
+            let tempURL = downloadsDirectory.appendingPathComponent("\(download.videoId).tmp")
+            try await ref.write(toFile: tempURL)
+
+            // Move to final location
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                try fileManager.removeItem(at: destinationURL)
+            }
+            try fileManager.moveItem(at: tempURL, to: destinationURL)
+
+            // Update download status to completed
+            if let index = downloads.firstIndex(where: { $0.id == download.id }) {
+                downloads[index].status = .completed
+                downloads[index].progress = 1.0
+                downloads[index].fileSize = try destinationURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                persistDownloads()
+                updateStorageInfo()
+            }
+        } catch {
+            if let index = downloads.firstIndex(where: { $0.id == download.id }) {
+                downloads[index].status = .failed
+                persistDownloads()
+            }
+            print("Download failed: \(error)")
+        }
     }
     
     // MARK: - Storage Management
@@ -285,17 +334,25 @@ class OfflineDownloadService: ObservableObject {
     }
     
     private func loadExistingDownloads() {
-        // Load downloads from persistent storage
-        // This would typically use Core Data or similar
-        downloads = [] // Placeholder
+        let manifestURL = downloadsDirectory.appendingPathComponent("downloads_manifest.json")
+        guard fileManager.fileExists(atPath: manifestURL.path) else {
+            downloads = []
+            return
+        }
+
+        do {
+            let data = try Data(contentsOf: manifestURL)
+            let decoded = try JSONDecoder().decode([OfflineDownload].self, from: data)
+            downloads = decoded.filter { download in
+                let videoURL = downloadsDirectory.appendingPathComponent("\(download.videoId).mp4")
+                return download.status != .completed || fileManager.fileExists(atPath: videoURL.path)
+            }
+        } catch {
+            downloads = []
+            print("Failed to load offline downloads: \(error)")
+        }
     }
-    
-    private func getVideoStreamURL(_ videoId: String, quality: DownloadQuality) async -> URL? {
-        // Get appropriate stream URL based on quality
-        // This would integrate with your video streaming service
-        return URL(string: "https://example.com/stream/\(videoId)")
-    }
-    
+
     private func estimateDownloadSize(quality: DownloadQuality) -> Int64 {
         // Estimate download size based on quality
         switch quality {
@@ -314,94 +371,18 @@ class OfflineDownloadService: ObservableObject {
     }
     
     private func handleNetworkChange() async {
-        if downloadOnlyOnWiFi && !isOnWiFi() {
-            // Pause all downloads
-            for (_, task) in downloadTasks {
-                task.suspend()
-            }
-        } else {
-            // Resume downloads
-            for (_, task) in downloadTasks {
-                task.resume()
-            }
-        }
+        // Firebase Storage downloads handle network changes automatically
     }
-    
-    private func cleanupPartialDownload(_ downloadId: String) async {
-        // Clean up any partial download files
-        let partialURL = downloadsDirectory.appendingPathComponent("\(downloadId).tmp")
-        try? fileManager.removeItem(at: partialURL)
-    }
-}
 
-// MARK: - Download Delegate
-
-class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        // Handle completed download
-        Task { @MainActor in
-            await OfflineDownloadService.shared.handleDownloadCompletion(task: downloadTask, location: location)
-        }
-    }
-    
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        // Update download progress
-        let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
-        
-        Task { @MainActor in
-            await OfflineDownloadService.shared.updateDownloadProgress(task: downloadTask, progress: progress)
-        }
-    }
-}
-
-// MARK: - Download Completion Handling
-
-extension OfflineDownloadService {
-    func handleDownloadCompletion(task: URLSessionDownloadTask, location: URL) async {
-        // Find the download associated with this task
-        guard let downloadId = downloadTasks.first(where: { $0.value == task })?.key,
-              let downloadIndex = downloads.firstIndex(where: { $0.id == downloadId }) else {
-            return
-        }
-        
-        var download = downloads[downloadIndex]
-        
+    private func persistDownloads() {
+        try? fileManager.createDirectory(at: downloadsDirectory, withIntermediateDirectories: true)
+        let manifestURL = downloadsDirectory.appendingPathComponent("downloads_manifest.json")
         do {
-            // Move downloaded file to final location
-            let finalURL = downloadsDirectory.appendingPathComponent("\(download.videoId).mp4")
-            try fileManager.moveItem(at: location, to: finalURL)
-            
-            // Update download status
-            download.status = .completed
-            download.progress = 1.0
-            download.fileSize = try finalURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-            
-            downloads[downloadIndex] = download
-            
-            // Clean up
-            downloadTasks.removeValue(forKey: downloadId)
-            
-            // Update storage info
-            updateStorageInfo()
-            
+            let data = try JSONEncoder().encode(downloads)
+            try data.write(to: manifestURL, options: .atomic)
         } catch {
-            download.status = .failed
-            downloads[downloadIndex] = download
-            print("Failed to complete download: \(error)")
+            print("Failed to persist offline downloads: \(error)")
         }
-    }
-    
-    func updateDownloadProgress(task: URLSessionDownloadTask, progress: Double) async {
-        guard let downloadId = downloadTasks.first(where: { $0.value == task })?.key,
-              let downloadIndex = downloads.firstIndex(where: { $0.id == downloadId }) else {
-            return
-        }
-        
-        downloads[downloadIndex].progress = progress
-        
-        // Update total progress
-        let totalProgress = downloads.reduce(0.0) { $0 + $1.progress } / Double(downloads.count)
-        self.totalDownloadProgress = totalProgress
     }
 }
 
@@ -413,6 +394,7 @@ struct OfflineDownload: Identifiable, Codable {
     let title: String
     let thumbnailURL: String
     let duration: TimeInterval
+    let remoteVideoURL: String
     let quality: DownloadQuality
     var status: DownloadStatus
     var progress: Double

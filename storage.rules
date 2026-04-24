@@ -48,6 +48,13 @@ service firebase.storage {
       allow delete: if request.auth != null;  // Any authenticated user
     }
     
+    // 🎬 USER BANNER VIDEOS (iOS UserMediaStorageService: user-banner-videos/{uid}-{timestamp}.mp4)
+    match /user-banner-videos/{filename} {
+      allow read: if true;
+      allow write: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+    
     // 🎬 BANNER VIDEOS - Anyone can read, authenticated users can upload
     match /banner_videos/{userId}/{filename} {
       allow read: if true;  // Public read

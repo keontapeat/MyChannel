@@ -170,6 +170,12 @@ struct CreateVideoRequest: Codable {
     let language: String?
     let videoUrl: String?
     let thumbnailUrl: String?
+    let allowComments: Bool?
+    let madeForKids: Bool?
+    let ageRestricted: Bool?
+    let filmingLocation: String?
+    let isPremiere: Bool?
+    let scheduledAt: String?
 }
 
 struct CreateVideoResponse: Codable {
@@ -358,7 +364,13 @@ class VideoAPIService: ObservableObject {
         isPremium: Bool = false,
         language: String? = "en",
         videoUrl: String? = nil,
-        thumbnailUrl: String? = nil
+        thumbnailUrl: String? = nil,
+        allowComments: Bool? = nil,
+        madeForKids: Bool? = nil,
+        ageRestricted: Bool? = nil,
+        filmingLocation: String? = nil,
+        isPremiere: Bool? = nil,
+        scheduledAt: String? = nil
     ) async throws -> VideoDetail {
         let request = CreateVideoRequest(
             title: title,
@@ -369,7 +381,13 @@ class VideoAPIService: ObservableObject {
             isPremium: isPremium,
             language: language,
             videoUrl: videoUrl,
-            thumbnailUrl: thumbnailUrl
+            thumbnailUrl: thumbnailUrl,
+            allowComments: allowComments,
+            madeForKids: madeForKids,
+            ageRestricted: ageRestricted,
+            filmingLocation: filmingLocation,
+            isPremiere: isPremiere,
+            scheduledAt: scheduledAt
         )
         
         let response: CreateVideoResponse = try await apiClient.post(

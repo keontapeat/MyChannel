@@ -12,12 +12,24 @@ import GoogleSignIn
 #endif
 import UserNotifications
 
+// 🔥 Bootstrap Firebase BEFORE any SwiftUI @StateObject stored properties initialize.
+// Swift evaluates stored property initializers before the App struct's init body runs,
+// so any `AuthenticationManager.shared` access from a @StateObject would otherwise fire
+// before `FirebaseAppDelegate.application(_:didFinishLaunching…)`. Referencing this
+// lazy-evaluated `let` forces FirebaseApp.configure() to run on first touch.
+private let __bootstrapFirebase: Void = {
+    FirebaseManager.shared.configureIfPossible()
+}()
+
 @main
 struct MyChannelApp: App {
     @UIApplicationDelegateAdaptor(FirebaseAppDelegate.self) var firebaseDelegate
     @Environment(\.scenePhase) private var scenePhase
 
-    @StateObject private var authManager: AuthenticationManager = AuthenticationManager.shared
+    @StateObject private var authManager: AuthenticationManager = {
+        _ = __bootstrapFirebase
+        return AuthenticationManager.shared
+    }()
     @StateObject private var appState: AppState = AppState.shared
     @StateObject private var globalPlayerManager: GlobalVideoPlayerManager = GlobalVideoPlayerManager.shared
     @ObservedObject private var settingsService: SettingsService = SettingsService.shared

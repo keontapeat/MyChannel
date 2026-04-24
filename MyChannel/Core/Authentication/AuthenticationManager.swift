@@ -351,6 +351,50 @@ class AuthenticationManager: ObservableObject {
     }
     
     // MARK: - Social Sign In
+
+    /// Called from SwiftUI SignInWithAppleButton .onCompletion — credential arrives pre-authenticated,
+    /// no presentationAnchor needed. iPad-safe.
+    func signInWithAppleCredential(_ credential: ASAuthorizationAppleIDCredential) async {
+        authState = .authenticating
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let payload = try await FirebaseAppleAuthService.shared.handleCredential(credential)
+            await finishAppleSignIn(payload: payload)
+        } catch let error as ASAuthorizationError where error.code == .canceled {
+            print("🍎 [Apple Sign In] User cancelled")
+            authState = .unauthenticated
+        } catch {
+            print("🍎 [Apple Sign In] Error: \(error.localizedDescription)")
+            authState = .error(error.localizedDescription)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                if case .error = self?.authState { self?.authState = .unauthenticated }
+            }
+        }
+    }
+
+    private func finishAppleSignIn(payload: AuthPayload) async {
+        let basicUser = User(
+            id: payload.uid,
+            username: payload.email?.components(separatedBy: "@").first ?? "apple_user",
+            displayName: payload.displayName.isEmpty ? "Apple User" : payload.displayName,
+            email: payload.email ?? "",
+            profileImageURL: nil,
+            isVerified: true,
+            isCreator: true
+        )
+        currentUser = basicUser
+        isAuthenticated = true
+        authState = .authenticated
+        objectWillChange.send()
+        do { await createFirestoreProfileIfNeeded(for: basicUser) } catch { print("⚠️ [Auth] Non-fatal: Firestore profile creation failed: \(error)") }
+        do { await loadFullProfileAfterSignIn(uid: payload.uid, fallback: basicUser) } catch { print("⚠️ [Auth] Non-fatal: profile loading failed: \(error)") }
+        NotificationCenter.default.post(name: .userDidLogin, object: currentUser)
+        if let user = currentUser {
+            Task { await SmartUserSeederService.shared.registerRealUser(user) }
+        }
+    }
+
     func signInWithApple() async {
         authState = .authenticating
         isLoading = true

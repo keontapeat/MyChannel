@@ -507,7 +507,12 @@ struct FacebookParityStoryCreatorView: View {
                     videoURL: media.url,
                     musicTrack: storyMusic
                 )
-                // Update media with music version
+                let updatedMedia = CreateStoryViewModel.MediaItem(
+                    url: videoWithMusic,
+                    type: .video,
+                    duration: media.duration
+                )
+                viewModel.setMedia(updatedMedia)
             } catch {
                 print("Failed to add music: \(error)")
             }

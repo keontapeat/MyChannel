@@ -467,27 +467,39 @@ final class TopRankMLService: ObservableObject {
         var filmmakers = scored.filter { $0.category == .filmmaker }
         var channels = scored.filter { $0.category == .channel }
 
-        // If categories are sparse, assign untagged users proportionally
-        if artists.count < 5 {
-            let extra = scored.filter { $0.category == .channel }.prefix(10 - artists.count)
-            for var u in extra {
-                u.category = .artist
-                artists.append(u)
-            }
-        }
-        if filmmakers.count < 5 {
-            let artistIds = Set(artists.map(\.id))
-            let extra = scored.filter { $0.category == .channel && !artistIds.contains($0.id) }.prefix(10 - filmmakers.count)
-            for var u in extra {
-                u.category = .filmmaker
-                filmmakers.append(u)
-            }
-        }
-
         // Sort each by overallScore descending
         artists.sort { $0.overallScore > $1.overallScore }
         filmmakers.sort { $0.overallScore > $1.overallScore }
         channels.sort { $0.overallScore > $1.overallScore }
+
+        filmmakers = prioritizedRankings(
+            filmmakers,
+            pinnedNames: ["Shot By Keonta", "Tee Cee", "Merch Hd"]
+        )
+        channels = prioritizedRankings(
+            channels,
+            pinnedNames: ["Ktrip", "Baby Juu", "Mbk Cari"]
+        )
+
+        // Prevent duplicate people from appearing across sections.
+        // Priority order:
+        // 1. Top Artists
+        // 2. Top Indie Filmmakers
+        // 3. Top MyChannels
+        let artistIds = Set(artists.map(\.id))
+        filmmakers.removeAll { artistIds.contains($0.id) }
+
+        filmmakers = prioritizedRankings(
+            filmmakers,
+            pinnedNames: ["Shot By Keonta", "Tee Cee", "Merch Hd"]
+        )
+
+        let filmmakerIds = Set(filmmakers.map(\.id))
+        channels.removeAll { artistIds.contains($0.id) || filmmakerIds.contains($0.id) }
+        channels = prioritizedRankings(
+            channels,
+            pinnedNames: ["Ktrip", "Baby Juu", "Mbk Cari"]
+        )
 
         // Assign ranks + compute rank changes
         topArtists = assignRanks(artists.prefix(200).map { $0 }, previousRanks: &previousArtistRanks)
@@ -621,6 +633,30 @@ final class TopRankMLService: ObservableObject {
         return "\(n)"
     }
 }
+
+ private func prioritizedRankings(_ rankings: [TopRankedUser], pinnedNames: [String]) -> [TopRankedUser] {
+     func normalize(_ value: String) -> String {
+         value.lowercased()
+             .replacingOccurrences(of: "_c", with: "")
+             .replacingOccurrences(of: "_", with: " ")
+             .replacingOccurrences(of: "-", with: " ")
+             .replacingOccurrences(of: "  ", with: " ")
+             .trimmingCharacters(in: .whitespacesAndNewlines)
+     }
+
+     var remaining = rankings
+     var ordered: [TopRankedUser] = []
+
+     for pinnedName in pinnedNames {
+         let normalizedPinned = normalize(pinnedName)
+         if let index = remaining.firstIndex(where: { normalize($0.name) == normalizedPinned }) {
+             ordered.append(remaining.remove(at: index))
+         }
+     }
+
+     ordered.append(contentsOf: remaining)
+     return ordered
+ }
 
 // MARK: - Cloud Run request / response models
 

@@ -10,7 +10,7 @@ import AVFoundation
 import UIKit
 
 // MARK: - Profile Media Uploader (HEVC compression + upload)
-@MainActor
+// Not @MainActor: video export + file I/O must run off the main thread or the UI freezes during Save.
 enum ProfileMediaUploader {
     static let maxBannerDuration: TimeInterval = 15 // seconds
     static let maxBannerSizeBytes: Int64 = 50 * 1024 * 1024 // 50MB
@@ -61,16 +61,10 @@ enum ProfileMediaUploader {
         throw UploadError.fileTooLarge
     }
     
-    // Upload to API and return remote URL string
-    static func uploadBannerVideo(_ url: URL, fileName: String) async throws -> String {
-        let data = try Data(contentsOf: url)
-        let response = try await NetworkService.shared.uploadFile(
-            endpoint: .custom("/users/me/banner"),
-            fileData: data,
-            fileName: fileName,
-            mimeType: "video/mp4"
-        )
-        return response.fileUrl
+    // Upload to Firebase Storage and return remote URL string
+    static func uploadBannerVideo(_ url: URL, uid: String) async throws -> String {
+        print("📤 [ProfileMediaUploader] Starting banner video upload for uid: \(uid)")
+        return try await UserMediaStorageService.shared.uploadBannerVideo(uid: uid, videoURL: url)
     }
     
     // MARK: - Private helpers

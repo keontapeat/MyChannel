@@ -1246,18 +1246,63 @@ private struct MinimalMusicSection: View {
         "Hotboy Curry": 1771099410,
         "Ysr Loski": 1511351716,
         "Luh Monti": 1656612386,
+        "Luh monti": 1656612386,
         "Babyfxce E": 1573432856,
         "3200 Tre": 1491631657,
         "Ktrip": 1484873437,
+        "KTrip": 1484873437,
         "Báby Ju": 1649723396,
         "Baby Ju": 1649723396,
         "Ftos Twan": 1527300992,
+        "FTOS Twan": 1527300992,
         "Scatz": 904008025,
         "Scatz Ripky": 904008025,
         "Baby Ghost": 1507813989,
         "Way P": 1524383650,
-        "Yn Jay": 1484873437,
-        "Krispylife Kidd": 1565580889,
+        "Yn Jay": 1482962180,
+        "YN Jay": 1482962180,
+        "Krispylife Kidd": 1477569694,
+        "KrispyLife Kidd": 1477569694,
+        "Clean Up Man": 1538452293,
+        "Eightball Tank": 1492591865,
+        "Ysr Gramz": 1490787471,
+        "YSR Gramz": 1490787471,
+        "Babii Moe": 1507109510,
+        "Babii MOE": 1507109510,
+        "Six Ward Von": 1564317122,
+        "MIA Patman": 1548074075,
+        "Mia PatMan": 1548074075,
+        "Mia Pat Man": 1548074075,
+        "Lil Nook": 1763508797,
+        "lil nook": 1763508797,
+        "Jeff Skigh": 945119824,
+        "Homi Michel": 1514456557,
+        "BBDR Tay": 1501537814,
+        "PaidLife Zar": 1501538060,
+        "Paidlife Zar": 1501538060,
+        "Richvon23": 1531986560,
+        "RichVon23": 1531986560,
+        "Geeoutto": 1583072463,
+        "Mia Curt": 1576989709,
+        "Dee Grant": 1488384274,
+        "FTM Bear": 1483982707,
+        "Ftm Bear": 1483982707,
+        "Cliff Mac": 964080263,
+        "Obabe": 1496302013,
+        "Velly Beretta": 1174001237,
+        "King Cashes": 1498000463,
+        "King cashes": 1498000463,
+        "Detwan Love": 1155696158,
+        "Real JT": 1422427461,
+        "real jt": 1422427461,
+        "Realjt": 1422427461,
+        "Lil Lik": 1725106609,
+        "Lil lik": 1725106609,
+        "Stickz": 1676978658,
+        "MANNYKEA": 1828612897,
+        "Mannykea": 1828612897,
+        "Ot Love": 1836358576,
+        "OT Love": 1836358576,
     ]
     
     private func catalogArtistFor(name: String, avatar: String) -> CatalogArtist {
@@ -1934,7 +1979,7 @@ private struct MinimalCategoriesSection: View {
             // Carousel
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    ForEach(current.prefix(18)) { video in
+                    ForEach(Array(current.prefix(18).enumerated()), id: \.offset) { _, video in
                         MinimalVideoCard(
                             video: video,
                             action: { onPlayVideo(video) }
@@ -1953,6 +1998,13 @@ private struct TopArtistsSection: View {
     let sourceVideos: [Video]
     var onSelect: (String, String, [Video], Int) -> Void = { _,_,_,_  in }
     var onSeeAll: () -> Void = {}
+
+    private var orderedRankings: [TopRankedUser] {
+        prioritizedRankings(
+            rankings,
+            pinnedNames: ["Yung Sak Runner"]
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1977,7 +2029,7 @@ private struct TopArtistsSection: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    ForEach(Array(rankings.enumerated()), id: \.element.id) { idx, a in
+                    ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, a in
                         Button {
                             let vids = sourceVideos.filter { $0.creator.displayName == a.name }
                             onSelect(a.name, a.avatar, vids, a.totalViews)
@@ -1999,6 +2051,13 @@ private struct TopIndieFilmmakersSection: View {
     let rankings: [TopRankedUser]
     var onSeeAll: () -> Void = {}
     var onSelect: (String, [FreeMovie]) -> Void = { _,_ in }
+
+    private var orderedRankings: [TopRankedUser] {
+        prioritizedRankings(
+            rankings,
+            pinnedNames: ["Shot By Keonta", "Tee Cee", "Merch Hd"]
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2023,7 +2082,7 @@ private struct TopIndieFilmmakersSection: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    ForEach(Array(rankings.enumerated()), id: \.element.id) { idx, f in
+                    ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, f in
                         Button {
                             onSelect(f.name, Array(FreeMovie.sampleMovies.shuffled().prefix(Int.random(in: 6...10))))
                         } label: {
@@ -2045,6 +2104,13 @@ private struct TopMyChannelsSection: View {
     let sourceVideos: [Video]
     var onSelect: (String, String, Int, Int, [Video]) -> Void = { _,_,_,_,_ in }
     var onSeeAll: () -> Void = {}
+
+    private var orderedRankings: [TopRankedUser] {
+        prioritizedRankings(
+            rankings,
+            pinnedNames: ["Ktrip", "Baby Juu", "Mbk Cari"]
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2069,7 +2135,7 @@ private struct TopMyChannelsSection: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    ForEach(Array(rankings.enumerated()), id: \.element.id) { idx, channel in
+                    ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, channel in
                         Button {
                             HapticManager.shared.impact(style: .medium)
                             let vids = sourceVideos.filter { $0.creator.displayName.lowercased().contains(channel.name.lowercased()) }
@@ -2087,6 +2153,30 @@ private struct TopMyChannelsSection: View {
     }
 }
 
+private func prioritizedRankings(_ rankings: [TopRankedUser], pinnedNames: [String]) -> [TopRankedUser] {
+    func normalize(_ value: String) -> String {
+        value.lowercased()
+            .replacingOccurrences(of: "_c", with: "")
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var remaining = rankings
+    var ordered: [TopRankedUser] = []
+
+    for pinnedName in pinnedNames {
+        let normalizedPinned = normalize(pinnedName)
+        if let index = remaining.firstIndex(where: { normalize($0.name) == normalizedPinned }) {
+            ordered.append(remaining.remove(at: index))
+        }
+    }
+
+    ordered.append(contentsOf: remaining)
+    return ordered
+}
+
 // MARK: - See All List Views (ML-Powered — Top Artists / Filmmakers / Channels)
 
 private struct TopArtistsListView: View {
@@ -2094,10 +2184,17 @@ private struct TopArtistsListView: View {
     @EnvironmentObject private var appState: AppState
     @ObservedObject private var rankService = TopRankMLService.shared
 
+    private var orderedRankings: [TopRankedUser] {
+        prioritizedRankings(
+            rankService.topArtists,
+            pinnedNames: ["Yung Sak Runner"]
+        )
+    }
+
     var body: some View {
         NavigationStack {
             List {
-                ForEach(Array(rankService.topArtists.enumerated()), id: \.element.id) { idx, artist in
+                ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, artist in
                     NavigationLink {
                         ArtistPageView(
                             artist: Artist(
@@ -2138,10 +2235,17 @@ private struct TopFilmmakersListView: View {
     let onDismiss: () -> Void
     @ObservedObject private var rankService = TopRankMLService.shared
 
+    private var orderedRankings: [TopRankedUser] {
+        prioritizedRankings(
+            rankService.topFilmmakers,
+            pinnedNames: ["Shot By Keonta", "Tee Cee", "Merch Hd"]
+        )
+    }
+
     var body: some View {
         NavigationStack {
             List {
-                ForEach(Array(rankService.topFilmmakers.enumerated()), id: \.element.id) { idx, filmmaker in
+                ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, filmmaker in
                     NavigationLink {
                         FilmmakerDetailView(
                             name: filmmaker.name,
@@ -2177,10 +2281,17 @@ private struct TopChannelsListView: View {
     let onDismiss: () -> Void
     @ObservedObject private var rankService = TopRankMLService.shared
 
+    private var orderedRankings: [TopRankedUser] {
+        prioritizedRankings(
+            rankService.topChannels,
+            pinnedNames: ["Ktrip", "Baby Juu", "Mbk Cari"]
+        )
+    }
+
     var body: some View {
         NavigationStack {
             List {
-                ForEach(Array(rankService.topChannels.enumerated()), id: \.element.id) { idx, channel in
+                ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, channel in
                     NavigationLink {
                         ChannelDetailView(
                             name: channel.name,
@@ -2221,6 +2332,12 @@ private struct RankListRow: View {
     let user: TopRankedUser
     let index: Int
     var subtitle: String? = nil
+
+    private var displayName: String {
+        user.name
+            .replacingOccurrences(of: "_c", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     private var displaySubtitle: String {
         subtitle ?? "\(TopRankMLService.formatCount(user.totalViews)) total views"
@@ -2267,9 +2384,10 @@ private struct RankListRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
-                    Text(user.name)
-                        .font(.system(size: 16, weight: .semibold))
+                    Text(displayName)
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.primary)
+                        .lineLimit(1)
                     if user.isVerified {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.system(size: 12))

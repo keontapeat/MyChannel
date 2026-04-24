@@ -17,6 +17,34 @@ struct CatalogSong: Identifiable, Codable {
     let trackViewUrl: String?
     let collectionName: String?
     let primaryGenreName: String?
+    /// ISO date from iTunes when available (for “New Releases” ordering)
+    let releaseDate: String?
+    /// iTunes artist id — use for navigation to artist (not `id`, which is track id)
+    let artistId: Int?
+    
+    init(
+        id: Int,
+        title: String,
+        artist: String,
+        artworkUrl: String?,
+        previewUrl: String?,
+        trackViewUrl: String?,
+        collectionName: String?,
+        primaryGenreName: String?,
+        releaseDate: String? = nil,
+        artistId: Int? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.artist = artist
+        self.artworkUrl = artworkUrl
+        self.previewUrl = previewUrl
+        self.trackViewUrl = trackViewUrl
+        self.collectionName = collectionName
+        self.primaryGenreName = primaryGenreName
+        self.releaseDate = releaseDate
+        self.artistId = artistId
+    }
 }
 
 struct CatalogArtist: Identifiable, Codable {
@@ -32,6 +60,41 @@ struct CatalogAlbum: Identifiable, Codable {
     let artist: String
     let artworkUrl: String?
     let viewUrl: String?
+    let artistId: Int?
+    
+    init(id: Int, title: String, artist: String, artworkUrl: String?, viewUrl: String?, artistId: Int? = nil) {
+        self.id = id
+        self.title = title
+        self.artist = artist
+        self.artworkUrl = artworkUrl
+        self.viewUrl = viewUrl
+        self.artistId = artistId
+    }
+
+    /// When `Album.id` is a numeric Apple Music catalog id (e.g. from MusicKit), use for iTunes album detail.
+    static func fromAppAlbum(_ album: Album, artistName: String) -> CatalogAlbum? {
+        guard let collectionId = Int(album.id) else { return nil }
+        let aid: Int? = {
+            let s = album.artistId.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !s.isEmpty, let n = Int(s), n > 0 else { return nil }
+            return n
+        }()
+        return CatalogAlbum(
+            id: collectionId,
+            title: album.title,
+            artist: artistName,
+            artworkUrl: album.artworkURL?.absoluteString,
+            viewUrl: nil,
+            artistId: aid
+        )
+    }
+}
+
+/// Aggregated Apple Music content for Music Hub (pinned friend artists only).
+struct FriendHubMusic {
+    let songs: [CatalogSong]
+    let songsNewestFirst: [CatalogSong]
+    let albums: [CatalogAlbum]
 }
 
 @MainActor
@@ -174,13 +237,21 @@ final class MusicCatalogService: ObservableObject {
         let decoded = try JSONDecoder().decode(iTunesSearchResponse.self, from: data)
         return decoded.results.compactMap { r in
             guard let id = r.collectionId else { return nil }
-            return CatalogAlbum(id: id, title: r.collectionName ?? r.trackName ?? "", artist: r.artistName ?? "", artworkUrl: r.artworkUrl100, viewUrl: r.collectionViewUrl)
+            return CatalogAlbum(
+                id: id,
+                title: r.collectionName ?? r.trackName ?? "",
+                artist: r.artistName ?? "",
+                artworkUrl: upgradedArtwork(from: r.artworkUrl100),
+                viewUrl: r.collectionViewUrl,
+                artistId: r.artistId
+            )
         }
     }
     
     func topTracksForArtist(artistId: Int, limit: Int = 25, country: String = "US") async throws -> [CatalogSong] {
-        // Use lookup by artistId and filter to song entities
-        let urlString = "https://itunes.apple.com/lookup?id=\(artistId)&entity=song&country=\(country)&limit=\(limit)"
+        // Use lookup by artistId and filter to song entities (iTunes max 200 per request)
+        let cap = min(max(limit, 1), 200)
+        let urlString = "https://itunes.apple.com/lookup?id=\(artistId)&entity=song&country=\(country)&limit=\(cap)"
         return try await fetchSongs(from: urlString)
     }
     
@@ -188,6 +259,108 @@ final class MusicCatalogService: ObservableObject {
         // Use lookup by collectionId and entity=song to get album tracks
         let urlString = "https://itunes.apple.com/lookup?id=\(collectionId)&entity=song&country=\(country)"
         return try await fetchSongs(from: urlString)
+    }
+    
+    /// All albums iTunes returns for an artist (up to 200 per request).
+    func albumsForArtist(artistId: Int, limit: Int = 200, country: String = "US") async throws -> [CatalogAlbum] {
+        let cap = min(max(limit, 1), 200)
+        let urlString = "https://itunes.apple.com/lookup?id=\(artistId)&entity=album&country=\(country)&limit=\(cap)"
+        guard let url = URL(string: urlString) else { return [] }
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let http = response as? HTTPURLResponse, 200...299 ~= http.statusCode else { return [] }
+        let decoded = try JSONDecoder().decode(iTunesSearchResponse.self, from: data)
+        var seen = Set<Int>()
+        return decoded.results.compactMap { r -> CatalogAlbum? in
+            guard let cid = r.collectionId, let name = r.collectionName, !name.isEmpty else { return nil }
+            guard seen.insert(cid).inserted else { return nil }
+            return CatalogAlbum(
+                id: cid,
+                title: name,
+                artist: r.artistName ?? "",
+                artworkUrl: upgradedArtwork(from: r.artworkUrl100),
+                viewUrl: r.collectionViewUrl,
+                artistId: r.artistId
+            )
+        }
+    }
+    
+    /// Pool every friend’s tracks + albums from Apple. **Round-robin** merges so no single artist
+    /// dominates the first 100 slots (everyone—including newer list entries—shows in Top Charts / Songs / Albums).
+    func loadFriendHubMusic(country: String = "US") async -> FriendHubMusic {
+        let friends = FeaturedFriendArtist.friends
+        var songBatches: [[CatalogSong]] = Array(repeating: [], count: friends.count)
+        var albumBatches: [[CatalogAlbum]] = Array(repeating: [], count: friends.count)
+        await withTaskGroup(of: (Int, [CatalogSong], [CatalogAlbum]).self) { group in
+            for (index, f) in friends.enumerated() {
+                group.addTask {
+                    let songs = (try? await self.topTracksForArtist(artistId: f.appleMusicId, limit: 100, country: country)) ?? []
+                    let albums = (try? await self.albumsForArtist(artistId: f.appleMusicId, limit: 200, country: country)) ?? []
+                    return (index, songs, albums)
+                }
+            }
+            for await (index, songs, albums) in group {
+                if index < songBatches.count {
+                    songBatches[index] = songs
+                    albumBatches[index] = albums
+                }
+            }
+        }
+        let hubSongs = interleaveSongsRoundRobin(songBatches, maxCount: 100)
+        let newestBatches: [[CatalogSong]] = songBatches.map { batch in
+            batch.sorted { ($0.releaseDate ?? "") > ($1.releaseDate ?? "") }
+        }
+        let newestFirst = interleaveSongsRoundRobin(newestBatches, maxCount: 100)
+        let hubAlbums = interleaveAlbumsRoundRobin(albumBatches, maxCount: 100)
+        return FriendHubMusic(
+            songs: hubSongs,
+            songsNewestFirst: newestFirst,
+            albums: hubAlbums
+        )
+    }
+    
+    /// Music Hub: pin SHARIFE COOPER (iTunes track 1582751629, BE FOREAL / MIA Ghost) at #1; drop TRUMP from the pooled list.
+    func applyMusicHubTopSongsEdits(_ songs: [CatalogSong], country: String = "US") async -> [CatalogSong] {
+        let pinTrackId = 1582751629
+        let filtered = songs.filter {
+            $0.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != "trump"
+        }
+        let lookupURL = "https://itunes.apple.com/lookup?id=\(pinTrackId)&country=\(country)"
+        guard let pinned = (try? await fetchSongs(from: lookupURL))?.first else {
+            return dedupeSongs(filtered)
+        }
+        var merged = filtered.filter { $0.id != pinned.id }
+        merged.insert(pinned, at: 0)
+        return dedupeSongs(merged)
+    }
+    
+    /// Music Hub **On Repeat**: 10 slots — round-robin across `FeaturedFriendArtist` so every friend shows up.
+    /// You only appear on the Pinned Artists card; this row never pulls your Apple catalog.
+    func songsForOnRepeatPinnedFriends(country: String = "US") async -> [CatalogSong] {
+        let friends = FeaturedFriendArtist.friends
+        var perArtist: [[CatalogSong]] = []
+        perArtist.reserveCapacity(friends.count)
+        for friend in friends {
+            let batch = (try? await topTracksForArtist(artistId: friend.appleMusicId, limit: 100, country: country)) ?? []
+            perArtist.append(batch)
+        }
+        var collected: [CatalogSong] = []
+        var seen = Set<Int>()
+        var round = 0
+        while collected.count < 10 {
+            var addedThisRound = false
+            for tracks in perArtist {
+                guard collected.count < 10 else { break }
+                guard round < tracks.count else { continue }
+                let t = tracks[round]
+                if seen.insert(t.id).inserted {
+                    collected.append(t)
+                    addedThisRound = true
+                }
+            }
+            round += 1
+            if !addedThisRound { break }
+        }
+        return dedupeSongs(Array(collected.prefix(10)))
     }
     
     func curatedSpotlightSongs() async -> [CatalogSong] {
@@ -266,7 +439,9 @@ final class MusicCatalogService: ObservableObject {
                 previewUrl: r.previewUrl,
                 trackViewUrl: r.trackViewUrl,
                 collectionName: r.collectionName,
-                primaryGenreName: r.primaryGenreName
+                primaryGenreName: r.primaryGenreName,
+                releaseDate: r.releaseDate,
+                artistId: r.artistId
             )
         }
     }
@@ -293,9 +468,56 @@ final class MusicCatalogService: ObservableObject {
                 previewUrl: item.previewUrl,
                 trackViewUrl: item.url,
                 collectionName: item.albumName,
-                primaryGenreName: item.genreName
+                primaryGenreName: item.genreName,
+                releaseDate: nil,
+                artistId: nil
             )
         }
+    }
+    
+    /// Fair merge: take 1st song from each artist, then 2nd from each, etc., skipping duplicate track IDs.
+    private func interleaveSongsRoundRobin(_ batches: [[CatalogSong]], maxCount: Int) -> [CatalogSong] {
+        var result: [CatalogSong] = []
+        result.reserveCapacity(min(maxCount, 256))
+        var seen = Set<Int>()
+        var round = 0
+        while result.count < maxCount {
+            var addedThisRound = false
+            for batch in batches {
+                guard result.count < maxCount else { break }
+                guard round < batch.count else { continue }
+                let s = batch[round]
+                if seen.insert(s.id).inserted {
+                    result.append(s)
+                    addedThisRound = true
+                }
+            }
+            round += 1
+            if !addedThisRound { break }
+        }
+        return result
+    }
+    
+    private func interleaveAlbumsRoundRobin(_ batches: [[CatalogAlbum]], maxCount: Int) -> [CatalogAlbum] {
+        var result: [CatalogAlbum] = []
+        result.reserveCapacity(min(maxCount, 256))
+        var seen = Set<Int>()
+        var round = 0
+        while result.count < maxCount {
+            var addedThisRound = false
+            for batch in batches {
+                guard result.count < maxCount else { break }
+                guard round < batch.count else { continue }
+                let a = batch[round]
+                if seen.insert(a.id).inserted {
+                    result.append(a)
+                    addedThisRound = true
+                }
+            }
+            round += 1
+            if !addedThisRound { break }
+        }
+        return result
     }
     
     private func dedupeSongs(_ songs: [CatalogSong]) -> [CatalogSong] {
@@ -351,6 +573,7 @@ private struct iTunesTrack: Codable {
     let collectionViewUrl: String?
     let primaryGenreName: String?
     let artistLinkUrl: String?
+    let releaseDate: String?
 }
 
 // MARK: - Apple Music RSS

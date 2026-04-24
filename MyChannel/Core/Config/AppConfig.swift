@@ -162,6 +162,76 @@ struct AppConfig {
         static let enableFlicksPeek = false
         // Ads
         static let enableAds = true
+
+        // 🔒 Direct Vertex AI Agent Builder `detectIntent` calls from the iOS client.
+        // Disabled: these require OAuth + per-agent permissions the app cannot supply
+        // and previously produced endless 404/401s. Route through `agentProxy` function instead.
+        static let enableVertexDirectAgentCalls = false
+
+        // MARK: - Phase 51–100 Flags
+        // All default OFF; flip per-phase as each wave lands in production.
+
+        // Wave 11 — Post-Launch Growth (51–55)
+        static let enableReferralLoop = false              // Phase 51
+        static let enableOnboardingExperiments = false     // Phase 52
+        static let enableSmartPushTiming = false           // Phase 53
+        static let enableLifecycleMessaging = false        // Phase 54
+        static let enableAppClipAndWidgets = false         // Phase 55
+
+        // Wave 12 — Monetization Depth (56–60) — gated by enableCreatorMonetization
+        static let enableShoppableVideo = false            // Phase 56
+        static let enableCreatorFund = false               // Phase 57
+        static let enableAdYieldV2 = false                 // Phase 58
+        static let enableTieredSubscriptions = false       // Phase 59
+        static let enableVirtualGifts = false              // Phase 60 (IAP-only)
+
+        // Wave 13 — Global Scale (61–65)
+        static let enableFullLocalization = false          // Phase 61
+        static let enableRegionalLicensing = false         // Phase 62
+        static let enableEdgeCompute = false               // Phase 63
+        static let enableMultiRegionFirestore = false      // Phase 64
+        static let enableTaxFX = false                     // Phase 65
+
+        // Wave 14 — Creator Power Tools (66–70)
+        static let enableMultiTrackEditor = false          // Phase 66
+        static let enableAIBrollVeo = false                // Phase 67
+        static let enablePodcastMode = false               // Phase 68
+        static let enableCollaborativeDrafts = false       // Phase 69
+        static let enablePublicCreatorAPI = false          // Phase 70
+
+        // Wave 15 — Trust & Safety (71–75)
+        static let enableKidsMode = false                  // Phase 71
+        static let enableDSACompliance = false             // Phase 72
+        static let enableC2PAProvenance = false            // Phase 73
+        static let enableCopyrightMatchV2 = false          // Phase 74
+        static let enableLEPortal = false                  // Phase 75 (ops-only)
+
+        // Wave 16 — AI-Native UX (76–80)
+        static let enableAmbientAgent = false              // Phase 76
+        static let enableConversationalSearch = false      // Phase 77
+        static let enableAIHost = false                    // Phase 78
+        static let enableSmartClipping = false             // Phase 79
+        static let enableGenerativeThumbnails = false      // Phase 80
+
+        // Wave 17 — Verticals (81–85)
+        static let enableEsportsHub = false                // Phase 81
+        static let enableSportsLiveCards = false           // Phase 82
+        static let enableGameClipSDK = false               // Phase 83
+        static let enableWatchParties = false              // Phase 84
+        static let enableInteractiveLive = false           // Phase 85
+
+        // Wave 18 — Platforms II (86–90) — platform targets, not flags. Kept for parity.
+        static let enableVisionProV2 = false               // Phase 90 visionOS
+
+        // Wave 19 — Infra Hard-Mode (91–95) — ops only; FinOps observable flag:
+        static let enableFinOpsDashboard = false           // Phase 93
+
+        // Wave 20 — Moonshots (96–100)
+        static let enableMyChannelOriginals = false        // Phase 96
+        static let enableCreatorAccelerator = false        // Phase 97
+        static let enablePasskeyIdentity = false           // Phase 98
+        static let enableMiniAppSDK = false                // Phase 99
+        static let enableIPOReadiness = false              // Phase 100
     }
     
     // MARK: - Performance Settings

@@ -58,10 +58,17 @@ final class VideoFirestoreService: ObservableObject {
         
         let data: [String: Any] = [
             "userId": video.creator.id,
+            "creatorId": video.creator.id,
+            "creatorUsername": video.creator.username,
+            "creatorDisplayName": video.creator.displayName,
+            "creatorProfileImage": video.creator.profileImageURL ?? "",
+            "creatorVerified": video.creator.isVerified,
             "title": video.title,
             "description": video.description,
             "thumbnailUrl": video.thumbnailURL,
+            "thumbnailURL": video.thumbnailURL,
             "videoUrl": video.videoURL,
+            "videoURL": video.videoURL,
             "duration": video.duration,
             "viewCount": viewCountToSave,  // 🔥 FIX: Preserve existing count
             "likeCount": video.likeCount,
@@ -70,6 +77,12 @@ final class VideoFirestoreService: ObservableObject {
             "tags": video.tags,
             "isPublic": video.visibility == .public,
             "visibility": video.visibility.rawValue,
+            "ageRestricted": video.ageRestricted ?? false,
+            "madeForKids": video.madeForKids ?? false,
+            "allowComments": video.allowComments ?? (existingDoc?.data()?["allowComments"] as? Bool ?? true),
+            "filmingLocation": video.filmingLocation ?? (existingDoc?.data()?["filmingLocation"] as? String ?? ""),
+            "isPremiere": video.isPremiere ?? (existingDoc?.data()?["isPremiere"] as? Bool ?? false),
+            "scheduledAt": video.scheduledAt.map { Timestamp(date: $0) } ?? existingDoc?.data()?["scheduledAt"] ?? NSNull(),
             "createdAt": existingDoc?.data()?["createdAt"] ?? FieldValue.serverTimestamp(),  // Preserve original createdAt
             "updatedAt": FieldValue.serverTimestamp()
         ]
@@ -328,21 +341,47 @@ final class VideoFirestoreService: ObservableObject {
                 let storedIsPublic = (d["isPublic"] as? Bool) ?? true
                 let storedVisibilityRaw = (d["visibility"] as? String)?.lowercased()
                 let visibilityStatus = Video.VisibilityStatus(rawValue: storedVisibilityRaw ?? "") ?? (storedIsPublic ? .public : .private)
+
+                let creator = User(
+                    id: (d["creatorId"] as? String) ?? (d["userId"] as? String) ?? creatorId,
+                    username: d["creatorUsername"] as? String ?? AppState.shared.currentUser?.username ?? "creator",
+                    displayName: d["creatorDisplayName"] as? String ?? AppState.shared.currentUser?.displayName ?? "Creator",
+                    email: AppState.shared.currentUser?.email ?? "",
+                    profileImageURL: d["creatorProfileImage"] as? String ?? AppState.shared.currentUser?.profileImageURL,
+                    bannerImageURL: AppState.shared.currentUser?.bannerImageURL,
+                    bio: AppState.shared.currentUser?.bio,
+                    subscriberCount: AppState.shared.currentUser?.subscriberCount ?? 0,
+                    videoCount: AppState.shared.currentUser?.videoCount ?? 0,
+                    isVerified: (d["creatorVerified"] as? Bool) ?? AppState.shared.currentUser?.isVerified ?? false,
+                    isCreator: true,
+                    createdAt: AppState.shared.currentUser?.createdAt ?? Date()
+                )
+
+                let thumbnailURL = (d["thumbnailUrl"] as? String) ?? (d["thumbnailURL"] as? String) ?? ""
+                let videoURL = (d["videoUrl"] as? String) ?? (d["videoURL"] as? String) ?? ""
+                let categoryRaw = (d["category"] as? String)?.lowercased() ?? "entertainment"
+                let category = VideoCategory(rawValue: categoryRaw) ?? .entertainment
                 
                 let video = Video(
                     id: doc.documentID,
                     title: d["title"] as? String ?? "",
                     description: d["description"] as? String ?? "",
-                    thumbnailURL: d["thumbnailUrl"] as? String ?? "",
-                    videoURL: d["videoUrl"] as? String ?? "",
+                    thumbnailURL: thumbnailURL,
+                    videoURL: videoURL,
                     duration: (d["duration"] as? Double) ?? 0,
                     viewCount: finalViewCount, // 🔥 FIX: Use the synced count
                     likeCount: (d["likeCount"] as? Int) ?? 0,
-                    creator: AppState.shared.currentUser ?? User.defaultUser,
-                    category: .entertainment,
+                    commentCount: (d["commentCount"] as? Int) ?? 0,
+                    creator: creator,
+                    category: category,
                     tags: (d["tags"] as? [String]) ?? [],
                     isPublic: storedIsPublic,
-                    visibility: visibilityStatus
+                    visibility: visibilityStatus,
+                    ageRestricted: d["ageRestricted"] as? Bool,
+                    madeForKids: d["madeForKids"] as? Bool,
+                    allowComments: d["allowComments"] as? Bool,
+                    filmingLocation: d["filmingLocation"] as? String,
+                    isPremiere: d["isPremiere"] as? Bool
                 )
                 videos.append(video)
             }

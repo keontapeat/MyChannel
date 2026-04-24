@@ -3,12 +3,15 @@ import FirebaseAuth
 
 struct DownloadsView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var downloadManager = DownloadManager.shared
+    @StateObject private var offlineService = OfflineDownloadService.shared
     @StateObject private var mlService = DownloadMLService.shared
     @StateObject private var subscriptionService = SubscriptionService.shared
     @State private var showingSettings = false
     @State private var showingUpgrade = false
-    @State private var selectedVideo: DownloadedVideo?
+
+    private var completedDownloads: [OfflineDownload] {
+        offlineService.downloads.filter { $0.status == .completed }
+    }
     
     var body: some View {
         NavigationStack {
@@ -18,7 +21,7 @@ struct DownloadsView: View {
                 
                 if AppConfig.Features.enableSubscriptions && !subscriptionService.isPlusSubscriber {
                     plusUpgradePrompt
-                } else if downloadManager.downloads.isEmpty && !downloadManager.isLoading {
+                } else if completedDownloads.isEmpty && !offlineService.isDownloading {
                     emptyDownloadsState
                 } else {
                     downloadsContent
@@ -71,7 +74,7 @@ struct DownloadsView: View {
                     Button {
                         
                     } label: {
-                        Image(systemName: "ellipsis.vertical")
+                        Image(systemName: "ellipsis")
                             .font(.system(size: 20))
                             .foregroundColor(.white)
                     }
@@ -93,7 +96,7 @@ struct DownloadsView: View {
     // MARK: - Load Content
     
     private func loadContent() async {
-        downloadManager.loadDownloads()
+        offlineService.updateStorageInfo()
         await mlService.fetchRecommendedDownloads(limit: 10)
     }
     
@@ -231,14 +234,14 @@ struct DownloadsView: View {
                     
                     Spacer()
                     
-                    Text("\(downloadManager.downloads.count) videos")
+                    Text("\(completedDownloads.count) videos")
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
                 
-                ForEach(downloadManager.downloads) { download in
+                ForEach(completedDownloads) { download in
                     downloadedVideoRow(download)
                 }
                 
@@ -273,11 +276,11 @@ struct DownloadsView: View {
                 .foregroundColor(.gray)
             
             VStack(alignment: .leading, spacing: 4) {
-                Text("\(downloadManager.getFormattedTotalStorage()) used")
+                Text("\(ByteCountFormatter.string(fromByteCount: offlineService.usedStorage, countStyle: .file)) used")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.white)
                 
-                ProgressView(value: Double(downloadManager.getTotalStorageUsed()) / 10_000_000_000.0)
+                ProgressView(value: Double(offlineService.usedStorage) / Double(max(offlineService.maxStorageLimit, 1)))
                     .tint(.blue)
             }
             
@@ -300,12 +303,11 @@ struct DownloadsView: View {
     
     // MARK: - Downloaded Video Row
     
-    private func downloadedVideoRow(_ download: DownloadedVideo) -> some View {
+    private func downloadedVideoRow(_ download: OfflineDownload) -> some View {
         Button {
-            selectedVideo = download
         } label: {
             HStack(spacing: 12) {
-                AsyncImage(url: URL(string: download.thumbnailUrl)) { image in
+                AsyncImage(url: URL(string: download.thumbnailURL)) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -316,7 +318,7 @@ struct DownloadsView: View {
                 .frame(width: 168, height: 94)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(alignment: .bottomTrailing) {
-                    Text(download.formattedDuration)
+                    Text(formatDuration(download.duration))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 6)
@@ -333,20 +335,20 @@ struct DownloadsView: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     
-                    Text(download.channelName)
+                    Text("Available offline")
                         .font(.system(size: 13))
                         .foregroundColor(.gray)
                         .lineLimit(1)
                     
                     HStack(spacing: 6) {
-                        Text(download.formattedViewCount)
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(download.fileSize), countStyle: .file))
                             .font(.system(size: 12))
                             .foregroundColor(.gray)
                         
                         Text("•")
                             .foregroundColor(.gray)
                         
-                        Text(download.formattedFileSize)
+                        Text(download.quality.rawValue.uppercased())
                             .font(.system(size: 12))
                             .foregroundColor(.gray)
                     }
@@ -371,13 +373,13 @@ struct DownloadsView: View {
                     
                     Button(role: .destructive) {
                         Task {
-                            try? await downloadManager.deleteDownload(videoId: download.videoId)
+                            try? await offlineService.deleteDownload(download.id)
                         }
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
                 } label: {
-                    Image(systemName: "ellipsis.vertical")
+                    Image(systemName: "ellipsis")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.gray)
                         .frame(width: 44, height: 44)
@@ -388,7 +390,20 @@ struct DownloadsView: View {
         }
         .buttonStyle(.plain)
     }
-    
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let totalSeconds = max(Int(duration), 0)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+
     // MARK: - Recommended Download Row
     
     private func recommendedDownloadRow(_ video: RecommendedDownload) -> some View {
@@ -453,8 +468,8 @@ struct DownloadsView: View {
 
 struct DownloadSettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var downloadManager = DownloadManager.shared
-    @State private var downloadQuality: DownloadedVideo.VideoQuality = .high
+    @StateObject private var offlineService = OfflineDownloadService.shared
+    @State private var downloadQuality: DownloadQuality = .high
     @State private var wifiOnly = true
     @State private var smartDownloads = false
     @State private var storageLimit = 10.0
@@ -468,10 +483,10 @@ struct DownloadSettingsView: View {
                 Form {
                     Section {
                         Picker("Download quality", selection: $downloadQuality) {
-                            Text("Low (360p)").tag(DownloadedVideo.VideoQuality.low)
-                            Text("Medium (480p)").tag(DownloadedVideo.VideoQuality.medium)
-                            Text("High (720p)").tag(DownloadedVideo.VideoQuality.high)
-                            Text("HD (1080p)").tag(DownloadedVideo.VideoQuality.hd)
+                            Text("Low (360p)").tag(DownloadQuality.low)
+                            Text("Medium (480p)").tag(DownloadQuality.medium)
+                            Text("High (720p)").tag(DownloadQuality.high)
+                            Text("HD (1080p)").tag(DownloadQuality.hd)
                         }
                     } header: {
                         Text("Quality")
@@ -510,7 +525,7 @@ struct DownloadSettingsView: View {
                             Text("Total storage used")
                                 .foregroundColor(.white)
                             Spacer()
-                            Text(downloadManager.getFormattedTotalStorage())
+                            Text(ByteCountFormatter.string(fromByteCount: offlineService.usedStorage, countStyle: .file))
                                 .foregroundColor(.gray)
                         }
                     }
@@ -518,8 +533,8 @@ struct DownloadSettingsView: View {
                     Section {
                         Button("Delete all downloads") {
                             Task {
-                                for download in downloadManager.downloads {
-                                    try? await downloadManager.deleteDownload(videoId: download.videoId)
+                                for download in offlineService.downloads {
+                                    try? await offlineService.deleteDownload(download.id)
                                 }
                             }
                         }
@@ -531,9 +546,17 @@ struct DownloadSettingsView: View {
             .navigationTitle("Download Settings")
             .navigationBarTitleDisplayMode(.inline)
             .preferredColorScheme(.dark)
+            .task {
+                downloadQuality = offlineService.downloadQuality
+                wifiOnly = offlineService.downloadOnlyOnWiFi
+                storageLimit = Double(offlineService.maxStorageLimit) / 1_000_000_000.0
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
+                        offlineService.downloadQuality = downloadQuality
+                        offlineService.downloadOnlyOnWiFi = wifiOnly
+                        offlineService.maxStorageLimit = Int64(storageLimit * 1_000_000_000.0)
                         dismiss()
                     }
                     .fontWeight(.semibold)

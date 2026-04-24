@@ -29,14 +29,12 @@ struct EditProfileView: View {
     @State private var selectedProfileUIImage: UIImage?
     @State private var selectedBannerUIImage: UIImage?
     @State private var isSaving = false
-    @State private var showingImagePicker = false
-    @State private var imagePickerType: ImagePickerType = .profile
+    @State private var showingProfileImagePicker = false
+    @State private var showingBannerImagePicker = false
     @State private var showingSaveConfirmation = false
     @State private var hasUnsavedChanges = false
     @State private var showingDiscardAlert = false
     
-    private enum ImagePickerType { case profile, banner }
-
     @State private var isVideoCover: Bool = false
     @State private var showingVideoPicker = false
     @State private var bannerVideoLocalURL: URL?
@@ -164,17 +162,23 @@ struct EditProfileView: View {
         .onChange(of: location) { _ in checkForChanges() }
         .onChange(of: website) { _ in checkForChanges() }
         .photosPicker(
-            isPresented: $showingImagePicker,
-            selection: imagePickerType == .profile ? $selectedProfileImage : $selectedBannerImage,
+            isPresented: $showingProfileImagePicker,
+            selection: $selectedProfileImage,
             matching: .images,
             photoLibrary: .shared()
         )
-            .photosPicker(
-                isPresented: $showingVideoPicker,
-                selection: $selectedBannerVideo,
-                matching: .videos,
-                photoLibrary: .shared()
-            )
+        .photosPicker(
+            isPresented: $showingBannerImagePicker,
+            selection: $selectedBannerImage,
+            matching: .images,
+            photoLibrary: .shared()
+        )
+        .photosPicker(
+            isPresented: $showingVideoPicker,
+            selection: $selectedBannerVideo,
+            matching: .videos,
+            photoLibrary: .shared()
+        )
         .alert("Discard Changes?", isPresented: $showingDiscardAlert) {
             Button("Discard", role: .destructive) {
                 dismiss()
@@ -320,8 +324,7 @@ struct EditProfileView: View {
                     // Photo source buttons
                     HStack(spacing: 12) {
                         Button {
-                            imagePickerType = .banner
-                            showingImagePicker = true
+                            showingBannerImagePicker = true
                             HapticManager.shared.impact(style: .light)
                         } label: {
                             Label("Pick from Library", systemImage: "photo.badge.plus")
@@ -403,8 +406,7 @@ struct EditProfileView: View {
                 
                 HStack(spacing: 16) {
                     Button(action: {
-                        imagePickerType = .profile
-                        showingImagePicker = true
+                        showingProfileImagePicker = true
                         HapticManager.shared.impact(style: .light)
                     }) {
                         ZStack {
@@ -716,8 +718,15 @@ struct EditProfileView: View {
         print("💾 [EditProfile] selectedBannerUIImage: \(selectedBannerUIImage != nil ? "YES" : "NO")")
         isSaving = true
         HapticManager.shared.impact(style: .medium)
+        // Bust cache NOW so loadProfileSafely on return fetches fresh Firestore data (new photo URL)
+        ProfileCacheService.shared.clearCache()
         
         Task {
+            defer {
+                Task { @MainActor in
+                    isSaving = false
+                }
+            }
             var remoteBannerURL: String? = user.bannerVideoURL
 
             if isVideoCover {
@@ -726,11 +735,12 @@ struct EditProfileView: View {
                 } else if let localURL = bannerVideoLocalURL {
                     do {
                         let prepared = try await ProfileMediaUploader.prepareBannerVideo(from: localURL)
-                        let remote = try await ProfileMediaUploader.uploadBannerVideo(prepared, fileName: "banner_\(user.id).mp4")
+                        let remote = try await ProfileMediaUploader.uploadBannerVideo(prepared, uid: user.id)
                         remoteBannerURL = remote
                     } catch {
                         print("Banner upload failed: \(error)")
-                        remoteBannerURL = localURL.absoluteString
+                        // Never persist file:// URLs — they break after relaunch. Keep last known remote URL.
+                        remoteBannerURL = user.bannerVideoURL
                     }
                 }
             }
@@ -778,6 +788,7 @@ struct EditProfileView: View {
                 }
             }
 
+            let previousProfileImageURL = user.profileImageURL
             var updatedUser = user
             print("🔨 Creating updated user object with profileImageURL: \(profileImageURL ?? "nil")")
             updatedUser = User(
@@ -844,15 +855,9 @@ struct EditProfileView: View {
                 
                 // Force sync with auth manager and app state to ensure all references are updated
                 await MainActor.run {
-                    // Clear old profile image from cache if URL changed
-                    if let oldURL = user.profileImageURL,
-                       let newURL = updatedUser.profileImageURL,
-                       oldURL != newURL {
-                        // ImageCache will handle cleanup automatically
-                        // Or we can clear the entire cache if needed
-                        ImageCache.shared.clearCache()
-                        print("🗑️ Cleared old profile image from cache")
-                    }
+                    // Clear ALL image caches so the new profile picture URL fetches fresh
+                    ImageCache.shared.clearCache()
+                    print("🗑️ Cleared all image caches for profile picture refresh")
                     
                     // Update all references again to ensure consistency
                     authManager.currentUser = updatedUser
@@ -867,25 +872,19 @@ struct EditProfileView: View {
             
             // Capture values for closure
             let finalProfileImageURL = updatedUser.profileImageURL
-            let previousProfileImageURL = user.profileImageURL
             
             await MainActor.run {
                 isSaving = false
                 hasUnsavedChanges = false
                 
-                // Clear selected images after save to trigger UI refresh from URL
-                // Add delay to ensure user object is fully updated, persistence is complete, and view refreshes
-                // Only clear if we successfully got a new URL
+                // Clear selected profile image whenever we have a new URL from Storage
+                // (covers first-ever upload where previousProfileImageURL is nil)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    if selectedProfileUIImage != nil {
-                        if let newURL = finalProfileImageURL, let oldURL = previousProfileImageURL, newURL != oldURL {
-                            print("✅ Clearing selectedProfileUIImage - triggering refresh from new URL: \(newURL)")
-                            selectedProfileUIImage = nil
-                        } else {
-                            print("⚠️ Not clearing selectedProfileUIImage - URL didn't change or is nil")
-                            print("   Old URL: \(previousProfileImageURL ?? "nil")")
-                            print("   New URL: \(finalProfileImageURL ?? "nil")")
-                        }
+                    if selectedProfileUIImage != nil, finalProfileImageURL != nil {
+                        print("✅ Clearing selectedProfileUIImage - new URL: \(finalProfileImageURL!)")
+                        selectedProfileUIImage = nil
+                    } else if finalProfileImageURL == nil {
+                        print("⚠️ Upload may have failed — previousURL: \(previousProfileImageURL ?? "nil"), newURL: nil")
                     }
                 }
                 if selectedBannerUIImage != nil && imageBannerURL != nil {
@@ -893,24 +892,27 @@ struct EditProfileView: View {
                         selectedBannerUIImage = nil
                     }
                 }
-            }
-            
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showingSaveConfirmation = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showingSaveConfirmation = false }
-            }
-            // Invalidate cache so the fresh Firestore profile is served on next load
-            await MainActor.run {
+                
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    showingSaveConfirmation = true
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        showingSaveConfirmation = false
+                    }
+                }
+                
                 ProfileCacheService.shared.clearCache()
+                
+                print("📢 Posting userProfileUpdated notification with profileImageURL: \(updatedUser.profileImageURL ?? "nil")")
+                NotificationCenter.default.post(name: .userProfileUpdated, object: updatedUser)
+                NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
+                
+                HapticManager.shared.impact(style: .light)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    dismiss()
+                }
             }
-            
-            // Post notification to refresh all profile views
-            print("📢 Posting userProfileUpdated notification with profileImageURL: \(updatedUser.profileImageURL ?? "nil")")
-            NotificationCenter.default.post(name: .userProfileUpdated, object: updatedUser)
-            NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
-            
-            HapticManager.shared.impact(style: .light)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { dismiss() }
         }
     }
 

@@ -349,13 +349,11 @@ struct ComprehensiveCreatorStudioView: View {
     // MARK: - Computed Properties
     
     private var hasNewComments: Bool {
-        // Check for new comments requiring moderation
-        return true // Placeholder
+        false
     }
     
     private var hasCopyrightClaims: Bool {
-        // Check for active copyright claims
-        return false // Placeholder
+        false
     }
 }
 
@@ -528,6 +526,25 @@ struct StudioDashboardView: View {
         )
         .cornerRadius(12)
     }
+
+    private func analyticsMetricRow(title: String, value: String, icon: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.primary)
+                .frame(width: 24)
+
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+
+            Spacer()
+
+            Text(value)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+        }
+    }
     
     private var latestCommentsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -581,21 +598,32 @@ struct StudioDashboardView: View {
                 .pickerStyle(.segmented)
                 .frame(width: 200)
             }
-            
-            // Placeholder for chart
-            RoundedRectangle(cornerRadius: 8)
-                .fill(AppTheme.Colors.background)
-                .frame(height: 200)
-                .overlay(
-                    VStack(spacing: 8) {
-                        Image(systemName: "chart.xyaxis.line")
-                            .font(.system(size: 32))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        Text("Loading analytics...")
-                            .font(.system(size: 14))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
+
+            VStack(spacing: 12) {
+                analyticsMetricRow(
+                    title: "Views",
+                    value: formatNumber(analyticsService.channelAnalytics?.totalViews ?? 0),
+                    icon: "eye.fill"
                 )
+                analyticsMetricRow(
+                    title: "Subscribers",
+                    value: formatNumber(analyticsService.channelAnalytics?.totalSubscribers ?? 0),
+                    icon: "person.2.fill"
+                )
+                analyticsMetricRow(
+                    title: "Revenue",
+                    value: "$\(String(format: "%.2f", analyticsService.channelAnalytics?.totalRevenue ?? 0))",
+                    icon: "dollarsign.circle.fill"
+                )
+                analyticsMetricRow(
+                    title: "Recent uploads",
+                    value: "\(recentVideos.count)",
+                    icon: "play.rectangle.fill"
+                )
+            }
+            .padding(16)
+            .background(AppTheme.Colors.background)
+            .cornerRadius(8)
         }
         .padding(16)
         .background(AppTheme.Colors.surface)

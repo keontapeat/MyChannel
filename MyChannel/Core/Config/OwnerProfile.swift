@@ -67,16 +67,16 @@ struct OwnerProfile {
         FriendArtist(name: "Yung Sak Runner",     instagram: "@yungsakrunner",       avatar: "asset://YungSakRunnerAvatar"),
 
         // ── TOP INDIE FILMMAKERS ─────────────────────────────────────────────────
-        // Shot By Keonta #1, TeeCee #2, Merch HD #3
+        // Shot By Keonta #1, Tee Cee #2, Merch Hd #3
         FriendArtist(name: "Shot By Keonta", instagram: "@sbkeonta_",  avatar: "asset://ShotByKeontaThumbnail", category: "filmmaker", pinnedRank: 1),
-        FriendArtist(name: "TeeCee",         instagram: "@teecee",     avatar: "asset://TeeCeeAvatar",          category: "filmmaker", pinnedRank: 2),
-        FriendArtist(name: "Merch HD",       instagram: "@merchhd",    avatar: "asset://MerchHDAvatar",         category: "filmmaker", pinnedRank: 3),
+        FriendArtist(name: "Tee Cee",        instagram: "@teecee",     avatar: "asset://TeeCeeAvatar",          category: "filmmaker", pinnedRank: 2),
+        FriendArtist(name: "Merch Hd",       instagram: "@merchhd",    avatar: "asset://MerchHDAvatar",         category: "filmmaker", pinnedRank: 3),
         FriendArtist(name: "Pros KT",        instagram: "@proskt",     avatar: "asset://ProsKtAvatar",          category: "filmmaker", pinnedRank: 4),
 
         // ── TOP MYCHANNELS ───────────────────────────────────────────────────────
-        // Ktrip #1, Baby Ju #2, Mbk Cari #3 — then all artists also appear as channels
+        // Ktrip #1, Baby Juu #2, Mbk Cari #3 — then all artists also appear as channels
         FriendArtist(name: "Ktrip",     instagram: "@ktrip",    avatar: "asset://KtripAvatar",    category: "channel", pinnedRank: 1),
-        FriendArtist(name: "Baby Ju",   instagram: "@babyju",   avatar: "asset://BabyJuAvatar",   category: "channel", pinnedRank: 2),
+        FriendArtist(name: "Baby Juu",  instagram: "@babyju",   avatar: "asset://BabyJuAvatar",   category: "channel", pinnedRank: 2),
         FriendArtist(name: "Mbk Cari",  instagram: "@mbkcari",  avatar: "asset://MbkCariAvatar",  category: "channel", pinnedRank: 3),
         FriendArtist(name: "HTG Nook_c",        instagram: "@htg.nook",           avatar: "asset://HTGNookAvatar",          category: "channel"),
         FriendArtist(name: "Scatz Ripky_c",     instagram: "@scatzripky6",         avatar: "asset://ScatzAvatar",            category: "channel"),

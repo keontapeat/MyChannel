@@ -1301,6 +1301,7 @@ struct BulkVisibilitySheet: View {
     let onSave: () -> Void
     
     @State private var selectedVisibility: VideoVisibility = .public_
+    @State private var isApplying = false
     
     enum VideoVisibility: String, CaseIterable {
         case public_ = "Public"
@@ -1342,6 +1343,7 @@ struct BulkVisibilitySheet: View {
                     Button("Apply to All Selected") {
                         applyVisibility()
                     }
+                    .disabled(isApplying || selectedVideoIds.isEmpty)
                 }
             }
             .navigationTitle("Change Visibility")
@@ -1357,11 +1359,36 @@ struct BulkVisibilitySheet: View {
     }
     
     private func applyVisibility() {
-        // TODO: Implement visibility change in Firestore
-        print("🔥 Apply visibility: \(selectedVisibility.displayName) to \(selectedVideoIds.count) videos")
-        HapticManager.shared.notification(type: .success)
-        onSave()
-        dismiss()
+        Task {
+            await MainActor.run {
+                isApplying = true
+            }
+
+            let visibility: Video.VisibilityStatus
+            switch selectedVisibility {
+            case .public_:
+                visibility = .public
+            case .unlisted:
+                visibility = .unlisted
+            case .private_:
+                visibility = .private
+            }
+
+            for videoId in selectedVideoIds {
+                do {
+                    try await VideoFirestoreService.shared.updateVideoVisibility(videoId: videoId, visibility: visibility)
+                } catch {
+                    print("🚨 Failed to update visibility for \(videoId): \(error)")
+                }
+            }
+
+            await MainActor.run {
+                isApplying = false
+                HapticManager.shared.notification(type: .success)
+                onSave()
+                dismiss()
+            }
+        }
     }
 }
 

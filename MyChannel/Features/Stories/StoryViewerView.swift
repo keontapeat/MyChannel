@@ -28,6 +28,8 @@ struct StoryViewerView: View {
     @State private var hasLiked: Bool = false
     @State private var showingProfile: Bool = false
     @State private var showingReport: Bool = false
+    @State private var showingDeleteConfirmation: Bool = false
+    @State private var showingArchiveConfirmation: Bool = false
     @State private var hapticFeedback = UIImpactFeedbackGenerator(style: .light)
 
     @Environment(\.scenePhase) private var scenePhase
@@ -40,6 +42,10 @@ struct StoryViewerView: View {
     private var currentContent: StoryContent? {
         guard currentContentIndex < currentStory.content.count else { return nil }
         return currentStory.content[currentContentIndex]
+    }
+
+    private var canDeleteCurrentStory: Bool {
+        AppState.shared.currentUser?.id == currentStory.creatorId
     }
 
     var body: some View {
@@ -138,6 +144,7 @@ struct StoryViewerView: View {
                     EnhancedStoryFooterView(
                         story: currentStory,
                         hasLiked: hasLiked,
+                        canDeleteCurrentStory: canDeleteCurrentStory,
                         onReply: { showingReply = true },
                         onLike: {
                             if reduceMotion {
@@ -150,7 +157,9 @@ struct StoryViewerView: View {
                             hapticFeedback.impactOccurred()
                         },
                         onShare: { hapticFeedback.impactOccurred() },
-                        onReport: { showingReport = true }
+                        onReport: { showingReport = true },
+                        onArchive: { showingArchiveConfirmation = true },
+                        onDelete: { showingDeleteConfirmation = true }
                     )
                 }
                 .padding(.horizontal, 16)
@@ -359,6 +368,26 @@ struct StoryViewerView: View {
                 }
             }
         }
+        .alert("Delete Story?", isPresented: $showingDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                Task {
+                    await deleteCurrentStory()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This story will be removed immediately.")
+        }
+        .alert("Archive Story?", isPresented: $showingArchiveConfirmation) {
+            Button("Archive") {
+                Task {
+                    await archiveCurrentStory()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This story will be moved out of your active stories.")
+        }
     }
 
     // MARK: - Private Methods
@@ -381,6 +410,30 @@ struct StoryViewerView: View {
             currentStoryIndex = initialIndex
         }
         updateTextVisibility()
+    }
+
+    private func deleteCurrentStory() async {
+        do {
+            try await DatabaseService.shared.deleteStory(id: currentStory.id)
+            NotificationCenter.default.post(name: .storiesDidChange, object: nil)
+            await MainActor.run {
+                onDismiss()
+            }
+        } catch {
+            print("🚨 [StoryViewerView] Failed to delete story: \(error.localizedDescription)")
+        }
+    }
+
+    private func archiveCurrentStory() async {
+        do {
+            try await DatabaseService.shared.archiveStory(id: currentStory.id)
+            NotificationCenter.default.post(name: .storiesDidChange, object: nil)
+            await MainActor.run {
+                onDismiss()
+            }
+        } catch {
+            print("🚨 [StoryViewerView] Failed to archive story: \(error.localizedDescription)")
+        }
     }
 
     private func handleTapGesture(at location: CGPoint) {
@@ -870,10 +923,13 @@ struct EnhancedStoryTextOverlay: View {
 struct EnhancedStoryFooterView: View {
     let story: Story
     let hasLiked: Bool
+    let canDeleteCurrentStory: Bool
     let onReply: () -> Void
     let onLike: () -> Void
     let onShare: () -> Void
     let onReport: () -> Void
+    let onArchive: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
         HStack(spacing: 16) {
@@ -943,6 +999,16 @@ struct EnhancedStoryFooterView: View {
                 .buttonStyle(PlainButtonStyle())
                 
                 Menu {
+                    if canDeleteCurrentStory {
+                        Button(action: onArchive) {
+                            Label("Archive Story", systemImage: "archivebox")
+                        }
+
+                        Button(role: .destructive, action: onDelete) {
+                            Label("Delete Story", systemImage: "trash")
+                        }
+                    }
+
                     Button(action: onReport) {
                         Label("Report Story", systemImage: "flag")
                     }

@@ -14,6 +14,8 @@ struct MusicHubView: View {
     @State private var quickPicks: [CatalogSong] = []
     @State private var topArtists: [CatalogArtist] = []
     @State private var topAlbums: [CatalogAlbum] = []
+    /// Newest friend tracks first (from iTunes `releaseDate`); fallback to hub pool.
+    @State private var newReleaseSongs: [CatalogSong] = []
     @State private var searchText: String = ""
     @State private var loading: Bool = true
     @ObservedObject private var preview = AudioPreviewPlayer.shared
@@ -51,9 +53,6 @@ struct MusicHubView: View {
 
                 ScrollView {
                     VStack(spacing: 0) {
-                        // MyChannel Music Branding
-                        myChannelMusicBanner
-                        
                         // Welcome Header
                         welcomeHeader
                         
@@ -63,6 +62,9 @@ struct MusicHubView: View {
                             
                             // On Repeat
                             onRepeatSection
+                            
+                            // Top Charts
+                            topChartsSection
                             
                             // Top Artists
                             topArtistsSection
@@ -267,7 +269,7 @@ struct MusicHubView: View {
                     showArtistDashboard = true
                     HapticManager.shared.impact(style: .light)
                 } label: {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
+                    Image(systemName: "music.note.house")
                         .font(.system(size: 20, weight: .medium))
                         .foregroundColor(.blue)
                 }
@@ -314,11 +316,11 @@ struct MusicHubView: View {
                 .foregroundColor(.primary)
                 .padding(.horizontal, 24)
             
-            if trending.isEmpty && loading {
+            if trending.isEmpty && loading && newReleaseSongs.isEmpty {
                 ProgressView().tint(.secondary)
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
             } else {
-                let songs = Array(trending.prefix(20))
+                let songs = newReleaseSongs.isEmpty ? Array(trending.prefix(100)) : newReleaseSongs
                 let pages = stride(from: 0, to: songs.count, by: 5).map { i in
                     Array(songs[i..<min(i + 5, songs.count)])
                 }
@@ -587,6 +589,14 @@ struct MusicHubView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
+                    // Show current user's profile picture first
+                    if let currentUser = appState.currentUser {
+                        NavigationLink(destination: ArtistProfileView(artist: CatalogArtist(id: currentUser.id.hashValue, name: currentUser.displayName, linkUrl: nil, artworkUrl: currentUser.profileImageURL))) {
+                            DiscoverArtistCircleCard(artist: CatalogArtist(id: currentUser.id.hashValue, name: currentUser.displayName, linkUrl: nil, artworkUrl: currentUser.profileImageURL))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    
                     ForEach(artists, id: \.id) { artist in
                         NavigationLink(destination: ArtistProfileView(artist: artist)) {
                             DiscoverArtistCircleCard(artist: artist)
@@ -601,24 +611,42 @@ struct MusicHubView: View {
     
     @State private var onRepeatPage: Int = 0
     
-    // MARK: - On Repeat Section
+    // MARK: - Top Charts Section
     
-    private let onRepeatSeeds: [String] = [
-        "5am In Miami Lil Poppa",
-        "OPRAH MIA Ghost",
-        "Whatever Ktrip",
-        "Free Ty JuuJu",
-        "Valuable Pain YoungBoy Never Broke Again",
-        "Smoking & Thinking Lil Durk",
-        "Promises Jhené Aiko",
-        "Foreign Say Twicee",
-        "Pick Up The Phone Travis Scott",
-        "BACKGROUND Lil Yachty",
-        "Space Song Beach House",
-        "Magic In The Hamptons Social House",
-        "pick up the phone Young Thug",
-        "Choosin Texas Ella Langley"
-    ]
+    @State private var topCharts: [CatalogSong] = []
+    
+    private var topChartsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 6) {
+                Image(systemName: "chart.bar.fill")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.red)
+                Text("Top Charts")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.primary)
+            }
+            .padding(.horizontal, 24)
+            
+            if topCharts.isEmpty && loading {
+                ProgressView().tint(.secondary)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 14) {
+                        ForEach(Array(topCharts.prefix(100).enumerated()), id: \.offset) { index, song in
+                            NavigationLink(destination: ArtistProfileView(artist: catalogArtistForChartSong(song))) {
+                                TopChartSquareCard(song: song, rank: index + 1)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                }
+            }
+        }
+    }
+    
+    // MARK: - On Repeat Section (10 slots — songs from Pinned Artists / friend IDs in MusicCatalogService)
     
     private var onRepeatSection: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -691,7 +719,7 @@ struct MusicHubView: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 14) {
-                        ForEach(Array(topArtists.prefix(15).enumerated()), id: \.element.id) { index, artist in
+                        ForEach(Array(topArtists.prefix(100).enumerated()), id: \.element.id) { index, artist in
                             NavigationLink(destination: ArtistProfileView(artist: artist)) {
                                 TopArtistSquareCard(artist: artist, rank: index + 1)
                             }
@@ -721,8 +749,9 @@ struct MusicHubView: View {
                 ProgressView().tint(.secondary)
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
             } else {
-                let pages = stride(from: 0, to: min(trending.count, 20), by: 5).map { i in
-                    Array(trending[i..<min(i + 5, min(trending.count, 20))])
+                let cap = min(trending.count, 100)
+                let pages = stride(from: 0, to: cap, by: 5).map { i in
+                    Array(trending[i..<min(i + 5, cap)])
                 }
                 
                 TabView(selection: $topSongsPage) {
@@ -761,35 +790,38 @@ struct MusicHubView: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
-                        ForEach(topAlbums.prefix(15)) { album in
-                            VStack(alignment: .leading, spacing: 8) {
-                                AppAsyncImage(url: URL(string: album.artworkUrl ?? "")) { img in
-                                    img.resizable().scaledToFill()
-                                } placeholder: {
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.gray.opacity(0.15))
-                                        .overlay(
-                                            Image(systemName: "music.note.list")
-                                                .font(.system(size: 24))
-                                                .foregroundColor(.gray.opacity(0.4))
-                                        )
+                        ForEach(topAlbums.prefix(100)) { album in
+                            NavigationLink(destination: AlbumDetailView(album: album)) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    AppAsyncImage(url: URL(string: album.artworkUrl ?? "")) { img in
+                                        img.resizable().scaledToFill()
+                                    } placeholder: {
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color.gray.opacity(0.15))
+                                            .overlay(
+                                                Image(systemName: "music.note.list")
+                                                    .font(.system(size: 24))
+                                                    .foregroundColor(.gray.opacity(0.4))
+                                            )
+                                    }
+                                    .frame(width: 90, height: 90)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(album.title)
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(.primary)
+                                            .lineLimit(1)
+                                        Text(album.artist)
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                    .frame(width: 90, alignment: .leading)
                                 }
-                                .frame(width: 90, height: 90)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                                
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(album.title)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.primary)
-                                        .lineLimit(1)
-                                    Text(album.artist)
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.secondary)
-                                        .lineLimit(1)
-                                }
-                                .frame(width: 90, alignment: .leading)
                             }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding(.horizontal, 24)
@@ -1319,61 +1351,42 @@ struct MusicHubView: View {
         return "Local Artists"
     }
     
+    /// iTunes artist id for navigation — never use track `id` as artist id.
+    private func catalogArtistForChartSong(_ song: CatalogSong) -> CatalogArtist {
+        let aid = song.artistId
+            ?? FeaturedFriendArtist.friends.first { $0.name.caseInsensitiveCompare(song.artist) == .orderedSame }?.appleMusicId
+            ?? 0
+        return CatalogArtist(id: aid, name: song.artist, linkUrl: nil, artworkUrl: song.artworkUrl)
+    }
+    
     private func load() async {
         loading = true
         
-        // Phase 1: Fire all primary requests in parallel
-        async let curatedSongsTask = MusicCatalogService.shared.curatedSpotlightSongs()
-        async let curatedArtistsTask = MusicCatalogService.shared.curatedArtists()
-        async let curatedAlbumsTask = MusicCatalogService.shared.curatedAlbums()
-        async let topSongsTask: [CatalogSong] = (try? MusicCatalogService.shared.topSongs(limit: 40)) ?? []
-        
-        // Show friend artists immediately from hardcoded data (no network wait)
         let instantFriendArtists = FeaturedFriendArtist.friends.map { $0.catalogArtist }
         artists = instantFriendArtists
+        topArtists = instantFriendArtists.shuffled()
         
-        let top = await topSongsTask
-        let editorialArtists = await curatedArtistsTask
-        let editorialAlbums = await curatedAlbumsTask
-        let curatedSongs = await curatedSongsTask
-        
-        // Phase 2: Immediately populate all sections — kills the spinners
-        if !top.isEmpty { trending = top }
-        
-        let existingIds = Set(instantFriendArtists.map { $0.id })
-        let filteredEditorial = editorialArtists.filter { !existingIds.contains($0.id) }
-        artists = instantFriendArtists + filteredEditorial
-        if !editorialAlbums.isEmpty { albums = editorialAlbums }
-        
-        topArtists = editorialArtists
-        topAlbums = editorialAlbums
-        
-        // Set loading false NOW so all sections render with data
-        loading = false
-        
-        // Phase 3: Load On Repeat songs in parallel (non-blocking, fills in after)
         Task {
-            let onRepeatSongs: [CatalogSong] = await withTaskGroup(of: CatalogSong?.self) { group in
-                for seed in onRepeatSeeds {
-                    group.addTask {
-                        try? await MusicCatalogService.shared.searchSongs(term: seed, limit: 1).first
-                    }
-                }
-                var results: [(Int, CatalogSong)] = []
-                var index = 0
-                for await song in group {
-                    if let song = song {
-                        results.append((index, song))
-                    }
-                    index += 1
-                }
-                // Preserve seed order
-                return onRepeatSeeds.indices.compactMap { i in
-                    results.first { $0.0 == i }?.1
-                }
-            }
+            async let hubTask = MusicCatalogService.shared.loadFriendHubMusic()
+            async let onRepeatTask = MusicCatalogService.shared.songsForOnRepeatPinnedFriends()
+            let hub = await hubTask
+            let onRepeatSongs = await onRepeatTask
+            let editedSongs = await MusicCatalogService.shared.applyMusicHubTopSongsEdits(hub.songs)
             await MainActor.run {
+                if !editedSongs.isEmpty {
+                    trending = editedSongs
+                    topCharts = Array(editedSongs.prefix(100))
+                }
+                if !hub.albums.isEmpty {
+                    topAlbums = hub.albums
+                    albums = hub.albums
+                }
+                let newestFiltered = Array(hub.songsNewestFirst.prefix(100)).filter {
+                    $0.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != "trump"
+                }
+                newReleaseSongs = newestFiltered.isEmpty ? Array(editedSongs.prefix(100)) : newestFiltered
                 if !onRepeatSongs.isEmpty { quickPicks = onRepeatSongs }
+                loading = false
             }
         }
         
@@ -1399,10 +1412,11 @@ struct MusicHubView: View {
                 let freshIds = Set(freshFriendArtists.map { $0.id })
                 let filtered = artists.filter { !freshIds.contains($0.id) }
                 artists = freshFriendArtists + filtered
+                topArtists = freshFriendArtists.shuffled()
             }
         }
         
-        // Phase 5: Local + For You (non-blocking)
+        // Phase 5: Local + For You (non-blocking; fall back to friend hub pool)
         Task {
             let city = appState.currentUser?.location ?? ""
             if !city.isEmpty, let loc = try? await MusicCatalogService.shared.searchSongs(term: city, limit: 30) {
@@ -1410,11 +1424,10 @@ struct MusicHubView: View {
             }
             await MainActor.run {
                 if local.isEmpty {
-                    let fallback = !curatedSongs.isEmpty ? curatedSongs : top
-                    local = Array(fallback.prefix(8))
+                    local = Array(trending.prefix(8))
                 }
             }
-            await loadForYou(curatedFallback: !curatedSongs.isEmpty ? curatedSongs : top)
+            await loadForYou(curatedFallback: Array(trending.prefix(12)))
         }
     }
     
@@ -2533,6 +2546,7 @@ struct DiscoverArtistCircleCard: View {
                 .lineLimit(1)
                 .frame(width: 90)
         }
+        .contentShape(Rectangle())
     }
 }
 
@@ -2572,6 +2586,7 @@ struct DiscoverMixCard: View {
             .frame(width: 140)
         }
         .buttonStyle(ScaleButtonStyle())
+        .contentShape(Rectangle())
     }
 }
 
@@ -2626,6 +2641,7 @@ struct FriendActivityCard: View {
             }
         }
         .frame(width: 80)
+        .contentShape(Rectangle())
     }
 }
 
@@ -2673,6 +2689,7 @@ struct ConcertPreviewCard: View {
             .frame(width: 200)
         }
         .buttonStyle(ScaleButtonStyle())
+        .contentShape(Rectangle())
     }
 }
 
@@ -2726,6 +2743,7 @@ struct BehindTheMusicCard: View {
                 .foregroundColor(.secondary)
         }
         .frame(width: 180)
+        .contentShape(Rectangle())
     }
 }
 
@@ -2759,7 +2777,7 @@ struct TopArtistSquareCard: View {
                         .stroke(
                             isFeaturedFriend ? Color.red : Color(.systemGray4),
                             lineWidth: isFeaturedFriend ? 2 : 0.5
-                        )
+                    )
                 )
                 .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 3)
                 
@@ -2778,6 +2796,50 @@ struct TopArtistSquareCard: View {
                 .lineLimit(1)
                 .frame(width: 90)
         }
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Top Chart Square Card
+
+struct TopChartSquareCard: View {
+    let song: CatalogSong
+    let rank: Int
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack(alignment: .bottomTrailing) {
+                AppAsyncImage(url: URL(string: song.artworkUrl ?? "")) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(.systemGray5))
+                        .overlay(
+                            Image(systemName: "music.note")
+                                .font(.system(size: 24))
+                                .foregroundColor(.secondary)
+                        )
+                }
+                .frame(width: 90, height: 90)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 3)
+                
+                Text("#\(rank)")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.red))
+                    .offset(x: 4, y: 4)
+            }
+            
+            Text(song.title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+                .frame(width: 90)
+        }
+        .contentShape(Rectangle())
     }
 }
 

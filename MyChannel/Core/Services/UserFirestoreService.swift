@@ -46,6 +46,7 @@ final class UserFirestoreService: ObservableObject {
         }
         if let bannerImageURL = user.bannerImageURL {
             userData["bannerImageURL"] = bannerImageURL
+            userData["bannerImageUrl"] = bannerImageURL
         }
         if let bio = user.bio {
             userData["bio"] = bio
@@ -144,8 +145,8 @@ final class UserFirestoreService: ObservableObject {
             displayName: data["displayName"] as? String ?? "",
             email: data["email"] as? String ?? "",
             // Read primary key, fall back to legacy key used by web, then Google Auth photo
-            profileImageURL: (data["profileImageURL"] as? String) ?? (data["avatarUrl"] as? String) ?? (data["photoURL"] as? String),
-            bannerImageURL: data["bannerImageURL"] as? String,
+            profileImageURL: (data["profileImageURL"] as? String) ?? (data["profileImageUrl"] as? String) ?? (data["avatarUrl"] as? String) ?? (data["photoURL"] as? String),
+            bannerImageURL: (data["bannerImageURL"] as? String) ?? (data["bannerImageUrl"] as? String),
             bio: data["bio"] as? String,
             subscriberCount: data["subscriberCount"] as? Int ?? 0,
             videoCount: data["videoCount"] as? Int ?? 0,

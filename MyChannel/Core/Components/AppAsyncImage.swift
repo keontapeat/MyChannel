@@ -38,6 +38,11 @@ fileprivate final class ThermonuclearImageLoader {
         cache.setObject(image, forKey: url.absoluteString as NSString, cost: cost)
     }
     
+    func clearCache() {
+        cache.removeAllObjects()
+        inFlightRequests.removeAll()
+    }
+    
     // 🔥 Load with deduplication - same URL = same request
     func load(_ url: URL, timeout: TimeInterval = 10) async -> UIImage? {
         let key = url.absoluteString
@@ -56,7 +61,10 @@ fileprivate final class ThermonuclearImageLoader {
         let task = Task<UIImage?, Never> {
             do {
                 var request = URLRequest(url: url)
-                if let host = url.host?.lowercased(), host.contains("googleusercontent.com") || host.contains("ggpht.com") {
+                let hostLower = url.host?.lowercased() ?? ""
+                if hostLower.contains("googleusercontent.com") || hostLower.contains("ggpht.com")
+                    || hostLower.contains("mzstatic.com") || hostLower.contains("apple.com")
+                    || hostLower.contains("itunes.apple.com") || hostLower.contains("audio-ssl.itunes.apple.com") {
                     request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
                 }
                 let (data, response) = try await session.data(for: request)
@@ -105,10 +113,12 @@ struct AppAsyncImage<Content: View, Placeholder: View>: View {
                 content(Image(uiImage: uiImage))
             } else {
                 placeholder()
-                    .task(id: url) {
-                        await load()
-                    }
             }
+        }
+        .task(id: url) {
+            // Reset cached image so we re-fetch for the new URL
+            uiImage = nil
+            await load()
         }
     }
 
@@ -199,8 +209,16 @@ struct AppAsyncImage<Content: View, Placeholder: View>: View {
             }
         }
 
+        // Apple CDN: prefer HTTPS (mzstatic sometimes returns http)
+        let fetchURL: URL = {
+            guard url.scheme?.lowercased() == "http", let host = url.host?.lowercased(), host.contains("mzstatic.com") else { return url }
+            var c = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            c?.scheme = "https"
+            return c?.url ?? url
+        }()
+
         // 🔥 THERMONUCLEAR: Use deduplicated loader with caching
-        if let fetched = await ThermonuclearImageLoader.shared.load(url) {
+        if let fetched = await ThermonuclearImageLoader.shared.load(fetchURL) {
             self.uiImage = fetched
         }
     }

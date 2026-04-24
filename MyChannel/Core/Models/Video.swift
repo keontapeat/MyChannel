@@ -49,6 +49,9 @@ struct Video: Identifiable, Codable, Hashable {
     var endScreens: [EndScreen]? // YouTube-style end screens
     var ageRestricted: Bool?
     var madeForKids: Bool?
+    var allowComments: Bool?
+    var filmingLocation: String?
+    var isPremiere: Bool?
     var transcript: VideoTranscript?
     
     // 🔥 NEW: MyChannel University Properties
@@ -70,6 +73,7 @@ struct Video: Identifiable, Codable, Hashable {
         case tags, isPublic, visibility, quality, aspectRatio, isLiveStream
         case scheduledAt, contentSource, externalID, contentRating
         case language, subtitles, isVerified, monetization, isSponsored, chapters
+        case ageRestricted, madeForKids, allowComments, filmingLocation, isPremiere
     }
     
     // MARK: - Custom Decoding
@@ -117,6 +121,11 @@ struct Video: Identifiable, Codable, Hashable {
         monetization = try container.decodeIfPresent(MonetizationSettings.self, forKey: .monetization)
         isSponsored = try container.decodeIfPresent(Bool.self, forKey: .isSponsored)
         chapters = try container.decodeIfPresent([Chapter].self, forKey: .chapters)
+        ageRestricted = try container.decodeIfPresent(Bool.self, forKey: .ageRestricted)
+        madeForKids = try container.decodeIfPresent(Bool.self, forKey: .madeForKids)
+        allowComments = try container.decodeIfPresent(Bool.self, forKey: .allowComments)
+        filmingLocation = try container.decodeIfPresent(String.self, forKey: .filmingLocation)
+        isPremiere = try container.decodeIfPresent(Bool.self, forKey: .isPremiere)
     }
     
     // MARK: - Custom Encoding
@@ -154,6 +163,11 @@ struct Video: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(monetization, forKey: .monetization)
         try container.encodeIfPresent(isSponsored, forKey: .isSponsored)
         try container.encodeIfPresent(chapters, forKey: .chapters)
+        try container.encodeIfPresent(ageRestricted, forKey: .ageRestricted)
+        try container.encodeIfPresent(madeForKids, forKey: .madeForKids)
+        try container.encodeIfPresent(allowComments, forKey: .allowComments)
+        try container.encodeIfPresent(filmingLocation, forKey: .filmingLocation)
+        try container.encodeIfPresent(isPremiere, forKey: .isPremiere)
     }
     
     // Computed property for shareable link
@@ -191,7 +205,12 @@ struct Video: Identifiable, Codable, Hashable {
         isVerified: Bool = false,
         monetization: MonetizationSettings? = nil,
         isSponsored: Bool? = nil,
-        chapters: [Chapter]? = nil
+        chapters: [Chapter]? = nil,
+        ageRestricted: Bool? = nil,
+        madeForKids: Bool? = nil,
+        allowComments: Bool? = nil,
+        filmingLocation: String? = nil,
+        isPremiere: Bool? = nil
     ) {
         self.id = id
         self.title = title
@@ -229,6 +248,11 @@ struct Video: Identifiable, Codable, Hashable {
         self.monetization = monetization
         self.isSponsored = isSponsored
         self.chapters = chapters
+        self.ageRestricted = ageRestricted
+        self.madeForKids = madeForKids
+        self.allowComments = allowComments
+        self.filmingLocation = filmingLocation
+        self.isPremiere = isPremiere
     }
 
     // MARK: - Chapters
@@ -714,7 +738,7 @@ enum VideoCategory: String, Codable, CaseIterable, CustomStringConvertible {
         case .shorts: return "rectangle.portrait"
         case .gaming: return "gamecontroller"
         case .music: return "music.note"
-        case .cooking: return "chef.hat"
+        case .cooking: return "fork.knife"
         case .lifestyle: return "heart.fill"
         case .education: return "graduationcap"
         case .technology: return "laptopcomputer"

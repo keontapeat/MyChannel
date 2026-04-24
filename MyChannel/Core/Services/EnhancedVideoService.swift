@@ -58,7 +58,7 @@ class EnhancedVideoService: ObservableObject {
             case .shorts: return "rectangle.portrait"
             case .gaming: return "gamecontroller"
             case .music: return "music.note"
-            case .cooking: return "chef.hat"
+            case .cooking: return "fork.knife"
             case .lifestyle: return "heart.fill"
             }
         }

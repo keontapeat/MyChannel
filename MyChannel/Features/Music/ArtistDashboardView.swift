@@ -19,6 +19,13 @@ struct ArtistDashboardView: View {
     @State private var selectedTab: DashboardTab = .overview
     @State private var isLoading = true
     @State private var artistId: String = ""
+    @State private var showUploadSheet = false
+    @State private var showDistributionSheet = false
+    @State private var showPayoutSheet = false
+    @State private var showVerificationSheet = false
+    @State private var showContentIDSheet = false
+    @State private var showProfileEditSheet = false
+    @State private var selectedContentPolicy: ContentMatch.MatchPolicy = .track
     
     // Overview data
     @State private var totalTracks: Int = 0
@@ -26,16 +33,21 @@ struct ArtistDashboardView: View {
     @State private var totalEarnings: Double = 0
     @State private var currentListeners: Int = 0
     @State private var pendingPayout: Double = 0
+    @State private var payoutAccountConnected = false
     
     // Music tracks
     @State private var tracks: [ArtistTrack] = []
     
     // Distribution
     @State private var distributionStatus: [PlatformDistribution] = []
+    @State private var payoutRequests: [PayoutRequest] = []
+    @State private var topLocations: [AnalyticsBreakdown] = []
+    @State private var deviceBreakdown: [AnalyticsBreakdown] = []
     
     // Content ID
     @State private var contentIdMatches: Int = 0
     @State private var contentIdRevenue: Double = 0
+    @State private var protectedTracksCount: Int = 0
     
     // Verification
     @State private var verificationStatus: String = "not_submitted"
@@ -64,8 +76,24 @@ struct ArtistDashboardView: View {
     struct PlatformDistribution: Identifiable {
         let id: String
         let platform: String
+        let trackTitle: String?
         let status: String
         let submittedAt: Date?
+        let releaseDate: Date?
+    }
+
+    struct AnalyticsBreakdown: Identifiable {
+        let id: String
+        let label: String
+        let count: Int
+    }
+
+    struct PayoutRequest: Identifiable {
+        let id: String
+        let amount: Double
+        let payoutMethod: String
+        let status: String
+        let requestedAt: Date?
     }
     
     var body: some View {
@@ -103,6 +131,80 @@ struct ArtistDashboardView: View {
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .task { await loadDashboardData() }
+            .sheet(isPresented: $showUploadSheet, onDismiss: {
+                Task { await loadDashboardData() }
+            }) {
+                MusicUploadSheet()
+            }
+            .sheet(isPresented: $showDistributionSheet) {
+                NavigationStack {
+                    MusicDistributionRequestSheet(
+                        artistId: artistId,
+                        tracks: trackOptions,
+                        onSubmitted: {
+                            Task {
+                                await loadDistributionStatus()
+                            }
+                        }
+                    )
+                }
+            }
+            .sheet(isPresented: $showPayoutSheet) {
+                NavigationStack {
+                    ArtistPayoutRequestSheet(
+                        artistId: artistId,
+                        availableAmount: pendingPayout,
+                        payoutAccountConnected: payoutAccountConnected,
+                        onSubmitted: {
+                            Task {
+                                await loadPayoutData()
+                            }
+                        }
+                    )
+                }
+            }
+            .sheet(isPresented: $showVerificationSheet) {
+                NavigationStack {
+                    ArtistVerificationRequestSheet(
+                        artistId: artistId,
+                        displayName: appState.currentUser?.displayName ?? "",
+                        email: appState.currentUser?.email ?? "",
+                        onSubmitted: {
+                            Task {
+                                await loadVerificationStatus()
+                            }
+                        }
+                    )
+                }
+            }
+            .sheet(isPresented: $showContentIDSheet) {
+                NavigationStack {
+                    ContentIDEnrollmentSheet(
+                        artistId: artistId,
+                        artistName: appState.currentUser?.displayName ?? "",
+                        tracks: trackOptions,
+                        defaultPolicy: selectedContentPolicy,
+                        onSubmitted: {
+                            Task {
+                                await loadContentIdData()
+                            }
+                        }
+                    )
+                }
+            }
+            .sheet(isPresented: $showProfileEditSheet) {
+                NavigationStack {
+                    ArtistProfileEditSheet(
+                        artistId: artistId,
+                        currentDisplayName: appState.currentUser?.displayName ?? "",
+                        onSubmitted: {
+                            Task {
+                                await loadDashboardData()
+                            }
+                        }
+                    )
+                }
+            }
         }
     }
     
@@ -111,14 +213,26 @@ struct ArtistDashboardView: View {
     private var header: some View {
         VStack(spacing: 12) {
             HStack {
-                Circle()
-                    .fill(Color(.systemGray5))
-                    .frame(width: 60, height: 60)
-                    .overlay(
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 30))
-                            .foregroundColor(.secondary)
-                    )
+                Group {
+                    if let urlString = appState.currentUser?.profileImageURL,
+                       let url = URL(string: urlString) {
+                        AppAsyncImage(url: url) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            Circle().fill(Color(.systemGray5))
+                        }
+                    } else {
+                        Circle()
+                            .fill(Color(.systemGray5))
+                            .overlay(
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 30))
+                                    .foregroundColor(.secondary)
+                            )
+                    }
+                }
+                .frame(width: 60, height: 60)
+                .clipShape(Circle())
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Artist Dashboard")
@@ -134,6 +248,18 @@ struct ArtistDashboardView: View {
                 
                 Spacer()
                 
+                // Edit profile button
+                Button {
+                    showProfileEditSheet = true
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                        .padding(8)
+                        .background(AppTheme.Colors.primary.opacity(0.1))
+                        .clipShape(Circle())
+                }
+                
                 // Verification badge
                 verificationBadge
             }
@@ -145,15 +271,15 @@ struct ArtistDashboardView: View {
     
     private var verificationBadge: some View {
         HStack(spacing: 6) {
-            Image(systemName: verificationStatus == "approved" ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+            Image(systemName: verificationBadgeIcon)
                 .font(.system(size: 14))
-            Text(verificationStatus == "approved" ? "Verified" : "Not Verified")
+            Text(verificationBadgeTitle)
                 .font(.system(size: 12, weight: .medium))
         }
-        .foregroundColor(verificationStatus == "approved" ? .green : .orange)
+        .foregroundColor(verificationBadgeColor)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background((verificationStatus == "approved" ? Color.green : Color.orange).opacity(0.1))
+        .background(verificationBadgeColor.opacity(0.1))
         .clipShape(Capsule())
     }
     
@@ -204,10 +330,32 @@ struct ArtistDashboardView: View {
                     .foregroundColor(.primary)
                 
                 VStack(spacing: 12) {
-                    quickActionButton(title: "Upload New Track", icon: "plus.circle.fill", color: .blue)
-                    quickActionButton(title: "Request Payout", icon: "arrow.down.circle.fill", color: .green)
-                    quickActionButton(title: "Distribute to Platforms", icon: "arrow.up.circle.fill", color: .orange)
-                    quickActionButton(title: "View Content ID", icon: "fingerprint", color: .purple)
+                    quickActionButton(title: "Upload New Track", icon: "plus.circle.fill", color: .blue) {
+                        showUploadSheet = true
+                    }
+                    quickActionButton(title: "Request Payout", icon: "arrow.down.circle.fill", color: .green) {
+                        showPayoutSheet = true
+                    }
+                    quickActionButton(title: "Distribute to Platforms", icon: "arrow.up.circle.fill", color: .orange) {
+                        showDistributionSheet = true
+                    }
+                    quickActionButton(title: "Manage Content ID", icon: "fingerprint", color: .purple) {
+                        selectedContentPolicy = .track
+                        showContentIDSheet = true
+                    }
+                }
+            }
+
+            if !isArtistVerified {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Verification")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.primary)
+                    quickActionButton(title: verificationStatus == "submitted" ? "Verification Pending Review" : "Submit Verification", icon: "checkmark.seal.fill", color: .indigo) {
+                        if verificationStatus != "submitted" {
+                            showVerificationSheet = true
+                        }
+                    }
                 }
             }
         }
@@ -238,8 +386,9 @@ struct ArtistDashboardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
     
-    private func quickActionButton(title: String, icon: String, color: Color) -> some View {
+    private func quickActionButton(title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button {
+            action()
             HapticManager.shared.impact(style: .medium)
         } label: {
             HStack(spacing: 12) {
@@ -270,6 +419,7 @@ struct ArtistDashboardView: View {
                     .foregroundColor(.primary)
                 Spacer()
                 Button {
+                    showUploadSheet = true
                     HapticManager.shared.impact(style: .medium)
                 } label: {
                     HStack(spacing: 6) {
@@ -405,34 +555,38 @@ struct ArtistDashboardView: View {
             .background(Color(.systemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 12))
             
-            // Geographic distribution (mock)
             VStack(alignment: .leading, spacing: 12) {
                 Text("Top Locations")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.primary)
                 
-                VStack(spacing: 10) {
-                    locationRow(country: "United States", percentage: 45, color: .blue)
-                    locationRow(country: "United Kingdom", percentage: 18, color: .green)
-                    locationRow(country: "Canada", percentage: 12, color: .orange)
-                    locationRow(country: "Germany", percentage: 10, color: .purple)
-                    locationRow(country: "Other", percentage: 15, color: .gray)
+                if topLocations.isEmpty {
+                    analyticsEmptyState("Location data will appear after listeners stream your music.")
+                } else {
+                    VStack(spacing: 10) {
+                        ForEach(Array(topLocations.prefix(5).enumerated()), id: \.element.id) { index, item in
+                            locationRow(country: item.label, count: item.count, total: topLocations.reduce(0) { $0 + $1.count }, color: analyticsColor(at: index))
+                        }
+                    }
                 }
             }
             .padding(16)
             .background(Color(.systemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 12))
             
-            // Device breakdown (mock)
             VStack(alignment: .leading, spacing: 12) {
                 Text("Device Breakdown")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.primary)
                 
-                HStack(spacing: 12) {
-                    deviceRow(icon: "iphone", name: "iOS", percentage: 55, color: .blue)
-                    deviceRow(icon: "android", name: "Android", percentage: 35, color: .green)
-                    deviceRow(icon: "desktopcomputer", name: "Desktop", percentage: 10, color: .orange)
+                if deviceBreakdown.isEmpty {
+                    analyticsEmptyState("Device mix appears once playback events start coming in.")
+                } else {
+                    HStack(spacing: 12) {
+                        ForEach(Array(deviceBreakdown.prefix(3).enumerated()), id: \.element.id) { index, item in
+                            deviceRow(icon: deviceIcon(for: item.label), name: item.label, count: item.count, total: deviceBreakdown.reduce(0) { $0 + $1.count }, color: analyticsColor(at: index))
+                        }
+                    }
                 }
             }
             .padding(16)
@@ -441,7 +595,7 @@ struct ArtistDashboardView: View {
         }
     }
     
-    private func locationRow(country: String, percentage: Int, color: Color) -> some View {
+    private func locationRow(country: String, count: Int, total: Int, color: Color) -> some View {
         HStack(spacing: 12) {
             Text(country)
                 .font(.system(size: 14))
@@ -450,18 +604,18 @@ struct ArtistDashboardView: View {
             Spacer()
             
             HStack(spacing: 8) {
-                Text("\(percentage)%")
+                Text("\(percentage(for: count, total: total))%")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(color)
                 
-                ProgressView(value: Double(percentage), total: 100)
+                ProgressView(value: Double(count), total: Double(max(total, 1)))
                     .progressViewStyle(LinearProgressViewStyle(tint: color))
                     .frame(width: 80)
             }
         }
     }
     
-    private func deviceRow(icon: String, name: String, percentage: Int, color: Color) -> some View {
+    private func deviceRow(icon: String, name: String, count: Int, total: Int, color: Color) -> some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 24))
@@ -469,7 +623,7 @@ struct ArtistDashboardView: View {
             Text(name)
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
-            Text("\(percentage)%")
+            Text("\(percentage(for: count, total: total))%")
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(color)
         }
@@ -477,6 +631,16 @@ struct ArtistDashboardView: View {
             .padding(12)
             .background(Color(.systemGray6))
             .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func analyticsEmptyState(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 13))
+            .foregroundColor(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Color(.systemGray6))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
     }
     
     // MARK: - Earnings Tab
@@ -534,18 +698,55 @@ struct ArtistDashboardView: View {
                     .foregroundColor(.primary)
                 
                 VStack(spacing: 12) {
-                    payoutOptionCard(title: "Instant Payout", description: "1-2 business days", fee: "$1.00 fee", color: .green)
-                    payoutOptionCard(title: "Standard Payout", description: "5-7 business days", fee: "No fee", color: .blue)
+                    payoutOptionCard(title: "Instant Payout", description: payoutAccountConnected ? "1-2 business days" : "Connect payouts first", fee: "1.5% fee", color: .green) {
+                        showPayoutSheet = true
+                    }
+                    payoutOptionCard(title: "Standard Payout", description: payoutAccountConnected ? "5-7 business days" : "Connect payouts first", fee: "No fee", color: .blue) {
+                        showPayoutSheet = true
+                    }
                 }
             }
             .padding(16)
             .background(Color(.systemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            if !payoutRequests.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Recent Requests")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+
+                    VStack(spacing: 10) {
+                        ForEach(payoutRequests.prefix(5)) { request in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(formatCurrency(request.amount))
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                    Text(request.payoutMethod.capitalized)
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Text(request.status.replacingOccurrences(of: "_", with: " ").capitalized)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(request.status == "completed" ? .green : .orange)
+                            }
+                            .padding(12)
+                            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color(.systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
         }
     }
     
-    private func payoutOptionCard(title: String, description: String, fee: String, color: Color) -> some View {
+    private func payoutOptionCard(title: String, description: String, fee: String, color: Color, action: @escaping () -> Void) -> some View {
         Button {
+            action()
             HapticManager.shared.impact(style: .medium)
         } label: {
             HStack(spacing: 12) {
@@ -592,6 +793,7 @@ struct ArtistDashboardView: View {
                     .foregroundColor(.primary)
                 Spacer()
                 Button {
+                    showDistributionSheet = true
                     HapticManager.shared.impact(style: .medium)
                 } label: {
                     HStack(spacing: 6) {
@@ -661,9 +863,9 @@ struct ArtistDashboardView: View {
             
             Spacer()
             
-            Text("0% fee")
+            Text("Supported")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.green)
+                .foregroundColor(.secondary)
         }
         .padding(12)
         .background(Color(.systemGray6))
@@ -672,19 +874,31 @@ struct ArtistDashboardView: View {
     
     private func distributionRow(_ dist: PlatformDistribution) -> some View {
         HStack(spacing: 12) {
-            Text(dist.platform)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.primary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(dist.platform)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.primary)
+                if let trackTitle = dist.trackTitle, !trackTitle.isEmpty {
+                    Text(trackTitle)
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                if let releaseDate = dist.releaseDate {
+                    Text("Release \(releaseDate.formatted(date: .abbreviated, time: .omitted))")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
             
             Spacer()
             
             HStack(spacing: 4) {
                 Circle()
-                    .fill(dist.status == "approved" ? Color.green : Color.orange)
+                    .fill(distributionStatusColor(for: dist.status))
                     .frame(width: 8, height: 8)
-                Text(dist.status.capitalized)
+                Text(dist.status.replacingOccurrences(of: "_", with: " ").capitalized)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(dist.status == "approved" ? .green : .orange)
+                    .foregroundColor(distributionStatusColor(for: dist.status))
             }
         }
         .padding(12)
@@ -700,13 +914,21 @@ struct ArtistDashboardView: View {
                 .font(.system(size: 22, weight: .bold))
                 .foregroundColor(.primary)
             
-            // Content ID overview
             VStack(alignment: .leading, spacing: 16) {
                 Text("Content ID Overview")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.primary)
                 
                 HStack(spacing: 20) {
+                    VStack(spacing: 8) {
+                        Text("\(protectedTracksCount)")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(.purple)
+                        Text("Protected")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+
                     VStack(spacing: 8) {
                         Text("\(contentIdMatches)")
                             .font(.system(size: 32, weight: .bold))
@@ -730,16 +952,34 @@ struct ArtistDashboardView: View {
             .background(Color(.systemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 12))
             
-            // Copyright policy options
             VStack(alignment: .leading, spacing: 12) {
-                Text("Default Copyright Policy")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
-                
+                HStack {
+                    Text("Register Existing Track")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Button {
+                        selectedContentPolicy = .track
+                        showContentIDSheet = true
+                    } label: {
+                        Text("Enroll")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.blue)
+                            .clipShape(Capsule())
+                    }
+                }
+
+                Text("Choose a default enforcement policy when enrolling an uploaded track.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+
                 VStack(spacing: 10) {
-                    policyOptionCard(title: "Copyright Strike", description: "Block unauthorized usage", icon: "exclamationmark.triangle.fill", color: .red)
-                    policyOptionCard(title: "Revenue Share", description: "Allow usage + earn % of revenue", icon: "dollarsign.circle.fill", color: .green)
-                    policyOptionCard(title: "Allow Usage", description: "Free to use", icon: "checkmark.circle.fill", color: .blue)
+                    policyOptionCard(title: "Copyright Strike", description: "Block unauthorized usage", icon: "exclamationmark.triangle.fill", color: .red, policy: .block)
+                    policyOptionCard(title: "Revenue Share", description: "Allow usage + earn revenue", icon: "dollarsign.circle.fill", color: .green, policy: .monetize)
+                    policyOptionCard(title: "Allow Usage", description: "Track usage without blocking it", icon: "checkmark.circle.fill", color: .blue, policy: .track)
                 }
             }
             .padding(16)
@@ -748,8 +988,10 @@ struct ArtistDashboardView: View {
         }
     }
     
-    private func policyOptionCard(title: String, description: String, icon: String, color: Color) -> some View {
+    private func policyOptionCard(title: String, description: String, icon: String, color: Color, policy: ContentMatch.MatchPolicy) -> some View {
         Button {
+            selectedContentPolicy = policy
+            showContentIDSheet = true
             HapticManager.shared.impact(style: .medium)
         } label: {
             HStack(spacing: 12) {
@@ -786,21 +1028,15 @@ struct ArtistDashboardView: View {
         #if canImport(FirebaseAuth)
         if let uid = Auth.auth().currentUser?.uid {
             artistId = uid
-            
-            // Load tracks
             await loadTracks()
-            
-            // Load analytics
-            await loadAnalytics()
-            
-            // Load distribution status
-            await loadDistributionStatus()
-            
-            // Load content ID data
-            await loadContentIdData()
-            
-            // Load verification status
-            await loadVerificationStatus()
+
+            async let analyticsTask = loadAnalytics()
+            async let distributionTask = loadDistributionStatus()
+            async let contentIdTask = loadContentIdData()
+            async let verificationTask = loadVerificationStatus()
+            async let payoutTask = loadPayoutData()
+
+            _ = await (analyticsTask, distributionTask, contentIdTask, verificationTask, payoutTask)
         }
         #endif
         
@@ -813,25 +1049,34 @@ struct ArtistDashboardView: View {
         
         do {
             let snapshot = try await db.collection("music_tracks")
-                .where("artistId", "==", artistId)
-                .order(by: "createdAt", descending: true)
+                .whereField("artistId", isEqualTo: artistId)
                 .getDocuments()
-            
-            tracks = snapshot.documents.compactMap { doc in
+
+            let loadedTracks = snapshot.documents.compactMap { doc in
                 let data = doc.data()
+                let uploadedAt = (data["uploadedAt"] as? Timestamp)?.dateValue()
+                    ?? (data["createdAt"] as? Timestamp)?.dateValue()
+                    ?? Date()
+                let albumValue = (data["album"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let albumNameValue = (data["albumName"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let statusValue = data["status"] as? String
+                    ?? (((data["isPublished"] as? Bool) ?? false) ? "published" : "draft")
+                let streamCount = (data["streamCount"] as? Int)
+                    ?? Int((data["streamCount"] as? Int64) ?? 0)
                 return ArtistTrack(
                     id: doc.documentID,
                     title: data["title"] as? String ?? "",
-                    album: data["albumName"] as? String,
+                    album: !(albumNameValue ?? "").isEmpty ? albumNameValue : albumValue,
                     genre: data["genre"] as? String ?? "",
-                    streamCount: data["streamCount"] as? Int ?? 0,
-                    status: data["status"] as? String ?? "uploading",
+                    streamCount: streamCount,
+                    status: statusValue,
                     artworkURL: data["artworkURL"] as? String,
-                    audioURL: data["audioURL"] as? String,
-                    uploadedAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+                    audioURL: (data["audioURL"] as? String) ?? (data["streamURL"] as? String),
+                    uploadedAt: uploadedAt
                 )
             }
-            
+
+            tracks = loadedTracks.sorted { $0.uploadedAt > $1.uploadedAt }
             totalTracks = tracks.count
             totalStreams = tracks.reduce(0) { $0 + $1.streamCount }
         } catch {
@@ -841,20 +1086,202 @@ struct ArtistDashboardView: View {
     }
     
     private func loadAnalytics() async {
-        // Mock data for now - will connect to real analytics API
-        currentListeners = Int.random(in: 10...100)
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        
+        do {
+            let thirtyDaysAgo = Date().addingTimeInterval(-2_592_000)
+            let fiveMinutesAgo = Date().addingTimeInterval(-300)
+            let playsSnapshot = try await db.collection("music_plays")
+                .whereField("artistId", isEqualTo: artistId)
+                .whereField("playedAt", isGreaterThan: Timestamp(date: thirtyDaysAgo))
+                .getDocuments()
+
+            let playDocuments = playsSnapshot.documents.map { $0.data() }
+            let recentListenerIds = Set(playDocuments.compactMap { data -> String? in
+                guard let timestamp = data["playedAt"] as? Timestamp,
+                      timestamp.dateValue() >= fiveMinutesAgo else { return nil }
+                return data["listenerId"] as? String
+            })
+            currentListeners = recentListenerIds.count
+
+            topLocations = aggregateBreakdown(from: playDocuments, primaryKey: "country", fallbackKey: "countryCode")
+            deviceBreakdown = aggregateBreakdown(from: playDocuments, primaryKey: "deviceType")
+        } catch {
+            print("Error loading analytics: \(error)")
+            currentListeners = 0
+            topLocations = []
+            deviceBreakdown = []
+        }
+        #else
+        currentListeners = 0
+        topLocations = []
+        deviceBreakdown = []
+        #endif
+    }
+
+    private func loadPayoutData() async {
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+
+        do {
+            let grossEstimated = Double(totalStreams) * 0.004
+
+            let accountDoc = try? await db.collection("artist_stripe").document(artistId).getDocument()
+            let accountData = accountDoc?.data()
+            payoutAccountConnected = (accountData?["connected"] as? Bool)
+                ?? ((accountData?["stripeAccountId"] as? String)?.isEmpty == false)
+
+            let payoutSnapshot = try await db.collection("artist_payouts")
+                .whereField("artistId", isEqualTo: artistId)
+                .getDocuments()
+
+            let completedPayoutTotal = payoutSnapshot.documents.reduce(0.0) { partial, doc in
+                let data = doc.data()
+                let status = data["status"] as? String ?? ""
+                let amount = data["amount"] as? Double ?? Double(data["amount"] as? Int ?? 0)
+                return status == "completed" || status == "paid" ? partial + amount : partial
+            }
+
+            let requestSnapshot = try await db.collection("music_payout_requests")
+                .whereField("artistId", isEqualTo: artistId)
+                .getDocuments()
+
+            payoutRequests = requestSnapshot.documents.compactMap { doc in
+                let data = doc.data()
+                let amount = data["finalAmount"] as? Double
+                    ?? data["amount"] as? Double
+                    ?? Double(data["finalAmount"] as? Int ?? data["amount"] as? Int ?? 0)
+                return PayoutRequest(
+                    id: doc.documentID,
+                    amount: amount,
+                    payoutMethod: data["payoutType"] as? String ?? data["payoutMethod"] as? String ?? "standard",
+                    status: data["status"] as? String ?? "pending",
+                    requestedAt: (data["requestedAt"] as? Timestamp)?.dateValue()
+                )
+            }
+            .sorted { ($0.requestedAt ?? .distantPast) > ($1.requestedAt ?? .distantPast) }
+
+            totalEarnings = grossEstimated
+            pendingPayout = max(0, grossEstimated - completedPayoutTotal)
+        } catch {
+            print("Error loading payout data: \(error)")
+            payoutAccountConnected = false
+            payoutRequests = []
+            totalEarnings = Double(totalStreams) * 0.004
+            pendingPayout = totalEarnings
+        }
+        #else
+        payoutAccountConnected = false
+        payoutRequests = []
         totalEarnings = Double(totalStreams) * 0.004
         pendingPayout = totalEarnings
+        #endif
     }
     
     private func loadDistributionStatus() async {
-        // Mock data for now
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        
+        do {
+            let snapshot = try await db.collection("music_distribution")
+                .whereField("artistId", isEqualTo: artistId)
+                .getDocuments()
+
+            distributionStatus = snapshot.documents.flatMap { doc in
+                let data = doc.data()
+                let submittedAt = (data["submittedAt"] as? Timestamp)?.dateValue()
+                let releaseDate = (data["releaseDate"] as? Timestamp)?.dateValue()
+
+                if let platformStatuses = data["platformStatuses"] as? [String: [String: Any]], !platformStatuses.isEmpty {
+                    return platformStatuses.map { platform, platformData in
+                        PlatformDistribution(
+                            id: "\(doc.documentID)_\(platform)",
+                            platform: platform,
+                            trackTitle: data["trackTitle"] as? String,
+                            status: platformData["status"] as? String ?? data["overallStatus"] as? String ?? "pending",
+                            submittedAt: (platformData["submittedAt"] as? Timestamp)?.dateValue() ?? submittedAt,
+                            releaseDate: releaseDate
+                        )
+                    }
+                }
+
+                return [
+                    PlatformDistribution(
+                        id: doc.documentID,
+                        platform: data["platform"] as? String ?? "Unknown",
+                        trackTitle: data["trackTitle"] as? String,
+                        status: data["status"] as? String ?? data["overallStatus"] as? String ?? "pending_review",
+                        submittedAt: submittedAt,
+                        releaseDate: releaseDate
+                    )
+                ]
+            }
+            .sorted { ($0.submittedAt ?? .distantPast) > ($1.submittedAt ?? .distantPast) }
+        } catch {
+            print("Error loading distribution status: \(error)")
+            distributionStatus = []
+        }
+        #else
+        distributionStatus = []
+        #endif
     }
     
     private func loadContentIdData() async {
-        // Mock data for now
-        contentIdMatches = Int.random(in: 0...50)
-        contentIdRevenue = Double.random(in: 0...500)
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        
+        do {
+            // Try app-side collections first
+            let referenceSnapshot = try await db.collection("content_id_references")
+                .whereField("ownerId", isEqualTo: artistId)
+                .getDocuments()
+
+            let matchesSnapshot = try await db.collection("content_matches")
+                .whereField("ownerId", isEqualTo: artistId)
+                .getDocuments()
+
+            let usageSnapshot = try await db.collection("content_usage_tracking")
+                .whereField("ownerId", isEqualTo: artistId)
+                .getDocuments()
+
+            var protectedCount = referenceSnapshot.documents.count
+            var matchesCount = matchesSnapshot.documents.count
+            var revenueTotal = usageSnapshot.documents.reduce(0.0) { sum, doc in
+                let data = doc.data()
+                let revenue = data["revenue"] as? Double ?? 0.0
+                return sum + revenue
+            }
+            
+            // Fallback to backend music_content_id collection if app collections empty
+            if protectedCount == 0 {
+                let backendSnapshot = try await db.collection("music_content_id")
+                    .whereField("artistId", isEqualTo: artistId)
+                    .getDocuments()
+                protectedCount = backendSnapshot.documents.count
+                
+                // Also check for matches/revenue in backend format
+                let backendMatchesSnapshot = try await db.collection("music_content_id")
+                    .whereField("artistId", isEqualTo: artistId)
+                    .whereField("matchCount", isGreaterThan: 0)
+                    .getDocuments()
+                matchesCount = max(matchesCount, backendMatchesSnapshot.documents.count)
+            }
+
+            protectedTracksCount = protectedCount
+            contentIdMatches = matchesCount
+            contentIdRevenue = revenueTotal
+        } catch {
+            print("Error loading content ID data: \(error)")
+            protectedTracksCount = 0
+            contentIdMatches = 0
+            contentIdRevenue = 0.0
+        }
+        #else
+        protectedTracksCount = 0
+        contentIdMatches = 0
+        contentIdRevenue = 0.0
+        #endif
     }
     
     private func loadVerificationStatus() async {
@@ -862,17 +1289,126 @@ struct ArtistDashboardView: View {
         let db = Firestore.firestore()
         
         do {
+            if appState.currentUser?.isVerified == true {
+                verificationStatus = "verified"
+                return
+            }
+
+            let userDoc = try? await db.collection("users").document(artistId).getDocument()
+            if let status = userDoc?.data()?["verificationStatus"] as? String {
+                verificationStatus = status
+                return
+            }
+
             let doc = try await db.collection("artist_verification").document(artistId).getDocument()
             if let data = doc.data(), let status = data["status"] as? String {
                 verificationStatus = status
+            } else {
+                verificationStatus = "not_submitted"
             }
         } catch {
             print("Error loading verification status: \(error)")
+            verificationStatus = appState.currentUser?.isVerified == true ? "verified" : "not_submitted"
         }
         #endif
     }
     
     // MARK: - Helpers
+
+    private var trackOptions: [ArtistDashboardTrackOption] {
+        tracks.map {
+            ArtistDashboardTrackOption(id: $0.id, title: $0.title, audioURL: $0.audioURL)
+        }
+    }
+
+    private var isArtistVerified: Bool {
+        ["approved", "verified"].contains(verificationStatus.lowercased())
+    }
+
+    private var verificationBadgeIcon: String {
+        switch verificationStatus.lowercased() {
+        case "approved", "verified":
+            return "checkmark.seal.fill"
+        case "submitted", "pending_review", "pendingreview":
+            return "clock.fill"
+        default:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var verificationBadgeTitle: String {
+        switch verificationStatus.lowercased() {
+        case "approved", "verified":
+            return "Verified"
+        case "submitted", "pending_review", "pendingreview":
+            return "Pending"
+        default:
+            return "Not Verified"
+        }
+    }
+
+    private var verificationBadgeColor: Color {
+        switch verificationStatus.lowercased() {
+        case "approved", "verified":
+            return .green
+        case "submitted", "pending_review", "pendingreview":
+            return .blue
+        default:
+            return .orange
+        }
+    }
+
+    private func aggregateBreakdown(from documents: [[String: Any]], primaryKey: String, fallbackKey: String? = nil) -> [AnalyticsBreakdown] {
+        let counts = documents.reduce(into: [String: Int]()) { partial, data in
+            let rawValue = (data[primaryKey] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let fallbackValue = fallbackKey.flatMap { key in
+                (data[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            let label = rawValue?.isEmpty == false ? rawValue! : (fallbackValue ?? "")
+            guard !label.isEmpty else { return }
+            partial[label, default: 0] += 1
+        }
+
+        return counts
+            .map { AnalyticsBreakdown(id: $0.key, label: $0.key, count: $0.value) }
+            .sorted { $0.count > $1.count }
+    }
+
+    private func percentage(for count: Int, total: Int) -> Int {
+        guard total > 0 else { return 0 }
+        return Int((Double(count) / Double(total) * 100).rounded())
+    }
+
+    private func analyticsColor(at index: Int) -> Color {
+        let colors: [Color] = [.blue, .green, .orange, .purple, .gray]
+        return colors[index % colors.count]
+    }
+
+    private func distributionStatusColor(for status: String) -> Color {
+        switch status.lowercased() {
+        case "approved", "live", "delivered":
+            return .green
+        case "rejected", "failed":
+            return .red
+        default:
+            return .orange
+        }
+    }
+
+    private func deviceIcon(for label: String) -> String {
+        switch label.lowercased() {
+        case let value where value.contains("iphone") || value.contains("ios"):
+            return "iphone"
+        case let value where value.contains("ipad"):
+            return "ipad"
+        case let value where value.contains("mac") || value.contains("desktop"):
+            return "desktopcomputer"
+        case let value where value.contains("tv"):
+            return "tv"
+        default:
+            return "headphones"
+        }
+    }
     
     private func formatNumber(_ num: Int) -> String {
         if num >= 1000000 {

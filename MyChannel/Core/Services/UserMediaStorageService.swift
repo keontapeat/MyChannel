@@ -37,8 +37,10 @@ final class UserMediaStorageService: ObservableObject {
         
         print("📤 [UserMediaStorageService] Image data size: \(data.count) bytes")
         
-        let ref = storage.reference().child("user-avatars/\(uid).jpg")
-        print("📤 [UserMediaStorageService] Uploading to path: user-avatars/\(uid).jpg")
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let path = "user-avatars/\(uid)-\(timestamp).jpg"
+        let ref = storage.reference().child(path)
+        print("📤 [UserMediaStorageService] Uploading to path: \(path)")
         
         let _ = try await ref.putDataAsync(data, metadata: { let md = StorageMetadata(); md.contentType = "image/jpeg"; return md }())
         print("✅ [UserMediaStorageService] Upload to Storage successful")
@@ -46,9 +48,13 @@ final class UserMediaStorageService: ObservableObject {
         let url = try await ref.downloadURL().absoluteString
         print("✅ [UserMediaStorageService] Download URL obtained: \(url)")
         
-        // ⚠️ DO NOT write to Firestore here - let EditProfileView call UserFirestoreService.updateUser()
-        // This prevents duplicate writes and race conditions
-        // The URL will be written to Firestore when the full user profile is saved
+        #if canImport(FirebaseFirestore)
+        try? await db.collection("users").document(uid).setData([
+            "profileImageURL": url,
+            "profileImageUrl": url,
+            "updatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
+        #endif
         
         return url
         #else
@@ -58,14 +64,57 @@ final class UserMediaStorageService: ObservableObject {
 
     func uploadBanner(uid: String, image: UIImage) async throws -> String {
         #if canImport(FirebaseStorage)
-        guard let data = image.jpegData(compressionQuality: 0.9) else { return "" }
+        guard let data = image.jpegData(compressionQuality: 0.9) else {
+            throw NSError(domain: "UserMediaStorageService", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to convert banner image to JPEG"])
+        }
         let ref = storage.reference().child("user-banners/\(uid).jpg")
         let _ = try await ref.putDataAsync(data, metadata: { let md = StorageMetadata(); md.contentType = "image/jpeg"; return md }())
         let url = try await ref.downloadURL().absoluteString
-        try await db.collection("users").document(uid).updateData(["bannerImageUrl": url])
+        // Must match User model + UserFirestoreService.fetchUser ("bannerImageURL"). Legacy key kept for older docs/web.
+        try await db.collection("users").document(uid).setData([
+            "bannerImageURL": url,
+            "bannerImageUrl": url,
+            "updatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
         return url
         #else
-        return ""
+        throw NSError(domain: "UserMediaStorageService", code: 2, userInfo: [NSLocalizedDescriptionKey: "Firebase Storage not available"])
+        #endif
+    }
+    
+    func uploadBannerVideo(uid: String, videoURL: URL) async throws -> String {
+        #if canImport(FirebaseStorage)
+        print("📤 [UserMediaStorageService] Starting banner video upload for uid: \(uid)")
+        
+        let videoData = try await Task.detached(priority: .userInitiated) {
+            try Data(contentsOf: videoURL)
+        }.value
+        print("📤 [UserMediaStorageService] Video data size: \(videoData.count) bytes")
+        
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let path = "user-banner-videos/\(uid)-\(timestamp).mp4"
+        let ref = storage.reference().child(path)
+        print("📤 [UserMediaStorageService] Uploading video to path: \(path)")
+        
+        let metadata = StorageMetadata()
+        metadata.contentType = "video/mp4"
+        
+        let _ = try await ref.putDataAsync(videoData, metadata: metadata)
+        print("✅ [UserMediaStorageService] Video upload to Storage successful")
+        
+        let url = try await ref.downloadURL().absoluteString
+        print("✅ [UserMediaStorageService] Video download URL obtained: \(url)")
+        
+        #if canImport(FirebaseFirestore)
+        try? await db.collection("users").document(uid).setData([
+            "bannerVideoURL": url,
+            "updatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
+        #endif
+        
+        return url
+        #else
+        throw NSError(domain: "UserMediaStorageService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Firebase Storage not available"])
         #endif
     }
     

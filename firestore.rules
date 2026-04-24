@@ -63,6 +63,7 @@ service cloud.firestore {
     // Check if URL is from approved image CDNs
     function isApprovedImageURL(url) {
       return url == null || // Allow null (will use placeholder)
+             url.matches('.*firebasestorage\\.googleapis\\.com.*') || // Firebase Storage (download URLs use ?token= not .jpg suffix)
              url.matches('.*ytimg\\.com.*') ||           // YouTube thumbnails
              url.matches('.*imgur\\.com.*') ||           // Imgur
              url.matches('.*cloudinary\\.com.*') ||      // Cloudinary
@@ -71,11 +72,11 @@ service cloud.firestore {
              url.matches('.*cloudfront\\.net.*') ||      // AWS CloudFront
              url.matches('.*pluto\\.tv.*') ||            // Pluto TV
              url.matches('.*image\\.tmdb\\.org.*') ||    // TMDB
-             url.matches('.*\\.jpg$') ||                 // Direct JPG
-             url.matches('.*\\.jpeg$') ||                // Direct JPEG
-             url.matches('.*\\.png$') ||                 // Direct PNG
-             url.matches('.*\\.webp$') ||                // Direct WebP
-             url.matches('.*\\.gif$');                   // Direct GIF
+             url.matches('.*\\.jpg') ||                  // .jpg in URL (covers query strings)
+             url.matches('.*\\.jpeg') ||                 // .jpeg
+             url.matches('.*\\.png') ||                  // .png
+             url.matches('.*\\.webp') ||                 // .webp
+             url.matches('.*\\.gif');                    // .gif
     }
     
     // Validate image URL - returns true if URL is valid or null
@@ -99,11 +100,18 @@ service cloud.firestore {
                        (!('thumbnailURL' in request.resource.data) || 
                         isValidImageURL(request.resource.data.thumbnailURL));
       
-      // Update/Delete (owner check + image URL validation on update)
-      allow update: if isSignedIn() && 
+      // Update: owner/admin for full edits, OR any signed-in user for
+      // engagement-only counter increments (viewCount, likeCount, dislikeCount,
+      // shareCount, commentCount) to support view tracking.
+      allow update: if isSignedIn() && (
                        (request.auth.uid == resource.data.creatorId || isAdmin()) &&
-                       (!('thumbnailURL' in request.resource.data) || 
-                        isValidImageURL(request.resource.data.thumbnailURL));
+                       (!('thumbnailURL' in request.resource.data) ||
+                        isValidImageURL(request.resource.data.thumbnailURL))
+                    ) || (
+                       isSignedIn() &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['viewCount','likeCount','dislikeCount','shareCount','commentCount','lastViewedAt','updatedAt'])
+                    );
       
       allow delete: if isSignedIn() && 
                        (request.auth.uid == resource.data.creatorId || isAdmin());
@@ -217,6 +225,27 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
     
+    // 🔥 User private subcollections (downloads, search history, subscriptions, watch history)
+    match /users/{userId}/downloads/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/search_history/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/subscriptions/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/watch_history/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/liked_videos/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/playlists/{document=**} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+    
     // ========================================
     // 👤 USER DATA & PROFILES (OPTIMIZED)
     // ========================================
@@ -229,12 +258,16 @@ service cloud.firestore {
                        (!('profileImageURL' in request.resource.data) || 
                         isValidImageURL(request.resource.data.profileImageURL)) &&
                        (!('bannerURL' in request.resource.data) || 
-                        isValidImageURL(request.resource.data.bannerURL));
+                        isValidImageURL(request.resource.data.bannerURL)) &&
+                       (!('bannerImageURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.bannerImageURL));
       allow update: if (isOwner(userId) || isAdmin()) &&
                        (!('profileImageURL' in request.resource.data) || 
                         isValidImageURL(request.resource.data.profileImageURL)) &&
                        (!('bannerURL' in request.resource.data) || 
-                        isValidImageURL(request.resource.data.bannerURL));
+                        isValidImageURL(request.resource.data.bannerURL)) &&
+                       (!('bannerImageURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.bannerImageURL));
       allow delete: if isOwner(userId) || isAdmin();
     }
     
@@ -395,7 +428,7 @@ service cloud.firestore {
     
     match /rankings/{document=**} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isSignedIn();
     }
     
     match /competitor_rankings/{document=**} {
@@ -913,6 +946,38 @@ service cloud.firestore {
     
     match /workspace-invites/{document=**} {
       allow read, write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 📈 PLATFORM MONITORING & METRICS
+    // ========================================
+    match /platformHealth/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /platformMetrics/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /activeSessions/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /videoViews/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /adClicks/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /payments/{document=**} {
+      allow read: if isSignedIn() && (resource == null || request.auth.uid == resource.data.userId || isAdmin());
+      allow write: if isSignedIn();
+    }
+    match /ml_events/{document=**} {
+      allow read: if isAdmin();
+      allow write: if isSignedIn();
     }
     
     // ========================================

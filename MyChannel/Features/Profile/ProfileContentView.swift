@@ -1741,7 +1741,7 @@ private struct FullWidthVideoCard: View {
                     isWatchLaterLocal = appState.isVideoInWatchLater(video.id)
                     showOptions = true
                 } label: {
-                    Image(systemName: "ellipsis.vertical")
+                    Image(systemName: "ellipsis")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(AppTheme.Colors.textSecondary)
                         .frame(width: 28, height: 28)
@@ -2322,7 +2322,7 @@ private struct AdvancedVideoTableRow: View {
                 isWatchLaterLocal = appState.isVideoInWatchLater(video.id)
                 showOptions = true
             } label: {
-                Image(systemName: "ellipsis.vertical")
+                Image(systemName: "ellipsis")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(AppTheme.Colors.textSecondary)
                     .frame(width: 28, height: 28)

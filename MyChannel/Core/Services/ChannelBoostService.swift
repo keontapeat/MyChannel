@@ -14,7 +14,7 @@ struct ChannelBoostConfig {
         let info = Bundle.main.infoDictionary ?? [:]
         let baseString = (info["CHANNELBOOST_BASE_URL"] as? String) ?? "https://api.mychannel.live"
         let tokenString = (info["CHANNELBOOST_TOKEN"] as? String) ?? ""
-        self.apiBase = URL(string: baseString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))) ?? URL(string: "http://localhost:8877")!
+        self.apiBase = URL(string: baseString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))) ?? URL(string: "https://api.mychannel.live")!
         self.token = tokenString
     }
 }
@@ -42,6 +42,8 @@ struct ChannelBoostService {
 
     // MARK: - Helpers
     private func request<T: Decodable>(_ path: String, method: String = "GET", body: Encodable? = nil) async throws -> T {
+        // Skip calls when no token is configured (avoids noisy localhost/API errors in dev)
+        guard !config.token.isEmpty else { throw ChannelBoostError.invalidURL }
         guard let url = URL(string: path, relativeTo: config.apiBase) else { throw ChannelBoostError.invalidURL }
         var req = URLRequest(url: url)
         req.httpMethod = method

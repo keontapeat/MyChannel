@@ -100,6 +100,11 @@ struct CreatorStudioView: View {
 
 private struct StudioAnalyticsVideoList: View {
     @State private var videos: [Video] = []
+
+    private func loadVideos() async {
+        guard let uid = AppState.shared.currentUser?.id else { return }
+        videos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: uid, limit: 20)
+    }
     
     var body: some View {
         List {
@@ -126,14 +131,23 @@ private struct StudioAnalyticsVideoList: View {
             }
         }
         .task {
-            guard let uid = AppState.shared.currentUser?.id else { return }
-            videos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: uid, limit: 20)
+            await loadVideos()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshCreatorStudio"))) { _ in
+            Task {
+                await loadVideos()
+            }
         }
     }
 }
 
 private struct StudioContentList: View {
     @State private var videos: [Video] = []
+
+    private func loadVideos() async {
+        guard let uid = AppState.shared.currentUser?.id else { return }
+        videos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: uid, limit: 20)
+    }
     
     var body: some View {
         List {
@@ -162,8 +176,12 @@ private struct StudioContentList: View {
         }
         .listStyle(.plain)
         .task {
-            guard let uid = AppState.shared.currentUser?.id else { return }
-            videos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: uid, limit: 20)
+            await loadVideos()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshCreatorStudio"))) { _ in
+            Task {
+                await loadVideos()
+            }
         }
     }
 }

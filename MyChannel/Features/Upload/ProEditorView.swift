@@ -110,6 +110,7 @@ struct ProEditorView: View {
             .disabled(isSaving)
         }
         .padding(.horizontal, 20)
+        .padding(.top, 8)
         .padding(.vertical, 16)
         .background(.black)
     }

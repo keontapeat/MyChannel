@@ -27,6 +27,8 @@ struct MusicUploadSheet: View {
     @State private var albumName = ""
     @State private var selectedGenre = "Hip-Hop"
     @State private var isExplicit = false
+    @State private var protectWithContentID = true
+    @State private var selectedContentPolicy: ContentMatch.MatchPolicy = .track
 
     @State private var selectedArtworkItem: PhotosPickerItem?
     @State private var artworkImage: UIImage?
@@ -79,6 +81,39 @@ struct MusicUploadSheet: View {
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
+                        Divider().padding(.leading, 16)
+                        Toggle(isOn: $protectWithContentID) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Protect with Content ID")
+                                    .font(.system(size: 15))
+                                    .foregroundColor(.primary)
+                                Text("Register this track for automated copyright matching")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .tint(Color(red: 0.88, green: 0.15, blue: 0.25))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        if protectWithContentID {
+                            Divider().padding(.leading, 16)
+                            HStack {
+                                Text("Copyright Policy")
+                                    .font(.system(size: 15))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Picker("", selection: $selectedContentPolicy) {
+                                    Text("Track").tag(ContentMatch.MatchPolicy.track)
+                                    Text("Monetize").tag(ContentMatch.MatchPolicy.monetize)
+                                    Text("Block").tag(ContentMatch.MatchPolicy.block)
+                                    Text("Mute").tag(ContentMatch.MatchPolicy.mute)
+                                }
+                                .pickerStyle(.menu)
+                                .accentColor(Color(red: 0.88, green: 0.15, blue: 0.25))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
                     }
 
                     // Audio file card
@@ -399,6 +434,19 @@ struct MusicUploadSheet: View {
             let audioDownloadURL = try await audioRef.downloadURL().absoluteString
             uploadProgress = 0.9
 
+            var contentIDReferenceId: String? = nil
+            if protectWithContentID {
+                contentIDReferenceId = await ContentIDService.shared.uploadReferenceFile(
+                    title: trackTitle.trimmingCharacters(in: .whitespaces),
+                    rightsholder: artistName.trimmingCharacters(in: .whitespaces),
+                    ownerId: artistId,
+                    sourceTrackId: trackId,
+                    videoURL: "",
+                    audioURL: audioDownloadURL,
+                    policy: selectedContentPolicy
+                )
+            }
+
             // 3. Save metadata to Firestore
             let trackData: [String: Any] = [
                 "id": trackId,
@@ -406,14 +454,21 @@ struct MusicUploadSheet: View {
                 "artistId": artistId,
                 "artistName": artistName.trimmingCharacters(in: .whitespaces),
                 "album": albumName.trimmingCharacters(in: .whitespaces),
+                "albumName": albumName.trimmingCharacters(in: .whitespaces),
                 "genre": selectedGenre,
                 "isExplicit": isExplicit,
                 "artworkURL": artworkURLString as Any,
                 "audioURL": audioDownloadURL,
+                "streamURL": audioDownloadURL,
                 "streamCount": 0,
                 "likeCount": 0,
                 "uploadedAt": FieldValue.serverTimestamp(),
-                "isPublished": true
+                "createdAt": FieldValue.serverTimestamp(),
+                "isPublished": true,
+                "status": "published",
+                "contentIdProtected": protectWithContentID,
+                "contentIdPolicy": selectedContentPolicy.rawValue,
+                "contentIdReferenceId": contentIDReferenceId as Any
             ]
             try await db.collection("music_tracks").document(trackId).setData(trackData)
             uploadProgress = 1.0

@@ -143,6 +143,8 @@ struct ArtistProfileView: View {
     let artist: CatalogArtist
     @State private var tracks: [CatalogSong] = []
     @State private var trackRowData: [TrackRowData] = []
+    /// Newest first (by iTunes `releaseDate`) for Latest Drops + View All.
+    @State private var latestTrackRowData: [TrackRowData] = []
     @State private var loading = true
     @State private var isFollowing = false
     @Environment(\.dismiss) private var dismiss
@@ -154,6 +156,17 @@ struct ArtistProfileView: View {
     /// Look up featured friend data if this artist is one of your friends
     private var featuredFriend: FeaturedFriendArtist? {
         FeaturedFriendArtist.friends.first { $0.appleMusicId == artist.id }
+    }
+    
+    /// Hero: catalog artwork, else pinned friend profile image (avoids wrong collab covers).
+    private var preferredHeroArtworkURL: URL? {
+        if let u = artist.artworkUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !u.isEmpty,
+           let url = URL(string: u) { return url }
+        if let ff = featuredFriend {
+            let p = ff.profileImageURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !p.isEmpty, let url = URL(string: p) { return url }
+        }
+        return nil
     }
     
     var body: some View {
@@ -229,11 +242,13 @@ struct ArtistProfileView: View {
         }
         .toolbarBackground(.hidden, for: .navigationBar)
         .task {
-            // Resolve hero image: use artist artwork if available, otherwise load from tracks
-            if let artUrl = artist.artworkUrl, !artUrl.isEmpty, let url = URL(string: artUrl) {
+            if let url = preferredHeroArtworkURL {
                 heroImageURL = url
             }
             await loadTracks()
+        }
+        .onDisappear {
+            AudioPreviewPlayer.shared.stop()
         }
     }
     
@@ -391,9 +406,21 @@ struct ArtistProfileView: View {
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.white)
                 Spacer()
-                Button("See All") {}
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Color(red: 0.8, green: 0.2, blue: 0.2))
+                NavigationLink {
+                    ArtistProfileAllTracksListView(
+                        rows: trackRowData,
+                        navigationTitle: "Popular Tracks",
+                        accentRed: accentRed,
+                        darkGray: darkGray
+                    )
+                } label: {
+                    Text("See All")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Color(red: 0.8, green: 0.2, blue: 0.2))
+                }
+                .buttonStyle(.plain)
+                .disabled(trackRowData.isEmpty)
+                .opacity(trackRowData.isEmpty ? 0.35 : 1)
             }
             .padding(.horizontal, 20)
             
@@ -403,94 +430,11 @@ struct ArtistProfileView: View {
             } else {
                 VStack(spacing: 12) {
                     ForEach(trackRowData.prefix(5)) { row in
-                        popularTrackRow(row: row)
+                        ArtistProfileTrackRowView(row: row, accentRed: accentRed, darkGray: darkGray)
                     }
                 }
             }
         }
-    }
-    
-    private func popularTrackRow(row: TrackRowData) -> some View {
-        HStack(spacing: 14) {
-            // Track Image — fall back to artist artwork if track artwork is missing
-            AppAsyncImage(url: row.artworkURL) { img in
-                img.resizable().scaledToFill()
-            } placeholder: {
-                RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.1))
-                    .overlay(
-                        Image(systemName: "music.note")
-                            .font(.system(size: 16))
-                            .foregroundColor(.white.opacity(0.3))
-                    )
-            }
-            .frame(width: 52, height: 52)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            
-            // Rank Number
-            Text("\(row.rank)")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.white.opacity(0.5))
-                .frame(width: 20)
-            
-            // Title & Info
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(row.track.title)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    
-                    if row.isTrending {
-                        HStack(spacing: 4) {
-                            Image(systemName: "flame.fill")
-                                .font(.system(size: 10))
-                            Text("Trending")
-                                .font(.system(size: 11, weight: .bold))
-                        }
-                        .foregroundColor(accentRed)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(accentRed.opacity(0.2)))
-                    }
-                }
-                
-                HStack(spacing: 4) {
-                    Text(row.playCount)
-                    Image(systemName: "diamond.fill")
-                        .font(.system(size: 6))
-                    Text("•  \(row.duration)")
-                }
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.5))
-            }
-            
-            Spacer()
-            
-            // Trailing Actions
-            HStack(spacing: 16) {
-                Button { HapticManager.shared.impact(style: .light) } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.white)
-                }
-                
-                // Isolated play button — only this subview re-renders on playback state change
-                TrackPlayButton(
-                    trackId: String(row.track.id),
-                    previewUrl: row.track.previewUrl,
-                    title: row.track.title,
-                    artist: row.track.artist,
-                    artworkURL: row.artworkURL
-                )
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(darkGray)
-                .padding(.horizontal, 10)
-        )
     }
     
     // MARK: - Latest Drops
@@ -502,15 +446,27 @@ struct ArtistProfileView: View {
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.white)
                 Spacer()
-                Button("View All") {}
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Color(red: 0.8, green: 0.2, blue: 0.2))
+                NavigationLink {
+                    ArtistProfileAllTracksListView(
+                        rows: latestTrackRowData,
+                        navigationTitle: "Latest Drops",
+                        accentRed: accentRed,
+                        darkGray: darkGray
+                    )
+                } label: {
+                    Text("View All")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Color(red: 0.8, green: 0.2, blue: 0.2))
+                }
+                .buttonStyle(.plain)
+                .disabled(latestTrackRowData.isEmpty)
+                .opacity(latestTrackRowData.isEmpty ? 0.35 : 1)
             }
             .padding(.horizontal, 20)
             
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
-                    ForEach(trackRowData.prefix(6)) { row in
+                    ForEach(latestTrackRowData.prefix(6)) { row in
                         AppAsyncImage(url: row.artworkURL) { img in
                             img.resizable().scaledToFill()
                         } placeholder: {
@@ -630,29 +586,42 @@ struct ArtistProfileView: View {
     // MARK: - Helpers
     
     private func loadTracks() async {
-        if let results = try? await MusicCatalogService.shared.topTracksForArtist(artistId: artist.id, limit: 15) {
+        var lookupId = artist.id
+        if lookupId == 0,
+           let match = try? await MusicCatalogService.shared.searchArtists(term: artist.name, limit: 1).first {
+            lookupId = match.id
+        }
+        if let results = try? await MusicCatalogService.shared.topTracksForArtist(artistId: lookupId, limit: 100) {
             tracks = results
-            // Build stable row data once — random values are cached and won't regenerate on re-render
             let artistFallbackArt = URL(string: artist.artworkUrl ?? "")
-            trackRowData = results.enumerated().map { index, track in
-                let trackArt: URL? = {
-                    if let art = track.artworkUrl, !art.isEmpty, let url = URL(string: art) { return url }
-                    return artistFallbackArt
-                }()
-                return TrackRowData(
-                    id: track.id,
-                    track: track,
-                    rank: index + 1,
-                    playCount: formatCount(Int.random(in: 800_000...3_000_000)),
-                    duration: "\(Int.random(in: 2...4)):\(String(format: "%02d", Int.random(in: 10...59)))",
-                    isTrending: index == 2,
-                    artworkURL: trackArt
-                )
+            trackRowData = Self.buildTrackRows(
+                from: results,
+                artistFallbackArt: artistFallbackArt,
+                trendingIndex: 2,
+                formatCount: formatCount
+            )
+            let byNewest = results.sorted { ($0.releaseDate ?? "") > ($1.releaseDate ?? "") }
+            latestTrackRowData = Self.buildTrackRows(
+                from: byNewest,
+                artistFallbackArt: artistFallbackArt,
+                trendingIndex: nil,
+                formatCount: formatCount
+            )
+            // If still no hero, prefer a track where this artist is the credited lead (skip "feat." collabs on others' albums).
+            if heroImageURL == nil {
+                let nameNorm = artist.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                let leadArt = results.first { track in
+                    track.artist.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == nameNorm
+                }
+                let pick = leadArt ?? results.first
+                if let art = pick?.artworkUrl, !art.isEmpty, let url = URL(string: art) {
+                    heroImageURL = url
+                }
             }
-            // If we still have no hero image, use the first track's artwork
-            if heroImageURL == nil, let firstArt = results.first?.artworkUrl, !firstArt.isEmpty, let url = URL(string: firstArt) {
-                heroImageURL = url
-            }
+        } else {
+            tracks = []
+            trackRowData = []
+            latestTrackRowData = []
         }
         loading = false
     }
@@ -666,6 +635,159 @@ struct ArtistProfileView: View {
             return String(format: "%.0fK", k)
         }
         return "\(n)"
+    }
+    
+    /// Stable row models for popular (iTunes order) and latest (newest `releaseDate` first).
+    private static func buildTrackRows(
+        from results: [CatalogSong],
+        artistFallbackArt: URL?,
+        trendingIndex: Int?,
+        formatCount: (Int) -> String
+    ) -> [TrackRowData] {
+        results.enumerated().map { index, track in
+            let trackArt: URL? = {
+                if let art = track.artworkUrl, !art.isEmpty, let url = URL(string: art) { return url }
+                return artistFallbackArt
+            }()
+            return TrackRowData(
+                id: track.id,
+                track: track,
+                rank: index + 1,
+                playCount: formatCount(Int.random(in: 800_000...3_000_000)),
+                duration: "\(Int.random(in: 2...4)):\(String(format: "%02d", Int.random(in: 10...59)))",
+                isTrending: trendingIndex.map { $0 == index } ?? false,
+                artworkURL: trackArt
+            )
+        }
+    }
+}
+
+// MARK: - Track row + full list (See All / View All)
+
+private struct ArtistProfileTrackRowView: View {
+    let row: TrackRowData
+    let accentRed: Color
+    let darkGray: Color
+    
+    var body: some View {
+        HStack(spacing: 14) {
+            AppAsyncImage(url: row.artworkURL) { img in
+                img.resizable().scaledToFill()
+            } placeholder: {
+                RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.1))
+                    .overlay(
+                        Image(systemName: "music.note")
+                            .font(.system(size: 16))
+                            .foregroundColor(.white.opacity(0.3))
+                    )
+            }
+            .frame(width: 52, height: 52)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            
+            Text("\(row.rank)")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.white.opacity(0.5))
+                .frame(width: 20)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(row.track.title)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    
+                    if row.isTrending {
+                        HStack(spacing: 4) {
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 10))
+                            Text("Trending")
+                                .font(.system(size: 11, weight: .bold))
+                        }
+                        .foregroundColor(accentRed)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(accentRed.opacity(0.2)))
+                    }
+                }
+                
+                HStack(spacing: 4) {
+                    Text(row.playCount)
+                    Image(systemName: "diamond.fill")
+                        .font(.system(size: 6))
+                    Text("•  \(row.duration)")
+                }
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.5))
+            }
+            
+            Spacer()
+            
+            HStack(spacing: 16) {
+                Button { HapticManager.shared.impact(style: .light) } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                
+                TrackPlayButton(
+                    trackId: String(row.track.id),
+                    previewUrl: row.track.previewUrl,
+                    title: row.track.title,
+                    artist: row.track.artist,
+                    artworkURL: row.artworkURL
+                )
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(darkGray)
+                .padding(.horizontal, 10)
+        )
+    }
+}
+
+private struct ArtistProfileAllTracksListView: View {
+    let rows: [TrackRowData]
+    let navigationTitle: String
+    let accentRed: Color
+    let darkGray: Color
+    
+    var body: some View {
+        Group {
+            if rows.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "music.note.list")
+                        .font(.system(size: 44))
+                        .foregroundColor(.white.opacity(0.35))
+                    Text("No Songs")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text("Could not load tracks for this artist.")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.55))
+                        .multilineTextAlignment(.center)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("No songs. Could not load tracks for this artist.")
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(rows) { row in
+                            ArtistProfileTrackRowView(row: row, accentRed: accentRed, darkGray: darkGray)
+                        }
+                    }
+                    .padding(.vertical, 16)
+                }
+            }
+        }
+        .background(Color.black.ignoresSafeArea())
+        .navigationTitle(navigationTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarColorScheme(.dark, for: .navigationBar)
     }
 }
 

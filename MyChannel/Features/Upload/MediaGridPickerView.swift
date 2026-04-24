@@ -100,6 +100,9 @@ struct MediaGridPickerView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            Color.clear.frame(height: 0)
+        }
         .sheet(isPresented: $showPreview) {
             if let asset = selectedAsset {
                 VideoPreviewSheet(asset: asset, onSelect: {

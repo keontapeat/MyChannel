@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AuthenticationServices
 
 struct AuthenticationView: View {
     @ObservedObject private var authManager = AuthenticationManager.shared
@@ -264,6 +265,7 @@ struct SignInView: View {
     @State private var isLoading: Bool = false
     @State private var showingError: Bool = false
     @State private var errorMessage: String = ""
+    @State private var appleSignInNonce: String = ""
     
     let onSignUp: () -> Void
     let onForgotPassword: () -> Void
@@ -385,14 +387,25 @@ struct SignInView: View {
                     
                     // Social sign in
                     VStack(spacing: 12) {
-                        SocialSignInButton(
-                            title: "Continue with Apple",
-                            icon: "applelogo",
-                            backgroundColor: .black,
-                            textColor: .white
-                        ) {
-                            signInWithApple()
+                        SignInWithAppleButton(.continue) { request in
+                            appleSignInNonce = FirebaseAppleAuthService.shared.prepareNonce()
+                            request.requestedScopes = [.fullName, .email]
+                            request.nonce = appleSignInNonce
+                        } onCompletion: { result in
+                            switch result {
+                            case .success(let auth):
+                                guard let credential = auth.credential as? ASAuthorizationAppleIDCredential else { return }
+                                Task { await AuthenticationManager.shared.signInWithAppleCredential(credential) }
+                            case .failure(let error):
+                                let nsErr = error as NSError
+                                if nsErr.domain == ASAuthorizationError.errorDomain && nsErr.code == ASAuthorizationError.canceled.rawValue { return }
+                                errorMessage = error.localizedDescription
+                                showingError = true
+                            }
                         }
+                        .signInWithAppleButtonStyle(.black)
+                        .frame(height: 50)
+                        .cornerRadius(AppTheme.CornerRadius.lg)
                         
                         SocialSignInButton(
                             title: "Continue with Google",
@@ -467,21 +480,6 @@ struct SignInView: View {
         }
     }
     
-    private func signInWithApple() {
-        Task {
-            // iPad requires a brief delay so the key window is fully active
-            // before the SIWA controller attempts to present its popover.
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            await AuthenticationManager.shared.signInWithApple()
-            // Show error if auth failed (AuthenticationManager handles internally via authState)
-            if case .error(let msg) = AuthenticationManager.shared.authState {
-                await MainActor.run {
-                    errorMessage = msg
-                    showingError = true
-                }
-            }
-        }
-    }
     
     private func signInWithGoogle() {
         Task {

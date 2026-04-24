@@ -14,6 +14,8 @@ struct MusicPickerSheet: View {
     @State private var searchText = ""
     @State private var selectedCategory: MusicCategory = .trending
     @State private var currentlyPlaying: String? = nil
+    @State private var isSearching = false
+    @State private var recentSearches: [String] = []
     @Environment(\.dismiss) private var dismiss
     
     enum MusicCategory: CaseIterable {
@@ -42,6 +44,7 @@ struct MusicPickerSheet: View {
         NavigationStack {
             VStack(spacing: 0) {
                 searchBar
+                recentSearchesSection
                 categorySelector
                 musicList
             }
@@ -55,6 +58,12 @@ struct MusicPickerSheet: View {
                 }
             }
             .task { await loadInitial() }
+            .onAppear { loadRecentSearches() }
+            .onChange(of: searchText) { newValue in
+                Task {
+                    await searchCatalog(for: newValue)
+                }
+            }
         }
     }
     
@@ -120,6 +129,25 @@ struct MusicPickerSheet: View {
     private var musicList: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
+                if isSearching {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
+                }
+
+                if !isSearching && results.isEmpty {
+                    VStack(spacing: 10) {
+                        Image(systemName: "music.note.list")
+                            .font(.system(size: 28))
+                            .foregroundColor(.secondary)
+                        Text(searchText.isEmpty ? "No songs found" : "No results for \"(searchText)\"")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 32)
+                }
+
                 ForEach(results, id: \.id) { s in
                     let item = CreateStoryViewModel.MusicItem(
                         title: s.title,
@@ -142,13 +170,87 @@ struct MusicPickerSheet: View {
             .padding()
         }
     }
+
+    private var recentSearchesSection: some View {
+        Group {
+            if !recentSearches.isEmpty && searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(recentSearches, id: \.self) { term in
+                            Button {
+                                searchText = term
+                                Task {
+                                    await searchCatalog(for: term)
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "clock.arrow.circlepath")
+                                        .font(.caption)
+                                    Text(term)
+                                        .font(.caption)
+                                        .lineLimit(1)
+                                }
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(16)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.bottom, 8)
+            }
+        }
+    }
 }
 
 // MARK: - Data loading
 extension MusicPickerSheet {
+    private func loadRecentSearches() {
+        if let stored = UserDefaults.standard.array(forKey: "story_music_recent_searches") as? [String] {
+            recentSearches = stored
+        }
+    }
+
+    private func storeRecentSearch(_ term: String) {
+        let normalized = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+        recentSearches.removeAll { $0.caseInsensitiveCompare(normalized) == .orderedSame }
+        recentSearches.insert(normalized, at: 0)
+        if recentSearches.count > 12 {
+            recentSearches = Array(recentSearches.prefix(12))
+        }
+        UserDefaults.standard.set(recentSearches, forKey: "story_music_recent_searches")
+    }
+
     private func loadInitial() async {
         if results.isEmpty {
-            if let items = try? await MusicCatalogService.shared.topSongs(limit: 40) {
+            let musicKit = MusicKitService.shared
+            if musicKit.authorizationStatus != .authorized {
+                _ = await musicKit.requestAuthorization()
+            }
+
+            if musicKit.authorizationStatus == .authorized,
+               let chartTracks = try? await musicKit.getTopCharts(limit: 40),
+               !chartTracks.isEmpty {
+                results = chartTracks.map { track in
+                    CatalogSong(
+                        id: Int(track.id) ?? track.id.hashValue,
+                        title: track.title,
+                        artist: track.artistName,
+                        artworkUrl: track.artworkURL?.absoluteString,
+                        previewUrl: track.previewURL?.absoluteString,
+                        trackViewUrl: nil,
+                        collectionName: track.albumTitle,
+                        primaryGenreName: track.genres.first,
+                        releaseDate: nil,
+                        artistId: nil
+                    )
+                }
+            } else if let items = try? await MusicCatalogService.shared.topSongs(limit: 40) {
                 results = items
             }
         }
@@ -166,6 +268,43 @@ extension MusicPickerSheet {
         }
         if let items = try? await MusicCatalogService.shared.genreSongs(term, limit: 40) {
             results = items
+        }
+    }
+
+    private func searchCatalog(for term: String) async {
+        let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            isSearching = false
+            await loadCategory(selectedCategory)
+            return
+        }
+
+        isSearching = true
+        defer { isSearching = false }
+        storeRecentSearch(trimmed)
+
+        let musicKit = MusicKitService.shared
+        if musicKit.authorizationStatus == .authorized,
+           let musicKitItems = try? await musicKit.search(term: trimmed, limit: 50),
+           !musicKitItems.isEmpty {
+            results = musicKitItems.map { track in
+                CatalogSong(
+                    id: Int(track.id) ?? track.id.hashValue,
+                    title: track.title,
+                    artist: track.artistName,
+                    artworkUrl: track.artworkURL?.absoluteString,
+                    previewUrl: track.previewURL?.absoluteString,
+                    trackViewUrl: nil,
+                    collectionName: track.albumTitle,
+                    primaryGenreName: track.genres.first,
+                    releaseDate: nil,
+                    artistId: nil
+                )
+            }
+        } else if let items = try? await MusicCatalogService.shared.searchSongs(term: trimmed, limit: 50) {
+            results = items
+        } else {
+            results = []
         }
     }
 }

@@ -9,6 +9,15 @@ import Foundation
 import AVFoundation
 import MediaPlayer
 import Combine
+#if canImport(UIKit)
+import UIKit
+#endif
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 enum MusicRepeatMode: String, Codable {
     case off
@@ -34,6 +43,12 @@ final class MusicPlayerService: ObservableObject {
     @Published var isShuffleEnabled: Bool = false
     @Published var repeatMode: MusicRepeatMode = .off
     @Published var isCrossfadeEnabled: Bool = false
+    @Published var crossfadeDuration: TimeInterval = 2.0
+    @Published var isGaplessEnabled: Bool = true
+    @Published var audioQuality: Song.AudioQuality = .standard
+    @Published var isSpatialAudioEnabled: Bool = false
+    @Published private(set) var sleepTimerEndTime: Date?
+    private var sleepTimerTask: Task<Void, Never>?
     
     // MARK: - Private
     private var player: AVPlayer?
@@ -152,6 +167,20 @@ final class MusicPlayerService: ObservableObject {
         isCrossfadeEnabled = enabled
     }
     
+    // MARK: - Queue Management
+    
+    func moveQueue(from source: IndexSet, to destination: Int) {
+        queue.move(fromOffsets: source, toOffset: destination)
+    }
+    
+    func removeFromQueue(at offsets: IndexSet) {
+        queue.remove(atOffsets: offsets)
+    }
+    
+    func clearQueue() {
+        queue.removeAll()
+    }
+    
     func stop() {
         if let obs = timeObserver {
             player?.removeTimeObserver(obs)
@@ -167,6 +196,35 @@ final class MusicPlayerService: ObservableObject {
         duration = 0
         currentSong = nil
         nowPlayingCenter.nowPlayingInfo = nil
+    }
+    
+    // MARK: - Sleep Timer
+    
+    func setSleepTimer(minutes: Int) {
+        sleepTimerTask?.cancel()
+        sleepTimerEndTime = Date().addingTimeInterval(TimeInterval(minutes * 60))
+        
+        sleepTimerTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                if let endTime = sleepTimerEndTime, Date() >= endTime {
+                    pause()
+                    sleepTimerEndTime = nil
+                    break
+                }
+            }
+        }
+    }
+    
+    func cancelSleepTimer() {
+        sleepTimerTask?.cancel()
+        sleepTimerTask = nil
+        sleepTimerEndTime = nil
+    }
+    
+    var sleepTimerRemaining: TimeInterval? {
+        guard let endTime = sleepTimerEndTime else { return nil }
+        return max(0, endTime.timeIntervalSinceNow)
     }
     
     // MARK: - Private helpers
@@ -193,6 +251,87 @@ final class MusicPlayerService: ObservableObject {
         isPlaying = true
         
         updateNowPlayingInfo(for: song)
+        
+        // Track recently played in Firestore
+        Task {
+            await saveToRecentlyPlayed(song: song)
+        }
+    }
+    
+    private func saveToRecentlyPlayed(song: Song) async {
+        #if canImport(FirebaseAuth) && canImport(FirebaseFirestore)
+        let uid = Auth.auth().currentUser?.uid
+        let listenerId = uid ?? "anonymous_\(UUID().uuidString)"
+        let db = Firestore.firestore()
+        
+        do {
+            let regionCode = Locale.current.regionCode ?? "US"
+            let countryName = Locale.current.localizedString(forRegionCode: regionCode) ?? regionCode
+            #if canImport(UIKit)
+            let deviceType: String = {
+                switch UIDevice.current.userInterfaceIdiom {
+                case .pad: return "iPad"
+                case .phone: return "iPhone"
+                case .tv: return "Apple TV"
+                case .mac: return "Mac"
+                default: return "Other"
+                }
+            }()
+            #else
+            let deviceType = "Unknown"
+            #endif
+
+            // Save to user's recently played collection
+            let playData: [String: Any] = [
+                "songId": song.id,
+                "title": song.title,
+                "artistIds": song.artistIds,
+                "primaryArtistId": song.primaryArtistId,
+                "artworkURL": song.artworkURL?.absoluteString ?? "",
+                "duration": song.duration,
+                "playedAt": FieldValue.serverTimestamp()
+            ]
+
+            if let uid {
+                try await db.collection("users").document(uid)
+                    .collection("recently_played")
+                    .document(song.id)
+                    .setData(playData, merge: true)
+            }
+
+            try await db.collection("music_plays").document().setData([
+                "songId": song.id,
+                "artistId": song.primaryArtistId,
+                "listenerId": listenerId,
+                "playedAt": FieldValue.serverTimestamp(),
+                "country": countryName,
+                "countryCode": regionCode,
+                "deviceType": deviceType
+            ])
+
+            try await db.collection("music_tracks").document(song.id).setData([
+                "streamCount": FieldValue.increment(Int64(1)),
+                "lastPlayedAt": FieldValue.serverTimestamp()
+            ], merge: true)
+            
+            // Keep only last 50 recently played
+            if let uid {
+                let snapshot = try await db.collection("users").document(uid)
+                    .collection("recently_played")
+                    .order(by: "playedAt", descending: true)
+                    .getDocuments()
+                
+                if snapshot.documents.count > 50 {
+                    let toDelete = snapshot.documents.suffix(from: 50)
+                    for doc in toDelete {
+                        try await doc.reference.delete()
+                    }
+                }
+            }
+        } catch {
+            print("Error saving to recently played: \(error)")
+        }
+        #endif
     }
     
     private func addObservers() {

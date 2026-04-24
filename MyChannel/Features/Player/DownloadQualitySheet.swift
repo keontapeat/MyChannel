@@ -12,7 +12,6 @@ struct DownloadQualitySheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var premiumService = PremiumService.shared
     @StateObject private var offlineService = OfflineDownloadService.shared
-    @StateObject private var downloadManager = DownloadManager.shared
     @StateObject private var subscriptionService = SubscriptionService.shared
     @State private var selectedQuality: DownloadQuality = .medium
     @State private var isDownloading: Bool = false
@@ -283,8 +282,8 @@ struct DownloadQualitySheet: View {
             return
         }
         
-        // Check if already downloaded via DownloadManager (Firestore)
-        if downloadManager.isVideoDownloaded(videoId: video.id) {
+        // Check if already downloaded via offline service
+        if offlineService.isVideoAvailableOffline(video.id) || offlineService.downloads.contains(where: { $0.videoId == video.id }) {
             await MainActor.run {
                 errorMessage = "This video is already downloaded."
                 showingError = true
@@ -298,27 +297,13 @@ struct DownloadQualitySheet: View {
         }
         
         do {
-            // Map DownloadQuality to DownloadedVideo.VideoQuality
-            let videoQuality: DownloadedVideo.VideoQuality = selectedQuality
+            try await offlineService.downloadVideo(video, quality: selectedQuality)
             
-            // Download via DownloadManager — saves to Firestore + local file
-            try await downloadManager.downloadVideo(
-                videoId: video.id,
-                title: video.title,
-                channelName: video.creator.displayName,
-                channelId: video.creator.id,
-                thumbnailUrl: video.thumbnailURL,
-                duration: video.duration,
-                viewCount: video.viewCount,
-                videoUrl: video.videoURL,
-                quality: videoQuality
-            )
-            
-            // Monitor download progress via DownloadManager
             await monitorDownloadProgress(videoId: video.id)
             
             await MainActor.run {
                 isDownloading = false
+                downloadProgress = 1.0
                 HapticManager.shared.notification(type: .success)
                 dismiss()
             }
@@ -339,11 +324,23 @@ struct DownloadQualitySheet: View {
                 break
             }
             
-            if let progress = downloadManager.activeDownloads[videoId] {
+            if let download = offlineService.downloads.first(where: { $0.videoId == videoId }) {
                 await MainActor.run {
-                    downloadProgress = progress
+                    downloadProgress = download.progress
                 }
-            } else if downloadManager.isVideoDownloaded(videoId: videoId) {
+                if download.status == .completed {
+                    await MainActor.run {
+                        downloadProgress = 1.0
+                        isDownloading = false
+                    }
+                } else if download.status == .failed {
+                    await MainActor.run {
+                        isDownloading = false
+                        errorMessage = "Download failed. Please try again."
+                        showingError = true
+                    }
+                }
+            } else if offlineService.isVideoAvailableOffline(videoId) {
                 // Download completed
                 await MainActor.run {
                     downloadProgress = 1.0

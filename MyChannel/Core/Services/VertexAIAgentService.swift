@@ -387,7 +387,15 @@ class VertexAIAgentService: ObservableObject {
         sessionID: String,
         query: String
     ) async throws -> String {
-        
+
+        // 🔒 GATE: Direct Vertex AI Agent Builder calls from the client are disabled.
+        // They require OAuth + per-agent permissions that the iOS app cannot supply,
+        // and previously retried endlessly on 404/401. Route through `agentProxy`
+        // Cloud Function instead when/if enabled.
+        if !AppConfig.Features.enableVertexDirectAgentCalls {
+            throw VertexAIAgentError.disabled
+        }
+
         // Vertex AI Agent Builder endpoint
         let endpoint = "https://\(location)-aiplatform.googleapis.com/v1/projects/\(agentProjectID)/locations/\(location)/agents/\(agentID)/sessions/\(sessionID):detectIntent"
         
@@ -596,7 +604,8 @@ enum VertexAIAgentError: LocalizedError {
     case invalidResponse
     case noResponseText
     case apiError(Int, String)
-    
+    case disabled
+
     var errorDescription: String? {
         switch self {
         case .invalidURL:
@@ -607,6 +616,8 @@ enum VertexAIAgentError: LocalizedError {
             return "No response text from Vertex AI"
         case .apiError(let code, let message):
             return "Vertex AI error (\(code)): \(message)"
+        case .disabled:
+            return "Vertex AI direct agent calls are disabled"
         }
     }
 }

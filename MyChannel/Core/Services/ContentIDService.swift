@@ -11,6 +11,7 @@ struct ContentMatch: Identifiable, Codable {
     let confidence: Double
     let timeRange: MatchTimeRange
     let rightsholder: String
+    let ownerId: String?
     let policy: MatchPolicy
     let claimId: String?
     let status: MatchStatus
@@ -94,7 +95,7 @@ final class ContentIDService: ObservableObject {
         return matches
     }
     
-    func uploadReferenceFile(title: String, rightsholder: String, videoURL: String, audioURL: String?, policy: ContentMatch.MatchPolicy) async -> String? {
+    func uploadReferenceFile(title: String, rightsholder: String, ownerId: String? = nil, sourceTrackId: String? = nil, videoURL: String, audioURL: String?, policy: ContentMatch.MatchPolicy) async -> String? {
         // Generate fingerprints for reference content
         let fingerprints = await generateFingerprints(videoURL: videoURL, audioURL: audioURL, thumbnailURL: nil)
         
@@ -117,6 +118,8 @@ final class ContentIDService: ObservableObject {
             try await db.collection("content_id_references").document(reference.id).setData([
                 "title": reference.title,
                 "rightsholder": reference.rightsholder,
+                "ownerId": ownerId as Any,
+                "sourceTrackId": sourceTrackId as Any,
                 "fingerprints": [
                     "audioFingerprint": reference.fingerprints.audioFingerprint as Any,
                     "videoFingerprint": reference.fingerprints.videoFingerprint as Any,
@@ -239,6 +242,7 @@ final class ContentIDService: ObservableObject {
                         confidence: confidence,
                         timeRange: ContentMatch.MatchTimeRange(start: 0, duration: 300, sourceStart: 0), // Mock time range
                         rightsholder: data["rightsholder"] as? String ?? "",
+                        ownerId: data["ownerId"] as? String,
                         policy: ContentMatch.MatchPolicy(rawValue: data["policy"] as? String ?? "track") ?? .track,
                         claimId: nil,
                         status: .active,
@@ -267,6 +271,7 @@ final class ContentIDService: ObservableObject {
                     "sourceStart": match.timeRange.sourceStart as Any
                 ],
                 "rightsholder": match.rightsholder,
+                "ownerId": match.ownerId as Any,
                 "policy": match.policy.rawValue,
                 "status": match.status.rawValue,
                 "createdAt": FieldValue.serverTimestamp()
@@ -280,11 +285,11 @@ final class ContentIDService: ObservableObject {
         case .block:
             await blockContent(videoId: match.matchedVideoId, reason: "Copyright match: \(match.rightsholder)")
         case .monetize:
-            await shareRevenue(videoId: match.matchedVideoId, rightsholder: match.rightsholder, percentage: 0.5)
+            await shareRevenue(videoId: match.matchedVideoId, rightsholder: match.rightsholder, ownerId: match.ownerId, percentage: 0.5)
         case .mute:
             await muteAudio(videoId: match.matchedVideoId, timeRange: match.timeRange)
         case .track:
-            await trackUsage(videoId: match.matchedVideoId, rightsholder: match.rightsholder)
+            await trackUsage(videoId: match.matchedVideoId, rightsholder: match.rightsholder, ownerId: match.ownerId)
         }
     }
     
@@ -300,12 +305,13 @@ final class ContentIDService: ObservableObject {
         #endif
     }
     
-    private func shareRevenue(videoId: String, rightsholder: String, percentage: Double) async {
+    private func shareRevenue(videoId: String, rightsholder: String, ownerId: String?, percentage: Double) async {
         #if canImport(FirebaseFirestore)
         do {
             try await db.collection("revenue_sharing").document("\(videoId)_\(rightsholder)").setData([
                 "videoId": videoId,
                 "rightsholder": rightsholder,
+                "ownerId": ownerId as Any,
                 "percentage": percentage,
                 "startedAt": FieldValue.serverTimestamp(),
                 "isActive": true
@@ -319,12 +325,13 @@ final class ContentIDService: ObservableObject {
         print("🔇 Muting audio for video \(videoId) from \(timeRange.start) to \(timeRange.start + timeRange.duration)")
     }
     
-    private func trackUsage(videoId: String, rightsholder: String) async {
+    private func trackUsage(videoId: String, rightsholder: String, ownerId: String?) async {
         #if canImport(FirebaseFirestore)
         do {
             try await db.collection("content_usage_tracking").document().setData([
                 "videoId": videoId,
                 "rightsholder": rightsholder,
+                "ownerId": ownerId as Any,
                 "trackedAt": FieldValue.serverTimestamp(),
                 "views": 0,
                 "revenue": 0.0

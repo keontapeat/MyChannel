@@ -73,12 +73,13 @@ struct YouTubeStyleUploadFlow: View {
                         completedView
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
-                // Bottom Action Bar
-                bottomActionBar
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .background(Color(.systemBackground).ignoresSafeArea())
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                bottomActionBar
+                    .background(Color(.systemBackground))
+            }
+            .background(Color(.systemBackground))
             .navigationBarHidden(true)
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -147,6 +148,7 @@ struct YouTubeStyleUploadFlow: View {
             }
         }
         .padding(.horizontal, 20)
+        .padding(.top, 8)
         .padding(.vertical, 12)
         .background(Color(.systemBackground))
         .overlay(
@@ -227,8 +229,7 @@ struct YouTubeStyleUploadFlow: View {
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .padding(.top, 100)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             } else if recentVideos.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "video.slash")
@@ -243,8 +244,7 @@ struct YouTubeStyleUploadFlow: View {
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .padding(.top, 100)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             } else {
                 ScrollView {
                     LazyVGrid(columns: [
@@ -259,6 +259,7 @@ struct YouTubeStyleUploadFlow: View {
                                 }
                         }
                     }
+                    .padding(.top, 2)
                 }
             }
         }

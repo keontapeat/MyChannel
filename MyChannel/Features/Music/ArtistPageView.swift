@@ -451,7 +451,15 @@ struct ArtistPageView: View {
                     HStack(spacing: 14) {
                         ForEach(allDrops.prefix(8), id: \.id) { album in
                             NavigationLink {
-                                AlbumDetailView(album: album, tracks: [])
+                                Group {
+                                    if let cat = CatalogAlbum.fromAppAlbum(album, artistName: artist.name) {
+                                        AlbumDetailView(album: cat)
+                                    } else {
+                                        Text("Album details unavailable")
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
+                                            .padding()
+                                    }
+                                }
                             } label: {
                                 AlbumTileView(album: album)
                             }
@@ -523,7 +531,15 @@ struct ArtistPageView: View {
                     HStack(spacing: 14) {
                         ForEach(albums, id: \.id) { album in
                             NavigationLink {
-                                AlbumDetailView(album: album, tracks: [])
+                                Group {
+                                    if let cat = CatalogAlbum.fromAppAlbum(album, artistName: artist.name) {
+                                        AlbumDetailView(album: cat)
+                                    } else {
+                                        Text("Album details unavailable")
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
+                                            .padding()
+                                    }
+                                }
                             } label: {
                                 AlbumTileView(album: album)
                             }
@@ -549,7 +565,15 @@ struct ArtistPageView: View {
                     HStack(spacing: 14) {
                         ForEach(singles, id: \.id) { album in
                             NavigationLink {
-                                AlbumDetailView(album: album, tracks: [])
+                                Group {
+                                    if let cat = CatalogAlbum.fromAppAlbum(album, artistName: artist.name) {
+                                        AlbumDetailView(album: cat)
+                                    } else {
+                                        Text("Album details unavailable")
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
+                                            .padding()
+                                    }
+                                }
                             } label: {
                                 AlbumTileView(album: album)
                             }

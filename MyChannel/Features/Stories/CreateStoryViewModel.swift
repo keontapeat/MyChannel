@@ -375,25 +375,6 @@ class CreateStoryViewModel: ObservableObject {
         var created: Story? = nil
         let currentMedia = selectedMedia
         
-        // Build fallback story (used on error or when no uploadable media)
-        func makeFallbackStory(mediaURL: String = currentMedia?.url.absoluteString ?? "") -> Story {
-            print("📸 [Story Upload] Creating fallback story with URL: \(mediaURL)")
-            return Story(
-                creatorId: creatorId,
-                mediaURL: mediaURL,
-                mediaType: getStoryMediaType(),
-                duration: getStoryDuration(),
-                caption: caption.isEmpty ? nil : caption,
-                text: textOverlay?.text,
-                content: [storyContent],
-                backgroundColor: storyType == .text ? colorToHex(backgroundGradient.first ?? .blue) : nil,
-                textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
-                music: storyMusic,
-                stickers: storyStickers,
-                audience: audience.rawValue
-            )
-        }
-        
         // Upload media to Firebase Storage then save story to Firestore
         if let media = currentMedia {
             print("📸 [Story Upload] Media found: \(media.url)")
@@ -424,21 +405,64 @@ class CreateStoryViewModel: ObservableObject {
             } catch {
                 print("🚨 [Story Upload] Error: \(error.localizedDescription)")
                 showError(error.localizedDescription)
-                created = makeFallbackStory(mediaURL: media.url.absoluteString)
-                if let c = created {
-                    try? await DatabaseService.shared.saveStory(c)
-                }
+                let failedStory = Story(
+                    creatorId: creatorId,
+                    mediaURL: media.url.absoluteString,
+                    mediaType: getStoryMediaType(),
+                    duration: getStoryDuration(),
+                    caption: caption.isEmpty ? nil : caption,
+                    text: textOverlay?.text,
+                    content: [storyContent],
+                    backgroundColor: storyType == .text ? colorToHex(backgroundGradient.first ?? .blue) : nil,
+                    textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
+                    music: storyMusic,
+                    stickers: storyStickers,
+                    audience: audience.rawValue
+                )
+                return failedStory
             }
         } else {
             print("📸 [Story Upload] No media selected (text-only story)")
-            created = makeFallbackStory()
+            created = Story(
+                creatorId: creatorId,
+                mediaURL: "",
+                mediaType: getStoryMediaType(),
+                duration: getStoryDuration(),
+                caption: caption.isEmpty ? nil : caption,
+                text: textOverlay?.text,
+                content: [storyContent],
+                backgroundColor: storyType == .text ? colorToHex(backgroundGradient.first ?? .blue) : nil,
+                textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
+                music: storyMusic,
+                stickers: storyStickers,
+                audience: audience.rawValue
+            )
             if let c = created {
-                try? await DatabaseService.shared.saveStory(c)
-                print("✅ [Story Upload] Text-only story saved")
+                do {
+                    try await DatabaseService.shared.saveStory(c)
+                    print("✅ [Story Upload] Text-only story saved")
+                } catch {
+                    print("� [Story Upload] Failed to save text-only story: \(error.localizedDescription)")
+                    showError(error.localizedDescription)
+                    return c
+                }
             }
         }
-        
-        let finalStory = created ?? makeFallbackStory()
+
+        let finalStory = created ?? Story(
+            creatorId: creatorId,
+            mediaURL: currentMedia?.url.absoluteString ?? "",
+            mediaType: getStoryMediaType(),
+            duration: getStoryDuration(),
+            caption: caption.isEmpty ? nil : caption,
+            text: textOverlay?.text,
+            content: [storyContent],
+            backgroundColor: storyType == .text ? colorToHex(backgroundGradient.first ?? .blue) : nil,
+            textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
+            music: storyMusic,
+            stickers: storyStickers,
+            audience: audience.rawValue
+        )
         print("📸 [Story Upload] Returning story: \(finalStory.id)")
         return finalStory
     }

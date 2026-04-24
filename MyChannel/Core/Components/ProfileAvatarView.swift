@@ -5,14 +5,25 @@ struct ProfileAvatarView: View {
     let size: CGFloat
     var showsRing: Bool = false
 
+    private var assetName: String? {
+        guard let s = urlString?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
+        guard s.hasPrefix("asset://") else { return nil }
+        return String(s.dropFirst("asset://".count)).components(separatedBy: "?").first
+    }
+
     private var url: URL? {
-        guard let s = urlString, !s.isEmpty else { return nil }
+        guard let s = urlString?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
+        guard !s.hasPrefix("asset://") else { return nil }
         return URL(string: s)
     }
 
     var body: some View {
         ZStack {
-            if let url {
+            if let assetName, let uiImage = UIImage(named: assetName) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+            } else if let url {
                 AppAsyncImage(url: url) { image in
                     image
                         .resizable()

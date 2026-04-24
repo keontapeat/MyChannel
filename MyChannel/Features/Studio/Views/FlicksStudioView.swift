@@ -55,6 +55,12 @@ struct FlicksStudioView: View {
         .onAppear {
             loadFlicks()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshCreatorStudio"))) { _ in
+            loadFlicks()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshFlicksFeed"))) { _ in
+            loadFlicks()
+        }
     }
     
     // MARK: - Stats Header
@@ -170,11 +176,35 @@ struct FlicksStudioView: View {
     // MARK: - Helper Functions
     
     private func loadFlicks() {
-        // Load user's Flicks (short videos)
         Task {
-            // Filter for videos under 60 seconds
-            flicks = [] // TODO: Load from Firestore where duration < 60
-            isLoading = false
+            await MainActor.run {
+                isLoading = true
+            }
+
+            guard let creatorId = AuthenticationManager.shared.currentUser?.id else {
+                await MainActor.run {
+                    flicks = []
+                    isLoading = false
+                }
+                return
+            }
+
+            let creatorVideos = await videoService.fetchVideosByCreator(creatorId: creatorId, limit: 100)
+            let shortFormVideos = creatorVideos.filter { video in
+                let isShortDuration = video.duration > 0 && video.duration <= 60
+                let hasFlickTag = video.tags.contains { $0.lowercased() == "flick" || $0.lowercased() == "shorts" }
+                let portraitCategory = video.category == .shorts
+                return isShortDuration || hasFlickTag || portraitCategory
+            }
+
+            let sortedFlicks = shortFormVideos.sorted { lhs, rhs in
+                lhs.createdAt > rhs.createdAt
+            }
+
+            await MainActor.run {
+                flicks = sortedFlicks
+                isLoading = false
+            }
         }
     }
     

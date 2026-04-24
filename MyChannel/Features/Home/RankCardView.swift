@@ -13,6 +13,12 @@ struct RankCardView: View {
     let index: Int
     var subtitle: String? = nil
 
+    private var displayName: String {
+        user.name
+            .replacingOccurrences(of: "_c", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var displaySubtitle: String {
         if let s = subtitle { return s }
         return "\(TopRankMLService.formatCount(user.totalViews)) total views"
@@ -67,7 +73,7 @@ struct RankCardView: View {
             }
 
             VStack(alignment: .center, spacing: 2) {
-                Text(user.name)
+                Text(displayName)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.primary)
                     .lineLimit(1)

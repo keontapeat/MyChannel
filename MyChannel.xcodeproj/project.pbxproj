@@ -20,6 +20,7 @@
 		0541DE762E470D3F001B3F9E /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 0541DE752E470D3F001B3F9E /* FirebaseStorage */; };
 		054581AC2E59637D00F067AA /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 054581AB2E59637D00F067AA /* GoogleSignIn */; };
 		054581AE2E59637D00F067AA /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 054581AD2E59637D00F067AA /* GoogleSignInSwift */; };
+		05E845A52F9B05AF007F7218 /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 05E845A42F9B05AF007F7218 /* FirebaseAppCheck */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -60,6 +61,7 @@
 				0541DE642E470D3F001B3F9E /* FirebaseAnalytics in Frameworks */,
 				0541DE742E470D3F001B3F9E /* FirebasePerformance in Frameworks */,
 				0541DE6A2E470D3F001B3F9E /* FirebaseCore in Frameworks */,
+				05E845A52F9B05AF007F7218 /* FirebaseAppCheck in Frameworks */,
 				0541DE662E470D3F001B3F9E /* FirebaseAnalyticsCore in Frameworks */,
 				054581AE2E59637D00F067AA /* GoogleSignInSwift in Frameworks */,
 				054581AC2E59637D00F067AA /* GoogleSignIn in Frameworks */,
@@ -79,6 +81,7 @@
 			isa = PBXGroup;
 			children = (
 				055B9AC62E1F0BB6004E6282 /* MyChannel */,
+				05E845A32F9B05AF007F7218 /* Frameworks */,
 				055B9AC52E1F0BB6004E6282 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -89,6 +92,13 @@
 				055B9AC42E1F0BB6004E6282 /* MyChannel.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		05E845A32F9B05AF007F7218 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -125,6 +135,7 @@
 				0541DE752E470D3F001B3F9E /* FirebaseStorage */,
 				054581AB2E59637D00F067AA /* GoogleSignIn */,
 				054581AD2E59637D00F067AA /* GoogleSignInSwift */,
+				05E845A42F9B05AF007F7218 /* FirebaseAppCheck */,
 			);
 			productName = MyChannel;
 			productReference = 055B9AC42E1F0BB6004E6282 /* MyChannel.app */;
@@ -539,6 +550,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 054581AA2E59637D00F067AA /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
 			productName = GoogleSignInSwift;
+		};
+		05E845A42F9B05AF007F7218 /* FirebaseAppCheck */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAppCheck;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

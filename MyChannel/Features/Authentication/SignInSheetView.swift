@@ -12,9 +12,9 @@ struct SignInSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var authManager: AuthenticationManager
     @State private var isLoadingGoogle: Bool = false
-    @State private var isLoadingApple: Bool = false
     @State private var showFullAuth: Bool = false
     @State private var errorMessage: String = ""
+    @State private var appleSignInNonce: String = ""
 
     var body: some View {
         NavigationStack {
@@ -70,28 +70,28 @@ struct SignInSheetView: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .disabled(isLoadingGoogle || isLoadingApple)
+                    .disabled(isLoadingGoogle)
 
-                    // Apple
-                    Button(action: { Task { await appleTap() } }) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "applelogo")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
-                            Text(isLoadingApple ? "Signing in…" : "Sign in with Apple")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity, alignment: .center)
+                    // Apple — use system SignInWithAppleButton (handles iPad presentationAnchor natively)
+                    SignInWithAppleButton(.signIn) { request in
+                        appleSignInNonce = FirebaseAppleAuthService.shared.prepareNonce()
+                        request.requestedScopes = [.fullName, .email]
+                        request.nonce = appleSignInNonce
+                    } onCompletion: { result in
+                        switch result {
+                        case .success(let auth):
+                            guard let credential = auth.credential as? ASAuthorizationAppleIDCredential else { return }
+                            Task { await AuthenticationManager.shared.signInWithAppleCredential(credential) }
+                        case .failure(let error):
+                            let nsErr = error as NSError
+                            if nsErr.domain == ASAuthorizationError.errorDomain && nsErr.code == ASAuthorizationError.canceled.rawValue { return }
+                            errorMessage = error.localizedDescription
                         }
-                        .padding(.vertical, 14)
-                        .padding(.horizontal, 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color(.label))
-                        )
                     }
-                    .buttonStyle(.plain)
-                    .disabled(isLoadingGoogle || isLoadingApple)
+                    .signInWithAppleButtonStyle(.black)
+                    .frame(height: 50)
+                    .cornerRadius(12)
+                    .disabled(isLoadingGoogle)
 
                     // Divider
                     HStack {
@@ -163,7 +163,6 @@ struct SignInSheetView: View {
 
     // MARK: - Actions
     private func googleTap() async {
-        guard !isLoadingApple else { return }
         isLoadingGoogle = true
         defer { isLoadingGoogle = false }
         // 🔥 FIX 2.1(a): Use AuthenticationManager (Firebase Auth) instead of AuthService (backend API)
@@ -171,21 +170,6 @@ struct SignInSheetView: View {
         // onChange(of: authManager.isAuthenticated) will auto-dismiss the sheet
     }
 
-    private func appleTap() async {
-        guard !isLoadingGoogle else { return }
-        isLoadingApple = true
-        // 🔥 FIX 2.1(a) iPad SIWA:
-        // iPad sheets have separate window contexts that break ASAuthorizationController.
-        // Dismiss the sheet first, wait for the animation, then trigger SIWA.
-        // MainTabView's onChange(of: authManager.isAuthenticated) will ensure
-        // presentSignInSheet is set to false even if this view is torn down.
-        dismiss()
-        Task.detached { @MainActor in
-            // Wait for sheet dismissal animation to fully complete on iPad
-            try? await Task.sleep(nanoseconds: 600_000_000)
-            await AuthenticationManager.shared.signInWithApple()
-        }
-    }
 }
 
 #Preview("SignInSheetView") {
