@@ -91,6 +91,17 @@ struct RealTimeCommentsView: View {
                 commentsManager.addComment(newComment)
                 selectedComment = nil
             }
+            .background(
+                UIKitSheetConfigurator(
+                    configuration: UIKitSheetConfiguration(
+                        detents: [.medium(), .large()],
+                        largestUndimmedDetentIdentifier: .large,
+                        prefersGrabberVisible: true,
+                        prefersScrollingExpandsWhenScrolledToEdge: false,
+                        preferredCornerRadius: 28
+                    )
+                )
+            )
         }
     }
     
@@ -668,11 +679,19 @@ struct CommentComposerSheet: View {
                             Text(AppState.shared.currentUser?.displayName ?? "You")
                                 .font(.system(size: 14, weight: .medium))
                             
-                            TextField(replyingTo != nil ? "Add a reply..." : "Add a comment...", text: $commentText, axis: .vertical)
-                                .textFieldStyle(PlainTextFieldStyle())
-                                .font(.system(size: 14))
-                                .lineLimit(5...10)
-                                .focused($isTextFieldFocused)
+                            UIKitMultilineTextView(
+                                text: $commentText,
+                                placeholder: replyingTo != nil ? "Add a reply..." : "Add a comment...",
+                                font: .systemFont(ofSize: 14),
+                                textColor: UIColor(AppTheme.Colors.textPrimary),
+                                placeholderColor: UIColor.secondaryLabel,
+                                isFirstResponder: isTextFieldFocused,
+                                maxLength: 500,
+                                onFocusChanged: { focused in
+                                    isTextFieldFocused = focused
+                                }
+                            )
+                            .frame(minHeight: 72, maxHeight: 160)
                         }
                     }
                     

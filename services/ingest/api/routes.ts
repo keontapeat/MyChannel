@@ -13,6 +13,56 @@ const JWT_SECRET = process.env.JWT_SECRET || ''
 const storage = new Storage()
 const PROOF_BUCKET = process.env.PROOF_BUCKET || 'mychannel-proofs'
 
+function toIsoString(value: any): string | null {
+  if (!value) return null
+  if (typeof value === 'string') return value
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value.toDate === 'function') return value.toDate().toISOString()
+  if (typeof value._seconds === 'number') return new Date(value._seconds * 1000).toISOString()
+  return null
+}
+
+function computeIngestReadiness(data: Record<string, any>) {
+  const checklist = {
+    source: !!String(data.source || '').trim(),
+    query: !!String(data.query || '').trim(),
+    totalResults: Number(data.totalResults || 0) > 0,
+    selectedAsset: !!String(data.selectedAssetId || '').trim(),
+    proofCaptured: !!data.proofCaptured
+  }
+  const completed = Object.values(checklist).filter(Boolean).length
+  const total = Object.keys(checklist).length
+  return {
+    checklist,
+    completed,
+    total,
+    score: Number((completed / total).toFixed(2)),
+    ready: completed === total
+  }
+}
+
+function serializeJob(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) {
+  const data = doc.data() || {}
+  const readiness = computeIngestReadiness(data as Record<string, any>)
+  return {
+    id: doc.id,
+    source: data.source || null,
+    query: data.query || '',
+    status: data.status || 'pending',
+    lifecycleState: data.lifecycleState || data.status || 'pending',
+    progress: Number(data.progress || 0),
+    totalResults: Number(data.totalResults || 0),
+    selectedAssetId: data.selectedAssetId || null,
+    proofCaptured: !!data.proofCaptured,
+    proofId: data.proofId || null,
+    error: data.error || null,
+    readiness,
+    createdAt: toIsoString(data.createdAt),
+    updatedAt: toIsoString(data.updatedAt),
+    completedAt: toIsoString(data.completedAt)
+  }
+}
+
 async function verifyUser(authHeader: string | undefined) {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null
   const token = authHeader.slice(7).trim()
@@ -71,7 +121,11 @@ export async function pullSourceHandler(req: FastifyRequest<{ Body: { source: 'P
       source: body.source,
       query: body.query || '',
       status: 'pending',
+      lifecycleState: 'discovered',
+      progress: results.length > 0 ? 15 : 5,
       totalResults: results.length,
+      selectedAssetId: null,
+      proofCaptured: false,
       createdAt: now,
       updatedAt: now
     })
@@ -81,7 +135,7 @@ export async function pullSourceHandler(req: FastifyRequest<{ Body: { source: 'P
       ...r
     }))
 
-    rep.send({ ok: true, jobId: jobRef.id, count: results.length, assets })
+    rep.send({ ok: true, jobId: jobRef.id, count: results.length, assets, job: serializeJob(await jobRef.get()) })
   } catch (error) {
     console.error('Pull source error:', error)
     rep.code(500).send({ error: 'Internal server error' })
@@ -106,13 +160,21 @@ export async function ingestAssetHandler(req: FastifyRequest<{ Params: { id: str
     if (String(jobData.userId || '') !== user.userId) {
       return rep.code(403).send({ error: 'Forbidden' })
     }
+    if (String(jobData.status || '') === 'completed') {
+      return rep.code(409).send({ error: 'Job already completed' })
+    }
 
+    const now = admin.firestore.Timestamp.now()
     await jobRef.update({
       status: 'processing',
-      updatedAt: admin.firestore.Timestamp.now()
+      lifecycleState: 'ingesting',
+      selectedAssetId: id,
+      progress: 55,
+      updatedAt: now
     })
 
-    rep.send({ ok: true, assetId: id, status: 'processing' })
+    const updatedJob = await jobRef.get()
+    rep.send({ ok: true, assetId: id, status: 'processing', job: serializeJob(updatedJob) })
   } catch (error) {
     console.error('Ingest asset error:', error)
     rep.code(500).send({ error: 'Internal server error' })
@@ -131,20 +193,19 @@ export async function statusHandler(req: FastifyRequest, rep: FastifyReply) {
       .limit(limit)
       .get()
 
-    const jobs = snap.docs.map(doc => {
-      const data = doc.data()
-      return {
-        id: doc.id,
-        source: data.source,
-        query: data.query,
-        status: data.status,
-        totalResults: data.totalResults || 0,
-        createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : null,
-        updatedAt: data.updatedAt ? data.updatedAt.toDate().toISOString() : null
+    const jobs = snap.docs.map(doc => serializeJob(doc))
+
+    rep.send({
+      jobs,
+      summary: {
+        total: jobs.length,
+        pending: jobs.filter(job => job.status === 'pending').length,
+        processing: jobs.filter(job => job.status === 'processing').length,
+        completed: jobs.filter(job => job.status === 'completed').length,
+        failed: jobs.filter(job => job.status === 'failed').length,
+        avgProgress: jobs.length ? Number((jobs.reduce((sum, job) => sum + job.progress, 0) / jobs.length).toFixed(2)) : 0
       }
     })
-
-    rep.send({ jobs })
   } catch (error) {
     console.error('Status error:', error)
     rep.code(500).send({ error: 'Internal server error' })
@@ -188,6 +249,22 @@ export async function reviewMonetizableHandler(req: FastifyRequest<{ Params: { v
         updatedAt: now
       })
     })
+
+    const jobSnap = await db.collection('ingest_jobs')
+      .where('userId', '==', user.userId)
+      .where('selectedAssetId', '==', videoId)
+      .limit(1)
+      .get()
+
+    if (!jobSnap.empty) {
+      await jobSnap.docs[0].ref.set({
+        monetizable: !!value,
+        monetizableReason: reason || null,
+        lifecycleState: 'rights-reviewed',
+        progress: 85,
+        updatedAt: now
+      }, { merge: true })
+    }
 
     rep.send({ ok: true, videoId, monetizable: !!value })
   } catch (error) {
@@ -242,6 +319,22 @@ export async function snapshotProofHandler(req: FastifyRequest<{ Body: { sourceA
     }
 
     await db.collection('proofs').doc(proofId).set(proofData)
+
+    const jobSnap = await db.collection('ingest_jobs')
+      .where('userId', '==', user.userId)
+      .where('selectedAssetId', '==', sourceAssetId)
+      .limit(1)
+      .get()
+
+    if (!jobSnap.empty) {
+      await jobSnap.docs[0].ref.set({
+        proofCaptured: true,
+        proofId,
+        lifecycleState: 'proof-captured',
+        progress: 75,
+        updatedAt: now
+      }, { merge: true })
+    }
 
     rep.send({ ok: true, proofId, htmlUrl: proofData.htmlUrl || null, screenshotUrl: proofData.screenshotUrl || null })
   } catch (error) {

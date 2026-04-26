@@ -14,7 +14,8 @@ struct SignInSheetView: View {
     @State private var isLoadingGoogle: Bool = false
     @State private var showFullAuth: Bool = false
     @State private var errorMessage: String = ""
-    @State private var appleSignInNonce: String = ""
+    @State private var appleSignInRawNonce: String = ""
+    @State private var appleSignInHashedNonce: String = ""
 
     var body: some View {
         NavigationStack {
@@ -72,16 +73,19 @@ struct SignInSheetView: View {
                     .buttonStyle(.plain)
                     .disabled(isLoadingGoogle)
 
-                    // Apple — use system SignInWithAppleButton (handles iPad presentationAnchor natively)
+                    // Apple — iPad-safe: pass raw nonce directly, no shared mutable state
                     SignInWithAppleButton(.signIn) { request in
-                        appleSignInNonce = FirebaseAppleAuthService.shared.prepareNonce()
+                        let pair = FirebaseAppleAuthService.shared.generateNoncePair()
+                        appleSignInRawNonce = pair.raw
+                        appleSignInHashedNonce = pair.hashed
                         request.requestedScopes = [.fullName, .email]
-                        request.nonce = appleSignInNonce
+                        request.nonce = pair.hashed
                     } onCompletion: { result in
                         switch result {
                         case .success(let auth):
                             guard let credential = auth.credential as? ASAuthorizationAppleIDCredential else { return }
-                            Task { await AuthenticationManager.shared.signInWithAppleCredential(credential) }
+                            let rawNonce = appleSignInRawNonce
+                            Task { await AuthenticationManager.shared.signInWithAppleCredential(credential, rawNonce: rawNonce) }
                         case .failure(let error):
                             let nsErr = error as NSError
                             if nsErr.domain == ASAuthorizationError.errorDomain && nsErr.code == ASAuthorizationError.canceled.rawValue { return }

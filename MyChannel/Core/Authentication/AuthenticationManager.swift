@@ -373,6 +373,26 @@ class AuthenticationManager: ObservableObject {
         }
     }
 
+    /// iPad-safe: accepts raw nonce directly, no shared mutable state.
+    func signInWithAppleCredential(_ credential: ASAuthorizationAppleIDCredential, rawNonce: String) async {
+        authState = .authenticating
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let payload = try await FirebaseAppleAuthService.shared.handleCredential(credential, rawNonce: rawNonce)
+            await finishAppleSignIn(payload: payload)
+        } catch let error as ASAuthorizationError where error.code == .canceled {
+            print("🍎 [Apple Sign In] User cancelled")
+            authState = .unauthenticated
+        } catch {
+            print("🍎 [Apple Sign In] Error (iPad-safe path): \(error.localizedDescription)")
+            authState = .error(error.localizedDescription)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                if case .error = self?.authState { self?.authState = .unauthenticated }
+            }
+        }
+    }
+
     private func finishAppleSignIn(payload: AuthPayload) async {
         let basicUser = User(
             id: payload.uid,

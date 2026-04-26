@@ -32,18 +32,33 @@ final class FirebaseAppleAuthService: NSObject {
     }
 
     // MARK: - Nonce for SwiftUI SignInWithAppleButton flow
-    /// Call this before constructing the SignInWithAppleButton request to get a nonce that is paired
-    /// with the subsequent handleCredential call.
+
+    /// Returns (rawNonce, hashedNonce). Pass hashedNonce to the ASAuthorizationAppleIDRequest,
+    /// and rawNonce to handleCredential(_, rawNonce:) in the completion handler.
+    /// This avoids shared mutable state and eliminates the iPad race condition.
+    func generateNoncePair() -> (raw: String, hashed: String) {
+        let raw = randomNonceString()
+        return (raw, sha256(raw))
+    }
+
+    /// Legacy: stores nonce in shared state. Prefer generateNoncePair() + handleCredential(_:rawNonce:).
     func prepareNonce() -> String {
         let nonce = randomNonceString()
         pendingNonce = nonce
         return sha256(nonce)
     }
 
-    /// Called by the SwiftUI SignInWithAppleButton .onCompletion handler.
-    /// Apple's own button manages presentationAnchor — no ASAuthorizationController.performRequests() needed.
+    /// iPad-safe: accepts the raw nonce directly instead of reading shared state.
+    func handleCredential(_ credential: ASAuthorizationAppleIDCredential, rawNonce: String) async throws -> AuthPayload {
+        return try await completeFirebaseSignIn(credential: credential, nonce: rawNonce)
+    }
+
+    /// Legacy: reads nonce from shared state. Prefer handleCredential(_:rawNonce:).
     func handleCredential(_ credential: ASAuthorizationAppleIDCredential) async throws -> AuthPayload {
-        guard let nonce = pendingNonce else { throw AuthError.unknown }
+        guard let nonce = pendingNonce else {
+            print("🍎 [Apple Sign In] ERROR: pendingNonce is nil — race condition on iPad")
+            throw AuthError.unknown
+        }
         pendingNonce = nil
         return try await completeFirebaseSignIn(credential: credential, nonce: nonce)
     }
@@ -159,23 +174,27 @@ extension FirebaseAppleAuthService: ASAuthorizationControllerDelegate {
 // MARK: - ASAuthorizationControllerPresentationContextProviding
 extension FirebaseAppleAuthService: ASAuthorizationControllerPresentationContextProviding {
     nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        // 1. Foreground-active scene key window
-        if let fg = scenes.first(where: { $0.activationState == .foregroundActive }) {
-            if let w = fg.keyWindow { return w }
-            if let w = fg.windows.first { return w }
+        // Must access UIApplication on @MainActor; use DispatchQueue.main.sync to bridge
+        // from the nonisolated protocol requirement. Safe because Apple calls this on main thread.
+        return DispatchQueue.main.sync {
+            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            // 1. Foreground-active scene key window
+            if let fg = scenes.first(where: { $0.activationState == .foregroundActive }) {
+                if let w = fg.keyWindow { return w }
+                if let w = fg.windows.first { return w }
+            }
+            // 2. Any scene's key window
+            for s in scenes { if let w = s.keyWindow { return w } }
+            // 3. Any scene's first window
+            for s in scenes { if let w = s.windows.first { return w } }
+            // 4. Last resort — create window in the first available scene
+            if let scene = scenes.first {
+                let w = UIWindow(windowScene: scene)
+                w.makeKeyAndVisible()
+                return w
+            }
+            return UIWindow()
         }
-        // 2. Any scene's key window
-        for s in scenes { if let w = s.keyWindow { return w } }
-        // 3. Any scene's first window
-        for s in scenes { if let w = s.windows.first { return w } }
-        // 4. Last resort
-        if let scene = scenes.first {
-            let w = UIWindow(windowScene: scene)
-            w.makeKeyAndVisible()
-            return w
-        }
-        return UIWindow()
     }
 }
 

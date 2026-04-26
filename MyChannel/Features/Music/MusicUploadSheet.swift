@@ -8,6 +8,7 @@
 
 import SwiftUI
 import PhotosUI
+import AVFoundation
 import UniformTypeIdentifiers
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
@@ -24,11 +25,28 @@ struct MusicUploadSheet: View {
 
     @State private var trackTitle = ""
     @State private var artistName = ""
+    @State private var featuredArtists = ""
     @State private var albumName = ""
     @State private var selectedGenre = "Hip-Hop"
+    @State private var releaseType = "Single"
+    @State private var trackLanguage = "en"
     @State private var isExplicit = false
     @State private var protectWithContentID = true
     @State private var selectedContentPolicy: ContentMatch.MatchPolicy = .track
+    // Credits
+    @State private var songwriter = ""
+    @State private var producer = ""
+    @State private var recordLabel = ""
+    @State private var copyrightOwner = ""
+    @State private var copyrightYear = String(Calendar.current.component(.year, from: Date()))
+    // Lyrics
+    @State private var lyrics = ""
+    @State private var showLyricsEditor = false
+    // Captured duration
+    @State private var capturedDuration: Double = 0
+    // Scheduling
+    @State private var scheduleRelease = false
+    @State private var releaseDate = Date()
 
     @State private var selectedArtworkItem: PhotosPickerItem?
     @State private var artworkImage: UIImage?
@@ -45,6 +63,13 @@ struct MusicUploadSheet: View {
         "Hip-Hop", "R&B", "Pop", "Rock", "Electronic", "Country",
         "Afrobeats", "Latin", "Jazz", "Indie", "Gospel", "Trap",
         "Soul", "Drill", "Alternative", "Lo-Fi", "Michigan Rap"
+    ]
+    private let releaseTypes = ["Single", "EP", "Album"]
+    private let languages = [
+        ("en", "English"), ("es", "Spanish"), ("fr", "French"),
+        ("de", "German"), ("pt", "Portuguese"), ("hi", "Hindi"),
+        ("ja", "Japanese"), ("zh", "Chinese"), ("ar", "Arabic"),
+        ("ru", "Russian"), ("ko", "Korean"), ("it", "Italian")
     ]
 
     enum UploadState {
@@ -65,20 +90,40 @@ struct MusicUploadSheet: View {
                         Divider().padding(.leading, 16)
                         uploadField("Artist Name", text: $artistName, required: true)
                         Divider().padding(.leading, 16)
+                        uploadField("Featured Artists", text: $featuredArtists, required: false)
+                        Divider().padding(.leading, 16)
                         uploadField("Album / Project", text: $albumName, required: false)
                         Divider().padding(.leading, 16)
-                        // Genre picker row
+                        pickerRow("Genre", selection: $selectedGenre, options: genres)
+                        Divider().padding(.leading, 16)
+                        pickerRow("Release Type", selection: $releaseType, options: releaseTypes)
+                        Divider().padding(.leading, 16)
                         HStack {
-                            Text("Genre")
+                            Text("Language")
                                 .font(.system(size: 15))
                                 .foregroundColor(.primary)
                             Spacer()
-                            Picker("", selection: $selectedGenre) {
-                                ForEach(genres, id: \.self) { Text($0).tag($0) }
+                            Picker("", selection: $trackLanguage) {
+                                ForEach(languages, id: \.0) { code, name in
+                                    Text(name).tag(code)
+                                }
                             }
                             .pickerStyle(.menu)
                             .accentColor(Color(red: 0.88, green: 0.15, blue: 0.25))
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        Divider().padding(.leading, 16)
+                        Toggle(isOn: $isExplicit) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                    .font(.system(size: 14))
+                                Text("Explicit Content")
+                                    .font(.system(size: 15))
+                            }
+                        }
+                        .tint(Color(red: 0.88, green: 0.15, blue: 0.25))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                         Divider().padding(.leading, 16)
@@ -113,6 +158,81 @@ struct MusicUploadSheet: View {
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
+                        }
+                    }
+
+                    // Credits card
+                    uploadCard {
+                        uploadSectionLabel("CREDITS & RIGHTS")
+                        uploadField("Songwriter", text: $songwriter, required: false)
+                        Divider().padding(.leading, 16)
+                        uploadField("Producer", text: $producer, required: false)
+                        Divider().padding(.leading, 16)
+                        uploadField("Record Label", text: $recordLabel, required: false)
+                        Divider().padding(.leading, 16)
+                        uploadField("© Copyright Owner", text: $copyrightOwner, required: false)
+                        Divider().padding(.leading, 16)
+                        HStack {
+                            Text("℗ Year")
+                                .font(.system(size: 15))
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Picker("", selection: $copyrightYear) {
+                                ForEach((2000...Calendar.current.component(.year, from: Date())).reversed(), id: \.self) { year in
+                                    Text(String(year)).tag(String(year))
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .accentColor(Color(red: 0.88, green: 0.15, blue: 0.25))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
+
+                    // Lyrics card
+                    uploadCard {
+                        uploadSectionLabel("LYRICS (OPTIONAL)")
+                        Button {
+                            showLyricsEditor.toggle()
+                        } label: {
+                            HStack {
+                                Image(systemName: lyrics.isEmpty ? "text.quote" : "checkmark.circle.fill")
+                                    .foregroundColor(lyrics.isEmpty ? Color(red: 0.88, green: 0.15, blue: 0.25) : .green)
+                                Text(lyrics.isEmpty ? "Add Lyrics" : "Lyrics added (\(lyrics.split(separator: "\n").count) lines)")
+                                    .font(.system(size: 15))
+                                    .foregroundColor(lyrics.isEmpty ? Color(red: 0.88, green: 0.15, blue: 0.25) : .primary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 13))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    // Scheduling card
+                    uploadCard {
+                        uploadSectionLabel("RELEASE SCHEDULE")
+                        Toggle(isOn: $scheduleRelease) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Schedule release")
+                                    .font(.system(size: 15))
+                                    .foregroundColor(.primary)
+                                Text("Set a future release date for this track")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .tint(Color(red: 0.88, green: 0.15, blue: 0.25))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        if scheduleRelease {
+                            Divider().padding(.leading, 16)
+                            DatePicker("Release date", selection: $releaseDate, in: Date()..., displayedComponents: [.date])
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
                         }
                     }
 
@@ -168,22 +288,6 @@ struct MusicUploadSheet: View {
                         }
                     }
 
-                    // Settings card
-                    uploadCard {
-                        uploadSectionLabel("SETTINGS")
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.orange)
-                                .font(.system(size: 15))
-                            Text("Explicit Content")
-                                .font(.system(size: 15))
-                            Spacer()
-                            Toggle("", isOn: $isExplicit)
-                                .tint(Color(red: 0.88, green: 0.15, blue: 0.25))
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                    }
 
                     // Upload progress
                     if uploadState == .uploading {
@@ -267,11 +371,38 @@ struct MusicUploadSheet: View {
                 Text("Your track is live on MyChannel Music. Streams will start counting toward your earnings.")
             }
         }
+        .sheet(isPresented: $showLyricsEditor) {
+            NavigationStack {
+                TextEditor(text: $lyrics)
+                    .padding(12)
+                    .navigationTitle("Lyrics")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showLyricsEditor = false }
+                                .foregroundColor(Color(red: 0.88, green: 0.15, blue: 0.25))
+                        }
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Clear") { lyrics = "" }
+                                .foregroundColor(.secondary)
+                        }
+                    }
+            }
+        }
         .onChange(of: selectedArtworkItem) { item in
             Task {
                 if let data = try? await item?.loadTransferable(type: Data.self),
                    let img = UIImage(data: data) {
                     artworkImage = img
+                }
+            }
+        }
+        .onChange(of: selectedAudioURL) { url in
+            guard let url else { return }
+            Task {
+                let asset = AVURLAsset(url: url)
+                if let duration = try? await asset.load(.duration) {
+                    capturedDuration = CMTimeGetSeconds(duration)
                 }
             }
         }
@@ -346,6 +477,22 @@ struct MusicUploadSheet: View {
 
     // MARK: - Reusable Card Components
 
+    private func pickerRow(_ label: String, selection: Binding<String>, options: [String]) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundColor(.primary)
+            Spacer()
+            Picker("", selection: selection) {
+                ForEach(options, id: \.self) { Text($0).tag($0) }
+            }
+            .pickerStyle(.menu)
+            .accentColor(Color(red: 0.88, green: 0.15, blue: 0.25))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
     @ViewBuilder
     private func uploadCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -388,6 +535,12 @@ struct MusicUploadSheet: View {
         !trackTitle.trimmingCharacters(in: .whitespaces).isEmpty &&
         !artistName.trimmingCharacters(in: .whitespaces).isEmpty &&
         selectedAudioURL != nil
+    }
+
+    private func generateISRC() -> String {
+        let year = Calendar.current.component(.year, from: Date()) % 100
+        let designation = Int.random(in: 10000...99999)
+        return "US-MCH-\(String(format: "%02d", year))-\(designation)"
     }
 
     // MARK: - Upload
@@ -434,6 +587,8 @@ struct MusicUploadSheet: View {
             let audioDownloadURL = try await audioRef.downloadURL().absoluteString
             uploadProgress = 0.9
 
+            let isrc = generateISRC()
+
             var contentIDReferenceId: String? = nil
             if protectWithContentID {
                 contentIDReferenceId = await ContentIDService.shared.uploadReferenceFile(
@@ -453,19 +608,32 @@ struct MusicUploadSheet: View {
                 "title": trackTitle.trimmingCharacters(in: .whitespaces),
                 "artistId": artistId,
                 "artistName": artistName.trimmingCharacters(in: .whitespaces),
+                "featuredArtists": featuredArtists.trimmingCharacters(in: .whitespaces),
                 "album": albumName.trimmingCharacters(in: .whitespaces),
                 "albumName": albumName.trimmingCharacters(in: .whitespaces),
+                "releaseType": releaseType,
                 "genre": selectedGenre,
+                "language": trackLanguage,
                 "isExplicit": isExplicit,
                 "artworkURL": artworkURLString as Any,
                 "audioURL": audioDownloadURL,
                 "streamURL": audioDownloadURL,
+                "duration": capturedDuration,
+                "isrc": isrc,
+                "songwriter": songwriter.trimmingCharacters(in: .whitespaces),
+                "producer": producer.trimmingCharacters(in: .whitespaces),
+                "recordLabel": recordLabel.trimmingCharacters(in: .whitespaces),
+                "copyrightOwner": copyrightOwner.isEmpty ? artistName.trimmingCharacters(in: .whitespaces) : copyrightOwner.trimmingCharacters(in: .whitespaces),
+                "copyrightYear": copyrightYear,
+                "lyrics": lyrics,
                 "streamCount": 0,
                 "likeCount": 0,
                 "uploadedAt": FieldValue.serverTimestamp(),
                 "createdAt": FieldValue.serverTimestamp(),
-                "isPublished": true,
-                "status": "published",
+                "isPublished": !scheduleRelease,
+                "status": scheduleRelease ? "scheduled" : "published",
+                "scheduledRelease": scheduleRelease,
+                "releaseDate": scheduleRelease ? Timestamp(date: releaseDate) : FieldValue.serverTimestamp(),
                 "contentIdProtected": protectWithContentID,
                 "contentIdPolicy": selectedContentPolicy.rawValue,
                 "contentIdReferenceId": contentIDReferenceId as Any

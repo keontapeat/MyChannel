@@ -4,10 +4,11 @@ struct VideoChaptersSheet: View {
     let video: Video
     let onSelect: (TimeInterval) -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var searchText: String = ""
     
     var body: some View {
         NavigationView {
-            List(chaptersWithEnd, id: \.chapter.id) { item in
+            List(filteredChapters, id: \.chapter.id) { item in
                 Button {
                     onSelect(item.chapter.start)
                     Task { await AnalyticsService.shared.trackEvent("chapter_tap", parameters: ["videoId": video.id, "title": item.chapter.title, "start": item.chapter.start]) }
@@ -29,7 +30,19 @@ struct VideoChaptersSheet: View {
             .navigationTitle("Chapters")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+            .searchable(text: $searchText, prompt: "Search chapters")
         }
+        .background(
+            UIKitSheetConfigurator(
+                configuration: UIKitSheetConfiguration(
+                    detents: [.medium(), .large()],
+                    largestUndimmedDetentIdentifier: .large,
+                    prefersGrabberVisible: true,
+                    prefersScrollingExpandsWhenScrolledToEdge: false,
+                    preferredCornerRadius: 28
+                )
+            )
+        )
     }
     
     private var chaptersWithEnd: [(chapter: Video.Chapter, end: TimeInterval?)] {
@@ -42,6 +55,14 @@ struct VideoChaptersSheet: View {
             result.append((ch, end))
         }
         return result
+    }
+
+    private var filteredChapters: [(chapter: Video.Chapter, end: TimeInterval?)] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return chaptersWithEnd }
+        return chaptersWithEnd.filter { item in
+            item.chapter.title.lowercased().contains(query) || timeString(item.chapter.start).contains(query)
+        }
     }
     
     @ViewBuilder

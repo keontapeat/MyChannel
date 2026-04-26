@@ -34,6 +34,17 @@ struct UpNextQueueSheet: View {
             .listStyle(.plain)
             .navigationTitle("Up next")
         }
+        .background(
+            UIKitSheetConfigurator(
+                configuration: UIKitSheetConfiguration(
+                    detents: [.medium(), .large()],
+                    largestUndimmedDetentIdentifier: .large,
+                    prefersGrabberVisible: true,
+                    prefersScrollingExpandsWhenScrolledToEdge: false,
+                    preferredCornerRadius: 28
+                )
+            )
+        )
     }
 }
 

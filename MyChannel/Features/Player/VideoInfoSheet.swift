@@ -99,6 +99,17 @@ struct VideoInfoSheet: View {
                 }
             }
         }
+        .background(
+            UIKitSheetConfigurator(
+                configuration: UIKitSheetConfiguration(
+                    detents: [.medium(), .large()],
+                    largestUndimmedDetentIdentifier: .large,
+                    prefersGrabberVisible: true,
+                    prefersScrollingExpandsWhenScrolledToEdge: false,
+                    preferredCornerRadius: 28
+                )
+            )
+        )
     }
     
     private func calculateEngagementRate() -> String {

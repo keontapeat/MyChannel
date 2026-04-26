@@ -1441,6 +1441,17 @@ struct VideoDetailView: View {
         .sheet(isPresented: $showingCommentComposer) {
             RealTimeCommentsView(video: video)
                 .presentationDetents([.large])
+                .background(
+                    UIKitSheetConfigurator(
+                        configuration: UIKitSheetConfiguration(
+                            detents: [.large()],
+                            largestUndimmedDetentIdentifier: .large,
+                            prefersGrabberVisible: true,
+                            prefersScrollingExpandsWhenScrolledToEdge: false,
+                            preferredCornerRadius: 28
+                        )
+                    )
+                )
         }
         .fullScreenCover(isPresented: $showingFullscreenOverlay) {
             ImmersiveFullscreenPlayerView(video: video) {
@@ -1462,10 +1473,32 @@ struct VideoDetailView: View {
                                   isSubscribed: $isSubscribed,
                                   isWatchLater: $isWatchLater)
                 .presentationDetents([.medium])
+                .background(
+                    UIKitSheetConfigurator(
+                        configuration: UIKitSheetConfiguration(
+                            detents: [.medium()],
+                            largestUndimmedDetentIdentifier: .medium,
+                            prefersGrabberVisible: true,
+                            prefersScrollingExpandsWhenScrolledToEdge: false,
+                            preferredCornerRadius: 28
+                        )
+                    )
+                )
         }
         // 🔥 FIX: Video editor sheet (YouTube-style edit interface)
         .sheet(isPresented: $showingVideoEditor) {
             PostUploadEditorView(video: video)
+                .background(
+                    UIKitSheetConfigurator(
+                        configuration: UIKitSheetConfiguration(
+                            detents: [.large()],
+                            largestUndimmedDetentIdentifier: .large,
+                            prefersGrabberVisible: true,
+                            prefersScrollingExpandsWhenScrolledToEdge: false,
+                            preferredCornerRadius: 28
+                        )
+                    )
+                )
         }
         .sheet(isPresented: $showingSubtitlePicker) {
             NavigationView {
@@ -1486,6 +1519,17 @@ struct VideoDetailView: View {
                 .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("Done") { showingSubtitlePicker = false } } }
             }
             .presentationDetents([.medium])
+            .background(
+                UIKitSheetConfigurator(
+                    configuration: UIKitSheetConfiguration(
+                        detents: [.medium()],
+                        largestUndimmedDetentIdentifier: .medium,
+                        prefersGrabberVisible: true,
+                        prefersScrollingExpandsWhenScrolledToEdge: false,
+                        preferredCornerRadius: 28
+                    )
+                )
+            )
         }
         .sheet(isPresented: $showingUpNextList) {
             UpNextQueueSheet(current: video, queue: recommendedVideos) { v in
@@ -1503,6 +1547,17 @@ struct VideoDetailView: View {
                 playerManager.setPreferredQuality(quality)
             }
             .presentationDetents([.fraction(0.4)])
+            .background(
+                UIKitSheetConfigurator(
+                    configuration: UIKitSheetConfiguration(
+                        detents: [.medium()],
+                        largestUndimmedDetentIdentifier: .medium,
+                        prefersGrabberVisible: true,
+                        prefersScrollingExpandsWhenScrolledToEdge: false,
+                        preferredCornerRadius: 28
+                    )
+                )
+            )
         }
         .sheet(isPresented: $showingPlaybackSpeedSelector) {
             PlaybackSpeedSelector(selectedSpeed: $playbackRate) { speed in
@@ -1510,6 +1565,17 @@ struct VideoDetailView: View {
                 playerManager.setPlaybackRate(speed)
             }
             .presentationDetents([.fraction(0.4)])
+            .background(
+                UIKitSheetConfigurator(
+                    configuration: UIKitSheetConfiguration(
+                        detents: [.medium()],
+                        largestUndimmedDetentIdentifier: .medium,
+                        prefersGrabberVisible: true,
+                        prefersScrollingExpandsWhenScrolledToEdge: false,
+                        preferredCornerRadius: 28
+                    )
+                )
+            )
         }
         .sheet(isPresented: $showingTranscript) {
             VideoTranscriptSheet(video: video)
@@ -1522,11 +1588,33 @@ struct VideoDetailView: View {
         .sheet(isPresented: $showingCreatorProfile) {
             CreatorProfileSheet(creator: selectedCreatorProfile ?? video.creator)
                 .presentationDetents([.large])
+                .background(
+                    UIKitSheetConfigurator(
+                        configuration: UIKitSheetConfiguration(
+                            detents: [.large()],
+                            largestUndimmedDetentIdentifier: .large,
+                            prefersGrabberVisible: true,
+                            prefersScrollingExpandsWhenScrolledToEdge: false,
+                            preferredCornerRadius: 28
+                        )
+                    )
+                )
         }
         .sheet(isPresented: Binding(get: { selectedHashtag != nil }, set: { if !$0 { selectedHashtag = nil } })) {
             if let hashtag = selectedHashtag {
                 HashtagSearchSheet(hashtag: hashtag)
                     .presentationDetents([.large])
+                    .background(
+                        UIKitSheetConfigurator(
+                            configuration: UIKitSheetConfiguration(
+                                detents: [.large()],
+                                largestUndimmedDetentIdentifier: .large,
+                                prefersGrabberVisible: true,
+                                prefersScrollingExpandsWhenScrolledToEdge: false,
+                                preferredCornerRadius: 28
+                            )
+                        )
+                    )
             }
         }
         .overlay(alignment: .topTrailing) {

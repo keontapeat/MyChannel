@@ -53,6 +53,7 @@ struct UploadView: View {
     // Pro Editor
     @State private var showProEditor = false
     @State private var proEditorVideoURL: URL?
+    @State private var showShareSheet = false
 
     // AI Title/Description optimizer
     @State private var isLoadingAISuggestions = false
@@ -301,6 +302,12 @@ struct UploadView: View {
             if let url = uploadManager.videoURL {
                 RawPlayerLayerView(player: AVPlayer(url: url), videoGravity: .resizeAspect)
                     .ignoresSafeArea()
+            }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let video = uploadManager.uploadedVideo {
+                let shareURL = URL(string: "https://mychannel.app/video/\(video.id)") ?? URL(string: "https://mychannel.app")!
+                ShareSheet(items: ["\(video.title) — Watch on MyChannel", shareURL])
             }
         }
         .sheet(isPresented: $showQualitySettings) {
@@ -876,6 +883,18 @@ struct UploadView: View {
                     }
                     .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.primary))
 
+                    Toggle(isOn: $uploadManager.allowEmbedding) {
+                        Text("Allow embedding")
+                            .font(.system(size: 15, weight: .medium))
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.primary))
+
+                    Toggle(isOn: $uploadManager.notifySubscribers) {
+                        Text("Notify subscribers")
+                            .font(.system(size: 15, weight: .medium))
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.primary))
+
                     Toggle(isOn: $uploadManager.isScheduled) {
                         Text("Schedule upload")
                             .font(.system(size: 15, weight: .medium))
@@ -899,6 +918,31 @@ struct UploadView: View {
                     }
                 }
                 
+                detailCard(title: "License & Language") {
+                    Picker("License", selection: $uploadManager.license) {
+                        ForEach(VideoLicense.allCases, id: \.self) { lic in
+                            Text(lic.displayName).tag(lic)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Picker("Video language", selection: $uploadManager.language) {
+                        Text("English").tag("en")
+                        Text("Spanish").tag("es")
+                        Text("French").tag("fr")
+                        Text("German").tag("de")
+                        Text("Portuguese").tag("pt")
+                        Text("Hindi").tag("hi")
+                        Text("Japanese").tag("ja")
+                        Text("Chinese").tag("zh")
+                        Text("Arabic").tag("ar")
+                        Text("Russian").tag("ru")
+                        Text("Korean").tag("ko")
+                        Text("Italian").tag("it")
+                    }
+                    .pickerStyle(.menu)
+                }
+
                 detailCard(title: "Location & Thumbnail") {
                     ProfessionalInputField(
                         title: "Location",
@@ -1384,7 +1428,7 @@ struct UploadView: View {
                     // Share Video
                     Button {
                         HapticManager.shared.impact(style: .light)
-                        // TODO: Implement share sheet
+                        showShareSheet = true
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "square.and.arrow.up")
@@ -1832,25 +1876,20 @@ struct ProfessionalTextEditor: View {
                 .padding(.top, 12)
                 
                 ZStack(alignment: .topLeading) {
-                    TextEditor(text: $text)
-                        .font(.system(size: 16))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .focused($isFocused)
-                        .scrollContentBackground(.hidden)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .onChange(of: text) { newValue in
-                            if newValue.count > maxLength { text = String(newValue.prefix(maxLength)) }
+                    UIKitMultilineTextView(
+                        text: $text,
+                        placeholder: placeholder,
+                        font: .systemFont(ofSize: 16),
+                        textColor: UIColor(AppTheme.Colors.textPrimary),
+                        placeholderColor: UIColor(AppTheme.Colors.textTertiary),
+                        isFirstResponder: isFocused,
+                        maxLength: maxLength,
+                        onFocusChanged: { focused in
+                            isFocused = focused
                         }
-                    
-                    if text.isEmpty {
-                        Text(placeholder)
-                            .font(.system(size: 16))
-                            .foregroundColor(AppTheme.Colors.textTertiary)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .allowsHitTesting(false)
-                    }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 4)
                 }
                 .frame(height: 100)
             }

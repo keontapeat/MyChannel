@@ -712,8 +712,11 @@ class EnhancedVideoUploadService: ObservableObject {
                 "ageRestricted": upload.ageRestricted,
                 "madeForKids": upload.madeForKids,
                 "allowComments": upload.allowComments,
+                "allowEmbedding": upload.allowEmbedding,
+                "notifySubscribers": upload.notifySubscribers,
                 "filmingLocation": upload.filmingLocation,
                 "isPremiere": upload.isPremiere,
+                "license": upload.license,
                 "copyrightClaims": [],
                 "performanceScore": 0.0,
                 "seoScore": 0.0,
@@ -889,6 +892,10 @@ struct VideoUpload: Identifiable, Codable {
     var isScheduled: Bool = false
     var scheduledDate: Date? = nil
     var isPremiere: Bool = false
+    var language: String = "en"
+    var license: String = "standard"
+    var allowEmbedding: Bool = true
+    var notifySubscribers: Bool = true
 }
 
 enum UploadStatus: String, Codable, CaseIterable {

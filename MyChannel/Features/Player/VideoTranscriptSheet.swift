@@ -4,6 +4,7 @@ struct VideoTranscriptSheet: View {
     let video: Video
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
+    @State private var searchFocused = false
     @State private var selectedLanguage = "English"
     @State private var autoScroll = true
     @State private var currentTime: TimeInterval = 0
@@ -16,11 +17,15 @@ struct VideoTranscriptSheet: View {
                 // Search and Language Controls
                 VStack(spacing: 12) {
                     HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.secondary)
-                        
-                        TextField("Search transcript...", text: $searchText)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                        UIKitSearchBar(
+                            text: $searchText,
+                            placeholder: "Search transcript...",
+                            isFirstResponder: searchFocused,
+                            onFocusChanged: { focused in
+                                searchFocused = focused
+                            }
+                        )
+                        .frame(height: 44)
                     }
                     
                     HStack {
@@ -83,6 +88,17 @@ struct VideoTranscriptSheet: View {
                 }
             }
         }
+        .background(
+            UIKitSheetConfigurator(
+                configuration: UIKitSheetConfiguration(
+                    detents: [.medium(), .large()],
+                    largestUndimmedDetentIdentifier: .large,
+                    prefersGrabberVisible: true,
+                    prefersScrollingExpandsWhenScrolledToEdge: false,
+                    preferredCornerRadius: 28
+                )
+            )
+        )
     }
     
     private var mockTranscriptSegments: [VideoTranscriptSegment] {

@@ -35,6 +35,10 @@ class VideoUploadManager: ObservableObject {
     @Published var isUnlisted: Bool = false
     @Published var monetizationEnabled: Bool = true // 🔥💰 DEFAULT: ON! Creators earn from day 1!
     @Published var allowComments: Bool = true
+    @Published var allowEmbedding: Bool = true
+    @Published var notifySubscribers: Bool = true
+    @Published var license: VideoLicense = .standard
+    @Published var language: String = "en"
     
     // 🔥 NEW: Scheduling & Advanced Features
     @Published var isScheduled: Bool = false
@@ -191,7 +195,11 @@ class VideoUploadManager: ObservableObject {
                     filmingLocation: filmingLocation,
                     isScheduled: isScheduled,
                     scheduledDate: isScheduled ? scheduledDate : nil,
-                    isPremiere: isPremiere
+                    isPremiere: isPremiere,
+                    language: language,
+                    license: license,
+                    allowEmbedding: allowEmbedding,
+                    notifySubscribers: notifySubscribers
                 )
                 
                 let video = try await uploadVideoWithProgress(videoData, metadata: metadata)
@@ -216,7 +224,7 @@ class VideoUploadManager: ObservableObject {
                 // 🔥 FIX: Ensure viewCount is initialized to 0 in Firestore
                 print("💾 [VideoUploadManager] Saving video to Firestore with viewCount: 0")
                 try? await VideoFirestoreService.shared.saveVideo(uploadedVideo)
-                
+
                 // 🔥 FIX: Verify viewCount was saved correctly
                 let savedCount = await RealtimeViewTracker.shared.getViewCount(for: uploadedVideo.id)
                 print("📊 [VideoUploadManager] Verified viewCount after save: \(savedCount)")
@@ -620,6 +628,16 @@ class VideoUploadManager: ObservableObject {
                 #endif
             }
 
+            // Persist YouTube-parity fields not carried by Video model
+            #if canImport(FirebaseFirestore)
+            try? await Firestore.firestore().collection("videos").document(uploaded.id).updateData([
+                "language": metadata.language,
+                "license": metadata.license.rawValue,
+                "allowEmbedding": metadata.allowEmbedding,
+                "notifySubscribers": metadata.notifySubscribers
+            ])
+            #endif
+
             // Persist metadata to backend (best-effort, non-blocking)
             Task {
                 _ = try? await VideoAPIService.shared.createVideo(
@@ -629,7 +647,7 @@ class VideoUploadManager: ObservableObject {
                     tags: metadata.tags,
                     visibility: metadata.isUnlisted ? "unlisted" : (metadata.isPublic ? "public" : "private"),
                     isPremium: self.monetizationEnabled,
-                    language: "en",
+                    language: metadata.language,
                     videoUrl: uploaded.videoURL,
                     thumbnailUrl: uploaded.thumbnailURL,
                     allowComments: metadata.allowComments,
@@ -676,6 +694,10 @@ class VideoUploadManager: ObservableObject {
         filmingLocation = ""
         ageRestricted = false
         madeForKids = false
+        allowEmbedding = true
+        notifySubscribers = true
+        license = .standard
+        language = "en"
         uploadProgress = 0.0
         videoDuration = 0
         videoDimensions = .zero
@@ -747,8 +769,12 @@ struct VideoUploadMetadata {
     let isScheduled: Bool
     let scheduledDate: Date?
     let isPremiere: Bool
+    let language: String
+    let license: VideoLicense
+    let allowEmbedding: Bool
+    let notifySubscribers: Bool
     
-    init(title: String, description: String, tags: [String], category: VideoCategory, isPublic: Bool, isUnlisted: Bool = false, thumbnailData: Data? = nil, monetizationEnabled: Bool = false, allowComments: Bool = true, madeForKids: Bool = false, ageRestricted: Bool = false, filmingLocation: String = "", isScheduled: Bool = false, scheduledDate: Date? = nil, isPremiere: Bool = false) {
+    init(title: String, description: String, tags: [String], category: VideoCategory, isPublic: Bool, isUnlisted: Bool = false, thumbnailData: Data? = nil, monetizationEnabled: Bool = false, allowComments: Bool = true, madeForKids: Bool = false, ageRestricted: Bool = false, filmingLocation: String = "", isScheduled: Bool = false, scheduledDate: Date? = nil, isPremiere: Bool = false, language: String = "en", license: VideoLicense = .standard, allowEmbedding: Bool = true, notifySubscribers: Bool = true) {
         self.title = title
         self.description = description
         self.tags = tags
@@ -764,6 +790,22 @@ struct VideoUploadMetadata {
         self.isScheduled = isScheduled
         self.scheduledDate = scheduledDate
         self.isPremiere = isPremiere
+        self.language = language
+        self.license = license
+        self.allowEmbedding = allowEmbedding
+        self.notifySubscribers = notifySubscribers
+    }
+}
+
+enum VideoLicense: String, Codable, CaseIterable {
+    case standard = "standard"
+    case creativeCommons = "creative_commons"
+
+    var displayName: String {
+        switch self {
+        case .standard: return "Standard License"
+        case .creativeCommons: return "Creative Commons - Attribution"
+        }
     }
 }
 

@@ -13,6 +13,99 @@ function extractStringList(value: unknown): string[] {
   return value.map(item => String(item).trim()).filter(Boolean);
 }
 
+function normalizeSearchText(value: unknown): string {
+  return String(value || '').trim().toLowerCase();
+}
+
+function tokenizeQuery(value: string): string[] {
+  return Array.from(new Set(
+    normalizeSearchText(value)
+      .split(/[^a-z0-9@#_]+/i)
+      .map(token => token.trim())
+      .filter(token => token.length >= 2)
+  ));
+}
+
+function computeTokenCoverageScore(haystack: string, tokens: string[]): number {
+  if (!tokens.length || !haystack) return 0;
+  let score = 0;
+  for (const token of tokens) {
+    if (haystack === token) {
+      score += 10;
+      continue;
+    }
+    if (haystack.startsWith(token)) {
+      score += 6;
+      continue;
+    }
+    if (haystack.includes(` ${token} `) || haystack.endsWith(` ${token}`) || haystack.startsWith(`${token} `)) {
+      score += 4;
+      continue;
+    }
+    if (haystack.includes(token)) {
+      score += 2;
+    }
+  }
+  return score;
+}
+
+function computeRecencyBoost(value: any): number {
+  const iso = toIsoString(value);
+  if (!iso) return 0;
+  const ageMs = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ageMs) || ageMs < 0) return 0;
+  const days = ageMs / (1000 * 60 * 60 * 24);
+  if (days <= 3) return 4;
+  if (days <= 7) return 3;
+  if (days <= 30) return 2;
+  if (days <= 90) return 1;
+  return 0;
+}
+
+function computePopularityBoost(data: Record<string, any>): number {
+  const views = Number(data.views || 0);
+  const likes = Number(data.likes || 0);
+  const comments = Number(data.comments || 0);
+  return Math.min(8, Math.log10(Math.max(views, 1)) * 2 + Math.log10(Math.max(likes + comments, 1)));
+}
+
+function computeVideoSearchScore(
+  queryText: string,
+  tokens: string[],
+  data: Record<string, any>,
+  user: Record<string, any>
+): number {
+  if (!queryText) {
+    return computePopularityBoost(data) + computeRecencyBoost(data.publishedAt || data.createdAt);
+  }
+
+  const title = normalizeSearchText(data.title);
+  const description = normalizeSearchText(data.description);
+  const searchText = normalizeSearchText(data.searchText);
+  const tags = extractStringList(data.tags).map(normalizeSearchText).join(' ');
+  const creatorUsername = normalizeSearchText(user.username);
+  const creatorDisplayName = normalizeSearchText(user.displayName || user.name || user.username);
+
+  let score = 0;
+
+  if (title === queryText) score += 40;
+  else if (title.startsWith(queryText)) score += 25;
+  else if (title.includes(queryText)) score += 15;
+
+  if (creatorUsername === queryText || creatorDisplayName === queryText) score += 18;
+
+  score += computeTokenCoverageScore(title, tokens) * 3;
+  score += computeTokenCoverageScore(tags, tokens) * 2.5;
+  score += computeTokenCoverageScore(creatorUsername, tokens) * 2;
+  score += computeTokenCoverageScore(creatorDisplayName, tokens) * 2;
+  score += computeTokenCoverageScore(searchText, tokens) * 1.5;
+  score += computeTokenCoverageScore(description, tokens) * 1;
+  score += computePopularityBoost(data);
+  score += computeRecencyBoost(data.publishedAt || data.createdAt);
+
+  return Number(score.toFixed(2));
+}
+
 function toIsoString(value: any): string | null {
   if (!value) return null;
   if (typeof value === 'string') return value;
@@ -42,10 +135,11 @@ app.use(express.json());
 app.get('/v1/search', async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
+    const normalizedQuery = normalizeSearchText(q);
+    const queryTokens = tokenizeQuery(q);
     const page = parseInt(req.query.page as string) || 1;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
     const offset = (page - 1) * limit;
-    const qLower = q.toLowerCase();
 
     const category = req.query.category as string || null;
     const durationMin = parseInt(req.query.durationMin as string) || null;
@@ -91,7 +185,7 @@ app.get('/v1/search', async (req, res) => {
     const snap = await query.limit(Math.min(Math.max(page * limit * 5, 60), 240)).get();
 
     const usersMap = await loadUsersMap(snap.docs.map(doc => String(doc.get('ownerId') || '')));
-    const filteredDocs = snap.docs.filter(doc => {
+    const rankedDocs = snap.docs.map(doc => {
       const data = doc.data();
       const user = usersMap[String(data.ownerId || '')] || {};
       const fields = [
@@ -102,12 +196,33 @@ app.get('/v1/search', async (req, res) => {
         String(user.username || ''),
         String(user.displayName || user.name || '')
       ];
-      return !q || fields.some(value => value.toLowerCase().includes(qLower));
+      const matches = !normalizedQuery || fields.some(value => normalizeSearchText(value).includes(normalizedQuery)) || queryTokens.every(token => fields.some(value => normalizeSearchText(value).includes(token)));
+      if (!matches) {
+        return null;
+      }
+
+      return {
+        doc,
+        data,
+        user,
+        score: computeVideoSearchScore(normalizedQuery, queryTokens, data, user)
+      };
+    }).filter((entry): entry is { doc: FirebaseFirestore.QueryDocumentSnapshot; data: Record<string, any>; user: Record<string, any>; score: number } => Boolean(entry));
+
+    rankedDocs.sort((a, b) => {
+      if (sortBy === 'date') {
+        return new Date(toIsoString(b.data.publishedAt || b.data.createdAt) || 0).getTime() - new Date(toIsoString(a.data.publishedAt || a.data.createdAt) || 0).getTime();
+      }
+      if (sortBy === 'likes') {
+        return Number(b.data.likes || 0) - Number(a.data.likes || 0) || b.score - a.score;
+      }
+      if (sortBy === 'views') {
+        return Number(b.data.views || 0) - Number(a.data.views || 0) || b.score - a.score;
+      }
+      return b.score - a.score || Number(b.data.views || 0) - Number(a.data.views || 0);
     });
 
-    const items = filteredDocs.slice(offset, offset + limit).map(doc => {
-      const data = doc.data();
-      const user = usersMap[String(data.ownerId || '')] || {};
+    const items = rankedDocs.slice(offset, offset + limit).map(({ doc, data, user, score }) => {
       return {
         id: doc.id,
         title: data.title || '',
@@ -128,7 +243,8 @@ app.get('/v1/search', async (req, res) => {
           avatarUrl: user.avatarUrl || null,
           verified: !!user.verified,
           subscriberCount: Number(user.subscriberCount || user.subscriber_count || 0)
-        }
+        },
+        relevanceScore: score
       };
     });
 
@@ -138,8 +254,7 @@ app.get('/v1/search', async (req, res) => {
       qualities: {}
     };
 
-    filteredDocs.forEach(doc => {
-      const data = doc.data();
+    rankedDocs.forEach(({ data }) => {
       if (data.category) {
         facets.categories[data.category] = (facets.categories[data.category] || 0) + 1;
       }
@@ -156,14 +271,14 @@ app.get('/v1/search', async (req, res) => {
 
     return res.json({
       items,
-      total: filteredDocs.length,
+      total: rankedDocs.length,
       q,
       filters: { category, durationMin, durationMax, dateAfter, dateBefore, sortBy, quality },
       facets,
       pagination: {
         page,
         limit,
-        hasMore: filteredDocs.length > offset + items.length
+        hasMore: rankedDocs.length > offset + items.length
       }
     });
   } catch (e: any) {
@@ -176,7 +291,8 @@ app.get('/v1/suggest', async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
     const limit = Math.min(parseInt(req.query.limit as string) || 8, 20);
-    const qLower = q.toLowerCase();
+    const qLower = normalizeSearchText(q);
+    const queryTokens = tokenizeQuery(q);
     if (!qLower) {
       return res.json({ suggestions: [] });
     }
@@ -191,14 +307,22 @@ app.get('/v1/suggest', async (req, res) => {
     for (const doc of snap.docs) {
       const data = doc.data();
       const title = String(data.title || '').trim();
-      if (title && title.toLowerCase().includes(qLower)) {
+      const normalizedTitle = normalizeSearchText(title);
+      if (title && (normalizedTitle.includes(qLower) || queryTokens.every(token => normalizedTitle.includes(token)))) {
         suggestions.add(title);
       }
 
       for (const tag of extractStringList(data.tags)) {
-        if (tag.toLowerCase().includes(qLower)) {
+        const normalizedTag = normalizeSearchText(tag);
+        if (normalizedTag.includes(qLower) || queryTokens.every(token => normalizedTag.includes(token))) {
           suggestions.add(tag);
         }
+      }
+
+      const category = String(data.category || '').trim();
+      const normalizedCategory = normalizeSearchText(category);
+      if (category && (normalizedCategory.includes(qLower) || queryTokens.every(token => normalizedCategory.includes(token)))) {
+        suggestions.add(category);
       }
 
       if (suggestions.size >= limit) {

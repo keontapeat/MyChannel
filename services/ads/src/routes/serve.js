@@ -2,6 +2,14 @@ import { query } from '../lib/db.js'
 import crypto from 'crypto'
 import { recomputeFloors } from '../jobs/floors.js'
 
+function buildAuctionDiagnostics(eligible, floor) {
+  return {
+    eligibleCount: eligible.length,
+    floorCpmCents: floor,
+    topBids: eligible.slice(0, 3).map(li => ({ lineItemId: li.id, bidCpmCents: li.bid_cpm_cents || 0 }))
+  }
+}
+
 function matchTargeting(li, body) {
   const t = li.targeting_json || {}
   if (t.geo && t.geo.length && !t.geo.includes((body.locale||'').split('-').pop())) return false
@@ -38,12 +46,14 @@ export default async function registerServeRoute(app) {
     const eligible = lis.filter(li => matchTargeting(li, body) && (li.bid_cpm_cents||0) >= floor)
     // auction by bid cpm
     eligible.sort((a,b)=> (b.bid_cpm_cents||0)-(a.bid_cpm_cents||0))
-    if (!eligible.length) return { fill: 'none' }
+    if (!eligible.length) return { fill: 'none', reason: 'no_eligible_line_items', auction: buildAuctionDiagnostics([], floor) }
     const winner = eligible[0]
+    const runnerUp = eligible[1] || null
+    const clearingCpmCents = Math.max(floor, Math.min(winner.bid_cpm_cents || floor, (runnerUp?.bid_cpm_cents || floor) + 1))
     // simple frequency cap by ip hash per placement in last hour
     const ipHash = crypto.createHash('md5').update(req.ip).digest('hex')
     const { rows: freq } = await query("select count(*)::int as c from ad_requests where ip_hash=$1 and placement=$2 and ts > now() - interval '1 hour'",[ipHash, body.placement])
-    if ((freq[0]?.c||0) > 120) return { fill: 'none' }
+    if ((freq[0]?.c||0) > 120) return { fill: 'none', reason: 'frequency_cap', auction: buildAuctionDiagnostics(eligible, floor) }
 
     const { rows: reqIns } = await query('insert into ad_requests(key_id, placement, locale, device, ip_hash, ua_hash, ts) values($1,$2,$3,$4,$5,md5($6),now()) returning id',[keys[0].id, body.placement, body.locale||'', body.device||'', ipHash, req.headers['user-agent']||''])
     const requestId = reqIns[0].id
@@ -51,6 +61,14 @@ export default async function registerServeRoute(app) {
     return {
       fill: 'direct',
       creative: { uri: winner.creative_uri, clickUrl: winner.click_url, duration: winner.duration_sec||0 },
+      auction: {
+        requestId,
+        lineItemId: winner.id,
+        clearingCpmCents,
+        winningBidCpmCents: winner.bid_cpm_cents || 0,
+        runnerUpBidCpmCents: runnerUp?.bid_cpm_cents || null,
+        ...buildAuctionDiagnostics(eligible, floor)
+      },
       tracking: {
         impUrl: `${trackingBase}/imp?rid=${requestId}&li=${winner.id}&q=0`,
         q25Url: `${trackingBase}/imp?rid=${requestId}&li=${winner.id}&q=25`,

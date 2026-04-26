@@ -5,18 +5,33 @@ import rate from '@fastify/rate-limit'
 import jwt from '@fastify/jwt'
 import { fetch } from 'undici'
 
+if (!process.env.JWT_SECRET) {
+  throw new Error('Missing JWT_SECRET')
+}
+
 const app = Fastify({ logger: true })
 await app.register(cors)
 await app.register(helmet)
 await app.register(rate, { max: 200, timeWindow: '1 minute' })
-await app.register(jwt, { secret: process.env.JWT_SECRET || 'dev-secret' })
+await app.register(jwt, { secret: process.env.JWT_SECRET })
 
 async function auth(req, reply) {
   try {
     await req.jwtVerify()
   } catch (err) {
-    reply.code(401).send({ error: 'Unauthorized' })
+    return reply.code(401).send({ error: 'Unauthorized' })
   }
+}
+
+function buildForwardHeaders(req) {
+  const headers = { ...req.headers }
+  delete headers.host
+  delete headers['content-length']
+  if (req.user) {
+    headers['x-auth-user-id'] = String(req.user.userId || req.user.uid || '')
+    headers['x-auth-email'] = String(req.user.email || '')
+  }
+  return headers
 }
 
 app.get('/health', async () => ({ status: 'ok' }))
@@ -37,7 +52,7 @@ const DOCTOR  = process.env.DOCTOR_URL     || 'http://doctor:9099'
 
 app.all('/boost/*', { preHandler: auth }, async (req, reply) => {
   const url = BOOST + req.url.replace('/boost', '')
-  const res = await fetch(url, { method: req.method, headers: req.headers, body: req.raw })
+  const res = await fetch(url, { method: req.method, headers: buildForwardHeaders(req), body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req.raw })
   reply.status(res.status)
   for (const [k,v] of res.headers) reply.header(k, v)
   reply.send(await res.arrayBuffer())
@@ -45,7 +60,7 @@ app.all('/boost/*', { preHandler: auth }, async (req, reply) => {
 
 app.all('/mind/*', { preHandler: auth }, async (req, reply) => {
   const url = MIND + req.url.replace('/mind', '')
-  const res = await fetch(url, { method: req.method, headers: req.headers, body: req.raw })
+  const res = await fetch(url, { method: req.method, headers: buildForwardHeaders(req), body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req.raw })
   reply.status(res.status)
   for (const [k,v] of res.headers) reply.header(k, v)
   reply.send(await res.arrayBuffer())
@@ -53,7 +68,7 @@ app.all('/mind/*', { preHandler: auth }, async (req, reply) => {
 
 app.all('/pay/*', { preHandler: auth }, async (req, reply) => {
   const url = PAY + req.url.replace('/pay', '')
-  const res = await fetch(url, { method: req.method, headers: req.headers, body: req.raw })
+  const res = await fetch(url, { method: req.method, headers: buildForwardHeaders(req), body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req.raw })
   reply.status(res.status)
   for (const [k,v] of res.headers) reply.header(k, v)
   reply.send(await res.arrayBuffer())
@@ -61,7 +76,7 @@ app.all('/pay/*', { preHandler: auth }, async (req, reply) => {
 
 app.all('/protect/*', { preHandler: auth }, async (req, reply) => {
   const url = PROTECT + req.url.replace('/protect', '')
-  const res = await fetch(url, { method: req.method, headers: req.headers, body: req.raw })
+  const res = await fetch(url, { method: req.method, headers: buildForwardHeaders(req), body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req.raw })
   reply.status(res.status)
   for (const [k,v] of res.headers) reply.header(k, v)
   reply.send(await res.arrayBuffer())
@@ -69,7 +84,7 @@ app.all('/protect/*', { preHandler: auth }, async (req, reply) => {
 
 app.all('/iq/*', { preHandler: auth }, async (req, reply) => {
   const url = IQ + req.url.replace('/iq', '')
-  const res = await fetch(url, { method: req.method, headers: req.headers, body: req.raw })
+  const res = await fetch(url, { method: req.method, headers: buildForwardHeaders(req), body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req.raw })
   reply.status(res.status)
   for (const [k,v] of res.headers) reply.header(k, v)
   reply.send(await res.arrayBuffer())
@@ -78,7 +93,7 @@ app.all('/iq/*', { preHandler: auth }, async (req, reply) => {
 function proxy(prefix, base) {
   app.all(`${prefix}/*`, { preHandler: auth }, async (req, reply) => {
     const url = base + req.url.replace(prefix, '')
-    const res = await fetch(url, { method: req.method, headers: req.headers, body: req.raw })
+    const res = await fetch(url, { method: req.method, headers: buildForwardHeaders(req), body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req.raw })
     reply.status(res.status)
     for (const [k,v] of res.headers) reply.header(k, v)
     reply.send(await res.arrayBuffer())

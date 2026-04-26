@@ -31,6 +31,114 @@ function extractStringList(value: unknown): string[] {
   return value.map(item => String(item).trim()).filter(Boolean);
 }
 
+function normalizeTags(value: unknown): string[] {
+  return Array.from(new Set(extractStringList(value).map(tag => tag.toLowerCase()))).slice(0, 25);
+}
+
+function toNumber(value: unknown): number {
+  const num = Number(value || 0);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function publishedAtMillis(value: any): number {
+  const iso = toIsoString(value);
+  return iso ? new Date(iso).getTime() : 0;
+}
+
+function computePublishReadiness(data: Record<string, any>) {
+  const checklist = {
+    title: !!String(data.title || '').trim(),
+    description: String(data.description || '').trim().length >= 20,
+    thumbnail: !!String(data.thumbnailUrl || '').trim(),
+    video: !!String(data.videoUrl || '').trim(),
+    category: !!String(data.category || '').trim(),
+    tags: normalizeTags(data.tags).length >= 3,
+    visibility: ['private', 'unlisted', 'public'].includes(String(data.visibility || '').trim().toLowerCase())
+  };
+
+  const completed = Object.values(checklist).filter(Boolean).length;
+  const total = Object.keys(checklist).length;
+  return {
+    checklist,
+    completed,
+    total,
+    score: Number((completed / total).toFixed(2)),
+    ready: completed === total
+  };
+}
+
+function computeEngagementRate(video: Record<string, any>): number {
+  const views = Math.max(1, toNumber(video.views));
+  const interactions = toNumber(video.likes) + toNumber(video.comments) + toNumber(video.shares);
+  return Number(((interactions / views) * 100).toFixed(2));
+}
+
+function computeAverageViewDuration(video: Record<string, any>): number | null {
+  const views = toNumber(video.views);
+  const watchTime = toNumber(video.watchTime || video.watchTimeMinutes || 0);
+  if (!views || !watchTime) return null;
+  return Number((watchTime / views).toFixed(2));
+}
+
+function formatDraft(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) {
+  const data = doc.data() || {};
+  const readiness = computePublishReadiness(data as Record<string, any>);
+  return {
+    id: doc.id,
+    title: data.title || '',
+    description: data.description || null,
+    thumbnailUrl: data.thumbnailUrl || null,
+    videoUrl: data.videoUrl || null,
+    visibility: data.visibility || 'private',
+    status: data.status || 'draft',
+    category: data.category || null,
+    tags: normalizeTags(data.tags),
+    isPremium: !!data.isPremium,
+    language: data.language || 'en',
+    monetizationStatus: data.monetizationStatus || 'not_reviewed',
+    scheduledPublishAt: toIsoString(data.scheduledPublishAt),
+    createdAt: toIsoString(data.createdAt),
+    updatedAt: toIsoString(data.updatedAt) || toIsoString(data.createdAt),
+    publishReadiness: readiness
+  };
+}
+
+function formatVideoPerformance(video: Record<string, any>) {
+  return {
+    id: String(video.id || ''),
+    title: video.title || '',
+    status: video.status || 'draft',
+    visibility: video.visibility || 'private',
+    publishedAt: toIsoString(video.publishedAt || video.createdAt),
+    viewCount: toNumber(video.views),
+    likeCount: toNumber(video.likes),
+    commentCount: toNumber(video.comments),
+    shareCount: toNumber(video.shares),
+    watchTime: toNumber(video.watchTime || video.watchTimeMinutes || 0),
+    avgViewDuration: computeAverageViewDuration(video),
+    engagementRate: computeEngagementRate(video),
+    ctr: video.ctr != null ? Number(Number(video.ctr).toFixed(2)) : null,
+    revenue: toNumber(video.revenue),
+    estimatedRevenue: toNumber(video.estimatedRevenue || video.revenue),
+    monetizationStatus: video.monetizationStatus || 'not_reviewed',
+    updatedAt: toIsoString(video.updatedAt) || toIsoString(video.createdAt)
+  };
+}
+
+function summarizeWindow(videos: Record<string, any>[], days: number) {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const inWindow = videos.filter(video => publishedAtMillis(video.publishedAt || video.createdAt) >= cutoff);
+  return {
+    days,
+    videoCount: inWindow.length,
+    views: inWindow.reduce((sum, video) => sum + toNumber(video.views), 0),
+    watchTime: inWindow.reduce((sum, video) => sum + toNumber(video.watchTime || video.watchTimeMinutes || 0), 0),
+    likes: inWindow.reduce((sum, video) => sum + toNumber(video.likes), 0),
+    comments: inWindow.reduce((sum, video) => sum + toNumber(video.comments), 0),
+    revenue: inWindow.reduce((sum, video) => sum + toNumber(video.estimatedRevenue || video.revenue), 0)
+  };
+}
+
 async function verifyUser(authHeader: string | undefined): Promise<AuthenticatedUser | null> {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7).trim();
@@ -92,26 +200,16 @@ app.get('/v1/creator/drafts', async (req, res) => {
       .get();
 
     const filteredDocs = snap.docs.filter(doc => String(doc.get('status') || 'draft') !== 'published');
-    const drafts = filteredDocs.slice(offset, offset + limit).map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        title: data.title || '',
-        description: data.description || null,
-        thumbnailUrl: data.thumbnailUrl || null,
-        videoUrl: data.videoUrl || null,
-        visibility: data.visibility || 'private',
-        status: data.status || 'draft',
-        category: data.category || null,
-        tags: extractStringList(data.tags),
-        isPremium: !!data.isPremium,
-        createdAt: toIsoString(data.createdAt),
-        updatedAt: toIsoString(data.updatedAt) || toIsoString(data.createdAt)
-      };
-    });
+    const drafts = filteredDocs.slice(offset, offset + limit).map(doc => formatDraft(doc));
 
     return res.json({
       drafts,
+      summary: {
+        totalDrafts: filteredDocs.length,
+        readyToPublish: drafts.filter(draft => draft.publishReadiness.ready).length,
+        scheduled: drafts.filter(draft => !!draft.scheduledPublishAt).length,
+        monetized: drafts.filter(draft => draft.isPremium || draft.monetizationStatus === 'approved').length
+      },
       pagination: {
         page,
         limit,
@@ -146,33 +244,26 @@ app.post('/v1/creator/drafts', async (req, res) => {
       thumbnailUrl: String(body.thumbnailUrl || '').trim() || null,
       videoUrl: String(body.videoUrl || '').trim() || null,
       visibility: String(body.visibility || 'private').trim().toLowerCase() || 'private',
-      status: 'draft',
+      status: String(body.status || existing.get('status') || 'draft').trim().toLowerCase() || 'draft',
       category: String(body.category || '').trim() || null,
-      tags: Array.from(new Set(extractStringList(body.tags).map(tag => tag.toLowerCase()))).slice(0, 25),
+      tags: normalizeTags(body.tags),
       isPremium: !!body.isPremium,
       language: String(body.language || 'en').trim() || 'en',
+      monetizationStatus: String(body.monetizationStatus || existing.get('monetizationStatus') || 'not_reviewed').trim().toLowerCase() || 'not_reviewed',
+      scheduledPublishAt: body.scheduledPublishAt ? admin.firestore.Timestamp.fromDate(new Date(String(body.scheduledPublishAt))) : (existing.get('scheduledPublishAt') || null),
+      metadataCompletionScore: computePublishReadiness(body).score,
       updatedAt: now,
       createdAt: existing.exists ? (existing.get('createdAt') || now) : now
     };
 
     await draftRef.set(payload, { merge: true });
 
+    const updatedDraft = await draftRef.get();
+
     return res.status(existing.exists ? 200 : 201).json({
       id: draftRef.id,
-      draft: {
-        id: draftRef.id,
-        title: payload.title,
-        description: payload.description,
-        thumbnailUrl: payload.thumbnailUrl,
-        videoUrl: payload.videoUrl,
-        visibility: payload.visibility,
-        status: payload.status,
-        category: payload.category,
-        tags: payload.tags,
-        isPremium: payload.isPremium,
-        createdAt: toIsoString(payload.createdAt),
-        updatedAt: toIsoString(payload.updatedAt)
-      }
+      draft: formatDraft(updatedDraft),
+      publishReady: formatDraft(updatedDraft).publishReadiness.ready
     });
   } catch (e: any) {
     return res.status(500).json({ error: e?.message || 'internal' });
@@ -202,6 +293,28 @@ app.get('/v1/creator/analytics', async (req, res) => {
     const likes = publishedVideos.reduce((sum, video) => sum + Number(video.likes || 0), 0);
     const comments = publishedVideos.reduce((sum, video) => sum + Number(video.comments || 0), 0);
     const subscribers = Number(userSnap.data()?.subscriberCount || userSnap.data()?.subscriber_count || 0);
+    const revenue = publishedVideos.reduce((sum, video) => sum + toNumber(video.estimatedRevenue || video.revenue), 0);
+    const averageViewsPerVideo = publishedVideos.length ? Number((views / publishedVideos.length).toFixed(2)) : 0;
+    const averageEngagementRate = publishedVideos.length
+      ? Number((publishedVideos.reduce((sum, video) => sum + computeEngagementRate(video), 0) / publishedVideos.length).toFixed(2))
+      : 0;
+    const topVideos = publishedVideos
+      .map(video => formatVideoPerformance(video))
+      .sort((a, b) => b.viewCount - a.viewCount || b.engagementRate - a.engagementRate)
+      .slice(0, 5);
+    const recentVideos = videos
+      .slice(0, 10)
+      .map(video => formatVideoPerformance(video));
+    const readinessSummary = draftVideos
+      .map(video => computePublishReadiness(video))
+      .reduce((acc, readiness) => {
+        acc.readyToPublish += readiness.ready ? 1 : 0;
+        acc.avgCompletionScore += readiness.score;
+        return acc;
+      }, { readyToPublish: 0, avgCompletionScore: 0 });
+    const avgDraftCompletionScore = draftVideos.length
+      ? Number((readinessSummary.avgCompletionScore / draftVideos.length).toFixed(2))
+      : 0;
 
     return res.json({
       views,
@@ -209,18 +322,22 @@ app.get('/v1/creator/analytics', async (req, res) => {
       subscribers,
       likes,
       comments,
+      revenue,
       videoCount: publishedVideos.length,
       draftCount: draftVideos.length,
-      recentVideos: videos.slice(0, 5).map(video => ({
-        id: video.id,
-        title: video.title || '',
-        status: video.status || 'draft',
-        viewCount: Number(video.views || 0),
-        likeCount: Number(video.likes || 0),
-        commentCount: Number(video.comments || 0),
-        createdAt: toIsoString(video.createdAt),
-        updatedAt: toIsoString(video.updatedAt) || toIsoString(video.createdAt)
-      }))
+      averageViewsPerVideo,
+      averageEngagementRate,
+      draftReadiness: {
+        readyToPublish: readinessSummary.readyToPublish,
+        avgCompletionScore: avgDraftCompletionScore
+      },
+      windows: {
+        last7Days: summarizeWindow(publishedVideos, 7),
+        last28Days: summarizeWindow(publishedVideos, 28),
+        last90Days: summarizeWindow(publishedVideos, 90)
+      },
+      topVideos,
+      recentVideos
     });
   } catch (e: any) {
     return res.status(500).json({ error: e?.message || 'internal' });

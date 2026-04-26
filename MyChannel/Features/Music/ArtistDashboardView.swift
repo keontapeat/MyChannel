@@ -26,6 +26,10 @@ struct ArtistDashboardView: View {
     @State private var showContentIDSheet = false
     @State private var showProfileEditSheet = false
     @State private var selectedContentPolicy: ContentMatch.MatchPolicy = .track
+    @State private var showTrackEditSheet = false
+    @State private var showSplitsSheet = false
+    @State private var showDSPClaimingSheet = false
+    @State private var selectedTrackForEdit: ArtistTrack? = nil
     
     // Overview data
     @State private var totalTracks: Int = 0
@@ -70,6 +74,7 @@ struct ArtistDashboardView: View {
         let status: String
         let artworkURL: String?
         let audioURL: String?
+        let isrc: String?
         let uploadedAt: Date
     }
     
@@ -198,12 +203,36 @@ struct ArtistDashboardView: View {
                         artistId: artistId,
                         currentDisplayName: appState.currentUser?.displayName ?? "",
                         onSubmitted: {
-                            Task {
-                                await loadDashboardData()
-                            }
+                            Task { await loadDashboardData() }
                         }
                     )
                 }
+            }
+            .sheet(isPresented: $showTrackEditSheet) {
+                if let track = selectedTrackForEdit {
+                    TrackEditDeleteSheet(
+                        trackId: track.id,
+                        artistId: artistId,
+                        onUpdated: { Task { await loadDashboardData() } }
+                    )
+                }
+            }
+            .sheet(isPresented: $showSplitsSheet) {
+                if let track = selectedTrackForEdit {
+                    RevenueSplitsSheet(
+                        trackId: track.id,
+                        trackTitle: track.title,
+                        artistId: artistId,
+                        onSaved: { Task { await loadDashboardData() } }
+                    )
+                }
+            }
+            .sheet(isPresented: $showDSPClaimingSheet) {
+                DSPArtistClaimingSheet(
+                    artistId: artistId,
+                    artistName: appState.currentUser?.displayName ?? "",
+                    onSubmitted: {}
+                )
             }
         }
     }
@@ -342,6 +371,9 @@ struct ArtistDashboardView: View {
                     quickActionButton(title: "Manage Content ID", icon: "fingerprint", color: .purple) {
                         selectedContentPolicy = .track
                         showContentIDSheet = true
+                    }
+                    quickActionButton(title: "Claim Artist Profiles (DSP)", icon: "link.badge.plus", color: .teal) {
+                        showDSPClaimingSheet = true
                     }
                 }
             }
@@ -501,27 +533,52 @@ struct ArtistDashboardView: View {
                     Text("•")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
+                    if let isrc = track.isrc {
+                        Text(isrc)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.blue)
+                    }
+                    Text("•")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
                     Text(formatNumber(track.streamCount) + " streams")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
+                    Text("•")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                    Text(formatCurrency(Double(track.streamCount) * 0.004))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.green)
                 }
             }
             
             Spacer()
-            
-            // Status badge
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(track.status == "published" ? Color.green : Color.orange)
-                    .frame(width: 8, height: 8)
-                Text(track.status.capitalized)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(track.status == "published" ? .green : .orange)
+
+            VStack(spacing: 6) {
+                Button {
+                    selectedTrackForEdit = track
+                    showTrackEditSheet = true
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 13))
+                        .foregroundColor(AppTheme.Colors.primary)
+                        .padding(6)
+                        .background(AppTheme.Colors.primary.opacity(0.1))
+                        .clipShape(Circle())
+                }
+                Button {
+                    selectedTrackForEdit = track
+                    showSplitsSheet = true
+                } label: {
+                    Image(systemName: "person.2")
+                        .font(.system(size: 13))
+                        .foregroundColor(.purple)
+                        .padding(6)
+                        .background(Color.purple.opacity(0.1))
+                        .clipShape(Circle())
+                }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background((track.status == "published" ? Color.green : Color.orange).opacity(0.1))
-            .clipShape(Capsule())
         }
         .padding(12)
         .background(Color(.systemBackground))
@@ -709,6 +766,49 @@ struct ArtistDashboardView: View {
             .padding(16)
             .background(Color(.systemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            if !tracks.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Per-Track Earnings")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+
+                    VStack(spacing: 10) {
+                        ForEach(tracks.prefix(10)) { track in
+                            HStack(spacing: 12) {
+                                if let url = track.artworkURL.flatMap({ URL(string: $0) }) {
+                                    AppAsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                                        placeholder: { Rectangle().fill(Color(.systemGray5)) }
+                                        .frame(width: 36, height: 36)
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                } else {
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(Color(.systemGray5))
+                                        .frame(width: 36, height: 36)
+                                        .overlay(Image(systemName: "music.note").foregroundColor(.secondary).font(.system(size: 12)))
+                                }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(track.title)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .lineLimit(1)
+                                    Text(formatNumber(track.streamCount) + " streams")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Text(formatCurrency(Double(track.streamCount) * 0.004))
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(.green)
+                            }
+                            .padding(12)
+                            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color(.systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
 
             if !payoutRequests.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
@@ -1072,6 +1172,7 @@ struct ArtistDashboardView: View {
                     status: statusValue,
                     artworkURL: data["artworkURL"] as? String,
                     audioURL: (data["audioURL"] as? String) ?? (data["streamURL"] as? String),
+                    isrc: data["isrc"] as? String,
                     uploadedAt: uploadedAt
                 )
             }

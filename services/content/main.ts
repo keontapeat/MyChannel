@@ -9374,6 +9374,50 @@ app.get('/v1/users/:userId/actions', async (req, res) => {
 // Content ID System API
 // ─────────────────────────────────────────────────────────────────────────────
 
+function normalizeFingerprintValue(value: unknown): string {
+  return String(value || '').trim().toLowerCase();
+}
+
+function fingerprintTokens(value: unknown): string[] {
+  return Array.from(new Set(
+    normalizeFingerprintValue(value)
+      .split(/[^a-z0-9]+/i)
+      .map(token => token.trim())
+      .filter(token => token.length >= 4)
+  ));
+}
+
+function tokenOverlapScore(left: string[], right: string[]): number {
+  if (!left.length || !right.length) return 0;
+  const rightSet = new Set(right);
+  const overlap = left.filter(token => rightSet.has(token)).length;
+  return overlap / Math.max(left.length, right.length);
+}
+
+function computeFingerprintSimilarity(candidate: Record<string, any>, fingerprint: string, audioFingerprint: string | null): number {
+  const normalizedFingerprint = normalizeFingerprintValue(fingerprint);
+  const normalizedAudioFingerprint = normalizeFingerprintValue(audioFingerprint);
+  const candidateFingerprint = normalizeFingerprintValue(candidate.fingerprint);
+  const candidateAudioFingerprint = normalizeFingerprintValue(candidate.audioFingerprint);
+
+  if (candidateFingerprint && candidateFingerprint === normalizedFingerprint) {
+    return 1;
+  }
+
+  const visualScore = tokenOverlapScore(fingerprintTokens(candidateFingerprint), fingerprintTokens(normalizedFingerprint));
+  const audioScore = normalizedAudioFingerprint && candidateAudioFingerprint
+    ? tokenOverlapScore(fingerprintTokens(candidateAudioFingerprint), fingerprintTokens(normalizedAudioFingerprint))
+    : 0;
+
+  return Number(Math.min(1, visualScore * 0.7 + audioScore * 0.3).toFixed(3));
+}
+
+function classifyContentIdAction(similarity: number): 'block' | 'review' | 'monitor' {
+  if (similarity >= 0.92) return 'block';
+  if (similarity >= 0.75) return 'review';
+  return 'monitor';
+}
+
 // POST /v1/content-id/register - register content fingerprint
 app.post('/v1/content-id/register', async (req, res) => {
   try {
@@ -9403,18 +9447,29 @@ app.post('/v1/content-id/register', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
+    const normalizedFingerprint = normalizeFingerprintValue(fingerprint);
+    const normalizedAudioFingerprint = audioFingerprint ? normalizeFingerprintValue(audioFingerprint) : null;
     const now = admin.firestore.Timestamp.now();
     const contentIdRef = db.collection('contentId').doc();
 
     await contentIdRef.set({
       videoId,
-      fingerprint: fingerprint.trim(),
-      audioFingerprint: audioFingerprint || null,
+      fingerprint: normalizedFingerprint,
+      fingerprintTokens: fingerprintTokens(normalizedFingerprint),
+      audioFingerprint: normalizedAudioFingerprint,
+      audioFingerprintTokens: normalizedAudioFingerprint ? fingerprintTokens(normalizedAudioFingerprint) : [],
       duration: duration || null,
       ownerId: user.userId,
       status: 'registered',
-      createdAt: now
+      createdAt: now,
+      updatedAt: now
     });
+
+    await videoRef.set({
+      contentIdRegistered: true,
+      contentIdFingerprintRef: contentIdRef.id,
+      updatedAt: now
+    }, { merge: true });
 
     res.status(201).json({
       contentId: contentIdRef.id,
@@ -9457,30 +9512,42 @@ app.post('/v1/content-id/match', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
+    const normalizedFingerprint = normalizeFingerprintValue(fingerprint);
+    const normalizedAudioFingerprint = audioFingerprint ? normalizeFingerprintValue(audioFingerprint) : null;
+
     const matchesSnap = await db.collection('contentId')
-      .where('fingerprint', '==', fingerprint.trim())
-      .limit(10)
+      .where('status', '==', 'registered')
+      .limit(100)
       .get();
 
-    const matches = matchesSnap.docs.map(doc => {
-      const data = doc.data();
-      return {
-        contentId: doc.id,
-        videoId: data.videoId,
-        ownerId: data.ownerId,
-        status: data.status,
-        similarity: 1.0,
-        createdAt: toIsoString(data.createdAt)
-      };
-    });
+    const matches = matchesSnap.docs
+      .map(doc => {
+        const data = doc.data();
+        const similarity = computeFingerprintSimilarity(data, normalizedFingerprint, normalizedAudioFingerprint);
+        if (String(data.videoId || '') === videoId || similarity < 0.45) {
+          return null;
+        }
+        return {
+          contentId: doc.id,
+          videoId: data.videoId,
+          ownerId: data.ownerId,
+          status: data.status,
+          similarity,
+          action: classifyContentIdAction(similarity),
+          createdAt: toIsoString(data.createdAt)
+        };
+      })
+      .filter((match): match is { contentId: string; videoId: string; ownerId: string; status: string; similarity: number; action: 'block' | 'review' | 'monitor'; createdAt: string | null } => Boolean(match))
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 10);
 
     const now = admin.firestore.Timestamp.now();
     const matchResultRef = db.collection('contentId').doc(videoId).collection('matches').doc();
 
     await matchResultRef.set({
       videoId,
-      fingerprint: fingerprint.trim(),
-      audioFingerprint: audioFingerprint || null,
+      fingerprint: normalizedFingerprint,
+      audioFingerprint: normalizedAudioFingerprint,
       matches,
       matchedAt: now
     });
@@ -9489,6 +9556,7 @@ app.post('/v1/content-id/match', async (req, res) => {
       videoId,
       matches,
       matchCount: matches.length,
+      highestSimilarity: matches[0]?.similarity || 0,
       matchedAt: toIsoString(now)
     });
   } catch (error) {
@@ -9544,6 +9612,14 @@ app.post('/v1/content-id/claim', async (req, res) => {
       createdAt: now
     });
 
+    await contentIdRef.set({
+      activeClaimId: claimRef.id,
+      claimStatus: 'active',
+      enforcementPolicy: policy || 'block',
+      enforcementAction: action || 'monetize',
+      updatedAt: now
+    }, { merge: true });
+
     res.status(201).json({
       claimId: claimRef.id,
       contentId,
@@ -9567,12 +9643,17 @@ app.put('/v1/content-id/claims/:claimId/resolve', async (req, res) => {
     const { claimId } = req.params;
     const { resolution, notes } = req.body || {};
 
-    const claimRef = db.collection('contentId').doc('temp').collection('claims').doc(claimId);
-    const claimSnap = await claimRef.get();
+    const claimQuery = await db.collectionGroup('claims')
+      .where(admin.firestore.FieldPath.documentId(), '==', claimId)
+      .limit(1)
+      .get();
 
-    if (!claimSnap.exists) {
+    if (claimQuery.empty) {
       return res.status(404).json({ error: 'Claim not found' });
     }
+
+    const claimSnap = claimQuery.docs[0];
+    const claimRef = claimSnap.ref;
 
     const claimData = claimSnap.data()!;
 
@@ -9588,8 +9669,19 @@ app.put('/v1/content-id/claims/:claimId/resolve', async (req, res) => {
       resolvedAt: now
     });
 
+    const parentContentIdRef = claimRef.parent.parent;
+    if (parentContentIdRef) {
+      await parentContentIdRef.set({
+        claimStatus: 'resolved',
+        activeClaimId: claimId,
+        claimResolution: resolution || 'withdrawn',
+        updatedAt: now
+      }, { merge: true });
+    }
+
     res.json({
       claimId,
+      contentId: claimData.contentId,
       status: 'resolved',
       resolution: resolution || 'withdrawn',
       resolvedAt: toIsoString(now)

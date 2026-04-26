@@ -1,9 +1,10 @@
 import Fastify from 'fastify'
-import { getVideoRights, exportProof, attributionPreview, policySummary } from './routes'
+import { getVideoRights, exportProof, attributionPreview, policySummary, updateVideoRights } from './routes.js'
 
 export function buildServer() {
   const app = Fastify({ logger: true })
   app.get('/rights/video/:videoId', getVideoRights)
+  app.put('/rights/video/:videoId', updateVideoRights)
   app.get('/rights/export/proof', exportProof)
   app.post('/rights/attribution/preview', attributionPreview)
   app.get('/rights/policy', policySummary)

@@ -265,7 +265,8 @@ struct SignInView: View {
     @State private var isLoading: Bool = false
     @State private var showingError: Bool = false
     @State private var errorMessage: String = ""
-    @State private var appleSignInNonce: String = ""
+    @State private var appleSignInRawNonce: String = ""
+    @State private var appleSignInHashedNonce: String = ""
     
     let onSignUp: () -> Void
     let onForgotPassword: () -> Void
@@ -388,14 +389,17 @@ struct SignInView: View {
                     // Social sign in
                     VStack(spacing: 12) {
                         SignInWithAppleButton(.continue) { request in
-                            appleSignInNonce = FirebaseAppleAuthService.shared.prepareNonce()
+                            let pair = FirebaseAppleAuthService.shared.generateNoncePair()
+                            appleSignInRawNonce = pair.raw
+                            appleSignInHashedNonce = pair.hashed
                             request.requestedScopes = [.fullName, .email]
-                            request.nonce = appleSignInNonce
+                            request.nonce = pair.hashed
                         } onCompletion: { result in
                             switch result {
                             case .success(let auth):
                                 guard let credential = auth.credential as? ASAuthorizationAppleIDCredential else { return }
-                                Task { await AuthenticationManager.shared.signInWithAppleCredential(credential) }
+                                let rawNonce = appleSignInRawNonce
+                                Task { await AuthenticationManager.shared.signInWithAppleCredential(credential, rawNonce: rawNonce) }
                             case .failure(let error):
                                 let nsErr = error as NSError
                                 if nsErr.domain == ASAuthorizationError.errorDomain && nsErr.code == ASAuthorizationError.canceled.rawValue { return }

@@ -42,6 +42,44 @@ function detectRepetitiveContent(text: string): { suspicious: boolean; repeatedC
   return { suspicious, repeatedChars, repeatedWords };
 }
 
+function classifySeverity(score: number, flags: string[]): 'low' | 'medium' | 'high' | 'critical' {
+  if (flags.includes('hate_speech')) return 'critical';
+  if (score >= 0.8) return 'high';
+  if (score >= 0.45) return 'medium';
+  return 'low';
+}
+
+function recommendAction(score: number, flags: string[]): 'allow' | 'monitor' | 'review' | 'block' {
+  if (flags.includes('hate_speech')) return 'block';
+  if (score >= 0.75) return 'block';
+  if (score >= 0.4) return 'review';
+  if (score >= 0.2) return 'monitor';
+  return 'allow';
+}
+
+function mergeFlags(...groups: string[][]): string[] {
+  return Array.from(new Set(groups.flat()));
+}
+
+function buildReasons(flags: string[]): string[] {
+  const reasons: Record<string, string> = {
+    adult_content: 'Detected adult sexual language patterns',
+    graphic_violence: 'Detected violent or graphic language patterns',
+    hate_speech: 'Detected hateful or extremist language patterns',
+    spam: 'Detected promotional spam signals',
+    profanity: 'Detected profanity',
+    scam_content: 'Detected scam or financial abuse language',
+    link_spam: 'Detected suspicious outbound link patterns',
+    emoji_spam: 'Detected excessive emoji spam patterns',
+    repetitive_content: 'Detected repetitive or duplicated content patterns',
+    aggressive_formatting: 'Detected excessive capitalization or aggressive formatting',
+    invalid_thumbnail_uri: 'Thumbnail URI is not from an allowed protocol',
+    adult_thumbnail_hint: 'Thumbnail URI text suggests adult content',
+    violent_thumbnail_hint: 'Thumbnail URI text suggests violent content'
+  };
+  return flags.map(flag => reasons[flag] || flag);
+}
+
 function evaluateText(text: string) {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -49,7 +87,10 @@ function evaluateText(text: string) {
       safe: true,
       flags: [] as string[],
       score: 0,
-      requiresReview: false
+      requiresReview: false,
+      severity: 'low' as const,
+      recommendedAction: 'allow' as const,
+      signals: {}
     };
   }
 
@@ -76,12 +117,32 @@ function evaluateText(text: string) {
   if (repetitive.suspicious) flags.push('repetitive_content');
   if (excessiveCaps) flags.push('aggressive_formatting');
 
-  const score = adultHits * 0.45 + violenceHits * 0.4 + hateHits * 0.5 + spamHits * 0.25 + profanityHits * 0.15 + scamHits * 0.35 + (linkSpam.suspicious ? 0.3 : 0) + (emojiSpam.suspicious ? 0.15 : 0) + (repetitive.suspicious ? 0.2 : 0) + (excessiveCaps ? 0.1 : 0);
+  const score = Math.min(adultHits * 0.45 + violenceHits * 0.4 + hateHits * 0.8 + spamHits * 0.25 + profanityHits * 0.15 + scamHits * 0.45 + (linkSpam.suspicious ? 0.3 : 0) + (emojiSpam.suspicious ? 0.15 : 0) + (repetitive.suspicious ? 0.2 : 0) + (excessiveCaps ? 0.1 : 0), 1);
+  const normalizedScore = Math.min(Number(score.toFixed(2)), 1);
+  const severity = classifySeverity(normalizedScore, flags);
+  const recommendedAction = recommendAction(normalizedScore, flags);
   return {
-    safe: score < 0.5 && !flags.includes('hate_speech'),
+    safe: recommendedAction === 'allow' || recommendedAction === 'monitor',
     flags,
-    score: Math.min(Number(score.toFixed(2)), 1),
-    requiresReview: score >= 0.35 || flags.includes('hate_speech')
+    score: normalizedScore,
+    requiresReview: recommendedAction === 'review' || recommendedAction === 'block',
+    severity,
+    recommendedAction,
+    signals: {
+      adultHits,
+      violenceHits,
+      hateHits,
+      spamHits,
+      profanityHits,
+      scamHits,
+      linkCount: linkSpam.count,
+      suspiciousLinkSpam: linkSpam.suspicious,
+      emojiCount: emojiSpam.count,
+      suspiciousEmojiSpam: emojiSpam.suspicious,
+      repeatedChars: repetitive.repeatedChars,
+      repeatedWords: repetitive.repeatedWords,
+      excessiveCaps
+    }
   };
 }
 
@@ -92,7 +153,10 @@ function evaluateThumbnailUri(thumbnailUri: string) {
       safe: true,
       flags: [] as string[],
       score: 0,
-      requiresReview: false
+      requiresReview: false,
+      severity: 'low' as const,
+      recommendedAction: 'allow' as const,
+      signals: {}
     };
   }
 
@@ -109,11 +173,21 @@ function evaluateThumbnailUri(thumbnailUri: string) {
   }
 
   const score = flags.includes('invalid_thumbnail_uri') ? 0.25 : flags.length * 0.3;
+  const normalizedScore = Math.min(Number(score.toFixed(2)), 1);
+  const severity = classifySeverity(normalizedScore, flags);
+  const recommendedAction = recommendAction(normalizedScore, flags);
   return {
-    safe: flags.length === 0,
+    safe: recommendedAction === 'allow' || recommendedAction === 'monitor',
     flags,
-    score: Math.min(Number(score.toFixed(2)), 1),
-    requiresReview: flags.length > 0
+    score: normalizedScore,
+    requiresReview: recommendedAction === 'review' || recommendedAction === 'block',
+    severity,
+    recommendedAction,
+    signals: {
+      invalidProtocol: flags.includes('invalid_thumbnail_uri'),
+      adultHint: flags.includes('adult_thumbnail_hint'),
+      violentHint: flags.includes('violent_thumbnail_hint')
+    }
   };
 }
 
@@ -128,21 +202,46 @@ app.post('/v1/moderate/video', async (req, res) => {
     const titleResult = evaluateText(String(title || ''));
     const descriptionResult = evaluateText(String(description || ''));
     const thumbnailResult = evaluateThumbnailUri(String(thumbnailUri || ''));
-    const flags = Array.from(new Set([
-      ...titleResult.flags,
-      ...descriptionResult.flags,
-      ...thumbnailResult.flags,
-    ]));
+    const flags = mergeFlags(
+      titleResult.flags,
+      descriptionResult.flags,
+      thumbnailResult.flags,
+    );
+    const overallScore = Math.min(Number(Math.max(titleResult.score, descriptionResult.score, thumbnailResult.score).toFixed(2)), 1);
+    const severity = classifySeverity(overallScore, flags);
+    const recommendedAction = recommendAction(overallScore, flags);
     const result = {
       titleSafe: titleResult.safe,
       descriptionSafe: descriptionResult.safe,
       thumbnailSafe: thumbnailResult.safe,
       flags,
+      reasons: buildReasons(flags),
       requiresReview: titleResult.requiresReview || descriptionResult.requiresReview || thumbnailResult.requiresReview,
+      severity,
+      recommendedAction,
+      safe: recommendedAction === 'allow' || recommendedAction === 'monitor',
       scores: {
         title: titleResult.score,
         description: descriptionResult.score,
-        thumbnail: thumbnailResult.score
+        thumbnail: thumbnailResult.score,
+        overall: overallScore
+      },
+      verdicts: {
+        title: {
+          severity: titleResult.severity,
+          recommendedAction: titleResult.recommendedAction,
+          signals: titleResult.signals
+        },
+        description: {
+          severity: descriptionResult.severity,
+          recommendedAction: descriptionResult.recommendedAction,
+          signals: descriptionResult.signals
+        },
+        thumbnail: {
+          severity: thumbnailResult.severity,
+          recommendedAction: thumbnailResult.recommendedAction,
+          signals: thumbnailResult.signals
+        }
       }
     };
     return res.json(result);

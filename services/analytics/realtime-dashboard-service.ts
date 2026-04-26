@@ -3,7 +3,7 @@
  * Live metrics with <1 second latency
  */
 
-import { Firestore } from '@google-cloud/firestore';
+import { Firestore, FieldValue } from '@google-cloud/firestore';
 
 interface AnalyticsMetrics {
   views: number;
@@ -22,9 +22,29 @@ interface RealtimeUpdate {
   timestamp: Date;
 }
 
+interface RealtimeWindowSummary {
+  minutes: number;
+  totals: Record<string, number>;
+  eventCount: number;
+  lastEventAt: Date | null;
+}
+
 export class RealtimeDashboardService {
   private firestore = new Firestore();
   private listeners: Map<string, Function> = new Map();
+
+  private normalizeMetrics(data: Partial<AnalyticsMetrics> | undefined): AnalyticsMetrics {
+    return {
+      views: Number(data?.views || 0),
+      watchTime: Number(data?.watchTime || 0),
+      engagement: Number(data?.engagement || 0),
+      revenue: Number(data?.revenue || 0),
+      subscribers: Number(data?.subscribers || 0),
+      likes: Number(data?.likes || 0),
+      comments: Number(data?.comments || 0),
+      shares: Number(data?.shares || 0),
+    };
+  }
 
   /**
    * Subscribe to real-time analytics updates
@@ -38,7 +58,7 @@ export class RealtimeDashboardService {
       .onSnapshot(snapshot => {
         if (!snapshot.exists) return;
 
-        const data = snapshot.data() as AnalyticsMetrics;
+        const data = this.normalizeMetrics(snapshot.data() as AnalyticsMetrics);
         callback(data);
       });
 
@@ -63,7 +83,7 @@ export class RealtimeDashboardService {
       return this.getEmptyMetrics();
     }
 
-    return doc.data() as AnalyticsMetrics;
+    return this.normalizeMetrics(doc.data() as AnalyticsMetrics);
   }
 
   /**
@@ -75,7 +95,7 @@ export class RealtimeDashboardService {
     // Update main analytics doc
     const analyticsRef = this.firestore.collection('analytics').doc(creatorId);
     batch.update(analyticsRef, {
-      [event.metric]: Firestore.FieldValue.increment(event.value),
+      [event.metric]: FieldValue.increment(event.value),
       lastUpdated: event.timestamp,
     });
 
@@ -90,6 +110,68 @@ export class RealtimeDashboardService {
 
     await batch.commit();
     console.log(`✅ [Analytics] Event tracked: ${event.metric} +${event.value}`);
+  }
+
+  async getEventWindowSummary(creatorId: string, minutes: number = 60): Promise<RealtimeWindowSummary> {
+    const since = new Date(Date.now() - minutes * 60 * 1000);
+    const snapshot = await this.firestore
+      .collection('analytics')
+      .doc(creatorId)
+      .collection('events')
+      .where('timestamp', '>=', since)
+      .orderBy('timestamp', 'desc')
+      .limit(500)
+      .get();
+
+    const totals: Record<string, number> = {};
+    let lastEventAt: Date | null = null;
+
+    snapshot.docs.forEach(doc => {
+      const data = doc.data() as RealtimeUpdate;
+      totals[data.metric] = (totals[data.metric] || 0) + Number(data.value || 0);
+      if (!lastEventAt) {
+        lastEventAt = data.timestamp instanceof Date ? data.timestamp : new Date(data.timestamp as any);
+      }
+    });
+
+    return {
+      minutes,
+      totals,
+      eventCount: snapshot.size,
+      lastEventAt,
+    };
+  }
+
+  async getMetricDelta(creatorId: string, metric: keyof AnalyticsMetrics, minutes: number = 60): Promise<number> {
+    const summary = await this.getEventWindowSummary(creatorId, minutes);
+    return Number(summary.totals[String(metric)] || 0);
+  }
+
+  async getDashboardSnapshot(creatorId: string): Promise<any> {
+    const [current, lastHour, lastDay, trendingVideos, revenueBreakdown, demographics] = await Promise.all([
+      this.getCurrentMetrics(creatorId),
+      this.getEventWindowSummary(creatorId, 60),
+      this.getEventWindowSummary(creatorId, 24 * 60),
+      this.getTrendingVideos(creatorId, 5),
+      this.getRevenueBreakdown(creatorId, 'day'),
+      this.getAudienceDemographics(creatorId),
+    ]);
+
+    return {
+      current,
+      deltas: {
+        lastHour: lastHour.totals,
+        last24Hours: lastDay.totals,
+      },
+      activity: {
+        lastHourEventCount: lastHour.eventCount,
+        last24HoursEventCount: lastDay.eventCount,
+        lastEventAt: lastHour.lastEventAt || lastDay.lastEventAt,
+      },
+      trendingVideos,
+      revenueBreakdown,
+      demographics,
+    };
   }
 
   /**
