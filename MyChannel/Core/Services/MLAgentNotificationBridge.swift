@@ -64,7 +64,7 @@ final class MLAgentNotificationBridge: ObservableObject {
     // This is the primary fast path — real-time, per-user, social only.
 
     private func observeFirestoreInbox(userId: String) {
-        NotificationsInboxService.shared.listen(userId: userId)
+        Task { try? await NotificationsInboxService.shared.fetchNotifications(userId: userId) }
     }
 
     // MARK: - 2. ML-Powered Viral Alert (creator only — their own content)

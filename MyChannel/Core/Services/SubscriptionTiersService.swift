@@ -92,12 +92,17 @@ final class SubscriptionTiersService: ObservableObject {
         #if canImport(StoreKit)
         isLoading = true
         defer { isLoading = false }
-        for await result in Transaction.currentEntitlements {
-            guard case .verified(let tx) = result else { continue }
-            if let tier = Self.tier(for: tx.productID) {
-                currentTier = tier
-                renewsAt = tx.expirationDate
-                return
+        // StoreKit 2 entitlement check
+        let statuses = try? await Product.SubscriptionInfo.status(for: "com.mychannel.subscriptions")
+        if let statuses {
+            for status in statuses {
+                guard case .verified(let renewal) = status.renewalInfo,
+                      case .verified(let tx) = status.transaction else { continue }
+                if let tier = Self.tier(for: tx.productID) {
+                    currentTier = tier
+                    renewsAt = tx.expirationDate
+                    return
+                }
             }
         }
         currentTier = nil

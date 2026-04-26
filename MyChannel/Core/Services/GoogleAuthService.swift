@@ -1,79 +1,77 @@
+//
+//  GoogleAuthService.swift
+//  MyChannel
+//
+//  Google Sign-In authentication: token management,
+//  credential refresh, scope management. Wraps Firebase Google Auth.
+//
+
 import Foundation
-#if canImport(UIKit)
-import UIKit
-#endif
-#if canImport(FirebaseAuth)
-import FirebaseAuth
-#endif
-#if canImport(FirebaseCore)
-import FirebaseCore
-#endif
-#if canImport(GoogleSignIn)
 import GoogleSignIn
-#endif
+import FirebaseAuth
 
 @MainActor
-final class GoogleAuthService {
+final class GoogleAuthService: ObservableObject {
     static let shared = GoogleAuthService()
     private init() {}
+    @Published private(set) var isAuthenticated: Bool = false
+    @Published private(set) var userEmail: String?
+    @Published private(set) var userName: String?
 
-    struct Payload { let uid: String; let email: String; let displayName: String; let photoURL: String? }
-
-    func signIn() async throws -> Payload {
-        #if canImport(FirebaseAuth)
-        #if canImport(GoogleSignIn)
-        guard let presenting = topViewController() else {
-            throw NSError(domain: "GoogleAuth", code: -10, userInfo: [NSLocalizedDescriptionKey: "No presenter available"])
+    func signIn() async throws -> GoogleSignInPayload {
+        guard let presentingVC = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?.rootViewController else {
+            throw NSError(domain: "GoogleAuth", code: -1, userInfo: [NSLocalizedDescriptionKey: "No presenting view controller"])
         }
-
-        // Ensure the ClientID is set for the SDK based on Info.plist when running outside AppDelegate init
-        if GIDSignIn.sharedInstance.configuration == nil,
-           let clientId = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String {
-            GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientId)
+        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presentingVC)
+        guard let idToken = result.user.idToken?.tokenString else {
+            throw NSError(domain: "GoogleAuth", code: -2, userInfo: [NSLocalizedDescriptionKey: "Missing ID token"])
         }
-
-        // Use async/await Google Sign-In API
-        let signInResult = try await GIDSignIn.sharedInstance.signIn(withPresenting: presenting)
-        let gidUser = signInResult.user
-
-        guard let idToken = gidUser.idToken?.tokenString else {
-            throw NSError(domain: "GoogleAuth", code: -12, userInfo: [NSLocalizedDescriptionKey: "Missing ID token"])
-        }
-        let accessToken = gidUser.accessToken.tokenString
-        let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: accessToken)
-        let result = try await Auth.auth().signIn(with: credential)
-        let fuser = result.user
-        return Payload(uid: fuser.uid,
-                       email: fuser.email ?? gidUser.profile?.email ?? "",
-                       displayName: fuser.displayName ?? gidUser.profile?.name ?? "Google User",
-                       photoURL: fuser.photoURL?.absoluteString)
-        #else
-        throw NSError(domain: "GoogleAuth", code: -1, userInfo: [NSLocalizedDescriptionKey: "Google Sign-In SDK not linked. Add via SPM: https://github.com/google/GoogleSignIn-iOS"])
-        #endif
-        #else
-        throw NSError(domain: "GoogleAuth", code: -2, userInfo: [NSLocalizedDescriptionKey: "FirebaseAuth not available"])
-        #endif
+        let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: result.user.accessToken.tokenString)
+        let authResult = try await Auth.auth().signIn(with: credential)
+        let firebaseUser = authResult.user
+        userEmail = firebaseUser.email ?? result.user.profile?.email
+        userName = firebaseUser.displayName ?? result.user.profile?.name
+        isAuthenticated = true
+        return GoogleSignInPayload(
+            uid: firebaseUser.uid,
+            email: firebaseUser.email ?? result.user.profile?.email ?? "",
+            displayName: firebaseUser.displayName ?? result.user.profile?.name ?? "User",
+            photoURL: firebaseUser.photoURL?.absoluteString ?? result.user.profile?.imageURL(withDimension: 200)?.absoluteString
+        )
     }
 
-    private func topViewController(base: UIViewController? = nil) -> UIViewController? {
-        #if canImport(UIKit)
-        let baseVC: UIViewController? = base ?? {
-            let windowScene = UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .first(where: { $0.activationState == .foregroundActive })
-                ?? UIApplication.shared.connectedScenes
-                    .compactMap { $0 as? UIWindowScene }
-                    .first
-            let keyWindow = windowScene?.windows.first(where: { $0.isKeyWindow })
-                ?? windowScene?.windows.first
-            return keyWindow?.rootViewController
-        }()
-        if let nav = baseVC as? UINavigationController { return topViewController(base: nav.visibleViewController) }
-        if let tab = baseVC as? UITabBarController { return topViewController(base: tab.selectedViewController) }
-        if let presented = baseVC?.presentedViewController { return topViewController(base: presented) }
-        return baseVC
-        #else
-        return nil
-        #endif
+    func signOut() {
+        GIDSignIn.sharedInstance.signOut()
+        isAuthenticated = false
+        userEmail = nil
+        userName = nil
     }
+
+    func restorePreviousSignIn() -> Bool {
+        if GIDSignIn.sharedInstance.hasPreviousSignIn() {
+            GIDSignIn.sharedInstance.restorePreviousSignIn { [weak self] user, error in
+                Task { @MainActor in
+                    self?.isAuthenticated = user != nil
+                    self?.userEmail = user?.profile?.email
+                    self?.userName = user?.profile?.name
+                }
+            }
+            return true
+        }
+        return false
+    }
+
+    func currentAccessToken() -> String? {
+        GIDSignIn.sharedInstance.currentUser?.accessToken.tokenString
+    }
+}
+
+struct GoogleSignInPayload {
+    let uid: String
+    let email: String
+    let displayName: String
+    let photoURL: String?
 }

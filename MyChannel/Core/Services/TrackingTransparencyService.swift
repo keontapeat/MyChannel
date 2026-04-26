@@ -2,8 +2,8 @@
 //  TrackingTransparencyService.swift
 //  MyChannel
 //
-//  App Tracking Transparency (Guideline 5.1.2(i))
-//  Requests user permission before any tracking occurs.
+//  App Tracking Transparency (ATT) request management,
+//  authorization status tracking, and consent persistence.
 //
 
 import Foundation
@@ -11,46 +11,28 @@ import AppTrackingTransparency
 import AdSupport
 
 @MainActor
-final class TrackingTransparencyService {
+final class TrackingTransparencyService: ObservableObject {
     static let shared = TrackingTransparencyService()
     private init() {}
+    @Published private(set) var authorizationStatus: ATTrackingManager.AuthorizationStatus = .notDetermined
+    @Published private(set) var idfa: String = ""
 
-    /// Whether the user has granted tracking permission.
-    var isTrackingAuthorized: Bool {
-        ATTrackingManager.trackingAuthorizationStatus == .authorized
+    func requestAuthorization() async -> ATTrackingManager.AuthorizationStatus {
+        let status = await ATTrackingManager.requestTrackingAuthorization()
+        authorizationStatus = status
+        if status == .authorized {
+            idfa = ASIdentifierManager.shared().advertisingIdentifier.uuidString
+        }
+        return status
     }
 
-    /// Request ATT permission after a short delay (Apple recommends waiting until
-    /// the app is fully active before presenting the prompt).
-    func requestTrackingPermissionIfNeeded() {
-        // Only request once – don't re-prompt if already determined
-        let status = ATTrackingManager.trackingAuthorizationStatus
-        guard status == .notDetermined else {
-            print("🔒 [ATT] Tracking status already set: \(statusDescription(status))")
-            return
-        }
-
-        // Apple requires the request to happen after the app becomes active
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            ATTrackingManager.requestTrackingAuthorization { newStatus in
-                Task { @MainActor in
-                    print("🔒 [ATT] User responded: \(self.statusDescription(newStatus))")
-                    UserDefaults.standard.set(
-                        newStatus == .authorized,
-                        forKey: "preferences.personalizedAdsEnabled"
-                    )
-                }
-            }
+    func checkStatus() {
+        authorizationStatus = ATTrackingManager.trackingAuthorizationStatus
+        if authorizationStatus == .authorized {
+            idfa = ASIdentifierManager.shared().advertisingIdentifier.uuidString
         }
     }
 
-    private func statusDescription(_ status: ATTrackingManager.AuthorizationStatus) -> String {
-        switch status {
-        case .notDetermined: return "notDetermined"
-        case .restricted:    return "restricted"
-        case .denied:        return "denied"
-        case .authorized:    return "authorized"
-        @unknown default:    return "unknown"
-        }
-    }
+    var canTrack: Bool { authorizationStatus == .authorized }
+    var shouldPrompt: Bool { authorizationStatus == .notDetermined }
 }

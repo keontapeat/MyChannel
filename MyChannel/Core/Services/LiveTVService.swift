@@ -8,6 +8,8 @@ final class LiveTVService {
     
     // 🔥 Cache for preloaded assets
     private var preloadedAssets: [String: AVURLAsset] = [:]
+    private var preloadedChannelIds: Set<String> = []
+    private var lastBulkPreloadAt: Date?
     private let preloadQueue = DispatchQueue(label: "com.mychannel.liveTVPreload", qos: .userInitiated)
 
     func fetchChannels() async -> [LiveTVChannel] {
@@ -46,20 +48,22 @@ final class LiveTVService {
     
     // 🔥 FIRE: Preload the first N channels for instant playback
     func preloadFireChannels(count: Int = 6) async {
-        let channels = Array(LiveTVChannel.sampleChannels.prefix(count))
-        
-        // 🔥 Also prewarm thumbnails (streams + YouTube logos)
-        thermonuclearPrewarm(count: count)
-        
-        await withTaskGroup(of: Void.self) { group in
-            for channel in channels {
-                group.addTask { [weak self] in
-                    await self?.preloadChannel(channel)
-                }
+        let shouldPreload = preloadQueue.sync { () -> Bool in
+            if let lastBulkPreloadAt, Date().timeIntervalSince(lastBulkPreloadAt) < 300 {
+                return false
             }
+            lastBulkPreloadAt = Date()
+            return true
+        }
+        guard shouldPreload else { return }
+        
+        let channels = Array(LiveTVChannel.sampleChannels.prefix(min(count, 3)))
+        let logoURLs = channels.map { $0.logoURL }
+        Task { @MainActor in
+            ThermonuclearYouTubeThumbnailCache.shared.prewarmThumbnails(logoURLs)
         }
         
-        print("🔥 LiveTVService: Preloaded \(count) fire channels for instant playback")
+        print("🔥 LiveTVService: Preloaded \(channels.count) fire channel thumbnails")
     }
     
     /// Preload next channel for smooth switching
@@ -67,7 +71,14 @@ final class LiveTVService {
         guard let url = URL(string: channel.streamURL) else { return }
         
         // Check if already preloaded
-        if preloadedAssets[channel.id] != nil { return }
+        let shouldPreload = preloadQueue.sync { () -> Bool in
+            guard preloadedAssets[channel.id] == nil, !preloadedChannelIds.contains(channel.id) else {
+                return false
+            }
+            preloadedChannelIds.insert(channel.id)
+            return true
+        }
+        guard shouldPreload else { return }
         
         // Create asset and preload metadata without playing
         let asset = AVURLAsset(url: url, options: [
@@ -84,7 +95,9 @@ final class LiveTVService {
                 self?.preloadedAssets[channel.id] = asset
             }
         } catch {
-            // Silently fail - fallback will handle
+            preloadQueue.async { [weak self] in
+                self?.preloadedChannelIds.remove(channel.id)
+            }
         }
     }
     

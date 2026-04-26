@@ -705,6 +705,10 @@ struct LiveTVPlayerView: View {
         setupTimeObserver()
         updateSubtitleAvailability()
         updateDVRAvailability()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            restoreSavedPlaybackPositionIfNeeded(for: channel)
+        }
     }
     
     @State private var statusObserver: NSKeyValueObservation?
@@ -839,6 +843,8 @@ struct LiveTVPlayerView: View {
     }
 
     private func teardown() {
+        persistPlaybackPosition(for: currentWatchingChannel ?? channel)
+
         // Clean up all observers properly
         networkMonitor?.cancel()
         networkMonitor = nil
@@ -956,6 +962,8 @@ struct LiveTVPlayerView: View {
     }
 
     private func switchToChannel(_ newChannel: LiveTVChannel) {
+        persistPlaybackPosition(for: currentWatchingChannel ?? channel)
+
         // 🔥 AI: Record watch event for the channel we're leaving
         if let previousChannel = currentWatchingChannel, previousChannel.id != newChannel.id {
             let watchDuration = Date().timeIntervalSince(watchStartTime)
@@ -1048,6 +1056,28 @@ struct LiveTVPlayerView: View {
         
         updateSubtitleAvailability()
         updateDVRAvailability()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            restoreSavedPlaybackPositionIfNeeded(for: newChannel)
+        }
+    }
+
+    private func persistPlaybackPosition(for channel: LiveTVChannel) {
+        guard isDVRAvailable,
+              dvrFraction.isFinite,
+              dvrFraction > 0,
+              dvrFraction < 1 else { return }
+
+        LiveTVPreviewPlaybackStore.shared.saveDVRFraction(dvrFraction, for: channel.id)
+    }
+
+    private func restoreSavedPlaybackPositionIfNeeded(for channel: LiveTVChannel) {
+        guard let savedFraction = LiveTVPreviewPlaybackStore.shared.dvrFraction(for: channel.id),
+              savedFraction > 0,
+              savedFraction < 1 else { return }
+
+        seekToFraction(savedFraction)
+        dvrFraction = savedFraction
     }
     
     private func preloadAdjacentChannels() {

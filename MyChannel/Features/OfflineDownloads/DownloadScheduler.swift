@@ -35,8 +35,8 @@ final class DownloadScheduler: ObservableObject {
     @Published var requireCharging: Bool = false
     @Published var minimumBatteryLevel: Int = 20
     @Published var preferredTimeWindows: [TimeWindow] = [
-        TimeWindow(start: 2, end: 6, isEnabled: true),   // Overnight
-        TimeWindow(start: 22, end: 24, isEnabled: true)  // Late evening
+        TimeWindow(start: 2, end: 6, isEnabled: true),
+        TimeWindow(start: 22, end: 24, isEnabled: true)
     ]
     @Published var maxDailyDownloads: Int = 50
     @Published var respectLowDataMode: Bool = true
@@ -395,7 +395,7 @@ final class DownloadScheduler: ObservableObject {
             thermalState: ProcessInfo.processInfo.thermalState
         )
     }
-    
+
     // MARK: - Background Tasks
     
     private func registerBackgroundTasks() {
@@ -425,7 +425,6 @@ final class DownloadScheduler: ObservableObject {
         request.requiresNetworkConnectivity = true
         request.requiresExternalPower = requireCharging
         
-        // Schedule for next preferred time window
         if let nextTime = calculateNextTimeWindowStart() {
             request.earliestBeginDate = nextTime
         }
@@ -439,11 +438,9 @@ final class DownloadScheduler: ObservableObject {
         
         for window in preferredTimeWindows.sorted(by: { $0.start < $1.start }) where window.isEnabled {
             var nextStart = calendar.date(bySettingHour: window.start, minute: 0, second: 0, of: now)!
-            
             if nextStart <= now {
                 nextStart = calendar.date(byAdding: .day, value: 1, to: nextStart)!
             }
-            
             return nextStart
         }
         
@@ -454,12 +451,10 @@ final class DownloadScheduler: ObservableObject {
     
     private func sortScheduledDownloads() {
         scheduledDownloads.sort { a, b in
-            // Priority first
             if a.priority != b.priority {
                 return a.priority.rawValue > b.priority.rawValue
             }
             
-            // Then deadline
             if let deadlineA = a.deadline, let deadlineB = b.deadline {
                 return deadlineA < deadlineB
             } else if a.deadline != nil {
@@ -468,7 +463,6 @@ final class DownloadScheduler: ObservableObject {
                 return false
             }
             
-            // Then scheduled time
             return a.scheduledAt < b.scheduledAt
         }
     }
@@ -527,10 +521,19 @@ struct ScheduledDownload: Identifiable, Codable {
     let priority: SchedulePriority
     let scheduledAt: Date
     let deadline: Date?
-    var status: ScheduleStatus
+    var status: Status
     var estimatedStartTime: Date?
     var completedAt: Date?
     var errorMessage: String?
+    
+    enum Status: String, Codable {
+        case pending
+        case downloading
+        case completed
+        case failed
+        case cancelled
+        case missed
+    }
 }
 
 enum SchedulePriority: Int, Codable, Comparable {
@@ -539,23 +542,14 @@ enum SchedulePriority: Int, Codable, Comparable {
     case high = 2
     
     static func < (lhs: SchedulePriority, rhs: SchedulePriority) -> Bool {
-        return lhs.rawValue < rhs.rawValue
+        lhs.rawValue < rhs.rawValue
     }
-}
-
-enum ScheduleStatus: String, Codable {
-    case pending
-    case downloading
-    case completed
-    case failed
-    case cancelled
-    case missed
 }
 
 struct TimeWindow: Codable, Identifiable {
     var id: String { "\(start)-\(end)" }
-    let start: Int // Hour (0-23)
-    let end: Int   // Hour (0-23)
+    let start: Int
+    let end: Int
     var isEnabled: Bool
     
     var displayName: String {
@@ -580,7 +574,7 @@ struct DeviceConditions {
     var thermalState: ProcessInfo.ThermalState = .nominal
     
     var isOptimal: Bool {
-        return batteryLevel > 20 && !isLowPowerMode && thermalState != .critical
+        batteryLevel > 20 && !isLowPowerMode && thermalState != .critical
     }
 }
 

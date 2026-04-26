@@ -265,7 +265,7 @@ struct GamingEsportsView: View {
         }
     }
     
-    private func featuredTournamentCard(tournament: EsportsTournament) -> some View {
+    private func featuredTournamentCard(tournament: GamingEsportsTournament) -> some View {
         VStack(spacing: 0) {
             // Background Image
             ZStack {
@@ -370,7 +370,7 @@ struct GamingEsportsView: View {
         }
     }
     
-    private func tournamentCard(tournament: EsportsTournament) -> some View {
+    private func tournamentCard(tournament: GamingEsportsTournament) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 // Game Icon
@@ -1434,7 +1434,7 @@ struct GamingEsportsView: View {
     
     // MARK: - Actions
     
-    private func joinTournament(_ tournament: EsportsTournament) {
+    private func joinTournament(_ tournament: GamingEsportsTournament) {
         guard joiningTournamentId == nil else { return }
         guard let userId = AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id else {
             joinAlertMessage = "Sign in to join tournaments."
@@ -1541,7 +1541,7 @@ enum LeaderboardPeriod: String, CaseIterable, Identifiable {
     }
 }
 
-struct EsportsTournament: Identifiable {
+struct GamingEsportsTournament: Identifiable {
     let id: String
     let name: String
     let gameName: String

@@ -13,6 +13,7 @@ import SceneKit
 import ARKit
 import CoreMotion
 import Combine
+import UIKit
 
 @MainActor
 class ImmersiveContentService: ObservableObject {
@@ -422,7 +423,16 @@ class ImmersiveContentService: ObservableObject {
     
     private func analyzeVideoContent(_ video: Video) async -> ImmersiveVideoContentAnalysis {
         // Analyze video content for background generation
-        return ImmersiveVideoContentAnalysis()
+        return ImmersiveVideoContentAnalysis(
+            videoId: video.id,
+            is360Video: false,
+            hasDepthData: false,
+            spatialAudioEnabled: spatialAudioEnabled,
+            hotspotsDetected: activeHotspots.count,
+            interactiveBranches: branchingOptions.count,
+            arCompatibilityScore: isARSupported ? 0.8 : 0.0,
+            recommendedViewMode: currentViewingMode.rawValue
+        )
     }
     
     private func generateBackgrounds(analysis: ImmersiveVideoContentAnalysis, mood: BackgroundMood, count: Int) async -> [GeneratedBackground] {
@@ -492,7 +502,7 @@ struct VideoHotspot: Identifiable, Codable {
     var isActive: Bool
     
     private enum CodingKeys: String, CodingKey {
-        case id, position, type, content, isActive
+        case id, time, position, type, content, isActive
     }
     
     init(id: String, time: CMTime, position: CGPoint, type: HotspotType, content: HotspotContent, isActive: Bool) {
@@ -507,7 +517,8 @@ struct VideoHotspot: Identifiable, Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
-        time = CMTime.zero // Placeholder
+        let seconds = try container.decodeIfPresent(Double.self, forKey: .time) ?? 0
+        time = CMTime(seconds: seconds, preferredTimescale: 600)
         position = try container.decode(CGPoint.self, forKey: .position)
         type = try container.decode(HotspotType.self, forKey: .type)
         content = try container.decode(HotspotContent.self, forKey: .content)
@@ -517,6 +528,7 @@ struct VideoHotspot: Identifiable, Codable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
+        try container.encode(time.seconds, forKey: .time)
         try container.encode(position, forKey: .position)
         try container.encode(type, forKey: .type)
         try container.encode(content, forKey: .content)
@@ -572,7 +584,7 @@ struct VideoBranch: Identifiable, Codable {
     }
     
     private enum CodingKeys: String, CodingKey {
-        case id, video, options
+        case id, video, decisionPoint, options
     }
     
     init(id: String, video: Video, decisionPoint: CMTime, options: [BranchOption]) {
@@ -586,7 +598,8 @@ struct VideoBranch: Identifiable, Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         video = try container.decode(Video.self, forKey: .video)
-        decisionPoint = CMTime.zero // Placeholder
+        let seconds = try container.decodeIfPresent(Double.self, forKey: .decisionPoint) ?? 0
+        decisionPoint = CMTime(seconds: seconds, preferredTimescale: 600)
         options = try container.decode([BranchOption].self, forKey: .options)
     }
     
@@ -594,6 +607,7 @@ struct VideoBranch: Identifiable, Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(video, forKey: .video)
+        try container.encode(decisionPoint.seconds, forKey: .decisionPoint)
         try container.encode(options, forKey: .options)
     }
 }
@@ -632,7 +646,7 @@ struct HapticEvent: Identifiable, Codable {
     }
     
     private enum CodingKeys: String, CodingKey {
-        case intensity, duration, pattern
+        case time, intensity, duration, pattern
     }
     
     init(time: CMTime, intensity: Float, duration: TimeInterval, pattern: HapticPattern) {
@@ -644,7 +658,8 @@ struct HapticEvent: Identifiable, Codable {
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        time = CMTime.zero // Placeholder
+        let seconds = try container.decodeIfPresent(Double.self, forKey: .time) ?? 0
+        time = CMTime(seconds: seconds, preferredTimescale: 600)
         intensity = try container.decode(Float.self, forKey: .intensity)
         duration = try container.decode(TimeInterval.self, forKey: .duration)
         pattern = try container.decode(HapticPattern.self, forKey: .pattern)
@@ -652,6 +667,7 @@ struct HapticEvent: Identifiable, Codable {
     
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(time.seconds, forKey: .time)
         try container.encode(intensity, forKey: .intensity)
         try container.encode(duration, forKey: .duration)
         try container.encode(pattern, forKey: .pattern)
@@ -793,14 +809,45 @@ class HapticVideoExperience: ObservableObject {
     }
 }
 
-// MARK: - Placeholder Classes
+// MARK: - AI Models
 
 class BackgroundSegmentationModel {
-    // Placeholder for ML model
+    private var isModelLoaded = false
+    
+    func loadModel() async throws {
+        guard !isModelLoaded else { return }
+        struct Req: Encodable { let task: String }
+        struct Raw: Decodable { let modelLoaded: Bool? }
+        let r: Raw = try await CloudRunAgentRouter.post(.superAITeam, path: "/predict", body: Req(task: "load_background_segmentation_model"), timeout: 30)
+        isModelLoaded = r.modelLoaded ?? true
+    }
+    
+    func segmentBackground(from image: CGImage) async throws -> CGImage? {
+        guard isModelLoaded else {
+            try? await loadModel()
+            guard isModelLoaded else { return nil }
+            return try await segmentBackground(from: image)
+        }
+        struct Req: Encodable { let task: String; let imageData: String }
+        struct Raw: Decodable { let maskData: String? }
+        let uiImage = UIImage(cgImage: image)
+        let base64 = uiImage.pngData()?.base64EncodedString() ?? ""
+        let r: Raw = try await CloudRunAgentRouter.post(.superAITeam, path: "/predict",
+            body: Req(task: "segment_background", imageData: base64), timeout: 30)
+        guard let maskData = r.maskData, let data = Data(base64Encoded: maskData) else { return nil }
+        return UIImage(data: data)?.cgImage
+    }
 }
 
 struct ImmersiveVideoContentAnalysis {
-    // Placeholder for immersive content analysis
+    let videoId: String
+    let is360Video: Bool
+    let hasDepthData: Bool
+    let spatialAudioEnabled: Bool
+    let hotspotsDetected: Int
+    let interactiveBranches: Int
+    let arCompatibilityScore: Double
+    let recommendedViewMode: String
 }
 
 // MARK: - Errors

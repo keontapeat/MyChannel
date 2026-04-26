@@ -172,8 +172,8 @@ struct HomeView: View {
                             onOpenArtistDetail: { name, avatar, vids, total in
                                 route = .artistDetail(name: name, avatar: avatar, videos: vids, totalViews: total)
                             },
-                            onOpenArtistMusicProfile: { catalogArtist in
-                                route = .artistMusicProfile(catalogArtist)
+                            onOpenArtistMusicProfile: { artist in
+                                route = .artistMusicProfile(artist)
                             },
                             onOpenFilmmakerDetail: { name, films in
                                 route = .filmmakerDetail(name: name, films: films)
@@ -1080,11 +1080,10 @@ struct MinimalContentSections: View {
 
         QuickTuneSection(liveChannelsAPI: liveChannelsAPI)
 
-        MinimalSection(title: "Movies", seeAllAction: { onSeeAllFreeMovies(blockbusterMovies) }) {
+        MinimalSection(title: "Movies", seeAllAction: { onSeeAllFreeMovies(homeBlockbusterMovies) }) {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: 16) {
-                    let movies = blockbusterMovies.isEmpty ? Array(FreeMovie.sampleMovies.prefix(6)) : Array(blockbusterMovies.prefix(12))
-                    ForEach(movies) { movie in
+                    ForEach(Array(homeBlockbusterMovies.prefix(18))) { movie in
                         MinimalMovieCard(movie: movie, action: { onSelectMovie(movie) })
                     }
                 }
@@ -1093,20 +1092,20 @@ struct MinimalContentSections: View {
         }
 
         TopArtistsSection(
-            rankings: rankService.topArtists,
+            rankings: rankService.topArtists.isEmpty ? TopRankMLService.fallbackTopArtists : rankService.topArtists,
             sourceVideos: detroitFlintArtistsTrending() + [makeFriendTrendingVideo()] + firestoreVideos,
             onSelect: { name, avatar, vids, total in onOpenArtistDetail(name, avatar, vids, total) },
             onSeeAll: onSeeAllArtists
         )
 
         TopIndieFilmmakersSection(
-            rankings: rankService.topFilmmakers,
+            rankings: rankService.topFilmmakers.isEmpty ? TopRankMLService.fallbackTopFilmmakers : rankService.topFilmmakers,
             onSeeAll: onSeeAllFilmmakers,
             onSelect: { name, films in onOpenFilmmakerDetail(name, films) }
         )
 
         TopMyChannelsSection(
-            rankings: rankService.topChannels,
+            rankings: rankService.topChannels.isEmpty ? TopRankMLService.fallbackTopChannels : rankService.topChannels,
             sourceVideos: detroitFlintArtistsTrending() + gamingCOD() + firestoreVideos,
             onSelect: { name, avatar, subs, total, vids in onOpenChannelDetail(name, avatar, subs, total, vids) },
             onSeeAll: onSeeAllChannels
@@ -1133,6 +1132,20 @@ struct MinimalContentSections: View {
         var vids = flintShowcaseVideos() + detroitFlintArtistsTrending() + gamingCOD() + firestoreVideos + SeedCatalogService.shared.seedVideos
         vids.insert(makeFriendTrendingVideo(), at: 0)
         return vids
+    }
+
+    private var homeBlockbusterMovies: [FreeMovie] {
+        let merged = blockbusterMovies + FreeMovie.sampleMovies.sorted { lhs, rhs in
+            if lhs.year != rhs.year { return lhs.year > rhs.year }
+            return lhs.imdbRating > rhs.imdbRating
+        }
+        var seen = Set<String>()
+        return merged.filter { movie in
+            let key = "\(movie.id)|\(movie.title.lowercased())"
+            guard movie.isAvailable, !movie.streamURL.isEmpty, !seen.contains(key) else { return false }
+            seen.insert(key)
+            return true
+        }
     }
 
     var body: some View {
@@ -1173,7 +1186,11 @@ struct MinimalContentSections: View {
                 return
             }
 
-            let items = try await TMDBService.shared.fetchPopularWithTrailersUS(page: 1, limit: 30)
+            async let trailersPage1 = TMDBService.shared.fetchPopularWithTrailersUS(page: 1, limit: 30)
+            async let trailersPage2 = TMDBService.shared.fetchPopularWithTrailersUS(page: 2, limit: 30)
+            async let freePage1 = TMDBService.shared.fetchFreeWithAdsMoviesUS(page: 1, limit: 30)
+            async let freePage2 = TMDBService.shared.fetchFreeWithAdsMoviesUS(page: 2, limit: 30)
+            let items = try await trailersPage1 + trailersPage2 + freePage1 + freePage2
             var chosen: [FreeMovie] = items.filter { $0.trailerURL != nil }
 
             if chosen.isEmpty {
@@ -1187,10 +1204,16 @@ struct MinimalContentSections: View {
                 chosen = freeList
             }
 
-            let boosted = chosen.sorted { lhs, rhs in
+            var seen = Set<String>()
+            let boosted = chosen.filter { movie in
+                let key = "\(movie.id)|\(movie.title.lowercased())"
+                guard movie.isAvailable, !movie.streamURL.isEmpty, !seen.contains(key) else { return false }
+                seen.insert(key)
+                return true
+            }.sorted { lhs, rhs in
                 let boost: (FreeMovie) -> Int = { m in
                     let t = m.title.lowercased()
-                    return (t.contains("smile 2") || t.contains("sinners")) ? 1 : 0
+                    return (t.contains("smile 2") || t.contains("sinners") || t.contains("sonic") || t.contains("venom") || t.contains("deadpool") || t.contains("wick") || t.contains("spider") || t.contains("batman")) ? 1 : 0
                 }
                 if boost(lhs) != boost(rhs) { return boost(lhs) > boost(rhs) }
                 if lhs.year != rhs.year { return lhs.year > rhs.year }
@@ -1619,7 +1642,7 @@ private struct QuickTuneSection: View {
                         autoPreview: true,
                         previewOverrideStreamURL: nil,
                         previewOverridePosterURL: nil,
-                        allowPlaybackInPreviews: false
+                        allowPlaybackInPreviews: true
                     )
                 }
                 .buttonStyle(PressableScaleStyle(scale: 0.96))
@@ -1632,7 +1655,7 @@ private struct QuickTuneSection: View {
                             autoPreview: true,
                             previewOverrideStreamURL: nil,
                             previewOverridePosterURL: nil,
-                            allowPlaybackInPreviews: false
+                            allowPlaybackInPreviews: true
                         )
                     }
                     .buttonStyle(PressableScaleStyle(scale: 0.96))
@@ -1744,7 +1767,7 @@ struct MinimalChannelCard: View {
 
     var body: some View {
         // 🔥 Only show channel when video is actually playing - no placeholder!
-        if streamReady && !streamFailed {
+        if !streamFailed {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
                     // 🔥 Live video thumbnail - only shows when playing
@@ -1979,10 +2002,11 @@ private struct MinimalCategoriesSection: View {
             // Carousel
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    ForEach(Array(current.prefix(18).enumerated()), id: \.offset) { _, video in
+                    ForEach(Array(current.prefix(18).enumerated()), id: \.offset) { index, video in
                         MinimalVideoCard(
                             video: video,
-                            action: { onPlayVideo(video) }
+                            action: { onPlayVideo(video) },
+                            useLivePreview: index < 3
                         )
                     }
                 }
@@ -2002,7 +2026,7 @@ private struct TopArtistsSection: View {
     private var orderedRankings: [TopRankedUser] {
         prioritizedRankings(
             rankings,
-            pinnedNames: ["Yung Sak Runner"]
+            pinnedNames: ["HTG Nook", "Scatz Ripky", "Kleanup Man"]
         )
     }
 
@@ -2055,7 +2079,7 @@ private struct TopIndieFilmmakersSection: View {
     private var orderedRankings: [TopRankedUser] {
         prioritizedRankings(
             rankings,
-            pinnedNames: ["Shot By Keonta", "Tee Cee", "Merch Hd"]
+            pinnedNames: ["Tee Cee", "Merch Hd", "Pros KT"]
         )
     }
 
@@ -2108,7 +2132,7 @@ private struct TopMyChannelsSection: View {
     private var orderedRankings: [TopRankedUser] {
         prioritizedRankings(
             rankings,
-            pinnedNames: ["Ktrip", "Baby Juu", "Mbk Cari"]
+            pinnedNames: ["Ktrip", "Baby Ju", "Baby Juu", "Mbk Cari"]
         )
     }
 

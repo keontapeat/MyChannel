@@ -436,7 +436,7 @@ struct ContentOptimizationTip {
 struct MonetizationInsights {
     let currentRevenue: Double
     let revenueStreams: [String: Double]
-    let sponsorshipOpportunities: [SponsorshipOpportunity]
+    let sponsorshipOpportunities: [MonetizationSponsorshipOpportunity]
     let revenueProjections: RevenueProjection
     let optimizationOpportunities: [String]
     let lastUpdated: Date

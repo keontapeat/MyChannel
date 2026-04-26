@@ -16,16 +16,17 @@ struct MinimalVideoCard: View {
     /// Returns true only for actual live streams with a real HLS manifest (.m3u8).
     /// Regular uploaded videos, Firebase Storage mp4s, and YouTube are excluded.
     private var hasStreamableURL: Bool {
-        // Must be marked as a live stream in the data model
-        guard video.isLiveStream else { return false }
+        if video.contentSource == .youtube, video.externalID?.isEmpty == false {
+            return true
+        }
         let url = video.videoURL.lowercased()
         if url.isEmpty { return false }
         if url.hasPrefix("asset://") { return false }
-        if url.contains("youtube.com") || url.contains("youtu.be") { return false }
-        if url.contains("firebasestorage.googleapis.com") { return false }
-        if url.contains("firebase") { return false }
-        // Must be an actual HLS manifest
-        return url.contains(".m3u8")
+        if url.contains("youtube.com") || url.contains("youtu.be") {
+            return video.externalID?.isEmpty == false
+        }
+        guard url.hasPrefix("http://") || url.hasPrefix("https://") else { return false }
+        return url.contains(".m3u8") || url.contains(".mp4") || url.contains(".mov") || url.contains("firebasestorage.googleapis.com")
     }
 
     var body: some View {

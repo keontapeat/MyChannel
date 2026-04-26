@@ -68,7 +68,7 @@ service firebase.storage {
     match /videos/{channelId}/{videoId}/{rest=**} {
       allow read: if true;
       allow write: if isSignedIn()
-        && uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid
+        && (uid() == channelId || uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid)
         && (isVideoType() || isImageType())
         && maxSize(5 * 1024 * 1024 * 1024)  // 5 GB max per segment/file
         && notExecutable();
@@ -78,7 +78,7 @@ service firebase.storage {
     match /thumbnails/{channelId}/{videoId}/{file} {
       allow read: if true;
       allow write: if isSignedIn()
-        && uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid
+        && (uid() == channelId || uid() == get(/databases/(default)/documents/videos/$(videoId)).data.ownerUid)
         && isImageType()
         && maxSize(5 * 1024 * 1024)  // 5 MB
         && notExecutable();

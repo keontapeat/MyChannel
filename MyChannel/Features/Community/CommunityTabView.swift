@@ -203,7 +203,7 @@ struct CommunityPostCard: View {
     let onDelete: () -> Void
     
     @State private var showingActionSheet = false
-    @State private var selectedPollOption: PollOption?
+    @State private var selectedPollOption: CommunityPollOption?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -535,7 +535,7 @@ struct CommunityPostCard: View {
     }
     
     // MARK: - Actions
-    private func votePoll(poll: Poll, option: PollOption) {
+    private func votePoll(poll: Poll, option: CommunityPollOption) {
         guard let uid = AppState.shared.currentUser?.id else { return }
         Task {
             if let idx = poll.options.firstIndex(where: { $0.id == option.id }) {

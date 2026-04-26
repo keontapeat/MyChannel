@@ -152,13 +152,15 @@ final class AICareerCategorizationService: ObservableObject {
     // MARK: - AI Service Call (Mock)
     
     private func callAIForCategorization(prompt: String) async throws -> String {
-        // TODO: Replace with actual AI service call (GPT-5, Claude, etc.)
-        // For now, use mock categorization based on keywords
-        
-        try await Task.sleep(nanoseconds: 200_000_000) // Simulate API delay
-        
-        // Mock response - in production, this would call your AI service
-        return mockAIResponse(prompt: prompt)
+        guard AppConfig.Features.enableAdaptiveInterface else {
+            try await Task.sleep(nanoseconds: 200_000_000)
+            return mockAIResponse(prompt: prompt)
+        }
+        struct Req: Encodable { let task: String; let prompt: String }
+        struct Raw: Decodable { let response: String? }
+        let r: Raw = try await CloudRunAgentRouter.post(.superAITeam, path: "/predict",
+            body: Req(task: "categorize_career", prompt: prompt), timeout: 30)
+        return r.response ?? mockAIResponse(prompt: prompt)
     }
     
     private func mockAIResponse(prompt: String) -> String {

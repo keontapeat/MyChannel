@@ -34,6 +34,15 @@ enum NotificationSource: String, Codable {
     // to regular users via NotificationsStore.
 }
 
+enum StoreNotificationType: String, Codable {
+    case like
+    case comment
+    case follow
+    case upload
+    case live
+    case system
+}
+
 // MARK: - StoreNotificationItem
 
 struct StoreNotificationItem: Identifiable, Equatable {
@@ -42,7 +51,7 @@ struct StoreNotificationItem: Identifiable, Equatable {
     var message: String
     var timestamp: Date
     var isRead: Bool = false
-    var type: NotificationItem.NotificationType
+    var type: StoreNotificationType
     var source: NotificationSource = .user
     var priority: NotificationPriority = .normal
     var avatarURL: String? = nil
@@ -122,7 +131,7 @@ final class NotificationsStore: ObservableObject {
     /// 5 minutes, collapse it into a grouped item instead of a new row.
     func pushSocialEvent(
         id: String,
-        type: NotificationItem.NotificationType,
+        type: StoreNotificationType,
         senderName: String,
         targetTitle: String,
         timestamp: Date,
@@ -191,12 +200,12 @@ final class NotificationsStore: ObservableObject {
     // Only processes known social types — silently drops anything else.
 
     private func bridgeFirestoreInbox() {
-        NotificationsInboxService.shared.$items
+        NotificationsInboxService.shared.$notifications
             .receive(on: DispatchQueue.main)
             .sink { [weak self] inboxItems in
                 guard let self else { return }
                 for inbox in inboxItems {
-                    let type = notifType(from: inbox.type)
+                    let type = notifType(from: inbox.type.rawValue)
                     // Only bridge known social event types
                     guard socialTypes.contains(type) else { continue }
                     let item = StoreNotificationItem(
@@ -204,7 +213,7 @@ final class NotificationsStore: ObservableObject {
                         title: inbox.title,
                         message: inbox.body,
                         timestamp: inbox.createdAt,
-                        isRead: inbox.read,
+                        isRead: inbox.isRead,
                         type: type,
                         source: NotificationSource.user,
                         priority: type == .live ? NotificationPriority.high : NotificationPriority.normal
@@ -215,7 +224,7 @@ final class NotificationsStore: ObservableObject {
             .store(in: &cancellables)
     }
 
-    private let socialTypes: Set<NotificationItem.NotificationType> = [.like, .comment, .follow, .upload, .live]
+    private let socialTypes: Set<StoreNotificationType> = [.like, .comment, .follow, .upload, .live]
 
     // MARK: - Helpers
 
@@ -229,7 +238,7 @@ final class NotificationsStore: ObservableObject {
         unreadCount = items.filter { !$0.isRead }.count
     }
 
-    private func groupedTitle(type: NotificationItem.NotificationType, count: Int, targetTitle: String) -> String {
+    private func groupedTitle(type: StoreNotificationType, count: Int, targetTitle: String) -> String {
         switch type {
         case .like:    return "\(count) people liked \"\(targetTitle)\""
         case .comment: return "\(count) new comments on \"\(targetTitle)\""
@@ -238,7 +247,7 @@ final class NotificationsStore: ObservableObject {
         }
     }
 
-    private func singleTitle(type: NotificationItem.NotificationType, senderName: String, targetTitle: String) -> String {
+    private func singleTitle(type: StoreNotificationType, senderName: String, targetTitle: String) -> String {
         switch type {
         case .like:    return "\(senderName) liked your video"
         case .comment: return "\(senderName) commented on your video"
@@ -249,7 +258,7 @@ final class NotificationsStore: ObservableObject {
         }
     }
 
-    private func singleMessage(type: NotificationItem.NotificationType, senderName: String, targetTitle: String) -> String {
+    private func singleMessage(type: StoreNotificationType, senderName: String, targetTitle: String) -> String {
         switch type {
         case .like:    return targetTitle
         case .comment: return targetTitle
@@ -269,7 +278,7 @@ final class NotificationsStore: ObservableObject {
                 message: "Building the Future of SwiftUI",
                 timestamp: Date().addingTimeInterval(-900),
                 isRead: false,
-                type: NotificationItem.NotificationType.like,
+                type: StoreNotificationType.like,
                 source: NotificationSource.user,
                 priority: NotificationPriority.normal
             ),
@@ -278,7 +287,7 @@ final class NotificationsStore: ObservableObject {
                 message: "'Amazing tutorial! This really helped me out'",
                 timestamp: Date().addingTimeInterval(-3600),
                 isRead: false,
-                type: NotificationItem.NotificationType.comment,
+                type: StoreNotificationType.comment,
                 source: NotificationSource.user,
                 priority: NotificationPriority.normal
             ),
@@ -287,7 +296,7 @@ final class NotificationsStore: ObservableObject {
                 message: "Tap to view their channel",
                 timestamp: Date().addingTimeInterval(-7200),
                 isRead: false,
-                type: NotificationItem.NotificationType.follow,
+                type: StoreNotificationType.follow,
                 source: NotificationSource.user,
                 priority: NotificationPriority.normal
             ),
@@ -296,7 +305,7 @@ final class NotificationsStore: ObservableObject {
                 message: "MusicMaker just started streaming",
                 timestamp: Date().addingTimeInterval(-14400),
                 isRead: true,
-                type: NotificationItem.NotificationType.live,
+                type: StoreNotificationType.live,
                 source: NotificationSource.liveAgent,
                 priority: NotificationPriority.high
             ),
@@ -305,7 +314,7 @@ final class NotificationsStore: ObservableObject {
                 message: "UI Design Masterclass 2026",
                 timestamp: Date().addingTimeInterval(-86400),
                 isRead: true,
-                type: NotificationItem.NotificationType.upload,
+                type: StoreNotificationType.upload,
                 source: NotificationSource.user,
                 priority: NotificationPriority.normal
             ),
@@ -320,6 +329,13 @@ final class NotificationsStore: ObservableObject {
 
 // MARK: - Type Conversion Helpers (file-scope)
 
-private func notifType(from string: String) -> NotificationItem.NotificationType {
-    NotificationItem.NotificationType(rawValue: string) ?? .system
+private func notifType(from string: String) -> StoreNotificationType {
+    switch string {
+    case "like": return .like
+    case "comment", "mention": return .comment
+    case "follow", "subscriber": return .follow
+    case "upload", "newVideo", "milestone": return .upload
+    case "live", "liveStart": return .live
+    default: return .system
+    }
 }

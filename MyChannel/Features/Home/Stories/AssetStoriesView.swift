@@ -17,8 +17,10 @@ struct UserStoryGroup: Identifiable {
     let authorImageName: String
     let stories: [AssetStory]
     
+    @MainActor
     var isSeen: Bool {
-        StorySeenTracker.shared.seenUsernames.contains(username.lowercased())
+        let seen = StorySeenTracker.shared.seenStoryIds
+        return !stories.isEmpty && stories.allSatisfy { seen.contains($0.id.uuidString) }
     }
     
     static func group(from stories: [AssetStory]) -> [UserStoryGroup] {
@@ -47,6 +49,7 @@ struct UserStoryGroup: Identifiable {
     }
     
     /// Sort groups: unseen first, then seen (Instagram ordering)
+    @MainActor
     static func sorted(_ groups: [UserStoryGroup]) -> [UserStoryGroup] {
         let unseen = groups.filter { !$0.isSeen }
         let seen = groups.filter { $0.isSeen }

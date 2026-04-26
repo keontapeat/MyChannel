@@ -59,7 +59,7 @@ final class LiveStreamManager: ObservableObject {
         saveReplay: Bool
     ) async throws -> FirestoreLiveStream {
         guard let user = AppState.shared.currentUser ?? AuthenticationManager.shared.currentUser else {
-            throw LiveStreamError.notAuthenticated
+            throw LiveStreamManagerError.notAuthenticated
         }
 
         let streamId = UUID().uuidString
@@ -242,7 +242,7 @@ final class LiveStreamManager: ObservableObject {
 }
 
 // MARK: - Errors
-enum LiveStreamError: LocalizedError {
+enum LiveStreamManagerError: LocalizedError {
     case notAuthenticated
     case streamNotFound
     case alreadyLive

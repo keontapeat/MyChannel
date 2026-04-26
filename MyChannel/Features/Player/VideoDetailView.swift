@@ -12,6 +12,8 @@ struct VideoDetailView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared
     @StateObject private var playerManager = VideoPlayerManager() // Single player manager
+    @StateObject private var appState = AppState.shared
+    @StateObject private var recommendationService = VideoDetailRecommendationService.shared
     
     // 🔥 REAL-TIME VIEW COUNT: Make view count reactive
     @State private var currentViewCount: Int
@@ -102,8 +104,10 @@ struct VideoDetailView: View {
     @State private var hasWatchedThreshold = false
     @State private var showingCinemaMode = false
     @State private var showingCreatorProfile = false
+    @State private var selectedCreatorProfile: User? = nil
+    @State private var selectedHashtag: String? = nil
     @State private var showingQueueSidebar = false  // 🔥 YOUTUBE PARITY: Queue sidebar
-    @State private var recommendedVideos: [Video] = []  // Firestore-fetched Up Next candidates
+    @State private var recommendedVideos: [Video] = []  // Service-backed recommendations
     
     // MARK: - YouTube Parity: Long-Press 2x Speed
     @State private var isLongPressSpeedUp = false  // 🔥 YOUTUBE PARITY: Hold-to-2x active
@@ -118,6 +122,16 @@ struct VideoDetailView: View {
     
     // MARK: - YouTube Parity: Loop Toggle
     @State private var isLooping = false
+
+    // MARK: - Wired Phase 141–154 Services
+    @StateObject private var ambientService = AmbientModeService.shared
+    @StateObject private var heatmapService = SentimentHeatmapService.shared
+    @StateObject private var timestampedCommentsService = TimestampedCommentsService.shared
+    @StateObject private var speedCurvesService = PlaybackSpeedCurvesService.shared
+    @State private var pinchScale: CGFloat = 1.0
+    @State private var lastPinchScale: CGFloat = 1.0
+    @State private var showAmbientGlow = false
+    @State private var showSilenceSkipIndicator = false
     
     // MARK: - YouTube Parity: Brightness / Volume Swipe
     @State private var currentBrightness: CGFloat = UIScreen.main.brightness
@@ -139,7 +153,25 @@ struct VideoDetailView: View {
                 avPlayerView
             }
         }
-        .background(Color.black)
+        .background(
+            // 🔥 PHASE 142: Ambient Mode glow behind player
+            Group {
+                if showAmbientGlow, ambientService.isEnabled {
+                    let palette = ambientService.currentPalette
+                    RadialGradient(
+                        colors: [
+                            Color(palette.dominant).opacity(ambientService.glowIntensity),
+                            Color(palette.secondary).opacity(ambientService.glowIntensity * 0.5),
+                            Color.black
+                        ],
+                        center: .center, startRadius: 50, endRadius: 300
+                    )
+                    .animation(.easeInOut(duration: ambientService.transitionDuration), value: palette)
+                } else {
+                    Color.black
+                }
+            }
+        )
         .overlay(alignment: .topLeading) {
             if showDebugHUD, let stats = playerManager.currentPlaybackStats() {
                 debugHUDView(stats: stats)
@@ -281,6 +313,21 @@ struct VideoDetailView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
                     .background(Color.black)
+                    // 🔥 PHASE 141: Pinch-to-zoom on video player
+                    .scaleEffect(pinchScale)
+                    .gesture(
+                        MagnificationGesture()
+                            .onChanged { value in
+                                pinchScale = max(1.0, min(3.0, lastPinchScale * value))
+                            }
+                            .onEnded { value in
+                                lastPinchScale = pinchScale
+                                if pinchScale < 1.1 {
+                                    withAnimation(.spring()) { pinchScale = 1.0; lastPinchScale = 1.0 }
+                                }
+                            }
+                    )
+                    .clipped()
             } else {
                 // 🔥 FIX: Show black background while player loads (prevents white screen)
                 Color.black
@@ -388,6 +435,73 @@ struct VideoDetailView: View {
             .allowsHitTesting(false)
         }
         
+        // 🔥 PHASE 154: Sentiment heatmap "Most replayed" indicator
+        if !heatmapService.mostReplayed.isEmpty, let top = heatmapService.mostReplayed.first {
+            HStack(spacing: 6) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.orange)
+                Text("Most replayed")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(Color.black.opacity(0.7)))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            .padding(.leading, 20)
+            .padding(.bottom, 60)
+            .zIndex(340)
+            .allowsHitTesting(false)
+            .opacity({
+                let t = playerManager.currentTime
+                return (t >= top.startSec && t <= top.endSec) ? 1 : 0
+            }())
+            .animation(.easeInOut, value: playerManager.currentTime)
+        }
+
+        // 🔥 PHASE 145: Auto-skip silence indicator
+        if showSilenceSkipIndicator {
+            HStack(spacing: 6) {
+                Image(systemName: "waveform.slash")
+                    .font(.system(size: 12, weight: .bold))
+                Text("Skipping silence")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(Color.black.opacity(0.7)))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .padding(.bottom, 60)
+            .zIndex(340)
+            .allowsHitTesting(false)
+            .transition(.opacity)
+        }
+
+        // 🔥 PHASE 146: Timestamped comment bubble
+        if let bubble = timestampedCommentsService.commentsAt(timestampSec: playerManager.currentTime, toleranceSec: 1.5).first {
+            HStack(spacing: 8) {
+                Image(systemName: "bubble.left.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.7))
+                Text(bubble.body)
+                    .font(.system(size: 13))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.black.opacity(0.75)))
+            .frame(maxWidth: 280, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            .padding(.leading, 16)
+            .padding(.bottom, 80)
+            .zIndex(345)
+            .allowsHitTesting(false)
+            .transition(.scale.combined(with: .opacity))
+        }
+
         // 🔥 YOUTUBE PARITY: Volume overlay (right side vertical swipe)
         if showVolumeOverlay {
             HStack(spacing: 8) {
@@ -633,16 +747,8 @@ struct VideoDetailView: View {
             HStack {
                 InteractiveRichTextTitleView(
                     title: video.title,
-                    onChannelTap: { channelName in
-                        // Navigate to channel profile
-                        print("📺 Navigate to channel: \(channelName)")
-                        // TODO: Implement channel navigation
-                    },
-                    onHashtagTap: { hashtag in
-                        // Navigate to hashtag search
-                        print("🔍 Navigate to hashtag: \(hashtag)")
-                        // TODO: Implement hashtag search navigation
-                    },
+                    onChannelTap: { channelName in handleChannelTap(channelName) },
+                    onHashtagTap: { hashtag in handleHashtagTap(hashtag) },
                     textColor: .white,  // 🔥 FIX: White text for visibility on black background
                     channelMapper: ChannelMentionMapper(creator: video.creator)  // 🔥 YOUTUBE PARITY: @sbkeonta_ → @ShotByKeonta
                 )
@@ -698,6 +804,21 @@ struct VideoDetailView: View {
             }
             .buttonStyle(ScaleButtonStyle())
         }
+        
+        // 🔥 PHASE 142: Ambient Mode Toggle
+        Button(action: {
+            ambientService.toggle()
+            showAmbientGlow = ambientService.isEnabled
+            HapticManager.shared.impact(style: .light)
+        }) {
+            ZStack {
+                Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
+                Image(systemName: ambientService.isEnabled ? "lightbulb.fill" : "lightbulb")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(ambientService.isEnabled ? .yellow : .white)
+            }
+        }
+        .buttonStyle(ScaleButtonStyle())
         
         // Theater Mode Toggle
         Button(action: {
@@ -843,6 +964,28 @@ struct VideoDetailView: View {
         .overlay(alignment: .topLeading) {
             scrubPreview
         }
+        // 🔥 PHASE 154: Sentiment heatmap overlay on scrubber
+        .overlay(alignment: .bottom) {
+            if heatmapService.showHeatmap, !heatmapService.segments.isEmpty, playerManager.duration > 0 {
+                GeometryReader { geo in
+                    let w = geo.size.width - 40
+                    HStack(spacing: 0) {
+                        ForEach(heatmapService.segments) { seg in
+                            let start = CGFloat(seg.startSec / playerManager.duration) * w
+                            let end = CGFloat(seg.endSec / playerManager.duration) * w
+                            let segW = max(2, end - start)
+                            Rectangle()
+                                .fill(Color.orange.opacity(seg.replayIntensity * 0.6))
+                                .frame(width: segW, height: 4)
+                                .offset(x: start)
+                        }
+                    }
+                }
+                .frame(height: 4)
+                .padding(.horizontal, 20)
+                .allowsHitTesting(false)
+            }
+        }
         .gesture(
             DragGesture(minimumDistance: 20)
                 .onEnded { value in
@@ -874,12 +1017,6 @@ struct VideoDetailView: View {
                                     Text(chapter.title)
                                         .font(.system(size: 12, weight: .semibold))
                                         .foregroundColor(.white)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 6)
-                                                .fill(Color.black.opacity(0.8))
-                                        )
                                     
                                     Text(formatTime(chapter.start))
                                         .font(.system(size: 11))
@@ -1276,31 +1413,23 @@ struct VideoDetailView: View {
                                             showingChapters = true
                                         }
                                     },
-                                    onProfileTap: { showingCreatorProfile = true },
+                                    onProfileTap: {
+                                        selectedCreatorProfile = video.creator
+                                        showingCreatorProfile = true
+                                    },
+                                    onChannelTap: { channelName in handleChannelTap(channelName) },
+                                    onHashtagTap: { hashtag in handleHashtagTap(hashtag) },
                                     dynamicViewCount: currentViewCount) // 🔥 REAL-TIME: Pass reactive view count
                 .overlay(alignment: .bottom) {
                     // Simple Up Next bar with autoplay toggle
                     if let next = recommendedVideos.first(where: { $0.id != video.id }) {
-                        HStack(spacing: 12) {
-                            RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial)
-                                .frame(width: 56, height: 32)
-                                .overlay(Text("Up next").font(.caption2))
-                            Text(next.title).font(.caption).lineLimit(1).foregroundStyle(AppTheme.Colors.textPrimary)
-                            Spacer()
-                            Toggle(isOn: .constant(true)) { Text("Autoplay").font(.caption2) }
-                                .labelsHidden()
-                                .tint(AppTheme.Colors.primary)
-                            Button {
-                                playNext(next)
-                            } label: {
-                                Image(systemName: "play.fill")
-                                    .foregroundColor(AppTheme.Colors.primary)
-                                    .font(.title2)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(.ultraThinMaterial)
+                        VideoDetailUpNextBar(
+                            sourceVideo: video,
+                            next: next,
+                            autoplayEnabled: $autoplayEnabled,
+                            onTap: { playNext(next) },
+                            onImpression: { trackRecommendationImpression(next) }
+                        )
                     }
                 }
             }
@@ -1391,8 +1520,14 @@ struct VideoDetailView: View {
                 .presentationDetents([.medium])
         }
         .sheet(isPresented: $showingCreatorProfile) {
-            CreatorProfileSheet(creator: video.creator)
+            CreatorProfileSheet(creator: selectedCreatorProfile ?? video.creator)
                 .presentationDetents([.large])
+        }
+        .sheet(isPresented: Binding(get: { selectedHashtag != nil }, set: { if !$0 { selectedHashtag = nil } })) {
+            if let hashtag = selectedHashtag {
+                HashtagSearchSheet(hashtag: hashtag)
+                    .presentationDetents([.large])
+            }
         }
         .overlay(alignment: .topTrailing) {
             // Video Cards Overlay (YouTube-style)
@@ -1616,12 +1751,13 @@ struct VideoDetailView: View {
                         }
                         
                         if let vmap = await AdsService.shared.fetchVMAP(videoId: video.id) {
-                            if let preroll = vmap.prerollUrl, !preroll.isEmpty, AdsFrequencyCapService.shared.canShowPreroll() {
+                            let uid = AppState.shared.currentUser?.id ?? "anonymous"
+                            if let preroll = vmap.prerollUrl, !preroll.isEmpty, AdsFrequencyCapService.shared.canShow(userId: uid, adUnit: "pre_roll") {
                                 prerollURL = preroll
                                 showingAd = true
                                 pendingContentResume = true
                                 playerManager.pause()
-                                AdsFrequencyCapService.shared.recordPreroll()
+                                AdsFrequencyCapService.shared.recordExposure(userId: uid, adUnit: "pre_roll", placement: "video_start", duration: 0, skippable: true, completed: false)
                             }
                             self.midrolls = vmap.midrolls ?? []
                             self.servedMidrollIndices = []
@@ -1639,11 +1775,11 @@ struct VideoDetailView: View {
             controlsHideTimer?.invalidate()
             
             // 🔥 YOUTUBE PARITY: Save watch progress when leaving
-            WatchProgressService.shared.saveProgress(
-                videoId: video.id,
-                currentTime: playerManager.currentTime,
-                duration: playerManager.duration
-            )
+            let _uid = AppState.shared.currentUser?.id ?? "anonymous"
+            let _pos = playerManager.currentTime
+            let _dur = playerManager.duration
+            let _vid = video.id
+            Task { try? await WatchProgressService.shared.saveProgress(userId: _uid, videoId: _vid, position: _pos, duration: _dur) }
             
             // 🔥 YOUTUBE PARITY: If user explicitly closed (X button), don't start PiP
             guard !userExplicitlyClosed else {
@@ -1701,80 +1837,8 @@ struct VideoDetailView: View {
         .onChange(of: playerManager.isPlaying) { newValue in
             print("🎵 Player state changed to: \(newValue ? "Playing" : "Paused")")
         }
-        .onChange(of: playerManager.currentTime) { newTime in
-            // 🔥 YOUTUBE PARITY: Save watch progress every ~5 seconds
-            if playerManager.duration > 0 {
-                let roundedTime = Int(newTime)
-                if roundedTime % 5 == 0 && roundedTime > 0 {
-                    WatchProgressService.shared.saveProgress(
-                        videoId: video.id,
-                        currentTime: newTime,
-                        duration: playerManager.duration
-                    )
-                }
-            }
-            
-            // Update watch progress
-            if playerManager.duration > 0 {
-                watchProgress = newTime / playerManager.duration
-                
-                // Track watch milestones (YouTube-style analytics)
-                if !hasWatchedThreshold && watchProgress >= 0.25 {
-                    hasWatchedThreshold = true
-                    Task {
-                        await AnalyticsService.shared.trackVideoQuartile(videoId: video.id, quartile: 1)
-                    }
-                } else if watchProgress >= 0.5 {
-                    Task {
-                        await AnalyticsService.shared.trackVideoQuartile(videoId: video.id, quartile: 2)
-                    }
-                } else if watchProgress >= 0.75 {
-                    Task {
-                        await AnalyticsService.shared.trackVideoQuartile(videoId: video.id, quartile: 3)
-                    }
-                }
-            }
-            
-            if let chapters = video.chapters, !chapters.isEmpty {
-                let sorted = chapters.sorted { $0.start < $1.start }
-                if let current = sorted.last(where: { $0.start <= newTime }) {
-                    currentChapterTitle = current.title
-                }
-            }
-            
-            // Check for video cards at specific timestamps
-            if let cards = video.videoCards {
-                for card in cards {
-                    if abs(newTime - card.timestamp) < 0.5 && currentVideoCard?.id != card.id {
-                        currentVideoCard = card
-                        showingVideoCards = true
-                        
-                        // Auto-hide after 8 seconds
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
-                            if currentVideoCard?.id == card.id {
-                                showingVideoCards = false
-                                currentVideoCard = nil
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Check midroll schedule
-            if !midrolls.isEmpty, !showingAd, playerManager.duration > 0 {
-                for (idx, m) in midrolls.enumerated() {
-                    if servedMidrollIndices.contains(idx) { continue }
-                    if newTime >= m.time, newTime <= m.time + 0.5, AdsFrequencyCapService.shared.canShowMidroll() {
-                        servedMidrollIndices.insert(idx)
-                        prerollURL = m.url
-                        showingAd = true
-                        pendingContentResume = true
-                        playerManager.pause()
-                        AdsFrequencyCapService.shared.recordMidroll()
-                        break
-                    }
-                }
-            }
+        .onReceive(playerManager.$currentTime) { _ in
+            handleCurrentTimeChange()
         }
         // 🔥 FIX: Listen for "Open Video Editor" notification
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenVideoEditor"))) { notification in
@@ -1819,13 +1883,28 @@ struct VideoDetailView: View {
             let latestCount = await RealtimeViewTracker.shared.getViewCount(for: video.id)
             print("📊 [VideoDetailView] Latest view count from Firestore: \(latestCount)")
             
-            // 🔥 Load Up Next recommendations from Firestore (same category/creator)
-            let recs = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 20)
-            
+            // 🔥 Load Up Next recommendations from VideoDetailRecommendationService
+            let recs = await recommendationService.recommendations(
+                for: video,
+                userId: appState.currentUser?.id,
+                limit: 20
+            )
+
             await MainActor.run {
                 currentViewCount = latestCount
-                recommendedVideos = recs.filter { $0.id != video.id }
+                recommendedVideos = recs
             }
+
+            recommendationService.prefetchNextPlayerItem(from: recs)
+
+            // 🔥 PHASE 154: Load sentiment heatmap for scrubber
+            try? await heatmapService.loadHeatmap(videoId: video.id)
+
+            // 🔥 PHASE 146: Load timestamped comments
+            try? await timestampedCommentsService.loadComments(videoId: video.id)
+
+            // 🔥 PHASE 145: Detect silence regions for auto-skip
+            try? await speedCurvesService.detectSilence(videoId: video.id)
         }
         .onChange(of: playerManager.isPlaying) { isPlaying in
             // 🔥 FIX: Update view count when video starts playing
@@ -1847,20 +1926,7 @@ struct VideoDetailView: View {
         }
         // 🔥 YOUTUBE PARITY: Auto quality selection + Resume playback position when video loads
         .onChange(of: playerManager.duration) { newDuration in
-            if newDuration > 0 && playerManager.selectedQuality == .auto {
-                playerManager.autoSelectQuality()
-            }
-            
-            // 🔥 YOUTUBE PARITY: Resume from saved position
-            if newDuration > 0, let savedPosition = WatchProgressService.shared.getSavedPosition(videoId: video.id) {
-                let fraction = savedPosition / newDuration
-                if fraction > 0.02 && fraction < 0.95 {
-                    print("▶️ [YouTube] Resuming from \(Int(savedPosition))s / \(Int(newDuration))s")
-                    playerManager.seek(to: fraction)
-                }
-                // Only resume once — clear after seeking
-                WatchProgressService.shared.clearProgress(videoId: video.id)
-            }
+            handleDurationChange(newDuration)
         }
         // 🔥 YOUTUBE PARITY: Queue sidebar
         .overlay(alignment: .trailing) {
@@ -1875,7 +1941,88 @@ struct VideoDetailView: View {
     }
     
     // MARK: - Helper Methods
-    
+
+    private func handleDurationChange(_ newDuration: Double) {
+        guard newDuration > 0 else { return }
+        if playerManager.selectedQuality == .auto {
+            playerManager.autoSelectQuality()
+        }
+        let savedPosition = WatchProgressService.shared.resumePosition(videoId: video.id)
+        guard savedPosition > 0 else { return }
+        let fraction = savedPosition / newDuration
+        if fraction > 0.02 && fraction < 0.95 {
+            print("▶️ [YouTube] Resuming from \(Int(savedPosition))s / \(Int(newDuration))s")
+            playerManager.seek(to: fraction)
+        }
+    }
+
+    private func handleCurrentTimeChange() {
+        let newTime = playerManager.currentTime
+        if playerManager.duration > 0 {
+            let roundedTime = Int(newTime)
+            if roundedTime % 5 == 0 && roundedTime > 0 {
+                let uid = AppState.shared.currentUser?.id ?? "anonymous"
+                let vid = video.id
+                let dur = playerManager.duration
+                Task { try? await WatchProgressService.shared.saveProgress(userId: uid, videoId: vid, position: newTime, duration: dur) }
+            }
+            watchProgress = newTime / playerManager.duration
+            if !hasWatchedThreshold && watchProgress >= 0.25 {
+                hasWatchedThreshold = true
+                Task { await AnalyticsService.shared.trackVideoQuartile(videoId: video.id, quartile: 1) }
+            } else if watchProgress >= 0.5 {
+                Task { await AnalyticsService.shared.trackVideoQuartile(videoId: video.id, quartile: 2) }
+            } else if watchProgress >= 0.75 {
+                Task { await AnalyticsService.shared.trackVideoQuartile(videoId: video.id, quartile: 3) }
+            }
+        }
+        if speedCurvesService.autoSkipSilence {
+            if let seg = speedCurvesService.silenceSegments.first(where: { newTime >= $0.startSec && newTime <= $0.endSec }) {
+                let skipTo = seg.endSec / playerManager.duration
+                playerManager.seek(to: min(1.0, skipTo))
+                withAnimation { showSilenceSkipIndicator = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    withAnimation { showSilenceSkipIndicator = false }
+                }
+            }
+        }
+        if let chapters = video.chapters, !chapters.isEmpty {
+            let sorted = chapters.sorted { $0.start < $1.start }
+            if let current = sorted.last(where: { $0.start <= newTime }) {
+                currentChapterTitle = current.title
+            }
+        }
+        if let cards = video.videoCards {
+            for card in cards {
+                if abs(newTime - card.timestamp) < 0.5 && currentVideoCard?.id != card.id {
+                    currentVideoCard = card
+                    showingVideoCards = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+                        if currentVideoCard?.id == card.id {
+                            showingVideoCards = false
+                            currentVideoCard = nil
+                        }
+                    }
+                }
+            }
+        }
+        if !midrolls.isEmpty, !showingAd, playerManager.duration > 0 {
+            let uid = AppState.shared.currentUser?.id ?? "anonymous"
+            for (idx, m) in midrolls.enumerated() {
+                if servedMidrollIndices.contains(idx) { continue }
+                if newTime >= m.time, newTime <= m.time + 0.5, AdsFrequencyCapService.shared.canShow(userId: uid, adUnit: "mid_roll") {
+                    servedMidrollIndices.insert(idx)
+                    prerollURL = m.url
+                    showingAd = true
+                    pendingContentResume = true
+                    playerManager.pause()
+                    AdsFrequencyCapService.shared.recordExposure(userId: uid, adUnit: "mid_roll", placement: "video_midroll", duration: 0, skippable: true, completed: false)
+                    break
+                }
+            }
+        }
+    }
+
     private func resetControlsHideTimer() {
         controlsHideTimer?.invalidate()
         
@@ -2024,7 +2171,46 @@ struct VideoDetailView: View {
     private func playNext(_ next: Video) {
         showUpNext = false
         upNextTimer?.invalidate(); upNextTimer = nil
+        trackRecommendationClick(next)
         videoToPresent = next
+    }
+
+    private func handleChannelTap(_ channelName: String) {
+        Task {
+            let resolved = await UserLookupService.shared.resolveUser(usernameOrDisplayName: channelName, fallback: video.creator)
+            await MainActor.run {
+                selectedCreatorProfile = resolved ?? video.creator
+                showingCreatorProfile = true
+            }
+        }
+    }
+
+    private func handleHashtagTap(_ hashtag: String) {
+        selectedHashtag = hashtag
+    }
+
+    private func trackRecommendationImpression(_ next: Video) {
+        Task {
+            let index = recommendedVideos.firstIndex(of: next) ?? 0
+            await recommendationService.trackImpression(
+                videoId: next.id,
+                sourceVideoId: video.id,
+                position: index,
+                userId: appState.currentUser?.id
+            )
+        }
+    }
+
+    private func trackRecommendationClick(_ next: Video) {
+        Task {
+            let index = recommendedVideos.firstIndex(of: next) ?? 0
+            await recommendationService.trackClick(
+                videoId: next.id,
+                sourceVideoId: video.id,
+                position: index,
+                userId: appState.currentUser?.id
+            )
+        }
     }
 
     private func cancelEndscreen() {

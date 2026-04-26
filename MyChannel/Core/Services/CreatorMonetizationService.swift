@@ -215,7 +215,7 @@ class CreatorMonetizationService: ObservableObject {
     
     // MARK: - Sponsorship Matching
     
-    func findSponsorshipOpportunities(creatorId: String) async throws -> [SponsorshipOpportunity] {
+    func findSponsorshipOpportunities(creatorId: String) async throws -> [MonetizationSponsorshipOpportunity] {
         let request = SponsorshipMatchingRequest(
             creatorId: creatorId,
             audienceData: await getAudienceData(creatorId: creatorId),
@@ -230,7 +230,7 @@ class CreatorMonetizationService: ObservableObject {
         )
         
         return response.opportunities.map { opportunity in
-            SponsorshipOpportunity(
+            MonetizationSponsorshipOpportunity(
                 id: opportunity.id,
                 brand: opportunity.brand,
                 category: opportunity.category,
@@ -578,7 +578,7 @@ struct MonetizationAdOptimizationResult: Codable {
     let implementationSteps: [String]
 }
 
-struct SponsorshipOpportunity: Codable {
+struct MonetizationSponsorshipOpportunity: Codable {
     let id: String
     let brand: String
     let category: String
@@ -734,7 +734,7 @@ struct SponsorshipMatchingRequest: Encodable {
 }
 
 struct SponsorshipMatchingResponse: Codable {
-    let opportunities: [SponsorshipOpportunity]
+    let opportunities: [MonetizationSponsorshipOpportunity]
 }
 
 struct MembershipOptimizationRequest: Encodable {

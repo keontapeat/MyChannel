@@ -21,7 +21,7 @@ final class EsportsTournamentService: ObservableObject {
     #endif
     
     /// Fetch tournaments that are currently active or starting soon.
-    func fetchActiveTournaments(limit: Int = 12) async throws -> [EsportsTournament] {
+    func fetchActiveTournaments(limit: Int = 12) async throws -> [GamingEsportsTournament] {
         #if canImport(FirebaseFirestore)
         let snapshot = try await db.collection("tournaments")
             .whereField("status", in: ["active", "upcoming", "live"])
@@ -29,8 +29,8 @@ final class EsportsTournamentService: ObservableObject {
             .limit(to: limit)
             .getDocuments()
         
-        let tournaments: [EsportsTournament] = snapshot.documents.compactMap { doc in
-            EsportsTournament(document: doc)
+        let tournaments: [GamingEsportsTournament] = snapshot.documents.compactMap { doc in
+            GamingEsportsTournament(document: doc)
         }
         
         if tournaments.isEmpty {
@@ -60,7 +60,7 @@ final class EsportsTournamentService: ObservableObject {
     }
     
     /// Fetch the highest prize pool tournament to feature.
-    func fetchFeaturedTournament() async throws -> EsportsTournament? {
+    func fetchFeaturedTournament() async throws -> GamingEsportsTournament? {
         #if canImport(FirebaseFirestore)
         let snapshot = try await db.collection("tournaments")
             .whereField("status", in: ["active", "upcoming", "live"])
@@ -69,7 +69,7 @@ final class EsportsTournamentService: ObservableObject {
             .getDocuments()
         
         if let document = snapshot.documents.first {
-            return EsportsTournament(document: document)
+            return GamingEsportsTournament(document: document)
         }
         return nil
         #else
@@ -80,7 +80,7 @@ final class EsportsTournamentService: ObservableObject {
 
 // MARK: - Firestore Helpers
 
-private extension EsportsTournament {
+private extension GamingEsportsTournament {
     #if canImport(FirebaseFirestore)
     init?(document: DocumentSnapshot) {
         guard let data = document.data() else { return nil }
@@ -118,9 +118,9 @@ private extension EsportsTournament {
 // MARK: - Sample Fallbacks
 
 private extension EsportsTournamentService {
-    static func sampleTournaments() -> [EsportsTournament] {
+    static func sampleTournaments() -> [GamingEsportsTournament] {
         [
-            EsportsTournament(
+            GamingEsportsTournament(
                 id: "spring-championship",
                 name: "Spring Championship",
                 gameName: "Fortnite",
@@ -132,7 +132,7 @@ private extension EsportsTournamentService {
                 startDate: Date().addingTimeInterval(60 * 60 * 48),
                 isLive: false
             ),
-            EsportsTournament(
+            GamingEsportsTournament(
                 id: "pro-league-finals",
                 name: "Pro League Finals",
                 gameName: "Valorant",

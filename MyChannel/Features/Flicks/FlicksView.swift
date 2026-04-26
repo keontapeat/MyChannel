@@ -376,126 +376,65 @@ struct FlicksView: View {
 
     private func makeYouTubeDemoVideos() -> [Video] {
         let demoUser = User(
-            username: "demo_creator",
-            displayName: "Demo Creator",
+            username: "open_flicks",
+            displayName: "Open Flicks",
             email: "demo@mychannel.app",
-            profileImageURL: "https://i.pravatar.cc/200?u=demo_creator",
+            profileImageURL: "https://archive.org/services/img/BigBuckBunny_124",
             bannerImageURL: nil,
-            bio: "Autoplay demo",
+            bio: "Playable open videos",
             subscriberCount: 1_000_000,
             videoCount: 100,
             isVerified: true,
             isCreator: true
         )
 
-        // 🔥 MASSIVE COLLECTION: 50+ popular YouTube videos that embed reliably
-        let ids: [(id: String, title: String)] = [
-            // Music Videos
-            ("dQw4w9WgXcQ", "Never Gonna Give You Up 🎵"),
-            ("Zi_XLOBDo_Y", "Michael Jackson - Billie Jean 🎤"),
-            ("71GJrAY54Ew", "Scatz - Rebound (Official Music Video) 🔥"),
-            ("9bZkp7q19f0", "PSY - Gangnam Style 🐴"),
-            ("kJQP7kiw5Fk", "Luis Fonsi - Despacito ft. Daddy Yankee 💃"),
-            ("OPf0YbXqDm0", "Mark Ronson - Uptown Funk ft. Bruno Mars 🎺"),
-            ("CevxZvSJLk8", "Katy Perry - Roar 🦁"),
-            ("JGwWNGJdvx8", "Ed Sheeran - Shape of You 🎸"),
-            ("fRh_vgS2dFE", "Justin Bieber - Sorry 🎤"),
-            ("RgKAFK5djSk", "Wiz Khalifa - See You Again ft. Charlie Puth 🚗"),
-            
-            // Gaming & Sports
-            ("x9v2Q8l2dY4", "Warzone Best Moments 🎮"),
-            ("jNQXAC9IVRw", "Me at the zoo (First YouTube Video) 🦒"),
-            ("2Vv-BfVoq4g", "Evolution of Dance 💃"),
-            ("hT_nvWreIhg", "Charlie Bit My Finger 👶"),
-            ("_OBlgSz8sSM", "Charlie the Unicorn 🦄"),
-            
-            // Viral & Trending
-            ("ZZ5LpwO-An4", "HEYYEYAAEYAAAEYAEYAA 🎵"),
-            ("wZZ7oFKsKzY", "Nyan Cat [original] 🐱"),
-            ("dMH0bHeiRNg", "Keyboard Cat 🎹"),
-            ("EIyixC9NsLI", "Dramatic Chipmunk 🐿️"),
-            ("y6Sxv-sUYtM", "Poker Face 🃏"),
-            
-            // Tech & Education
-            ("videoseries", "Tech Tips & Tricks 💻"),
-            ("dQw4w9WgXcQ", "Coding Tutorial 👨‍💻"),
-            ("Zi_XLOBDo_Y", "AI Explained Simply 🤖"),
-            ("71GJrAY54Ew", "Future of Technology 🚀"),
-            
-            // Fitness & Health
-            ("9bZkp7q19f0", "10 Min Morning Workout 💪"),
-            ("kJQP7kiw5Fk", "Yoga for Beginners 🧘"),
-            ("OPf0YbXqDm0", "HIIT Cardio Blast 🔥"),
-            ("CevxZvSJLk8", "Abs in 5 Minutes ⚡"),
-            
-            // Food & Cooking
-            ("JGwWNGJdvx8", "Perfect Pasta Recipe 🍝"),
-            ("fRh_vgS2dFE", "Quick Breakfast Ideas 🍳"),
-            ("RgKAFK5djSk", "Dessert in 60 Seconds 🍰"),
-            ("x9v2Q8l2dY4", "Street Food Tour 🌮"),
-            
-            // Travel & Adventure
-            ("jNQXAC9IVRw", "Tokyo Night Walk 🌃"),
-            ("2Vv-BfVoq4g", "Bali Beach Vibes 🏖️"),
-            ("hT_nvWreIhg", "NYC in 4K 🗽"),
-            ("_OBlgSz8sSM", "Dubai Drone Tour 🏙️"),
-            
-            // Comedy & Entertainment
-            ("ZZ5LpwO-An4", "Funny Pets Compilation 😂"),
-            ("wZZ7oFKsKzY", "Epic Fails 2024 🤦"),
-            ("dMH0bHeiRNg", "Stand-Up Comedy Best Bits 🎭"),
-            ("EIyixC9NsLI", "Pranks Gone Wrong 😱"),
-            
-            // Art & Design
-            ("y6Sxv-sUYtM", "Digital Art Timelapse 🎨"),
-            ("dQw4w9WgXcQ", "Calligraphy Tutorial ✍️"),
-            ("Zi_XLOBDo_Y", "3D Modeling Magic 🖥️"),
-            ("71GJrAY54Ew", "Photography Tips 📸"),
-            
-            // Nature & Animals
-            ("9bZkp7q19f0", "Ocean Life 4K 🌊"),
-            ("kJQP7kiw5Fk", "Safari Wildlife 🦁"),
-            ("OPf0YbXqDm0", "Mountain Hiking 🏔️"),
-            ("CevxZvSJLk8", "Cute Puppies Playing 🐶"),
-            
-            // More Viral Content
-            ("JGwWNGJdvx8", "Trending Dance Challenge 💃"),
-            ("fRh_vgS2dFE", "Life Hacks You Need 💡"),
-            ("RgKAFK5djSk", "Satisfying Videos 😌"),
-            ("x9v2Q8l2dY4", "Mind-Blowing Facts 🤯"),
-            ("jNQXAC9IVRw", "Before & After Transformations ✨"),
-            ("2Vv-BfVoq4g", "Oddly Satisfying Compilation 🌀"),
-            ("hT_nvWreIhg", "Extreme Sports Highlights 🏂"),
-            ("_OBlgSz8sSM", "Luxury Lifestyle 💎"),
-            ("ZZ5LpwO-An4", "Street Interviews 🎤"),
-            ("wZZ7oFKsKzY", "Magic Tricks Revealed 🎩"),
-            ("dMH0bHeiRNg", "Science Experiments 🧪"),
-            ("EIyixC9NsLI", "Car Reviews 🚗"),
-            ("y6Sxv-sUYtM", "Fashion Lookbook 👗"),
-            ("dQw4w9WgXcQ", "Home Decor Ideas 🏡")
+        let directVideos: [(title: String, url: String, thumb: String, category: VideoCategory, duration: Double)] = [
+            ("Big Buck Bunny", "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", "https://archive.org/services/img/BigBuckBunny_124", .movies, 596),
+            ("Sintel", "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4", "https://archive.org/services/img/Sintel", .movies, 888),
+            ("Tears of Steel", "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4", "https://archive.org/services/img/TearOfSteel", .movies, 734),
+            ("Elephants Dream", "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4", "https://archive.org/services/img/ElephantsDream", .movies, 653),
+            ("For Bigger Blazes", "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", "https://picsum.photos/seed/flick-blazes/720/1280", .entertainment, 15),
+            ("For Bigger Escapes", "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4", "https://picsum.photos/seed/flick-escapes/720/1280", .travel, 15),
+            ("For Bigger Fun", "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4", "https://picsum.photos/seed/flick-fun/720/1280", .entertainment, 60),
+            ("For Bigger Joyrides", "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4", "https://picsum.photos/seed/flick-joyrides/720/1280", .lifestyle, 15),
+            ("Subaru Outback Adventure", "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4", "https://picsum.photos/seed/flick-subaru/720/1280", .travel, 594),
+            ("Volkswagen GTI Review", "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4", "https://picsum.photos/seed/flick-gti/720/1280", .entertainment, 654),
+            ("We Are Going On Bullrun", "https://storage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4", "https://picsum.photos/seed/flick-bullrun/720/1280", .entertainment, 180),
+            ("Night of the Living Dead", "https://archive.org/download/night_of_the_living_dead/night_of_the_living_dead_512kb.mp4", "https://archive.org/services/img/night_of_the_living_dead", .movies, 5760),
+            ("Charade", "https://archive.org/download/Charade_1963/Charade_1963_512kb.mp4", "https://archive.org/services/img/Charade_1963", .movies, 6780),
+            ("House on Haunted Hill", "https://archive.org/download/House_on_Haunted_Hill/House_on_Haunted_Hill_512kb.mp4", "https://archive.org/services/img/House_on_Haunted_Hill", .movies, 4500),
+            ("Carnival of Souls", "https://archive.org/download/CarnivalofSouls/CarnivalofSouls_512kb.mp4", "https://archive.org/services/img/CarnivalofSouls", .movies, 4680),
+            ("D.O.A.", "https://archive.org/download/DOA_1950/DOA_1950_512kb.mp4", "https://archive.org/services/img/DOA_1950", .movies, 4980),
+            ("Detour", "https://archive.org/download/Detour/Detour_512kb.mp4", "https://archive.org/services/img/Detour", .movies, 4080),
+            ("His Girl Friday", "https://archive.org/download/his_girl_friday/his_girl_friday_512kb.mp4", "https://archive.org/services/img/his_girl_friday", .movies, 5520),
+            ("The General", "https://archive.org/download/TheGeneral1926/The%20General%20%281926%29.mp4", "https://archive.org/services/img/TheGeneral1926", .movies, 4500),
+            ("Metropolis", "https://archive.org/download/Metropolis_201610/Metropolis.mp4", "https://archive.org/services/img/Metropolis_201610", .movies, 9180)
         ]
-
-        return ids.map { entry in
+        let repeated = (0..<6).flatMap { batch in
+            directVideos.enumerated().map { index, item in
+                (id: "playable_flick_\(batch)_\(index)", item: item, title: "\(item.title) \(batch + 1)")
+            }
+        }
+        return repeated.map { entry in
             Video(
-                id: "yt_demo_\(entry.id)",
+                id: entry.id,
                 title: entry.title,
-                description: "Demo autoplay video",
-                thumbnailURL: "https://i.ytimg.com/vi/\(entry.id)/hqdefault.jpg",
-                videoURL: "https://www.youtube.com/watch?v=\(entry.id)",
-                duration: 120,
-                viewCount: Int.random(in: 1_000_000...900_000_000),
-                likeCount: Int.random(in: 10_000...8_000_000),
-                commentCount: Int.random(in: 2_000...500_000),
+                description: "Playable Flick",
+                thumbnailURL: entry.item.thumb,
+                videoURL: entry.item.url,
+                duration: entry.item.duration,
+                viewCount: Int.random(in: 100_000...9_000_000),
+                likeCount: Int.random(in: 10_000...800_000),
+                commentCount: Int.random(in: 2_000...50_000),
                 createdAt: Date(),
                 creator: demoUser,
-                category: .music,
-                tags: ["demo","autoplay","shorts"],
+                category: entry.item.category,
+                tags: ["playable","flicks","open"],
                 isPublic: true,
                 quality: [.quality720p],
                 aspectRatio: .portrait,
                 isLiveStream: false,
-                contentSource: .youtube,
-                externalID: entry.id,
+                contentSource: .userUploaded,
                 isVerified: true
             )
         }
@@ -591,12 +530,14 @@ struct FlicksView: View {
         }
         #endif
         
-        // If we got videos from Firestore, use them!
+        let playableFallbacks = makeYouTubeDemoVideos()
+
+        // If we got videos from Firestore, use them plus playable fallbacks so feed stays full.
         if !firestoreVideos.isEmpty {
             await MainActor.run {
-                self.videos = firestoreVideos.shuffled()
+                self.videos = mergedFlickVideos(primary: firestoreVideos, fallback: playableFallbacks, minimumCount: 100)
                 self.currentIndex = 0
-                print("✅ [FlicksView] Loaded \(firestoreVideos.count) videos from Firestore")
+                print("✅ [FlicksView] Loaded \(firestoreVideos.count) videos from Firestore plus playable fallbacks")
             }
             return
         }
@@ -611,25 +552,69 @@ struct FlicksView: View {
                 let dedup = Array(Dictionary(grouping: results, by: { $0.id }).values.compactMap { $0.first })
                 let sorted = dedup.shuffled()
                 await MainActor.run {
-                    self.videos = sorted.isEmpty ? makeYouTubeDemoVideos() : sorted
+                    self.videos = mergedFlickVideos(primary: sorted, fallback: playableFallbacks, minimumCount: 100)
                     self.currentIndex = 0
-                    print("✅ [FlicksView] Loaded \(sorted.count) videos from YouTube")
+                    print("✅ [FlicksView] Loaded \(sorted.count) videos from YouTube plus playable fallbacks")
                 }
             } catch {
                 await MainActor.run {
-                    self.loadError = "Could not load YouTube shorts. Showing demos."
-                    self.videos = makeYouTubeDemoVideos()
+                    self.loadError = nil
+                    self.videos = playableFallbacks.shuffled()
                     self.currentIndex = 0
                 }
             }
         } else {
             // 🔥 PRIORITY 3: Fallback to demo videos
             await MainActor.run {
-                self.videos = makeYouTubeDemoVideos()
+                self.videos = playableFallbacks.shuffled()
                 self.currentIndex = 0
                 print("⚠️ [FlicksView] No Firestore videos or YouTube key. Showing \(self.videos.count) demo videos")
             }
         }
+    }
+
+    private func mergedFlickVideos(primary: [Video], fallback: [Video], minimumCount: Int) -> [Video] {
+        let playablePrimary = primary.filter { video in
+            guard !video.videoURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+            if video.contentSource == .youtube {
+                return false
+            }
+            return URL(string: video.videoURL) != nil
+        }
+        var seen = Set<String>()
+        var merged = (playablePrimary + fallback).filter { video in
+            if seen.contains(video.id) { return false }
+            seen.insert(video.id)
+            return true
+        }
+        while merged.count < minimumCount {
+            let nextBatch = fallback.map { original in
+                Video(
+                    id: "\(original.id)_loop_\(merged.count)",
+                    title: original.title,
+                    description: original.description,
+                    thumbnailURL: original.thumbnailURL,
+                    videoURL: original.videoURL,
+                    duration: original.duration,
+                    viewCount: original.viewCount,
+                    likeCount: original.likeCount,
+                    commentCount: original.commentCount,
+                    createdAt: original.createdAt,
+                    creator: original.creator,
+                    category: original.category,
+                    tags: original.tags,
+                    isPublic: original.isPublic,
+                    quality: original.quality,
+                    aspectRatio: original.aspectRatio,
+                    isLiveStream: original.isLiveStream,
+                    contentSource: original.contentSource,
+                    externalID: original.externalID,
+                    isVerified: original.isVerified
+                )
+            }
+            merged.append(contentsOf: nextBatch)
+        }
+        return Array(merged.shuffled().prefix(max(minimumCount, merged.count)))
     }
 
     // MARK: - Tracking

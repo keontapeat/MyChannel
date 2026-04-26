@@ -1,64 +1,49 @@
+//
+//  SubscriptionsFeedService.swift
+//  MyChannel
+//
+//  Subscription feed: chronological + algorithmic feed from subscribed
+//  creators, new upload notifications, feed pagination.
+//  Uses `recommendations` Cloud Run.
+//
+
 import Foundation
-#if canImport(FirebaseFirestore)
-import FirebaseFirestore
-#endif
+
+struct SubscriptionsFeedItem: Codable, Identifiable {
+    let id: String
+    let videoId: String
+    let creatorId: String
+    let creatorName: String
+    let creatorImageURL: String?
+    let title: String
+    let thumbnailURL: String?
+    let publishedAt: Date
+    let isShort: Bool
+    let isLive: Bool
+}
 
 @MainActor
 final class SubscriptionsFeedService: ObservableObject {
     static let shared = SubscriptionsFeedService()
     private init() {}
+    @Published private(set) var feed: [SubscriptionsFeedItem] = []
+    @Published private(set) var hasMore: Bool = true
+    private var lastDocId: String?
 
-    struct FeedItem: Identifiable, Codable, Equatable {
-        let id: String
-        let videoId: String
-        let ownerUid: String
-        let title: String
-        let thumb: String
-        let createdAt: Date
-        let read: Bool
-        
-        init(id: String = UUID().uuidString, videoId: String, ownerUid: String, title: String, thumb: String, createdAt: Date, read: Bool = false) {
-            self.id = id
-            self.videoId = videoId
-            self.ownerUid = ownerUid
-            self.title = title
-            self.thumb = thumb
-            self.createdAt = createdAt
-            self.read = read
+    func fetchFeed(userId: String, limit: Int = 20, refresh: Bool = false) async throws {
+        if refresh { feed = []; lastDocId = nil; hasMore = true }
+        struct Req: Encodable { let task: String; let userId: String; let limit: Int; let cursor: String? }
+        struct RawI: Decodable { let id: String; let video_id: String; let creator_id: String; let creator_name: String; let creator_image: String?; let title: String; let thumbnail: String?; let published: String?; let is_short: Bool?; let is_live: Bool? }
+        struct Raw: Decodable { let items: [RawI]?; let has_more: Bool?; let cursor: String? }
+        let r: Raw = try await CloudRunAgentRouter.post(.recommendations, path: "/predict",
+            body: Req(task: "fetch_subscriptions_feed", userId: userId, limit: limit, cursor: lastDocId))
+        let newItems = (r.items ?? []).map {
+            SubscriptionsFeedItem(id: $0.id, videoId: $0.video_id, creatorId: $0.creator_id, creatorName: $0.creator_name,
+                creatorImageURL: $0.creator_image, title: $0.title, thumbnailURL: $0.thumbnail,
+                publishedAt: $0.published.flatMap { ISO8601DateFormatter().date(from: $0) } ?? Date(), isShort: $0.is_short ?? false, isLive: $0.is_live ?? false)
         }
-    }
-
-    @Published var items: [FeedItem] = []
-    private var listener: Any?
-
-    func listen(uid: String) {
-        stop()
-        #if canImport(FirebaseFirestore)
-        let db = Firestore.firestore()
-        listener = db.collection("feeds").document(uid).collection("items").order(by: "createdAt", descending: true).limit(to: 100).addSnapshotListener { [weak self] snap, _ in
-            guard let self = self, let snap = snap else { return }
-            self.items = snap.documents.compactMap { doc in
-                let d = doc.data()
-                return FeedItem(
-                    id: doc.documentID,
-                    videoId: (d["videoId"] as? String) ?? doc.documentID,
-                    ownerUid: (d["ownerUid"] as? String) ?? "",
-                    title: (d["title"] as? String) ?? "",
-                    thumb: (d["thumb"] as? String) ?? "",
-                    createdAt: (d["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
-                    read: (d["read"] as? Bool) ?? false
-                )
-            }
-        }
-        #endif
-    }
-
-    func stop() {
-        #if canImport(FirebaseFirestore)
-        (listener as? ListenerRegistration)?.remove()
-        #endif
-        listener = nil
+        feed.append(contentsOf: newItems)
+        hasMore = r.has_more ?? false
+        lastDocId = r.cursor
     }
 }
-
-

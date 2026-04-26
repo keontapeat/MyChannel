@@ -167,7 +167,7 @@ final class MonitoringService: ObservableObject {
     
     func stopTrace(_ traceName: String, metrics: [String: Int]? = nil) {
         #if canImport(FirebasePerformance)
-        guard let trace = performanceTraces[traceName] as? Trace else { return }
+        guard let trace = performanceTraces[traceName] as? FirebasePerformance.Trace else { return }
         
         // Add custom metrics
         if let metrics = metrics {

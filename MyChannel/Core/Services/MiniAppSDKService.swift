@@ -79,7 +79,7 @@ final class MiniAppSDKService: NSObject, ObservableObject {
         struct Raw: Decodable { let installs: [RawInstall]? }
 
         let r: Raw = try await CloudRunAgentRouter.post(
-            .developerPortal,
+            .superAITeam,
             path: "/predict",
             body: Request(task: "list_installs", creatorUid: creatorUid)
         )

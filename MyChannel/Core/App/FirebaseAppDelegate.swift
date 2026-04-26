@@ -23,11 +23,15 @@ final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
         #if canImport(FirebaseAppCheck)
         class ProviderFactory: NSObject, AppCheckProviderFactory {
             func createProvider(with app: FirebaseApp) -> AppCheckProvider? {
+                #if DEBUG
+                return AppCheckDebugProvider(app: app)
+                #else
                 if #available(iOS 14.0, *) {
                     return AppAttestProvider(app: app)
                 } else {
                     return DeviceCheckProvider(app: app)
                 }
+                #endif
             }
         }
         AppCheck.setAppCheckProviderFactory(ProviderFactory())

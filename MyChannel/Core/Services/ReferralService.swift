@@ -12,7 +12,7 @@ import Foundation
 import FirebaseFirestore
 #endif
 
-struct ReferralCode: Codable, Identifiable, Equatable {
+struct GrowthReferralCode: Codable, Identifiable, Equatable {
     let id: String              // the code itself
     let ownerUid: String
     let createdAt: Date
@@ -49,14 +49,14 @@ final class ReferralService: ObservableObject {
     static let shared = ReferralService()
     private init() {}
 
-    @Published var myCode: ReferralCode?
+    @Published var myCode: GrowthReferralCode?
     @Published var kFactorToday: Double?
     @Published private(set) var isLoading = false
 
     // MARK: - Create / fetch code
 
     /// Mint or fetch the current user's referral code.
-    func ensureMyCode(uid: String, campaign: String? = "launch-2026") async throws -> ReferralCode {
+    func ensureMyCode(uid: String, campaign: String? = "launch-2026") async throws -> GrowthReferralCode {
         guard AppConfig.Features.enableReferralLoop else { throw ReferralError.disabled }
 
         struct Request: Encodable {
@@ -79,7 +79,7 @@ final class ReferralService: ObservableObject {
             body: Request(task: "create_or_fetch", uid: uid, campaign: campaign)
         )
 
-        let code = ReferralCode(
+        let code = GrowthReferralCode(
             id: raw.code ?? Self.fallbackCode(uid: uid),
             ownerUid: uid,
             createdAt: Date(),
@@ -107,7 +107,7 @@ final class ReferralService: ObservableObject {
     }
 
     /// Shareable Universal Link pointing at `mychannel.live/r/<code>`.
-    func shareURL(for code: ReferralCode) -> URL {
+    func shareURL(for code: GrowthReferralCode) -> URL {
         URL(string: "https://mychannel.live/r/\(code.id)")!
     }
 

@@ -338,7 +338,7 @@ struct StoreNotificationCard: View {
 
     /// Grouped count chip: "3 likes"
     @ViewBuilder
-    private func groupBadge(count: Int, type: NotificationItem.NotificationType) -> some View {
+    private func groupBadge(count: Int, type: StoreNotificationType) -> some View {
         if count > 1 {
             Text("\(count) \(groupLabel(type))")
                 .font(.system(size: 9, weight: .bold))
@@ -348,7 +348,7 @@ struct StoreNotificationCard: View {
         }
     }
 
-    private func groupLabel(_ type: NotificationItem.NotificationType) -> String {
+    private func groupLabel(_ type: StoreNotificationType) -> String {
         switch type {
         case .like:    return "likes"
         case .comment: return "comments"
@@ -359,16 +359,24 @@ struct StoreNotificationCard: View {
         }
     }
 
-    private func iconName(_ type: NotificationItem.NotificationType, source: NotificationSource) -> String {
+    private func iconName(_ type: StoreNotificationType, source: NotificationSource) -> String {
         switch source {
         case .viralAgent:     return "flame.fill"
         case .liveAgent:      return "dot.radiowaves.left.and.right"
         case .recommendAgent: return "sparkles"
-        case .user:           return type.iconName
+        case .user:
+            switch type {
+            case .like:    return "heart.fill"
+            case .comment: return "bubble.right.fill"
+            case .follow:  return "person.badge.plus"
+            case .upload:  return "arrow.up.circle.fill"
+            case .live:    return "dot.radiowaves.left.and.right"
+            case .system:  return "gear"
+            }
         }
     }
 
-    private func typeColor(_ type: NotificationItem.NotificationType) -> Color {
+    private func typeColor(_ type: StoreNotificationType) -> Color {
         switch type {
         case .like:    return AppTheme.Colors.primary
         case .comment: return .blue
@@ -392,7 +400,7 @@ struct StoreNotificationCard: View {
 // MARK: - Legacy NotificationCard (kept for backward compat)
 
 struct NotificationCard: View {
-    let notification: NotificationItem
+    let notification: LegacyNotificationItem
     let onTap: () -> Void
     var onSwipeDelete: (() -> Void)? = nil
     
@@ -565,7 +573,7 @@ struct NotificationsEmptyState: View {
 }
 
 // MARK: - Supporting Models
-struct NotificationItem: Identifiable {
+struct LegacyNotificationItem: Identifiable {
     let id: String = UUID().uuidString
     let title: String
     let message: String
@@ -604,29 +612,29 @@ struct NotificationItem: Identifiable {
         }
     }
     
-    static let sampleNotifications: [NotificationItem] = [
-        NotificationItem(
+    static let sampleNotifications: [LegacyNotificationItem] = [
+        LegacyNotificationItem(
             title: "New like on your video",
             message: "Tech Creator liked your video 'Building the Future of SwiftUI'",
             timestamp: Calendar.current.date(byAdding: .minute, value: -30, to: Date()) ?? Date(),
             isRead: false,
             type: .like
         ),
-        NotificationItem(
+        LegacyNotificationItem(
             title: "New comment",
             message: "Creative Artist commented: 'Amazing tutorial! Really helped me understand the concepts better.'",
             timestamp: Calendar.current.date(byAdding: .hour, value: -2, to: Date()) ?? Date(),
             isRead: false,
             type: .comment
         ),
-        NotificationItem(
+        LegacyNotificationItem(
             title: "New follower",
             message: "Gaming Pro started following you",
             timestamp: Calendar.current.date(byAdding: .hour, value: -5, to: Date()) ?? Date(),
             isRead: true,
             type: .follow
         ),
-        NotificationItem(
+        LegacyNotificationItem(
             title: "Video uploaded",
             message: "Music Maker uploaded a new video: 'Beat Making Tutorial'",
             timestamp: Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date(),

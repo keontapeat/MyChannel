@@ -383,7 +383,7 @@ struct CreateCommunityPostView: View {
             guard selectedPostType == .poll else { return nil }
             let options = pollOptions.compactMap { option in
                 let trimmed = option.trimmingCharacters(in: .whitespacesAndNewlines)
-                return trimmed.isEmpty ? nil : PollOption(text: trimmed)
+                return trimmed.isEmpty ? nil : CommunityPollOption(text: trimmed)
             }
             return Poll(
                 question: pollQuestion,

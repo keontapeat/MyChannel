@@ -24,6 +24,11 @@ struct OwnerCommandCenterView: View {
         case fraud     = "FRAUD"
         case content   = "CONTENT"
         case reports   = "REPORTS"
+        case livestreams = "LIVE"
+        case ai        = "AI"
+        case revenue   = "REVENUE"
+        case system    = "SYSTEM"
+        case executive = "EXEC"
     }
 
 private struct CreatorPulseCard: View {
@@ -277,6 +282,11 @@ private struct OwnerTaskCard: View {
             case .fraud:     fraudTab
             case .content:   contentTab
             case .reports:   reportsTab
+            case .livestreams: liveStreamsTab
+            case .ai:        aiTab
+            case .revenue:   revenueTab
+            case .system:    systemTab
+            case .executive: executiveTab
             }
         }
         .navigationTitle("⚡ COMMAND CENTER")
@@ -740,6 +750,36 @@ private struct OwnerTaskCard: View {
             .padding(16)
         }
     }
+    
+    // MARK: - LIVE STREAMS TAB
+    
+    private var liveStreamsTab: some View {
+        LiveStreamsCommandCenterView()
+    }
+    
+    // MARK: - AI TAB
+    
+    private var aiTab: some View {
+        AICommandCenterView()
+    }
+    
+    // MARK: - REVENUE TAB
+    
+    private var revenueTab: some View {
+        RevenueCommandCenterView()
+    }
+    
+    // MARK: - SYSTEM TAB
+    
+    private var systemTab: some View {
+        SystemCommandCenterView()
+    }
+    
+    // MARK: - EXECUTIVE TAB
+    
+    private var executiveTab: some View {
+        ExecutiveCommandCenterView()
+    }
 
     // MARK: - Helpers
 
@@ -1119,6 +1159,11 @@ class CommandCenterViewModel: ObservableObject {
     private var listeners: [ListenerRegistration] = []
     private var refreshTimer: Timer?
     private var cancellables: Set<AnyCancellable> = []
+    
+    // Owner UIDs for access control
+    private let ownerUIDs = [
+        "7EAoUc1aKsNRqR4cYBIOYVGB3Mf2"  // keontapeat@mychannel.live
+    ]
 
     func startTracking() {
         loadFromFirestore()
@@ -1156,27 +1201,43 @@ class CommandCenterViewModel: ObservableObject {
     // MARK: - Firestore Loading
 
     func loadFromFirestore() {
-        // Load user count
-        db.collection("users").getDocuments { [weak self] snap, _ in
+        // Verify owner access
+        guard let currentUser = Auth.auth().currentUser,
+              ownerUIDs.contains(currentUser.uid) else {
+            print("🚫 [CommandCenter] Access denied - not an owner")
+            return
+        }
+        
+        // Load analytics from dedicated analytics collection
+        db.collection("platformAnalytics").document("daily").getDocument { [weak self] snap, _ in
             guard let self else { return }
-            let count = snap?.documents.count ?? 0
+            let data = snap?.data() ?? [:]
             Task { @MainActor in
-                self.totalUsers = count
-                self.totalDownloads = Int(Double(count) * 1.3)
-                self.newUsersToday = max(1, count / 30)
-                self.newDownloadsToday = max(1, self.totalDownloads / 25)
-                self.newDownloadsWeek = self.newDownloadsToday * 7
-                self.newDownloadsMonth = self.newDownloadsToday * 30
-                self.activeNow = max(1, count / 8)
-                self.paidUsers = max(0, count / 10)
-                self.creatorCount = max(0, count / 5)
-                self.newCreatorsToday = max(0, self.creatorCount / 30)
-                self.day1Retention = Int.random(in: 45...65)
-                self.day7Retention = Int.random(in: 25...40)
-                self.avgSessionMinutes = Int.random(in: 18...35)
-                self.revenueToday = max(0, count * 2)
-                self.platformHealth = Double.random(in: 88...97)
-                self.topCountries = self.buildCountries(totalUsers: count)
+                self.totalUsers = data["totalUsers"] as? Int ?? 0
+                self.totalDownloads = data["totalDownloads"] as? Int ?? 0
+                self.newUsersToday = data["newUsersToday"] as? Int ?? 0
+                self.newDownloadsToday = data["newDownloadsToday"] as? Int ?? 0
+                self.newDownloadsWeek = data["newDownloadsWeek"] as? Int ?? 0
+                self.newDownloadsMonth = data["newDownloadsMonth"] as? Int ?? 0
+                self.activeNow = data["activeNow"] as? Int ?? 0
+                self.paidUsers = data["paidUsers"] as? Int ?? 0
+                self.creatorCount = data["creatorCount"] as? Int ?? 0
+                self.newCreatorsToday = data["newCreatorsToday"] as? Int ?? 0
+                self.day1Retention = data["day1Retention"] as? Int ?? 0
+                self.day7Retention = data["day7Retention"] as? Int ?? 0
+                self.avgSessionMinutes = data["avgSessionMinutes"] as? Int ?? 0
+                self.revenueToday = data["revenueToday"] as? Int ?? 0
+                self.platformHealth = data["platformHealth"] as? Double ?? 92.0
+
+                if let countriesData = data["topCountries"] as? [[String: Any]] {
+                    self.topCountries = countriesData.compactMap { dict -> CountryStat? in
+                        guard let name = dict["name"] as? String,
+                              let flag = dict["flag"] as? String,
+                              let users = dict["users"] as? Int,
+                              let percent = dict["percent"] as? Int else { return nil }
+                        return CountryStat(flag: flag, name: name, users: users, percent: percent)
+                    }
+                }
             }
         }
 

@@ -1493,7 +1493,7 @@ struct MusicHubView: View {
 private struct MusicCard: View {
     let song: CatalogSong
     var onOpenURL: (URL) -> Void = { url in
-        DeepLinkService.shared.handle(url: url)
+        _ = DeepLinkService.shared.parse(url: url)
     }
     @ObservedObject private var preview = AudioPreviewPlayer.shared
     var body: some View {

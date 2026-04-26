@@ -2,64 +2,66 @@
 //  WatchProgressService.swift
 //  MyChannel
 //
-//  🔥 YOUTUBE PARITY: Remember where the user left off in every video.
-//  Persists to UserDefaults for instant access. Videos watched past 95%
-//  are considered "finished" and won't resume.
+//  Watch progress tracking: resume playback, completion tracking,
+//  history sync. Uses Firestore for persistence.
 //
 
 import Foundation
+import FirebaseFirestore
+
+struct WatchProgress: Codable, Identifiable {
+    let id: String
+    let userId: String
+    let videoId: String
+    let positionSec: Double
+    let durationSec: Double
+    let completionPct: Double
+    let lastWatchedAt: Date
+    var isCompleted: Bool { completionPct >= 0.9 }
+}
 
 @MainActor
-final class WatchProgressService {
+final class WatchProgressService: ObservableObject {
     static let shared = WatchProgressService()
-    
-    private let defaults = UserDefaults.standard
-    private let storageKey = "com.mychannel.watchProgress"
-    
     private init() {}
-    
-    // MARK: - Save Progress
-    
-    /// Save the current playback position for a video.
-    /// Only saves if the user has watched at least 5 seconds and hasn't finished (>95%).
-    func saveProgress(videoId: String, currentTime: TimeInterval, duration: TimeInterval) {
-        guard duration > 0 else { return }
-        let fraction = currentTime / duration
-        
-        // Don't save if video just started (<5s) or is basically finished (>95%)
-        guard currentTime >= 5 && fraction < 0.95 else {
-            // If finished, clear the saved position so it starts from beginning next time
-            if fraction >= 0.95 {
-                clearProgress(videoId: videoId)
-            }
-            return
+    @Published private(set) var progress: [String: WatchProgress] = [:]
+    private let db = Firestore.firestore()
+
+    func saveProgress(userId: String, videoId: String, position: Double, duration: Double) async throws {
+        let pct = duration > 0 ? min(1.0, position / duration) : 0
+        let docId = "\(userId)_\(videoId)"
+        let data: [String: Any] = ["userId": userId, "videoId": videoId, "position": position, "duration": duration, "pct": pct, "lastWatched": FieldValue.serverTimestamp()]
+        try await db.collection("watch_progress").document(docId).setData(data, merge: true)
+        let wp = WatchProgress(id: docId, userId: userId, videoId: videoId, positionSec: position, durationSec: duration, completionPct: pct, lastWatchedAt: Date())
+        progress[videoId] = wp
+    }
+
+    func fetchProgress(userId: String, videoId: String) async throws -> WatchProgress? {
+        let docId = "\(userId)_\(videoId)"
+        let snapshot = try await db.collection("watch_progress").document(docId).getDocument()
+        guard let data = snapshot.data() else { return nil }
+        let wp = WatchProgress(id: docId, userId: userId, videoId: videoId,
+            positionSec: data["position"] as? Double ?? 0, durationSec: data["duration"] as? Double ?? 0,
+            completionPct: data["pct"] as? Double ?? 0, lastWatchedAt: Date())
+        progress[videoId] = wp; return wp
+    }
+
+    func fetchAllInProgress(userId: String) async throws {
+        let snapshot = try await db.collection("watch_progress")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("pct", isLessThan: 0.9)
+            .order(by: "lastWatched", descending: true)
+            .limit(to: 50)
+            .getDocuments()
+        for doc in snapshot.documents {
+            let data = doc.data()
+            let videoId = data["videoId"] as? String ?? ""
+            let wp = WatchProgress(id: doc.documentID, userId: userId, videoId: videoId,
+                positionSec: data["position"] as? Double ?? 0, durationSec: data["duration"] as? Double ?? 0,
+                completionPct: data["pct"] as? Double ?? 0, lastWatchedAt: Date())
+            progress[videoId] = wp
         }
-        
-        var allProgress = loadAllProgress()
-        allProgress[videoId] = currentTime
-        defaults.set(allProgress, forKey: storageKey)
     }
-    
-    // MARK: - Get Saved Position
-    
-    /// Returns the saved playback position for a video, or nil if none exists.
-    func getSavedPosition(videoId: String) -> TimeInterval? {
-        let allProgress = loadAllProgress()
-        return allProgress[videoId]
-    }
-    
-    // MARK: - Clear Progress
-    
-    /// Clear saved progress for a specific video (e.g., when video finishes).
-    func clearProgress(videoId: String) {
-        var allProgress = loadAllProgress()
-        allProgress.removeValue(forKey: videoId)
-        defaults.set(allProgress, forKey: storageKey)
-    }
-    
-    // MARK: - Private
-    
-    private func loadAllProgress() -> [String: TimeInterval] {
-        return defaults.dictionary(forKey: storageKey) as? [String: TimeInterval] ?? [:]
-    }
+
+    func resumePosition(videoId: String) -> Double { progress[videoId]?.positionSec ?? 0 }
 }

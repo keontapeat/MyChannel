@@ -1,59 +1,76 @@
+//
+//  ReviewGateService.swift
+//  MyChannel
+//
+//  Phase 204: Review gate — human approval for AI actions.
+//  Approval workflows, escalation, audit trail. Uses `trust-safety-ai` Cloud Run.
+//
+
 import Foundation
-#if canImport(UIKit)
-import StoreKit
-#endif
 
-final class ReviewGateService {
-    static let shared = ReviewGateService()
-    private init() {}
-    
-    // 🔥 FIX: Track when we last showed rating prompt to prevent spam
-    private var lastRatingPromptDate: Date? {
-        get {
-            if let timestamp = UserDefaults.standard.object(forKey: "lastRatingPromptDate") as? Date {
-                return timestamp
-            }
-            return nil
-        }
-        set {
-            UserDefaults.standard.set(newValue, forKey: "lastRatingPromptDate")
-        }
-    }
-    
-    // 🔥 FIX: Only show rating prompt once per month maximum
-    private let minimumDaysBetweenPrompts = 30
-
-    func checkEligibilityAndPrompt(userId: String?) async {
-        // 🔥 REMOVED: Rating popup is too annoying - users can rate manually from Settings
-        // This function is now a no-op to prevent any rating prompts
-        return
-        
-        // OLD CODE (disabled):
-        /*
-        guard let userId = userId else { return }
-        
-        // 🔥 FIX: Check if we've shown rating prompt recently
-        if let lastPrompt = lastRatingPromptDate {
-            let daysSinceLastPrompt = Calendar.current.dateComponents([.day], from: lastPrompt, to: Date()).day ?? 0
-            if daysSinceLastPrompt < minimumDaysBetweenPrompts {
-                print("📊 [ReviewGate] Rating prompt shown \(daysSinceLastPrompt) days ago - skipping (min: \(minimumDaysBetweenPrompts) days)")
-                return
-            }
-        }
-        
-        // TODO: Call Cloud Function /reviews/eligibility and, if eligible, present SKStoreReviewController
-        #if canImport(UIKit)
-        await MainActor.run {
-            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                SKStoreReviewController.requestReview(in: scene)
-                lastRatingPromptDate = Date()
-                print("📊 [ReviewGate] Rating prompt shown")
-            }
-        }
-        #endif
-        */
-    }
+struct ReviewItem: Codable, Identifiable {
+    let id: String
+    let actionType: String
+    let actionDescription: String
+    let requestedBy: String
+    let riskLevel: RiskLevel
+    let status: ReviewStatus
+    let createdAt: Date
+    let reviewedAt: Date?
+    let reviewerId: String?
+    let decision: String?
+    let notes: String?
+    enum RiskLevel: String, Codable { case low, medium, high, critical }
+    enum ReviewStatus: String, Codable { case pending, approved, rejected, escalated, expired }
 }
 
+@MainActor
+final class ReviewGateService: ObservableObject {
+    static let shared = ReviewGateService()
+    private init() {}
+    @Published private(set) var pending: [ReviewItem] = []
+    @Published private(set) var history: [ReviewItem] = []
 
+    func submitForReview(actionType: String, description: String, requestedBy: String, riskLevel: ReviewItem.RiskLevel) async throws -> ReviewItem {
+        struct Req: Encodable { let task: String; let actionType: String; let description: String; let requestedBy: String; let risk: String }
+        struct Raw: Decodable { let id: String }
+        let r: Raw = try await CloudRunAgentRouter.post(.trustSafetyAI, path: "/predict",
+            body: Req(task: "submit_for_review", actionType: actionType, description: description, requestedBy: requestedBy, risk: riskLevel.rawValue))
+        let item = ReviewItem(id: r.id, actionType: actionType, actionDescription: description, requestedBy: requestedBy,
+            riskLevel: riskLevel, status: .pending, createdAt: Date(), reviewedAt: nil, reviewerId: nil, decision: nil, notes: nil)
+        pending.append(item); return item
+    }
 
+    func approve(itemId: String, reviewerId: String, notes: String?) async throws {
+        struct Req: Encodable { let task: String; let itemId: String; let reviewerId: String; let decision: String; let notes: String? }
+        struct Raw: Decodable { let ok: Bool? }
+        let _: Raw = try await CloudRunAgentRouter.post(.trustSafetyAI, path: "/predict",
+            body: Req(task: "review_decision", itemId: itemId, reviewerId: reviewerId, decision: "approved", notes: notes))
+        moveFromPending(itemId: itemId, status: .approved, reviewerId: reviewerId, decision: "approved", notes: notes)
+    }
+
+    func reject(itemId: String, reviewerId: String, notes: String?) async throws {
+        struct Req: Encodable { let task: String; let itemId: String; let reviewerId: String; let decision: String; let notes: String? }
+        struct Raw: Decodable { let ok: Bool? }
+        let _: Raw = try await CloudRunAgentRouter.post(.trustSafetyAI, path: "/predict",
+            body: Req(task: "review_decision", itemId: itemId, reviewerId: reviewerId, decision: "rejected", notes: notes))
+        moveFromPending(itemId: itemId, status: .rejected, reviewerId: reviewerId, decision: "rejected", notes: notes)
+    }
+
+    func escalate(itemId: String, reviewerId: String) async throws {
+        struct Req: Encodable { let task: String; let itemId: String; let reviewerId: String }
+        struct Raw: Decodable { let ok: Bool? }
+        let _: Raw = try await CloudRunAgentRouter.post(.trustSafetyAI, path: "/predict",
+            body: Req(task: "escalate_review", itemId: itemId, reviewerId: reviewerId))
+        moveFromPending(itemId: itemId, status: .escalated, reviewerId: reviewerId, decision: "escalated", notes: nil)
+    }
+
+    private func moveFromPending(itemId: String, status: ReviewItem.ReviewStatus, reviewerId: String, decision: String?, notes: String?) {
+        guard let idx = pending.firstIndex(where: { $0.id == itemId }) else { return }
+        let old = pending.remove(at: idx)
+        let completed = ReviewItem(id: old.id, actionType: old.actionType, actionDescription: old.actionDescription,
+            requestedBy: old.requestedBy, riskLevel: old.riskLevel, status: status, createdAt: old.createdAt,
+            reviewedAt: Date(), reviewerId: reviewerId, decision: decision, notes: notes)
+        history.insert(completed, at: 0)
+    }
+}

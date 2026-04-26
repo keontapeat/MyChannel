@@ -22,8 +22,8 @@ class PredictiveAnalyticsEngine: ObservableObject {
     @Published var viralPredictions: [PredictiveViralPrediction] = []
     @Published var optimalUploadTimes: [OptimalUploadTime] = []
     @Published var audienceMoodAnalysis: AudienceMoodAnalysis?
-    @Published var revenueForecasts: [RevenueForecast] = []
-    @Published var trendAlerts: [TrendAlert] = []
+    @Published var revenueForecasts: [PredictiveRevenueForecast] = []
+    @Published var trendAlerts: [PredictiveTrendAlert] = []
     @Published var growthPredictions: [PredictiveGrowthPrediction] = []
     @Published var competitorInsights: [CompetitorInsight] = []
     
@@ -210,7 +210,7 @@ class PredictiveAnalyticsEngine: ObservableObject {
     func forecastRevenue(
         for creatorId: String,
         period: ForecastPeriod = .thirtyDays
-    ) async throws -> RevenueForecast {
+    ) async throws -> PredictiveRevenueForecast {
         
         // Analyze historical revenue data
         let historicalData = try await fetchHistoricalRevenue(creatorId: creatorId)
@@ -233,7 +233,7 @@ class PredictiveAnalyticsEngine: ObservableObject {
             period: period
         )
         
-        let forecast = RevenueForecast(
+        let forecast = PredictiveRevenueForecast(
             creatorId: creatorId,
             period: period,
             predictedRevenue: prediction.totalRevenue,
@@ -259,7 +259,7 @@ class PredictiveAnalyticsEngine: ObservableObject {
     // MARK: - Trend Surfing
     
     /// Alert creators to emerging trends before competitors
-    func detectEmergingTrends(for creatorId: String) async throws -> [TrendAlert] {
+    func detectEmergingTrends(for creatorId: String) async throws -> [PredictiveTrendAlert] {
         
         // Analyze global trending topics
         let globalTrends = await trendDetector.detectGlobalTrends()
@@ -274,7 +274,7 @@ class PredictiveAnalyticsEngine: ObservableObject {
         let trendLifecycles = await predictTrendLifecycles(trends: globalTrends + nicheTrends)
         
         // Generate personalized alerts
-        let alerts = await generateTrendAlerts(
+        let alerts = await generatePredictiveTrendAlerts(
             globalTrends: globalTrends,
             nicheTrends: nicheTrends,
             competitorTrends: competitorTrends,
@@ -517,9 +517,9 @@ class PredictiveAnalyticsEngine: ObservableObject {
         return [] // Placeholder
     }
     
-    private func generateTrendAlerts(globalTrends: [Trend], nicheTrends: [Trend], competitorTrends: [CompetitorTrend], lifecycles: [TrendLifecycle], creatorId: String) async -> [TrendAlert] {
+    private func generatePredictiveTrendAlerts(globalTrends: [Trend], nicheTrends: [Trend], competitorTrends: [CompetitorTrend], lifecycles: [TrendLifecycle], creatorId: String) async -> [PredictiveTrendAlert] {
         return [
-            TrendAlert(
+            PredictiveTrendAlert(
                 id: UUID().uuidString,
                 trend: "AI Productivity Tools",
                 opportunityScore: 0.89,
@@ -605,7 +605,7 @@ struct AudienceMoodAnalysis: Identifiable, Codable {
     let lastUpdated: Date
 }
 
-struct RevenueForecast: Identifiable, Codable {
+struct PredictiveRevenueForecast: Identifiable, Codable {
     let id = UUID()
     let creatorId: String
     let period: ForecastPeriod
@@ -619,7 +619,7 @@ struct RevenueForecast: Identifiable, Codable {
     let createdAt: Date
 }
 
-struct TrendAlert: Identifiable, Codable {
+struct PredictiveTrendAlert: Identifiable, Codable {
     let id: String
     let trend: String
     let opportunityScore: Double

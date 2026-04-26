@@ -17,7 +17,11 @@ import FirebasePerformance
 class PerformanceMonitoringManager {
     static let shared = PerformanceMonitoringManager()
     
-    private var activeTraces: [String: Trace] = [:]
+    #if canImport(FirebasePerformance)
+    private var activeTraces: [String: FirebasePerformance.Trace] = [:]
+    #else
+    private var activeTraces: [String: Any] = [:]
+    #endif
     private var isEnabled = true
     
     private init() {
@@ -61,7 +65,7 @@ class PerformanceMonitoringManager {
         
         // Add custom metrics
         for (key, value) in metrics {
-            trace.setValue(value, forMetric: key)
+            trace.incrementMetric(key, by: value)
         }
         
         trace.stop()
@@ -77,7 +81,7 @@ class PerformanceMonitoringManager {
     
     func addTraceMetric(traceName: String, key: String, value: Int64) {
         #if canImport(FirebasePerformance)
-        activeTraces[traceName]?.setValue(value, forMetric: key)
+        activeTraces[traceName]?.incrementMetric(key, by: value)
         #endif
     }
     

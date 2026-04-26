@@ -19,7 +19,11 @@ class StartupPerformanceTracker: ObservableObject {
     
     @Published var metrics = StartupMetrics()
     
+    #if canImport(FirebasePerformance)
+    private var appLaunchTrace: FirebasePerformance.Trace?
+    #else
     private var appLaunchTrace: Any?
+    #endif
     private var initStartTime: Date?
     private var firstFrameTime: Date?
     
@@ -54,8 +58,8 @@ class StartupPerformanceTracker: ObservableObject {
         metrics.timeToFirstFrame = timeToFirstFrame
         
         #if canImport(FirebasePerformance)
-        if let trace = appLaunchTrace as? Trace {
-            trace.setValue(Int64(timeToFirstFrame * 1000), forMetric: "time_to_first_frame_ms")
+        if let trace = appLaunchTrace {
+            trace.incrementMetric("time_to_first_frame_ms", by: Int64(timeToFirstFrame * 1000))
         }
         #endif
         
@@ -69,8 +73,8 @@ class StartupPerformanceTracker: ObservableObject {
         metrics.timeToInteractive = timeToInteractive
         
         #if canImport(FirebasePerformance)
-        if let trace = appLaunchTrace as? Trace {
-            trace.setValue(Int64(timeToInteractive * 1000), forMetric: "time_to_interactive_ms")
+        if let trace = appLaunchTrace {
+            trace.incrementMetric("time_to_interactive_ms", by: Int64(timeToInteractive * 1000))
         }
         #endif
         
@@ -85,9 +89,9 @@ class StartupPerformanceTracker: ObservableObject {
         metrics.memoryAtLaunch = getMemoryUsage()
         
         #if canImport(FirebasePerformance)
-        if let trace = appLaunchTrace as? Trace {
-            trace.setValue(Int64(coldStartTime * 1000), forMetric: "cold_start_ms")
-            trace.setValue(metrics.memoryAtLaunch / 1_000_000, forMetric: "memory_at_launch_mb")
+        if let trace = appLaunchTrace {
+            trace.incrementMetric("cold_start_ms", by: Int64(coldStartTime * 1000))
+            trace.incrementMetric("memory_at_launch_mb", by: metrics.memoryAtLaunch / 1_000_000)
             trace.stop()
         }
         #endif
@@ -101,8 +105,8 @@ class StartupPerformanceTracker: ObservableObject {
         metrics.criticalServicesTime = duration
         
         #if canImport(FirebasePerformance)
-        if let trace = appLaunchTrace as? Trace {
-            trace.setValue(Int64(duration * 1000), forMetric: "critical_services_ms")
+        if let trace = appLaunchTrace {
+            trace.incrementMetric("critical_services_ms", by: Int64(duration * 1000))
         }
         #endif
     }
@@ -111,8 +115,8 @@ class StartupPerformanceTracker: ObservableObject {
         metrics.totalServicesLoaded = count
         
         #if canImport(FirebasePerformance)
-        if let trace = appLaunchTrace as? Trace {
-            trace.setValue(Int64(count), forMetric: "services_loaded")
+        if let trace = appLaunchTrace {
+            trace.incrementMetric("services_loaded", by: Int64(count))
         }
         #endif
     }

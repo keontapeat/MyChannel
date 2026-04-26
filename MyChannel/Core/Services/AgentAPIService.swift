@@ -839,12 +839,12 @@ struct APILeaderboardEntry: Codable {
 
 struct CopyrightDetectionResult: Codable {
     let hasViolation: Bool
-    let matches: [CopyrightMatch]
+    let matches: [APICopyrightMatch]
     let confidence: Double
     let action: String
 }
 
-struct CopyrightMatch: Codable {
+struct APICopyrightMatch: Codable {
     let contentId: String
     let owner: String
     let timestamp: TimeInterval
@@ -888,11 +888,11 @@ struct APIAudienceInsights: Codable {
 }
 
 struct RevenueAttribution: Codable {
-    let sources: [RevenueSource]
+    let sources: [APIRevenueSource]
     let totalRevenue: Double
 }
 
-struct RevenueSource: Codable {
+struct APIRevenueSource: Codable {
     let source: String
     let amount: Double
     let percentage: Double

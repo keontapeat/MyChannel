@@ -2,61 +2,52 @@
 //  StorySeenTracker.swift
 //  MyChannel
 //
-//  Instagram-style local seen/unseen tracking for story rings
+//  Tracks which stories a user has seen, expiry management,
+//  and seen/unseen counts. Uses Firestore for persistence.
 //
 
 import Foundation
+import FirebaseFirestore
 
-class StorySeenTracker: ObservableObject {
+struct StorySeenRecord: Codable, Identifiable {
+    let id: String
+    let userId: String
+    let storyId: String
+    let creatorId: String
+    let seenAt: Date
+}
+
+@MainActor
+final class StorySeenTracker: ObservableObject {
     static let shared = StorySeenTracker()
-    
-    private let key = "seen_story_usernames"
-    
-    /// Set of lowercased usernames whose stories have been fully viewed
-    @Published private(set) var seenUsernames: Set<String> = []
-    
-    private init() {
-        load()
+    private init() {}
+    @Published private(set) var seenStoryIds: Set<String> = []
+    private let db = Firestore.firestore()
+
+    func markSeen(userId: String, storyId: String, creatorId: String) {
+        seenStoryIds.insert(storyId)
+        let data: [String: Any] = ["userId": userId, "storyId": storyId, "creatorId": creatorId, "seenAt": FieldValue.serverTimestamp()]
+        db.collection("story_seen").document("\(userId)_\(storyId)").setData(data)
     }
-    
-    // MARK: - Public API
-    
-    /// Check if a user's stories have been seen
-    func hasSeen(username: String) -> Bool {
-        seenUsernames.contains(username.lowercased())
+
+    func fetchSeen(userId: String) async throws {
+        let snapshot = try await db.collection("story_seen").whereField("userId", isEqualTo: userId).getDocuments()
+        seenStoryIds = Set(snapshot.documents.compactMap { $0.data()["storyId"] as? String })
     }
-    
-    /// Mark a user's stories as seen (call when their last story finishes or user taps past)
-    func markSeen(username: String) {
-        let key = username.lowercased()
-        guard !seenUsernames.contains(key) else { return }
-        seenUsernames.insert(key)
-        save()
-    }
-    
-    /// Reset a user (e.g. when they post a new story)
-    func markUnseen(username: String) {
-        let key = username.lowercased()
-        guard seenUsernames.contains(key) else { return }
-        seenUsernames.remove(key)
-        save()
-    }
-    
-    /// Clear all seen state (e.g. on logout or after 24h cleanup)
-    func resetAll() {
-        seenUsernames.removeAll()
-        save()
-    }
-    
-    // MARK: - Persistence
-    
-    private func load() {
-        if let array = UserDefaults.standard.stringArray(forKey: key) {
-            seenUsernames = Set(array)
+
+    func isSeen(storyId: String) -> Bool { seenStoryIds.contains(storyId) }
+
+    func unseenCount(from stories: [String]) -> Int { stories.filter { !seenStoryIds.contains($0) }.count }
+
+    func clearExpired(olderThan hours: Int = 24) async throws {
+        let cutoff = Date().addingTimeInterval(-Double(hours * 3600))
+        let snapshot = try await db.collection("story_seen")
+            .whereField("seenAt", isLessThan: cutoff)
+            .limit(to: 100)
+            .getDocuments()
+        for doc in snapshot.documents {
+            if let storyId = doc.data()["storyId"] as? String { seenStoryIds.remove(storyId) }
+            try await doc.reference.delete()
         }
-    }
-    
-    private func save() {
-        UserDefaults.standard.set(Array(seenUsernames), forKey: key)
     }
 }

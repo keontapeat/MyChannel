@@ -10,7 +10,7 @@
 
 import Foundation
 
-struct EdgeFeedItem: Codable, Identifiable, Equatable {
+struct EdgeComputeFeedItem: Codable, Identifiable, Equatable {
     let id: String
     let videoId: String
     let title: String
@@ -20,7 +20,7 @@ struct EdgeFeedItem: Codable, Identifiable, Equatable {
 }
 
 struct EdgeFeedPage: Codable {
-    let items: [EdgeFeedItem]
+    let items: [EdgeComputeFeedItem]
     let nextCursor: String?
     let edgeRegion: String?
     let cacheStatus: String?     // "HIT", "MISS", "EXPIRED", etc.

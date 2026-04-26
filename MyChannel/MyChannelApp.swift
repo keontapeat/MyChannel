@@ -115,17 +115,19 @@ struct MyChannelApp: App {
                 .onChange(of: authManager.isAuthenticated) { isAuth in
                     if !isAuth { appState.clearUser() }
                 }
-                .onChange(of: scenePhase) { newPhase in
-                    print("🎬 [MyChannelApp] ScenePhase changed to \(newPhase)")
+                .onChange(of: scenePhase) { _ in
+                    print("🎬 [MyChannelApp] ScenePhase changed to \(scenePhase)")
                     
                     // 🔥 LiveTV: Handle app lifecycle for 24/7 channel reliability
                     Task { @MainActor in
-                        switch newPhase {
+                        switch scenePhase {
                         case .active:
                             LiveTVManager.shared.onAppBecameActive()
                             // 🔒 ATT: Request tracking permission (Guideline 5.1.2(i))
                             // Must fire after app is active and first screen is visible.
-                            TrackingTransparencyService.shared.requestTrackingPermissionIfNeeded()
+                            if TrackingTransparencyService.shared.shouldPrompt {
+                                _ = await TrackingTransparencyService.shared.requestAuthorization()
+                            }
                         case .background:
                             LiveTVManager.shared.onAppEnteredBackground()
                         default:
@@ -139,10 +141,14 @@ struct MyChannelApp: App {
                         return
                     }
                     #endif
-                    DeepLinkManager.shared.handle(url)
+                    _ = DeepLinkService.shared.parse(url: url)
+                    DeepLinkManager.shared.storeDeferred(url: url)
                 }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
-                    _ = DeepLinkManager.shared.handleUniversalLink(activity)
+                    if let url = activity.webpageURL {
+                        _ = DeepLinkService.shared.parse(url: url)
+                        DeepLinkManager.shared.storeDeferred(url: url)
+                    }
                 }
         }
     }

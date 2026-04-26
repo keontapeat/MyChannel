@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct PrizePoolBreakdownView: View {
-    let tournament: EsportsTournament
+    let tournament: GamingEsportsTournament
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -203,7 +203,7 @@ struct PrizePoolBreakdownView: View {
 
 #Preview {
     PrizePoolBreakdownView(
-        tournament: EsportsTournament(
+        tournament: GamingEsportsTournament(
             id: "spring-championship",
             name: "Spring Championship",
             gameName: "Fortnite",

@@ -288,13 +288,15 @@ class VertexAIService: ObservableObject {
     
     /// Transcribe video audio using Google Cloud Speech-to-Text
     func transcribeVideo(audioURL: URL) async throws -> Transcription {
-        // This would use Google Cloud Speech-to-Text API
-        // Placeholder implementation
-        return Transcription(
-            text: "Transcription would go here",
-            timestamps: [],
-            confidence: 0.95
-        )
+        guard AppConfig.Features.enableVertexAI else { return Transcription(text: "", timestamps: [], confidence: 0) }
+        struct Req: Encodable { let task: String; let audioURL: String }
+        struct RawT: Decodable { let text: String; let start: Double; let end: Double }
+        struct Raw: Decodable { let segments: [RawT]?; let confidence: Double? }
+        let r: Raw = try await CloudRunAgentRouter.post(.voiceAIv2, path: "/predict",
+            body: Req(task: "transcribe_video", audioURL: audioURL.absoluteString), timeout: 60)
+        let timestamps = (r.segments ?? []).map { TranscriptTimestamp(text: $0.text, start: $0.start, end: $0.end) }
+        let fullText = timestamps.map(\.text).joined(separator: " ")
+        return Transcription(text: fullText, timestamps: timestamps, confidence: r.confidence ?? 0)
     }
     
     // MARK: - Translation
@@ -369,9 +371,15 @@ struct ThumbnailSuggestion {
     let emotionalTone: String
 }
 
+struct TranscriptTimestamp {
+    let text: String
+    let start: Double
+    let end: Double
+}
+
 struct Transcription {
     let text: String
-    let timestamps: [TimeInterval]
+    let timestamps: [TranscriptTimestamp]
     let confidence: Double
 }
 

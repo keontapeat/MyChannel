@@ -581,10 +581,11 @@ struct FreeMoviesView: View {
         isFetching = true
         defer { isFetching = false }
         let results = await FreeCatalogService.shared.searchAll(query: "", limitPerSource: 30)
+        let mapped = results.map { $0.toFreeMovie }
         await MainActor.run {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                let tmdb = results.filter { $0.id.hasPrefix("tmdb-") }.sorted { $0.year > $1.year }
-                let others = results.filter { !$0.id.hasPrefix("tmdb-") }
+                let tmdb = mapped.filter { $0.id.hasPrefix("tmdb-") }.sorted(by: { $0.releaseDate > $1.releaseDate })
+                let others = mapped.filter { !$0.id.hasPrefix("tmdb-") }
                 remoteMovies = tmdb + others
             }
         }

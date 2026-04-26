@@ -18,11 +18,14 @@ struct VideoDetailMetaView: View {
     @Binding var isLiked: Bool
     @Binding var isDisliked: Bool
     @Binding var expandedDescription: Bool
+    var autoplayEnabled: Binding<Bool>? = nil
     let onShare: () -> Void
     let onMore: () -> Void
     let onComment: () -> Void
     var onChapters: (() -> Void)? = nil
     var onProfileTap: (() -> Void)? = nil
+    var onChannelTap: ((String) -> Void)? = nil
+    var onHashtagTap: ((String) -> Void)? = nil
     var dynamicViewCount: Int? = nil
     
     // MARK: - Services for Firestore persistence
@@ -41,6 +44,8 @@ struct VideoDetailMetaView: View {
     @State private var showingPremiumUpsell: Bool = false // 🔥 YOUTUBE PARITY: Premium upsell
     @State private var showingStopAdsUpsell: Bool = false // 🔥 YOUTUBE PARITY: Stop ads upsell
     @StateObject private var premiumService = PremiumService.shared
+    @State private var previewComments: [RealTimeComment] = []
+    @State private var commentsListener: Any? = nil
     
     // MARK: - Performance Optimization
     private let impactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -93,6 +98,29 @@ struct VideoDetailMetaView: View {
             isLiked = appState.likedVideos.contains(video.id)
             isSubscribed = appState.subscriptions.contains(video.creator.id)
             isWatchLater = appState.watchLaterVideos.contains(video.id)
+            if commentsListener == nil {
+                commentsListener = CommentsFirestoreService.shared.listen(videoId: video.id) { comments in
+                    Task { @MainActor in
+                        self.previewComments = Array(
+                            comments
+                                .filter { $0.parentId == nil }
+                                .sorted { lhs, rhs in
+                                    let lhsScore = commentRelevanceScore(lhs)
+                                    let rhsScore = commentRelevanceScore(rhs)
+                                    if lhsScore == rhsScore {
+                                        return lhs.createdAt > rhs.createdAt
+                                    }
+                                    return lhsScore > rhsScore
+                                }
+                                .prefix(2)
+                        )
+                    }
+                }
+            }
+        }
+        .onDisappear {
+            CommentsFirestoreService.shared.stop(listener: commentsListener)
+            commentsListener = nil
         }
         .sheet(isPresented: $showingTipSheet) {
             // 🔥 FIX 3.1.1: Gate tip sheet behind feature flag
@@ -364,10 +392,10 @@ struct VideoDetailMetaView: View {
                     )
                 },
                 onChannelTap: { channelName in
-                    print("📺 Navigate to channel: \(channelName)")
+                    onChannelTap?(channelName)
                 },
                 onHashtagTap: { hashtag in
-                    print("🔍 Navigate to hashtag: \(hashtag)")
+                    onHashtagTap?(hashtag)
                 }
             )
             .font(.system(size: 14, weight: .regular))
@@ -436,27 +464,55 @@ struct VideoDetailMetaView: View {
                 .accessibilityLabel("Add comment")
             }
             
-            // Comments preview placeholder
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(0..<min(2, max(0, video.commentCount)), id: \.self) { _ in
-                    HStack(spacing: 12) {
-                        Circle()
-                            .fill(AppTheme.Colors.surface)
+            if previewComments.isEmpty {
+                Text("Be the first to comment")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .padding(.vertical, 8)
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(previewComments) { comment in
+                        HStack(alignment: .top, spacing: 12) {
+                            AsyncImage(url: URL(string: comment.author.profileImageURL ?? "")) { image in
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                Circle()
+                                    .fill(AppTheme.Colors.surface)
+                                    .overlay(
+                                        Text(String(comment.author.displayName.prefix(1)))
+                                            .font(.caption.weight(.bold))
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
+                                    )
+                            }
                             .frame(width: 32, height: 32)
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Rectangle()
-                                .fill(AppTheme.Colors.surface)
-                                .frame(height: 12)
-                                .frame(maxWidth: 120)
-                            
-                            Rectangle()
-                                .fill(AppTheme.Colors.surface.opacity(0.7))
-                                .frame(height: 10)
-                                .frame(maxWidth: .infinity)
+                            .clipShape(Circle())
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 6) {
+                                    Text(comment.author.displayName)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(AppTheme.Colors.textPrimary)
+                                        .lineLimit(1)
+                                    Text(comment.timeAgo)
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                }
+
+                                Text(comment.text)
+                                    .font(.system(size: 14, weight: .regular))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                    .lineLimit(2)
+
+                                if comment.likeCount > 0 {
+                                    Text("\(formatCount(comment.likeCount)) likes")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                }
+                            }
+
+                            Spacer(minLength: 0)
                         }
                     }
-                    .redacted(reason: .placeholder)
                 }
             }
         }
@@ -592,6 +648,14 @@ struct VideoDetailMetaView: View {
     }
     
     // MARK: - Helper Methods
+    private func commentRelevanceScore(_ comment: RealTimeComment) -> Double {
+        let ageHours = Date().timeIntervalSince(comment.createdAt) / 3600
+        let recencyBoost = max(0, 24 - ageHours) / 6
+        let engagementScore = Double(comment.likeCount) * 1.2 + Double(comment.replyCount) * 2.5
+        let textRichness = min(Double(comment.text.count) / 80.0, 2.0)
+        return engagementScore + recencyBoost + textRichness
+    }
+
     private func formatCount(_ count: Int) -> String {
         if count >= 1_000_000 {
             return String(format: "%.1fM", Double(count) / 1_000_000)

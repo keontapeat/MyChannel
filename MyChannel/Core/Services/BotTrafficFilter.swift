@@ -2,71 +2,72 @@
 //  BotTrafficFilter.swift
 //  MyChannel
 //
-//  BOT TRAFFIC FILTER
-//  Filter out bots, crawlers, automated traffic
+//  Bot traffic filtering: request fingerprinting, behavioral analysis,
+//  CAPTCHA integration, IP reputation. Uses `trust-safety-ai` Cloud Run.
 //
 
 import Foundation
 
+struct BotDetection: Codable, Identifiable {
+    let id: String
+    let ipAddress: String
+    let userAgent: String
+    let fingerprint: String
+    let isBot: Bool
+    let confidence: Double
+    let reason: String
+    let detectedAt: Date
+}
+
+struct IPReputation: Codable {
+    let ip: String
+    let score: Double
+    let category: String
+    let lastChecked: Date
+}
+
 @MainActor
 final class BotTrafficFilter: ObservableObject {
     static let shared = BotTrafficFilter()
-    
-    @Published var totalRequests: Int = 0
-    @Published var botRequests: Int = 0
-    @Published var humanRequests: Int = 0
-    
-    private let botUserAgents = [
-        "bot", "crawler", "spider", "scraper",
-        "googlebot", "bingbot", "slurp", "duckduckbot",
-        "baiduspider", "yandexbot", "facebookexternalhit",
-        "headless", "phantom", "selenium", "puppeteer"
-    ]
-    
     private init() {}
-    
-    /// Check if request is from a bot
-    func isBot(userAgent: String, ipAddress: String) -> Bool {
-        totalRequests += 1
-        
-        let userAgentLower = userAgent.lowercased()
-        
-        // Check user agent for bot signatures
-        for botSignature in botUserAgents {
-            if userAgentLower.contains(botSignature) {
-                botRequests += 1
-                print("🤖 [BotFilter] Bot detected: \(userAgent)")
-                return true
-            }
-        }
-        
-        // Check for headless browser signatures
-        if userAgentLower.contains("headless") || userAgentLower.isEmpty {
-            botRequests += 1
-            return true
-        }
-        
-        // Check for datacenter IPs (common for bots)
-        if isDatacenterIP(ipAddress) {
-            botRequests += 1
-            return true
-        }
-        
-        humanRequests += 1
-        return false
+    @Published private(set) var recentDetections: [BotDetection] = []
+    private var blockedIPs: Set<String> = []
+
+    func analyzeRequest(ip: String, userAgent: String, path: String, headers: [String: String]) -> BotDetection {
+        let fp = fingerprint(userAgent: userAgent, headers: headers)
+        let score = computeBotScore(ip: ip, userAgent: userAgent, path: path)
+        let isBot = score > 0.6
+        let reason = isBot ? (score > 0.8 ? "Known bot pattern" : "Suspicious behavior") : "Human"
+        let det = BotDetection(id: UUID().uuidString, ipAddress: ip, userAgent: userAgent, fingerprint: fp,
+            isBot: isBot, confidence: score, reason: reason, detectedAt: Date())
+        if isBot { recentDetections.append(det); if recentDetections.count > 200 { recentDetections = Array(recentDetections.suffix(100)) } }
+        return det
     }
-    
-    private func isDatacenterIP(_ ipAddress: String) -> Bool {
-        // Check if IP belongs to known datacenter ranges
-        // (In production, use IP geolocation service)
-        let datacenterPrefixes = ["192.0.2", "198.51.100", "203.0.113"]
-        return datacenterPrefixes.contains(where: { ipAddress.hasPrefix($0) })
+
+    func checkIPReputation(ip: String) async throws -> IPReputation {
+        struct Req: Encodable { let task: String; let ip: String }
+        struct Raw: Decodable { let score: Double?; let category: String? }
+        let r: Raw = try await CloudRunAgentRouter.post(.trustSafetyAI, path: "/predict",
+            body: Req(task: "check_ip_reputation", ip: ip))
+        return IPReputation(ip: ip, score: r.score ?? 0, category: r.category ?? "unknown", lastChecked: Date())
     }
-    
-    /// Get bot detection rate
-    func getBotRate() -> Double {
-        guard totalRequests > 0 else { return 0 }
-        return Double(botRequests) / Double(totalRequests)
+
+    func blockIP(ip: String) { blockedIPs.insert(ip) }
+    func unblockIP(ip: String) { blockedIPs.remove(ip) }
+    func isBlocked(ip: String) -> Bool { blockedIPs.contains(ip) }
+
+    private func fingerprint(userAgent: String, headers: [String: String]) -> String {
+        let raw = "\(userAgent)|\(headers["Accept-Language"] ?? "")|\(headers["Accept-Encoding"] ?? "")"
+        return raw.data(using: .utf8)?.base64EncodedString() ?? ""
+    }
+
+    private func computeBotScore(ip: String, userAgent: String, path: String) -> Double {
+        var score = 0.0
+        if userAgent.lowercased().contains("bot") { score += 0.5 }
+        if userAgent.lowercased().contains("crawler") { score += 0.4 }
+        if userAgent.lowercased().contains("spider") { score += 0.4 }
+        if blockedIPs.contains(ip) { score += 0.3 }
+        if path.contains("/api/") && userAgent.isEmpty { score += 0.3 }
+        return min(1.0, score)
     }
 }
-

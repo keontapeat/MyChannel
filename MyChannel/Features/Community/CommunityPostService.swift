@@ -33,7 +33,7 @@ final class CommunityPostService: ObservableObject {
                         poll = Poll(
                             question: pollData["question"] as? String ?? "",
                             options: (pollData["options"] as? [[String: Any]] ?? []).compactMap { opt in
-                                PollOption(
+                                CommunityPollOption(
                                     text: opt["text"] as? String ?? "",
                                     voteCount: opt["voteCount"] as? Int ?? 0
                                 )
@@ -151,10 +151,10 @@ final class CommunityPostService: ObservableObject {
                 poll: Poll(
                     question: "What should my next video be about?",
                     options: [
-                        PollOption(text: "Tech Review", voteCount: 120),
-                        PollOption(text: "Gaming", voteCount: 89),
-                        PollOption(text: "Tutorial", voteCount: 156),
-                        PollOption(text: "Vlog", voteCount: 45)
+                        CommunityPollOption(text: "Tech Review", voteCount: 120),
+                        CommunityPollOption(text: "Gaming", voteCount: 89),
+                        CommunityPollOption(text: "Tutorial", voteCount: 156),
+                        CommunityPollOption(text: "Vlog", voteCount: 45)
                     ]
                 )
             ),

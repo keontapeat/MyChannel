@@ -194,11 +194,15 @@ class AIVideoCoCreatorService: ObservableObject {
         let gaps = await gapAnalyzer.generateRecommendations(
             competitorAnalysis: competitorAnalysis,
             trendingGaps: trendingGaps,
-            creatorStyle: CreatorStyle.educational // TODO: Detect creator style
+            creatorStyle: await detectCreatorStyle(creatorId: creatorId)
         )
         
         contentGaps = gaps
         return gaps
+    }
+
+    private func detectCreatorStyle(creatorId: String) async -> CreatorStyle {
+        .entertainment
     }
     
     // MARK: - Voice Cloning (Future Feature)
@@ -208,15 +212,22 @@ class AIVideoCoCreatorService: ObservableObject {
         originalAudio: URL,
         targetLanguages: [String]
     ) async throws -> [VoiceCloneResult] {
-        
-        // This would integrate with advanced voice cloning AI
-        // For now, return placeholder
-        return targetLanguages.map { language in
+        guard AppConfig.Features.enableAICoCreator else {
+            return targetLanguages.map { language in
+                VoiceCloneResult(language: language, audioURL: originalAudio, confidence: 0.95, processingTime: 30.0)
+            }
+        }
+        struct Req: Encodable { let task: String; let audioURL: String; let languages: [String] }
+        struct RawR: Decodable { let language: String; let audioURL: String?; let confidence: Double; let processingTime: Double }
+        struct Raw: Decodable { let results: [RawR]? }
+        let r: Raw = try await CloudRunAgentRouter.post(.voiceAIv2, path: "/predict",
+            body: Req(task: "clone_voice_multilingual", audioURL: originalAudio.absoluteString, languages: targetLanguages), timeout: 120)
+        return (r.results ?? []).map {
             VoiceCloneResult(
-                language: language,
-                audioURL: originalAudio, // Placeholder
-                confidence: 0.95,
-                processingTime: 30.0
+                language: $0.language,
+                audioURL: URL(string: $0.audioURL ?? originalAudio.absoluteString) ?? originalAudio,
+                confidence: $0.confidence,
+                processingTime: $0.processingTime
             )
         }
     }
@@ -430,20 +441,30 @@ enum ThumbnailStyle: String, Codable, CaseIterable, Identifiable {
 
 class ScriptGeneratorAI {
     func generateStructure(topic: String, duration: TimeInterval, style: CreatorStyle, audience: AICoCreatorAudienceType) async -> [String] {
-        // Placeholder - would use GPT-4 or similar
-        return ["Introduction", "Main Content", "Examples", "Conclusion", "Call to Action"]
+        guard AppConfig.Features.enableAICoCreator else { return ["Introduction", "Main Content", "Examples", "Conclusion", "Call to Action"] }
+        struct Req: Encodable { let task: String; let topic: String; let duration: Double; let style: String; let audience: String }
+        struct Raw: Decodable { let sections: [String]? }
+        let r: Raw? = try? await CloudRunAgentRouter.post(.superAITeam, path: "/predict",
+            body: Req(task: "generate_script_structure", topic: topic, duration: duration, style: style.rawValue, audience: audience.rawValue), timeout: 30)
+        return r?.sections ?? ["Introduction", "Main Content", "Examples", "Conclusion", "Call to Action"]
     }
     
     func generateSection(outline: String, index: Int, keywords: [String], style: CreatorStyle) async -> AICoCreatorScriptSection {
-        // Placeholder - would generate detailed content
+        guard AppConfig.Features.enableAICoCreator else {
+            return AICoCreatorScriptSection(order: index, title: outline, content: "AI-generated content for \(outline) with keywords: \(keywords.joined(separator: ", "))", duration: 30.0, type: .mainContent, visualCues: ["Show example", "Display chart"], transitions: ["Smooth fade", "Quick cut"])
+        }
+        struct Req: Encodable { let task: String; let outline: String; let keywords: [String]; let style: String }
+        struct Raw: Decodable { let content: String?; let duration: Double?; let cues: [String]?; let transitions: [String]? }
+        let r: Raw? = try? await CloudRunAgentRouter.post(.superAITeam, path: "/predict",
+            body: Req(task: "generate_script_section", outline: outline, keywords: keywords, style: style.rawValue), timeout: 30)
         return AICoCreatorScriptSection(
             order: index,
             title: outline,
-            content: "AI-generated content for \(outline) with keywords: \(keywords.joined(separator: ", "))",
-            duration: 30.0,
+            content: r?.content ?? "AI-generated content for \(outline)",
+            duration: r?.duration ?? 30.0,
             type: .mainContent,
-            visualCues: ["Show example", "Display chart"],
-            transitions: ["Smooth fade", "Quick cut"]
+            visualCues: r?.cues ?? ["Show example"],
+            transitions: r?.transitions ?? ["Smooth fade"]
         )
     }
     

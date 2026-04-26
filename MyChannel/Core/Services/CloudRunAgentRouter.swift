@@ -421,4 +421,15 @@ enum CloudRunService: String, CaseIterable {
     case onUploadCreated = "on-upload-created-trigger"
     case onVideoReady = "on-video-ready"
     case notifyFollowers = "notifyfollowersonstorycreated"
+    
+    // MARK: - YouTube Parity Infrastructure Services
+    
+    // ClickHouse Analytics Proxy
+    case clickhouseProxy = "clickhouse-proxy"
+    // GraphQL Federation Gateway
+    case graphQLGateway = "graphql-gateway"
+    // WebRTC Signaling Server
+    case webrtcSignaling = "webrtc-signaling"
+    // Edge Personalization Proxy
+    case edgePersonalization = "edge-personalization"
 }

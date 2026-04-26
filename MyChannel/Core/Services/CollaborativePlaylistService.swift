@@ -23,7 +23,7 @@ protocol CollaborativePlaylistServiceProtocol {
     func addVideo(playlistId: String, video: PlaylistVideoItem) async throws
     func removeVideo(playlistId: String, videoItemId: String) async throws
     func reorderVideos(playlistId: String, videoIds: [String]) async throws
-    func suggestVideo(playlistId: String, suggestion: PlaylistSuggestion) async throws
+    func suggestVideo(playlistId: String, suggestion: CollaborativePlaylistSuggestion) async throws
     func approveSuggestion(playlistId: String, suggestionId: String) async throws
     func rejectSuggestion(playlistId: String, suggestionId: String) async throws
 }
@@ -428,7 +428,7 @@ class CollaborativePlaylistService: ObservableObject, CollaborativePlaylistServi
     }
     
     // MARK: - Suggestions
-    func suggestVideo(playlistId: String, suggestion: PlaylistSuggestion) async throws {
+    func suggestVideo(playlistId: String, suggestion: CollaborativePlaylistSuggestion) async throws {
         isLoading = true
         defer { isLoading = false }
         

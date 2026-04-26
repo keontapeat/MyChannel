@@ -27,10 +27,18 @@ class VideoStreamingService: ObservableObject {
     enum PlaybackState {
         case playing, paused, stopped, buffering, error(String)
     }
+
+    struct VideoInfo {
+        let duration: TimeInterval
+        let fileSize: Int64
+        let format: String
+    }
     
     private init() {
         setupPlaybackObservers()
     }
+
+    private func setupPlaybackObservers() {}
     
     // MARK: - Video Upload
     func uploadVideo(
@@ -241,57 +249,6 @@ class VideoStreamingService: ObservableObject {
             print("Failed to trigger video processing: \(error)")
         }
     }
-    
-    private func setupPlaybackObservers() {
-        // Setup AVPlayerItem observers, etc.
-    }
-}
-
-// MARK: - Video Storage Service
-@MainActor
-class VideoStorageService: ObservableObject {
-    static let shared = VideoStorageService()
-    
-    private init() {}
-    
-    func uploadFile(
-        data: Data,
-        fileName: String,
-        contentType: String,
-        bucket: String,
-        progressHandler: @escaping (Double) -> Void = { _ in }
-    ) async throws -> String {
-        
-        // Simulate upload progress
-        for i in 1...10 {
-            try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-            let progress = Double(i) / 10.0
-            progressHandler(progress)
-        }
-        
-        // Return mock URL for now - replace with real Supabase/AWS S3 upload
-        return "https://your-cdn.com/\(bucket)/\(fileName)"
-    }
-    
-    func deleteFile(url: String) async throws {
-        // Implementation for file deletion
-    }
-    
-    func deleteVideo(from urlString: String) async throws {
-        try await deleteFile(url: urlString)
-    }
-    
-    func getSignedURL(for path: String, expiresIn: TimeInterval = 3600) async throws -> String {
-        // Implementation for signed URLs
-        return path
-    }
-}
-
-// MARK: - Supporting Models
-struct VideoInfo {
-    let duration: TimeInterval
-    let fileSize: Int64
-    let format: String
 }
 
 enum VideoUploadError: LocalizedError {
@@ -301,7 +258,7 @@ enum VideoUploadError: LocalizedError {
     case thumbnailGenerationFailed(String)
     case uploadFailed(String)
     case networkError(String)
-    
+
     var errorDescription: String? {
         switch self {
         case .invalidFile(let message),
@@ -312,6 +269,55 @@ enum VideoUploadError: LocalizedError {
              .networkError(let message):
             return message
         }
+    }
+}
+
+@MainActor
+class VideoStorageService: ObservableObject {
+    static let shared = VideoStorageService()
+    
+    private init() {}
+    
+    private let storage = ObjectStorageOrchestrator.shared
+    
+    func uploadFile(
+        data: Data,
+        fileName: String,
+        contentType: String,
+        bucket: String,
+        progressHandler: @escaping (Double) -> Void = { _ in }
+    ) async throws -> String {
+        progressHandler(0.1)
+        let path = bucket.isEmpty ? fileName : "\(bucket)/\(fileName)"
+        let options = contentType.hasPrefix("image/") ? ObjectStorageOrchestrator.UploadOptions.thumbnail : ObjectStorageOrchestrator.UploadOptions.video
+        let result = try await storage.upload(file: data, path: path, options: options)
+        progressHandler(1.0)
+        return result.urls[result.providers.first ?? .googleCloud] ?? storage.getPublicURL(path: path)
+    }
+    
+    func deleteFile(url: String) async throws {
+        let path = extractPath(from: url)
+        try await storage.delete(path: path)
+    }
+
+    func deleteVideo(from url: String) async throws {
+        try await deleteFile(url: url)
+    }
+    
+    func getSignedURL(for path: String, expiresIn: TimeInterval = 3600) async throws -> String {
+        storage.getPublicURL(path: path)
+    }
+    
+    private func extractPath(from url: String) -> String {
+        guard let parsed = URL(string: url) else { return url }
+        let path = parsed.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if let range = path.range(of: "mychannel-videos/") {
+            return String(path[range.upperBound...])
+        }
+        if let range = path.range(of: "file/mychannel/") {
+            return String(path[range.upperBound...])
+        }
+        return path
     }
 }
 

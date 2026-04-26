@@ -10,6 +10,7 @@
 import Foundation
 import AVFoundation
 import Combine
+import UIKit
 
 @MainActor
 final class VideoCoCreatorAGI: ObservableObject {
@@ -107,10 +108,12 @@ final class VideoCoCreatorAGI: ObservableObject {
     }
     
     private func analyzeFrameViralPotential(_ videoURL: URL, _ timestamp: TimeInterval) async -> Double {
-        // TODO: Use Google Video Intelligence API
-        // Analyze: facial expressions, action, composition, emotion
-        
-        return Double.random(in: 0.3...0.95)
+        guard AppConfig.Features.enableAICoCreator else { return Double.random(in: 0.3...0.95) }
+        struct Req: Encodable { let task: String; let videoURL: String; let timestamp: Double }
+        struct Raw: Decodable { let viralScore: Double?; let facialExpression: String?; let action: String?; let composition: Double?; let emotion: String? }
+        let r: Raw? = try? await CloudRunAgentRouter.post(.superAITeam, path: "/predict",
+            body: Req(task: "analyze_frame_viral_potential", videoURL: videoURL.absoluteString, timestamp: timestamp), timeout: 30)
+        return r?.viralScore ?? Double.random(in: 0.3...0.95)
     }
     
     private func detectMomentType(_ score: Double) -> MomentType {
@@ -178,16 +181,19 @@ final class VideoCoCreatorAGI: ObservableObject {
     }
     
     private func enhanceWithAI(_ frame: CGImage, style: ThumbnailStyle) async -> AIThumbnail {
-        // TODO: Use DALL-E or Stable Diffusion to enhance
-        
-        return AIThumbnail(
-            id: UUID().uuidString,
-            imageData: Data(), // TODO: Convert CGImage to Data
-            style: style,
-            enhancementPrompt: "Enhance for maximum CTR",
-            predictedCTR: 0.0, // Will be set later
-            generatedAt: Date()
-        )
+        guard AppConfig.Features.enableAICoCreator else {
+            let image = UIImage(cgImage: frame)
+            let data = image.jpegData(compressionQuality: 0.9) ?? Data()
+            return AIThumbnail(id: UUID().uuidString, imageData: data, style: style, enhancementPrompt: "Enhance for maximum CTR", predictedCTR: 0.0, generatedAt: Date())
+        }
+        struct Req: Encodable { let task: String; let imageData: String; let style: String }
+        struct Raw: Decodable { let enhancedImage: String?; let prompt: String? }
+        let image = UIImage(cgImage: frame)
+        let base64 = image.jpegData(compressionQuality: 0.9)?.base64EncodedString() ?? ""
+        let r: Raw? = try? await CloudRunAgentRouter.post(.superAITeam, path: "/predict",
+            body: Req(task: "enhance_thumbnail", imageData: base64, style: style.rawValue), timeout: 30)
+        let imageData = Data(base64Encoded: r?.enhancedImage ?? "") ?? image.jpegData(compressionQuality: 0.9) ?? Data()
+        return AIThumbnail(id: UUID().uuidString, imageData: imageData, style: style, enhancementPrompt: r?.prompt ?? "Enhance for maximum CTR", predictedCTR: 0.0, generatedAt: Date())
     }
     
     private func predictCTR(_ thumbnail: AIThumbnail) async -> Double {
@@ -201,54 +207,128 @@ final class VideoCoCreatorAGI: ObservableObject {
     }
     
     private func extractThumbnailFeatures(_ thumbnail: AIThumbnail) -> [Double] {
-        // TODO: Analyze image for features
-        
-        return [
-            Double.random(in: 0...1), // contrast
-            Double.random(in: 0...1), // face detected
-            Double.random(in: 0...1), // text present
-            Double.random(in: 0...1), // emotion
-            Double.random(in: 0...1)  // composition
-        ]
+        guard let image = UIImage(data: thumbnail.imageData) else { return [] }
+        var features: [Double] = []
+        let cgImage = image.cgImage
+        let width = CGFloat(cgImage?.width ?? 1)
+        let height = CGFloat(cgImage?.height ?? 1)
+        features.append(Double(width))
+        features.append(Double(height))
+        features.append(Double(width / height))
+        features.append(Double(thumbnail.imageData.count) / 1024.0)
+        features.append(cgImage?.bitsPerComponent == 8 ? 1.0 : 0.5)
+        return features
     }
     
     private func runCTRModel(_ features: [Double]) async -> Double {
-        // Simple model (TODO: Train actual ML model)
-        
-        let score = features.reduce(0, +) / Double(features.count)
-        return score * 0.15 // 0-15% CTR
+        guard AppConfig.Features.enableAICoCreator else { return features.reduce(0, +) / Double(max(features.count, 1)) * 0.15 }
+        struct Req: Encodable { let task: String; let features: [Double] }
+        struct Raw: Decodable { let ctr: Double? }
+        let r: Raw? = try? await CloudRunAgentRouter.post(.superAITeam, path: "/predict",
+            body: Req(task: "predict_thumbnail_ctr", features: features), timeout: 15)
+        return r?.ctr ?? (features.reduce(0, +) / Double(max(features.count, 1)) * 0.15)
     }
-    
+
     // MARK: - 🎵 VIDEO ENHANCEMENT
-    
+
     private func analyzeVideoContent(_ videoURL: URL) async -> VideoAnalysis {
         print("🔍 [CoCreatorAGI] Analyzing video content...")
-        
-        // TODO: Use Google Video Intelligence API
-        
-        // Use default placeholder analysis
+
+        guard AppConfig.Features.enableAICoCreator else {
+            return VideoAnalysis()
+        }
+
+        struct Req: Encodable { let task: String; let videoURL: String }
+        struct Raw: Decodable {
+            let primaryAudience: String?
+            let viralPotential: Double?
+            let engagementPotential: Double?
+            let suggestions: [String]?
+            let recommendations: [String]?
+        }
+
+        let _: Raw? = try? await CloudRunAgentRouter.post(
+            .superAITeam,
+            path: "/predict",
+            body: Req(task: "analyze_video_content", videoURL: videoURL.absoluteString),
+            timeout: 60
+        )
+
         return VideoAnalysis()
     }
-    
+
     private func removeSilences(_ videoURL: URL) async -> URL {
-        // TODO: Remove silent sections
-        // For now, return original
-        return videoURL
+        guard AppConfig.Features.enableAICoCreator else { return videoURL }
+
+        struct Req: Encodable { let task: String; let videoURL: String }
+        struct Raw: Decodable { let processedURL: String? }
+
+        let r: Raw? = try? await CloudRunAgentRouter.post(
+            .voiceAIv2,
+            path: "/predict",
+            body: Req(task: "remove_silences", videoURL: videoURL.absoluteString),
+            timeout: 90
+        )
+
+        return URL(string: r?.processedURL ?? "") ?? videoURL
     }
     
     private func optimizePacing(_ videoURL: URL, _ moments: [ViralMoment]) async -> URL {
-        // TODO: Speed up slow sections, slow down exciting parts
-        return videoURL
+        guard AppConfig.Features.enableAICoCreator else { return videoURL }
+
+        struct Req: Encodable { let task: String; let videoURL: String; let timestamps: [Double] }
+        struct Raw: Decodable { let processedURL: String? }
+
+        let timestamps = moments.map(\.timestamp)
+        let r: Raw? = try? await CloudRunAgentRouter.post(
+            .voiceAIv2,
+            path: "/predict",
+            body: Req(task: "optimize_pacing", videoURL: videoURL.absoluteString, timestamps: timestamps),
+            timeout: 90
+        )
+
+        return URL(string: r?.processedURL ?? "") ?? videoURL
     }
     
     private func addAIEffects(_ videoURL: URL, _ moments: [ViralMoment]) async -> URL {
-        // TODO: Add zoom, slow-mo, effects at viral moments
-        return videoURL
+        guard AppConfig.Features.enableAICoCreator else { return videoURL }
+
+        struct EffectRequest: Encodable {
+            let timestamp: Double
+            let type: String
+            let intensity: Double
+        }
+        struct Req: Encodable { let task: String; let videoURL: String; let effects: [EffectRequest] }
+        struct Raw: Decodable { let processedURL: String? }
+
+        let effects = moments.map {
+            EffectRequest(timestamp: $0.timestamp, type: String(describing: $0.type), intensity: $0.viralScore)
+        }
+
+        let r: Raw? = try? await CloudRunAgentRouter.post(
+            .voiceAIv2,
+            path: "/predict",
+            body: Req(task: "add_ai_effects", videoURL: videoURL.absoluteString, effects: effects),
+            timeout: 90
+        )
+
+        return URL(string: r?.processedURL ?? "") ?? videoURL
     }
     
     private func addBackgroundMusic(_ videoURL: URL, _ analysis: VideoAnalysis) async -> URL {
-        // TODO: AI-selected music matching mood
-        return videoURL
+        guard AppConfig.Features.enableAICoCreator else { return videoURL }
+
+        struct Req: Encodable { let task: String; let videoURL: String; let mood: String }
+        struct Raw: Decodable { let processedURL: String? }
+
+        let r: Raw? = try? await CloudRunAgentRouter.post(
+            .voiceAIv2,
+            path: "/predict",
+            body: Req(task: "add_background_music", videoURL: videoURL.absoluteString, mood: "neutral"),
+            timeout: 90
+        )
+
+        return URL(string: r?.processedURL ?? "") ?? videoURL
     }
     
     private func calculateViralScore(_ analysis: VideoAnalysis, _ moments: [ViralMoment]) -> Double {

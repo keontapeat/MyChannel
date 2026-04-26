@@ -88,6 +88,59 @@ final class TopRankMLService: ObservableObject {
 
     private init() {}
 
+    private static func fallbackRankedUser(_ friend: FriendArtist, category: RankCategory, rank: Int) -> TopRankedUser {
+        let displayName = friend.name.hasSuffix("_c") ? String(friend.name.dropLast(2)) : friend.name
+        return TopRankedUser(
+            id: "fallback_\(category.rawValue)_\(displayName.lowercased().replacingOccurrences(of: " ", with: "_"))",
+            name: displayName,
+            username: displayName.lowercased().replacingOccurrences(of: " ", with: ""),
+            avatar: friend.avatar,
+            isVerified: true,
+            totalViews: 0,
+            subscribers: category == .channel ? max(5000 - ((rank - 1) * 1500), 1500) : 0,
+            videoCount: category == .filmmaker ? max(24 - ((rank - 1) * 3), 15) : 0,
+            likeCount: 0,
+            commentCount: 0,
+            shareCount: 0,
+            watchTimeMinutes: 0,
+            avgViewDuration: 0,
+            engagementScore: Double(1000 - rank),
+            viralityScore: 0,
+            contentQualityScore: 0,
+            consistencyScore: 0,
+            overallScore: Double(1000 - rank),
+            rank: rank,
+            previousRank: rank,
+            rankChange: 0,
+            category: category,
+            lastUpdated: Date()
+        )
+    }
+
+    static var fallbackTopArtists: [TopRankedUser] {
+        ["HTG Nook", "Scatz Ripky", "Kleanup Man"].enumerated().compactMap { index, name in
+            OwnerProfile.instagramFriends.first { $0.name == name }.map {
+                fallbackRankedUser($0, category: .artist, rank: index + 1)
+            }
+        }
+    }
+
+    static var fallbackTopFilmmakers: [TopRankedUser] {
+        ["Tee Cee", "Merch Hd", "Pros KT"].enumerated().compactMap { index, name in
+            OwnerProfile.instagramFriends.first { $0.name == name }.map {
+                fallbackRankedUser($0, category: .filmmaker, rank: index + 1)
+            }
+        }
+    }
+
+    static var fallbackTopChannels: [TopRankedUser] {
+        ["Ktrip", "Baby Juu", "Mbk Cari"].enumerated().compactMap { index, name in
+            OwnerProfile.instagramFriends.first { $0.name == name }.map {
+                fallbackRankedUser($0, category: .channel, rank: index + 1)
+            }
+        }
+    }
+
     // MARK: - Lifecycle
 
     func startRealTimeRanking() {
@@ -353,7 +406,7 @@ final class TopRankMLService: ObservableObject {
                 var container = encoder.singleValueContainer()
                 let data = try JSONSerialization.data(withJSONObject: ["users": users])
                 let obj = try JSONSerialization.jsonObject(with: data)
-                try container.encode(AnyCodable(obj))
+                try container.encode(TopRankAnyCodable(obj))
             }
         }
 
@@ -474,11 +527,11 @@ final class TopRankMLService: ObservableObject {
 
         filmmakers = prioritizedRankings(
             filmmakers,
-            pinnedNames: ["Shot By Keonta", "Tee Cee", "Merch Hd"]
+            pinnedNames: ["Tee Cee", "Merch Hd", "Pros KT"]
         )
         channels = prioritizedRankings(
             channels,
-            pinnedNames: ["Ktrip", "Baby Juu", "Mbk Cari"]
+            pinnedNames: ["Ktrip", "Baby Ju", "Baby Juu", "Mbk Cari"]
         )
 
         // Prevent duplicate people from appearing across sections.
@@ -491,14 +544,27 @@ final class TopRankMLService: ObservableObject {
 
         filmmakers = prioritizedRankings(
             filmmakers,
-            pinnedNames: ["Shot By Keonta", "Tee Cee", "Merch Hd"]
+            pinnedNames: ["Tee Cee", "Merch Hd", "Pros KT"]
         )
 
         let filmmakerIds = Set(filmmakers.map(\.id))
         channels.removeAll { artistIds.contains($0.id) || filmmakerIds.contains($0.id) }
+
+        // Guarantee the pinned Top MyChannels always appear, even if deduplication removed them
+        let pinnedChannelNames = ["Ktrip", "Baby Juu", "Mbk Cari"]
+        let channelIds = Set(channels.map(\.id))
+        for (pinIdx, pinName) in pinnedChannelNames.enumerated() {
+            let pinId = "ig_\(pinName.lowercased().replacingOccurrences(of: " ", with: "_"))"
+            if !channelIds.contains(pinId) {
+                if let friend = OwnerProfile.instagramFriends.first(where: { $0.name == pinName }) {
+                    channels.insert(TopRankMLService.fallbackRankedUser(friend, category: .channel, rank: pinIdx + 1), at: 0)
+                }
+            }
+        }
+
         channels = prioritizedRankings(
             channels,
-            pinnedNames: ["Ktrip", "Baby Juu", "Mbk Cari"]
+            pinnedNames: ["Ktrip", "Baby Ju", "Baby Juu", "Mbk Cari"]
         )
 
         // Assign ranks + compute rank changes
@@ -667,7 +733,7 @@ private struct TopRankPayload: Encodable {
         var container = encoder.singleValueContainer()
         let data = try JSONSerialization.data(withJSONObject: ["users": users])
         let obj = try JSONSerialization.jsonObject(with: data)
-        try container.encode(AnyCodable(obj))
+        try container.encode(TopRankAnyCodable(obj))
     }
 }
 
@@ -695,7 +761,7 @@ private struct TopRankResponse: Decodable {
 
 // MARK: - AnyCodable helper for encoding [String: Any]
 
-private struct AnyCodable: Encodable {
+private struct TopRankAnyCodable: Encodable {
     let value: Any
 
     init(_ value: Any) { self.value = value }

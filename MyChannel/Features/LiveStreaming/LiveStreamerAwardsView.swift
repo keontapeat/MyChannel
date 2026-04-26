@@ -126,14 +126,14 @@ struct LiveStreamerAwardsView: View {
                     }
                 }
                 
-                // Top 3 Podium
-                if awards.topStreamers.count >= 3 {
-                    podiumView
+                if let topStreamer = awards.topStreamers.first {
+                    featuredTopStreamerCard(ranking: topStreamer)
+                        .padding(.horizontal, 16)
                 }
                 
                 // Rankings List
                 VStack(spacing: 12) {
-                    ForEach(Array(awards.topStreamers.enumerated()), id: \.element.id) { index, ranking in
+                    ForEach(Array(awards.topStreamers.dropFirst().enumerated()), id: \.element.id) { index, ranking in
                         RankingCard(ranking: ranking)
                     }
                 }
@@ -141,6 +141,98 @@ struct LiveStreamerAwardsView: View {
             }
             .padding(.vertical, 20)
         }
+    }
+
+    private func featuredTopStreamerCard(ranking: LiveStreamerAwardsSystem.StreamerRanking) -> some View {
+        HStack(spacing: 14) {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(.systemGray4), Color(.systemGray2)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 128, height: 142)
+                .overlay(
+                    Image(systemName: "person.crop.square.fill")
+                        .font(.system(size: 54, weight: .medium))
+                        .foregroundColor(.white.opacity(0.92))
+                )
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Top Streamer of the \(selectedTimeframe == .daily ? "Day" : selectedTimeframe == .weekly ? "Week" : selectedTimeframe == .monthly ? "Month" : selectedTimeframe == .quarterly ? "Quarter" : selectedTimeframe == .yearly ? "Year" : "Era")")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+
+                Text("#1")
+                    .font(.system(size: 50, weight: .black, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.primary)
+
+                Text(ranking.streamer.displayName)
+                    .font(.system(size: 21, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .lineLimit(2)
+
+                Divider()
+
+                HStack(spacing: 18) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Hours Streamed")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        Text(String(format: "%.0f", ranking.totalHoursStreamed))
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Peak CCU")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        Text(formatCompactNumber(ranking.peakViewers))
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                    }
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            VStack {
+                Spacer()
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.Colors.primary.opacity(0.16))
+                        .frame(width: 58, height: 58)
+                    Image(systemName: "medal.star.fill")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            LinearGradient(
+                colors: [Color(.systemBackground), AppTheme.Colors.primary.opacity(0.05)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(AppTheme.Colors.primary.opacity(0.65), lineWidth: 2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: AppTheme.Colors.primary.opacity(0.18), radius: 12, x: 0, y: 8)
+    }
+
+    private func formatCompactNumber(_ value: Int) -> String {
+        if value >= 1000 {
+            let formatted = Double(value) / 1000.0
+            return formatted.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(formatted))K" : String(format: "%.1fK", formatted)
+        }
+        return "\(value)"
     }
     
     private var podiumView: some View {
@@ -719,54 +811,89 @@ struct RankingCard: View {
     let ranking: LiveStreamerAwardsSystem.StreamerRanking
     
     var body: some View {
-        HStack(spacing: 16) {
-            // Rank
-            Text("#\(ranking.rank)")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(ranking.tier.color)
-                .frame(width: 50)
-            
-            // Avatar
+        HStack(spacing: 14) {
+            Text("\(ranking.rank)")
+                .font(.system(size: 30, weight: .black, design: .rounded))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .frame(width: 26)
+
             Circle()
-                .fill(Color.gray.opacity(0.3))
-                .frame(width: 44, height: 44)
+                .fill(
+                    LinearGradient(
+                        colors: [ranking.tier.color.opacity(0.95), ranking.tier.color.opacity(0.55)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 46, height: 46)
                 .overlay(
-                    Image(systemName: "person.fill")
+                    Text(String(ranking.streamer.displayName.prefix(1)))
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.white)
                 )
-            
-            // Info
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(ranking.streamer.username)
-                        .font(.system(size: 16, weight: .semibold))
-                    
-                    Image(systemName: ranking.tier.icon)
-                        .font(.system(size: 12))
-                        .foregroundColor(ranking.tier.color)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(ranking.streamer.displayName)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                HStack(spacing: 5) {
+                    Image(systemName: categoryIcon)
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(categoryLabel)
+                        .font(.system(size: 13, weight: .medium))
                 }
-                
-                Text("\(ranking.points) points • \(ranking.tier.rawValue)")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
+                .foregroundColor(AppTheme.Colors.textSecondary)
             }
-            
+
             Spacer()
-            
-            // Change
-            if let change = ranking.rankChange {
-                HStack(spacing: 4) {
-                    Image(systemName: change > 0 ? "arrow.up" : "arrow.down")
-                        .font(.system(size: 12, weight: .bold))
-                    Text("\(abs(change))")
-                        .font(.system(size: 14, weight: .semibold))
+
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack(spacing: 5) {
+                    Image(systemName: "chart.bar.fill")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                    Text(compactWeeklyViews)
+                        .font(.system(size: 24, weight: .black, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
                 }
-                .foregroundColor(change > 0 ? .green : .red)
+                Text("Weekly Views")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
             }
+
+            Text(ranking.rank <= 3 ? "Follow" : "View Stats")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color(.systemGray6), in: Capsule())
         }
-        .padding(16)
-        .background(AppTheme.Colors.surface)
-        .cornerRadius(16)
+        .padding(12)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 7, x: 0, y: 3)
+    }
+
+    private var categoryLabel: String {
+        if ranking.categoryScores.keys.contains(.gamingStreamer) { return "Gaming" }
+        if ranking.categoryScores.keys.contains(.justChattingStreamer) { return "Just Chatting" }
+        if ranking.categoryScores.keys.contains(.creativeStreamer) { return "Creative" }
+        return "Overall"
+    }
+
+    private var categoryIcon: String {
+        if ranking.categoryScores.keys.contains(.gamingStreamer) { return "gamecontroller.fill" }
+        if ranking.categoryScores.keys.contains(.justChattingStreamer) { return "message.fill" }
+        if ranking.categoryScores.keys.contains(.creativeStreamer) { return "paintbrush.fill" }
+        return "crown.fill"
+    }
+
+    private var compactWeeklyViews: String {
+        if ranking.totalViews >= 1000 {
+            let value = Double(ranking.totalViews) / 1000.0
+            return value.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(value))K" : String(format: "%.1fK", value)
+        }
+        return "\(ranking.totalViews)"
     }
 }
 

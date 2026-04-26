@@ -13,7 +13,7 @@ import Foundation
 import FirebaseFirestore
 #endif
 
-struct PodcastEpisode: Codable, Identifiable, Equatable {
+struct PodcastModeEpisode: Codable, Identifiable, Equatable {
     let id: String
     let showId: String
     let creatorId: String
@@ -83,7 +83,7 @@ final class PodcastModeService: ObservableObject {
     /// Register an audio-only upload as a podcast episode. The video pipeline
     /// already hosts audio in Storage; we just record it in a podcast-specific
     /// collection and kick off transcript + chapter generation server-side.
-    func publishEpisode(_ ep: PodcastEpisode) async throws {
+    func publishEpisode(_ ep: PodcastModeEpisode) async throws {
         guard AppConfig.Features.enablePodcastMode else { throw PodError.disabled }
         #if canImport(FirebaseFirestore)
         try await Firestore.firestore()

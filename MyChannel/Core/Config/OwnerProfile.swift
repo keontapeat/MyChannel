@@ -68,10 +68,10 @@ struct OwnerProfile {
 
         // ── TOP INDIE FILMMAKERS ─────────────────────────────────────────────────
         // Shot By Keonta #1, Tee Cee #2, Merch Hd #3
-        FriendArtist(name: "Shot By Keonta", instagram: "@sbkeonta_",  avatar: "asset://ShotByKeontaThumbnail", category: "filmmaker", pinnedRank: 1),
-        FriendArtist(name: "Tee Cee",        instagram: "@teecee",     avatar: "asset://TeeCeeAvatar",          category: "filmmaker", pinnedRank: 2),
-        FriendArtist(name: "Merch Hd",       instagram: "@merchhd",    avatar: "asset://MerchHDAvatar",         category: "filmmaker", pinnedRank: 3),
-        FriendArtist(name: "Pros KT",        instagram: "@proskt",     avatar: "asset://ProsKtAvatar",          category: "filmmaker", pinnedRank: 4),
+        FriendArtist(name: "Shot By Keonta", instagram: "@sbkeonta_",  avatar: "asset://ShotByKeontaThumbnail", category: "filmmaker"),
+        FriendArtist(name: "Tee Cee",        instagram: "@teecee",     avatar: "asset://TeeCeeAvatar",          category: "filmmaker", pinnedRank: 1),
+        FriendArtist(name: "Merch Hd",       instagram: "@merchhd",    avatar: "asset://MerchHDAvatar",         category: "filmmaker", pinnedRank: 2),
+        FriendArtist(name: "Pros KT",        instagram: "@proskt",     avatar: "asset://ProsKtAvatar",          category: "filmmaker", pinnedRank: 3),
 
         // ── TOP MYCHANNELS ───────────────────────────────────────────────────────
         // Ktrip #1, Baby Juu #2, Mbk Cari #3 — then all artists also appear as channels

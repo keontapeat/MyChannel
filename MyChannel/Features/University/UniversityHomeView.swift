@@ -36,6 +36,7 @@ struct UniversityHomeView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                universityHeroHeader
                 tabBar
                 Divider()
 
@@ -62,21 +63,15 @@ struct UniversityHomeView: View {
                     .refreshable { await refreshContent() }
                 }
             }
-            .background(Color(.systemBackground))
-            .navigationTitle("MCU")
+            .background(
+                LinearGradient(
+                    colors: [Color(.systemBackground), Color(.secondarySystemBackground).opacity(0.55)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "graduationcap.fill")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(UniversityTheme.Colors.accent)
-                        Text("MyChannel University")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(Color(.label))
-                    }
-                }
-            }
         }
         .onAppear {
             if isInitialLoad {
@@ -95,6 +90,60 @@ struct UniversityHomeView: View {
     }
 
     // MARK: - Tab Bar (underline style, no pills)
+    
+    private var universityHeroHeader: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(.systemBackground),
+                    UniversityTheme.Colors.accent.opacity(0.08),
+                    Color(.systemBackground)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            
+            Image(systemName: "laurel.leading")
+                .font(.system(size: 96, weight: .thin))
+                .foregroundColor(Color(.tertiaryLabel).opacity(0.12))
+                .offset(x: -82, y: -2)
+            Image(systemName: "laurel.trailing")
+                .font(.system(size: 96, weight: .thin))
+                .foregroundColor(Color(.tertiaryLabel).opacity(0.12))
+                .offset(x: 82, y: -2)
+            
+            VStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(UniversityTheme.Colors.accent.opacity(0.14))
+                        .frame(width: 58, height: 58)
+                    Image(systemName: "play.rectangle.fill")
+                        .font(.system(size: 24, weight: .black))
+                        .foregroundColor(UniversityTheme.Colors.accent)
+                    Image(systemName: "graduationcap.fill")
+                        .font(.system(size: 22, weight: .black))
+                        .foregroundColor(UniversityTheme.Colors.accent)
+                        .offset(y: 21)
+                }
+                
+                HStack(spacing: 7) {
+                    Image(systemName: "graduationcap.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(UniversityTheme.Colors.accent)
+                    Text("MyChannel University")
+                        .font(.system(size: 18, weight: .black, design: .rounded))
+                        .foregroundColor(Color(.label))
+                }
+                
+                Text("AI-verified learning paths. Real creator credentials.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color(.secondaryLabel))
+            }
+            .padding(.top, 8)
+            .padding(.bottom, 18)
+        }
+        .frame(height: 118)
+    }
 
     private var tabBar: some View {
         HStack(spacing: 0) {
@@ -130,19 +179,21 @@ struct UniversityHomeView: View {
     private var dashboardContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             statsHeroGrid
-                .padding(.top, 20)
+                .padding(.top, 12)
                 .padding(.horizontal, 16)
 
-            sectionDivider
-
             if !viewModel.continueLearningVideos.isEmpty {
-                sectionHeader(title: "Continue Watching", icon: "play.fill")
+                premiumContinueWatchingCard(video: viewModel.continueLearningVideos[0])
                     .padding(.horizontal, 16)
-                ContinueLearningSection(videos: viewModel.continueLearningVideos) { video in
-                    viewModel.playVideo(video)
-                }
-                sectionDivider
+                    .padding(.top, 12)
             }
+            
+            HStack(alignment: .top, spacing: 12) {
+                featuredCourseCard
+                academicPathCard
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
 
             if !viewModel.careerPathsProgress.isEmpty {
                 sectionHeader(title: "Certificate Progress", icon: "seal.fill")
@@ -172,53 +223,50 @@ struct UniversityHomeView: View {
 
     private var statsHeroGrid: some View {
         VStack(spacing: 12) {
-            // Row 1 — primary stats
             HStack(spacing: 12) {
                 statTile(
                     value: "\(Int(viewModel.totalUniversityHours))",
-                    unit: "hrs",
-                    label: "Learning Time",
+                    unit: "Hours",
+                    label: "Learning Hours",
                     icon: "clock.fill",
                     iconColor: Color(.systemBlue)
                 )
                 statTile(
                     value: "\(viewModel.progress.videosCompleted)",
-                    unit: "videos",
-                    label: "Completed",
-                    icon: "checkmark.circle.fill",
-                    iconColor: UniversityTheme.Colors.verified
+                    unit: "Videos",
+                    label: "Enrollment",
+                    icon: "play.square.fill",
+                    iconColor: Color(.systemGray2)
                 )
             }
-            // Row 2 — secondary stats
             HStack(spacing: 12) {
                 statTile(
                     value: "\(viewModel.certificatesEarned)",
-                    unit: viewModel.certificatesEarned == 1 ? "cert" : "certs",
-                    label: "Certificates",
+                    unit: "Certificates",
+                    label: "Verifiable Credentials",
                     icon: "seal.fill",
                     iconColor: UniversityTheme.Colors.certificateGold
                 )
                 statTile(
                     value: "\(viewModel.streaksAndGoals.currentStreak)",
-                    unit: "days",
-                    label: "Streak",
+                    unit: "Day Streak",
+                    label: "Current Learning Streak: \(viewModel.streaksAndGoals.currentStreak) Days",
                     icon: "flame.fill",
                     iconColor: Color(.systemOrange)
                 )
             }
-            // Row 3 — tertiary stats
             HStack(spacing: 12) {
                 statTile(
                     value: "\(viewModel.averageAIScore)",
-                    unit: "%",
+                    unit: "AI Score",
                     label: "AI Score",
-                    icon: "checkmark.shield.fill",
+                    icon: "chart.xyaxis.line",
                     iconColor: UniversityTheme.Colors.accent
                 )
                 statTile(
                     value: "#\(viewModel.globalRank)",
                     unit: "",
-                    label: "Global Rank",
+                    label: "Rank: #\(viewModel.globalRank) (out of 1.5M)",
                     icon: "chart.bar.fill",
                     iconColor: Color(.systemPurple)
                 )
@@ -228,36 +276,196 @@ struct UniversityHomeView: View {
 
     private func statTile(value: String, unit: String, label: String, icon: String, iconColor: Color) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundColor(iconColor)
-                .frame(width: 32)
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(iconColor.opacity(0.12))
+                    .frame(width: 52, height: 52)
+                Image(systemName: icon)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(iconColor)
+            }
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
                     Text(value)
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundColor(Color(.label))
                     if !unit.isEmpty {
                         Text(unit)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(Color(.secondaryLabel))
+                            .lineLimit(1)
                     }
                 }
                 Text(label)
-                    .font(.system(size: 12, weight: .regular))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(Color(.secondaryLabel))
+                    .lineLimit(2)
             }
 
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 16)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(Color(.separator).opacity(0.55), lineWidth: 0.8)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 3)
         .frame(maxWidth: .infinity)
     }
+    
+    private func premiumContinueWatchingCard(video: ContinueLearningVideo) -> some View {
+        Button {
+            viewModel.playVideo(video)
+            HapticManager.shared.impact(style: .medium)
+        } label: {
+            ZStack(alignment: .bottomLeading) {
+                AsyncImage(url: URL(string: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1200&q=80")) { image in
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    LinearGradient(colors: [.black.opacity(0.85), .gray.opacity(0.55)], startPoint: .top, endPoint: .bottom)
+                }
+                
+                LinearGradient(
+                    colors: [.black.opacity(0.05), .black.opacity(0.58), .black.opacity(0.92)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 7) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 12, weight: .black))
+                            .foregroundColor(.red)
+                        Text("Continue Watching")
+                            .font(.system(size: 18, weight: .black, design: .rounded))
+                            .foregroundColor(.white)
+                        Spacer()
+                    }
+                    
+                    HStack(alignment: .bottom, spacing: 12) {
+                        AsyncImage(url: URL(string: video.video.thumbnailURL)) { image in
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Rectangle().fill(Color.white.opacity(0.22))
+                        }
+                        .frame(width: 142, height: 80)
+                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(video.video.title)
+                                .font(.system(size: 16, weight: .black))
+                                .foregroundColor(.white)
+                                .lineLimit(2)
+                            Text(video.video.creatorName)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.78))
+                            HStack(spacing: 6) {
+                                Image(systemName: "clock")
+                                Text(video.timeRemainingText)
+                                Spacer()
+                                Image(systemName: "play.fill")
+                            }
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.82))
+                        }
+                    }
+                    
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(.white.opacity(0.22)).frame(height: 4)
+                            Capsule()
+                                .fill(Color.red)
+                                .frame(width: geo.size.width * video.progressPercentage, height: 4)
+                            Circle()
+                                .fill(.white)
+                                .frame(width: 14, height: 14)
+                                .offset(x: max(0, geo.size.width * video.progressPercentage - 7))
+                        }
+                    }
+                    .frame(height: 14)
 
+                    HStack(spacing: 14) {
+                        Image(systemName: "play.fill")
+                            .foregroundColor(.white)
+                        Rectangle()
+                            .fill(.red)
+                            .frame(width: 78, height: 4)
+                            .clipShape(Capsule())
+                        Spacer()
+                        Image(systemName: "list.bullet.rectangle")
+                            .foregroundColor(.white.opacity(0.88))
+                        Text("Chapter Selection")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(.black.opacity(0.45), in: Capsule())
+                    }
+                }
+                .padding(14)
+            }
+            .frame(height: 205)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(.white.opacity(0.18), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.18), radius: 14, x: 0, y: 8)
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private var featuredCourseCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Featured Course")
+                .font(.system(size: 20, weight: .black, design: .rounded))
+            ZStack(alignment: .bottomLeading) {
+                LinearGradient(colors: [Color(red: 0.12, green: 0.04, blue: 0.04), Color(red: 0.42, green: 0.13, blue: 0.12)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("CS50X: Introduction to Computer Science")
+                        .font(.system(size: 16, weight: .black))
+                        .foregroundColor(.white)
+                    Text("ENROLL")
+                        .font(.system(size: 13, weight: .black))
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(.white, in: Capsule())
+                }
+                .padding(14)
+            }
+            .frame(height: 132)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.black.opacity(0.08), lineWidth: 0.8)
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    
+    private var academicPathCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("My Academic Path")
+                .font(.system(size: 20, weight: .black, design: .rounded))
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color(.systemBackground))
+                AcademicPathMiniMap()
+            }
+            .frame(height: 132)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color(.separator).opacity(0.4), lineWidth: 0.8)
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    
     private func sectionHeader(title: String, icon: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
@@ -718,6 +926,46 @@ struct SubjectCard: View {
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator), lineWidth: 0.5))
+    }
+}
+
+private struct AcademicPathMiniMap: View {
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let height = geo.size.height
+
+            ZStack {
+                Path { path in
+                    path.move(to: CGPoint(x: width * 0.18, y: height * 0.78))
+                    path.addCurve(
+                        to: CGPoint(x: width * 0.82, y: height * 0.30),
+                        control1: CGPoint(x: width * 0.28, y: height * 0.28),
+                        control2: CGPoint(x: width * 0.62, y: height * 0.88)
+                    )
+                }
+                .stroke(Color(.systemGray4), style: StrokeStyle(lineWidth: 4, lineCap: .round, dash: [2, 10]))
+
+                ForEach([CGPoint(x: 0.18, y: 0.78), CGPoint(x: 0.42, y: 0.55), CGPoint(x: 0.60, y: 0.33), CGPoint(x: 0.82, y: 0.30)], id: \.x) { point in
+                    Circle()
+                        .fill(Color(.systemGray5))
+                        .frame(width: 28, height: 28)
+                        .overlay(
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(Color(.systemGray3))
+                        )
+                        .position(x: width * point.x, y: height * point.y)
+                }
+
+                Circle()
+                    .fill(UniversityTheme.Colors.accent)
+                    .frame(width: 34, height: 34)
+                    .shadow(color: UniversityTheme.Colors.accent.opacity(0.3), radius: 8, x: 0, y: 4)
+                    .position(x: width * 0.56, y: height * 0.48)
+            }
+            .padding(12)
+        }
     }
 }
 

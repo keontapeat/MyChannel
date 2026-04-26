@@ -3,6 +3,23 @@ import AVFoundation
 import AVKit
 import UIKit
 
+@MainActor
+final class LiveTVPreviewPlaybackStore: ObservableObject {
+    static let shared = LiveTVPreviewPlaybackStore()
+
+    private var dvrFractionsByChannelId: [String: Double] = [:]
+
+    private init() {}
+
+    func saveDVRFraction(_ fraction: Double, for channelId: String) {
+        dvrFractionsByChannelId[channelId] = max(0, min(1, fraction))
+    }
+
+    func dvrFraction(for channelId: String) -> Double? {
+        dvrFractionsByChannelId[channelId]
+    }
+}
+
 // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
 // 🔥 THERMONUCLEAR LIVE THUMBNAIL SYSTEM - FASTEST IN THE WORLD 🔥
 // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
@@ -269,6 +286,8 @@ struct LiveChannelThumbnailView: View {
     let posterURL: String?
     let fallbackStreamURL: String?
     let allowPlaybackInPreviews: Bool
+    let initialDVRFraction: Double?
+    let showsLiveBadge: Bool
     var channelCategory: LiveTVChannel.ChannelCategory?
     var channelName: String?
     var channelId: String?
@@ -287,6 +306,8 @@ struct LiveChannelThumbnailView: View {
         posterURL: String? = nil,
         fallbackStreamURL: String? = nil,
         allowPlaybackInPreviews: Bool = false,
+        initialDVRFraction: Double? = nil,
+        showsLiveBadge: Bool = true,
         channelCategory: LiveTVChannel.ChannelCategory? = nil,
         channelName: String? = nil,
         channelId: String? = nil,
@@ -297,6 +318,8 @@ struct LiveChannelThumbnailView: View {
         self.posterURL = posterURL
         self.fallbackStreamURL = fallbackStreamURL
         self.allowPlaybackInPreviews = allowPlaybackInPreviews
+        self.initialDVRFraction = initialDVRFraction
+        self.showsLiveBadge = showsLiveBadge
         self.channelCategory = channelCategory
         self.channelName = channelName
         self.channelId = channelId
@@ -323,6 +346,7 @@ struct LiveChannelThumbnailView: View {
             if canActivatePlayer && hasAppeared && (!AppConfig.isPreview || allowPlaybackInPreviews) && !streamFailed {
                 ThermonuclearPlayer(
                     urls: buildURLCandidates(),
+                    initialPlaybackFraction: initialDVRFraction,
                     onReady: { handleReady() },
                     onSnapshot: { handleSnapshot($0) },
                     onAllFailed: { handleAllFailed() }
@@ -332,12 +356,11 @@ struct LiveChannelThumbnailView: View {
             }
             
             // 🔥 Layer 3: LIVE badge (always show when we have a poster or stream is ready)
-            if posterLoaded || isReady {
+            if showsLiveBadge && (posterLoaded || isReady) {
                 liveBadge
             }
         }
         .clipped()
-        .drawingGroup() // 🔥 GPU acceleration
         .onAppear {
             hasAppeared = true
             
@@ -358,6 +381,11 @@ struct LiveChannelThumbnailView: View {
                 try? await Task.sleep(nanoseconds: 50_000_000) // 🔥 50ms (was 150ms)
                 if ActivePlayerLimiter.shared.requestActivation(for: streamURL) {
                     canActivatePlayer = true
+                } else if allowPlaybackInPreviews {
+                    _ = ActivePlayerLimiter.shared.forceDeactivateOldest()
+                    if ActivePlayerLimiter.shared.requestActivation(for: streamURL) {
+                        canActivatePlayer = true
+                    }
                 }
             }
         }
@@ -383,12 +411,6 @@ struct LiveChannelThumbnailView: View {
     
     // 🔥 Build URL candidates with nuclear fallbacks
     private func buildURLCandidates() -> [String] {
-        var urls = [streamURL]
-        if let fallback = fallbackStreamURL {
-            urls.append(fallback)
-        }
-        
-        // 🔥 NUCLEAR FALLBACKS - 100% reliable streams (tested December 2024)
         let nuclearFallbacks = [
             // Apple's official test streams - ALWAYS work
             "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8",
@@ -401,11 +423,22 @@ struct LiveChannelThumbnailView: View {
             "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8"
         ]
         
-        for fallback in nuclearFallbacks where !urls.contains(fallback) {
-            urls.append(fallback)
+        var urls: [String] = []
+        if allowPlaybackInPreviews {
+            if let fallback = fallbackStreamURL {
+                urls.append(fallback)
+            }
+            urls.append(contentsOf: nuclearFallbacks)
+            urls.append(streamURL)
+        } else {
+            urls.append(streamURL)
+            if let fallback = fallbackStreamURL {
+                urls.append(fallback)
+            }
+            urls.append(contentsOf: nuclearFallbacks)
         }
         
-        return urls
+        return Array(NSOrderedSet(array: urls)) as? [String] ?? urls
     }
     
     private func handleReady() {
@@ -715,6 +748,7 @@ struct LiveChannelThumbnailView: View {
 // MARK: - 🔥 THERMONUCLEAR PLAYER
 private struct ThermonuclearPlayer: UIViewRepresentable {
     let urls: [String]
+    let initialPlaybackFraction: Double?
     let onReady: () -> Void
     let onSnapshot: (UIImage) -> Void
     var onAllFailed: (() -> Void)?
@@ -726,7 +760,7 @@ private struct ThermonuclearPlayer: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: ThermonuclearPlayerView, context: Context) {
-        uiView.configure(urls: urls, onReady: onReady, onSnapshot: onSnapshot, onAllFailed: onAllFailed)
+        uiView.configure(urls: urls, initialPlaybackFraction: initialPlaybackFraction, onReady: onReady, onSnapshot: onSnapshot, onAllFailed: onAllFailed)
     }
     
     static func dismantleUIView(_ uiView: ThermonuclearPlayerView, coordinator: ()) {
@@ -739,6 +773,7 @@ private final class ThermonuclearPlayerView: UIView {
     private var player: AVPlayer?
     private var playerLayer: AVPlayerLayer?
     private var urlCandidates: [String] = []
+    private var initialPlaybackFraction: Double?
     private var currentIndex: Int = 0
     private var statusObserver: NSKeyValueObservation?
     private var timeControlObserver: NSKeyValueObservation?
@@ -756,12 +791,13 @@ private final class ThermonuclearPlayerView: UIView {
         playerLayer?.frame = bounds
     }
     
-    func configure(urls: [String], onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void, onAllFailed: (() -> Void)? = nil) {
+    func configure(urls: [String], initialPlaybackFraction: Double?, onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void, onAllFailed: (() -> Void)? = nil) {
         // 🔥 Prevent duplicate configurations
-        guard !isConfigured || configuredURLs != urls else { return }
+        guard !isConfigured || configuredURLs != urls || self.initialPlaybackFraction != initialPlaybackFraction else { return }
         
         urlCandidates = urls
         configuredURLs = urls
+        self.initialPlaybackFraction = initialPlaybackFraction
         currentIndex = 0
         isConfigured = true
         hasNotifiedAllFailed = false
@@ -846,6 +882,7 @@ private final class ThermonuclearPlayerView: UIView {
                 guard let self else { return }
                 switch item.status {
                 case .readyToPlay:
+                    self.applyInitialPlaybackFractionIfNeeded()
                     self.notifyReady(onReady)
                     self.player?.play()
                 case .failed:
@@ -924,6 +961,23 @@ private final class ThermonuclearPlayerView: UIView {
         retryWorkItem?.cancel()
         DispatchQueue.main.async { onReady() }
     }
+
+    private func applyInitialPlaybackFractionIfNeeded() {
+        guard let fraction = initialPlaybackFraction,
+              fraction > 0,
+              let item = player?.currentItem,
+              let timeRange = item.seekableTimeRanges.last?.timeRangeValue else {
+            return
+        }
+
+        let start = CMTimeGetSeconds(timeRange.start)
+        let duration = CMTimeGetSeconds(timeRange.duration)
+        guard duration > 0 else { return }
+
+        let target = start + duration * max(0, min(1, fraction))
+        player?.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: CMTime(seconds: 1, preferredTimescale: 600))
+        initialPlaybackFraction = nil
+    }
     
     private func tryNextURL(onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void) {
         currentIndex += 1
@@ -973,6 +1027,7 @@ private final class ThermonuclearPlayerView: UIView {
         player = nil
         playerLayer?.removeFromSuperlayer()
         playerLayer = nil
+        initialPlaybackFraction = nil
         hasGeneratedSnapshot = false
     }
     

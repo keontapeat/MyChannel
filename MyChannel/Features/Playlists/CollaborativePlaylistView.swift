@@ -749,7 +749,7 @@ struct CollaborativePlaylistDetailView: View {
 
 // MARK: - Supporting Views
 struct SuggestionRow: View {
-    let suggestion: PlaylistSuggestion
+    let suggestion: CollaborativePlaylistSuggestion
     let onApprove: () -> Void
     let onReject: () -> Void
     

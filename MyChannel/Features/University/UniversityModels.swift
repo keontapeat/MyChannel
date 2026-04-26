@@ -326,7 +326,7 @@ struct AIVerificationResult: Codable {
 }
 
 // MARK: - Watch Session
-struct WatchSession: Codable {
+struct UniversityWatchSession: Codable {
     let id: String
     let userId: String
     let videoId: String

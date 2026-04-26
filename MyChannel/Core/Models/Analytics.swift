@@ -24,6 +24,9 @@ struct VideoAnalytics: Identifiable, Codable, Equatable {
     let engagementRate: Double // Percentage
     let revenue: Double
     let date: Date
+    let duration: TimeInterval
+    let retentionRate: Double
+    let peakEngagementHour: Int?
     
     init(
         id: String = UUID().uuidString,
@@ -39,7 +42,10 @@ struct VideoAnalytics: Identifiable, Codable, Equatable {
         clickThroughRate: Double = 0.0,
         engagementRate: Double = 0.0,
         revenue: Double = 0.0,
-        date: Date = Date()
+        date: Date = Date(),
+        duration: TimeInterval = 0,
+        retentionRate: Double = 0.0,
+        peakEngagementHour: Int? = nil
     ) {
         self.id = id
         self.videoId = videoId
@@ -55,6 +61,9 @@ struct VideoAnalytics: Identifiable, Codable, Equatable {
         self.engagementRate = engagementRate
         self.revenue = revenue
         self.date = date
+        self.duration = duration
+        self.retentionRate = retentionRate
+        self.peakEngagementHour = peakEngagementHour
     }
     
     var totalEngagements: Int {
@@ -64,6 +73,11 @@ struct VideoAnalytics: Identifiable, Codable, Equatable {
     var watchTimeHours: Double {
         watchTime / 3600
     }
+
+    var viewCount: Int { views }
+    var shareCount: Int { shares }
+    var commentCount: Int { comments }
+    var likeCount: Int { likes }
     
     // MARK: - Equatable
     static func == (lhs: VideoAnalytics, rhs: VideoAnalytics) -> Bool {

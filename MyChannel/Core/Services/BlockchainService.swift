@@ -2,75 +2,67 @@
 //  BlockchainService.swift
 //  MyChannel
 //
-//  🔐 BLOCKCHAIN SERVICE - POLYGON INTEGRATION!
-//  Verify content ownership, immutable timestamps
-//  Prove you uploaded first! ($10/month for 10K uploads)
+//  Blockchain integration: content provenance, NFT minting,
+//  ownership verification, Polygon chain. Uses `trust-safety-ai` Cloud Run.
 //
 
 import Foundation
 
-class BlockchainService {
-    static let shared = BlockchainService()
-    
-    private let polygonRPC = "https://polygon-rpc.com"
-    private let contractAddress = "0x..." // Deploy your contract
-    
-    private init() {}
-    
-    /// Verify video ownership on blockchain
-    func verifyOwnership(videoId: String, creatorId: String) async throws -> BlockchainVerification {
-        print("🔐 [Blockchain] Verifying ownership for video: \(videoId)")
-        
-        // Create hash of video metadata
-        let hash = createContentHash(videoId: videoId, creatorId: creatorId)
-        
-        // Submit to Polygon blockchain
-        let txHash = try await submitToBlockchain(hash)
-        
-        return BlockchainVerification(
-            videoId: videoId,
-            creatorId: creatorId,
-            contentHash: hash,
-            transactionHash: txHash,
-            blockNumber: 0, // Will be set when mined
-            timestamp: Date(),
-            verified: true
-        )
-    }
-    
-    private func createContentHash(videoId: String, creatorId: String) -> String {
-        let data = "\(videoId):\(creatorId):\(Date().timeIntervalSince1970)".data(using: .utf8)!
-        // TODO: Use proper SHA-256 hash
-        return data.base64EncodedString()
-    }
-    
-    private func submitToBlockchain(_ hash: String) async throws -> String {
-        // TODO: Submit to Polygon blockchain
-        // Cost: ~$0.001 per transaction
-        return "0x" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
-    }
-    
-    func getPerformance() async -> Double { return 1.0 }
-}
-
-struct BlockchainVerification {
-    let videoId: String
-    let creatorId: String
-    let contentHash: String
-    let transactionHash: String
+struct BlockchainRecord: Codable, Identifiable {
+    let id: String
+    let contentId: String
+    let txHash: String
     let blockNumber: Int
+    let chain: String
     let timestamp: Date
-    let verified: Bool
+    let verifiedAt: Date?
 }
 
+struct NFTMintRequest: Codable, Identifiable {
+    let id: String
+    let contentId: String
+    let creatorId: String
+    let tokenURI: String
+    let contractAddress: String
+    let tokenId: String?
+    let status: MintStatus
+    let mintedAt: Date?
+    enum MintStatus: String, Codable { case pending, minted, failed }
+}
 
+@MainActor
+final class BlockchainService: ObservableObject {
+    static let shared = BlockchainService()
+    private init() {}
+    @Published private(set) var records: [BlockchainRecord] = []
+    @Published private(set) var nfts: [NFTMintRequest] = []
 
+    func registerProvenance(contentId: String, creatorId: String, metadata: [String: String]) async throws -> BlockchainRecord {
+        struct Req: Encodable { let task: String; let contentId: String; let creatorId: String; let metadata: [String: String] }
+        struct Raw: Decodable { let id: String; let txHash: String; let block: Int; let chain: String }
+        let r: Raw = try await CloudRunAgentRouter.post(.trustSafetyAI, path: "/predict",
+            body: Req(task: "register_provenance", contentId: contentId, creatorId: creatorId, metadata: metadata), timeout: 30)
+        let record = BlockchainRecord(id: r.id, contentId: contentId, txHash: r.txHash, blockNumber: r.block, chain: r.chain, timestamp: Date(), verifiedAt: nil)
+        records.append(record); return record
+    }
 
+    func verifyProvenance(contentId: String) async throws -> BlockchainRecord? {
+        struct Req: Encodable { let task: String; let contentId: String }
+        struct Raw: Decodable { let id: String; let txHash: String; let block: Int; let chain: String; let verified: String? }
+        let r: Raw = try await CloudRunAgentRouter.post(.trustSafetyAI, path: "/predict",
+            body: Req(task: "verify_provenance", contentId: contentId))
+        guard !r.id.isEmpty else { return nil }
+        return BlockchainRecord(id: r.id, contentId: contentId, txHash: r.txHash, blockNumber: r.block, chain: r.chain,
+            timestamp: Date(), verifiedAt: r.verified.flatMap { ISO8601DateFormatter().date(from: $0) })
+    }
 
-
-
-
-
-
-
-
+    func mintNFT(contentId: String, creatorId: String, tokenURI: String) async throws -> NFTMintRequest {
+        struct Req: Encodable { let task: String; let contentId: String; let creatorId: String; let tokenURI: String }
+        struct Raw: Decodable { let id: String; let contract: String; let tokenId: String?; let status: String }
+        let r: Raw = try await CloudRunAgentRouter.post(.trustSafetyAI, path: "/predict",
+            body: Req(task: "mint_nft", contentId: contentId, creatorId: creatorId, tokenURI: tokenURI), timeout: 45)
+        let nft = NFTMintRequest(id: r.id, contentId: contentId, creatorId: creatorId, tokenURI: tokenURI,
+            contractAddress: r.contract, tokenId: r.tokenId, status: .init(rawValue: r.status) ?? .pending, mintedAt: r.status == "minted" ? Date() : nil)
+        nfts.append(nft); return nft
+    }
+}

@@ -676,31 +676,25 @@ struct ContinueWatchingCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack(alignment: .bottom) {
                     // Poster
-                    AsyncImage(url: URL(string: progress.movie?.fullPosterURL ?? "")) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.3))
-                    }
-                    .frame(width: 140, height: 210)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(width: 140, height: 210)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                     
                     // Progress bar
                     VStack(spacing: 4) {
-                        ProgressView(value: progress.progress)
+                        ProgressView(value: progress.completionPct)
                             .progressViewStyle(LinearProgressViewStyle(tint: .red))
                             .scaleEffect(y: 2)
                         
                         HStack {
-                            Text(progress.remainingTime)
+                            Text("\(Int(max(0, progress.durationSec - progress.positionSec)))s left")
                                 .font(.system(size: 10))
                                 .foregroundColor(.white)
                             
                             Spacer()
                             
-                            Text(progress.progressPercentage)
+                            Text("\(Int(progress.completionPct * 100))%")
                                 .font(.system(size: 10))
                                 .foregroundColor(.white)
                         }
@@ -709,13 +703,11 @@ struct ContinueWatchingCard: View {
                     .background(Color.black.opacity(0.8))
                 }
                 
-                if let movie = progress.movie {
-                    Text(movie.title)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white)
-                        .lineLimit(2)
-                        .frame(width: 140, alignment: .leading)
-                }
+                Text(progress.videoId)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                    .frame(width: 140, alignment: .leading)
             }
         }
         .buttonStyle(PlainButtonStyle())

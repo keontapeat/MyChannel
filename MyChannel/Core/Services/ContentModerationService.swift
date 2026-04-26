@@ -17,7 +17,7 @@ class ContentModerationService: ObservableObject {
     @Published var moderationQueue: [ContentModerationItem] = []
     @Published var automatedActions: [ContentModerationAction] = []
     @Published var communityGuidelines: [CommunityGuideline] = []
-    @Published var copyrightClaims: [CopyrightClaim] = []
+    @Published var copyrightClaims: [ModerationCopyrightClaim] = []
     @Published var isProcessing = false
     
     private let networkService = NetworkService.shared
@@ -141,12 +141,12 @@ class ContentModerationService: ObservableObject {
     /// Submit copyright claim
     func submitCopyrightClaim(
         videoId: String,
-        claimantInfo: CopyrightClaimant,
-        copyrightedWork: CopyrightedWork,
-        evidence: [CopyrightEvidence]
-    ) async throws -> CopyrightClaim {
+        claimantInfo: ModerationCopyrightClaimant,
+        copyrightedWork: ModerationCopyrightedWork,
+        evidence: [ModerationCopyrightEvidence]
+    ) async throws -> ModerationCopyrightClaim {
         
-        let claim = CopyrightClaim(
+        let claim = ModerationCopyrightClaim(
             id: UUID().uuidString,
             videoId: videoId,
             claimant: claimantInfo,
@@ -280,47 +280,47 @@ enum CommentModerationAction: String {
     case remove, markAsSpam, shadowBan, warning, none
 }
 
-struct CopyrightClaim: Identifiable, Codable {
+struct ModerationCopyrightClaim: Identifiable, Codable {
     let id: String
     let videoId: String
-    let claimant: CopyrightClaimant
-    let copyrightedWork: CopyrightedWork
-    let evidence: [CopyrightEvidence]
-    var status: CopyrightClaimStatus
+    let claimant: ModerationCopyrightClaimant
+    let copyrightedWork: ModerationCopyrightedWork
+    let evidence: [ModerationCopyrightEvidence]
+    var status: ModerationCopyrightClaimStatus
     let submittedAt: Date
     let reviewDeadline: Date
-    var counterNotification: CopyrightCounterNotification?
+    var counterNotification: ModerationCopyrightCounterNotification?
 }
 
-struct CopyrightClaimant: Codable {
+struct ModerationCopyrightClaimant: Codable {
     let name: String
     let email: String
     let organization: String?
     let address: String
 }
 
-struct CopyrightedWork: Codable {
+struct ModerationCopyrightedWork: Codable {
     let title: String
     let description: String
     let originalURL: String?
     let registrationNumber: String?
 }
 
-struct CopyrightEvidence: Codable {
-    let type: EvidenceType
+struct ModerationCopyrightEvidence: Codable {
+    let type: ModerationEvidenceType
     let url: String
     let description: String
 }
 
-enum EvidenceType: String, Codable {
+enum ModerationEvidenceType: String, Codable {
     case originalWork, registrationCertificate, other
 }
 
-enum CopyrightClaimStatus: String, Codable {
+enum ModerationCopyrightClaimStatus: String, Codable {
     case submitted, underReview, approved, rejected, counterNotified, resolved
 }
 
-struct CopyrightCounterNotification: Codable {
+struct ModerationCopyrightCounterNotification: Codable {
     let statement: String
     let contactInfo: String
     let submittedAt: Date

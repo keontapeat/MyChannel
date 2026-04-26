@@ -130,7 +130,15 @@ final class VSMatchWalletService: ObservableObject {
             // Flag medium-risk for manual review (but allow)
             if fraudCheck.riskScore > 0.4 {
                 print("⚠️ [Fraud Detection] FLAGGED - Medium risk, proceeding with caution")
-                // TODO: Send alert to admin dashboard for manual review
+                #if canImport(FirebaseFirestore)
+                let db = Firestore.firestore()
+                try? await db.collection("fraud_alerts").document(UUID().uuidString).setData([
+                    "userId": userId,
+                    "riskScore": fraudCheck.riskScore,
+                    "amount": amount,
+                    "alertedAt": FieldValue.serverTimestamp()
+                ])
+                #endif
             }
             
             print("✅ [Fraud Detection] Transaction approved (risk: \(fraudCheck.riskScore))")
@@ -146,6 +154,16 @@ final class VSMatchWalletService: ObservableObject {
             currency: "usd",
             customerId: userId
         )
+
+        #if canImport(FirebaseFirestore)
+        try? await db.collection("payment_intents").document(paymentIntentId).setData([
+            "userId": userId,
+            "amount": amount,
+            "currency": "usd",
+            "status": "requires_confirmation",
+            "createdAt": FieldValue.serverTimestamp()
+        ])
+        #endif
         
         // TODO: Confirm payment via Stripe Payment Sheet or backend
         // For now, assume payment is confirmed after intent creation

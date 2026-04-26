@@ -154,9 +154,9 @@ class ABTestingManager: ObservableObject {
         return OnboardingFlow(rawValue: variant) ?? .stepByStep
     }
     
-    var feedLayout: FeedLayout {
+    var feedLayout: ABTestFeedLayout {
         let variant = getExperimentVariant(ExperimentKeys.feedLayout)
-        return FeedLayout(rawValue: variant) ?? .grid
+        return ABTestFeedLayout(rawValue: variant) ?? .grid
     }
     
     var uploadFlow: UploadFlow {
@@ -274,7 +274,7 @@ enum OnboardingFlow: String, CaseIterable {
     case personalized = "personalized"
 }
 
-enum FeedLayout: String, CaseIterable {
+enum ABTestFeedLayout: String, CaseIterable {
     case grid = "grid"
     case list = "list"
     case masonry = "masonry"

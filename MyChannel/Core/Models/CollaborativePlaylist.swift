@@ -19,7 +19,7 @@ struct CollaborativePlaylist: Identifiable, Codable, Equatable {
     let isPublic: Bool
     let allowSuggestions: Bool // Non-collaborators can suggest videos
     let requireApproval: Bool // Owner must approve additions
-    var pendingSuggestions: [PlaylistSuggestion]
+    var pendingSuggestions: [CollaborativePlaylistSuggestion]
     let shareCode: String // For easy sharing/joining
     let createdAt: Date
     let updatedAt: Date
@@ -36,7 +36,7 @@ struct CollaborativePlaylist: Identifiable, Codable, Equatable {
         isPublic: Bool = true,
         allowSuggestions: Bool = true,
         requireApproval: Bool = false,
-        pendingSuggestions: [PlaylistSuggestion] = [],
+        pendingSuggestions: [CollaborativePlaylistSuggestion] = [],
         shareCode: String = String((0..<6).map { _ in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".randomElement()! }),
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
@@ -241,7 +241,7 @@ struct PlaylistVideoItem: Identifiable, Codable, Equatable {
 }
 
 // MARK: - Playlist Suggestion
-struct PlaylistSuggestion: Identifiable, Codable, Equatable {
+struct CollaborativePlaylistSuggestion: Identifiable, Codable, Equatable {
     let id: String
     let videoId: String
     let title: String
@@ -449,7 +449,7 @@ extension CollaborativePlaylist {
                 )
             ],
             pendingSuggestions: [
-                PlaylistSuggestion(
+                CollaborativePlaylistSuggestion(
                     videoId: "vid-suggest-1",
                     title: "Rust for Swift Developers",
                     thumbnailURL: "https://picsum.photos/320/180?random=suggest1",
@@ -537,15 +537,16 @@ extension CollaborativePlaylist {
                     
                     // Collaborators
                     HStack(spacing: -8) {
-                        ForEach(playlist.collaborators.prefix(4)) { collaborator in
-                            AsyncImage(url: URL(string: collaborator.profileImageURL ?? "")) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                Circle()
-                                    .fill(AppTheme.Colors.surface)
-                            }
+                        ForEach(Array(playlist.collaborators.prefix(4))) { collaborator in
+                            let initial = String(collaborator.displayName.prefix(1))
+                            Circle()
+                                .fill(AppTheme.Colors.surface)
+                                .overlay(
+                                    Text(initial)
+                                        .font(AppTheme.Typography.caption2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                )
                             .frame(width: 32, height: 32)
                             .clipShape(Circle())
                             .overlay(Circle().stroke(Color.white, lineWidth: 2))

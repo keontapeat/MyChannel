@@ -20,8 +20,7 @@ struct MoviesView: View {
     }
     
     private var allMovies: [FreeMovie] {
-        if !remoteMovies.isEmpty { return remoteMovies }
-        return FreeMovie.sampleMovies
+        deduped(remoteMovies + FreeMovie.sampleMovies)
     }
     
     // Featured movies (first row)
@@ -29,53 +28,53 @@ struct MoviesView: View {
         allMovies
             .filter { $0.runtime >= 60 && $0.imdbRating >= 7.0 }
             .sorted { $0.imdbRating > $1.imdbRating }
-            .prefix(10)
+            .prefix(50)
             .map { $0 }
     }
     
     // Horror Movies
     private var horrorMovies: [FreeMovie] {
-        allMovies.filter { $0.genre.contains(.horror) || $0.genre.contains(.thriller) }.prefix(10).map { $0 }
+        allMovies.filter { $0.genre.contains(.horror) || $0.genre.contains(.thriller) }.prefix(50).map { $0 }
     }
     
     // Blockbuster Movies
     private var blockbusterMovies: [FreeMovie] {
-        allMovies.filter { $0.genre.contains(.action) || $0.genre.contains(.scifi) }.sorted { $0.imdbRating > $1.imdbRating }.prefix(10).map { $0 }
+        allMovies.filter { $0.genre.contains(.action) || $0.genre.contains(.scifi) }.sorted { $0.imdbRating > $1.imdbRating }.prefix(50).map { $0 }
     }
     
     // Comedy Movies
     private var comedyMovies: [FreeMovie] {
-        allMovies.filter { $0.genre.contains(.comedy) }.prefix(10).map { $0 }
+        allMovies.filter { $0.genre.contains(.comedy) }.prefix(50).map { $0 }
     }
 
     // Drama Movies
     private var dramaMovies: [FreeMovie] {
-        allMovies.filter { $0.genre.contains(.drama) }.prefix(10).map { $0 }
+        allMovies.filter { $0.genre.contains(.drama) }.prefix(50).map { $0 }
     }
 
     // Sci-Fi & Fantasy
     private var scifiMovies: [FreeMovie] {
-        allMovies.filter { $0.genre.contains(.scifi) || $0.genre.contains(.fantasy) }.prefix(10).map { $0 }
+        allMovies.filter { $0.genre.contains(.scifi) || $0.genre.contains(.fantasy) }.prefix(50).map { $0 }
     }
 
     // Top Rated
     private var topRatedMovies: [FreeMovie] {
-        allMovies.filter { $0.imdbRating >= 7.5 }.sorted { $0.imdbRating > $1.imdbRating }.prefix(10).map { $0 }
+        allMovies.filter { $0.imdbRating >= 7.5 }.sorted { $0.imdbRating > $1.imdbRating }.prefix(50).map { $0 }
     }
 
     // Animation
     private var animationMovies: [FreeMovie] {
-        allMovies.filter { $0.genre.contains(.animation) }.prefix(10).map { $0 }
+        allMovies.filter { $0.genre.contains(.animation) }.prefix(50).map { $0 }
     }
 
     // Classics (pre-1980)
     private var classicMovies: [FreeMovie] {
-        allMovies.filter { $0.year < 1980 }.sorted { $0.imdbRating > $1.imdbRating }.prefix(10).map { $0 }
+        allMovies.filter { $0.year < 1980 }.sorted { $0.imdbRating > $1.imdbRating }.prefix(50).map { $0 }
     }
 
     // Full Movies (60+ min)
     private var fullMovies: [FreeMovie] {
-        allMovies.filter { $0.runtime >= 60 }.sorted { $0.year > $1.year }.prefix(10).map { $0 }
+        allMovies.filter { $0.runtime >= 60 }.sorted { $0.year > $1.year }.prefix(100).map { $0 }
     }
     
     private var searchResults: [FreeMovie] {
@@ -316,13 +315,24 @@ struct MoviesView: View {
     private func initialFetch() async {
         isFetching = true
         defer { isFetching = false }
-        let results = await FreeCatalogService.shared.searchAll(query: "", limitPerSource: 30)
+        let results = await FreeCatalogService.shared.searchAll(query: "", limitPerSource: 100)
+        let mapped = results.map { $0.toFreeMovie }
         await MainActor.run {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                let tmdb = results.filter { $0.id.hasPrefix("tmdb-") }.sorted { $0.year > $1.year }
-                let others = results.filter { !$0.id.hasPrefix("tmdb-") }
-                remoteMovies = tmdb + others
+                let tmdb = mapped.filter { $0.id.hasPrefix("tmdb-") }.sorted(by: { $0.releaseDate > $1.releaseDate })
+                let others = mapped.filter { !$0.id.hasPrefix("tmdb-") }
+                remoteMovies = deduped(tmdb + others)
             }
+        }
+    }
+
+    private func deduped(_ movies: [FreeMovie]) -> [FreeMovie] {
+        var seen = Set<String>()
+        return movies.filter { movie in
+            let key = "\(movie.id)|\(movie.title.lowercased())"
+            guard !seen.contains(key) else { return false }
+            seen.insert(key)
+            return movie.isAvailable && !movie.streamURL.isEmpty
         }
     }
 }

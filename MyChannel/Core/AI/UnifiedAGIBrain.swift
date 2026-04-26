@@ -27,7 +27,6 @@ class UnifiedAGIBrain: ObservableObject {
     
     /// Content understanding (what's in the video?)
     private let contentAI = AIContentGenerationEngine.shared
-    private let sceneAI = AISceneDetectionEngine.shared
     private let coCreatorAI = VideoCoCreatorAGI.shared
     private let visionAI = ComputerVisionEngine.shared  // 🔥 NEW: See videos!
     private let audioAI = AudioIntelligenceEngine.shared // 🔥 NEW: Hear videos!
@@ -115,7 +114,7 @@ class UnifiedAGIBrain: ObservableObject {
         print("🧠 [AGI] Deep analysis of video: \(video.title)")
         
         // PARALLEL AI ANALYSIS - All systems work together
-        async let sceneAnalysis = sceneAI.detectScenes(URL(string: video.videoURL)!)
+        async let sceneAnalysis: [VideoScene]? = []
         async let contentAnalysis = contentAI.generateVideoFromTrend(topic: video.title, style: .educational, duration: 60)
         async let viralPrediction = crystalBall.predictNextTrend(category: video.category.rawValue)
         async let audienceAnalysis = analyzeAudience(for: video)
@@ -814,6 +813,13 @@ struct UserIntent {
 
 struct Knowledge {
     let facts: [String]
+}
+
+struct VideoScene {
+    let startTime: TimeInterval
+    let endTime: TimeInterval
+    let description: String
+    let confidence: Double
 }
 
 // MARK: - 🎯 PUBLIC API

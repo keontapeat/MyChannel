@@ -10,7 +10,7 @@ struct VideoChaptersSheet: View {
             List(chaptersWithEnd, id: \.chapter.id) { item in
                 Button {
                     onSelect(item.chapter.start)
-                    Task { await AnalyticsService.shared.trackChapterTap(videoId: video.id, title: item.chapter.title, start: item.chapter.start) }
+                    Task { await AnalyticsService.shared.trackEvent("chapter_tap", parameters: ["videoId": video.id, "title": item.chapter.title, "start": item.chapter.start]) }
                     dismiss()
                 } label: {
                     HStack(spacing: 12) {

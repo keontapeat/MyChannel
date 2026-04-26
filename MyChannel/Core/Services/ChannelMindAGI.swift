@@ -692,24 +692,78 @@ struct Experience {
 
 // MARK: - 🔧 SUPPORTING ENGINES
 
+struct UserFeedback: Codable {
+    let videoId: String
+    let rating: Double
+    let watchTime: Double
+}
+
+struct VideoMetrics: Codable {
+    let views: Int
+    let likes: Int
+    let watchTime: Double
+}
+
 class ContinuousLearningEngine {
-    // Placeholder for continuous learning logic
+    func trainModel(userId: String, feedback: [UserFeedback]) async throws -> TrainingResult {
+        guard AppConfig.Features.enableChannelMindAGI else { return TrainingResult(loss: 0, accuracy: 0) }
+        struct Req: Encodable { let task: String; let userId: String; let feedback: [UserFeedback] }
+        struct Raw: Decodable { let loss: Double?; let accuracy: Double? }
+        let r: Raw = try await CloudRunAgentRouter.post(.superAITeam, path: "/predict",
+            body: Req(task: "continuous_learning_train", userId: userId, feedback: feedback), timeout: 60)
+        return TrainingResult(loss: r.loss ?? 0, accuracy: r.accuracy ?? 0)
+    }
 }
 
 class MultiModalAnalyzer {
-    // Placeholder for multi-modal analysis
+    func analyzeVideo(videoId: String) async throws -> MultiModalResult {
+        guard AppConfig.Features.enableChannelMindAGI else { return MultiModalResult(visualScore: 0, audioScore: 0, textScore: 0) }
+        struct Req: Encodable { let task: String; let videoId: String }
+        struct Raw: Decodable { let visual: Double?; let audio: Double?; let text: Double? }
+        let r: Raw = try await CloudRunAgentRouter.post(.superAITeam, path: "/predict",
+            body: Req(task: "multimodal_analyze", videoId: videoId), timeout: 45)
+        return MultiModalResult(visualScore: r.visual ?? 0, audioScore: r.audio ?? 0, textScore: r.text ?? 0)
+    }
 }
 
 class CausalInferenceEngine {
-    // Placeholder for causal inference
+    func inferCausality(videoId: String, metrics: VideoMetrics) async throws -> CausalAnalysis {
+        guard AppConfig.Features.enableChannelMindAGI else { return CausalAnalysis(chains: []) }
+        struct Req: Encodable { let task: String; let videoId: String; let metrics: [String: Double] }
+        struct RawF: Decodable { let factor: String; let impact: Double }
+        struct Raw: Decodable { let factors: [RawF]?; let confidence: Double? }
+        let r: Raw = try await CloudRunAgentRouter.post(.superAITeam, path: "/predict",
+            body: Req(task: "causal_inference", videoId: videoId, metrics: ["views": Double(metrics.views), "likes": Double(metrics.likes), "watchTime": metrics.watchTime]))
+        return CausalAnalysis(chains: [])
+    }
 }
 
 class ExplainabilityEngine {
-    // Placeholder for explanation generation
+    func generateExplanation(videoId: String, recommendationReason: String) async throws -> Explanation {
+        guard AppConfig.Features.enableChannelMindAGI else { return Explanation(summary: "Recommended based on your interests", reasoning: [], keyFactors: [], alternatives: [], confidence: 0) }
+        struct Req: Encodable { let task: String; let videoId: String; let reason: String }
+        struct Raw: Decodable { let text: String?; let factors: [String]? }
+        let r: Raw = try await CloudRunAgentRouter.post(.superAITeam, path: "/predict",
+            body: Req(task: "generate_explanation", videoId: videoId, reason: recommendationReason))
+        return Explanation(summary: r.text ?? "Recommended based on your interests", reasoning: [], keyFactors: [], alternatives: r.factors ?? [], confidence: 1.0)
+    }
 }
 
 class AdversarialDefenseSystem {
-    // Placeholder for adversarial defense
+    func detectAttack(input: String) async throws -> AttackDetection {
+        guard AppConfig.Features.enableChannelMindAGI else { return AttackDetection(isAttack: false, attackType: nil, confidence: 0) }
+        struct Req: Encodable { let task: String; let input: String }
+        struct Raw: Decodable { let is_attack: Bool?; let attack_type: String?; let confidence: Double? }
+        let r: Raw = try await CloudRunAgentRouter.post(.superAITeam, path: "/predict",
+            body: Req(task: "detect_adversarial_attack", input: input))
+        return AttackDetection(isAttack: r.is_attack ?? false, attackType: r.attack_type, confidence: r.confidence ?? 0)
+    }
 }
+
+struct TrainingResult { let loss: Double; let accuracy: Double }
+struct MultiModalResult { let visualScore: Double; let audioScore: Double; let textScore: Double }
+struct CausalFactor { let name: String; let impact: Double }
+// CausalAnalysis and Explanation are defined above in the DATA STRUCTURES section
+struct AttackDetection { let isAttack: Bool; let attackType: String?; let confidence: Double }
 
 

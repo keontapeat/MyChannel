@@ -173,7 +173,9 @@ struct AILiveTVSection: View {
                 loadingView
             } else if let section = forYouSection {
                 // Because You Watched
-                if !section.becauseYouWatched.isEmpty {
+                if !section.perfectForRightNow.isEmpty {
+                    perfectForNowRow(section.perfectForRightNow)
+                } else if !section.becauseYouWatched.isEmpty {
                     becauseYouWatchedRow(section.becauseYouWatched)
                 } else if !section.personalizedPicks.isEmpty {
                     personalizedPicksRow(section.personalizedPicks)
@@ -186,11 +188,12 @@ struct AILiveTVSection: View {
         VStack(alignment: .leading, spacing: 12) {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    ForEach(picks) { recommendation in
+                    ForEach(Array(picks.enumerated()), id: \.element.id) { index, recommendation in
                         AIChannelCard(
                             channel: recommendation.channel,
                             reason: recommendation.reason,
                             confidence: recommendation.aiConfidence,
+                            autoplayPreview: index < 3,
                             onSelect: { onSelectChannel(recommendation.channel) }
                         )
                     }
@@ -204,9 +207,10 @@ struct AILiveTVSection: View {
         VStack(alignment: .leading, spacing: 12) {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    ForEach(items) { item in
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         BecauseYouWatchedCard(
                             item: item,
+                            autoplayPreview: index < 3,
                             onSelect: { onSelectChannel(item.recommendedChannel) }
                         )
                     }
@@ -241,9 +245,10 @@ struct AILiveTVSection: View {
             } else if let trending = forYouSection?.trendingNow {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
-                        ForEach(trending) { item in
+                        ForEach(Array(trending.enumerated()), id: \.element.id) { index, item in
                             TrendingChannelCard(
                                 item: item,
+                                autoplayPreview: index < 3,
                                 onSelect: { onSelectChannel(item.channel) }
                             )
                         }
@@ -372,6 +377,7 @@ private struct AIChannelCard: View {
     let channel: LiveTVChannel
     let reason: String
     let confidence: Double
+    let autoplayPreview: Bool
     let onSelect: () -> Void
     
     var body: some View {
@@ -381,7 +387,16 @@ private struct AIChannelCard: View {
         }) {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
-                    LiveTVStaticThumbnail(channel: channel, width: 180, height: 100, cornerRadius: 12)
+                    LiveChannelThumbnailView(
+                        streamURL: channel.streamURL,
+                        posterURL: channel.logoURL,
+                        fallbackStreamURL: channel.previewFallbackURL,
+                        allowPlaybackInPreviews: true,
+                        initialDVRFraction: LiveTVPreviewPlaybackStore.shared.dvrFraction(for: channel.id),
+                        channelCategory: channel.category,
+                        channelName: channel.name,
+                        channelId: channel.id
+                    )
                     
                     // LIVE badge
                     VStack {
@@ -414,6 +429,8 @@ private struct AIChannelCard: View {
                     .allowsHitTesting(false)
                 }
                 .contentShape(Rectangle())
+                .frame(width: 180, height: 100)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(channel.name)
@@ -456,6 +473,7 @@ private struct AIChannelCard: View {
 
 private struct TrendingChannelCard: View {
     let item: TrendingChannel
+    let autoplayPreview: Bool
     let onSelect: () -> Void
     
     var body: some View {
@@ -465,7 +483,16 @@ private struct TrendingChannelCard: View {
         }) {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
-                    LiveTVStaticThumbnail(channel: item.channel, width: 160, height: 90, cornerRadius: 12)
+                    LiveChannelThumbnailView(
+                        streamURL: item.channel.streamURL,
+                        posterURL: item.channel.logoURL,
+                        fallbackStreamURL: item.channel.previewFallbackURL,
+                        allowPlaybackInPreviews: true,
+                        initialDVRFraction: LiveTVPreviewPlaybackStore.shared.dvrFraction(for: item.channel.id),
+                        channelCategory: item.channel.category,
+                        channelName: item.channel.name,
+                        channelId: item.channel.id
+                    )
                     
                     // Rank badge
                     VStack {
@@ -487,6 +514,8 @@ private struct TrendingChannelCard: View {
                     .allowsHitTesting(false)
                 }
                 .contentShape(Rectangle())
+                .frame(width: 160, height: 90)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.channel.name)
@@ -510,6 +539,7 @@ private struct TrendingChannelCard: View {
 
 private struct BecauseYouWatchedCard: View {
     let item: BecauseYouWatchedItem
+    let autoplayPreview: Bool
     let onSelect: () -> Void
     
     var body: some View {
@@ -519,7 +549,16 @@ private struct BecauseYouWatchedCard: View {
         }) {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
-                    LiveTVStaticThumbnail(channel: item.recommendedChannel, width: 160, height: 90, cornerRadius: 12)
+                    LiveChannelThumbnailView(
+                        streamURL: item.recommendedChannel.streamURL,
+                        posterURL: item.recommendedChannel.logoURL,
+                        fallbackStreamURL: item.recommendedChannel.previewFallbackURL,
+                        allowPlaybackInPreviews: true,
+                        initialDVRFraction: LiveTVPreviewPlaybackStore.shared.dvrFraction(for: item.recommendedChannel.id),
+                        channelCategory: item.recommendedChannel.category,
+                        channelName: item.recommendedChannel.name,
+                        channelId: item.recommendedChannel.id
+                    )
                     
                     // LIVE badge
                     VStack {
@@ -533,6 +572,8 @@ private struct BecauseYouWatchedCard: View {
                     .allowsHitTesting(false)
                 }
                 .contentShape(Rectangle())
+                .frame(width: 160, height: 90)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.recommendedChannel.name)
@@ -565,7 +606,18 @@ private struct TimeBasedCard: View {
         }) {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
-                    LiveTVStaticThumbnail(channel: pick.channel, width: 140, height: 80, cornerRadius: 10)
+                    LiveChannelThumbnailView(
+                        streamURL: pick.channel.streamURL,
+                        posterURL: pick.channel.logoURL,
+                        fallbackStreamURL: pick.channel.previewFallbackURL,
+                        allowPlaybackInPreviews: true,
+                        initialDVRFraction: LiveTVPreviewPlaybackStore.shared.dvrFraction(for: pick.channel.id),
+                        channelCategory: pick.channel.category,
+                        channelName: pick.channel.name,
+                        channelId: pick.channel.id
+                    )
+                    .frame(width: 140, height: 80)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     
                     // LIVE badge
                     VStack {

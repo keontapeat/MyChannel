@@ -27,19 +27,38 @@ class TranscodingService {
         let bitrate: Int
         let codec: VideoCodec
         let fps: Int
+        let isHLS: Bool // 🔥 YOUTUBE PARITY: HLS output flag
         
+        // 🔥 YOUTUBE PARITY: Full ABR ladder with AV1/VP9 + HLS
         static let profiles: [TranscodingProfile] = [
-            // YouTube-compatible profiles
-            TranscodingProfile(name: "144p", width: 256, height: 144, bitrate: 200_000, codec: .h264, fps: 30),
-            TranscodingProfile(name: "240p", width: 426, height: 240, bitrate: 400_000, codec: .h264, fps: 30),
-            TranscodingProfile(name: "360p", width: 640, height: 360, bitrate: 800_000, codec: .h264, fps: 30),
-            TranscodingProfile(name: "480p", width: 854, height: 480, bitrate: 1_500_000, codec: .h264, fps: 30),
-            TranscodingProfile(name: "720p", width: 1280, height: 720, bitrate: 2_500_000, codec: .h264, fps: 30),
-            TranscodingProfile(name: "1080p", width: 1920, height: 1080, bitrate: 5_000_000, codec: .h264, fps: 60),
-            TranscodingProfile(name: "1440p", width: 2560, height: 1440, bitrate: 10_000_000, codec: .h264, fps: 60),
-            TranscodingProfile(name: "4k", width: 3840, height: 2160, bitrate: 20_000_000, codec: .hevc, fps: 60),
-            TranscodingProfile(name: "8k", width: 7680, height: 4320, bitrate: 50_000_000, codec: .hevc, fps: 60),
+            // H.264 HLS ABR ladder (universal compatibility)
+            TranscodingProfile(name: "144p", width: 256, height: 144, bitrate: 200_000, codec: .h264, fps: 30, isHLS: true),
+            TranscodingProfile(name: "240p", width: 426, height: 240, bitrate: 400_000, codec: .h264, fps: 30, isHLS: true),
+            TranscodingProfile(name: "360p", width: 640, height: 360, bitrate: 800_000, codec: .h264, fps: 30, isHLS: true),
+            TranscodingProfile(name: "480p", width: 854, height: 480, bitrate: 1_500_000, codec: .h264, fps: 30, isHLS: true),
+            TranscodingProfile(name: "720p", width: 1280, height: 720, bitrate: 2_500_000, codec: .h264, fps: 30, isHLS: true),
+            TranscodingProfile(name: "1080p", width: 1920, height: 1080, bitrate: 5_000_000, codec: .h264, fps: 60, isHLS: true),
+            TranscodingProfile(name: "1440p", width: 2560, height: 1440, bitrate: 10_000_000, codec: .h264, fps: 60, isHLS: true),
+            TranscodingProfile(name: "4k", width: 3840, height: 2160, bitrate: 20_000_000, codec: .hevc, fps: 60, isHLS: true),
+            TranscodingProfile(name: "8k", width: 7680, height: 4320, bitrate: 50_000_000, codec: .hevc, fps: 60, isHLS: true),
+            // 🔥 YOUTUBE PARITY: VP9 profiles (better compression, 30-50% smaller)
+            TranscodingProfile(name: "720p_vp9", width: 1280, height: 720, bitrate: 1_800_000, codec: .vp9, fps: 30, isHLS: true),
+            TranscodingProfile(name: "1080p_vp9", width: 1920, height: 1080, bitrate: 3_500_000, codec: .vp9, fps: 60, isHLS: true),
+            TranscodingProfile(name: "4k_vp9", width: 3840, height: 2160, bitrate: 15_000_000, codec: .vp9, fps: 60, isHLS: true),
+            // 🔥 YOUTUBE PARITY: AV1 profiles (best compression, 50% smaller than H.264)
+            TranscodingProfile(name: "720p_av1", width: 1280, height: 720, bitrate: 1_200_000, codec: .av1, fps: 30, isHLS: true),
+            TranscodingProfile(name: "1080p_av1", width: 1920, height: 1080, bitrate: 2_500_000, codec: .av1, fps: 60, isHLS: true),
+            TranscodingProfile(name: "4k_av1", width: 3840, height: 2160, bitrate: 10_000_000, codec: .av1, fps: 60, isHLS: true),
         ]
+        
+        /// H.264-only profiles for maximum compatibility
+        static let h264Profiles: [TranscodingProfile] = profiles.filter { $0.codec == .h264 }
+        
+        /// VP9 profiles for web/Chrome
+        static let vp9Profiles: [TranscodingProfile] = profiles.filter { $0.codec == .vp9 }
+        
+        /// AV1 profiles for best compression
+        static let av1Profiles: [TranscodingProfile] = profiles.filter { $0.codec == .av1 }
     }
     
     enum VideoCodec: String {
@@ -103,9 +122,10 @@ class TranscodingService {
             urlRequest.httpMethod = "POST"
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
             urlRequest.httpBody = try JSONSerialization.data(withJSONObject: request)
+            if let apiKey = AppConfig.API.googleCloudAPIKey {
+                urlRequest.setValue(apiKey, forHTTPHeaderField: "X-Goog-Api-Key")
+            }
             
-            // TODO: Add Google Cloud authentication
-            // For now, simulate success
             job.status = .processing
             
             print("✅ [Transcoding] Job submitted: \(jobID)")
@@ -291,14 +311,27 @@ class TranscodingService {
             )
         )
         
-        // TODO: Combine into sprite sheet (10x10 grid)
-        // For now, return first thumbnail
-        guard let firstThumb = thumbnails.first else {
-            throw TranscodingError.spriteGenerationFailed
+        guard AppConfig.Features.enableMultiFormatPublisher else {
+            guard let firstThumb = thumbnails.first else { throw TranscodingError.spriteGenerationFailed }
+            return firstThumb
         }
         
+        struct Req: Encodable { let task: String; let thumbnailURLs: [String]; let gridSize: Int }
+        struct Raw: Decodable { let spriteURL: String?; let vttURL: String? }
+        let r: Raw = try await CloudRunAgentRouter.post(.myChannelContent, path: "/predict",
+            body: Req(task: "generate_sprite_sheet", thumbnailURLs: thumbnails.map(\.absoluteString), gridSize: 10), timeout: 45)
+        
+        guard let spriteURLString = r.spriteURL, let spriteURL = URL(string: spriteURLString) else {
+            guard let firstThumb = thumbnails.first else { throw TranscodingError.spriteGenerationFailed }
+            return firstThumb
+        }
+        
+        let spriteData = try await URLSession.shared.data(from: spriteURL).0
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("sprite_\(UUID().uuidString).jpg")
+        try spriteData.write(to: tempURL)
+        
         print("✅ [Sprites] Sprite sheet generated")
-        return firstThumb
+        return tempURL
     }
     
     // MARK: - 📝 VTT GENERATION (chapter markers)
@@ -349,28 +382,138 @@ class TranscodingService {
             "templateId": "preset/web-hd"
         ]
         
-        // Add quality profiles
+        // Add quality profiles with codec-aware stream config
         var elementaryStreams: [[String: Any]] = []
+        var muxStreams: [[String: Any]] = []
         
         for profile in profiles {
+            let codecKey: String
+            let codecConfig: [String: Any]
+            
+            switch profile.codec {
+            case .h264:
+                codecKey = "h264"
+                codecConfig = [
+                    "widthPixels": profile.width,
+                    "heightPixels": profile.height,
+                    "frameRate": profile.fps,
+                    "bitrateBps": profile.bitrate,
+                    "profile": "high",
+                    "bFrameCount": 3, // 🔥 B-frames for better compression
+                    "gopDuration": "3s"
+                ]
+            case .h265, .hevc:
+                codecKey = "h265"
+                codecConfig = [
+                    "widthPixels": profile.width,
+                    "heightPixels": profile.height,
+                    "frameRate": profile.fps,
+                    "bitrateBps": profile.bitrate,
+                    "profile": "main",
+                    "bFrameCount": 5,
+                    "gopDuration": "3s"
+                ]
+            case .vp9:
+                codecKey = "vp9"
+                codecConfig = [
+                    "widthPixels": profile.width,
+                    "heightPixels": profile.height,
+                    "frameRate": profile.fps,
+                    "bitrateBps": profile.bitrate,
+                    "profile": "main"
+                ]
+            case .av1:
+                codecKey = "av1"
+                codecConfig = [
+                    "widthPixels": profile.width,
+                    "heightPixels": profile.height,
+                    "frameRate": profile.fps,
+                    "bitrateBps": profile.bitrate,
+                    "profile": "main",
+                    "gopDuration": "3s"
+                ]
+            }
+            
             elementaryStreams.append([
                 "key": profile.name,
-                "videoStream": [
-                    "h264": [
-                        "widthPixels": profile.width,
-                        "heightPixels": profile.height,
-                        "frameRate": profile.fps,
-                        "bitrateBps": profile.bitrate
-                    ]
-                ]
+                "videoStream": [codecKey: codecConfig]
             ])
+            
+            // 🔥 YOUTUBE PARITY: Generate HLS mux streams (.m3u8 manifests)
+            if profile.isHLS {
+                muxStreams.append([
+                    "key": "hls_\(profile.name)",
+                    "container": "ts",
+                    "elementaryStreams": [profile.name],
+                    "segmentSettings": [
+                        "individualSegments": true,
+                        "segmentDuration": "6s" // 🔥 6s segments = fast start
+                    ]
+                ])
+            }
         }
         
-        request["config"] = [
-            "elementaryStreams": elementaryStreams
-        ]
+        var config: [String: Any] = ["elementaryStreams": elementaryStreams]
+        if !muxStreams.isEmpty {
+            config["muxStreams"] = muxStreams
+            // 🔥 YOUTUBE PARITY: HLS manifest list for ABR
+            config["manifests"] = [[
+                "fileName": "index.m3u8",
+                "type": "HLS",
+                "muxStreams": muxStreams.map { $0["key"] as! String }
+            ]]
+        }
         
+        request["config"] = config
         return request
+    }
+    
+    // MARK: - 📺 HLS MANIFEST GENERATION (YouTube Parity)
+    
+    /// Generate HLS master manifest (.m3u8) for adaptive bitrate streaming
+    func generateHLSManifest(videoID: String, profiles: [TranscodingProfile] = TranscodingProfile.h264Profiles) async throws -> String {
+        var masterPlaylist = "#EXTM3U\n#EXT-X-VERSION:6\n#EXT-X-INDEPENDENT-SEGMENTS\n\n"
+        
+        for profile in profiles where profile.isHLS {
+            let bandwidth = profile.bitrate
+            let resolution = "\(profile.width)x\(profile.height)"
+            let codecs = profile.codec == .h264 ? "avc1.64001f" : profile.codec == .hevc ? "hev1.1.6.L93.B0" : profile.codec == .vp9 ? "vp09.00.10.08" : "av01.0.01M.08"
+            
+            masterPlaylist += "#EXT-X-STREAM-INF:BANDWIDTH=\(bandwidth),RESOLUTION=\(resolution),CODECS=\"\(codecs)\"\n"
+            masterPlaylist += "hls_\(profile.name)/index.m3u8\n\n"
+        }
+        
+        print("📺 [HLS] Generated master manifest with \(profiles.count) renditions for video: \(videoID)")
+        return masterPlaylist
+    }
+    
+    /// Generate DASH manifest (.mpd) for MPEG-DASH streaming
+    func generateDASHManifest(videoID: String, profiles: [TranscodingProfile] = TranscodingProfile.h264Profiles, duration: TimeInterval) async throws -> String {
+        let durationPT = formatDASHDuration(duration)
+        var mpd = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        mpd += "<MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" type=\"static\" mediaPresentationDuration=\"\(durationPT)\" maxSegmentDuration=\"PT6S\">\n"
+        mpd += "  <Period>\n"
+        
+        for profile in profiles where profile.isHLS {
+            let codecs = profile.codec == .h264 ? "avc1.64001f" : profile.codec == .hevc ? "hev1.1.6.L93.B0" : profile.codec == .vp9 ? "vp09.00.10.08" : "av01.0.01M.08"
+            mpd += "    <AdaptationSet mimeType=\"video/mp4\" contentType=\"video\" segmentAlignment=\"true\">\n"
+            mpd += "      <Representation id=\"\(profile.name)\" width=\"\(profile.width)\" height=\"\(profile.height)\" frameRate=\"\(profile.fps)\" bandwidth=\"\(profile.bitrate)\" codecs=\"\(codecs)\">\n"
+            mpd += "        <SegmentTemplate media=\"hls_\(profile.name)/segment_$Number$.ts\" duration=\"6\" startNumber=\"1\"/>\n"
+            mpd += "      </Representation>\n"
+            mpd += "    </AdaptationSet>\n"
+        }
+        
+        mpd += "  </Period>\n</MPD>"
+        print("📺 [DASH] Generated MPD manifest with \(profiles.count) adaptations for video: \(videoID)")
+        return mpd
+    }
+    
+    private func formatDASHDuration(_ seconds: TimeInterval) -> String {
+        let h = Int(seconds) / 3600
+        let m = (Int(seconds) % 3600) / 60
+        let s = Int(seconds) % 60
+        let ms = Int((seconds.truncatingRemainder(dividingBy: 1)) * 1000)
+        return String(format: "PT%02dH%02dM%02d.%03dS", h, m, s, ms)
     }
     
     // MARK: - ❌ ERRORS

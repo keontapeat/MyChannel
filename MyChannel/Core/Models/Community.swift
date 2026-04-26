@@ -120,7 +120,7 @@ enum PostType: String, CaseIterable, Codable {
 struct Poll: Identifiable, Codable, Equatable {
     let id: String
     let question: String
-    let options: [PollOption]
+    let options: [CommunityPollOption]
     let endsAt: Date?
     let allowMultipleChoices: Bool
     let totalVotes: Int
@@ -128,7 +128,7 @@ struct Poll: Identifiable, Codable, Equatable {
     init(
         id: String = UUID().uuidString,
         question: String,
-        options: [PollOption],
+        options: [CommunityPollOption],
         endsAt: Date? = nil,
         allowMultipleChoices: Bool = false
     ) {
@@ -159,7 +159,7 @@ struct Poll: Identifiable, Codable, Equatable {
 }
 
 // MARK: - Poll Option Model
-struct PollOption: Identifiable, Codable, Equatable {
+struct CommunityPollOption: Identifiable, Codable, Equatable {
     let id: String
     let text: String
     let voteCount: Int
@@ -183,7 +183,7 @@ struct PollOption: Identifiable, Codable, Equatable {
     }
     
     // MARK: - Equatable
-    static func == (lhs: PollOption, rhs: PollOption) -> Bool {
+    static func == (lhs: CommunityPollOption, rhs: CommunityPollOption) -> Bool {
         lhs.id == rhs.id
     }
 }
@@ -586,7 +586,7 @@ class MockCommunityService: CommunityServiceProtocol, ObservableObject {
         }
         
         var updatedOptions = poll.options
-        updatedOptions[optionIndex] = PollOption(
+        updatedOptions[optionIndex] = CommunityPollOption(
             id: updatedOptions[optionIndex].id,
             text: updatedOptions[optionIndex].text,
             voteCount: updatedOptions[optionIndex].voteCount + 1,
@@ -663,10 +663,10 @@ extension CommunityPost {
             poll: Poll(
                 question: "What's your favorite digital art software?",
                 options: [
-                    PollOption(text: "Procreate", voteCount: 145),
-                    PollOption(text: "Adobe Photoshop", voteCount: 89),
-                    PollOption(text: "Clip Studio Paint", voteCount: 67),
-                    PollOption(text: "Other", voteCount: 23)
+                    CommunityPollOption(text: "Procreate", voteCount: 145),
+                    CommunityPollOption(text: "Adobe Photoshop", voteCount: 89),
+                    CommunityPollOption(text: "Clip Studio Paint", voteCount: 67),
+                    CommunityPollOption(text: "Other", voteCount: 23)
                 ],
                 endsAt: Calendar.current.date(byAdding: .day, value: 1, to: Date())
             ),

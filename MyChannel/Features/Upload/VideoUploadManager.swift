@@ -392,7 +392,7 @@ class VideoUploadManager: ObservableObject {
                 }
                 
                 Task {
-                    await VideoPlaybackReadinessService.shared.prepareForPlayback(video: uploadedVideo)
+                    _ = try? await VideoPlaybackReadinessService.shared.checkReadiness(videoId: uploadedVideo.id, userBandwidth: nil)
                 }
             }
             // Upload captions/dubs if any were attached
@@ -500,11 +500,15 @@ class VideoUploadManager: ObservableObject {
             let storage = Storage.storage()
             let rootRef = storage.reference()
             let videoId = UUID().uuidString
-            let videoRef = rootRef.child("\(AppConfig.Storage.videoPath)/\(videoId).mp4")
+            let videoRef = rootRef.child("\(AppConfig.Storage.videoPath)/\(creatorUser.id)/\(videoId)/video.mp4")
             
             // Prepare metadata (content type)
             let storageMetadata = StorageMetadata()
             storageMetadata.contentType = "video/mp4"
+            storageMetadata.customMetadata = [
+                "ownerUid": creatorUser.id,
+                "videoId": videoId
+            ]
             
             // Start upload task
             let uploadTask = videoRef.putData(data, metadata: storageMetadata)
@@ -538,9 +542,13 @@ class VideoUploadManager: ObservableObject {
             // Optional: Upload thumbnail if available
             var thumbnailURLString: String? = nil
             if let thumbData = metadata.thumbnailData {
-                let thumbRef = rootRef.child("\(AppConfig.Storage.thumbnailPath)/\(videoId).jpg")
+                let thumbRef = rootRef.child("\(AppConfig.Storage.thumbnailPath)/\(creatorUser.id)/\(videoId)/thumb.jpg")
                 let thumbMeta = StorageMetadata()
                 thumbMeta.contentType = "image/jpeg"
+                thumbMeta.customMetadata = [
+                    "ownerUid": creatorUser.id,
+                    "videoId": videoId
+                ]
                 let thumbTask = thumbRef.putData(thumbData, metadata: thumbMeta)
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                     thumbTask.observe(.success) { _ in
@@ -571,6 +579,8 @@ class VideoUploadManager: ObservableObject {
                 tags: metadata.tags,
                 isPublic: metadata.isPublic && !metadata.isUnlisted,
                 visibility: metadata.isUnlisted ? .unlisted : (metadata.isPublic ? .public : .private),
+                scheduledAt: metadata.scheduledDate,
+                language: "en",
                 // 🔥 FIX: Always enable monetization for testing
                 monetization: Video.MonetizationSettings(
                     isMonetized: true, // Always true for testing
@@ -584,14 +594,17 @@ class VideoUploadManager: ObservableObject {
                     totalRevenue: 0.0
                 ),
                 ageRestricted: metadata.ageRestricted,
-                madeForKids: metadata.madeForKids
+                madeForKids: metadata.madeForKids,
+                allowComments: metadata.allowComments,
+                filmingLocation: metadata.filmingLocation.isEmpty ? nil : metadata.filmingLocation,
+                isPremiere: metadata.isPremiere
             )
             
             // Trigger AI analysis (non-blocking)
             Task {
                 // Build the canonical GCS URI using the Firebase Storage bucket and known path
                 #if canImport(FirebaseStorage)
-                let gcsUri = "gs://\(rootRef.bucket)/\(AppConfig.Storage.videoPath)/\(videoId).mp4"
+                let gcsUri = "gs://\(rootRef.bucket)/\(AppConfig.Storage.videoPath)/\(creatorUser.id)/\(videoId)/video.mp4"
                 if let result = try? await AIService.shared.analyzeVideo(gcsUri: gcsUri, videoId: videoId, durationSeconds: self.videoDuration) {
                     // Optionally request virality score
                     let score = try? await AIService.shared.scoreVirality(

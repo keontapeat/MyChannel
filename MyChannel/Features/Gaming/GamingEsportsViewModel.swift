@@ -17,8 +17,8 @@ final class GamingEsportsViewModel: ObservableObject {
     // MARK: - Published Properties
     
     // Tournaments
-    @Published var featuredTournament: EsportsTournament?
-    @Published var activeTournaments: [EsportsTournament] = []
+    @Published var featuredTournament: GamingEsportsTournament?
+    @Published var activeTournaments: [GamingEsportsTournament] = []
     @Published var hasLiveTournaments = false
     
     // VS Matches
@@ -443,9 +443,9 @@ extension GamingEsportsViewModel {
 // MARK: - Sample Helpers
 
 private extension GamingEsportsViewModel {
-    static func sampleTournaments() -> (list: [EsportsTournament], featured: EsportsTournament) {
+    static func sampleTournaments() -> (list: [GamingEsportsTournament], featured: GamingEsportsTournament) {
         let tournaments = [
-            EsportsTournament(
+            GamingEsportsTournament(
                 id: "spring-championship",
                 name: "Spring Championship",
                 gameName: "Multi-Game",
@@ -457,7 +457,7 @@ private extension GamingEsportsViewModel {
                 startDate: Date().addingTimeInterval(60 * 60 * 38),
                 isLive: false
             ),
-            EsportsTournament(
+            GamingEsportsTournament(
                 id: "pro-league",
                 name: "Pro League Finals",
                 gameName: "Fortnite",
@@ -469,7 +469,7 @@ private extension GamingEsportsViewModel {
                 startDate: Date().addingTimeInterval(60 * 60 * 125),
                 isLive: false
             ),
-            EsportsTournament(
+            GamingEsportsTournament(
                 id: "masters",
                 name: "Masters Tournament",
                 gameName: "Valorant",

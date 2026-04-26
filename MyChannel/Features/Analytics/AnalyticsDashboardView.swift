@@ -404,8 +404,8 @@ struct AnalyticsDashboardView: View {
     }
 
     // MARK: - Export
-    private enum ExportFormat { case csv, json, pdf }
-    private func exportAnalytics(as format: ExportFormat) {
+    private enum DashboardExportFormat { case csv, json, pdf }
+    private func exportAnalytics(as format: DashboardExportFormat) {
         guard let analytics = channelAnalytics else { return }
         switch format {
         case .csv:

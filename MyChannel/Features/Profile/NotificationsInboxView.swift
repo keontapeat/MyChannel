@@ -8,7 +8,7 @@ struct NotificationsInboxView: View {
     var body: some View {
         NavigationStack {
             List {
-                ForEach(inbox.items) { item in
+                ForEach(inbox.notifications) { item in
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: icon(for: item.type))
                             .foregroundColor(.blue)
@@ -21,13 +21,13 @@ struct NotificationsInboxView: View {
                                 .foregroundColor(.secondary)
                         }
                         Spacer()
-                        if !item.read {
+                        if !item.isRead {
                             Circle().fill(Color.blue).frame(width: 8, height: 8)
                         }
                     }
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if let uid = appState.currentUser?.id { Task { await inbox.markRead(userId: uid, id: item.id, read: true) } }
+                        Task { try? await inbox.markRead(notificationId: item.id) }
                     }
                 }
             }
@@ -44,16 +44,23 @@ struct NotificationsInboxView: View {
                 }
             }
         }
-        .onAppear { if let uid = appState.currentUser?.id { inbox.listen(userId: uid) } }
-        .onDisappear { inbox.stop() }
+        .task {
+            if let uid = appState.currentUser?.id {
+                try? await inbox.fetchNotifications(userId: uid)
+            }
+        }
     }
 
-    private func icon(for type: String) -> String {
+    private func icon(for type: NotificationItem.NotificationType) -> String {
         switch type {
-        case "like": return "heart.fill"
-        case "comment": return "bubble.right.fill"
-        case "upload": return "arrow.up.circle.fill"
-        default: return "bell.fill"
+        case .like: return "heart.fill"
+        case .comment: return "bubble.right.fill"
+        case .newVideo: return "arrow.up.circle.fill"
+        case .liveStart: return "livephoto"
+        case .subscriber: return "person.badge.plus"
+        case .mention: return "at"
+        case .system: return "gear"
+        case .milestone: return "flag.fill"
         }
     }
 }

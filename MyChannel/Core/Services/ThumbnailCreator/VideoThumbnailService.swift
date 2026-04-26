@@ -269,7 +269,7 @@ final class VideoThumbnailService: ObservableObject {
     
     func exportThumbnail(
         _ image: UIImage,
-        format: ExportFormat = .png,
+        format: VideoThumbnailExportFormat = .png,
         quality: CGFloat = 0.95
     ) -> Data? {
         switch format {
@@ -280,7 +280,7 @@ final class VideoThumbnailService: ObservableObject {
         }
     }
     
-    enum ExportFormat {
+    enum VideoThumbnailExportFormat {
         case png
         case jpg
     }

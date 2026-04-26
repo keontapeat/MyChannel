@@ -665,12 +665,34 @@ class AdvancedAnalyticsService: ObservableObject {
         return 15.7
     }
 
-    // Placeholder calculations
-    private func calculatePerformanceScore(_ video: VideoAnalytics) -> Double { return 0.85 }
-    private func generateOptimizationSuggestions(_ video: VideoAnalytics) -> [String] { return ["Improve thumbnail", "Add more hashtags"] }
-    private func calculateViralPotential(_ video: VideoAnalytics) -> Double { return 0.73 }
-    private func predictBestPostingTime(_ video: VideoAnalytics) -> String { return "18:00" }
-    private func calculateAudienceMatch(_ video: VideoAnalytics) -> Double { return 0.89 }
+    private func calculatePerformanceScore(_ video: VideoAnalytics) -> Double {
+        let engagement = video.averageWatchTime / video.duration
+        let ctr = video.clickThroughRate
+        let retention = video.retentionRate
+        return (engagement * 0.4 + ctr * 0.3 + retention * 0.3) * 100
+    }
+    private func generateOptimizationSuggestions(_ video: VideoAnalytics) -> [String] {
+        var suggestions: [String] = []
+        if video.averageWatchTime < video.duration * 0.3 { suggestions.append("Improve video pacing in first 30 seconds") }
+        if video.clickThroughRate < 0.05 { suggestions.append("Test more compelling thumbnails") }
+        if video.retentionRate < 0.5 { suggestions.append("Add engaging hooks throughout") }
+        if Double(video.shareCount) < Double(video.viewCount) * 0.01 { suggestions.append("Add call-to-action for sharing") }
+        return suggestions.isEmpty ? ["Content is performing well"] : suggestions
+    }
+    private func calculateViralPotential(_ video: VideoAnalytics) -> Double {
+        let growthRate = video.viewCount > 0 ? Double(video.shareCount) / Double(video.viewCount) : 0
+        let engagement = video.averageWatchTime / video.duration
+        return min(1.0, (growthRate * 0.5 + engagement * 0.5))
+    }
+    private func predictBestPostingTime(_ video: VideoAnalytics) -> String {
+        let hour = video.peakEngagementHour ?? 18
+        return String(format: "%02d:00", hour)
+    }
+    private func calculateAudienceMatch(_ video: VideoAnalytics) -> Double {
+        let likeRatio = video.viewCount > 0 ? Double(video.likeCount) / Double(video.viewCount) : 0
+        let commentRatio = video.viewCount > 0 ? Double(video.commentCount) / Double(video.viewCount) : 0
+        return min(1.0, (likeRatio * 0.6 + commentRatio * 0.4) * 10)
+    }
 }
 
 // MARK: - Analytics Models (Non-duplicate definitions)

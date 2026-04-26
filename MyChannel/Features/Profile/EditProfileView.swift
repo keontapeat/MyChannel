@@ -229,21 +229,7 @@ struct EditProfileView: View {
                     Spacer()
                 }
                 
-                Picker("Cover Type", selection: $isVideoCover) {
-                    Text("Photo").tag(false)
-                    Text("Video").tag(true)
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: isVideoCover) { _ in
-                    hasUnsavedChanges = true
-                    // Clear opposite selection when switching modes
-                    if isVideoCover {
-                        selectedDefaultBannerImageURL = nil
-                    } else {
-                        selectedDefaultBannerVideoURL = nil
-                        bannerVideoLocalURL = nil
-                    }
-                }
+                coverTypeSelector
 
                 if isVideoCover {
                     // Video options
@@ -288,38 +274,36 @@ struct EditProfileView: View {
                         .buttonStyle(.plain)
                     }
 
-                    Button(action: {}) {
-                        ZStack {
-                            if let urlStr = selectedDefaultBannerVideoURL, let url = URL(string: urlStr) {
-                                VideoBannerPreview(url: url)
-                            } else if let local = bannerVideoLocalURL {
-                                VideoBannerPreview(url: local)
-                            } else if let currentRemote = user.bannerVideoURL, let url = URL(string: currentRemote) {
-                                VideoBannerPreview(url: url)
-                            } else {
-                                Rectangle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [AppTheme.Colors.primary.opacity(0.3), AppTheme.Colors.secondary.opacity(0.3)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
+                    ZStack {
+                        if let urlStr = selectedDefaultBannerVideoURL, let url = URL(string: urlStr) {
+                            VideoBannerPreview(url: url)
+                        } else if let local = bannerVideoLocalURL {
+                            VideoBannerPreview(url: local)
+                        } else if let currentRemote = user.bannerVideoURL, let url = URL(string: currentRemote) {
+                            VideoBannerPreview(url: url)
+                        } else {
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [AppTheme.Colors.primary.opacity(0.3), AppTheme.Colors.secondary.opacity(0.3)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
                                     )
-                                    .overlay(
-                                        Image(systemName: "video.fill")
-                                            .font(.system(size: 36))
-                                            .foregroundColor(.white)
-                                    )
-                            }
+                                )
+                                .overlay(
+                                    Image(systemName: "video.fill")
+                                        .font(.system(size: 36))
+                                        .foregroundColor(.white)
+                                )
                         }
-                        .frame(height: 140)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
-                        )
                     }
-                    .buttonStyle(.plain)
+                    .frame(height: 140)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
+                    )
+                    .allowsHitTesting(false)
                 } else {
                     // Photo source buttons
                     HStack(spacing: 12) {
@@ -350,43 +334,40 @@ struct EditProfileView: View {
                         .buttonStyle(.plain)
                     }
 
-                    Button(action: {}) {
-                        ZStack {
-                            if let selectedImage = selectedBannerUIImage {
-                                Image(uiImage: selectedImage)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } else if let urlStr = selectedDefaultBannerImageURL, let url = URL(string: urlStr) {
-                                CachedAsyncImage(url: url) { image in
-                                    image.resizable().aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Rectangle().fill(AppTheme.Colors.surface)
-                                }
-                            } else if let bannerURL = user.bannerImageURL {
-                                CachedAsyncImage(url: URL(string: bannerURL)) { image in
-                                    image.resizable().aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Rectangle().fill(AppTheme.Colors.surface)
-                                }
-                            } else {
-                                // Clean, professional placeholder - no gradient
-                                Rectangle()
-                                    .fill(AppTheme.Colors.surface)
-                                    .overlay(
-                                        Image(systemName: "photo")
-                                            .font(.system(size: 36))
-                                            .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.5))
-                                    )
+                    ZStack {
+                        if let selectedImage = selectedBannerUIImage {
+                            Image(uiImage: selectedImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } else if let urlStr = selectedDefaultBannerImageURL, let url = URL(string: urlStr) {
+                            CachedAsyncImage(url: url) { image in
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                Rectangle().fill(AppTheme.Colors.surface)
                             }
+                        } else if let bannerURL = user.bannerImageURL {
+                            CachedAsyncImage(url: URL(string: bannerURL)) { image in
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                Rectangle().fill(AppTheme.Colors.surface)
+                            }
+                        } else {
+                            Rectangle()
+                                .fill(AppTheme.Colors.surface)
+                                .overlay(
+                                    Image(systemName: "photo")
+                                        .font(.system(size: 36))
+                                        .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.5))
+                                )
                         }
-                        .frame(height: 140)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
-                        )
                     }
-                    .buttonStyle(.plain)
+                    .frame(height: 140)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 1)
+                    )
+                    .allowsHitTesting(false)
                 }
             }
             
@@ -487,6 +468,47 @@ struct EditProfileView: View {
                 }
             )
         }
+    }
+    
+    private var coverTypeSelector: some View {
+        HStack(spacing: 0) {
+            coverTypeButton(title: "Photo", isSelected: !isVideoCover) {
+                setCoverType(video: false)
+            }
+            
+            coverTypeButton(title: "Video", isSelected: isVideoCover) {
+                setCoverType(video: true)
+            }
+        }
+        .padding(2)
+        .background(Color(.systemGray5), in: Capsule())
+    }
+    
+    private func coverTypeButton(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 7)
+                .background(isSelected ? Color.white : Color.clear, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+    }
+    
+    private func setCoverType(video: Bool) {
+        guard isVideoCover != video else { return }
+        isVideoCover = video
+        hasUnsavedChanges = true
+        if video {
+            selectedDefaultBannerImageURL = nil
+        } else {
+            selectedDefaultBannerVideoURL = nil
+            bannerVideoLocalURL = nil
+            selectedBannerVideo = nil
+        }
+        HapticManager.shared.impact(style: .light)
     }
     
     // MARK: - Form Fields Section

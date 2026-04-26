@@ -5,14 +5,21 @@ struct ShortsFeedView: View {
     @State private var isLoading = true
 
     var body: some View {
-        VerticalShortsView()
-        .tabViewStyle(.page(indexDisplayMode: .never))
+        Group {
+            if isLoading {
+                ProgressView()
+            } else {
+                VerticalShortsView()
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+            }
+        }
         .task { await loadShorts() }
     }
 
     private func loadShorts() async {
-        // TODO: Fetch from Firestore shorts collection with prefetch
+        let videos = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 50)
         await MainActor.run {
+            shorts = videos.filter { $0.duration <= 60 }
             isLoading = false
         }
     }
@@ -23,4 +30,3 @@ struct ShortsFeedView_Previews: PreviewProvider {
         ShortsFeedView()
     }
 }
-

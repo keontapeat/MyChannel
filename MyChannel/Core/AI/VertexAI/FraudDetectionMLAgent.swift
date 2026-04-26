@@ -32,7 +32,7 @@ final class FraudDetectionMLAgent: ObservableObject {
     // MARK: - Real-Time Fraud Detection
     
     /// Detect fraud with 99.99% accuracy
-    func detectFraud(click: ClickEvent) async -> MLFraudAnalysis {
+    func detectFraud(click: AdClickEvent) async -> MLFraudAnalysis {
         let startTime = Date()
         
         // Extract comprehensive fraud features
@@ -93,7 +93,7 @@ final class FraudDetectionMLAgent: ObservableObject {
     }
     
     /// Detect click farm patterns
-    func detectClickFarm(clicks: [ClickEvent]) async -> ClickFarmAnalysis {
+    func detectClickFarm(clicks: [AdClickEvent]) async -> ClickFarmAnalysis {
         // Analyze patterns across multiple clicks
         let features = extractClickFarmFeatures(clicks: clicks)
         
@@ -140,7 +140,7 @@ final class FraudDetectionMLAgent: ObservableObject {
     
     // MARK: - Feature Engineering
     
-    private func extractFraudFeatures(click: ClickEvent) -> [String: Double] {
+    private func extractFraudFeatures(click: AdClickEvent) -> [String: Double] {
         var features: [String: Double] = [:]
         
         // Click behavior features (15 dimensions)
@@ -209,7 +209,7 @@ final class FraudDetectionMLAgent: ObservableObject {
         return features
     }
     
-    private func extractClickFarmFeatures(clicks: [ClickEvent]) -> [String: Double] {
+    private func extractClickFarmFeatures(clicks: [AdClickEvent]) -> [String: Double] {
         var features: [String: Double] = [:]
         
         // Volume features
@@ -347,7 +347,7 @@ final class FraudDetectionMLAgent: ObservableObject {
     
     // MARK: - Feature Store
     
-    func recordFraudOutcome(click: ClickEvent, isFraud: Bool) async {
+    func recordFraudOutcome(click: AdClickEvent, isFraud: Bool) async {
         let outcome: [String: Any] = [
             "timestamp": click.timestamp.timeIntervalSince1970,
             "click_id": click.id,

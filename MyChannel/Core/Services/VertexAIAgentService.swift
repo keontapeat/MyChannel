@@ -451,15 +451,14 @@ class VertexAIAgentService: ObservableObject {
     // MARK: - 📊 Parsing Response
     
     private func parseRecommendationResponse(_ response: String) -> RecommendationResponse {
-        // Parse JSON from agent response
-        // For now, return mock data
-        // TODO: Implement proper JSON parsing
-        
-        return RecommendationResponse(
-            videoIDs: [],
-            reasons: [],
-            confidence: 0.85
-        )
+        guard let data = response.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let videoIDs = json["videoIDs"] as? [String],
+              let reasons = json["reasons"] as? [String],
+              let confidence = json["confidence"] as? Double else {
+            return RecommendationResponse(videoIDs: [], reasons: ["AI response parsing failed"], confidence: 0)
+        }
+        return RecommendationResponse(videoIDs: videoIDs, reasons: reasons, confidence: confidence)
     }
     
     private func parseCoachingResponse(_ response: String, currentTitle: String) -> CoachingResponse {

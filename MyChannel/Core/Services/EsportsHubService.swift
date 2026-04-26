@@ -27,7 +27,7 @@ struct EsportsTeam: Codable, Identifiable, Equatable {
     let gameId: EsportsGameId
 }
 
-struct EsportsTournament: Codable, Identifiable, Equatable {
+struct EsportsHubTournament: Codable, Identifiable, Equatable {
     let id: String
     let name: String
     let gameId: EsportsGameId
@@ -39,7 +39,7 @@ struct EsportsTournament: Codable, Identifiable, Equatable {
     let liveStreamId: String?
 }
 
-struct BracketMatch: Codable, Identifiable, Equatable {
+struct EsportsBracketMatch: Codable, Identifiable, Equatable {
     let id: String
     let tournamentId: String
     let round: Int
@@ -57,8 +57,8 @@ final class EsportsHubService: ObservableObject {
     static let shared = EsportsHubService()
     private init() {}
 
-    @Published private(set) var featuredTournaments: [EsportsTournament] = []
-    @Published private(set) var latestBrackets: [String: [BracketMatch]] = [:]  // by tournamentId
+    @Published private(set) var featuredTournaments: [EsportsHubTournament] = []
+    @Published private(set) var latestBrackets: [String: [EsportsBracketMatch]] = [:]  // by tournamentId
 
     // MARK: - Tournaments
 
@@ -85,7 +85,7 @@ final class EsportsHubService: ObservableObject {
         )
         featuredTournaments = (r.tournaments ?? []).compactMap { t in
             guard let game = EsportsGameId(rawValue: t.game_id) else { return nil }
-            return EsportsTournament(
+            return EsportsHubTournament(
                 id: t.id,
                 name: t.name,
                 gameId: game,
@@ -99,7 +99,7 @@ final class EsportsHubService: ObservableObject {
         }
     }
 
-    func loadBracket(tournamentId: String) async throws -> [BracketMatch] {
+    func loadBracket(tournamentId: String) async throws -> [EsportsBracketMatch] {
         guard AppConfig.Features.enableEsportsHub else { return [] }
         struct Request: Encodable { let task: String; let tournamentId: String }
         struct RawM: Decodable {
@@ -121,7 +121,7 @@ final class EsportsHubService: ObservableObject {
             body: Request(task: "bracket", tournamentId: tournamentId)
         )
         let list = (r.matches ?? []).map {
-            BracketMatch(
+            EsportsBracketMatch(
                 id: $0.id,
                 tournamentId: tournamentId,
                 round: $0.round,

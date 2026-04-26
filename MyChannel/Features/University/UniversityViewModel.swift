@@ -363,7 +363,7 @@ class UniversityViewModel: ObservableObject {
     
     // MARK: - AI Verification
     
-    func verifyWatchSession(session: WatchSession) async -> AIVerificationResult {
+    func verifyWatchSession(session: UniversityWatchSession) async -> AIVerificationResult {
         // Use GPT-5 or Claude to verify the watch session
         let prompt = """
         Analyze this learning session:

@@ -42,6 +42,9 @@ struct CeremonyCountdownHero: View {
     
     @State private var timeRemaining: TimeInterval = 0
     @State private var starlightOffset: CGFloat = 0
+    private let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
+    private let particleXOffsets: [CGFloat] = [18, 42, 76, 104, 132, 168, 196, 228, 256, 284, 318, 344, 372, 406, 434, 462, 496, 524, 552, 586]
+    private let particleOpacities: [Double] = [0.22, 0.35, 0.28, 0.48, 0.31, 0.26, 0.44, 0.33, 0.57, 0.24, 0.39, 0.29, 0.53, 0.27, 0.42, 0.3, 0.5, 0.25, 0.37, 0.46]
     
     var body: some View {
         ZStack {
@@ -64,10 +67,10 @@ struct CeremonyCountdownHero: View {
                         .fill(Color.white.opacity(0.3))
                         .frame(width: 3, height: 3)
                         .offset(
-                            x: CGFloat.random(in: 0...geometry.size.width),
+                            x: min(particleXOffsets[index], max(0, geometry.size.width - 8)),
                             y: starlightOffset + CGFloat(index * 30)
                         )
-                        .opacity(Double.random(in: 0.2...0.6))
+                        .opacity(particleOpacities[index])
                 }
             }
             
@@ -139,6 +142,9 @@ struct CeremonyCountdownHero: View {
         .padding(.horizontal, 16)
         .onAppear {
             startStarlightAnimation()
+            updateTimeRemaining()
+        }
+        .onReceive(timer) { _ in
             updateTimeRemaining()
         }
     }
@@ -215,9 +221,6 @@ struct CeremonyCountdownHero: View {
     
     private func updateTimeRemaining() {
         timeRemaining = max(0, ceremonyDate.timeIntervalSinceNow)
-        Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
-            timeRemaining = max(0, ceremonyDate.timeIntervalSinceNow)
-        }
     }
     
     private func startStarlightAnimation() {
@@ -236,6 +239,7 @@ struct NomineeCard: View {
     
     @State private var isFlipped = false
     @State private var showConfetti = false
+    private let confettiOffsets: [CGFloat] = [-92, -75, -58, -43, -26, -12, 0, 14, 29, 44, 61, 77, 90, 104, 118]
     
     var body: some View {
         ZStack {
@@ -259,7 +263,6 @@ struct NomineeCard: View {
                 .opacity(showConfetti ? 1 : 0)
                 .allowsHitTesting(false)
         )
-        .drawingGroup() // Optimize rendering for smooth 60fps
     }
     
     private var frontCard: some View {
@@ -404,7 +407,7 @@ struct NomineeCard: View {
                     .fill(Color.awardGold)
                     .frame(width: 6, height: 6)
                     .offset(
-                        x: CGFloat.random(in: -100...100),
+                        x: confettiOffsets[index],
                         y: showConfetti ? -200 : 0
                     )
                     .opacity(showConfetti ? 0 : 1)

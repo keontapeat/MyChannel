@@ -156,7 +156,7 @@ final class ThumbnailSyncService: ObservableObject {
     func exportThumbnail(
         image: UIImage,
         filename: String,
-        format: ExportFormat = .png
+        format: ThumbnailExportFormat = .png
     ) async throws -> URL {
         // Save to Photos or Files app
         let data: Data?
@@ -188,7 +188,7 @@ final class ThumbnailSyncService: ObservableObject {
         return fileURL
     }
     
-    enum ExportFormat: String {
+    enum ThumbnailExportFormat: String {
         case png
         case jpg
         case webp
@@ -198,7 +198,7 @@ final class ThumbnailSyncService: ObservableObject {
     
     func batchExport(
         images: [(image: UIImage, filename: String)],
-        format: ExportFormat = .png,
+        format: ThumbnailExportFormat = .png,
         onProgress: @escaping (Double) -> Void
     ) async throws -> [URL] {
         var urls: [URL] = []

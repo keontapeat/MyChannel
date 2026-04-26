@@ -29,19 +29,19 @@ struct CompleteAnimationToolkit {
     }
     
     struct EffectsSuite {
-        static let presets: [TransitionPreset] = []
+        static let presets: [StudioTransitionPreset] = []
         static let particleEffects: [String] = [] // Placeholder
         static let lightingPresets: [String] = [] // Placeholder
     }
     
     struct VideoEditor {
-        static let presets: [ColorGradePreset] = []
-        static let transitions: [TransitionPreset] = []
-        static let colorGrades: [ColorGradePreset] = []
+        static let presets: [StudioColorGrade] = []
+        static let transitions: [StudioTransitionPreset] = []
+        static let colorGrades: [StudioColorGrade] = []
     }
     
     struct ExportSuite {
-        static let formats: [ExportFormat] = ExportFormat.allCases
+        static let formats: [StudioExportType] = StudioExportType.allCases
     }
 }
 
@@ -96,17 +96,17 @@ enum SoundEffectCategory: String, CaseIterable {
     }
 }
 
-struct TransitionPreset: Identifiable {
+struct StudioTransitionPreset: Identifiable {
     let id: String
     let name: String
 }
 
-struct ColorGradePreset: Identifiable {
+struct StudioColorGrade: Identifiable {
     let id: String
     let name: String
 }
 
-enum ExportFormat: String, CaseIterable {
+enum StudioExportType: String, CaseIterable {
     case mp4, mov, gif, pngSequence
     
     var name: String {
@@ -118,16 +118,16 @@ enum ExportFormat: String, CaseIterable {
         }
     }
     
-    var resolution: ExportResolution {
+    var resolution: StudioExportResolution {
         switch self {
-        case .mp4, .mov: return ExportResolution(dimensions: "1920x1080")
-        case .gif: return ExportResolution(dimensions: "1280x720")
-        case .pngSequence: return ExportResolution(dimensions: "3840x2160")
+        case .mp4, .mov: return StudioExportResolution(dimensions: "1920x1080")
+        case .gif: return StudioExportResolution(dimensions: "1280x720")
+        case .pngSequence: return StudioExportResolution(dimensions: "3840x2160")
         }
     }
 }
 
-struct ExportResolution {
+struct StudioExportResolution {
     let dimensions: String
 }
 
@@ -967,7 +967,7 @@ struct EffectChip: View {
 }
 
 struct TransitionCard: View {
-    let transition: TransitionPreset
+    let transition: StudioTransitionPreset
     
     var body: some View {
         VStack(spacing: 8) {
@@ -985,7 +985,7 @@ struct TransitionCard: View {
 }
 
 struct ColorGradeCard: View {
-    let grade: ColorGradePreset
+    let grade: StudioColorGrade
     
     var body: some View {
         VStack(spacing: 8) {
@@ -1010,7 +1010,7 @@ struct ColorGradeCard: View {
 }
 
 struct ExportFormatRow: View {
-    let format: ExportFormat
+    let format: StudioExportType
     
     var body: some View {
         HStack {

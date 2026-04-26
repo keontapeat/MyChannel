@@ -24,7 +24,8 @@ struct VideoLiveThumbnailView: View {
                 LiveChannelThumbnailView(
                     streamURL: video.videoURL,
                     posterURL: video.thumbnailURL,
-                    fallbackStreamURL: nil
+                    fallbackStreamURL: nil,
+                    showsLiveBadge: video.isLiveStream
                 )
             }
         }

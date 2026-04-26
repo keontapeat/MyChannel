@@ -464,9 +464,84 @@ class LiveStreamerAwardsSystem: ObservableObject {
     private func loadRankings() {
         // Load from database
         // Calculate current rankings
-        
-        // Mock data
-        topStreamers = []
+
+        let streamers: [(name: String, display: String, category: LeaderboardCategory, hours: Double, avg: Int, peak: Int, totalViews: Int, points: Int)] = [
+            ("StreamerAlex", "Streamer Alex", .overall, 45.0, 6200, 8500, 88000, 12840),
+            ("Christian", "Christian Live", .gaming, 42.5, 5400, 7900, 84500, 11920),
+            ("Presey", "Presey", .justChatting, 39.0, 5200, 8500, 81200, 11640),
+            ("Rahfoover", "Rahfoover", .gaming, 34.0, 3100, 4200, 28000, 9540),
+            ("Mariancuck", "Mariancuck", .gaming, 31.0, 2900, 4980, 24400, 9015),
+            ("Shivayla", "Shivayla", .justChatting, 30.5, 3200, 5320, 22100, 8760),
+            ("Saotti", "Saotti", .creative, 27.0, 2600, 4220, 20500, 8320),
+            ("Skamhar", "Skamhar", .gaming, 26.0, 2400, 4960, 19800, 8010)
+        ]
+
+        let seededAchievements: [Achievement] = [
+            Achievement(title: "Stream Warrior", description: "Streamed 100+ hours this season", icon: "timer", rarity: .rare, unlockedDate: Date().addingTimeInterval(-86400 * 14), progress: nil, requirement: "100 hours streamed"),
+            Achievement(title: "Rising Star", description: "Reached 1,000+ concurrent viewers", icon: "star.fill", rarity: .epic, unlockedDate: Date().addingTimeInterval(-86400 * 7), progress: nil, requirement: "1,000 concurrent viewers"),
+            Achievement(title: "Viral Moment", description: "Clipped a moment that blew up", icon: "rocket.fill", rarity: .legendary, unlockedDate: nil, progress: 0.72, requirement: "1M clip views")
+        ]
+
+        let seededBadges: [Badge] = [
+            Badge(name: "Verified Streamer", description: "Official verified status", icon: "checkmark.seal.fill", color: .blue, earnedDate: Date().addingTimeInterval(-86400 * 60), displayOnProfile: true),
+            Badge(name: "Top 100", description: "Ranked in Top 100", icon: "trophy.fill", color: .yellow, earnedDate: Date().addingTimeInterval(-86400 * 18), displayOnProfile: true),
+            Badge(name: "Award Winner", description: "Won a streamer award", icon: "medal.fill", color: .orange, earnedDate: Date().addingTimeInterval(-86400 * 9), displayOnProfile: true)
+        ]
+
+        topStreamers = streamers.enumerated().map { index, item in
+            let user = User(
+                id: "streamer-\(index + 1)",
+                username: item.name,
+                displayName: item.display,
+                email: "\(item.name.lowercased())@mychannel.live",
+                profileImageURL: nil,
+                bio: "Elite \(item.category.rawValue.lowercased()) streamer dominating the charts.",
+                subscriberCount: Int(Double(item.avg) * 3.2),
+                videoCount: 140 + index * 8,
+                isVerified: true,
+                isCreator: true,
+                totalViews: item.totalViews
+            )
+
+            let categoryScores: [AwardCategory: Int] = [
+                .streamerOfTheYear: max(70, 100 - index * 4),
+                .mostWatchedStreamer: max(66, 97 - index * 3),
+                item.category == .gaming ? .gamingStreamer : item.category == .justChatting ? .justChattingStreamer : item.category == .creative ? .creativeStreamer : .streamerOfTheYear: max(64, 94 - index * 2)
+            ]
+
+            return StreamerRanking(
+                id: user.id,
+                streamer: user,
+                rank: index + 1,
+                points: item.points,
+                previousRank: max(1, index + 2),
+                totalHoursStreamed: item.hours,
+                averageViewers: item.avg,
+                peakViewers: item.peak,
+                totalViews: item.totalViews,
+                uniqueViewers: Int(Double(item.totalViews) * 0.72),
+                chatMessagesPerMinute: Double(55 - index * 4),
+                subscriptionCount: 800 - index * 41,
+                giftsReceived: 220 - index * 17,
+                clipsCreated: 30 - index,
+                viralMoments: max(1, 8 - index),
+                categoryScores: categoryScores,
+                achievements: seededAchievements,
+                badges: seededBadges
+            )
+        }
+
+        myRanking = topStreamers.dropFirst(3).first
+        myAchievements = seededAchievements + [
+            Achievement(title: "24 Hour Warrior", description: "Completed a marathon stream", icon: "moon.stars.fill", rarity: .epic, unlockedDate: Date().addingTimeInterval(-86400 * 4), progress: nil, requirement: "24-hour stream")
+        ]
+        myBadges = seededBadges
+
+        currentSeason.winners = [
+            Winner(category: .streamerOfTheYear, streamer: topStreamers[0].streamer, acceptanceSpeech: "We built this with the community.", clipURL: nil),
+            Winner(category: .gamingStreamer, streamer: topStreamers[1].streamer, acceptanceSpeech: "Gaming is bigger than ever.", clipURL: nil),
+            Winner(category: .justChattingStreamer, streamer: topStreamers[2].streamer, acceptanceSpeech: "The chat carried this season.", clipURL: nil)
+        ]
     }
 }
 

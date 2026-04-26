@@ -226,8 +226,8 @@ class VideoPlayerManager: ObservableObject {
         } else {
             // 🔥🔥🔥 THERMONUCLEAR: Ultra-optimized player setup
             
-            // 🔥 PERF: Try to get pre-loaded asset from pool first
-            let asset: AVURLAsset
+            // 🔥 YOUTUBE PARITY: Try HLS manifest URL first for adaptive streaming
+            var asset: AVURLAsset
             if let preloadedAsset = PlayerPoolManager.shared.getPreloadedAsset(for: video.videoURL) {
                 asset = preloadedAsset
                 print("⚡ [VideoPlayer] Using PRE-LOADED asset (instant!)")
@@ -236,6 +236,27 @@ class VideoPlayerManager: ObservableObject {
                     AVURLAssetPreferPreciseDurationAndTimingKey: true
                 ])
                 asset.resourceLoader.preloadsEligibleContentKeys = true
+            }
+            var usingHLS = false
+            
+            // Check if HLS manifest is available (.m3u8)
+            if AppConfig.Features.enableHLSManifests {
+                let hlsURLString = video.videoURL.replacingOccurrences(of: ".mp4", with: "/index.m3u8")
+                if let hlsURL = URL(string: hlsURLString), hlsURLString != video.videoURL {
+                    // Try HLS first — AVPlayer natively supports it with ABR
+                    if let preloadedAsset = PlayerPoolManager.shared.getPreloadedAsset(for: hlsURLString) {
+                        asset = preloadedAsset
+                        usingHLS = true
+                        print("⚡ [VideoPlayer] Using PRE-LOADED HLS asset (instant ABR!)")
+                    } else {
+                        asset = AVURLAsset(url: hlsURL, options: [
+                            AVURLAssetPreferPreciseDurationAndTimingKey: true
+                        ])
+                        asset.resourceLoader.preloadsEligibleContentKeys = true
+                        usingHLS = true
+                        print("📺 [VideoPlayer] Using HLS manifest for ABR streaming")
+                    }
+                }
             }
             
             // Create player item with THERMONUCLEAR buffer settings

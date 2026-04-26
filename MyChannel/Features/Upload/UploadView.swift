@@ -410,38 +410,30 @@ struct UploadView: View {
     }
     
     private var enhancedProgressHeader: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
                 ForEach(0..<4) { index in
-                    ZStack {
-                        Circle()
-                            .fill(index <= stepIndex ? AppTheme.Colors.primary : AppTheme.Colors.surface)
-                            .frame(width: 8, height: 8)
-                        
-                        if index < stepIndex {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 6, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-                    }
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: stepIndex)
-                    
-                    if index < 3 {
-                        Rectangle()
-                            .fill(index < stepIndex ? AppTheme.Colors.primary : AppTheme.Colors.surface)
-                            .frame(height: 2)
-                            .animation(.easeInOut(duration: 0.4), value: stepIndex)
-                    }
+                    Capsule()
+                        .fill(index <= stepIndex ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 4)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: stepIndex)
                 }
             }
-            .padding(.horizontal, 60)
+            .padding(.horizontal, 16)
             
-            Text(stepTitle)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
+            VStack(spacing: 2) {
+                Text(stepTitle)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                Text(stepDescription)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
         }
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 0))
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        .background(Color(.systemBackground))
     }
     
     private var stepIndex: Int {
@@ -587,6 +579,13 @@ struct UploadView: View {
                         }
                     }
                 }
+                .padding(16)
+                .background(AppTheme.Colors.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(AppTheme.Colors.divider.opacity(0.25), lineWidth: 1)
+                )
                 .padding(.horizontal, 20)
                 
                 videoInfoSummary
@@ -623,13 +622,14 @@ struct UploadView: View {
             editingActionButtons
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 14)
         .background(
-            RoundedRectangle(cornerRadius: 20)
+            Rectangle()
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
+                    Rectangle()
+                        .fill(AppTheme.Colors.background.opacity(0.82))
                 )
         )
     }
@@ -697,9 +697,9 @@ struct UploadView: View {
             Image(systemName: "arrow.right").font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
+        .frame(height: 54)
         .background(AppTheme.Colors.primary)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
         .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 4)
         .scaleEffect(isAnimating ? 0.98 : 1.0)
         .animation(.easeInOut(duration: 0.1), value: isAnimating)
@@ -948,16 +948,28 @@ struct UploadView: View {
                 Text(uploadManager.videoDuration > 0 ? formattedTime(uploadManager.videoDuration) : "No video")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
-                Text("Ready to edit")
+                Text(uploadManager.title.isEmpty ? "Ready to edit" : uploadManager.title)
                     .font(.system(size: 12))
                     .foregroundColor(AppTheme.Colors.textSecondary)
+                    .lineLimit(2)
+                Text(uploadManager.fileSizeMB > 0 ? String(format: "%.1f MB · %@", uploadManager.fileSizeMB, creationMode == .flicks ? "Flicks" : "Standard upload") : (creationMode == .flicks ? "Flicks upload" : "Standard upload"))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textTertiary)
             }
 
             Spacer()
+
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.primary)
         }
-        .padding(12)
+        .padding(14)
         .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(AppTheme.Colors.divider.opacity(0.25), lineWidth: 1)
+        )
     }
 
     private func minimalSecondaryButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
@@ -1044,7 +1056,14 @@ struct UploadView: View {
     }
 
     private var uploadActionBar: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
+            HStack {
+                Text(uploadManager.title.isEmpty ? "Add a title to enable upload" : "Your upload is ready to publish")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                Spacer()
+            }
+
             Button {
                 HapticManager.shared.impact(style: .heavy)
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
@@ -1072,15 +1091,16 @@ struct UploadView: View {
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 15)
+                .frame(height: 54)
                 .background(uploadManager.title.isEmpty ? AppTheme.Colors.textTertiary : AppTheme.Colors.textPrimary)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: 18))
             }
             .buttonStyle(.plain)
             .disabled(uploadManager.title.isEmpty)
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 14)
         .background(
             Rectangle()
                 .fill(.ultraThinMaterial)

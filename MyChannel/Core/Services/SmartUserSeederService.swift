@@ -8,6 +8,9 @@
 
 import Foundation
 import SwiftUI
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 /// 🔥 SMART USER SEEDING SERVICE
 /// Fills the app with AI-generated realistic users until real users replace them
@@ -392,11 +395,15 @@ class SmartUserSeederService: ObservableObject {
     
     // MARK: - Count Real Users
     private func countRealUsers() async -> Int {
-        // In production, fetch from Firestore
         #if canImport(FirebaseFirestore)
-        // TODO: Query Firestore for real user count
-        // For now, return current authenticated user count (1 if logged in)
-        return AuthenticationManager.shared.isAuthenticated ? 1 : 0
+        let db = Firestore.firestore()
+        do {
+            let snapshot = try await db.collection("users").limit(to: 1000).getDocuments()
+            return snapshot.documents.count
+        } catch {
+            print("⚠️ [SmartUserSeeder] Error counting users: \(error)")
+            return AuthenticationManager.shared.isAuthenticated ? 1 : 0
+        }
         #else
         return 0
         #endif

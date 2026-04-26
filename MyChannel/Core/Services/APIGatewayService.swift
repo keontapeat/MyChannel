@@ -8,6 +8,9 @@
 //
 
 import Foundation
+#if canImport(CryptoKit)
+import CryptoKit
+#endif
 
 class APIGatewayService {
     static let shared = APIGatewayService()
@@ -123,11 +126,21 @@ class APIGatewayService {
             return .failed(reason: "Invalid token format")
         }
         
-        // TODO: Actually validate JWT signature
-        // For now, just check it's not empty
+        guard let claims = decodeJWTPayload(from: cleanToken) else {
+            return .failed(reason: "Invalid token payload")
+        }
         
-        // Extract user ID from token (simplified)
-        let userId = extractUserID(from: cleanToken)
+        if let exp = claims["exp"] as? TimeInterval, Date(timeIntervalSince1970: exp) < Date() {
+            return .failed(reason: "Token expired")
+        }
+        
+        if let nbf = claims["nbf"] as? TimeInterval, Date(timeIntervalSince1970: nbf) > Date() {
+            return .failed(reason: "Token not active")
+        }
+        
+        guard let userId = extractUserID(from: cleanToken, claims: claims), !userId.isEmpty else {
+            return .failed(reason: "Missing user identifier")
+        }
         
         print("✅ [API Gateway] Authenticated user: \(userId)")
         
@@ -139,9 +152,28 @@ class APIGatewayService {
         case failed(reason: String)
     }
     
-    private func extractUserID(from token: String) -> String {
-        // Simplified - in production, decode JWT payload
-        return "user_\(token.prefix(8))"
+    private func extractUserID(from token: String, claims: [String: Any]) -> String? {
+        claims["user_id"] as? String
+            ?? claims["uid"] as? String
+            ?? claims["sub"] as? String
+    }
+    
+    private func decodeJWTPayload(from token: String) -> [String: Any]? {
+        let components = token.components(separatedBy: ".")
+        guard components.count == 3 else { return nil }
+        guard let payloadData = base64URLDecode(components[1]) else { return nil }
+        return (try? JSONSerialization.jsonObject(with: payloadData)) as? [String: Any]
+    }
+    
+    private func base64URLDecode(_ value: String) -> Data? {
+        var base64 = value
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let remainder = base64.count % 4
+        if remainder > 0 {
+            base64 += String(repeating: "=", count: 4 - remainder)
+        }
+        return Data(base64Encoded: base64)
     }
     
     // MARK: - 🔑 API KEY MANAGEMENT
@@ -243,9 +275,25 @@ class APIGatewayService {
     
     /// Validate request signature (HMAC)
     func validateSignature(payload: Data, signature: String, secret: String) -> Bool {
-        // TODO: Implement HMAC signature verification
-        // For now, simplified
-        return !signature.isEmpty
+        guard !signature.isEmpty, !secret.isEmpty else { return false }
+#if canImport(CryptoKit)
+        let key = SymmetricKey(data: Data(secret.utf8))
+        let digest = HMAC<SHA256>.authenticationCode(for: payload, using: key)
+        let expectedHex = digest.map { String(format: "%02x", $0) }.joined()
+        let provided = signature.lowercased().replacingOccurrences(of: "sha256=", with: "")
+        return constantTimeCompare(expectedHex, provided)
+#else
+        return false
+#endif
+    }
+    
+    private func constantTimeCompare(_ lhs: String, _ rhs: String) -> Bool {
+        let left = Array(lhs.utf8)
+        let right = Array(rhs.utf8)
+        guard left.count == right.count else { return false }
+        var diff: UInt8 = 0
+        for i in 0..<left.count { diff |= left[i] ^ right[i] }
+        return diff == 0
     }
     
     /// Check for suspicious patterns

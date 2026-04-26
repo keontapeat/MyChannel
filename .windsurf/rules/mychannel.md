@@ -62,6 +62,7 @@ description: MyChannel project rules for Windsurf AI coding assistant
 - Use `AnimatedStatItem` for numeric stats (count-up animation on appear)
 - Always respect `reduceMotion` preference for accessibility
 - Use `.drawingGroup()` for complex animated views in lists
+- Live TV invariant: the first three visible Live TV / Quick Tune cards must always render `LiveChannelThumbnailView` with `allowPlaybackInPreviews: true`; never replace them with static poster/logo thumbnails or gate the preview view behind `streamReady`.
 
 ## Web Frontend Standards
 - Vanilla JS only in `index.html` and `public/` — no framework imports unless already present

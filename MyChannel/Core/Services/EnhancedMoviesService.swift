@@ -345,13 +345,13 @@ class EnhancedMoviesService: ObservableObject {
             }
             
             return WatchProgress(
-                movieId: movieId,
+                id: "\(userId)_\(movieId)",
                 userId: userId,
-                progress: progress,
-                currentTime: data["currentTime"] as? TimeInterval ?? 0,
-                duration: data["duration"] as? TimeInterval ?? 0,
-                lastWatchedAt: lastWatchedAt,
-                movie: nil // Will be populated later
+                videoId: movieId,
+                positionSec: data["currentTime"] as? TimeInterval ?? 0,
+                durationSec: data["duration"] as? TimeInterval ?? 0,
+                completionPct: progress,
+                lastWatchedAt: lastWatchedAt
             )
         }
         
@@ -359,10 +359,9 @@ class EnhancedMoviesService: ObservableObject {
         let enhancedProgress = await withTaskGroup(of: WatchProgress?.self) { group in
             for progress in watchProgress {
                 group.addTask {
-                    if let movie = await self.loadMovieById(progress.movieId) {
-                        var updatedProgress = progress
-                        updatedProgress.movie = movie
-                        return updatedProgress
+                    if let _ = await self.loadMovieById(progress.videoId) {
+                        // Movie exists, return progress as-is
+                        return progress
                     }
                     return nil
                 }
@@ -726,7 +725,7 @@ struct EnhancedMovie: Identifiable, Codable {
     }
 }
 
-struct WatchProgress: Identifiable, Codable {
+struct MovieWatchProgress: Identifiable, Codable {
     let id = UUID().uuidString
     let movieId: String
     let userId: String

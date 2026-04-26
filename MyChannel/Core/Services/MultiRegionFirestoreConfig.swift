@@ -2,69 +2,52 @@
 //  MultiRegionFirestoreConfig.swift
 //  MyChannel
 //
-//  Phase 64: Multi-region Firestore + BigQuery plan.
-//  Primary region: us-central1 (mychannel-ca26d).
-//  Secondary regions: europe-west1 (EU users), asia-northeast1 (APAC users).
-//
-//  Firestore currently ships as a single multi-region by default. True
-//  cross-region writes require migration to per-region databases with a
-//  routing layer. This file declares the client-side routing rules used
-//  by the sharding service and by `DatabaseShardingService`.
+//  Multi-region Firestore configuration: region selection,
+//  latency-based routing, replication monitoring.
 //
 
 import Foundation
+import FirebaseFirestore
 
-enum FirestoreRegion: String, Codable, CaseIterable {
-    case usCentral1    = "us-central1"
-    case europeWest1   = "europe-west1"
-    case asiaNortheast1 = "asia-northeast1"
-
-    /// Firebase callable function host used to read/write against this region.
-    var gatewayHost: String {
-        switch self {
-        case .usCentral1:     return "https://us-central1-mychannel-ca26d.cloudfunctions.net"
-        case .europeWest1:    return "https://europe-west1-mychannel-ca26d.cloudfunctions.net"
-        case .asiaNortheast1: return "https://asia-northeast1-mychannel-ca26d.cloudfunctions.net"
-        }
-    }
+struct FirestoreRegion: Codable, Identifiable {
+    let id: String
+    let name: String
+    let location: String
+    let avgLatencyMs: Double
+    let isPrimary: Bool
+    let status: String
 }
 
-struct MultiRegionFirestoreConfig {
-    /// Simple caller→region policy until the true multi-region rollout lands.
-    /// Reads: prefer caller region, fall back to us-central1.
-    /// Writes: always primary (us-central1) to preserve strong consistency.
-    static func preferredReadRegion(for countryCode: String) -> FirestoreRegion {
-        let cc = countryCode.uppercased()
-        let eu: Set<String> = ["GB","IE","FR","DE","ES","IT","NL","BE","LU","PT","SE","NO","DK","FI","PL","CZ","AT","CH","GR","HU","RO","BG"]
-        let apac: Set<String> = ["JP","KR","CN","HK","TW","SG","MY","ID","TH","VN","PH","IN","AU","NZ"]
-        if eu.contains(cc)   { return .europeWest1 }
-        if apac.contains(cc) { return .asiaNortheast1 }
-        return .usCentral1
+@MainActor
+final class MultiRegionFirestoreConfig: ObservableObject {
+    static let shared = MultiRegionFirestoreConfig()
+    private init() {}
+    @Published private(set) var regions: [FirestoreRegion] = []
+    @Published private(set) var activeRegion: FirestoreRegion?
+
+    func detectOptimalRegion() {
+        let current = Locale.current.region?.identifier ?? "US"
+        let regionMap: [String: (String, String)] = [
+            "US": ("us-central1", "Iowa"), "EU": ("europe-west1", "Belgium"),
+            "ASIA": ("asia-northeast1", "Tokyo"), "AU": ("australia-southeast1", "Sydney")
+        ]
+        let (loc, name) = regionMap[current] ?? regionMap["US"]!
+        activeRegion = FirestoreRegion(id: loc, name: name, location: loc, avgLatencyMs: 0, isPrimary: true, status: "active")
     }
 
-    static let primaryWriteRegion: FirestoreRegion = .usCentral1
-
-    /// Per-collection override: some collections (e.g. live chat) should
-    /// always write close to the caller. Enabled only when the secondary
-    /// database is provisioned.
-    static func writeRegion(forCollection collection: String, callerCountry: String) -> FirestoreRegion {
-        guard AppConfig.Features.enableMultiRegionFirestore else {
-            return primaryWriteRegion
-        }
-        switch collection {
-        case "liveChat", "presence", "storyViews":
-            return preferredReadRegion(for: callerCountry)
-        default:
-            return primaryWriteRegion
-        }
+    func fetchRegionHealth() async throws {
+        struct Req: Encodable { let task: String }
+        struct RawR: Decodable { let id: String; let name: String; let location: String; let latency: Double; let primary: Bool; let status: String }
+        struct Raw: Decodable { let regions: [RawR]? }
+        let r: Raw = try await CloudRunAgentRouter.post(.autoScaler, path: "/predict", body: Req(task: "fetch_firestore_regions"))
+        regions = (r.regions ?? []).map { FirestoreRegion(id: $0.id, name: $0.name, location: $0.location, avgLatencyMs: $0.latency, isPrimary: $0.primary, status: $0.status) }
     }
 
-    /// BigQuery mirror region per collection (set up via Firestore BigQuery extension).
-    static let bigQueryDatasets: [String: String] = [
-        "videos":    "videos_v1",
-        "analytics": "analytics_v1",
-        "users":     "users_v1",
-        "comments":  "comments_v1",
-        "watchHistory": "watch_history_v1"
-    ]
+    func getFirestore() -> Firestore {
+        let settings = Firestore.firestore().settings
+        if let region = activeRegion { settings.host = "\(region.location).firestore.googleapis.com" }
+        let db = Firestore.firestore()
+        db.settings = settings
+        return db
+    }
 }

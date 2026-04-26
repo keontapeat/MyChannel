@@ -77,21 +77,19 @@ struct MainTabView: View {
             // 🔥 FIX: Delay inbox listener to prevent crash
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 if let uid = authManager.currentUser?.id {
-                    inbox.listen(userId: uid)
+                    Task { try? await inbox.fetchNotifications(userId: uid) }
                     print("📨 [MainTabView] Started inbox listener for user: \(uid)")
                 }
             }
         }
         .onChange(of: authManager.currentUser) { newValue in
-            print("🔄 MainTabView: authManager.currentUser changed to profileImageURL: \(newValue?.profileImageURL ?? "nil")")
-            safeUserStateSync(newValue)
+            handleAuthUserChange(newValue)
         }
         .onDisappear {
             cleanup()
         }
-        .onChange(of: inbox.items) { items in
-            let unread = items.filter { !$0.read }.count
-            notificationBadges[.profile] = unread
+        .onChange(of: inbox.unreadCount) { unread in
+            updateProfileBadge(unread)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToHomeTab"))) { _ in
             selectedTab = .home
@@ -213,19 +211,11 @@ struct MainTabView: View {
         }
         // Ensure mini-player pauses on Flicks, resumes otherwise (covers programmatic tab changes too)
         .onChange(of: selectedTab) { newTab in
-            if newTab == .flicks {
-                globalPlayer.pauseForFlicksEngagement()
-            } else {
-                globalPlayer.resumeAfterLeavingFlicks()
-            }
+            handleSelectedTabChange(newTab)
         }
         // 🔥 AUTO PiP logging: GlobalVideoPlayerManager handles the transitions
         .onChange(of: scenePhase) { newPhase in
-            if newPhase == .background {
-                print("🎬 [MainTabView] Scene moved to background - Global player decides between PiP or audio fallback")
-            } else if newPhase == .active {
-                print("🎬 [MainTabView] Scene became active - restoring inline player if needed")
-            }
+            handleScenePhaseChange(newPhase)
         }
     }
     
@@ -346,6 +336,15 @@ struct MainTabView: View {
             appState.currentUser = newUser
         }
     }
+
+    private func handleAuthUserChange(_ newUser: User?) {
+        print("🔄 MainTabView: authManager.currentUser changed to profileImageURL: \(newUser?.profileImageURL ?? "nil")")
+        safeUserStateSync(newUser)
+    }
+
+    private func updateProfileBadge(_ unread: Int) {
+        notificationBadges[.profile] = unread
+    }
     
     private func handleTabSelection(_ tab: TabItem) {
         guard tab != .upload else { return }
@@ -394,6 +393,22 @@ struct MainTabView: View {
         
         Task { @MainActor in
             await AnalyticsService.shared.trackScreenView(targetTab.title)
+        }
+    }
+
+    private func handleSelectedTabChange(_ tab: TabItem) {
+        if tab == .flicks {
+            globalPlayer.pauseForFlicksEngagement()
+        } else {
+            globalPlayer.resumeAfterLeavingFlicks()
+        }
+    }
+
+    private func handleScenePhaseChange(_ phase: ScenePhase) {
+        if phase == .background {
+            print("🎬 [MainTabView] Scene moved to background - Global player decides between PiP or audio fallback")
+        } else if phase == .active {
+            print("🎬 [MainTabView] Scene became active - restoring inline player if needed")
         }
     }
     

@@ -5,7 +5,7 @@
 //  💾 MULTI-CLOUD OBJECT STORAGE - ULTRA RELIABLE!
 //  Google Cloud Storage + Backblaze B2 + Wasabi
 //  Automatic failover, geo-redundancy, cost optimization
-//  YouTube pays $1M/month for storage - we pay $100! 🔥
+//  YouTube pays $1M/month for storage - we pay $100!
 //
 
 import Foundation
@@ -14,7 +14,7 @@ import FirebaseStorage
 class ObjectStorageOrchestrator {
     static let shared = ObjectStorageOrchestrator()
     
-    // 🔥 STORAGE PROVIDERS
+    // STORAGE PROVIDERS
     enum Provider {
         case googleCloud    // Primary - Fast, reliable, $0.02/GB
         case backblaze      // Backup - $0.005/GB (4x cheaper!)
@@ -26,13 +26,15 @@ class ObjectStorageOrchestrator {
     private var uploadBytes: [Provider: Int64] = [:]
     private var errorCount: [Provider: Int] = [:]
     
+    private let session = URLSession.shared
+    
     private let storageQueue = DispatchQueue(label: "com.mychannel.storage", qos: .utility, attributes: .concurrent)
     
     private init() {
-        print("💾 [Storage] Multi-cloud orchestrator initialized")
+        print(" [Storage] Multi-cloud orchestrator initialized")
     }
     
-    // MARK: - 📤 UPLOAD
+    // MARK: - UPLOAD
     
     struct UploadOptions {
         let contentType: String
@@ -89,7 +91,7 @@ class ObjectStorageOrchestrator {
     ) async throws -> UploadResult {
         
         let startTime = Date()
-        print("💾 [Storage] Uploading: \(path) (\(file.count.formatted(.byteCount(style: .file))))")
+        print(" [Storage] Uploading: \(path) (\(file.count.formatted(.byteCount(style: .file))))")
         
         // Select providers based on redundancy level
         let providers = selectProviders(for: options.redundancy)
@@ -110,7 +112,7 @@ class ObjectStorageOrchestrator {
                         )
                         return (provider, url)
                     } catch {
-                        print("❌ [Storage] Upload to \(provider) failed: \(error)")
+                        print(" [Storage] Upload to \(provider) failed: \(error)")
                         self.incrementError(provider: provider)
                         return (provider, nil)
                     }
@@ -137,7 +139,7 @@ class ObjectStorageOrchestrator {
         
         let uploadTime = Date().timeIntervalSince(startTime)
         
-        print("✅ [Storage] Uploaded to \(successfulProviders.count) providers in \(Int(uploadTime * 1000))ms")
+        print(" [Storage] Uploaded to \(successfulProviders.count) providers in \(Int(uploadTime * 1000))ms")
         
         return UploadResult(
             path: path,
@@ -149,7 +151,7 @@ class ObjectStorageOrchestrator {
         )
     }
     
-    // MARK: - 📥 DOWNLOAD
+    // MARK: - DOWNLOAD
     
     struct DownloadOptions {
         let preferredProvider: Provider?
@@ -175,16 +177,16 @@ class ObjectStorageOrchestrator {
         options: DownloadOptions = .fast
     ) async throws -> Data {
         
-        print("📥 [Storage] Downloading: \(path)")
+        print(" [Storage] Downloading: \(path)")
         
         // Try preferred provider first
         if let preferred = options.preferredProvider {
             do {
                 let data = try await downloadFromProvider(preferred, path: path)
-                print("✅ [Storage] Downloaded from \(preferred)")
+                print(" [Storage] Downloaded from \(preferred)")
                 return data
             } catch {
-                print("⚠️ [Storage] \(preferred) failed, trying fallback...")
+                print(" [Storage] \(preferred) failed, trying fallback...")
                 incrementError(provider: preferred)
             }
         }
@@ -198,10 +200,10 @@ class ObjectStorageOrchestrator {
                 
                 do {
                     let data = try await downloadFromProvider(provider, path: path)
-                    print("✅ [Storage] Downloaded from \(provider) (fallback)")
+                    print(" [Storage] Downloaded from \(provider) (fallback)")
                     return data
                 } catch {
-                    print("⚠️ [Storage] \(provider) failed")
+                    print(" [Storage] \(provider) failed")
                     incrementError(provider: provider)
                     continue
                 }
@@ -211,11 +213,11 @@ class ObjectStorageOrchestrator {
         throw StorageError.allProvidersFailed
     }
     
-    // MARK: - 🗑️ DELETE
+    // MARK: - DELETE
     
     /// Delete file from all providers
     func delete(path: String) async throws {
-        print("🗑️ [Storage] Deleting: \(path)")
+        print(" [Storage] Deleting: \(path)")
         
         let providers: [Provider] = [.googleCloud, .firebase, .backblaze, .wasabi]
         
@@ -224,18 +226,18 @@ class ObjectStorageOrchestrator {
                 group.addTask {
                     do {
                         try await self.deleteFromProvider(provider, path: path)
-                        print("✅ [Storage] Deleted from \(provider)")
+                        print(" [Storage] Deleted from \(provider)")
                     } catch {
-                        print("⚠️ [Storage] Delete from \(provider) failed: \(error)")
+                        print(" [Storage] Delete from \(provider) failed: \(error)")
                     }
                 }
             }
         }
         
-        print("✅ [Storage] Deleted from all providers")
+        print(" [Storage] Deleted from all providers")
     }
     
-    // MARK: - 📋 LIST
+    // MARK: - LIST
     
     struct StorageItem {
         let path: String
@@ -244,21 +246,17 @@ class ObjectStorageOrchestrator {
         let modified: Date
         let providers: [Provider]
     }
-    
+
     /// List files in directory
     func list(prefix: String) async throws -> [StorageItem] {
-        print("📋 [Storage] Listing: \(prefix)")
-        
-        // Use Google Cloud as primary for listing
+        print(" [Storage] Listing: \(prefix)")
         let items = try await listFromProvider(.googleCloud, prefix: prefix)
-        
-        print("✅ [Storage] Found \(items.count) items")
+        print(" [Storage] Found \(items.count) items")
         return items
     }
-    
-    // MARK: - 🌐 PUBLIC URLs
-    
-    /// Get public URL for file (picks fastest CDN)
+
+    // MARK: - PUBLIC URLs
+
     func getPublicURL(path: String, preferredProvider: Provider = .googleCloud) -> String {
         switch preferredProvider {
         case .googleCloud:
@@ -271,149 +269,54 @@ class ObjectStorageOrchestrator {
             return "https://s3.us-west-1.wasabisys.com/mychannel/\(path)"
         }
     }
-    
-    /// Get CDN-optimized URL (for video streaming)
+
     func getCDNURL(path: String) -> String {
-        // Use Cloudflare or Google CDN
         return "https://cdn.mychannel.com/\(path)"
     }
-    
-    // MARK: - 🔧 PROVIDER OPERATIONS
-    
-    private func selectProviders(for redundancy: UploadOptions.RedundancyLevel) -> [Provider] {
-        switch redundancy {
-        case .single:
-            return [.googleCloud]
-        case .dual:
-            return [.googleCloud, .backblaze]
-        case .triple:
-            return [.googleCloud, .backblaze, .wasabi]
-        }
-    }
-    
-    private func minProvidersRequired(for redundancy: UploadOptions.RedundancyLevel) -> Int {
-        switch redundancy {
-        case .single: return 1
-        case .dual: return 1  // At least 1 of 2
-        case .triple: return 2  // At least 2 of 3
-        }
-    }
-    
-    private func uploadToProvider(
-        provider: Provider,
-        file: Data,
-        path: String,
-        options: UploadOptions
-    ) async throws -> String {
-        
-        switch provider {
-        case .googleCloud:
-            return try await uploadToGoogleCloud(file: file, path: path, options: options)
-        case .firebase:
-            return try await uploadToFirebase(file: file, path: path, options: options)
-        case .backblaze:
-            return try await uploadToBackblaze(file: file, path: path, options: options)
-        case .wasabi:
-            return try await uploadToWasabi(file: file, path: path, options: options)
-        }
-    }
-    
-    private func uploadToGoogleCloud(file: Data, path: String, options: UploadOptions) async throws -> String {
-        // TODO: Implement Google Cloud Storage API
-        // Use Google Cloud Storage client library
-        print("⬆️ [GCS] Uploading to Google Cloud Storage")
-        try await Task.sleep(nanoseconds: 100_000_000)  // Simulate upload
-        return "https://storage.googleapis.com/mychannel-videos/\(path)"
-    }
-    
-    private func uploadToFirebase(file: Data, path: String, options: UploadOptions) async throws -> String {
-        let storage = Storage.storage()
-        let storageRef = storage.reference().child(path)
-        
-        var metadata = StorageMetadata()
-        metadata.contentType = options.contentType
-        if let cacheControl = options.cacheControl {
-            metadata.cacheControl = cacheControl
-        }
-        if let customMetadata = options.metadata {
-            metadata.customMetadata = customMetadata
-        }
-        
-        _ = try await storageRef.putDataAsync(file, metadata: metadata)
-        let url = try await storageRef.downloadURL()
-        
-        print("✅ [Firebase] Uploaded")
-        return url.absoluteString
-    }
-    
-    private func uploadToBackblaze(file: Data, path: String, options: UploadOptions) async throws -> String {
-        // TODO: Implement Backblaze B2 API
-        print("⬆️ [B2] Uploading to Backblaze")
-        try await Task.sleep(nanoseconds: 100_000_000)
-        return "https://f001.backblazeb2.com/file/mychannel/\(path)"
-    }
-    
-    private func uploadToWasabi(file: Data, path: String, options: UploadOptions) async throws -> String {
-        // TODO: Implement Wasabi S3-compatible API
-        print("⬆️ [Wasabi] Uploading to Wasabi")
-        try await Task.sleep(nanoseconds: 100_000_000)
-        return "https://s3.us-west-1.wasabisys.com/mychannel/\(path)"
-    }
-    
-    private func downloadFromProvider(_ provider: Provider, path: String) async throws -> Data {
-        switch provider {
-        case .googleCloud:
-            return try await downloadFromGoogleCloud(path: path)
-        case .firebase:
-            return try await downloadFromFirebase(path: path)
-        case .backblaze:
-            return try await downloadFromBackblaze(path: path)
-        case .wasabi:
-            return try await downloadFromWasabi(path: path)
-        }
-    }
-    
+
+    // MARK: - PROVIDER OPERATIONS
+
     private func downloadFromGoogleCloud(path: String) async throws -> Data {
-        // TODO: Implement download from GCS
-        throw StorageError.notImplemented
+        let (data, _) = try await session.data(from: publicProviderURL(for: .googleCloud, path: path))
+        return data
     }
-    
+
     private func downloadFromFirebase(path: String) async throws -> Data {
         let storage = Storage.storage()
         let storageRef = storage.reference().child(path)
-        let data = try await storageRef.data(maxSize: 500 * 1024 * 1024)  // 500MB max
+        let data = try await storageRef.data(maxSize: 500 * 1024 * 1024)
         return data
     }
-    
+
     private func downloadFromBackblaze(path: String) async throws -> Data {
-        // TODO: Implement download from Backblaze
-        throw StorageError.notImplemented
+        let (data, _) = try await session.data(from: publicProviderURL(for: .backblaze, path: path))
+        return data
     }
-    
+
     private func downloadFromWasabi(path: String) async throws -> Data {
-        // TODO: Implement download from Wasabi
-        throw StorageError.notImplemented
+        let (data, _) = try await session.data(from: publicProviderURL(for: .wasabi, path: path))
+        return data
     }
-    
+
     private func deleteFromProvider(_ provider: Provider, path: String) async throws {
         switch provider {
         case .firebase:
             let storage = Storage.storage()
             let storageRef = storage.reference().child(path)
             try await storageRef.delete()
-        default:
-            // TODO: Implement for other providers
-            break
+        case .googleCloud, .backblaze, .wasabi:
+            var request = URLRequest(url: publicProviderURL(for: provider, path: path))
+            request.httpMethod = "DELETE"
+            _ = try await authorizedDataRequest(request, provider: provider)
         }
     }
-    
+
     private func listFromProvider(_ provider: Provider, prefix: String) async throws -> [StorageItem] {
         switch provider {
         case .firebase:
             let storage = Storage.storage()
             let storageRef = storage.reference().child(prefix)
             let result = try await storageRef.listAll()
-            
             var items: [StorageItem] = []
             for item in result.items {
                 let metadata = try await item.getMetadata()
@@ -426,33 +329,34 @@ class ObjectStorageOrchestrator {
                 ))
             }
             return items
-        default:
-            // TODO: Implement for other providers
-            return []
+        case .googleCloud, .backblaze, .wasabi:
+            let url = providerListURL(for: provider, prefix: prefix)
+            let (data, _) = try await session.data(from: url)
+            return parseListResponse(data: data, provider: provider)
         }
     }
-    
-    // MARK: - 📊 STATISTICS
-    
+
+    // MARK: - STATISTICS
+
     private func incrementUpload(provider: Provider, bytes: Int64) {
         storageQueue.async(flags: .barrier) { [weak self] in
             self?.uploadCount[provider, default: 0] += 1
             self?.uploadBytes[provider, default: 0] += bytes
         }
     }
-    
+
     private func incrementError(provider: Provider) {
         storageQueue.async(flags: .barrier) { [weak self] in
             self?.errorCount[provider, default: 0] += 1
         }
     }
-    
+
     struct StorageStats {
         let totalUploads: Int
         let totalBytes: Int64
         let totalErrors: Int
         let providerStats: [Provider: ProviderStats]
-        
+
         struct ProviderStats {
             let uploads: Int
             let bytes: Int64
@@ -460,39 +364,25 @@ class ObjectStorageOrchestrator {
             let successRate: Double
         }
     }
-    
+
     func getStats() -> StorageStats {
         return storageQueue.sync {
             let totalUploads = uploadCount.values.reduce(0, +)
             let totalBytes = uploadBytes.values.reduce(0, +)
             let totalErrors = errorCount.values.reduce(0, +)
-            
             var providerStats: [Provider: StorageStats.ProviderStats] = [:]
-            
             for provider in [Provider.googleCloud, .firebase, .backblaze, .wasabi] {
                 let uploads = uploadCount[provider, default: 0]
                 let bytes = uploadBytes[provider, default: 0]
                 let errors = errorCount[provider, default: 0]
                 let total = uploads + errors
                 let successRate = total > 0 ? Double(uploads) / Double(total) * 100 : 0
-                
-                providerStats[provider] = StorageStats.ProviderStats(
-                    uploads: uploads,
-                    bytes: bytes,
-                    errors: errors,
-                    successRate: successRate
-                )
+                providerStats[provider] = StorageStats.ProviderStats(uploads: uploads, bytes: bytes, errors: errors, successRate: successRate)
             }
-            
-            return StorageStats(
-                totalUploads: totalUploads,
-                totalBytes: totalBytes,
-                totalErrors: totalErrors,
-                providerStats: providerStats
-            )
+            return StorageStats(totalUploads: totalUploads, totalBytes: totalBytes, totalErrors: totalErrors, providerStats: providerStats)
         }
     }
-    
+
     func resetStats() {
         storageQueue.async(flags: .barrier) { [weak self] in
             self?.uploadCount.removeAll()
@@ -500,15 +390,16 @@ class ObjectStorageOrchestrator {
             self?.errorCount.removeAll()
         }
     }
-    
-    // MARK: - ❌ ERRORS
-    
+
+    // MARK: - ERRORS
+
     enum StorageError: LocalizedError {
         case insufficientRedundancy(required: Int, actual: Int)
         case allProvidersFailed
         case notImplemented
         case invalidPath
-        
+        case requestFailed(provider: Provider, statusCode: Int)
+
         var errorDescription: String? {
             switch self {
             case .insufficientRedundancy(let required, let actual):
@@ -519,65 +410,126 @@ class ObjectStorageOrchestrator {
                 return "Provider not yet implemented"
             case .invalidPath:
                 return "Invalid storage path"
+            case .requestFailed(let provider, let statusCode):
+                return "Storage request failed for \(provider) with status \(statusCode)"
             }
         }
     }
+
+    // MARK: - HELPER FUNCTIONS
+
+    private func selectProviders(for level: UploadOptions.RedundancyLevel) -> [Provider] {
+        switch level {
+        case .single: return [.googleCloud]
+        case .dual:   return [.googleCloud, .firebase]
+        case .triple: return [.googleCloud, .firebase, .backblaze]
+        }
+    }
+
+    private func minProvidersRequired(for level: UploadOptions.RedundancyLevel) -> Int {
+        switch level {
+        case .single: return 1
+        case .dual:   return 1
+        case .triple: return 2
+        }
+    }
+
+    private func uploadToProvider(provider: Provider, file: Data, path: String, options: UploadOptions) async throws -> String {
+        switch provider {
+        case .firebase:
+            let storage = Storage.storage()
+            let storageRef = storage.reference().child(path)
+            let metadata = StorageMetadata()
+            metadata.contentType = options.contentType
+            _ = try await storageRef.putDataAsync(file, metadata: metadata)
+            return getPublicURL(path: path, preferredProvider: .firebase)
+        case .googleCloud, .backblaze, .wasabi:
+            // Simplified: assume direct PUT to provider URL with auth handled elsewhere.
+            var request = URLRequest(url: publicProviderURL(for: provider, path: path))
+            request.httpMethod = "PUT"
+            request.setValue(options.contentType, forHTTPHeaderField: "Content-Type")
+            _ = try await authorizedDataRequest(request, provider: provider)
+            return getPublicURL(path: path, preferredProvider: provider)
+        }
+    }
+
+    private func downloadFromProvider(_ provider: Provider, path: String) async throws -> Data {
+        switch provider {
+        case .googleCloud: return try await downloadFromGoogleCloud(path: path)
+        case .firebase:    return try await downloadFromFirebase(path: path)
+        case .backblaze:   return try await downloadFromBackblaze(path: path)
+        case .wasabi:      return try await downloadFromWasabi(path: path)
+        }
+    }
+
+    private func publicProviderURL(for provider: Provider, path: String) -> URL {
+        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
+        switch provider {
+        case .googleCloud:
+            return URL(string: "https://storage.googleapis.com/mychannel-videos/\(encodedPath)")!
+        case .firebase:
+            return URL(string: "https://firebasestorage.googleapis.com/v0/b/mychannel.appspot.com/o/\(encodedPath)?alt=media")!
+        case .backblaze:
+            return URL(string: "https://f001.backblazeb2.com/file/mychannel/\(encodedPath)")!
+        case .wasabi:
+            return URL(string: "https://s3.us-west-1.wasabisys.com/mychannel/\(encodedPath)")!
+        }
+    }
+
+    private func providerListURL(for provider: Provider, prefix: String) -> URL {
+        let encodedPrefix = prefix.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? prefix
+        switch provider {
+        case .googleCloud:
+            return URL(string: "https://storage.googleapis.com/storage/v1/b/mychannel-videos/o?prefix=\(encodedPrefix)")!
+        case .backblaze:
+            return URL(string: "https://f001.backblazeb2.com/file/mychannel/?prefix=\(encodedPrefix)")!
+        case .wasabi:
+            return URL(string: "https://s3.us-west-1.wasabisys.com/mychannel?prefix=\(encodedPrefix)")!
+        case .firebase:
+            return publicProviderURL(for: .firebase, path: prefix)
+        }
+    }
+
+    private func authorizedDataRequest(_ request: URLRequest, provider: Provider) async throws -> Data {
+        var request = request
+        if let token = authorizationToken(for: provider) {
+            request.setValue(token, forHTTPHeaderField: "Authorization")
+        }
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw StorageError.requestFailed(provider: provider, statusCode: 0)
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw StorageError.requestFailed(provider: provider, statusCode: httpResponse.statusCode)
+        }
+        return data
+    }
+
+    private func authorizationToken(for provider: Provider) -> String? {
+        switch provider {
+        case .googleCloud:
+            return ProcessInfo.processInfo.environment["MYCHANNEL_GCS_BEARER"].map { "Bearer \($0)" }
+        case .backblaze:
+            return ProcessInfo.processInfo.environment["MYCHANNEL_B2_AUTH"]
+        case .wasabi:
+            return ProcessInfo.processInfo.environment["MYCHANNEL_WASABI_AUTH"]
+        case .firebase:
+            return nil
+        }
+    }
+
+    private func parseListResponse(data: Data, provider: Provider) -> [StorageItem] {
+        guard provider == .googleCloud,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let items = object["items"] as? [[String: Any]] else {
+            return []
+        }
+        return items.compactMap { item in
+            let path = item["name"] as? String ?? ""
+            let size = Int64(item["size"] as? String ?? "0") ?? 0
+            let contentType = item["contentType"] as? String ?? "application/octet-stream"
+            let modified = ISO8601DateFormatter().date(from: item["updated"] as? String ?? "") ?? Date()
+            return StorageItem(path: path, size: size, contentType: contentType, modified: modified, providers: [provider])
+        }
+    }
 }
-
-// MARK: - 📱 USAGE EXAMPLES
-
-/*
- 
- 💾 MULTI-CLOUD STORAGE:
- 
- let storage = ObjectStorageOrchestrator.shared
- 
- // Upload video with triple redundancy
- let result = try await storage.upload(
-     file: videoData,
-     path: "videos/\(videoID).mp4",
-     options: .video  // Triple redundant!
- )
- 
- print("Uploaded to: \(result.providers)")  // [googleCloud, backblaze, wasabi]
- 
- // Upload thumbnail with dual redundancy
- try await storage.upload(
-     file: thumbnailData,
-     path: "thumbnails/\(videoID).jpg",
-     options: .thumbnail
- )
- 
- // Download with automatic fallback
- let data = try await storage.download(
-     path: "videos/\(videoID).mp4",
-     options: .fast  // Tries Google Cloud first, falls back to others
- )
- 
- // Get public URL
- let url = storage.getPublicURL(path: "videos/\(videoID).mp4")
- 
- // Get CDN URL for streaming
- let cdnURL = storage.getCDNURL(path: "videos/\(videoID).mp4")
- 
- // List files
- let items = try await storage.list(prefix: "videos/")
- for item in items {
-     print("\(item.path) - \(item.size.formatted(.byteCount(style: .file)))")
- }
- 
- // Delete file
- try await storage.delete(path: "videos/\(videoID).mp4")
- 
- // Get statistics
- let stats = storage.getStats()
- print("Total uploads: \(stats.totalUploads)")
- print("Total data: \(stats.totalBytes.formatted(.byteCount(style: .file)))")
- 
- 🎯 COST COMPARISON:
- YouTube: $1M/month for storage
- Us with multi-cloud: ~$100/month
- 
- = 10,000X CHEAPER! 🔥
- 
- */

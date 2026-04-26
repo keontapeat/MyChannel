@@ -27,9 +27,9 @@ final class FraudDetectionAGI: ObservableObject {
     private var db: Firestore { Firestore.firestore() }
     #endif
     
-    private var clickHistory: [ClickEvent] = []
+    private var clickHistory: [AdClickEvent] = []
     private var deviceFingerprints: [String: DeviceFingerprint] = [:]
-    private var ipReputationCache: [String: IPReputation] = [:]
+    private var ipReputationCache: [String: FraudIPReputation] = [:]
     
     // Fraud thresholds
     private let highFraudThreshold: Double = 0.80
@@ -42,7 +42,7 @@ final class FraudDetectionAGI: ObservableObject {
     // MARK: - Click Analysis
     
     /// Analyze click event for fraud (50+ signals in <1ms)
-    func analyzeClick(_ event: ClickEvent) async -> FraudAnalysis {
+    func analyzeClick(_ event: AdClickEvent) async -> FraudAnalysis {
         isAnalyzing = true
         defer { isAnalyzing = false }
         
@@ -155,7 +155,7 @@ final class FraudDetectionAGI: ObservableObject {
     
     // MARK: - Signal Analysis
     
-    private func analyzeMouseMovement(event: ClickEvent) -> FraudSignal? {
+    private func analyzeMouseMovement(event: AdClickEvent) -> FraudSignal? {
         guard let mousePath = event.mousePath else {
             return FraudSignal(
                 name: "Mouse Movement",
@@ -193,7 +193,7 @@ final class FraudDetectionAGI: ObservableObject {
         )
     }
     
-    private func analyzeClickTiming(event: ClickEvent) -> FraudSignal? {
+    private func analyzeClickTiming(event: AdClickEvent) -> FraudSignal? {
         // Get recent clicks from same source
         let recentClicks = clickHistory.filter {
             $0.ipAddress == event.ipAddress &&
@@ -238,7 +238,7 @@ final class FraudDetectionAGI: ObservableObject {
         )
     }
     
-    private func analyzeDeviceFingerprint(event: ClickEvent) async -> FraudSignal? {
+    private func analyzeDeviceFingerprint(event: AdClickEvent) async -> FraudSignal? {
         let fingerprint = DeviceFingerprint(
             userAgent: event.userAgent,
             screenResolution: event.screenResolution,
@@ -286,7 +286,7 @@ final class FraudDetectionAGI: ObservableObject {
         )
     }
     
-    private func analyzeIPReputation(event: ClickEvent) async -> FraudSignal? {
+    private func analyzeIPReputation(event: AdClickEvent) async -> FraudSignal? {
         // Check cache first
         if let cached = ipReputationCache[event.ipAddress] {
             if cached.isBlacklisted {
@@ -327,7 +327,7 @@ final class FraudDetectionAGI: ObservableObject {
         )
     }
     
-    private func analyzeUserHistory(event: ClickEvent) async -> FraudSignal? {
+    private func analyzeUserHistory(event: AdClickEvent) async -> FraudSignal? {
         guard let userId = event.userId else {
             return FraudSignal(
                 name: "User History",
@@ -369,7 +369,7 @@ final class FraudDetectionAGI: ObservableObject {
         )
     }
     
-    private func analyzeViewportVisibility(event: ClickEvent) -> FraudSignal? {
+    private func analyzeViewportVisibility(event: AdClickEvent) -> FraudSignal? {
         // Check if ad was actually visible when clicked
         if !event.wasVisible {
             return FraudSignal(
@@ -398,7 +398,7 @@ final class FraudDetectionAGI: ObservableObject {
         )
     }
     
-    private func analyzeEngagementDepth(event: ClickEvent) -> FraudSignal? {
+    private func analyzeEngagementDepth(event: AdClickEvent) -> FraudSignal? {
         // Check if user actually engaged with content
         if let pageDepth = event.pageDepth, pageDepth == 0 {
             return FraudSignal(
@@ -427,7 +427,7 @@ final class FraudDetectionAGI: ObservableObject {
         )
     }
     
-    private func analyzeReferrer(event: ClickEvent) -> FraudSignal? {
+    private func analyzeReferrer(event: AdClickEvent) -> FraudSignal? {
         guard let referrer = event.referrer else {
             return FraudSignal(
                 name: "Referrer",
@@ -518,7 +518,7 @@ final class FraudDetectionAGI: ObservableObject {
     
     // MARK: - Actions
     
-    private func handleFraudDetected(event: ClickEvent, analysis: FraudAnalysis) async {
+    private func handleFraudDetected(event: AdClickEvent, analysis: FraudAnalysis) async {
         // Block the source
         blockedSources.insert(event.ipAddress)
         
@@ -550,12 +550,12 @@ final class FraudDetectionAGI: ObservableObject {
         #endif
     }
     
-    private func notifyAdvertiser(event: ClickEvent, analysis: FraudAnalysis) async {
+    private func notifyAdvertiser(event: AdClickEvent, analysis: FraudAnalysis) async {
         // Send notification to advertiser about blocked fraud
         print("📧 [FraudDetection] Notifying advertiser about blocked click")
     }
     
-    private func logFraudEvent(event: ClickEvent, analysis: FraudAnalysis) async {
+    private func logFraudEvent(event: AdClickEvent, analysis: FraudAnalysis) async {
         #if canImport(FirebaseFirestore)
         do {
             try await db.collection("fraud_events").document().setData([
@@ -588,7 +588,7 @@ final class FraudDetectionAGI: ObservableObject {
 
 // MARK: - Models
 
-struct ClickEvent {
+struct AdClickEvent {
     let id: String
     let adId: String
     let userId: String?
@@ -680,7 +680,7 @@ class DeviceFingerprint {
     }
 }
 
-struct IPReputation {
+struct FraudIPReputation {
     let ipAddress: String
     let isBlacklisted: Bool
     let riskScore: Double // 0-1

@@ -12,7 +12,7 @@ import Foundation
 import StoreKit
 #endif
 
-enum VirtualGift: String, CaseIterable, Codable {
+enum ServiceVirtualGift: String, CaseIterable, Codable {
     case heart       // 100 coins
     case rose        // 500 coins
     case crown       // 2500 coins
@@ -70,7 +70,7 @@ final class VirtualGiftsService: ObservableObject {
     /// Buy (consumable) and send a gift to `creatorId` on `contextId` (live stream / video).
     @discardableResult
     func sendGift(
-        _ gift: VirtualGift,
+        _ gift: ServiceVirtualGift,
         from senderUid: String,
         to creatorId: String,
         contextId: String,

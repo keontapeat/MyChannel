@@ -576,7 +576,10 @@ struct AssetStoriesPagerView: View {
     /// Mark the current user's stories as seen
     private func markCurrentUserSeen() {
         guard let group = currentGroup else { return }
-        StorySeenTracker.shared.markSeen(username: group.username)
+        let userId = AppState.shared.currentUser?.id ?? "anonymous"
+        for story in group.stories {
+            StorySeenTracker.shared.markSeen(userId: userId, storyId: story.id.uuidString, creatorId: group.username)
+        }
     }
 
     private func fillWidth(for barIndex: Int, totalWidth: CGFloat) -> CGFloat {

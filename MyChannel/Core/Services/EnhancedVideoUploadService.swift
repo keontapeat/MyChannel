@@ -267,7 +267,7 @@ class EnhancedVideoUploadService: ObservableObject {
             throw VideoUploadServiceError.videoTooShort
         }
         
-        if durationSeconds > 3600 { // 1 hour max
+        if durationSeconds > 43200 { // 12 hours max (YouTube parity for verified accounts)
             throw VideoUploadServiceError.videoTooLong
         }
         
@@ -669,11 +669,18 @@ class EnhancedVideoUploadService: ObservableObject {
                 "title": upload.title,
                 "description": upload.description,
                 "ownerUid": upload.userId,
+                "userId": upload.userId,
                 "creatorId": upload.userId,
                 "creatorName": AppState.shared.currentUser?.displayName ?? "Unknown",
+                "creatorDisplayName": AppState.shared.currentUser?.displayName ?? "Unknown",
+                "creatorUsername": AppState.shared.currentUser?.username ?? "",
                 "creatorAvatarURL": AppState.shared.currentUser?.profileImageURL ?? "",
+                "creatorProfileImage": AppState.shared.currentUser?.profileImageURL ?? "",
+                "creatorVerified": AppState.shared.currentUser?.isVerified ?? false,
                 "videoURL": videoURL,
+                "videoUrl": videoURL,
                 "thumbnailURL": thumbnailURL,
+                "thumbnailUrl": thumbnailURL,
                 "duration": metadata.duration,
                 "fileSize": metadata.fileSize,
                 "resolution": [
@@ -683,6 +690,7 @@ class EnhancedVideoUploadService: ObservableObject {
                 "frameRate": metadata.frameRate,
                 "bitrate": metadata.bitrate,
                 "codec": metadata.codec,
+                "isPublic": upload.visibility == .publicVideo,
                 "visibility": upload.visibility.rawValue,
                 "status": "published",
                 "category": upload.category,
@@ -690,6 +698,7 @@ class EnhancedVideoUploadService: ObservableObject {
                 "language": "en",
                 "createdAt": FieldValue.serverTimestamp(),
                 "publishedAt": FieldValue.serverTimestamp(),
+                "updatedAt": FieldValue.serverTimestamp(),
                 "viewCount": 0,
                 "likeCount": 0,
                 "dislikeCount": 0,
@@ -700,7 +709,11 @@ class EnhancedVideoUploadService: ObservableObject {
                 "clickThroughRate": 0.0,
                 "retentionRate": 0.0,
                 "monetizationEnabled": false,
-                "ageRestricted": false,
+                "ageRestricted": upload.ageRestricted,
+                "madeForKids": upload.madeForKids,
+                "allowComments": upload.allowComments,
+                "filmingLocation": upload.filmingLocation,
+                "isPremiere": upload.isPremiere,
                 "copyrightClaims": [],
                 "performanceScore": 0.0,
                 "seoScore": 0.0,
@@ -869,6 +882,13 @@ struct VideoUpload: Identifiable, Codable {
     var thumbnailURL: String?
     let createdAt: Date
     var completedAt: Date?
+    var madeForKids: Bool = false
+    var ageRestricted: Bool = false
+    var allowComments: Bool = true
+    var filmingLocation: String = ""
+    var isScheduled: Bool = false
+    var scheduledDate: Date? = nil
+    var isPremiere: Bool = false
 }
 
 enum UploadStatus: String, Codable, CaseIterable {
@@ -1067,7 +1087,7 @@ enum VideoUploadServiceError: LocalizedError {
         case .videoTooShort:
             return "Video must be at least 1 second long"
         case .videoTooLong:
-            return "Video must be less than 1 hour long"
+            return "Video must be less than 12 hours long"
         case .fileTooLarge:
             return "File size must be less than 2GB"
         case .noVideoTrack:

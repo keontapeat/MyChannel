@@ -59,9 +59,12 @@ final class VideoFirestoreService: ObservableObject {
         let data: [String: Any] = [
             "userId": video.creator.id,
             "creatorId": video.creator.id,
+            "ownerUid": video.creator.id,
             "creatorUsername": video.creator.username,
             "creatorDisplayName": video.creator.displayName,
+            "creatorName": video.creator.displayName,
             "creatorProfileImage": video.creator.profileImageURL ?? "",
+            "creatorAvatarURL": video.creator.profileImageURL ?? "",
             "creatorVerified": video.creator.isVerified,
             "title": video.title,
             "description": video.description,
@@ -72,11 +75,16 @@ final class VideoFirestoreService: ObservableObject {
             "duration": video.duration,
             "viewCount": viewCountToSave,  // 🔥 FIX: Preserve existing count
             "likeCount": video.likeCount,
+            "dislikeCount": video.dislikeCount,
             "commentCount": video.commentCount,
+            "shareCount": existingDoc?.data()?["shareCount"] as? Int ?? 0,
             "category": video.category.rawValue,
             "tags": video.tags,
+            "language": video.language ?? "en",
             "isPublic": video.visibility == .public,
             "visibility": video.visibility.rawValue,
+            "status": "published",
+            "processingStatus": "completed",
             "ageRestricted": video.ageRestricted ?? false,
             "madeForKids": video.madeForKids ?? false,
             "allowComments": video.allowComments ?? (existingDoc?.data()?["allowComments"] as? Bool ?? true),
@@ -84,7 +92,8 @@ final class VideoFirestoreService: ObservableObject {
             "isPremiere": video.isPremiere ?? (existingDoc?.data()?["isPremiere"] as? Bool ?? false),
             "scheduledAt": video.scheduledAt.map { Timestamp(date: $0) } ?? existingDoc?.data()?["scheduledAt"] ?? NSNull(),
             "createdAt": existingDoc?.data()?["createdAt"] ?? FieldValue.serverTimestamp(),  // Preserve original createdAt
-            "updatedAt": FieldValue.serverTimestamp()
+            "updatedAt": FieldValue.serverTimestamp(),
+            "publishedAt": existingDoc?.data()?["publishedAt"] ?? FieldValue.serverTimestamp()
         ]
         
         // 🔥 FIX: Use merge: true to preserve existing fields (especially viewCount)

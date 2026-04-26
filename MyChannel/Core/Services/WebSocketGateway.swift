@@ -45,7 +45,7 @@ class WebSocketGateway: ObservableObject {
     // MARK: - 🔌 CONNECTION
     
     func connect(userId: String? = nil) {
-        let urlString = "wss://api.mychannel.app/ws" // TODO: Update with your WebSocket URL
+        let urlString = "wss://mychannel-live-ws-fkri6ifojq-uc.a.run.app/ws"
         guard let url = URL(string: urlString) else {
             print("❌ [WebSocket] Invalid URL")
             return

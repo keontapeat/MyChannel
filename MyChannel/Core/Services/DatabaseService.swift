@@ -475,20 +475,20 @@ class DatabaseService: ObservableObject {
     }
     
     // MARK: - Analytics & Statistics
-    func saveAnalyticsEvent(_ event: AnalyticsEvent) async throws {
+    func saveAnalyticsEvent(_ event: LocalAnalyticsEvent) async throws {
         if let encoded = try? encoder.encode(event) {
             let key = "analytics_\(event.timestamp.timeIntervalSince1970)_\(UUID().uuidString)"
             userDefaults.set(encoded, forKey: key)
         }
     }
     
-    func fetchAnalyticsEvents(limit: Int = 1000) async throws -> [AnalyticsEvent] {
-        var events: [AnalyticsEvent] = []
+    func fetchAnalyticsEvents(limit: Int = 1000) async throws -> [LocalAnalyticsEvent] {
+        var events: [LocalAnalyticsEvent] = []
         
         for key in userDefaults.dictionaryRepresentation().keys {
             if key.hasPrefix("analytics_"), 
                let data = userDefaults.data(forKey: key),
-               let event = try? decoder.decode(AnalyticsEvent.self, from: data) {
+               let event = try? decoder.decode(LocalAnalyticsEvent.self, from: data) {
                 events.append(event)
             }
         }
@@ -578,7 +578,7 @@ struct SavedVideoItem: Identifiable, Codable {
     }
 }
 
-struct AnalyticsEvent: Codable {
+struct LocalAnalyticsEvent: Codable {
     let name: String
     let parameters: [String: String]
     let timestamp: Date

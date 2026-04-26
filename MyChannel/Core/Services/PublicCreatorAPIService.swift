@@ -10,7 +10,7 @@
 
 import Foundation
 
-struct APIClient: Codable, Identifiable, Equatable {
+struct CreatorAPIClient: Codable, Identifiable, Equatable {
     let id: String               // client_id
     let name: String
     let ownerUid: String
@@ -65,7 +65,7 @@ final class PublicCreatorAPIService: ObservableObject {
 
     // MARK: - Clients
 
-    func createClient(name: String, scopes: [APIScope], ownerUid: String) async throws -> (APIClient, plaintextSecret: String) {
+    func createClient(name: String, scopes: [APIScope], ownerUid: String) async throws -> (CreatorAPIClient, plaintextSecret: String) {
         guard AppConfig.Features.enablePublicCreatorAPI else { throw APIError.disabled }
         struct Request: Encodable {
             let name: String
@@ -80,7 +80,7 @@ final class PublicCreatorAPIService: ObservableObject {
         }
         let body = Request(name: name, scopes: scopes.map { $0.rawValue }, ownerUid: ownerUid)
         let raw: Raw = try await callPortal("/clients", method: "POST", body: body)
-        let client = APIClient(
+        let client = CreatorAPIClient(
             id: raw.client_id,
             name: name,
             ownerUid: ownerUid,
@@ -92,7 +92,7 @@ final class PublicCreatorAPIService: ObservableObject {
         return (client, raw.client_secret)
     }
 
-    func listClients(ownerUid: String) async throws -> [APIClient] {
+    func listClients(ownerUid: String) async throws -> [CreatorAPIClient] {
         guard AppConfig.Features.enablePublicCreatorAPI else { return [] }
         struct Raw: Decodable { let clients: [ClientRaw] }
         struct ClientRaw: Decodable {
@@ -105,7 +105,7 @@ final class PublicCreatorAPIService: ObservableObject {
         }
         let r: Raw = try await callPortal("/clients?ownerUid=\(ownerUid)", method: "GET", body: _EmptyBody())
         return r.clients.map {
-            APIClient(
+            CreatorAPIClient(
                 id: $0.client_id,
                 name: $0.name,
                 ownerUid: ownerUid,

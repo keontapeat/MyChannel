@@ -29,6 +29,8 @@ class AdvancedSearchService: ObservableObject {
     private let queryProcessor = AdvancedQueryProcessor()
     private let rankingEngine = SearchRankingEngine()
     private let autoCompleteService = AutoCompleteService()
+    private let elasticsearch = ElasticsearchService.shared
+    private let redisCache = RedisCacheService.shared
     #if canImport(FirebaseFirestore)
     private var db: Firestore { Firestore.firestore() }
     private var lastVideoSnap: DocumentSnapshot?
@@ -219,6 +221,14 @@ class AdvancedSearchService: ObservableObject {
     
     private func setupSearchEngine() {
         Task {
+            // 🔥 YOUTUBE PARITY: Elasticsearch index first (sub-100ms search)
+            // Then fallback to local index for offline
+            do {
+                try await elasticsearch.listIndices()
+                print("✅ [Search] Elasticsearch indices loaded: \(elasticsearch.indices.count)")
+            } catch {
+                print("⚠️ [Search] Elasticsearch unavailable, using local index: \(error)")
+            }
             let vids = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 50)
             searchIndexer.buildIndex(from: vids, creators: User.sampleUsers)
         }
@@ -230,6 +240,50 @@ class AdvancedSearchService: ObservableObject {
         filters: AdvancedSearchFilters
     ) async -> [VideoSearchResult] {
         
+        // 🔥 YOUTUBE PARITY: Try Elasticsearch first (sub-100ms full-text search)
+        if let esResults = try? await elasticsearch.search(
+            index: "videos",
+            query: query.searchTerms,
+            from: 0,
+            size: 50
+        ), esResults.totalHits > 0 {
+            print("⚡ [Search] ES returned \(esResults.totalHits) hits in <100ms")
+            // Convert ES docs to VideoSearchResult
+            let results = esResults.documents.compactMap { doc -> VideoSearchResult? in
+                guard let title = doc.source["title"], !title.isEmpty else { return nil }
+                let video = Video(
+                    id: doc.id,
+                    title: title,
+                    description: doc.source["description"] ?? "",
+                    thumbnailURL: doc.source["thumbnailUrl"] ?? "",
+                    videoURL: doc.source["videoUrl"] ?? "",
+                    duration: Double(doc.source["duration"] ?? "") ?? 0,
+                    viewCount: Int(doc.source["viewCount"] ?? "") ?? 0,
+                    likeCount: Int(doc.source["likeCount"] ?? "") ?? 0,
+                    creator: User.defaultUser,
+                    category: VideoCategory(rawValue: doc.source["category"] ?? "") ?? .entertainment
+                )
+                return VideoSearchResult(
+                    video: video,
+                    relevanceScore: doc.score,
+                    matchingFields: ["title", "description"],
+                    highlights: []
+                )
+            }
+            if !results.isEmpty { return results }
+        }
+        
+        // 🔥 YOUTUBE PARITY: Try Redis cache next (5ms)
+        if let cachedVideos: [Video] = await redisCache.getCachedSearch(query.searchTerms) {
+            print("⚡ [Search] Redis cache hit for: \(query.searchTerms)")
+            return cachedVideos.compactMap { video in
+                let score = calculateRelevance(video: video, query: query, filters: filters)
+                guard score > 0.1 else { return nil }
+                return VideoSearchResult(video: video, relevanceScore: score, matchingFields: getMatchingFields(video: video, query: query), highlights: generateHighlights(video: video, query: query))
+            }
+        }
+        
+        // Fallback: Firestore query
         var videos: [Video] = []
         #if canImport(FirebaseFirestore)
         do {
@@ -253,7 +307,11 @@ class AdvancedSearchService: ObservableObject {
                     category: filters.category ?? .entertainment
                 )
             }
-            if !fetched.isEmpty { videos = fetched }
+            if !fetched.isEmpty {
+                videos = fetched
+                // 🔥 YOUTUBE PARITY: Cache search results in Redis for 5 min
+                Task { await redisCache.cacheSearchResults(query.searchTerms, videos: fetched) }
+            }
         } catch { }
         #endif
         

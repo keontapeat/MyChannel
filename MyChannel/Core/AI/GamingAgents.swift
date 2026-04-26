@@ -611,7 +611,7 @@ final class LeaderboardCalculator: ObservableObject {
     @Published var isActive: Bool = false
     @Published var metrics: AgentMetrics = .empty
     @Published var status: AgentStatus = .idle
-    @Published var leaderboards: [String: [LeaderboardEntry]] = [:]
+    @Published var leaderboards: [String: [GamingLeaderboardEntry]] = [:]
     
     private var errorCount: Int = 0
     
@@ -681,7 +681,7 @@ final class LeaderboardCalculator: ObservableObject {
                 .getDocuments()
             
             // Calculate rankings based on wins, win rate, total earnings
-            var rankings: [String: LeaderboardEntry] = [:]
+            var rankings: [String: GamingLeaderboardEntry] = [:]
             
             for doc in snapshot.documents {
                 let data = doc.data()
@@ -692,7 +692,7 @@ final class LeaderboardCalculator: ObservableObject {
                     entry.totalEarnings += (data["winnerPayout"] as? Double) ?? 0
                     rankings[winnerId] = entry
                 } else {
-                    rankings[winnerId] = LeaderboardEntry(
+                    rankings[winnerId] = GamingLeaderboardEntry(
                         userId: winnerId,
                         rank: 0,
                         wins: 1,
@@ -708,7 +708,7 @@ final class LeaderboardCalculator: ObservableObject {
                     return entry1.totalEarnings > entry2.totalEarnings
                 }
                 return entry1.wins > entry2.wins
-            }.enumerated().map { (index, entry) -> LeaderboardEntry in
+            }.enumerated().map { (index, entry) -> GamingLeaderboardEntry in
                 var updated = entry
                 updated.rank = index + 1
                 return updated
@@ -725,7 +725,7 @@ final class LeaderboardCalculator: ObservableObject {
         #endif
     }
     
-    private func saveLeaderboard(division: String, entries: [LeaderboardEntry]) async throws {
+    private func saveLeaderboard(division: String, entries: [GamingLeaderboardEntry]) async throws {
         #if canImport(FirebaseFirestore)
         let db = Firestore.firestore()
         let batch = db.batch()
@@ -775,7 +775,7 @@ struct Tournament: Identifiable {
     let category: String
 }
 
-struct LeaderboardEntry: Identifiable {
+struct GamingLeaderboardEntry: Identifiable {
     let id = UUID()
     let userId: String
     var rank: Int

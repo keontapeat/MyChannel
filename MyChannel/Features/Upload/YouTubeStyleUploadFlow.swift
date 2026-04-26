@@ -41,6 +41,8 @@ struct YouTubeStyleUploadFlow: View {
     // Photos library recent videos
     @State private var recentVideos: [RecentVideo] = []
     @State private var isLoadingVideos = true
+    @State private var showUploadError = false
+    @State private var uploadErrorMessage = ""
     
     private let categories = [
         "Entertainment", "Music", "Gaming", "Sports", "News", "Education",
@@ -104,124 +106,137 @@ struct YouTubeStyleUploadFlow: View {
     // MARK: - Professional Header
     
     private var professionalHeader: some View {
-        HStack {
-            // Cancel/Back Button
+        HStack(spacing: 12) {
             Button(action: handleBackAction) {
-                HStack(spacing: 6) {
-                    Image(systemName: currentStep == .contentSelection ? "xmark" : "chevron.left")
-                        .font(.system(size: 16, weight: .medium))
-                    
-                    if currentStep != .contentSelection {
-                        Text("Back")
-                            .font(.system(size: 16, weight: .medium))
-                    }
-                }
-                .foregroundColor(.red)
+                Image(systemName: currentStep == .contentSelection ? "xmark" : "chevron.left")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .frame(width: 36, height: 36)
+                    .background(Color(.systemGray6))
+                    .clipShape(Circle())
             }
             
-            Spacer()
-            
-            // Title
             VStack(spacing: 2) {
                 Text(currentStep.title)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.primary)
                 
-                if currentStep != .contentSelection && currentStep != .completed {
-                    Text(currentStep.subtitle)
-                        .font(.system(size: 12))
+                if currentStep != .completed {
+                    Text(currentStep == .contentSelection ? "Choose a video and start creating" : currentStep.subtitle)
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.secondary)
+                        .lineLimit(1)
                 }
             }
+            .frame(maxWidth: .infinity)
             
-            Spacer()
-            
-            // Skip/Next Button
             if currentStep.canSkip {
                 Button("Skip") {
                     nextStep()
                 }
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.red)
+                .padding(.horizontal, 12)
+                .frame(height: 36)
+                .background(Color.red.opacity(0.08))
+                .clipShape(Capsule())
             } else {
-                Color.clear.frame(width: 50)
+                Color.clear.frame(width: 56, height: 36)
             }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 16)
         .padding(.top, 8)
-        .padding(.vertical, 12)
+        .padding(.bottom, 12)
         .background(Color(.systemBackground))
-        .overlay(
-            Rectangle()
-                .frame(height: 0.5)
-                .foregroundColor(.gray.opacity(0.3)),
-            alignment: .bottom
-        )
     }
     
     // MARK: - Progress Indicator
     
     private var progressIndicator: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(UploadStep.allCases.enumerated()), id: \.offset) { index, step in
-                Rectangle()
-                    .frame(height: 3)
-                    .foregroundColor(
-                        index <= currentStep.rawValue ? .red : .gray.opacity(0.3)
-                    )
-                    .animation(.easeInOut(duration: 0.3), value: currentStep)
+        HStack(spacing: 8) {
+            ForEach(Array(UploadStep.allCases.enumerated()), id: \.offset) { index, _ in
+                Capsule()
+                    .fill(index <= currentStep.rawValue ? Color.red : Color(.systemGray5))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 4)
+                    .animation(.easeInOut(duration: 0.25), value: currentStep)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
     }
     
     // MARK: - Content Selection View
     
     private var contentSelectionView: some View {
         VStack(spacing: 0) {
-            // Sleek action row — compact pills like YouTube
-            HStack(spacing: 8) {
-                Button(action: { showingPhotoPicker = true }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "photo.stack")
-                            .font(.system(size: 13, weight: .medium))
-                        Text("Browse")
-                            .font(.system(size: 13, weight: .semibold))
+            VStack(spacing: 14) {
+                HStack(spacing: 10) {
+                    Button(action: { showingPhotoPicker = true }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("Browse")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .frame(height: 38)
+                        .background(Color.red)
+                        .clipShape(Capsule())
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Color.red)
-                    .clipShape(Capsule())
+                    
+                    Button(action: { showingCamera = true }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "video.badge.plus")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("Record")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundColor(.primary)
+                        .padding(.horizontal, 16)
+                        .frame(height: 38)
+                        .background(Color(.systemGray6))
+                        .clipShape(Capsule())
+                    }
+                    
+                    Spacer()
+                    
+                    if !recentVideos.isEmpty {
+                        Text("\(recentVideos.count) videos")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
                 }
                 
-                Button(action: { showingCamera = true }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 13, weight: .medium))
-                        Text("Record")
-                            .font(.system(size: 13, weight: .semibold))
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Recent uploads")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.primary)
+                        Text("Pick a video from your library or record a new one.")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
                     }
-                    .foregroundColor(.primary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Color(.systemGray5))
-                    .clipShape(Capsule())
-                }
-                
-                Spacer()
-                
-                if !recentVideos.isEmpty {
-                    Text("\(recentVideos.count) videos")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    if !recentVideos.isEmpty {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("Ready")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.red)
+                            Text("Fast select")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
+            .padding(.bottom, 12)
             
-            // Video grid fills remaining space
             if isLoadingVideos {
                 VStack(spacing: 12) {
                     ProgressView()
@@ -248,12 +263,13 @@ struct YouTubeStyleUploadFlow: View {
             } else {
                 ScrollView {
                     LazyVGrid(columns: [
-                        GridItem(.flexible(), spacing: 1.5),
-                        GridItem(.flexible(), spacing: 1.5),
-                        GridItem(.flexible(), spacing: 1.5)
-                    ], spacing: 1.5) {
+                        GridItem(.flexible(), spacing: 2),
+                        GridItem(.flexible(), spacing: 2),
+                        GridItem(.flexible(), spacing: 2)
+                    ], spacing: 2) {
                         ForEach(recentVideos) { video in
                             RecentVideoCell(video: video)
+                                .contentShape(Rectangle())
                                 .onTapGesture {
                                     selectRecentVideo(video)
                                 }
@@ -269,125 +285,133 @@ struct YouTubeStyleUploadFlow: View {
     // MARK: - Video Preview View
     
     private var videoPreviewView: some View {
-        VStack(spacing: 24) {
-            // Large Thumbnail Preview (like your second image)
-            VStack(spacing: 16) {
-                Text("Preview")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                
-                // Big Thumbnail Container
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.black)
-                        .aspectRatio(16/9, contentMode: .fit)
+        ScrollView {
+            VStack(spacing: 20) {
+                VStack(spacing: 16) {
+                    Text("Preview")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 18)
+                            .fill(Color.black)
+                            .aspectRatio(16/9, contentMode: .fit)
+                        
+                        if let thumbnail = videoThumbnail {
+                            Image(uiImage: thumbnail)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .clipShape(RoundedRectangle(cornerRadius: 18))
+                        }
+                        
+                        Circle()
+                            .fill(Color.black.opacity(0.58))
+                            .frame(width: 64, height: 64)
+                            .overlay(
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.white)
+                                    .offset(x: 2)
+                            )
+                    }
+                    .overlay(alignment: .bottomTrailing) {
+                        Text(formatDuration(videoDuration))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(Color.black.opacity(0.7))
+                            .clipShape(Capsule())
+                            .padding(12)
+                    }
+                    .shadow(color: .black.opacity(0.12), radius: 18, x: 0, y: 10)
+                }
+                .padding(16)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 22))
+                
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("Thumbnail Time")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Text(formatTime(thumbnailTime))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Slider(value: $thumbnailTime, in: 0...videoDuration) { _ in
+                        generateThumbnailAtTime(thumbnailTime)
+                    }
+                    .accentColor(.red)
+                }
+                .padding(16)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 18))
+                
+                HStack(spacing: 12) {
                     if let thumbnail = videoThumbnail {
                         Image(uiImage: thumbnail)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .frame(width: 72, height: 72)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
                     
-                    // Play overlay
-                    Circle()
-                        .fill(Color.black.opacity(0.6))
-                        .frame(width: 64, height: 64)
-                        .overlay(
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 24))
-                                .foregroundColor(.white)
-                                .offset(x: 2)
-                        )
-                }
-                .onTapGesture {
-                    // Play preview
-                }
-            }
-            
-            // Thumbnail Time Scrubber
-            VStack(spacing: 12) {
-                HStack {
-                    Text("Thumbnail Time")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.primary)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(formatDuration(videoDuration))
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.primary)
+                        Text("Ready to edit and publish")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                        Text("Landscape preview · optimized for upload")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
                     
                     Spacer()
+                }
+                .padding(16)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 18))
+                
+                HStack(spacing: 12) {
+                    Button(action: {}) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "play.circle")
+                                .font(.system(size: 18))
+                            Text("Preview")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundColor(.red)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 46)
+                        .background(Color.red.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 23))
+                    }
                     
-                    Text(formatTime(thumbnailTime))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.secondary)
-                }
-                
-                Slider(value: $thumbnailTime, in: 0...videoDuration) { _ in
-                    generateThumbnailAtTime(thumbnailTime)
-                }
-                .accentColor(.red)
-            }
-            
-            // Video Info Card
-            HStack(spacing: 12) {
-                if let thumbnail = videoThumbnail {
-                    Image(uiImage: thumbnail)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 60, height: 60)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(formatDuration(videoDuration))
-                        .font(.system(size: 16, weight: .semibold))
+                    Button(action: {}) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 17))
+                            Text("1080p")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
                         .foregroundColor(.primary)
-                    
-                    Text("Ready to edit")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-            }
-            .padding()
-            .background(Color(.systemGray6))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            
-            Spacer()
-            
-            // Quality and Preview Buttons
-            HStack(spacing: 12) {
-                Button(action: {}) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "play.circle")
-                            .font(.system(size: 18))
-                        
-                        Text("Preview")
-                            .font(.system(size: 16, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 46)
+                        .background(Color(.secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 23))
                     }
-                    .foregroundColor(.red)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(Color.red.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 22))
-                }
-                
-                Button(action: {}) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "gear")
-                            .font(.system(size: 18))
-                        
-                        Text("1080p")
-                            .font(.system(size: 16, weight: .medium))
-                    }
-                    .foregroundColor(.primary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 22))
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+            .padding(.bottom, 120)
         }
-        .padding(.horizontal, 20)
     }
     
     // MARK: - Video Details View
@@ -395,7 +419,34 @@ struct YouTubeStyleUploadFlow: View {
     private var videoDetailsView: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Title Input
+                if let thumbnail = videoThumbnail {
+                    HStack(spacing: 12) {
+                        Image(uiImage: thumbnail)
+                            .resizable()
+                            .aspectRatio(16/9, contentMode: .fill)
+                            .frame(width: 112, height: 64)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(videoTitle.isEmpty ? "Untitled video" : videoTitle)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.primary)
+                                .lineLimit(2)
+                            Text("\(formatDuration(videoDuration)) · \(selectedCategory)")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                            Text(selectedVisibility.rawValue.capitalized)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.red)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(16)
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                }
+                
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Title")
                         .font(.system(size: 16, weight: .semibold))
@@ -408,7 +459,6 @@ struct YouTubeStyleUploadFlow: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 
-                // Description Input
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Description")
                         .font(.system(size: 16, weight: .semibold))
@@ -422,7 +472,6 @@ struct YouTubeStyleUploadFlow: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 
-                // Visibility Selection
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Visibility")
                         .font(.system(size: 16, weight: .semibold))
@@ -440,7 +489,6 @@ struct YouTubeStyleUploadFlow: View {
                     }
                 }
                 
-                // Category Selection
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Category")
                         .font(.system(size: 16, weight: .semibold))
@@ -470,7 +518,6 @@ struct YouTubeStyleUploadFlow: View {
                     }
                 }
                 
-                // Tags Input
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Tags")
                         .font(.system(size: 16, weight: .semibold))
@@ -505,8 +552,9 @@ struct YouTubeStyleUploadFlow: View {
                     }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 120)
         }
     }
     
@@ -616,7 +664,8 @@ struct YouTubeStyleUploadFlow: View {
             
             // Cancel button
             Button("Cancel Upload") {
-                // Cancel upload
+                uploadManager.cancelUpload()
+                currentStep = .videoDetails
             }
             .font(.system(size: 16))
             .foregroundColor(.secondary)
@@ -624,6 +673,17 @@ struct YouTubeStyleUploadFlow: View {
         .padding(.horizontal, 20)
         .onAppear {
             startUpload()
+        }
+        .alert("Upload Failed", isPresented: $showUploadError) {
+            Button("Try Again") {
+                currentStep = .publishing
+            }
+            Button("Edit Details") {
+                currentStep = .videoDetails
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(uploadErrorMessage)
         }
     }
     
@@ -661,7 +721,13 @@ struct YouTubeStyleUploadFlow: View {
             
             VStack(spacing: 16) {
                 Button("View Video") {
-                    // Navigate to video
+                    if let video = uploadManager.uploadedVideo {
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("NavigateToVideo"),
+                            object: video
+                        )
+                    }
+                    dismiss()
                 }
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.white)
@@ -689,34 +755,38 @@ struct YouTubeStyleUploadFlow: View {
     @ViewBuilder
     private var bottomActionBar: some View {
         if currentStep != .contentSelection && currentStep != .completed && currentStep != .publishing {
-            VStack(spacing: 0) {
-                Divider()
-                
-                HStack {
-                    Spacer()
-                    
-                    Button(action: nextStep) {
-                        HStack(spacing: 8) {
-                            Text(currentStep.nextButtonTitle)
-                                .font(.system(size: 16, weight: .semibold))
-                            
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 32)
-                        .padding(.vertical, 14)
-                        .background(
-                            Capsule()
-                                .fill(canProceed ? Color.red : Color.gray.opacity(0.4))
-                        )
+            VStack(spacing: 12) {
+                if currentStep == .videoDetails {
+                    HStack {
+                        Text(videoTitle.isEmpty ? "Add a title to continue" : "Looks good — you can publish next")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Spacer()
                     }
-                    .disabled(!canProceed)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                .background(Color(.systemBackground))
+                
+                Button(action: nextStep) {
+                    HStack(spacing: 8) {
+                        Text(currentStep.nextButtonTitle)
+                            .font(.system(size: 16, weight: .semibold))
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(
+                        RoundedRectangle(cornerRadius: 26)
+                            .fill(canProceed ? Color.red : Color.gray.opacity(0.35))
+                    )
+                    .shadow(color: canProceed ? Color.red.opacity(0.18) : .clear, radius: 14, x: 0, y: 8)
+                }
+                .disabled(!canProceed)
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 12)
+            .background(.thinMaterial)
         }
     }
     
@@ -909,6 +979,7 @@ struct YouTubeStyleUploadFlow: View {
         uploadManager.description = videoDescription
         uploadManager.selectedTags = Set(videoTags)
         uploadManager.isPublic = selectedVisibility == .publicVideo
+        uploadManager.isUnlisted = selectedVisibility == .unlisted
         uploadManager.thumbnail = videoThumbnail
         uploadManager.videoDuration = videoDuration
         
@@ -926,9 +997,11 @@ struct YouTubeStyleUploadFlow: View {
             if uploadManager.uploadedVideo != nil {
                 print("✅ Upload completed and video posted successfully")
                 self.currentStep = .completed
-            } else if uploadManager.uploadError != nil {
-                print("🚨 Upload failed: \(uploadManager.uploadError ?? "Unknown error")")
-                self.currentStep = .contentSelection
+            } else if let error = uploadManager.uploadError {
+                print("🚨 Upload failed: \(error)")
+                self.uploadErrorMessage = error
+                self.showUploadError = true
+                self.currentStep = .videoDetails
             } else {
                 // No error and no uploadedVideo means success (resetForm may have cleared it)
                 print("✅ Upload completed successfully")
