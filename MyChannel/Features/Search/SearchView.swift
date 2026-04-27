@@ -149,6 +149,17 @@ struct SearchView: View {
             SearchFiltersView(filters: $searchFilters) {
                 if !searchText.isEmpty { performSearch() }
             }
+            .background(
+                UIKitSheetConfigurator(
+                    configuration: UIKitSheetConfiguration(
+                        detents: [.medium(), .large()],
+                        largestUndimmedDetentIdentifier: .large,
+                        prefersGrabberVisible: true,
+                        prefersScrollingExpandsWhenScrolledToEdge: false,
+                        preferredCornerRadius: 28
+                    )
+                )
+            )
         }
         .sheet(isPresented: $showingVoiceSearch) {
             VoiceSearchSheet(
@@ -159,6 +170,17 @@ struct SearchView: View {
                     performSearch()
                 }
             )
+            .background(
+                UIKitSheetConfigurator(
+                    configuration: UIKitSheetConfiguration(
+                        detents: [.medium(), .large()],
+                        largestUndimmedDetentIdentifier: .large,
+                        prefersGrabberVisible: true,
+                        prefersScrollingExpandsWhenScrolledToEdge: false,
+                        preferredCornerRadius: 28
+                    )
+                )
+            )
         }
         .sheet(isPresented: $showingVisualSearch) {
             VisualSearchSheet(onComplete: { query in
@@ -166,6 +188,16 @@ struct SearchView: View {
                 showingVisualSearch = false
                 performSearch()
             })
+            .background(
+                UIKitSheetConfigurator(
+                    configuration: UIKitSheetConfiguration(
+                        detents: [.medium(), .large()],
+                        largestUndimmedDetentIdentifier: .large,
+                        prefersScrollingExpandsWhenScrolledToEdge: false,
+                        preferredCornerRadius: 28
+                    )
+                )
+            )
         }
         .onAppear {
             // Load recent searches from UserDefaults

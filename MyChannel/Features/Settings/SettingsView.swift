@@ -50,9 +50,31 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showingPremiumBenefits) {
             PremiumBenefitsView()
+                .background(
+                    UIKitSheetConfigurator(
+                        configuration: UIKitSheetConfiguration(
+                            detents: [.medium(), .large()],
+                            largestUndimmedDetentIdentifier: .large,
+                            prefersGrabberVisible: true,
+                            prefersScrollingExpandsWhenScrolledToEdge: false,
+                            preferredCornerRadius: 28
+                        )
+                    )
+                )
         }
         .sheet(isPresented: $showingAbout) {
             AboutView()
+                .background(
+                    UIKitSheetConfigurator(
+                        configuration: UIKitSheetConfiguration(
+                            detents: [.medium(), .large()],
+                            largestUndimmedDetentIdentifier: .large,
+                            prefersGrabberVisible: true,
+                            prefersScrollingExpandsWhenScrolledToEdge: false,
+                            preferredCornerRadius: 28
+                        )
+                    )
+                )
         }
         .alert("Delete Account?", isPresented: $showingDeleteAccountConfirmation) {
             Button("Cancel", role: .cancel) { }

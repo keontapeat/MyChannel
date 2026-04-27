@@ -1,5 +1,13 @@
 import SwiftUI
 import Combine
+import AVKit
+
+// MARK: - Player Mode
+enum PlayerMode {
+    case inline
+    case fullscreen
+    case pip
+}
 
 // MARK: - Player Controls Coordinator
 /// Centralizes player control visibility, auto-hide timing, and transient overlay lifecycle.
@@ -10,6 +18,9 @@ final class PlayerControlsCoordinator: ObservableObject {
     // MARK: - Control Visibility
     @Published var showControls: Bool = true
     @Published var isPlaying: Bool = false
+    
+    // MARK: - Player Mode State Machine
+    @Published var playerMode: PlayerMode = .inline
     
     // MARK: - Transient Overlays
     @Published var showSeekOverlay: Bool = false
@@ -28,6 +39,11 @@ final class PlayerControlsCoordinator: ObservableObject {
     /// Whether any transient overlay is currently visible
     var hasTransientOverlay: Bool {
         showSeekOverlay || showBrightnessOverlay || showVolumeOverlay || hoveredChapter != nil
+    }
+    
+    /// Whether controls should auto-hide (respects PiP mode)
+    var shouldAutoHide: Bool {
+        playerMode != .pip && isPlaying && !hasTransientOverlay
     }
     
     // MARK: - Control Visibility Management
@@ -60,12 +76,12 @@ final class PlayerControlsCoordinator: ObservableObject {
         cancelHideTimer()
         
         // Only auto-hide if playing and no transient overlays
-        guard isPlaying && !hasTransientOverlay else { return }
+        guard shouldAutoHide else { return }
         
         hideTimer = Timer.scheduledTimer(withTimeInterval: autoHideDelay, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
-                guard self.isPlaying && !self.hasTransientOverlay else { return }
+                guard self.shouldAutoHide else { return }
                 withAnimation(.easeInOut(duration: 0.25)) {
                     self.showControls = false
                 }
@@ -206,5 +222,75 @@ final class PlayerControlsCoordinator: ObservableObject {
         cancelHideTimer()
         chapterTooltipWorkItem?.cancel()
         chapterTooltipWorkItem = nil
+    }
+    
+    // MARK: - Player Mode State Machine
+    
+    func enterFullscreen() {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            playerMode = .fullscreen
+        }
+        showControlsAndResetTimer()
+    }
+    
+    func exitFullscreen() {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            playerMode = .inline
+        }
+        showControlsAndResetTimer()
+    }
+    
+    func enterPiP() {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            playerMode = .pip
+        }
+        // In PiP, controls are managed by the system, hide our controls
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showControls = false
+        }
+        cancelHideTimer()
+    }
+    
+    func exitPiP() {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            playerMode = .inline
+        }
+        showControlsAndResetTimer()
+    }
+    
+    // MARK: - Ad Coordination
+    
+    @Published var showingAd: Bool = false
+    @Published var adOverlayPausedPlayback: Bool = false
+    
+    func beginAdOverlay() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showingAd = true
+        }
+        // Ads should pause auto-hide and keep controls visible
+        cancelHideTimer()
+        if !showControls {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showControls = true
+            }
+        }
+    }
+    
+    func endAdOverlay() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showingAd = false
+        }
+        // Resume normal control behavior
+        if isPlaying {
+            resetHideTimer()
+        }
+    }
+    
+    func pausePlaybackForAd() {
+        adOverlayPausedPlayback = true
+    }
+    
+    func resumePlaybackAfterAd() {
+        adOverlayPausedPlayback = false
     }
 }

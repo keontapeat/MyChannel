@@ -168,14 +168,12 @@ struct BlockedUsersView: View {
     private var searchBar: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 18))
-                    .foregroundColor(AppTheme.Colors.textTertiary)
-                
-                TextField("Search blocked users...", text: $searchText)
-                    .font(.system(size: 16))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .textFieldStyle(PlainTextFieldStyle())
+                UIKitSearchBar(
+                    placeholder: "Search blocked users...",
+                    text: $searchText,
+                    onSearch: { /* Search is already debounced via onChange */ }
+                )
+                .frame(height: 36)
                 
                 if !searchText.isEmpty {
                     Button {

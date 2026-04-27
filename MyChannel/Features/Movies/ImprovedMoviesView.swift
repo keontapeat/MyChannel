@@ -186,15 +186,12 @@ struct ImprovedMoviesView: View {
     
     private var searchBar: some View {
         HStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .font(.system(size: 16))
-            
-            TextField("Search movies, actors, directors...", text: $searchText)
-                .textInputAutocapitalization(.words)
-                .disableAutocorrection(true)
-                .font(.system(size: 16))
-                .foregroundColor(AppTheme.Colors.textPrimary)
+            UIKitSearchBar(
+                placeholder: "Search movies, actors, directors...",
+                text: $searchText,
+                onSearch: { performSearch() }
+            )
+            .frame(height: 36)
             
             if isSearching {
                 ProgressView()

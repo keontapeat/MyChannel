@@ -419,21 +419,30 @@ struct VideoDetailView: View {
         
         // 🔥 YOUTUBE PARITY: Brightness overlay (left side vertical swipe)
         if controlsCoordinator.showBrightnessOverlay {
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
                 Image(systemName: UIScreen.main.brightness > 0.5 ? "sun.max.fill" : "sun.min.fill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.white)
-                ProgressView(value: Double(UIScreen.main.brightness), total: 1.0)
-                    .progressViewStyle(LinearProgressViewStyle(tint: .white))
-                    .frame(width: 100)
+                    .frame(width: 24)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    ProgressView(value: Double(UIScreen.main.brightness), total: 1.0)
+                        .progressViewStyle(LinearProgressViewStyle(tint: .white))
+                        .frame(width: 120)
+                    Text("\(Int(UIScreen.main.brightness * 100))%")
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.9))
+                }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Capsule().fill(Color.black.opacity(0.7)))
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(Capsule().fill(Color.black.opacity(0.75)))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .padding(.leading, 20)
+            .padding(.leading, 24)
+            .padding(.vertical, 100)
             .zIndex(350)
             .allowsHitTesting(false)
+            .transition(.scale.combined(with: .opacity))
         }
         
         // 🔥 PHASE 154: Sentiment heatmap "Most replayed" indicator
@@ -505,21 +514,30 @@ struct VideoDetailView: View {
 
         // 🔥 YOUTUBE PARITY: Volume overlay (right side vertical swipe)
         if controlsCoordinator.showVolumeOverlay {
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
+                VStack(alignment: .trailing, spacing: 4) {
+                    ProgressView(value: Double(playerManager.player?.volume ?? 0), total: 1.0)
+                        .progressViewStyle(LinearProgressViewStyle(tint: .white))
+                        .frame(width: 120)
+                    Text("\(Int((playerManager.player?.volume ?? 0) * 100))%")
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+                
                 Image(systemName: (playerManager.player?.volume ?? 0) > 0.5 ? "speaker.wave.3.fill" : "speaker.wave.1.fill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.white)
-                ProgressView(value: Double(playerManager.player?.volume ?? 0), total: 1.0)
-                    .progressViewStyle(LinearProgressViewStyle(tint: .white))
-                    .frame(width: 100)
+                    .frame(width: 24)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Capsule().fill(Color.black.opacity(0.7)))
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(Capsule().fill(Color.black.opacity(0.75)))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-            .padding(.trailing, 20)
+            .padding(.trailing, 24)
+            .padding(.vertical, 100)
             .zIndex(350)
             .allowsHitTesting(false)
+            .transition(.scale.combined(with: .opacity))
         }
     }
     

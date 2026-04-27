@@ -145,11 +145,12 @@ struct WatchLaterView: View {
         VStack(spacing: 12) {
             // Search Bar
             HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                
-                TextField("Search watch later...", text: $searchText)
-                    .textFieldStyle(.plain)
+                UIKitSearchBar(
+                    placeholder: "Search watch later...",
+                    text: $searchText,
+                    onSearch: { /* Search is already debounced via onChange */ }
+                )
+                .frame(height: 36)
                 
                 if !searchText.isEmpty {
                     Button(action: { searchText = "" }) {

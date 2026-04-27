@@ -660,13 +660,14 @@ struct FormField: View {
                 .foregroundColor(AppTheme.Colors.textSecondary)
             
             if isMultiline {
-                TextEditor(text: $text)
-                    .font(.system(size: 16))
-                    .frame(height: 100)
+                UIKitMultilineTextView(
+                    text: $text,
+                    placeholder: placeholder,
+                    height: 100
+                )
                     .padding(12)
                     .background(AppTheme.Colors.surface)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .scrollContentBackground(.hidden)
             } else {
                 TextField(placeholder, text: $text)
                     .font(.system(size: 16))

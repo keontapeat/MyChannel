@@ -467,6 +467,17 @@ struct EditProfileView: View {
                     hasUnsavedChanges = true
                 }
             )
+            .background(
+                UIKitSheetConfigurator(
+                    configuration: UIKitSheetConfiguration(
+                        detents: [.medium(), .large()],
+                        largestUndimmedDetentIdentifier: .large,
+                        prefersGrabberVisible: true,
+                        prefersScrollingExpandsWhenScrolledToEdge: false,
+                        preferredCornerRadius: 28
+                    )
+                )
+            )
         }
     }
     
