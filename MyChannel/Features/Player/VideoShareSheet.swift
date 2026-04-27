@@ -1,52 +1,18 @@
 import SwiftUI
-import UIKit
 
 // MARK: - 🔥 FIX: Native iOS Share Sheet using UIActivityViewController
 /// Proper share sheet that uses iOS's native sharing functionality
-struct VideoShareSheet: UIViewControllerRepresentable {
+struct VideoShareSheet: View {
     let items: [Any]
     var excludedActivityTypes: [UIActivity.ActivityType]? = nil
     var onComplete: ((Bool) -> Void)? = nil
-    
-    func makeCoordinator() -> Coordinator { Coordinator() }
-    
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(
-            activityItems: items,
-            applicationActivities: nil
+
+    var body: some View {
+        NativeShareSheet(
+            items: items,
+            excludedActivityTypes: excludedActivityTypes,
+            onComplete: onComplete
         )
-        
-        controller.excludedActivityTypes = excludedActivityTypes
-        
-        controller.completionWithItemsHandler = { _, completed, _, _ in
-            onComplete?(completed)
-        }
-        
-        // iPad: UIActivityViewController is a popover — it must have a source or it
-        // silently refuses to present. Setting the delegate to return .none makes iOS
-        // display it as a full sheet on all iPad form factors.
-        controller.popoverPresentationController?.delegate = context.coordinator
-        // Provide a fallback source rect in case the delegate isn't called in time.
-        if let windowScene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
-           let window = windowScene.windows.first(where: \.isKeyWindow) {
-            controller.popoverPresentationController?.sourceView = window
-            controller.popoverPresentationController?.sourceRect = CGRect(
-                x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0
-            )
-            controller.popoverPresentationController?.permittedArrowDirections = []
-        }
-        
-        return controller
-    }
-    
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-    
-    // MARK: - iPad Popover Coordinator
-    class Coordinator: NSObject, UIPopoverPresentationControllerDelegate {
-        func adaptivePresentationStyle(for controller: UIPresentationController,
-                                       traitCollection: UITraitCollection) -> UIModalPresentationStyle {
-            return .none
-        }
     }
 }
 

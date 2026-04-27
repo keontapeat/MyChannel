@@ -14,6 +14,7 @@ struct VideoDetailView: View {
     @StateObject private var playerManager = VideoPlayerManager() // Single player manager
     @StateObject private var appState = AppState.shared
     @StateObject private var recommendationService = VideoDetailRecommendationService.shared
+    @StateObject private var controlsCoordinator = PlayerControlsCoordinator()
     
     // 🔥 REAL-TIME VIEW COUNT: Make view count reactive
     @State private var currentViewCount: Int
@@ -44,16 +45,15 @@ struct VideoDetailView: View {
     @State private var isSubscribed = false
     @State private var isWatchLater = false
     @State private var showingCommentComposer = false
-    // showingShareSheet removed — share is now presented directly via UIApplication.shared.presentShareSheet()
     @State private var showingMoreOptions = false
     @State private var showingQualitySelector = false
     @State private var showingPlaybackSpeedSelector = false
+    @State private var showingShareSheet = false
 
     // MARK: - UI States
     @State private var expandedDescription = false
     @State private var isViewAppeared = false
-    @State private var showVideoControls = true
-    @State private var controlsHideTimer: Timer?
+    // Note: showVideoControls and controlsHideTimer now managed by controlsCoordinator
     @State private var showingFullscreenOverlay = false
     @State private var showingVideoEditor = false  // 🔥 FIX: Add video editor sheet
     @State private var showSeekRippleForward = false
@@ -63,8 +63,7 @@ struct VideoDetailView: View {
     @State private var currentChapterTitle: String = ""
     @State private var showingChapterTooltip = false
     @State private var chapterTooltipX: CGFloat = 0
-    @State private var hoveredChapter: Video.Chapter? = nil  // 🔥 YOUTUBE PARITY: Chapter tooltip state
-    @State private var chapterTooltipHideWorkItem: DispatchWorkItem?
+    // Note: hoveredChapter and chapterTooltipHideWorkItem now managed by controlsCoordinator
     @State private var showUpNext = false
     @State private var upNextCountdown = 5
     @State private var upNextVideo: Video? = nil
@@ -119,7 +118,7 @@ struct VideoDetailView: View {
     @State private var isHorizontalSeeking = false
     @State private var seekStartTime: TimeInterval = 0
     @State private var seekDeltaSeconds: TimeInterval = 0
-    @State private var showSeekOverlay = false
+    // Note: showSeekOverlay now managed by controlsCoordinator
     
     // MARK: - YouTube Parity: Loop Toggle
     @State private var isLooping = false
@@ -137,9 +136,10 @@ struct VideoDetailView: View {
     // MARK: - YouTube Parity: Brightness / Volume Swipe
     @State private var currentBrightness: CGFloat = UIScreen.main.brightness
     @State private var currentVolume: Float = 0.5
-    @State private var showBrightnessOverlay = false
-    @State private var showVolumeOverlay = false
+    // Note: showBrightnessOverlay and showVolumeOverlay now managed by controlsCoordinator
     @State private var verticalSwipeStartY: CGFloat = 0
+    @State private var lastBrightnessFeedbackStep: Int = -1
+    @State private var lastVolumeFeedbackStep: Int = -1
 
     // MARK: - Video Player Section (Extracted to fix compiler timeout)
     @ViewBuilder
@@ -354,7 +354,7 @@ struct VideoDetailView: View {
         
         // Invisible tap/drag area (disabled when controls visible so buttons work)
         videoTapArea
-            .allowsHitTesting(!showVideoControls)  // 🔥 FIX: Disable tap area when controls visible
+            .allowsHitTesting(!controlsCoordinator.showControls)  // 🔥 FIX: Disable tap area when controls visible
         
         // Ad overlay
         if showingAd, let url = prerollURL {
@@ -396,7 +396,7 @@ struct VideoDetailView: View {
         }
         
         // 🔥 YOUTUBE PARITY: Horizontal swipe-to-seek overlay
-        if showSeekOverlay {
+        if controlsCoordinator.showSeekOverlay {
             let targetTime = max(0, min(playerManager.duration, seekStartTime + seekDeltaSeconds))
             VStack(spacing: 4) {
                 Text(formatTime(targetTime))
@@ -418,7 +418,7 @@ struct VideoDetailView: View {
         }
         
         // 🔥 YOUTUBE PARITY: Brightness overlay (left side vertical swipe)
-        if showBrightnessOverlay {
+        if controlsCoordinator.showBrightnessOverlay {
             HStack(spacing: 8) {
                 Image(systemName: UIScreen.main.brightness > 0.5 ? "sun.max.fill" : "sun.min.fill")
                     .font(.system(size: 16, weight: .semibold))
@@ -504,7 +504,7 @@ struct VideoDetailView: View {
         }
 
         // 🔥 YOUTUBE PARITY: Volume overlay (right side vertical swipe)
-        if showVolumeOverlay {
+        if controlsCoordinator.showVolumeOverlay {
             HStack(spacing: 8) {
                 Image(systemName: (playerManager.player?.volume ?? 0) > 0.5 ? "speaker.wave.3.fill" : "speaker.wave.1.fill")
                     .font(.system(size: 16, weight: .semibold))
@@ -594,7 +594,7 @@ struct VideoDetailView: View {
                 let dx = translation.x
                 let dy = translation.y
 
-                if !isHorizontalSeeking && !showBrightnessOverlay && !showVolumeOverlay {
+                if !isHorizontalSeeking && !controlsCoordinator.showBrightnessOverlay && !controlsCoordinator.showVolumeOverlay {
                     if abs(dx) > abs(dy) && abs(dx) > 20 {
                         isHorizontalSeeking = true
                         seekStartTime = playerManager.currentTime
@@ -602,10 +602,10 @@ struct VideoDetailView: View {
                     } else if abs(dy) > abs(dx) && abs(dy) > 20 {
                         let isLeftSide = startX < screenWidth * 0.5
                         if isLeftSide {
-                            showBrightnessOverlay = true
+                            controlsCoordinator.beginBrightnessOverlay()
                             currentBrightness = UIScreen.main.brightness
                         } else {
-                            showVolumeOverlay = true
+                            controlsCoordinator.beginVolumeOverlay()
                             currentVolume = playerManager.player?.volume ?? currentVolume
                         }
                         verticalSwipeStartY = startLocation.y
@@ -615,23 +615,24 @@ struct VideoDetailView: View {
                 if isHorizontalSeeking {
                     let seekScale = min(playerManager.duration, 60.0) / max(screenWidth, 1)
                     seekDeltaSeconds = Double(dx) * seekScale
-                    withAnimation(.easeOut(duration: 0.1)) { showSeekOverlay = true }
-                    pauseControlsAutoHideForTransientOverlay()
+                    controlsCoordinator.beginSeekOverlay()
                 }
 
-                if showBrightnessOverlay {
+                if controlsCoordinator.showBrightnessOverlay {
                     let deltaY = verticalSwipeStartY - location.y
-                    let brightnessChange = deltaY / playerHeight
+                    let brightnessChange = deltaY / playerHeight * 0.7
                     let newBrightness = max(0, min(1, currentBrightness + brightnessChange))
                     UIScreen.main.brightness = newBrightness
+                    emitSteppedFeedbackIfNeeded(for: newBrightness, lastStep: &lastBrightnessFeedbackStep)
                     pauseControlsAutoHideForTransientOverlay()
                 }
 
-                if showVolumeOverlay {
+                if controlsCoordinator.showVolumeOverlay {
                     let deltaY = verticalSwipeStartY - location.y
-                    let volumeChange = Float(deltaY / playerHeight)
+                    let volumeChange = Float(deltaY / playerHeight) * 0.7
                     let newVolume = max(0, min(1, currentVolume + volumeChange))
                     playerManager.player?.volume = newVolume
+                    emitSteppedFeedbackIfNeeded(for: CGFloat(newVolume), lastStep: &lastVolumeFeedbackStep)
                     pauseControlsAutoHideForTransientOverlay()
                 }
             },
@@ -644,15 +645,19 @@ struct VideoDetailView: View {
                     print("⏩ [YouTube] Swipe-seek to \(Int(targetTime))s (delta: \(Int(seekDeltaSeconds))s)")
                 }
 
-                if showBrightnessOverlay {
+                if controlsCoordinator.showBrightnessOverlay {
                     currentBrightness = UIScreen.main.brightness
+                    lastBrightnessFeedbackStep = -1
+                    controlsCoordinator.endBrightnessOverlay()
                 }
 
-                if showVolumeOverlay {
+                if controlsCoordinator.showVolumeOverlay {
                     currentVolume = playerManager.player?.volume ?? 0.5
+                    lastVolumeFeedbackStep = -1
+                    controlsCoordinator.endVolumeOverlay()
                 }
 
-                if !isHorizontalSeeking && !showBrightnessOverlay && !showVolumeOverlay {
+                if !isHorizontalSeeking && !controlsCoordinator.showBrightnessOverlay && !controlsCoordinator.showVolumeOverlay {
                     if translation.y > 60 {
                         Task { await minimizeToMiniPlayer() }
                     } else if translation.y < -60 {
@@ -662,26 +667,14 @@ struct VideoDetailView: View {
 
                 isHorizontalSeeking = false
                 seekDeltaSeconds = 0
-                withAnimation { showSeekOverlay = false }
-                showBrightnessOverlay = false
-                showVolumeOverlay = false
-                resumeControlsAutoHideIfNeeded()
+                controlsCoordinator.endSeekOverlay()
             }
         )
         .zIndex(1)
     }
     private func handlePlayerTap() {
-        print("📱 Video tapped - Current controls state: \(showVideoControls)")
-        if showVideoControls {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                showVideoControls = false
-            }
-        } else {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                showVideoControls = true
-            }
-            resetControlsHideTimer()
-        }
+        print("📱 Video tapped - Current controls state: \(controlsCoordinator.showControls)")
+        controlsCoordinator.toggleControls()
     }
 
     
@@ -695,9 +688,9 @@ struct VideoDetailView: View {
         }
         .transition(.opacity)
         .zIndex(200)  // 🔥 FIX: Much higher z-index to ensure controls are above tap area
-        .allowsHitTesting(showVideoControls && !showUpNext)  // 🔥 FIX: Disable hit testing when end screen is showing
+        .allowsHitTesting(controlsCoordinator.showControls && !showUpNext)  // 🔥 FIX: Disable hit testing when end screen is showing
         .contentShape(Rectangle())  // 🔥 FIX: Ensure entire control area is tappable
-        .opacity(showVideoControls && !showUpNext ? 1.0 : 0.0)  // 🔥 FIX: Hide controls when end screen is active
+        .opacity(controlsCoordinator.showControls && !showUpNext ? 1.0 : 0.0)  // 🔥 FIX: Hide controls when end screen is active
     }
     
     @ViewBuilder
@@ -748,7 +741,7 @@ struct VideoDetailView: View {
         .padding(.horizontal, 20)
         .padding(.top, 16)
         .background(LinearGradient(colors: [.black.opacity(0.8), .clear], startPoint: .top, endPoint: .bottom))
-        .opacity(showVideoControls ? 1.0 : 0.0)
+        .opacity(controlsCoordinator.showControls ? 1.0 : 0.0)
     }
     
     @ViewBuilder
@@ -872,8 +865,7 @@ struct VideoDetailView: View {
                 HapticManager.shared.impact(style: .medium)
                 
                 // 🔥 FIX: Keep controls visible when play/pause is tapped
-                showVideoControls = true
-                resetControlsHideTimer()
+                controlsCoordinator.showControlsAndResetTimer()
             }) {
                 Image(systemName: playerManager.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.system(size: 56, weight: .semibold))
@@ -897,8 +889,8 @@ struct VideoDetailView: View {
             .buttonStyle(.plain)  // 🔥 FIX: Plain button style to prevent interference
         }
         .padding(.bottom, 18)
-        .opacity(showVideoControls ? 1.0 : 0.0)
-        .allowsHitTesting(showVideoControls)  // 🔥 FIX: Explicitly allow hit testing when visible
+        .opacity(controlsCoordinator.showControls ? 1.0 : 0.0)
+        .allowsHitTesting(controlsCoordinator.showControls)  // 🔥 FIX: Explicitly allow hit testing when visible
     }
     
     @ViewBuilder
@@ -908,7 +900,7 @@ struct VideoDetailView: View {
             progressTimeControls
         }
         .background(LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom))
-        .opacity(showVideoControls ? 1.0 : 0.0)
+        .opacity(controlsCoordinator.showControls ? 1.0 : 0.0)
     }
     
     @ViewBuilder
@@ -997,7 +989,7 @@ struct VideoDetailView: View {
                             .offset(x: x)
                     }
 
-                    if let hoveredChapter = hoveredChapter {
+                    if let hoveredChapter = controlsCoordinator.hoveredChapter {
                         VStack(spacing: 4) {
                             Text(hoveredChapter.title)
                                 .font(.system(size: 12, weight: .semibold))
@@ -1019,10 +1011,10 @@ struct VideoDetailView: View {
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
-                            updateHoveredChapter(at: value.location.x, trackWidth: trackWidth, chapters: sortedChapters)
+                            updateHoveredChapterViaCoordinator(at: value.location.x, trackWidth: trackWidth, chapters: sortedChapters)
                         }
                         .onEnded { _ in
-                            scheduleChapterTooltipHide()
+                            controlsCoordinator.clearHoveredChapter()
                         }
                 )
             }
@@ -1390,8 +1382,7 @@ struct VideoDetailView: View {
                                     isDisliked: $isDisliked,
                                     expandedDescription: $expandedDescription,
                                     onShare: {
-                                        let av = UIActivityViewController(activityItems: [shareURLWithTimestamp()], applicationActivities: nil)
-                                        UIApplication.shared.presentShareSheet(av)
+                                        showingShareSheet = true
                                     },
                                     onMore: { showingMoreOptions = true },
                                     onComment: { showingCommentComposer = true },
@@ -1472,6 +1463,9 @@ struct VideoDetailView: View {
                         )
                     )
                 )
+        }
+        .sheet(isPresented: $showingShareSheet) {
+            VideoShareSheet(items: [shareURLWithTimestamp()])
         }
         // 🔥 FIX: Video editor sheet (YouTube-style edit interface)
         .sheet(isPresented: $showingVideoEditor) {
@@ -1840,15 +1834,14 @@ struct VideoDetailView: View {
                         }
                     }
                 }
-                showVideoControls = true
+                controlsCoordinator.showControlsAndResetTimer()
                 isViewAppeared = true
-                resetControlsHideTimer()
             }
         }
         .onDisappear {
             print("🎬 VideoDetailView disappearing")
             playerControlsTimer?.invalidate()
-            controlsHideTimer?.invalidate()
+            controlsCoordinator.cleanup()
             
             // 🔥 YOUTUBE PARITY: Save watch progress when leaving
             let _uid = AppState.shared.currentUser?.id ?? "anonymous"
@@ -1902,16 +1895,17 @@ struct VideoDetailView: View {
                 }
             }
         }
-        .onChange(of: showVideoControls) { newValue in
+        .onChange(of: controlsCoordinator.showControls) { newValue in
             print("🎮 Controls visibility changed to: \(newValue)")
             if newValue {
-                resetControlsHideTimer()
+                controlsCoordinator.resetHideTimer()
             } else {
-                controlsHideTimer?.invalidate()
+                controlsCoordinator.cancelHideTimer()
             }
         }
         .onChange(of: playerManager.isPlaying) { newValue in
             print("🎵 Player state changed to: \(newValue ? "Playing" : "Paused")")
+            controlsCoordinator.updatePlayingState(newValue)
         }
         .onReceive(playerManager.$currentTime) { _ in
             handleCurrentTimeChange()
@@ -2099,85 +2093,35 @@ struct VideoDetailView: View {
         }
     }
 
+    // MARK: - Coordinator Delegates (legacy helpers now route to controlsCoordinator)
+    
     private func resetControlsHideTimer() {
-        controlsHideTimer?.invalidate()
-        
-        // 🔥 FIX: Only auto-hide controls if video is PLAYING (not when paused)
-        guard playerManager.isPlaying else { 
-            print("⏸️ [VideoDetailView] Controls NOT auto-hiding (video paused)")
-            return 
-        }
-        
-        // 🔥 FIX: 5 second delay before auto-hiding (YouTube standard)
-        controlsHideTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { _ in
-            // Double-check video is still playing before hiding
-            guard playerManager.isPlaying else { 
-                print("⏸️ [VideoDetailView] Cancelled auto-hide (video paused)")
-                return 
-            }
-            
-            withAnimation(.easeInOut(duration: 0.25)) {
-                showVideoControls = false
-                print("⏰ [VideoDetailView] Controls auto-hidden after 5s")
-            }
-        }
-        
-        print("⏱️ [VideoDetailView] Controls hide timer reset (5s)")
+        controlsCoordinator.resetHideTimer()
     }
 
     private func pauseControlsAutoHideForTransientOverlay() {
-        controlsHideTimer?.invalidate()
-        if !showVideoControls {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                showVideoControls = true
-            }
-        }
+        controlsCoordinator.pauseAutoHideForTransientOverlay()
     }
 
     private func resumeControlsAutoHideIfNeeded() {
-        let hasTransientOverlay = showSeekOverlay || showBrightnessOverlay || showVolumeOverlay || hoveredChapter != nil
-        guard !hasTransientOverlay else { return }
-        resetControlsHideTimer()
+        controlsCoordinator.resumeAutoHideIfNeeded()
     }
 
-    private func updateHoveredChapter(at locationX: CGFloat, trackWidth: CGFloat, chapters: [Video.Chapter]) {
-        guard playerManager.duration > 0, !chapters.isEmpty else { return }
-
-        let clampedX = max(0, min(trackWidth, locationX))
-        let threshold: CGFloat = 18
-        let chapterWithDistance = chapters
-            .map { chapter -> (Video.Chapter, CGFloat) in
-                let progress = max(0, min(1, chapter.start / playerManager.duration))
-                let chapterX = CGFloat(progress) * trackWidth
-                return (chapter, abs(chapterX - clampedX))
-            }
-            .min(by: { $0.1 < $1.1 })
-
-        guard let (chapter, distance) = chapterWithDistance, distance <= threshold else {
-            hoveredChapter = nil
-            return
-        }
-
-        chapterTooltipHideWorkItem?.cancel()
-        chapterTooltipX = clampedX
-        if hoveredChapter?.id != chapter.id {
-            withAnimation(.easeInOut(duration: 0.15)) {
-                hoveredChapter = chapter
-            }
-        }
-        pauseControlsAutoHideForTransientOverlay()
+    private func updateHoveredChapterViaCoordinator(at locationX: CGFloat, trackWidth: CGFloat, chapters: [Video.Chapter]) {
+        _ = controlsCoordinator.updateHoveredChapter(
+            at: locationX,
+            trackWidth: trackWidth,
+            chapters: chapters,
+            duration: playerManager.duration
+        )
     }
 
-    private func scheduleChapterTooltipHide() {
-        chapterTooltipHideWorkItem?.cancel()
-        let workItem = DispatchWorkItem {
-            withAnimation(.easeInOut(duration: 0.15)) {
-                hoveredChapter = nil
-            }
-            resumeControlsAutoHideIfNeeded()
-        }
-        chapterTooltipHideWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: workItem)
+    private func emitSteppedFeedbackIfNeeded(for normalizedValue: CGFloat, lastStep: inout Int) {
+        let clamped = max(0, min(1, normalizedValue))
+        let step = Int((clamped * 10).rounded())
+        guard step != lastStep else { return }
+        lastStep = step
+        HapticManager.shared.impact(style: .light)
     }
 
     // MARK: - Gesture Actions

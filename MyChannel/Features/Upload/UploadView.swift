@@ -307,7 +307,7 @@ struct UploadView: View {
         .sheet(isPresented: $showShareSheet) {
             if let video = uploadManager.uploadedVideo {
                 let shareURL = URL(string: "https://mychannel.app/video/\(video.id)") ?? URL(string: "https://mychannel.app")!
-                ShareSheet(items: ["\(video.title) — Watch on MyChannel", shareURL])
+                NativeShareSheet(items: ["\(video.title) — Watch on MyChannel", shareURL])
             }
         }
         .sheet(isPresented: $showQualitySettings) {

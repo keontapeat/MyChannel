@@ -55,7 +55,7 @@ struct UniversityCertificateDetailView: View {
         }
         .sheet(isPresented: $showShareSheet) {
             if let image = certificateImage {
-                CertificateShareSheet(items: [image])
+                NativeShareSheet(items: [image])
             }
         }
     }
@@ -402,31 +402,6 @@ struct UniversityCertificateDetailView: View {
     private func generateCertificateImage() {
         // TODO: Render certificate card as UIImage for sharing
         // Use UIGraphicsImageRenderer to capture SwiftUI view
-    }
-}
-
-// MARK: - Share Sheet
-struct CertificateShareSheet: UIViewControllerRepresentable {
-    let items: [Any]
-    
-    func makeCoordinator() -> Coordinator { Coordinator() }
-    
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
-        controller.popoverPresentationController?.delegate = context.coordinator
-        if let windowScene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
-           let window = windowScene.windows.first(where: \.isKeyWindow) {
-            controller.popoverPresentationController?.sourceView = window
-            controller.popoverPresentationController?.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
-            controller.popoverPresentationController?.permittedArrowDirections = []
-        }
-        return controller
-    }
-    
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-    
-    class Coordinator: NSObject, UIPopoverPresentationControllerDelegate {
-        func adaptivePresentationStyle(for controller: UIPresentationController, traitCollection: UITraitCollection) -> UIModalPresentationStyle { .none }
     }
 }
 

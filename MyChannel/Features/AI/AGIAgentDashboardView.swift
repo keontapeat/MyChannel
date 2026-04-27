@@ -377,7 +377,7 @@ struct AGIAgentDashboardView: View {
                     .cornerRadius(12)
                 }
                 .sheet(isPresented: $showShareSheet) {
-                    ShareSheet(items: [shareText])
+                    NativeShareSheet(items: [shareText])
                 }
 
                 // Portfolio value banner
