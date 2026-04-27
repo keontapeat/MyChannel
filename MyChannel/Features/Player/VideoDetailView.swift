@@ -64,6 +64,7 @@ struct VideoDetailView: View {
     @State private var showingChapterTooltip = false
     @State private var chapterTooltipX: CGFloat = 0
     @State private var hoveredChapter: Video.Chapter? = nil  // 🔥 YOUTUBE PARITY: Chapter tooltip state
+    @State private var chapterTooltipHideWorkItem: DispatchWorkItem?
     @State private var showUpNext = false
     @State private var upNextCountdown = 5
     @State private var upNextVideo: Video? = nil
@@ -563,31 +564,19 @@ struct VideoDetailView: View {
                     HapticManager.shared.impact(style: .medium)
                     print("⏩ Double-tap right: Forward 10s")
                 }
-            }
-        )
-        // 🔥 YOUTUBE PARITY: Long-press to 2x speed (hold → 2x, release → restore)
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.4)
-                .sequenced(before: DragGesture(minimumDistance: 0))
-                .onChanged { value in
-                    switch value {
-                    case .second(true, _):
-                        // Long press recognized — activate 2x speed
-                        if !isLongPressSpeedUp {
-                            savedPlaybackRate = playbackRate
-                            playbackRate = 2.0
-                            playerManager.setPlaybackRate(2.0)
-                            isLongPressSpeedUp = true
-                            withAnimation(.spring(response: 0.2)) { showSpeedUpIndicator = true }
-                            HapticManager.shared.impact(style: .medium)
-                            print("⚡ [YouTube] Long-press 2x speed activated")
-                        }
-                    default:
-                        break
+            },
+            onLongPressStateChanged: { isActive in
+                if isActive {
+                    if !isLongPressSpeedUp {
+                        savedPlaybackRate = playbackRate
+                        playbackRate = 2.0
+                        playerManager.setPlaybackRate(2.0)
+                        isLongPressSpeedUp = true
+                        withAnimation(.spring(response: 0.2)) { showSpeedUpIndicator = true }
+                        HapticManager.shared.impact(style: .medium)
+                        print("⚡ [YouTube] Long-press 2x speed activated")
                     }
-                }
-                .onEnded { _ in
-                    // Finger lifted — restore original speed
+                } else {
                     if isLongPressSpeedUp {
                         playbackRate = savedPlaybackRate
                         playerManager.setPlaybackRate(savedPlaybackRate)
@@ -597,96 +586,87 @@ struct VideoDetailView: View {
                         print("⚡ [YouTube] Long-press released — back to \(savedPlaybackRate)x")
                     }
                 }
-        )
-        // 🔥 YOUTUBE PARITY: Horizontal swipe-to-seek + Brightness/Volume vertical swipe + Swipe up/down for fullscreen/PiP
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 12, coordinateSpace: .local)
-                .onChanged { value in
-                    let screenWidth = UIScreen.main.bounds.width
-                    let playerHeight = UIScreen.main.bounds.width * 9.0 / 16.0
-                    let startX = value.startLocation.x
-                    let dx = value.translation.width
-                    let dy = value.translation.height
-                    
-                    // Determine gesture direction on first significant movement
-                    if !isHorizontalSeeking && !showBrightnessOverlay && !showVolumeOverlay {
-                        if abs(dx) > abs(dy) && abs(dx) > 20 {
-                            // Horizontal → seek
-                            isHorizontalSeeking = true
-                            seekStartTime = playerManager.currentTime
-                            seekDeltaSeconds = 0
-                        } else if abs(dy) > abs(dx) && abs(dy) > 20 {
-                            // Vertical → brightness (left) or volume (right)
-                            let isLeftSide = startX < screenWidth * 0.5
-                            if isLeftSide {
-                                showBrightnessOverlay = true
-                                currentBrightness = UIScreen.main.brightness
-                            } else {
-                                showVolumeOverlay = true
-                            }
-                            verticalSwipeStartY = value.startLocation.y
+            },
+            onPanChanged: { startLocation, translation, location, size in
+                let screenWidth = size.width
+                let playerHeight = max(size.height, 1)
+                let startX = startLocation.x
+                let dx = translation.x
+                let dy = translation.y
+
+                if !isHorizontalSeeking && !showBrightnessOverlay && !showVolumeOverlay {
+                    if abs(dx) > abs(dy) && abs(dx) > 20 {
+                        isHorizontalSeeking = true
+                        seekStartTime = playerManager.currentTime
+                        seekDeltaSeconds = 0
+                    } else if abs(dy) > abs(dx) && abs(dy) > 20 {
+                        let isLeftSide = startX < screenWidth * 0.5
+                        if isLeftSide {
+                            showBrightnessOverlay = true
+                            currentBrightness = UIScreen.main.brightness
+                        } else {
+                            showVolumeOverlay = true
+                            currentVolume = playerManager.player?.volume ?? currentVolume
                         }
-                    }
-                    
-                    // 🔥 Horizontal seek: 1pt = ~0.15s (whole screen swipe ≈ 60s)
-                    if isHorizontalSeeking {
-                        let seekScale = min(playerManager.duration, 60.0) / screenWidth
-                        seekDeltaSeconds = Double(dx) * seekScale
-                        withAnimation(.easeOut(duration: 0.1)) { showSeekOverlay = true }
-                    }
-                    
-                    // 🔥 Brightness (left side vertical swipe)
-                    if showBrightnessOverlay {
-                        let deltaY = verticalSwipeStartY - value.location.y
-                        let brightnessChange = deltaY / playerHeight
-                        let newBrightness = max(0, min(1, currentBrightness + brightnessChange))
-                        UIScreen.main.brightness = newBrightness
-                    }
-                    
-                    // 🔥 Volume (right side vertical swipe)
-                    if showVolumeOverlay {
-                        let deltaY = verticalSwipeStartY - value.location.y
-                        let volumeChange = Float(deltaY / playerHeight)
-                        let newVolume = max(0, min(1, currentVolume + volumeChange))
-                        playerManager.player?.volume = newVolume
+                        verticalSwipeStartY = startLocation.y
                     }
                 }
-                .onEnded { value in
-                    // 🔥 Finalize horizontal seek
-                    if isHorizontalSeeking {
-                        let targetTime = max(0, min(playerManager.duration, seekStartTime + seekDeltaSeconds))
-                        let progress = playerManager.duration > 0 ? targetTime / playerManager.duration : 0
-                        playerManager.seek(to: progress)
-                        HapticManager.shared.impact(style: .light)
-                        print("⏩ [YouTube] Swipe-seek to \(Int(targetTime))s (delta: \(Int(seekDeltaSeconds))s)")
-                    }
-                    
-                    // 🔥 Finalize brightness
-                    if showBrightnessOverlay {
-                        currentBrightness = UIScreen.main.brightness
-                    }
-                    
-                    // 🔥 Finalize volume
-                    if showVolumeOverlay {
-                        currentVolume = playerManager.player?.volume ?? 0.5
-                    }
-                    
-                    // 🔥 Swipe down → PiP, Swipe up → fullscreen (only if not seeking/adjusting)
-                    if !isHorizontalSeeking && !showBrightnessOverlay && !showVolumeOverlay {
-                        if value.translation.height > 60 {
-                            Task { await minimizeToMiniPlayer() }
-                        } else if value.translation.height < -60 {
-                            presentFullscreenPlayer()
-                        }
-                    }
-                    
-                    // Reset all gesture states
-                    isHorizontalSeeking = false
-                    seekDeltaSeconds = 0
-                    withAnimation { showSeekOverlay = false }
-                    showBrightnessOverlay = false
-                    showVolumeOverlay = false
+
+                if isHorizontalSeeking {
+                    let seekScale = min(playerManager.duration, 60.0) / max(screenWidth, 1)
+                    seekDeltaSeconds = Double(dx) * seekScale
+                    withAnimation(.easeOut(duration: 0.1)) { showSeekOverlay = true }
+                    pauseControlsAutoHideForTransientOverlay()
                 }
+
+                if showBrightnessOverlay {
+                    let deltaY = verticalSwipeStartY - location.y
+                    let brightnessChange = deltaY / playerHeight
+                    let newBrightness = max(0, min(1, currentBrightness + brightnessChange))
+                    UIScreen.main.brightness = newBrightness
+                    pauseControlsAutoHideForTransientOverlay()
+                }
+
+                if showVolumeOverlay {
+                    let deltaY = verticalSwipeStartY - location.y
+                    let volumeChange = Float(deltaY / playerHeight)
+                    let newVolume = max(0, min(1, currentVolume + volumeChange))
+                    playerManager.player?.volume = newVolume
+                    pauseControlsAutoHideForTransientOverlay()
+                }
+            },
+            onPanEnded: { _, translation, _, _ in
+                if isHorizontalSeeking {
+                    let targetTime = max(0, min(playerManager.duration, seekStartTime + seekDeltaSeconds))
+                    let progress = playerManager.duration > 0 ? targetTime / playerManager.duration : 0
+                    playerManager.seek(to: progress)
+                    HapticManager.shared.impact(style: .light)
+                    print("⏩ [YouTube] Swipe-seek to \(Int(targetTime))s (delta: \(Int(seekDeltaSeconds))s)")
+                }
+
+                if showBrightnessOverlay {
+                    currentBrightness = UIScreen.main.brightness
+                }
+
+                if showVolumeOverlay {
+                    currentVolume = playerManager.player?.volume ?? 0.5
+                }
+
+                if !isHorizontalSeeking && !showBrightnessOverlay && !showVolumeOverlay {
+                    if translation.y > 60 {
+                        Task { await minimizeToMiniPlayer() }
+                    } else if translation.y < -60 {
+                        presentFullscreenPlayer()
+                    }
+                }
+
+                isHorizontalSeeking = false
+                seekDeltaSeconds = 0
+                withAnimation { showSeekOverlay = false }
+                showBrightnessOverlay = false
+                showVolumeOverlay = false
+                resumeControlsAutoHideIfNeeded()
+            }
         )
         .zIndex(1)
     }
@@ -933,30 +913,34 @@ struct VideoDetailView: View {
     
     @ViewBuilder
     private var progressSlider: some View {
-        Slider(
+        UIKitVideoScrubber(
             value: Binding(
-                get: { playerManager.duration > 0 ? playerManager.currentTime / playerManager.duration : 0 },
+                get: { isScrubbing ? scrubFraction : (playerManager.duration > 0 ? playerManager.currentTime / playerManager.duration : 0) },
                 set: { fraction in
-                    if isScrubbing {
-                        scrubFraction = max(0, min(1, fraction))
-                        let t = playerManager.duration * scrubFraction
-                        scrubPreviewImage = playerManager.thumbnail(at: t)
-                    } else {
-                        playerManager.seek(to: fraction)
-                    }
+                    scrubFraction = max(0, min(1, fraction))
                 }
             ),
+            tintColor: .white,
+            minimumTrackColor: .white,
+            maximumTrackColor: UIColor.white.withAlphaComponent(0.35),
             onEditingChanged: { editing in
                 isScrubbing = editing
-                if !editing {
+                if editing {
+                    scrubFraction = playerManager.duration > 0 ? playerManager.currentTime / playerManager.duration : 0
+                } else {
                     playerManager.seek(to: scrubFraction)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                         scrubPreviewImage = nil
                     }
                 }
+            },
+            onScrubChanged: { fraction in
+                scrubFraction = max(0, min(1, fraction))
+                let t = playerManager.duration * scrubFraction
+                scrubPreviewImage = playerManager.thumbnail(at: t)
             }
         )
-        .tint(.white)
+        .frame(height: 32)
         .padding(.horizontal, 20)
         .overlay(alignment: .bottomLeading) {
             chapterTicks
@@ -1001,42 +985,46 @@ struct VideoDetailView: View {
         if let chapters = video.chapters, !chapters.isEmpty, playerManager.duration > 0 {
             GeometryReader { geometry in
                 let trackWidth = geometry.size.width - 40
-                HStack(spacing: 0) {
-                    ForEach(chapters.sorted(by: { $0.start < $1.start })) { chapter in
+                let sortedChapters = chapters.sorted(by: { $0.start < $1.start })
+                ZStack(alignment: .topLeading) {
+                    ForEach(sortedChapters) { chapter in
                         let p = max(0, min(1, chapter.start / playerManager.duration))
                         let x = CGFloat(p) * trackWidth
-                        
-                        ZStack(alignment: .top) {
-                            Rectangle()
-                                .fill(Color.white.opacity(0.45))
-                                .frame(width: 1, height: 8)
-                            
-                            // 🔥 YOUTUBE PARITY: Chapter tooltip on long press
-                            if let hoveredChapter = hoveredChapter, hoveredChapter.id == chapter.id {
-                                VStack(spacing: 4) {
-                                    Text(chapter.title)
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundColor(.white)
-                                    
-                                    Text(formatTime(chapter.start))
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.white.opacity(0.8))
-                                }
-                                .offset(y: -50)
-                                .transition(.opacity.combined(with: .scale))
-                            }
+
+                        Rectangle()
+                            .fill(Color.white.opacity(0.45))
+                            .frame(width: 1, height: 8)
+                            .offset(x: x)
+                    }
+
+                    if let hoveredChapter = hoveredChapter {
+                        VStack(spacing: 4) {
+                            Text(hoveredChapter.title)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.white)
+
+                            Text(formatTime(hoveredChapter.start))
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.8))
                         }
-                        .offset(x: x)
-                        .onLongPressGesture(minimumDuration: 0.3) {
-                            hoveredChapter = chapter
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                if hoveredChapter?.id == chapter.id {
-                                    hoveredChapter = nil
-                                }
-                            }
-                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(Color.black.opacity(0.8))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .offset(x: max(0, min(trackWidth - 120, chapterTooltipX - 60)), y: -50)
+                        .transition(.opacity.combined(with: .scale))
                     }
                 }
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            updateHoveredChapter(at: value.location.x, trackWidth: trackWidth, chapters: sortedChapters)
+                        }
+                        .onEnded { _ in
+                            scheduleChapterTooltipHide()
+                        }
+                )
             }
             .frame(height: 50)
             .padding(.horizontal, 28)
@@ -2135,6 +2123,61 @@ struct VideoDetailView: View {
         }
         
         print("⏱️ [VideoDetailView] Controls hide timer reset (5s)")
+    }
+
+    private func pauseControlsAutoHideForTransientOverlay() {
+        controlsHideTimer?.invalidate()
+        if !showVideoControls {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showVideoControls = true
+            }
+        }
+    }
+
+    private func resumeControlsAutoHideIfNeeded() {
+        let hasTransientOverlay = showSeekOverlay || showBrightnessOverlay || showVolumeOverlay || hoveredChapter != nil
+        guard !hasTransientOverlay else { return }
+        resetControlsHideTimer()
+    }
+
+    private func updateHoveredChapter(at locationX: CGFloat, trackWidth: CGFloat, chapters: [Video.Chapter]) {
+        guard playerManager.duration > 0, !chapters.isEmpty else { return }
+
+        let clampedX = max(0, min(trackWidth, locationX))
+        let threshold: CGFloat = 18
+        let chapterWithDistance = chapters
+            .map { chapter -> (Video.Chapter, CGFloat) in
+                let progress = max(0, min(1, chapter.start / playerManager.duration))
+                let chapterX = CGFloat(progress) * trackWidth
+                return (chapter, abs(chapterX - clampedX))
+            }
+            .min(by: { $0.1 < $1.1 })
+
+        guard let (chapter, distance) = chapterWithDistance, distance <= threshold else {
+            hoveredChapter = nil
+            return
+        }
+
+        chapterTooltipHideWorkItem?.cancel()
+        chapterTooltipX = clampedX
+        if hoveredChapter?.id != chapter.id {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                hoveredChapter = chapter
+            }
+        }
+        pauseControlsAutoHideForTransientOverlay()
+    }
+
+    private func scheduleChapterTooltipHide() {
+        chapterTooltipHideWorkItem?.cancel()
+        let workItem = DispatchWorkItem {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                hoveredChapter = nil
+            }
+            resumeControlsAutoHideIfNeeded()
+        }
+        chapterTooltipHideWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: workItem)
     }
 
     // MARK: - Gesture Actions
